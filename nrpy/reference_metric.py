@@ -501,9 +501,8 @@ class ReferenceMetric:
             :param expr: SymPy expression to be replaced
             :return: Expression with replaced variables
             """
-            sp_version = sp.__version__.lower()
-            sp_version = sp_version.replace("rc", ".").replace(
-                "b", "."
+            sp_version = (
+                sp.__version__.lower().replace("rc", ".").replace("b", ".")
             )  # turn 1.2rc1 -> 1.2.1, 1.11b1 -> 1.11.1
             parts = sp_version.split(".")
             major = int(parts[0])

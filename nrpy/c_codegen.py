@@ -230,15 +230,15 @@ class CCodeGen:
             self.simd_find_more_FMAsFMSs = True
 
         if self.enable_cse_preprocess:
-            sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
-            sympy_major_version = int(sympy_version.split(".")[0])
-            sympy_minor_version = int(sympy_version.split(".")[1])
-            if sympy_major_version < 1 or (
-                sympy_major_version == 1 and sympy_minor_version < 3
-            ):
+            sp_version = (
+                sp.__version__.lower().replace("rc", ".").replace("b", ".")
+            )  # turn 1.2rc1 -> 1.2.1, 1.11b1 -> 1.11.1
+            parts = sp_version.split(".")
+            major = int(parts[0])
+            minor = int(parts[1])
+            if (major, minor) < (1, 3):
                 logging.warning(
-                    "SymPy version %s does not support CSE preprocessing. Disabling...",
-                    sympy_version,
+                    f"SymPy version {sp.__version__} does not support CSE preprocessing. Disabling..."
                 )
                 self.enable_cse_preprocess = False
 
