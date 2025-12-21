@@ -5,17 +5,17 @@ This module performs the same power simplification as custom_c_codegen_functions
 Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, cast
 
 import sympy as sp
 
 try:
     from sympy.printing.numpy import JaxPrinter as Printer
-    from sympy.printing.numpy import _known_constants_jax as known_constants
-    from sympy.printing.numpy import _known_functions_jax as known_functions
+    from sympy.printing.numpy import _known_constants_jax as known_constants  # type: ignore
+    from sympy.printing.numpy import _known_functions_jax as known_functions  # type: ignore
 except ImportError:
     # Fallback for older SymPy versions
-    from sympy.printing.numpy import NumPyPrinter as Printer
+    from sympy.printing.numpy import NumPyPrinter as Printer  # type: ignore
     from sympy.printing.numpy import _known_constants_numpy, _known_functions_numpy
 
     known_functions = {k: "jnp." + v for k, v in _known_functions_numpy.items()}
@@ -25,7 +25,7 @@ except ImportError:
 # adding a type ignore as mypy does not let me inherit from JaxPrinter.
 # Disable specific pylint errors owing to sympy
 # pylint: disable=too-many-ancestors, abstract-method
-class NRPyJaxPrinter(Printer):  # type: ignore
+class NRPyJaxPrinter(Printer):
     """Custom JAX printer to handle custom power simplification."""
 
     _module = "jnp"
@@ -48,7 +48,7 @@ class NRPyJaxPrinter(Printer):  # type: ignore
         :param rational: Boolean indicating whether to use rational exponents.
         :return: String representation of the power expression.
         """
-        base, exp = expr.as_base_exp()
+        base, exp = cast(sp.Expr, expr).as_base_exp()
         b = self._print(base)
         retval = None
 
