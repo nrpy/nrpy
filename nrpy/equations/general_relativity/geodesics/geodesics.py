@@ -14,7 +14,7 @@ import doctest
 import logging
 import os
 import sys
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -219,7 +219,7 @@ class GeodesicEquations:
         sol1 = (-B + discriminant) / (2 * A)
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
-        return solutions[1]
+        return cast(sp.Expr, solutions[1])
 
     def geodesic_eom_rhs_massless(self) -> List[sp.Expr]:
         r"""
@@ -307,7 +307,7 @@ class GeodesicEquations:
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
 
-        return solutions[0]
+        return cast(sp.Expr, solutions[0])
 
     @staticmethod
     def symbolic_numerical_christoffel_recipe() -> List[List[List[sp.Expr]]]:
