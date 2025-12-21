@@ -8,7 +8,7 @@ Emails: ksible *at* outlook *dot** com
 """
 
 import sys
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union, cast
 
 from sympy import (
     Abs,
@@ -387,12 +387,12 @@ def expr_convert_to_simd_intrins(
                 subargs = list(args_list[i].args)
                 subargs.pop(j)
                 # Build the subtraction expression for replacement
-                subexpr = SubSIMD(args_list[k], Mul(*subargs))
+                subexpr = SubSIMD(args_list[k], Mul(*cast(List[Expr], subargs)))
                 args_list = [
                     arg for arg in args_list if arg not in (args_list[i], args_list[k])
                 ]
                 if len(args_list) > 0:
-                    subexpr = Add(subexpr, *args_list)
+                    subexpr = Add(subexpr, *cast(List[Expr], args_list))
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
@@ -741,7 +741,7 @@ def expr_convert_to_simd_intrins(
         for subtree in tree_diff.preorder():
             subexpr = subtree.expr
             if subexpr.func == Float:
-                if abs(subexpr - Integer(subexpr)) < 1.0e-14 * subexpr:
+                if abs(subexpr - Integer(subexpr)) < 1.0e-14 * cast(Expr, subexpr):
                     subtree.expr = Integer(subexpr)
         expr_diff = tree_diff.reconstruct()
 

@@ -11,7 +11,7 @@ import hashlib
 import importlib
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union, cast
 
 import black
 import sympy as sp
@@ -84,9 +84,9 @@ def assert_equal(
     Assertion Passed!
     """
     if not isinstance(vardict_1, dict):
-        vardict_1 = {"": sp.sympify(vardict_1)}
+        vardict_1 = {"": cast(sp.Expr, sp.sympify(vardict_1))}
     if not isinstance(vardict_2, dict):
-        vardict_2 = {"": sp.sympify(vardict_2)}
+        vardict_2 = {"": cast(sp.Expr, sp.sympify(vardict_2))}
 
     vardict_1_results_dict = process_dictionary_of_expressions(
         vardict_1, fixed_mpfs_for_free_symbols=True

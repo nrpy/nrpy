@@ -10,7 +10,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Union
+from typing import Union, cast
 
 import sympy as sp
 
@@ -18,7 +18,7 @@ import sympy as sp
 def f2r(
     input_float: Union[float, str],
     zpad: int = 60,
-) -> Union[float, sp.Rational]:
+) -> sp.Rational:
     """
     Convert a float-like number to a high-precision sympy.Rational number.
 
@@ -45,4 +45,4 @@ def f2r(
         float_as_string = f"{float_as_string}."
 
     # Append 60 zeros after the decimal of the floating point number to increase precision
-    return sp.Rational(float_as_string + "0" * zpad)
+    return cast(sp.Rational, sp.Rational(float_as_string + "0" * zpad))
