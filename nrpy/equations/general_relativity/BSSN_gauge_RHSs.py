@@ -20,13 +20,12 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
-from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy: Constructs BSSN right-hand-side expressions
-    BSSN_RHSs,
-)
 from nrpy.equations.general_relativity.BSSN_quantities import (  # NRPy: Computes useful BSSN quantities
     BSSN_quantities,
 )
-
+from nrpy.equations.general_relativity.BSSN_RHSs import (  # NRPy: Constructs BSSN right-hand-side expressions
+    BSSN_RHSs,
+)
 
 # Step 1.a: Declare/initialize parameters for this module
 

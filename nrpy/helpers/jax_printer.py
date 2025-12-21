@@ -11,8 +11,12 @@ import sympy as sp
 
 try:
     from sympy.printing.numpy import JaxPrinter as Printer
-    from sympy.printing.numpy import _known_constants_jax as known_constants  # type: ignore
-    from sympy.printing.numpy import _known_functions_jax as known_functions  # type: ignore
+    from sympy.printing.numpy import (
+        _known_constants_jax as known_constants,  # type: ignore
+    )
+    from sympy.printing.numpy import (
+        _known_functions_jax as known_functions,  # type: ignore
+    )
 except ImportError:
     # Fallback for older SymPy versions
     from sympy.printing.numpy import NumPyPrinter as Printer  # type: ignore
