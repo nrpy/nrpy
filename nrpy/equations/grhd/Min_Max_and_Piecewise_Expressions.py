@@ -5,7 +5,7 @@ calls of nrpyAbs with fabs calls
 
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -37,10 +37,10 @@ def min_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     :return: minimum of the two in symbolic form.
     """
     if a == sp.sympify(0):
-        return sp.Rational(1, 2) * (b - _nrpyAbs(b))
+        return cast(sp.Expr, sp.Rational(1, 2) * (b - _nrpyAbs(b)))
     if b == sp.sympify(0):
-        return sp.Rational(1, 2) * (a - _nrpyAbs(a))
-    return sp.Rational(1, 2) * (a + b - _nrpyAbs(a - b))
+        return cast(sp.Expr, sp.Rational(1, 2) * (a - _nrpyAbs(a)))
+    return cast(sp.Expr, sp.Rational(1, 2) * (a + b - _nrpyAbs(a - b)))
 
 
 def max_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
@@ -53,10 +53,10 @@ def max_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     :return: maximum of the two in symbolic form
     """
     if a == sp.sympify(0):
-        return sp.Rational(1, 2) * (b + _nrpyAbs(b))
+        return cast(sp.Expr, sp.Rational(1, 2) * (b + _nrpyAbs(b)))
     if b == sp.sympify(0):
-        return sp.Rational(1, 2) * (a + _nrpyAbs(a))
-    return sp.Rational(1, 2) * (a + b + _nrpyAbs(a - b))
+        return cast(sp.Expr, sp.Rational(1, 2) * (a + _nrpyAbs(a)))
+    return cast(sp.Expr, sp.Rational(1, 2) * (a + b + _nrpyAbs(a - b)))
 
 
 def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -69,7 +69,10 @@ def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x <= xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return min_noif(x - xstar - TINYDOUBLE, 0.0) / (x - xstar - TINYDOUBLE)
+    return cast(
+        sp.Expr,
+        min_noif(x - xstar - TINYDOUBLE, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE),
+    )
 
 
 def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -82,7 +85,10 @@ def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x >= xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return max_noif(x - xstar + TINYDOUBLE, 0.0) / (x - xstar + TINYDOUBLE)
+    return cast(
+        sp.Expr,
+        max_noif(x - xstar + TINYDOUBLE, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE),
+    )
 
 
 def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -95,7 +101,9 @@ def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x > xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return min_noif(x - xstar, 0.0) / (x - xstar - TINYDOUBLE)
+    return cast(
+        sp.Expr, min_noif(x - xstar, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE)
+    )
 
 
 def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -108,7 +116,9 @@ def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x > xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return max_noif(x - xstar, 0.0) / (x - xstar + TINYDOUBLE)
+    return cast(
+        sp.Expr, max_noif(x - xstar, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE)
+    )
 
 
 if __name__ == "__main__":

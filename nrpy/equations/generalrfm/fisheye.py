@@ -470,7 +470,7 @@ class FisheyeGeneralRFM:
         prefactor = s / (2 * sp.tanh(R / s))
         arg_plus = (r + R) / s
         arg_minus = (r - R) / s
-        return prefactor * sp.log(sp.cosh(arg_plus) / sp.cosh(arg_minus))
+        return cast(sp.Expr, prefactor * sp.log(sp.cosh(arg_plus) / sp.cosh(arg_minus)))
 
     def _build_unscaled_radius_map(self, r: sp.Expr) -> sp.Expr:
         """
@@ -496,7 +496,7 @@ class FisheyeGeneralRFM:
             s_i = self.s_list[i]
             rbar_unscaled += delta_a_i * self._G_kernel(r, R_i, s_i)
 
-        return rbar_unscaled
+        return cast(sp.Expr, rbar_unscaled)
 
 
 def build_fisheye_generalrfm(

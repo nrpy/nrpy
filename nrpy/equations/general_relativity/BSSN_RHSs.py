@@ -9,6 +9,7 @@ Author: Zachariah B. Etienne
 """
 
 from collections import OrderedDict
+
 # Step 1.a: import all needed modules from NRPy:
 from typing import Dict
 

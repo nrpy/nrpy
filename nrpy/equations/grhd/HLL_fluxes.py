@@ -6,13 +6,13 @@ Author: Terrence Pierre Jacques
 """
 
 # Step Import needed modules:
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
 import nrpy.indexedexp as ixp
-from nrpy.equations.grhd.characteristic_speeds import find_cmax_cmin
 from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
+from nrpy.equations.grhd.characteristic_speeds import find_cmax_cmin
 
 
 def calculate_GRHD_Tmunu_and_contractions(
@@ -136,7 +136,7 @@ def HLL_solver(
     :param Ul: conserved quantity at left interface
     :return: HLL flux at an interface
     """
-    return (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    return cast(sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin))
 
 
 def calculate_HLL_fluxes(

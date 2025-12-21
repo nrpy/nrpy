@@ -109,9 +109,9 @@ def find_cmax_cmin(
     #   CCTK_REAL cminL = -MIN(0.0,MIN(cminusl,cminusr));
 
     # Now, we need to set cmax to the larger of cpr,cpl, and 0
-    cmax = noif.max_noif(0.0, noif.max_noif(cpl, cpr))
+    cmax = noif.max_noif(sp.sympify(0.0), noif.max_noif(cpl, cpr))
     # And then, set cmin to the smaller of cmr,cml, and 0
-    cmin = -noif.min_noif(0.0, noif.min_noif(cml, cmr))
+    cmin = -noif.min_noif(sp.sympify(0.0), noif.min_noif(cml, cmr))
 
     # save the rescaled char. speeds
     return cmin, cmax
