@@ -100,44 +100,52 @@ class NRPyJaxPrinter(Printer):
         return retval
 
     def _print_ArrayElementwiseApplyFunc(self, expr: sp.Basic) -> str:
-        try:
-            func = expr.function
-            arr = expr.expr
-        except AttributeError:
-            func, arr = expr.args
+        """
+        Print a SymPy ArrayElementwiseApplyFunc expression by inlining the lambda body.
 
+        This lowers elementwise array-application nodes into JAX-broadcastable scalar
+        expressions over arrays (e.g., `jnp.sin(A)`, `jnp.abs(A)`, etc.), avoiding
+        unsupported SymPy printer nodes during code generation.
+
+        :param expr: ArrayElementwiseApplyFunc expression to print.
+        :return: String representation of the elementwise-applied expression.
+        """
+        # mypy note:
+        # SymPy printer hooks accept `Basic`, but `Basic` doesn't declare `.function` / `.expr`.
+        # These are runtime attributes on this node, so we cast to Any for safe inspection.
+        e = cast(Any, expr)
+
+        # ArrayElementwiseApplyFunc commonly provides `.function` and `.expr`. If not,
+        # fall back to the conventional `(function, element)` structure in `expr.args`.
+        if hasattr(e, "function") and hasattr(e, "expr"):
+            func = e.function  # scalar function to apply (often a sympy.Lambda)
+            arr = e.expr  # array operand/expression
+        else:
+            func, arr = expr.args  # expected: (function, element)
+
+        # Print the array operand once. JAX elementwise ops generally broadcast over arrays.
         arr_str = self._print(arr)
 
+        # Most commonly, SymPy wraps this as a unary Lambda(var, body).
         if isinstance(func, sp.Lambda):
-            # Handle only unary lambdas cleanly
+            # If a multi-argument lambda appears, fall back to vectorization so codegen proceeds.
             if len(func.variables) != 1:
                 return f"jnp.vectorize({self._print(func)})({arr_str})"
 
             var = func.variables[0]
             body = func.expr
 
-            # Optional fast-path ONLY if we *know* the mapping exists
-            if isinstance(body, sp.Function) and body.args == (var,):
-                fname = getattr(
-                    body.func, "__name__", getattr(body.func, "name", str(body.func))
-                )
-                if fname in self._kf:
-                    return f"{self._kf[fname]}({arr_str})"
-                # otherwise fall through to general path so printer methods (e.g. Abs) work
-
+            # Use a placeholder + string replacement to avoid SymPy rewriting back into the
+            # original ArrayElementwiseApplyFunc (or similar array-expression nodes).
             placeholder = sp.Symbol("__AEAF_PH__")
             scalar_body = body.xreplace({var: placeholder})
+
             body_str = self._print(scalar_body)
             ph_str = self._print(placeholder)
+
+            # Parenthesize the injected array to preserve operator precedence.
             return body_str.replace(ph_str, f"({arr_str})")
 
-        # Non-lambda fallback: look up by name string, not by object
-        fname = getattr(func, "__name__", getattr(func, "name", None))
-        if fname and fname in self._kf:
-            func_str = self._kf[fname]
-        elif fname:
-            func_str = f"{self._module}.{fname}"
-        else:
-            func_str = self._print(func)
-
-        return f"{func_str}({arr_str})"
+        # Non-Lambda case: print as a callable applied to the array.
+        # Parentheses ensure correct precedence if `func` prints as an expression.
+        return f"({self._print(func)})({arr_str})"
