@@ -62,7 +62,7 @@ public:
     (
         evolved_variables_list,
         auxevol_variables_list,
-        diag_variables_list,
+        _diag_variables_list,
         auxiliary_variables_list,
     ) = gri.CarpetXGridFunction.gridfunction_lists()
 
