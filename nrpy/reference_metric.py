@@ -313,92 +313,7 @@ class ReferenceMetric:
             self.ghatDDdDD = ixp.declarerank4(
                 "ghatDDdDD", dimension=3, symmetry="sym01sym23"
             )
-
-            # Algebraic computation of detgammahatdD using Jacobi's formula:
-            # D_{,k} = D * g^{ij} * g_{ij,k}
-            self.detgammahatdD = ixp.zerorank1(dimension=3)
-            for k in range(3):
-                for i in range(3):
-                    for j in range(3):
-                        self.detgammahatdD[k] += (
-                            self.detgammahat
-                            * self.ghatUU[i][j]
-                            * self.ghatDDdD[i][j][k]
-                        )
-
-            # Algebraic computation of detgammahatdDD:
-            # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k} <- TERM 1
-            #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}  <- TERM 2
-            #                + g^{ij} g_{ij,kl} ]               <- TERM 3
-            self.detgammahatdDD = ixp.zerorank2(dimension=3)
-            # TERM 1:
-            # D * ( g^{mn} g_{mn,l} * g^{ij} g_{ij,k} )
-            for k in range(3):
-                for l in range(3):
-                    for i in range(3):
-                        for j in range(3):
-                            for m in range(3):
-                                for n in range(3):
-                                    self.detgammahatdDD[k][l] += self.detgammahat * (
-                                        self.ghatUU[m][n]
-                                        * self.ghatDDdD[m][n][l]
-                                        * self.ghatUU[i][j]
-                                        * self.ghatDDdD[i][j][k]
-                                    )
-            # TERM 2:
-            # D * ( - g^{ip} g^{jq} g_{pq,l} g_{ij,k} )
-            for k in range(3):
-                for l in range(3):
-                    for i in range(3):
-                        for j in range(3):
-                            for p in range(3):
-                                for q in range(3):
-                                    self.detgammahatdDD[k][l] += self.detgammahat * (
-                                        -self.ghatUU[i][p]
-                                        * self.ghatUU[j][q]
-                                        * self.ghatDDdD[p][q][l]
-                                        * self.ghatDDdD[i][j][k]
-                                    )
-            # TERM 3:
-            # D * ( g^{ij} g_{ij,kl} )
-            for k in range(3):
-                for l in range(3):
-                    for i in range(3):
-                        for j in range(3):
-                            self.detgammahatdDD[k][l] += self.detgammahat * (
-                                self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
-                            )
-
-            # For GeneralRFM, all rescaling derivatives remain identically zero
-            # (already initialized above via zerorank* calls).
-
         else:
-            # Standard computation via symbolic differentiation for other coordinate systems
-            for i in range(3):
-                self.detgammahatdD[i] = sp.diff(self.detgammahat, self.xx[i])
-                for j in range(3):
-                    self.detgammahatdDD[i][j] = sp.diff(
-                        self.detgammahatdD[i], self.xx[j]
-                    )
-
-            for i in range(3):
-                for j in range(3):
-                    self.ReUdD[i][j] = sp.diff(self.ReU[i], self.xx[j])
-                    self.ReDdD[i][j] = sp.diff(self.ReD[i], self.xx[j])
-                    for k in range(3):
-                        self.ReUdDD[i][j][k] = sp.diff(self.ReUdD[i][j], self.xx[k])
-                        self.ReDdDD[i][j][k] = sp.diff(self.ReDdD[i][j], self.xx[k])
-
-            for i in range(3):
-                for j in range(3):
-                    for k in range(3):
-                        self.ReDDdD[i][j][k] = sp.diff(self.ReDD[i][j], self.xx[k])
-                        for l in range(3):
-                            # Simplifying this doesn't appear to help overall NRPy run time.
-                            self.ReDDdDD[i][j][k][l] = sp.diff(
-                                self.ReDDdD[i][j][k], self.xx[l]
-                            )
-
             for i in range(3):
                 for j in range(3):
                     for k in range(3):
@@ -414,6 +329,77 @@ class ReferenceMetric:
                             self.ghatDDdDD[i][j][k][l] = sp.diff(
                                 self.ghatDDdD[i][j][k], self.xx[l]
                             )
+
+        # Algebraic computation of detgammahatdD using Jacobi's formula:
+        # D_{,k} = D * g^{ij} * g_{ij,k}
+        self.detgammahatdD = ixp.zerorank1(dimension=3)
+        for k in range(3):
+            for i in range(3):
+                for j in range(3):
+                    self.detgammahatdD[k] += (
+                        self.detgammahat * self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
+                    )
+
+        # Algebraic computation of detgammahatdDD:
+        # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k} <- TERM 1
+        #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}  <- TERM 2
+        #                + g^{ij} g_{ij,kl} ]               <- TERM 3
+        self.detgammahatdDD = ixp.zerorank2(dimension=3)
+        # TERM 1:
+        # D * ( g^{mn} g_{mn,l} * g^{ij} g_{ij,k} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        for m in range(3):
+                            for n in range(3):
+                                self.detgammahatdDD[k][l] += self.detgammahat * (
+                                    self.ghatUU[m][n]
+                                    * self.ghatDDdD[m][n][l]
+                                    * self.ghatUU[i][j]
+                                    * self.ghatDDdD[i][j][k]
+                                )
+        # TERM 2:
+        # D * ( - g^{ip} g^{jq} g_{pq,l} g_{ij,k} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        for p in range(3):
+                            for q in range(3):
+                                self.detgammahatdDD[k][l] += self.detgammahat * (
+                                    -self.ghatUU[i][p]
+                                    * self.ghatUU[j][q]
+                                    * self.ghatDDdD[p][q][l]
+                                    * self.ghatDDdD[i][j][k]
+                                )
+        # TERM 3:
+        # D * ( g^{ij} g_{ij,kl} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        self.detgammahatdDD[k][l] += self.detgammahat * (
+                            self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
+                        )
+
+        for i in range(3):
+            for j in range(3):
+                self.ReUdD[i][j] = sp.diff(self.ReU[i], self.xx[j])
+                self.ReDdD[i][j] = sp.diff(self.ReD[i], self.xx[j])
+                for k in range(3):
+                    self.ReUdDD[i][j][k] = sp.diff(self.ReUdD[i][j], self.xx[k])
+                    self.ReDdDD[i][j][k] = sp.diff(self.ReDdD[i][j], self.xx[k])
+
+        for i in range(3):
+            for j in range(3):
+                for k in range(3):
+                    self.ReDDdD[i][j][k] = sp.diff(self.ReDD[i][j], self.xx[k])
+                    for l in range(3):
+                        # Simplifying this doesn't appear to help overall NRPy run time.
+                        self.ReDDdDD[i][j][k][l] = sp.diff(
+                            self.ReDDdD[i][j][k], self.xx[l]
+                        )
 
         # Step 4a: Compute Christoffel symbols of reference metric.
         # (Standard algebraic construction works for all systems including GeneralRFM)
