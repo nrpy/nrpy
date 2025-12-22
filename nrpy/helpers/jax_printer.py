@@ -98,3 +98,46 @@ class NRPyJaxPrinter(Printer):
         if retval is None:
             return super()._print_Pow(expr, rational=rational)
         return retval
+
+    def _print_ArrayElementwiseApplyFunc(self, expr: sp.Basic) -> str:
+        try:
+            func = expr.function
+            arr = expr.expr
+        except AttributeError:
+            func, arr = expr.args
+
+        arr_str = self._print(arr)
+
+        if isinstance(func, sp.Lambda):
+            # Handle only unary lambdas cleanly
+            if len(func.variables) != 1:
+                return f"jnp.vectorize({self._print(func)})({arr_str})"
+
+            var = func.variables[0]
+            body = func.expr
+
+            # Optional fast-path ONLY if we *know* the mapping exists
+            if isinstance(body, sp.Function) and body.args == (var,):
+                fname = getattr(
+                    body.func, "__name__", getattr(body.func, "name", str(body.func))
+                )
+                if fname in self._kf:
+                    return f"{self._kf[fname]}({arr_str})"
+                # otherwise fall through to general path so printer methods (e.g. Abs) work
+
+            placeholder = sp.Symbol("__AEAF_PH__")
+            scalar_body = body.xreplace({var: placeholder})
+            body_str = self._print(scalar_body)
+            ph_str = self._print(placeholder)
+            return body_str.replace(ph_str, f"({arr_str})")
+
+        # Non-lambda fallback: look up by name string, not by object
+        fname = getattr(func, "__name__", getattr(func, "name", None))
+        if fname and fname in self._kf:
+            func_str = self._kf[fname]
+        elif fname:
+            func_str = f"{self._module}.{fname}"
+        else:
+            func_str = self._print(func)
+
+        return f"{func_str}({arr_str})"
