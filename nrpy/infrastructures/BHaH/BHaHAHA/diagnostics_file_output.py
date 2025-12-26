@@ -108,6 +108,9 @@ Operations performed:
     fprintf(fileptr, "# column 19 = Spin y-component (based on xy/xz)\n");
     fprintf(fileptr, "# column 20 = Spin z-component (based on xz/xy)\n");
     fprintf(fileptr, "# column 21 = Spin z-component (based on yz/xy)\n");
+    fprintf(fileptr, "# column 22 = Spin x-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 23 = Spin y-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 24 = Spin z-component (based on spin function Omega)\n");
     fflush(fileptr);
   } // END IF file size zero -> need to write header
 
@@ -146,7 +149,10 @@ Operations performed:
           a_y_yz_over_xz_spin,                               // (18) Spin y (yz/xz)
           a_y_xy_over_xz_spin,                               // (19) Spin y (xy/xz)
           a_z_xz_over_xy_spin,                               // (20) Spin z (xz/xy)
-          a_z_yz_over_xy_spin                                // (21) Spin z (yz/xy)
+          a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
+          spin_chi_x_spectre,                                // (22) Spin x (Omega)
+          spin_chi_y_spectre,                                // (23) Spin y (Omega)
+          spin_chi_z_spectre                                 // (24) Spin z (Omega)
   );
 
   fflush(fileptr);
