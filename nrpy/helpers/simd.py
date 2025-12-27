@@ -9,7 +9,7 @@ Emails: ksible *at* outlook *dot** com
 """
 
 import sys
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, Optional, Union, cast
 
 from sympy import (
     Abs,
@@ -31,7 +31,6 @@ from sympy import (
     sign,
     simplify,
     sin,
-    sqrt,
     srepr,
     sympify,
     var,
@@ -175,6 +174,7 @@ def expr_convert_to_simd_intrins(
 
     Doctests:
     >>> from sympy.abc import a, b, c, d
+    >>> from sympy import sqrt
     >>> convert = expr_convert_to_simd_intrins
 
     >>> convert(-2*a)
@@ -372,9 +372,9 @@ def expr_convert_to_simd_intrins(
                 # Find the first occurrence of a negative product inside the addition
                 i = next(
                     i
-                    for i, arg in enumerate(args_list)
-                    if arg.func == Mul
-                    and any(lookup_rational(arg) == -1 for arg in args_list[i].args)
+                    for i, term in enumerate(args_list)
+                    if term.func == Mul
+                    and any(lookup_rational(factor) == -1 for factor in term.args)
                 )
                 # Find the first occurrence of a negative symbol inside the product
                 j = next(
@@ -388,12 +388,12 @@ def expr_convert_to_simd_intrins(
                 subargs = list(args_list[i].args)
                 subargs.pop(j)
                 # Build the subtraction expression for replacement
-                subexpr = SubSIMD(args_list[k], Mul(*cast(List[Expr], subargs)))
+                subexpr = SubSIMD(args_list[k], Mul(*subargs))
                 args_list = [
                     arg for arg in args_list if arg not in (args_list[i], args_list[k])
                 ]
                 if len(args_list) > 0:
-                    subexpr = Add(subexpr, *cast(List[Expr], args_list))
+                    subexpr = Add(subexpr, *args_list)
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
