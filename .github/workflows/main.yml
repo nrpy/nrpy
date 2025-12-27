@@ -38,9 +38,11 @@ jobs:
           pip install -U -r requirements.txt
           if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" && "${{ matrix.python-version }}" != "3.9.19" ]]; then
             pip install -U -r requirements-dev.txt
+            pip install git+https://github.com/sympy/sympy.git
           else
             # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
             sed 's/==.*//' requirements-dev.txt | xargs pip install -U
+            pip install sympy
           fi
           if [[ "${{ matrix.python-version }}" == "3.8.12" ]]; then
             pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.12.
@@ -49,15 +51,6 @@ jobs:
           pip install -U nrpylatex
           pip install -U ipython setuptools
           sudo apt-get -y install libgsl-dev
-
-      - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
-        run: |
-          pip install sympy
-          if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
-            pip install git+https://github.com/sympy/sympy.git
-          else
-            pip install sympy
-          fi
 
       - name: Display sympy and clang-format versions
         run: |
