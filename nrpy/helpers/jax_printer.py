@@ -22,6 +22,21 @@ if TYPE_CHECKING:
         def __init__(self, settings: Any = ...) -> None: ...
         def _print(self, expr: Any) -> Any: ...
         def _print_Pow(self, expr: sp.Basic, rational: bool = ...) -> Any: ...
+        def doprint(
+            self,
+            expr: Any,
+            assign_to: Any = ...,
+            **kwargs: Any,
+        ) -> str:
+            """
+             Typing-only stub for SymPy printers.
+
+             :param expr: Expression to print.
+             :param assign_to: Optional assignment target (e.g., a symbol/name).
+            :param kwargs: Additional printer options.
+             :return: Printed representation of `expr`.
+            """
+            return ""
 
 else:
     try:
