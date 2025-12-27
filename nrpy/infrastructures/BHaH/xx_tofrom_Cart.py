@@ -1,6 +1,6 @@
 # nrpy/infrastructures/BHaH/xx_tofrom_Cart.py
 """
-C function registration for converting between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian coordinate (x,y,z).
+C function registration for converting between uniform-grid coordinates (xx0, xx1, xx2) and Cartesian coordinates (x, y, z).
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -58,10 +58,8 @@ def _default_n_fisheye_transitions() -> int:
 
 def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
     """
-    Determine N (# of fisheye transitions) from the CoordSystem string if present.
-
-    Determine N (# of fisheye transitions) from the CoordSystem string if present,
-    else fall back to the global param n_fisheye_transitions.
+    Determine N (the number of fisheye transitions) from the CoordSystem string if present;
+    otherwise fall back to the global parameter n_fisheye_transitions.
 
     Supported examples (case-insensitive, no regex):
       - "Fisheye"               -> param fallback
@@ -275,7 +273,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     desc = "Given Cartesian point (x,y,z), this function "
     if gridding_approach == "multipatch":
-        desc += "does stuff needed for multipatch, and then "
+        desc += "assumes any required multipatch preprocessing has already been applied, then "
     desc += """unshifts the grid back to the origin to output the corresponding
             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid"""
 
@@ -356,14 +354,14 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     r = (f0 < fN) ? r_guess0 : r_guessN;
 
     while(iter < ITER_MAX && !tolerance_has_been_met) {{
-      REAL f_of_r, fprime_of_r;
 
 {nr_codegen_output}
 
-      // Guard against division by zero in Newton step:
-      if(fprime_of_r == (REAL)0.0) {{
-        break;
-      }}
+      // Unnecessary guard against division by zero in Newton step;
+      //   valid coordinate systems must have f'(r) > 0
+      // if(fprime_of_r == (REAL)0.0) {{
+      //  break;
+      // }}
 
       const REAL r_np1_unclamped = r - f_of_r / fprime_of_r;
 
@@ -379,9 +377,15 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     }}
 
     if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+#ifdef __CUDA_ARCH__
+      printf("ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
+             (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
+      asm("trap;");
+#else
       fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
-              rCart, Cartx, Carty, Cartz);
+              (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
       exit(1);
+#endif
     }}
 
     const REAL scale = r / rCart;
@@ -424,7 +428,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
   const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
-  int iter, tolerance_has_been_met=0;
+  int iter;
 """
         )
         for i in range(3):
@@ -449,12 +453,17 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 )
                 core_body_list.append(
                     f"""
-  iter=0;
-  REAL xx{i}  = 0.5 * (params->xxmin{i} + params->xxmax{i});
+  {{
+  int tolerance_has_been_met = 0;
+  iter = 0;
+  REAL xx{i} = (REAL)0.5 * (params->xxmin{i} + params->xxmax{i});
   while(iter < ITER_MAX && !tolerance_has_been_met) {{
     REAL f_of_xx{i}, fprime_of_xx{i};
 
 {nr_codegen_output}
+    if(fprime_of_xx{i} == (REAL)0.0) {{
+      break;
+    }}
     const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
 
     if( fabs(xx{i} - xx{i}_np1) <= XX_TOLERANCE * params->dxx{i} && fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE ) {{
@@ -463,11 +472,19 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     xx{i} = xx{i}_np1;
     iter++;
   }} // END Newton-Raphson iterations to compute xx{i}
-  if(iter >= ITER_MAX) {{
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
+  if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+#ifdef __CUDA_ARCH__
+    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+           (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
+    asm("trap;");
+#else
+    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+            (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     exit(1);
+#endif
   }}
   xx[{i}] = xx{i};
+  }}
 """
                 )
     else:
@@ -493,7 +510,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
       // Now, including typecasts:
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
-      // The (int) typecast always rounds down, so we add 0.5 inside the outer parenthesis:
+      // C float-to-int conversion truncates toward zero; for nonnegative inputs this matches floor().
+      // Assuming (xx - xxmin)/dxx + NGHOSTS is nonnegative (typical for valid interior points), this is safe.
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
       // The 0.5 values cancel out:
       //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
@@ -561,12 +579,12 @@ def register_CFunction_xx_to_Cart(
     >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> from nrpy.reference_metric import supported_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "xx_to_Cart"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in unittest_CoordSystems:
+    ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction_xx_to_Cart(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
@@ -653,8 +671,8 @@ const REAL xx2 = xx[2];
     # Step 4: Register the C function.
     cfc.register_CFunction(
         includes=["BHaH_defines.h"],
-        desc="""Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} in terms of
-local grid coordinates {xx[0][i0], xx[1][i1], xx[2][i2]} = {xx0, xx1, xx2},
+        desc="""Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} from the
+local coordinate vector {xx[0], xx[1], xx[2]} = {xx0, xx1, xx2},
 taking into account the possibility that the origin of this grid is off-center.""",
         cfunc_type="void",
         CoordSystem_for_wrapper_func=CoordSystem,
