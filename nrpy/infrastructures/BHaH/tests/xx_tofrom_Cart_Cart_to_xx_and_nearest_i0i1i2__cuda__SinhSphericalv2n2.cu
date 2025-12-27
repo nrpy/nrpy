@@ -4,8 +4,8 @@
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
  *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
-void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
-                                                             int Cart_to_i0i1i2[3]) {
+__host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSphericalv2n2(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
+                                                                               int Cart_to_i0i1i2[3]) {
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
@@ -20,10 +20,12 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
   {
     // First compute analytical coordinate inversions:
     /*
-     *  Original SymPy expression:
-     *  "xx[1] = atan2(Carty, Cartx)"
+     *  Original SymPy expressions:
+     *  "[xx[1] = acos(Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
+     *  "[xx[2] = atan2(Carty, Cartx)]"
      */
-    xx[1] = atan2(Carty, Cartx);
+    xx[1] = acos(Cartz / sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz))));
+    xx[2] = atan2(Carty, Cartx);
 
     // Next perform Newton-Raphson iterations as needed:
     const REAL XX_TOLERANCE = 1e-12;      // that's 1 part in 1e12 dxxi.
@@ -39,15 +41,15 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
         REAL f_of_xx0, fprime_of_xx0;
 
         {
-          const REAL tmp0 = (1.0 / (params->SINHWRHO));
-          const REAL tmp6 = params->AMPLRHO - params->rho_slope;
+          const REAL tmp0 = (1.0 / (params->SINHW));
+          const REAL tmp6 = params->AMPL - params->r_slope;
           const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
           const REAL tmp2 = exp(tmp0 * xx0);
           const REAL tmp3 = exp(-tmp0 * xx0);
           const REAL tmp7 = tmp5 * tmp6 * ((xx0) * (xx0));
           const REAL tmp4 = tmp2 - tmp3;
-          f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
-          fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
+          f_of_xx0 = params->r_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz)));
+          fprime_of_xx0 = params->r_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
         }
 
         if (fprime_of_xx0 == (REAL)0.0) {
@@ -63,60 +65,16 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
       } // END Newton-Raphson iterations to compute xx0
       if (iter >= ITER_MAX || !tolerance_has_been_met) {
 #ifdef __CUDA_ARCH__
-        printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
+        printf("ERROR: Newton-Raphson failed for SinhSphericalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
                (double)Carty, (double)Cartz);
         asm("trap;");
 #else
-        fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
+        fprintf(stderr, "ERROR: Newton-Raphson failed for SinhSphericalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
                 (double)Carty, (double)Cartz);
         exit(1);
 #endif
       }
       xx[0] = xx0;
-    }
-
-    {
-      int tolerance_has_been_met = 0;
-      iter = 0;
-      REAL xx2 = (REAL)0.5 * (params->xxmin2 + params->xxmax2);
-      while (iter < ITER_MAX && !tolerance_has_been_met) {
-        REAL f_of_xx2, fprime_of_xx2;
-
-        {
-          const REAL tmp0 = (1.0 / (params->SINHWZ));
-          const REAL tmp6 = params->AMPLZ - params->z_slope;
-          const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
-          const REAL tmp2 = exp(tmp0 * xx2);
-          const REAL tmp3 = exp(-tmp0 * xx2);
-          const REAL tmp7 = tmp5 * tmp6 * ((xx2) * (xx2));
-          const REAL tmp4 = tmp2 - tmp3;
-          f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
-          fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
-        }
-
-        if (fprime_of_xx2 == (REAL)0.0) {
-          break;
-        }
-        const REAL xx2_np1 = xx2 - f_of_xx2 / fprime_of_xx2;
-
-        if (fabs(xx2 - xx2_np1) <= XX_TOLERANCE * params->dxx2 && fabs(f_of_xx2) <= F_OF_XX_TOLERANCE) {
-          tolerance_has_been_met = 1;
-        }
-        xx2 = xx2_np1;
-        iter++;
-      } // END Newton-Raphson iterations to compute xx2
-      if (iter >= ITER_MAX || !tolerance_has_been_met) {
-#ifdef __CUDA_ARCH__
-        printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx2, (double)Cartx,
-               (double)Carty, (double)Cartz);
-        asm("trap;");
-#else
-        fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx2, (double)Cartx,
-                (double)Carty, (double)Cartz);
-        exit(1);
-#endif
-      }
-      xx[2] = xx2;
     }
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
@@ -135,4 +93,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2
+} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSphericalv2n2

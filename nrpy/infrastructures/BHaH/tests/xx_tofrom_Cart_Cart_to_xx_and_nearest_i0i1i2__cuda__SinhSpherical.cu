@@ -4,8 +4,8 @@
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
  *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
-void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
-                                                            int Cart_to_i0i1i2[3]) {
+__host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSpherical(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
+                                                                           int Cart_to_i0i1i2[3]) {
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
@@ -45,4 +45,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct 
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical
+} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__SinhSpherical

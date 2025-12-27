@@ -4,8 +4,8 @@
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
  *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
-void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
-                                                            int Cart_to_i0i1i2[3]) {
+__host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
+                                                                        int Cart_to_i0i1i2[3]) {
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
@@ -20,14 +20,13 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct 
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SINHW*asinh(sqrt(Cartx**2 + Carty**2 + Cartz**2)*sinh(1/params->SINHW)/params->AMPL)]"
-     *  "[xx[1] = acos(Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
-     *  "[xx[2] = atan2(Carty, Cartx)]"
+     *  "[xx[0] = Cartx]"
+     *  "[xx[1] = Carty]"
+     *  "[xx[2] = Cartz]"
      */
-    const REAL tmp0 = sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz)));
-    xx[0] = params->SINHW * asinh(tmp0 * sinh((1.0 / (params->SINHW))) / params->AMPL);
-    xx[1] = acos(Cartz / tmp0);
-    xx[2] = atan2(Carty, Cartx);
+    xx[0] = Cartx;
+    xx[1] = Carty;
+    xx[2] = Cartz;
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:
@@ -45,4 +44,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct 
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical
+} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM

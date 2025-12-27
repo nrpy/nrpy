@@ -4,8 +4,7 @@
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
  *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
-void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
-                                                            int Cart_to_i0i1i2[3]) {
+void Cart_to_xx_and_nearest_i0i1i2__rfm__SymTP(const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]) {
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
@@ -20,13 +19,20 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct 
   {
     /*
      *  Original SymPy expressions:
-     *  "[xx[0] = params->SINHW*asinh(sqrt(Cartx**2 + Carty**2 + Cartz**2)*sinh(1/params->SINHW)/params->AMPL)]"
-     *  "[xx[1] = acos(Cartz/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
+     *  "[xx[0] = params->SQRT1_2*sqrt(Cartx**2 + Carty**2 + Cartz**2 - params->bScale**2 + sqrt(-4*Cartz**2*params->bScale**2 + params->bScale**4 +
+     * 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 + Cartz**2)**2))]"
+     *  "[xx[1] = acos(params->SQRT1_2*sqrt(1 + (Cartx**2 + Carty**2 + Cartz**2)/params->bScale**2 - sqrt(-4*Cartz**2*params->bScale**2 +
+     * params->bScale**4 + 2*params->bScale**2*(Cartx**2 + Carty**2 + Cartz**2) + (Cartx**2 + Carty**2 +
+     * Cartz**2)**2)/params->bScale**2)*sign(Cartz))]"
      *  "[xx[2] = atan2(Carty, Cartx)]"
      */
-    const REAL tmp0 = sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz)));
-    xx[0] = params->SINHW * asinh(tmp0 * sinh((1.0 / (params->SINHW))) / params->AMPL);
-    xx[1] = acos(Cartz / tmp0);
+    const REAL tmp1 = ((params->bScale) * (params->bScale));
+    const REAL tmp2 = ((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz));
+    const REAL tmp4 = (1.0 / (tmp1));
+    const REAL tmp3 = sqrt(-4 * ((Cartz) * (Cartz)) * tmp1 + ((params->bScale) * (params->bScale) * (params->bScale) * (params->bScale)) +
+                           2 * tmp1 * tmp2 + ((tmp2) * (tmp2)));
+    xx[0] = params->SQRT1_2 * sqrt(-tmp1 + tmp2 + tmp3);
+    xx[1] = acos(params->SQRT1_2 * sqrt(tmp2 * tmp4 - tmp3 * tmp4 + 1) * (((Cartz) > 0) - ((Cartz) < 0)));
     xx[2] = atan2(Carty, Cartx);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
@@ -45,4 +51,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(const params_struct 
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical
+} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__SymTP
