@@ -4,12 +4,34 @@ This module performs the same power simplification as custom_c_codegen_functions
 Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
-from typing import Any, Dict, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Union, cast
 
 import sympy as sp
 
+if TYPE_CHECKING:
+    # SymPy printer classes may be untyped (Any) on older SymPy installs, which
+    # makes mypy complain about subclassing. Provide a small typed shim instead.
+    # pylint: disable=unused-argument
+    class Printer:  # pragma: no cover
+        """Dummy class definition for typehinting."""
+
+        _module: str
+        _kf: Dict[Any, Any]
+        _kc: Dict[Any, Any]
+
+        def __init__(self, settings: Any = ...) -> None: ...
+        def _print(self, expr: Any) -> Any: ...
+        def _print_Pow(self, expr: sp.Basic, rational: bool = ...) -> Any: ...
+
+else:
+    try:
+        from sympy.printing.numpy import JaxPrinter as Printer
+    except ImportError:
+        # Fallback for older SymPy versions
+        from sympy.printing.numpy import NumPyPrinter as Printer
+
 try:
-    from sympy.printing.numpy import JaxPrinter as Printer
+    # SymPy-dev / newer SymPy
     from sympy.printing.numpy import _jax_known_constants as known_constants
     from sympy.printing.numpy import _jax_known_functions as known_functions
 
@@ -22,7 +44,6 @@ try:
     }
 except ImportError:
     # Fallback for older SymPy versions
-    from sympy.printing.numpy import NumPyPrinter as Printer
     from sympy.printing.numpy import _known_constants_numpy, _known_functions_numpy
 
     known_functions = {k: "jnp." + v for k, v in _known_functions_numpy.items()}
@@ -32,7 +53,7 @@ except ImportError:
 # adding a type ignore as mypy does not let me inherit from JaxPrinter.
 # Disable specific pylint errors owing to sympy
 # pylint: disable=too-many-ancestors, abstract-method
-class NRPyJaxPrinter(Printer):  # type: ignore[misc]
+class NRPyJaxPrinter(Printer):
     """Custom JAX printer to handle custom power simplification."""
 
     _module = "jnp"
