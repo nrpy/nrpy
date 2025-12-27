@@ -1,7 +1,6 @@
 """
 Custom JAX printer to handle custom power simplification.
 This module performs the same power simplification as custom_c_codegen_functions.py for double
-
 Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
 """
 
@@ -23,7 +22,7 @@ try:
     }
 except ImportError:
     # Fallback for older SymPy versions
-    from sympy.printing.numpy import NumPyPrinter as Printer  # type: ignore
+    from sympy.printing.numpy import NumPyPrinter as Printer
     from sympy.printing.numpy import _known_constants_numpy, _known_functions_numpy
 
     known_functions = {k: "jnp." + v for k, v in _known_functions_numpy.items()}
@@ -33,7 +32,7 @@ except ImportError:
 # adding a type ignore as mypy does not let me inherit from JaxPrinter.
 # Disable specific pylint errors owing to sympy
 # pylint: disable=too-many-ancestors, abstract-method
-class NRPyJaxPrinter(Printer):
+class NRPyJaxPrinter(Printer):  # type: ignore[misc]
     """Custom JAX printer to handle custom power simplification."""
 
     _module = "jnp"
@@ -43,7 +42,6 @@ class NRPyJaxPrinter(Printer):
     def __init__(self, settings: Union[None, Dict[str, Any]] = None) -> None:
         """
         Initialize the NRPyJaxPrinter.
-
         :param settings: Settings for the printer.(defaults to None)
         """
         super().__init__(settings=settings)
@@ -51,7 +49,6 @@ class NRPyJaxPrinter(Printer):
     def _print_Pow(self, expr: sp.Basic, rational: bool = False) -> Union[str, Any]:
         """
         Print a power expression.
-
         :param expr: Power expression to print.
         :param rational: Boolean indicating whether to use rational exponents.
         :return: String representation of the power expression.
@@ -63,7 +60,6 @@ class NRPyJaxPrinter(Printer):
         def muln(n: int) -> str:
             """
             Return a string of repeated multiplication.
-
             :param n: Number of times to repeat multiplication.
             :return: String of repeated multiplication.
             """
@@ -86,6 +82,7 @@ class NRPyJaxPrinter(Printer):
             retval = f"{self._module}.sqrt({self._module}.cbrt({b}))"
         if exp == -sp.Rational(1, 6):
             retval = f"(1.0/({self._module}.sqrt({self._module}.cbrt({b}))))"
+
         # Small integer powers mapped to repeated multiplication
         if isinstance(exp, sp.Integer):
             n = int(exp)
@@ -102,11 +99,9 @@ class NRPyJaxPrinter(Printer):
     def _print_ArrayElementwiseApplyFunc(self, expr: sp.Basic) -> str:
         """
         Print a SymPy ArrayElementwiseApplyFunc expression by inlining the lambda body.
-
         This lowers elementwise array-application nodes into JAX-broadcastable scalar
         expressions over arrays (e.g., `jnp.sin(A)`, `jnp.abs(A)`, etc.), avoiding
         unsupported SymPy printer nodes during code generation.
-
         :param expr: ArrayElementwiseApplyFunc expression to print.
         :return: String representation of the elementwise-applied expression.
         """
@@ -140,8 +135,9 @@ class NRPyJaxPrinter(Printer):
             placeholder = sp.Symbol("__AEAF_PH__")
             scalar_body = body.xreplace({var: placeholder})
 
-            body_str = self._print(scalar_body)
-            ph_str = self._print(placeholder)
+            # Ensure strict string typing for mypy (Base _print returns Any)
+            body_str = str(self._print(scalar_body))
+            ph_str = str(self._print(placeholder))
 
             # Parenthesize the injected array to preserve operator precedence.
             return body_str.replace(ph_str, f"({arr_str})")
