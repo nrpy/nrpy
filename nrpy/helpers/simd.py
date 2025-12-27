@@ -388,12 +388,14 @@ def expr_convert_to_simd_intrins(
                 subargs = list(args_list[i].args)
                 subargs.pop(j)
                 # Build the subtraction expression for replacement
-                subexpr = SubSIMD(args_list[k], Mul(*subargs))
+                # FIX: Cast subargs to List[Expr] to satisfy stricter SymPy type hints
+                subexpr = SubSIMD(args_list[k], Mul(*[cast(Expr, a) for a in subargs]))
                 args_list = [
                     arg for arg in args_list if arg not in (args_list[i], args_list[k])
                 ]
                 if len(args_list) > 0:
-                    subexpr = Add(subexpr, *args_list)
+                    # FIX: Cast args_list to List[Expr]
+                    subexpr = Add(subexpr, *[cast(Expr, a) for a in args_list])
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
