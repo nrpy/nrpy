@@ -1735,7 +1735,7 @@ supported_CoordSystems = [
     "UWedgeHSinhSph",
     "RingHoleySinhSpherical",
     "HoleySinhSpherical",
-    "GeneralRFM",
+    "GeneralRFM_FisheyeN2",
 ]
 
 unittest_CoordSystems = [
