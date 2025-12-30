@@ -1,127 +1,177 @@
 # nrpy/equations/generalrfm/fisheye.py
 """
-General N transition fisheye raw to physical (xx -> Cart) mapping and reference metric.
+N transition fisheye mapping and induced reference metric.
 
-This module implements a radially symmetric, arbitrary N transition fisheye mapping
-from raw Cartesian coordinates xx^i to physical Cartesian coordinates Cart^i,
-together with the associated flat space reference metric in the raw coordinates and
-its first and second derivatives.
+The map is radial: CartU[i] = lam(r) * xx[i] with lam(r) = rbar(r) / r.
+This module constructs CartU, the Jacobian, the induced flat reference metric, and its
+first and second derivatives in 3D raw Cartesian coordinates.
 
-Compared to the original implementation, this version is optimized for performance:
+This file also includes detailed derivations to justify the tensor expressions used
+in the implementation.
 
-* It exploits the purely radial form of the map, Cart^i = λ(r) xx^i, where
-  λ(r) = rbar(r) / r.
-* All "expensive" derivatives are taken only with respect to a 1D radial symbol r,
-  never with respect to the Cartesian coordinates xx^i.
-* The reference metric and its derivatives are expressed in terms of radial scalar
-  functions of r and simple Cartesian tensors (delta_ij and xx^i), avoiding repeated
-  large sympy.diff calls with respect to xx^i.
-* All radial derivatives of the transition kernel and radius map are built in closed
-  form, avoiding SymPy differentiation (sp.diff) entirely.
+1. Raw radius
 
-This module is the *single source of truth* for the *equations* of the fisheye map:
-* forward mapping xx -> Cart,
-* the radial map r -> rbar(r),
-* the inverse-map 1D root equation f(r) = rbar(r) - rCart (used by Newton-Raphson),
-* and the reference metric induced by the map.
+Given raw Cartesian coordinates xx[0], xx[1], xx[2], define
 
-Infrastructure modules (e.g. BHaH codegen) should consume the SymPy expressions from
-this module and handle C codegen + numerical algorithms externally.
+    r(xx) = sqrt( (xx[0])^2 + (xx[1])^2 + (xx[2])^2 )
 
-Summary of the geometry:
+and note the standard identity
 
-* Raw to physical map: xx^i -> Cart^i(xx).
-* Reference metric: ghat_ij = delta_mn (partial Cart^m / partial xx^i) (partial Cart^n / partial xx^j).
-* First derivatives: ghat_ij,k computed from analytic radial formulas.
-* Second derivatives: ghat_ij,kl computed from analytic radial formulas.
+    d r / d xx[j] = xx[j] / r.
 
-The raw radius is
+2. N transition fisheye radius map
 
-    r = sqrt( sum_i (xx^i)^2 ).
+The N transition fisheye map is defined by:
+- plateau stretch factors a_0, a_1, ..., a_N
+- transition centers R_1, R_2, ..., R_N
+- width parameters s_1, s_2, ..., s_N
+- differences delta_a_i = a_{i-1} - a_i
 
-The N transition fisheye map is defined by
-
-* Plateau stretch (zoom out) factors a_0, ..., a_N.
-* Transition centers R_1, ..., R_N.
-* Width parameters s_1, ..., s_N.
-* Differences delta a_i = a_{i-1} - a_i.
-
-The single transition kernel is
+Single transition kernel:
 
     G(r; R, s) =
         s / (2 * tanh(R / s)) *
-        log( cosh( (r + R) / s ) / cosh( (r - R) / s ) ).
+        log( cosh((r + R)/s) / cosh((r - R)/s) ).
 
-The unscaled radius map is
+Unscaled radius map:
 
     rbar_unscaled(r) =
-        a_N * r + sum_{i=1}^N (a_{i-1} - a_i) * G(r; R_i, s_i).
+        a_N * r + sum_{i=1..N} (a_{i-1} - a_i) * G(r; R_i, s_i).
 
-A global scale factor c produces the final radius map
+Scaled physical radius map:
 
     rbar(r) = c * rbar_unscaled(r).
 
-The physical Cartesian coordinates are obtained by a purely radial rescaling,
+3. Forward map
 
-    Cart^i = (rbar(r) / r) * xx^i,
+The physical Cartesian coordinates are obtained by radial rescaling:
 
-which leaves the angular coordinates unchanged.
+    CartU[i] = (rbar(r) / r) * xx[i] = lam(r) * xx[i],
 
-Inverse-map equation (Cart -> xx):
+where
 
-Let rCart = ||Cart||. Taking norms of Cart^i = (rbar(r)/r) xx^i gives
+    lam(r) = rbar(r) / r.
 
-    rCart = rbar(r).
+4. Jacobian derivation
 
-So the inverse map reduces to solving the 1D root equation
+Differentiate CartU[i] = lam(r) * xx[i] with respect to xx[j]. Using
+d r / d xx[j] = xx[j] / r and the product rule:
 
-    f(r) = rbar(r) - rCart = 0,   with f'(r) = d rbar / dr,
+    d CartU[i] / d xx[j]
+      = lam(r) * delta_ij + xx[i] * d lam / d xx[j]
 
-and then recovering
+and since lam depends on xx only through r:
 
-    xx^i = (r / rCart) Cart^i    (for rCart > 0), with xx^i = 0 at rCart = 0.
+    d lam / d xx[j] = (d lam / d r) * (d r / d xx[j]) = (d lam / d r) * xx[j] / r.
 
-From this mapping, the flat reference metric in raw coordinates can be written in the
-standard "radial-tangential" decomposition
+Therefore the Jacobian has the compact form used in the code:
 
-    ghat_ij(r, xx) = A(r) delta_ij + B(r) xx^i xx^j,
+    d CartU[i] / d xx[j]
+      = lam * delta_ij + (d lam / d r) * (xx[i] * xx[j] / r).
 
-where A(r) encodes the tangential (angular) scaling and A(r) + B(r) r^2 encodes the
-radial scaling. For a spherically symmetric map of the physical radius rbar(r) we have
+The implementation stores the factor (d lam / d r) / r and multiplies by xx[i] * xx[j].
 
-    A(r)     = (rbar(r) / r)^2,
-    A(r) + B(r) r^2 = (d rbar / d r)^2,
+5. Induced reference metric and the A(r), B(r) decomposition
 
-so that
+The physical space is flat with metric delta_mn in the physical Cartesian coordinates.
+The induced metric in the raw coordinates is
+
+    ghatDD[i][j] = delta_mn
+                   * (d CartU[m] / d xx[i])
+                   * (d CartU[n] / d xx[j]).
+
+By spherical symmetry, any rank-2 tensor built from xx[i] can be decomposed as
+
+    ghatDD[i][j] = A(r) * delta_ij + B(r) * xx[i] * xx[j].
+
+For the fisheye map:
+
+- Tangential (angular) scaling is set by the factor multiplying directions orthogonal
+  to xx[i], which is lam(r). Thus the tangential eigenvalue is lam(r)^2, so
+
+      A(r) = lam(r)^2 = (rbar(r) / r)^2.
+
+- Radial scaling is determined by how radial line elements transform. Along the radial
+  direction, drbar = (d rbar / d r) * dr, so the radial metric component is
+
+      ghat_rr = (d rbar / d r)^2.
+
+In the A,B decomposition, the radial eigenvalue is A(r) + B(r) * r^2, so
+
+    A(r) + B(r) * r^2 = (d rbar / d r)^2,
+
+which yields
 
     B(r) = ( (d rbar / d r)^2 - A(r) ) / r^2.
 
-The first and second derivatives ghat_ij,k and ghat_ij,kl are then built from
-A(r), B(r) and their radial derivatives using the chain rule and the simple
-Cartesian identities
+Defining u = rbar(r) and p = d u / d r, this becomes the algebraic form used in code:
 
-    partial_k r = xx^k / r,
-    partial_k xx^i = delta^i_k,
-    partial_l partial_k xx^i = 0,
+    A(r) = u^2 / r^2
+    B(r) = p^2 / r^2 - u^2 / r^4.
 
-without ever asking SymPy to differentiate huge expressions with respect to xx^i.
+6. First derivatives of the metric
 
-Fisheye parameters are stored as NRPy code parameters so that they can be
-configured at code generation time.
+Write
+
+    ghatDD[i][j] = A(r) * delta_ij + B(r) * xx[i] * xx[j].
+
+Using
+- d r / d xx[k] = xx[k] / r
+- d(xx[i] * xx[j]) / d xx[k] = delta_ik * xx[j] + xx[i] * delta_jk
+
+we obtain
+
+    ghatDDdD[i][j][k]
+      = (A'(r) / r) * xx[k] * delta_ij
+        + (B'(r) / r) * xx[k] * xx[i] * xx[j]
+        + B(r) * (delta_ik * xx[j] + xx[i] * delta_jk).
+
+This is exactly the structure implemented for ghatDDdD.
+
+7. Second derivatives of the metric
+
+Differentiate ghatDDdD[i][j][k] with respect to xx[l]. A useful identity is
+
+    d (xx[k] / r) / d xx[l] = delta_kl / r - xx[k] * xx[l] / r^3.
+
+When differentiating (A'(r)/r) * xx[k] and (B'(r)/r) * xx[k], the terms combine into
+compact coefficients
+
+    coeff_A = A''/r^2 - A'/r^3
+    coeff_B = B''/r^2 - B'/r^3
+
+that multiply xx[k] * xx[l]. The remaining pieces come from differentiating the
+explicit xx factors in xx[i] * xx[j] and the deltas. The final assembled expression
+for ghatDDdDD is implemented directly in tensor-component form.
+
+8. Closed-form radial derivatives
+
+To avoid expensive Cartesian differentiation, this module builds all radial derivatives
+in 1D in terms of a single symbol r_sym, and only at the end substitutes r_sym -> r(xx).
+
+When requested, the kernel derivatives G', G'', G''' are computed in closed form, and
+the map derivatives are accumulated in a single pass.
+
+The helper _radial_metric_scalars uses u = rbar, p = du/dr, q = d2u/dr2, t = d3u/dr3
+to write lam, dlam/dr, A, B and their first and second radial derivatives in explicit
+algebraic form, which is then converted to full Cartesian expressions.
 """
 
-from dataclasses import dataclass
-from functools import lru_cache
-from typing import Dict, List, Optional, Tuple, Union, cast
+from __future__ import annotations
+
+from typing import Dict, Optional, Sequence, Tuple, Union
 
 import sympy as sp
 
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 
-_CodeParameterDefaultList = List[Union[str, int, float]]
+thismodule = __name__
 
-# Kronecker delta in 3D as a plain Python constant for fast tensor assembly.
+__all__ = ["GeneralRFMFisheye", "make_fisheye_rfm"]
+
+_CodeParameterDefault = Union[str, int, float]
+
 _KroneckerDelta3D: Tuple[
     Tuple[int, int, int], Tuple[int, int, int], Tuple[int, int, int]
 ] = (
@@ -131,679 +181,231 @@ _KroneckerDelta3D: Tuple[
 )
 
 
-@dataclass(frozen=True)
-class FisheyeRadialExprs:
-    """
-    Container for 1D radial SymPy expressions for the N-transition fisheye map.
-
-    These expressions are intended for infrastructure code that needs:
-      * rbar(r) and drbar/dr for forward mapping codegen, and/or
-      * f(r) = rbar(r) - rCart and f'(r) for inverse-map Newton-Raphson.
-
-    All expressions are built in terms of a single radial symbol r_sym (1D), not
-    the full Cartesian radius sqrt(xx^i xx^i).
-
-    :ivar num_transitions: Number of fisheye transitions N (>= 1).
-    :ivar r_sym: 1D raw-radius symbol used to build all radial expressions.
-    :ivar rCart_sym: 1D physical-radius symbol rCart = ||Cart|| used in f(r).
-    :ivar rbar_unscaled_of_r: Unscaled radius map rbar_unscaled(r_sym).
-    :ivar rbar_of_r: Scaled radius map rbar(r_sym) = c * rbar_unscaled(r_sym).
-    :ivar drbar_dr_of_r: First derivative d rbar / d r.
-    :ivar lam_of_r: Radial scaling λ(r) = rbar(r)/r.
-    :ivar dlam_dr_of_r: dλ/dr = (r rbar'(r) - rbar(r))/r^2.
-    :ivar f_of_r: Root function f(r) = rbar(r) - rCart.
-    :ivar fprime_of_r: Root derivative f'(r) = d rbar / d r.
-    """
-
-    num_transitions: int
-    r_sym: sp.Symbol
-    rCart_sym: sp.Symbol
-
-    rbar_unscaled_of_r: sp.Expr
-    rbar_of_r: sp.Expr
-    drbar_dr_of_r: sp.Expr
-
-    lam_of_r: sp.Expr
-    dlam_dr_of_r: sp.Expr
-
-    f_of_r: sp.Expr
-    fprime_of_r: sp.Expr
-
-
-# -----------------------------------------------------------------------------
-# Internal helpers: parameter registration and purely-radial kernel/map builders.
-# -----------------------------------------------------------------------------
-@dataclass(frozen=True)
-class _FisheyeParams:
-    """
-    Container for registered fisheye CodeParameters.
-
-    This exists so that radial-only expression builders (e.g. fisheye_radial_exprs)
-    can register and access the canonical fisheye parameters without instantiating
-    the full GeneralRFMFisheye object (which also builds Jacobians/metrics/derivs).
-    """
-
-    num_transitions: int
-    a_list: List[sp.Expr]
-    R_list: List[sp.Expr]
-    s_list: List[sp.Expr]
-    c: sp.Expr
-
-
-def _register_fisheye_params(
-    num_transitions: int,
-    a_default: Optional[List[float]] = None,
-    R_default: Optional[List[float]] = None,
-    s_default: Optional[List[float]] = None,
-    c_default: float = 1.0,
-) -> _FisheyeParams:
-    """
-    Register the fisheye CodeParameters and return the associated SymPy symbols.
-
-    The registration logic is shared between:
-      * GeneralRFMFisheye (full metric + derivatives), and
-      * fisheye_radial_exprs() (radial-only expressions for forward/inverse maps).
-
-    :param num_transitions: Number of fisheye transitions N. Must be at least 1.
-    :param a_default: Default plateau stretch factors [a0, ..., aN].
-                      If None, all entries are set to 1.0. Length must be num_transitions + 1.
-    :param R_default: Default raw transition centers [R1, ..., RN].
-                      If None, they are set to [1.0, 2.0, ..., float(N)].
-                      Length must be num_transitions.
-    :param s_default: Default raw transition widths [s1, ..., sN].
-                      If None, all entries are set to 0.5. Length must be num_transitions.
-    :param c_default: Default global scaling factor c. Defaults to 1.0.
-    :return: _FisheyeParams containing the registered CodeParameter symbols.
-    :raises ValueError: If num_transitions is less than 1.
-    :raises ValueError: If any of the default lists have inconsistent lengths.
-    """
-    if num_transitions < 1:
-        raise ValueError(
-            f"num_transitions must be >= 1; got num_transitions = {num_transitions}."
-        )
-
-    # ---------------------------------------------------------------------
-    # Step 1: Set up default parameter values and register NRPy CodeParameters.
-    # ---------------------------------------------------------------------
-    if a_default is None:
-        # Default: all plateaus have unit stretch before global scaling.
-        a_default_list: List[float] = [1.0 for _ in range(num_transitions + 1)]
-    else:
-        a_default_list = [float(val) for val in a_default]
-    if len(a_default_list) != num_transitions + 1:
-        raise ValueError(
-            "a_default must have length num_transitions + 1; "
-            f"got len(a_default) = {len(a_default_list)} while "
-            f"num_transitions + 1 = {num_transitions + 1}."
-        )
-
-    if R_default is None:
-        # Simple monotonically increasing centers as a fallback.
-        R_default_list: List[float] = [float(i + 1) for i in range(num_transitions)]
-    else:
-        R_default_list = [float(val) for val in R_default]
-    if len(R_default_list) != num_transitions:
-        raise ValueError(
-            "R_default must have length num_transitions; "
-            f"got len(R_default) = {len(R_default_list)} while "
-            f"num_transitions = {num_transitions}."
-        )
-
-    if s_default is None:
-        # Default: moderate transition widths.
-        s_default_list: List[float] = [0.5 for _ in range(num_transitions)]
-    else:
-        s_default_list = [float(val) for val in s_default]
-    if len(s_default_list) != num_transitions:
-        raise ValueError(
-            "s_default must have length num_transitions; "
-            f"got len(s_default) = {len(s_default_list)} while "
-            f"num_transitions = {num_transitions}."
-        )
-
-    # Plateau stretch factors a_0..a_N:
-    a_names = [f"fisheye_a{i}" for i in range(num_transitions + 1)]
-    a_list = par.register_CodeParameters(
-        "REAL",
-        __name__,
-        a_names,
-        cast(_CodeParameterDefaultList, a_default_list),
-        commondata=True,
-    )
-
-    # Raw transition centers R_1..R_N:
-    R_names = [f"fisheye_R{i + 1}" for i in range(num_transitions)]
-    R_list = par.register_CodeParameters(
-        "REAL",
-        __name__,
-        R_names,
-        cast(_CodeParameterDefaultList, R_default_list),
-        commondata=True,
-    )
-
-    # Raw transition widths s_1..s_N:
-    s_names = [f"fisheye_s{i + 1}" for i in range(num_transitions)]
-    s_list = par.register_CodeParameters(
-        "REAL",
-        __name__,
-        s_names,
-        cast(_CodeParameterDefaultList, s_default_list),
-        commondata=True,
-    )
-
-    # Global scale factor c:
-    c = par.register_CodeParameter(
-        "REAL",
-        __name__,
-        "fisheye_c",
-        c_default,
-        commondata=True,
-    )
-
-    return _FisheyeParams(
-        num_transitions=num_transitions,
-        a_list=a_list,
-        R_list=R_list,
-        s_list=s_list,
-        c=c,
-    )
-
-
-def _fisheye_G_kernel_and_derivs(
-    r: sp.Expr, R: sp.Expr, s: sp.Expr
-) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
-    """
-    Return the single-transition kernel G(r; R, s) and its first three radial derivatives.
-
-    The kernel is
-
-        G(r; R, s) =
-            s / (2 * tanh(R / s)) *
-            log( cosh( (r + R) / s ) / cosh( (r - R) / s ) ).
-
-    Closed-form radial derivatives (no SymPy sp.diff calls needed):
-
-        G'(r)  = [tanh((r+R)/s) - tanh((r-R)/s)] / [2*tanh(R/s)],
-
-        G''(r) = [sech^2((r+R)/s) - sech^2((r-R)/s)] / [2*s*tanh(R/s)],
-
-        G'''(r)= [sech^2((r-R)/s)*tanh((r-R)/s) - sech^2((r+R)/s)*tanh((r+R)/s)]
-                 / [s^2*tanh(R/s)].
-
-    :param r: Raw radius r (may be a symbol or an expression).
-    :param R: Raw transition center R.
-    :param s: Raw transition width s, assumed to be strictly positive.
-    :return: Tuple (G, G1, G2, G3), where Gk = d^k G / d r^k.
-    """
-    tanh_R_over_s = sp.tanh(R / s)
-    inv_2_tanh_R_over_s = sp.Integer(1) / (2 * tanh_R_over_s)
-
-    arg_plus = (r + R) / s
-    arg_minus = (r - R) / s
-
-    cosh_plus = sp.cosh(arg_plus)
-    cosh_minus = sp.cosh(arg_minus)
-
-    G = (s * inv_2_tanh_R_over_s) * sp.log(cosh_plus / cosh_minus)
-
-    tanh_plus = sp.tanh(arg_plus)
-    tanh_minus = sp.tanh(arg_minus)
-    G1 = inv_2_tanh_R_over_s * (tanh_plus - tanh_minus)
-
-    # sech^2(x) = 1/cosh(x)^2. Using cosh(x) avoids introducing sech() as a separate
-    # SymPy function (useful for some codegen backends).
-    sech2_plus = sp.Integer(1) / (cosh_plus * cosh_plus)
-    sech2_minus = sp.Integer(1) / (cosh_minus * cosh_minus)
-    G2 = inv_2_tanh_R_over_s * (sech2_plus - sech2_minus) / s
-
-    inv_tanh_R_over_s = sp.Integer(1) / tanh_R_over_s
-    G3 = (
-        inv_tanh_R_over_s
-        * (sech2_minus * tanh_minus - sech2_plus * tanh_plus)
-        / (s * s)
-    )
-
-    return (G, G1, G2, G3)
-
-
-def _build_unscaled_radius_map_and_derivs(
-    r: sp.Expr,
-    num_transitions: int,
-    a_list: List[sp.Expr],
-    R_list: List[sp.Expr],
-    s_list: List[sp.Expr],
-) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
-    """
-    Construct the unscaled N transition radius map rbar_unscaled(r) and its first three radial derivatives.
-
-    The map is
-
-        rbar_unscaled(r) =
-            a_N * r + sum_{i=1}^N (a_{i-1} - a_i) * G(r; R_i, s_i),
-
-    where G(r; R, s) is the single transition kernel.
-
-    :param r: Raw radius r (may be a symbol or an expression).
-    :param num_transitions: Number of fisheye transitions N (>= 1).
-    :param a_list: Plateau stretch factors [a0, ..., aN].
-    :param R_list: Transition centers [R1, ..., RN].
-    :param s_list: Transition widths [s1, ..., sN].
-    :return: Tuple (rb0, rb1, rb2, rb3), where rbk = d^k rbar_unscaled / d r^k.
-    """
-    a_N = a_list[-1]
-    rbar0 = a_N * r
-    rbar1 = a_N
-    rbar2 = sp.Integer(0)
-    rbar3 = sp.Integer(0)
-
-    # Build rbar_unscaled and its derivatives (up through third order) in one pass.
-    for i in range(num_transitions):
-        delta_a_i = a_list[i] - a_list[i + 1]
-        R_i = R_list[i]
-        s_i = s_list[i]
-
-        G0, G1, G2, G3 = _fisheye_G_kernel_and_derivs(r, R_i, s_i)
-
-        rbar0 += delta_a_i * G0
-        rbar1 += delta_a_i * G1
-        rbar2 += delta_a_i * G2
-        rbar3 += delta_a_i * G3
-
-    return (rbar0, rbar1, rbar2, rbar3)
-
-
-def _make_rsym_to_r_xreplace_dict(
-    r_sym: sp.Symbol, r: sp.Expr, r2: sp.Expr, max_power: int = 6
-) -> Dict[sp.Expr, sp.Expr]:
-    """
-    Build an xreplace dictionary mapping powers of r_sym into expressions built from r = sqrt(r2) and r2 = r^2.
-
-    This is purely a performance and codegen-shape optimization: even powers of r can
-    be expressed without an extra sqrt, e.g. r^2 -> r2, r^4 -> r2^2, etc.
-
-    :param r_sym: The 1D radial symbol used in intermediate expressions.
-    :param r: The Cartesian radius expression sqrt(r2).
-    :param r2: The squared Cartesian radius expression (sum_i xx_i^2).
-    :param max_power: Maximum |power| to include in the mapping.
-    :return: Dictionary suitable for SymPy expr.xreplace().
-    """
-    inv_r = 1 / r
-    inv_r2 = 1 / r2
-
-    sub: Dict[sp.Expr, sp.Expr] = {
-        r_sym: r,
-        r_sym**2: r2,
-        r_sym**-1: inv_r,
-        r_sym**-2: inv_r2,
-    }
-
-    for n in range(3, max_power + 1):
-        if n % 2 == 0:
-            sub[r_sym**n] = r2 ** (n // 2)
-            sub[r_sym**-n] = inv_r2 ** (n // 2)
-        else:
-            sub[r_sym**n] = (r2 ** ((n - 1) // 2)) * r
-            sub[r_sym**-n] = (inv_r2 ** ((n - 1) // 2)) * inv_r
-
-    return sub
-
-
-@lru_cache(maxsize=None)
-def fisheye_radial_exprs(num_transitions: int) -> FisheyeRadialExprs:
-    """
-    Build and return the canonical 1D radial SymPy expressions for an N-transition fisheye map.
-
-    This function is intentionally cached so that repeated codegen paths (e.g. multiple
-    infrastructure functions needing rbar and/or f(r)) do not repeatedly rebuild the
-    same symbolic expressions.
-
-    NOTE: Calling this function registers the required fisheye CodeParameters:
-      * fisheye_a0..fisheye_aN
-      * fisheye_R1..fisheye_RN
-      * fisheye_s1..fisheye_sN
-      * fisheye_c
-
-    :param num_transitions: Number of fisheye transitions N (>= 1).
-    :return: A FisheyeRadialExprs container holding rbar(r), derivatives, and f(r).
-    :raises ValueError: If num_transitions is less than 1.
-    """
-    if num_transitions < 1:
-        raise ValueError(
-            f"num_transitions must be >= 1 for fisheye; got {num_transitions}."
-        )
-
-    # Register the required CodeParameters without instantiating the full
-    # GeneralRFMFisheye object (which would also build Jacobians/metrics/derivs).
-    params = _register_fisheye_params(num_transitions=num_transitions)
-
-    r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
-    rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
-
-    # Build rbar_unscaled(r_sym) and its radial derivatives in closed form.
-    (
-        rbar_unscaled_of_r,
-        drbar_unscaled_dr_of_r,
-        _d2rbar_unscaled_dr2_of_r,
-        _d3rbar_unscaled_dr3_of_r,
-    ) = _build_unscaled_radius_map_and_derivs(
-        r=r_sym,
-        num_transitions=num_transitions,
-        a_list=params.a_list,
-        R_list=params.R_list,
-        s_list=params.s_list,
-    )
-
-    # Scaled physical radius and radial derivative.
-    rbar_of_r = params.c * rbar_unscaled_of_r
-    drbar_dr_of_r = params.c * drbar_unscaled_dr_of_r
-
-    lam_of_r = rbar_of_r / r_sym
-    dlam_dr_of_r = (drbar_dr_of_r * r_sym - rbar_of_r) / (r_sym**2)
-
-    # Inverse-map 1D root equation: rCart = rbar(r).
-    f_of_r = rbar_of_r - rCart_sym
-    fprime_of_r = drbar_dr_of_r
-
-    return FisheyeRadialExprs(
-        num_transitions=num_transitions,
-        r_sym=r_sym,
-        rCart_sym=rCart_sym,
-        rbar_unscaled_of_r=rbar_unscaled_of_r,
-        rbar_of_r=rbar_of_r,
-        drbar_dr_of_r=drbar_dr_of_r,
-        lam_of_r=lam_of_r,
-        dlam_dr_of_r=dlam_dr_of_r,
-        f_of_r=f_of_r,
-        fprime_of_r=fprime_of_r,
-    )
-
-
 class GeneralRFMFisheye:
     """
-    Construct an N transition fisheye raw to physical map and reference metric.
+    Build an N transition fisheye map and the induced flat reference metric in 3D.
 
-    The mapping is radially symmetric in the raw Cartesian coordinates xx^i and
-    is defined by a multi-transition kernel. Given plateau stretch factors a_i,
-    transition centers R_i, widths s_i, and a global scale c, the raw radius
+    This class constructs and stores:
+    * xx_to_CartU: the forward map CartU[i] = lam(r) * xx[i]
+    * dCart_dxxUD: the Jacobian d CartU[i] / d xx[j]
+    * ghatDD: the induced reference metric ghatDD[i][j]
+    * ghatDDdD: the first derivatives ghatDDdD[i][j][k]
+    * ghatDDdDD: the second derivatives ghatDDdDD[i][j][k][l]
 
-        r = sqrt( sum_i (xx^i)^2 )
-
-    is mapped to a physical radius rbar(r). The physical Cartesian coordinates are
-
-        Cart^i = (rbar(r) / r) * xx^i,
-
-    for r > 0, with the expression understood in the limiting sense at r = 0.
-
-    From this transformation, the flat space reference metric ghat_ij in the raw
-    coordinates admits the decomposition
-
-        ghat_ij = A(r) delta_ij + B(r) xx^i xx^j,
-
-    where A(r) = (rbar / r)^2 encodes the tangential scaling and
-    A(r) + B(r) r^2 = (d rbar / d r)^2 encodes the radial scaling. The functions
-    A(r), B(r) and their radial derivatives are computed symbolically in 1D using
-    a dedicated radial symbol r_fisheye, then converted into full expressions in
-    (xx^0, xx^1, xx^2) by the substitution r_fisheye -> r.
-
-    This approach is significantly faster than directly differentiating the full
-    metric with respect to xx^i using SymPy, especially for the second derivatives
-    ghat_ij,kl, which would otherwise require many large second-order Cartesian
-    derivatives of complicated expressions.
-
-    :ivar num_transitions: Number of fisheye transitions N.
-    :ivar a_list: Plateau stretch factors a_0, ..., a_N, stored as NRPy code
-        parameters.
-    :ivar R_list: Raw transition centers R_1, ..., R_N, stored as NRPy code
-        parameters.
-    :ivar s_list: Raw transition widths s_1, ..., s_N, stored as NRPy code
-        parameters.
-    :ivar c: Global scaling factor c, stored as an NRPy code parameter.
-    :ivar xx: Raw Cartesian coordinate symbols [xx0, xx1, xx2].
-    :ivar r: Raw radius r = sqrt( sum_i xx_i^2 ).
-    :ivar rbar_unscaled: Unscaled physical radius rbar_unscaled(r(xx)).
-    :ivar rbar: Scaled physical radius rbar(r(xx)) = c * rbar_unscaled(r(xx)).
-    :ivar xx_to_CartU: Raw to physical Cartesian map Cart^i(xx^j).
-    :ivar dCart_dxxUD: Jacobian partial Cart^i / partial xx^j, built from radial formulas.
-    :ivar ghatDD: Reference metric ghat_ij in raw coordinates.
-    :ivar ghatDDdD: First derivatives partial_k ghat_ij, built from radial formulas.
-    :ivar ghatDDdDD: Second derivatives partial_l partial_k ghat_ij, built from radial formulas.
+    The derivations that justify the tensor expressions are documented in the module
+    docstring and in helper docstrings.
     """
 
     def __init__(
         self,
         num_transitions: int,
-        a_default: Optional[List[float]] = None,
-        R_default: Optional[List[float]] = None,
-        s_default: Optional[List[float]] = None,
+        *,
+        a_defaults: Optional[Sequence[float]] = None,
+        R_defaults: Optional[Sequence[float]] = None,
+        s_defaults: Optional[Sequence[float]] = None,
         c_default: float = 1.0,
+        use_closed_form_derivs: bool = True,
+        use_power_map_subs: bool = True,
+        power_map_max: int = 6,
     ) -> None:
         """
-        Initialize the N transition fisheye mapping and reference metric in 3D.
+        Initialize and compute the fisheye map, Jacobian, and induced reference metric tensors.
 
-        Fisheye parameters are registered as NRPy CodeParameters so that they
-        can be overridden at code generation time.
+        Fisheye parameters are registered as NRPy CodeParameters so they can be overridden
+        at code generation time.
 
         :param num_transitions: Number of fisheye transitions N. Must be at least 1.
-        :param a_default: Default plateau stretch factors [a0, ..., aN].
-                          If None, all entries are set to 1.0. Length must be
-                          num_transitions + 1.
-        :param R_default: Default raw transition centers [R1, ..., RN].
-                          If None, they are set to [1.0, 2.0, ..., float(N)].
-                          Length must be num_transitions.
-        :param s_default: Default raw transition widths [s1, ..., sN].
-                          If None, all entries are set to 0.5. Length must be
-                          num_transitions.
+        :param a_defaults: Default plateau stretch factors [a0, ..., aN].
+                           If None, all entries are set to 1.0. Length must be
+                           num_transitions + 1.
+        :param R_defaults: Default transition centers [R1, ..., RN].
+                           If None, they are set to [1.0, 2.0, ..., float(N)].
+                           Length must be num_transitions.
+        :param s_defaults: Default transition widths [s1, ..., sN].
+                           If None, all entries are set to 0.5. Length must be
+                           num_transitions.
         :param c_default: Default global scaling factor c. Defaults to 1.0.
-
+        :param use_closed_form_derivs: If True, use closed form radial derivatives for
+                                       the single transition kernel and the radius map.
+                                       If False, compute derivatives using sp.diff in 1D.
+        :param use_power_map_subs: If True, substitute powers of r_sym using r and r^2
+                                   via an xreplace mapping (codegen shape optimization).
+        :param power_map_max: Maximum absolute power used in the power map substitutions.
         :raises ValueError: If num_transitions is less than 1.
-        :raises ValueError: If any of the default lists have inconsistent lengths.
+        :raises ValueError: If any default list has an inconsistent length.
         """
-        if num_transitions < 1:
+        n_transitions = int(num_transitions)
+        if n_transitions < 1:
+            raise ValueError(f"num_transitions must be >= 1; got {num_transitions}.")
+
+        a_default_floats = (
+            [1.0] * (n_transitions + 1)
+            if a_defaults is None
+            else [float(v) for v in a_defaults]
+        )
+        if len(a_default_floats) != n_transitions + 1:
             raise ValueError(
-                f"num_transitions must be >= 1; got num_transitions = {num_transitions}."
+                f"a_defaults must have length {n_transitions + 1}; got {len(a_default_floats)}."
             )
 
-        self.num_transitions = num_transitions
-
-        # ---------------------------------------------------------------------
-        # Step 1: Set up default parameter values and register NRPy CodeParameters.
-        # ---------------------------------------------------------------------
-        params = _register_fisheye_params(
-            num_transitions=num_transitions,
-            a_default=a_default,
-            R_default=R_default,
-            s_default=s_default,
-            c_default=c_default,
+        R_default_floats = (
+            [float(i + 1) for i in range(n_transitions)]
+            if R_defaults is None
+            else [float(v) for v in R_defaults]
         )
-        self.a_list = params.a_list
-        self.R_list = params.R_list
-        self.s_list = params.s_list
-        self.c = params.c
+        if len(R_default_floats) != n_transitions:
+            raise ValueError(
+                f"R_defaults must have length {n_transitions}; got {len(R_default_floats)}."
+            )
 
-        # ---------------------------------------------------------------------
-        # Step 2: Define raw coordinates, radial symbol, and radial map.
-        # ---------------------------------------------------------------------
-        # Raw Cartesian coordinates xx^i (3D).
+        s_default_floats = (
+            [0.5] * n_transitions
+            if s_defaults is None
+            else [float(v) for v in s_defaults]
+        )
+        if len(s_default_floats) != n_transitions:
+            raise ValueError(
+                f"s_defaults must have length {n_transitions}; got {len(s_default_floats)}."
+            )
+
+        self.num_transitions = n_transitions
+
+        self.a_list = par.register_CodeParameters(
+            "REAL",
+            thismodule,
+            [f"fisheye_a{i}" for i in range(n_transitions + 1)],
+            _as_par_default_list(a_default_floats),
+            commondata=True,
+        )
+        self.R_list = par.register_CodeParameters(
+            "REAL",
+            thismodule,
+            [f"fisheye_R{i + 1}" for i in range(n_transitions)],
+            _as_par_default_list(R_default_floats),
+            commondata=True,
+        )
+        self.s_list = par.register_CodeParameters(
+            "REAL",
+            thismodule,
+            [f"fisheye_s{i + 1}" for i in range(n_transitions)],
+            _as_par_default_list(s_default_floats),
+            commondata=True,
+        )
+        self.c = par.register_CodeParameter(
+            "REAL",
+            thismodule,
+            "fisheye_c",
+            defaultvalue=float(c_default),
+            commondata=True,
+        )
+
         self.xx = list(ixp.declarerank1("xx", dimension=3))
 
-        # Raw radius r = sqrt(xx^2 + yy^2 + zz^2).
-        # This is the actual radius expression in terms of xx^i.
-        r2 = sum(self.xx[i] ** 2 for i in range(3))
-        self.r = sp.sqrt(r2)
+        # r_squared = xx[0]^2 + xx[1]^2 + xx[2]^2
+        r_squared = sum(self.xx[i] ** 2 for i in range(3))
 
-        # For performance, we build the radial map and its derivatives in terms of
-        # a *symbolic* radial variable r_sym, and only at the end substitute
-        # r_sym -> r(xx). This keeps all expensive symbolic work strictly 1D in r_sym.
-        #
-        # In addition, all radial derivatives of the kernel and map are built in
-        # closed form, so no SymPy differentiation is performed.
+        # r = sqrt(r_squared)
+        self.r = sp.sqrt(r_squared)
+
+        # Build 1D radial expressions in r_sym, then substitute r_sym -> r(xx)
         r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
 
-        # Unscaled radius map and its first three derivatives (closed form).
-        (
-            rbar_unscaled_of_r,
-            drbar_unscaled_dr_of_r,
-            d2rbar_unscaled_dr2_of_r,
-            d3rbar_unscaled_dr3_of_r,
-        ) = _build_unscaled_radius_map_and_derivs(
-            r=r_sym,
-            num_transitions=self.num_transitions,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
+        # (rb0_u, rb1_u, rb2_u, rb3_u) = (rbar_unscaled, d/dr, d2/dr2, d3/dr3)
+        rb0_u, rb1_u, rb2_u, rb3_u = _unscaled_radius_map_and_derivs(
+            r_sym,
+            self.a_list,
+            self.R_list,
+            self.s_list,
+            use_closed_form_derivs=use_closed_form_derivs,
         )
 
-        # Scaled physical radius and its radial derivatives:
-        rbar_of_r = self.c * rbar_unscaled_of_r
-        drbar_dr = self.c * drbar_unscaled_dr_of_r
-        d2rbar_dr2 = self.c * d2rbar_unscaled_dr2_of_r
-        d3rbar_dr3 = self.c * d3rbar_unscaled_dr3_of_r
+        # u = rbar = c * rbar_unscaled
+        u = self.c * rb0_u
+        # p = du/dr
+        p = self.c * rb1_u
+        # q = d2u/dr2
+        q = self.c * rb2_u
+        # t = d3u/dr3
+        t = self.c * rb3_u
 
-        # Substitution dictionary for converting radial expressions to Cartesian.
-        # This maps even powers of r_sym into r2 = r^2 to reduce sqrt usage in downstream codegen.
-        sub = _make_rsym_to_r_xreplace_dict(r_sym=r_sym, r=self.r, r2=r2, max_power=6)
-
-        # Now build the actual coordinate-dependent radii by substituting r_sym -> r(xx).
-        self.rbar_unscaled = rbar_unscaled_of_r.xreplace(sub)
-        self.rbar = rbar_of_r.xreplace(sub)
-
-        # ---------------------------------------------------------------------
-        # Radial scaling factor λ(r) = rbar(r) / r and its radial derivative.
-        #     λ(r)     = rbar(r) / r,
-        #     λ'(r)    = (d rbar / d r * r - rbar) / r^2.
-        # ---------------------------------------------------------------------
-        lam_of_r = rbar_of_r / r_sym
-        dlam_dr_of_r = (drbar_dr * r_sym - rbar_of_r) / (r_sym**2)
-
-        # ---------------------------------------------------------------------
-        # Radial metric functions A(r) and B(r) and their derivatives.
-        #
-        # In spherical coordinates built from the raw radius r:
-        #     g_rr = (d rbar / d r)^2,
-        #     g_T  = (rbar / r)^2,
-        #
-        # where g_T is the tangential (angular) part. In the Cartesian decomposition
-        #     g_ij = A(r) delta_ij + B(r) xx^i xx^j,
-        # the eigenvalues are
-        #     g_T     = A(r),
-        #     g_rr    = A(r) + B(r) r^2.
-        # Therefore:
-        #     A(r) = (rbar / r)^2,
-        #     B(r) = (g_rr - A(r)) / r^2
-        #          = ( (d rbar / d r)^2 - A(r) ) / r^2.
-        #
-        # We compute A, B and their derivatives using closed-form formulas
-        # in terms of u=rbar, p=u', q=u'', t=u''' to avoid sp.diff entirely.
-        # ---------------------------------------------------------------------
-        u, p, q, t = rbar_of_r, drbar_dr, d2rbar_dr2, d3rbar_dr3
-        r = r_sym  # shorthand for formulas below
-
-        # A(r) = u^2 / r^2
-        A_of_r = u**2 / r**2
-
-        # B(r) = p^2/r^2 - u^2/r^4
-        B_of_r = p**2 / r**2 - u**2 / r**4
-
-        # A'(r) = 2up/r^2 - 2u^2/r^3
-        A1_of_r = 2 * u * p / r**2 - 2 * u**2 / r**3
-
-        # B'(r) = 2pq/r^2 - 2p^2/r^3 - 2up/r^4 + 4u^2/r^5
-        B1_of_r = (
-            2 * p * q / r**2 - 2 * p**2 / r**3 - 2 * u * p / r**4 + 4 * u**2 / r**5
+        # Build radial scalars:
+        # lam(r), dlam/dr, A(r), B(r), A'(r), B'(r), A''(r), B''(r)
+        lam_r, dlam_dr_r, A_r, B_r, A1_r, B1_r, A2_r, B2_r = _radial_metric_scalars(
+            r_sym, u, p, q, t
         )
 
-        # A''(r) = 2(p^2 + uq)/r^2 - 8up/r^3 + 6u^2/r^4
-        A2_of_r = 2 * (p**2 + u * q) / r**2 - 8 * u * p / r**3 + 6 * u**2 / r**4
-
-        # B''(r) = 2(q^2 + pt)/r^2 - 8pq/r^3 + (4p^2 - 2uq)/r^4 + 16up/r^5 - 20u^2/r^6
-        B2_of_r = (
-            2 * (q**2 + p * t) / r**2
-            - 8 * p * q / r**3
-            + (4 * p**2 - 2 * u * q) / r**4
-            + 16 * u * p / r**5
-            - 20 * u**2 / r**6
-        )
-
-        # Convert all radial functions to full expressions in the Cartesian coordinates
-        # by substituting r_sym -> r(xx). Use xreplace for efficiency.
-        lam, dlam_dr, A, B, A1, B1, A2, B2 = [
-            expr.xreplace(sub)
-            for expr in (
-                lam_of_r,
-                dlam_dr_of_r,
-                A_of_r,
-                B_of_r,
-                A1_of_r,
-                B1_of_r,
-                A2_of_r,
-                B2_of_r,
+        # Replace r_sym with the full Cartesian radius r(xx)
+        if use_power_map_subs:
+            sub = _rsym_substitution_dict(
+                r_sym, self.r, r_squared, max_power=int(power_map_max)
             )
-        ]
 
-        # ---------------------------------------------------------------------
-        # Pre-compute common factors for the tensor loops.
-        # ---------------------------------------------------------------------
+            def replace(expr: sp.Expr) -> sp.Expr:
+                return expr.xreplace(sub)
+
+        else:
+
+            def replace(expr: sp.Expr) -> sp.Expr:
+                return expr.subs({r_sym: self.r})
+
+        # lam = lam(r(xx)), dlam_dr = (dlam/dr)(r(xx)), etc.
+        lam = replace(lam_r)
+        dlam_dr = replace(dlam_dr_r)
+        A = replace(A_r)
+        B = replace(B_r)
+        A1 = replace(A1_r)
+        B1 = replace(B1_r)
+        A2 = replace(A2_r)
+        B2 = replace(B2_r)
+
+        # rbar_unscaled(xx) = rb0_u with r_sym -> r(xx)
+        self.rbar_unscaled = replace(rb0_u)
+        # rbar(xx) = u with r_sym -> r(xx)
+        self.rbar = replace(u)
+
+        # inv_r = 1/r, inv_r2 = 1/r^2, inv_r3 = 1/r^3
         inv_r = 1 / self.r
-        inv_r2 = 1 / r2
+        inv_r2 = 1 / r_squared
         inv_r3 = inv_r2 * inv_r
 
+        # A1_over_r = A'(r)/r, B1_over_r = B'(r)/r
         A1_over_r = A1 * inv_r
         B1_over_r = B1 * inv_r
 
+        # coeff_A = A''/r^2 - A'/r^3
         coeff_A = A2 * inv_r2 - A1 * inv_r3
+        # coeff_B = B''/r^2 - B'/r^3
         coeff_B = B2 * inv_r2 - B1 * inv_r3
 
+        # dlam_over_r = (dlam/dr)/r
         dlam_over_r = dlam_dr * inv_r
 
-        # Pre-compute xx products.
         xx = self.xx
         xx_prod = [[xx[i] * xx[j] for j in range(3)] for i in range(3)]
+        KD = _KroneckerDelta3D
 
-        # ---------------------------------------------------------------------
-        # Step 3: Raw (xx) -> physical Cartesian (Cart) map.
-        #         Cart^i = λ(r(xx)) * xx^i
-        #
-        # We still store Cart^i explicitly for completeness, but note that the
-        # Jacobian is built below from the radial identities rather than by
-        # differentiating these expressions with respect to xx^i.
-        # ---------------------------------------------------------------------
+        # Forward map: CartU[i] = lam * xx[i]
         self.xx_to_CartU = [lam * xx[i] for i in range(3)]
 
-        # ---------------------------------------------------------------------
-        # Step 4: Jacobian d Cart^i / d xx^j.
-        #
-        # For a purely radial map Cart^i = λ(r) xx^i, with r = sqrt(xx^k xx^k),
-        # we have
-        #
-        #     partial_j r = xx^j / r,
-        #     partial_j λ = λ'(r) partial_j r = λ'(r) xx^j / r,
-        #
-        # so
-        #
-        #     partial_j Cart^i = partial_j (λ xx^i)
-        #                 = λ delta^i_j + xx^i partial_j λ
-        #                 = λ delta^i_j + (λ'(r) / r) xx^i xx^j.
-        #
-        # This avoids any SymPy differentiation with respect to xx^i and is
-        # much faster than calling sp.diff on Cart^i(xx^j).
-        # ---------------------------------------------------------------------
-        KD = _KroneckerDelta3D
+        # Jacobian:
+        # d CartU[mu] / d xx[i] = lam * delta_{mu i} + (dlam/dr)/r * xx[mu] * xx[i]
         self.dCart_dxxUD = [
             [lam * KD[mu][i] + dlam_over_r * xx_prod[mu][i] for i in range(3)]
             for mu in range(3)
         ]
 
-        # ---------------------------------------------------------------------
-        # Step 5: Reference metric ghat_ij = A(r) delta_ij + B(r) xx^i xx^j.
-        # ---------------------------------------------------------------------
+        # Reference metric:
+        # ghatDD[i][j] = A * delta_ij + B * xx[i] * xx[j]
         self.ghatDD = ixp.zerorank2(dimension=3)
         for i in range(3):
             for j in range(3):
                 self.ghatDD[i][j] = A * KD[i][j] + B * xx_prod[i][j]
 
-        # ---------------------------------------------------------------------
-        # Step 6: First derivatives ghat_ij,k via radial formulas.
-        # ---------------------------------------------------------------------
+        # First derivatives:
+        # ghatDDdD[i][j][k] =
+        #   (A'(r)/r) * xx[k] * delta_ij
+        # + (B'(r)/r) * xx[k] * xx[i] * xx[j]
+        # + B * (delta_{ik} * xx[j] + xx[i] * delta_{jk})
         self.ghatDDdD = ixp.zerorank3(dimension=3)
         for i in range(3):
             for j in range(3):
@@ -814,9 +416,8 @@ class GeneralRFMFisheye:
                         + B * (KD[i][k] * xx[j] + xx[i] * KD[j][k])
                     )
 
-        # ---------------------------------------------------------------------
-        # Step 7: Second derivatives ghat_ij,kl via radial formulas.
-        # ---------------------------------------------------------------------
+        # Second derivatives:
+        # Implemented in component form using coeff_A, coeff_B and product rule expansions.
         self.ghatDDdDD = ixp.zerorank4(dimension=3)
         for i in range(3):
             for j in range(3):
@@ -825,112 +426,379 @@ class GeneralRFMFisheye:
                         term1 = (coeff_A * xx_prod[k][l] + A1_over_r * KD[k][l]) * KD[
                             i
                         ][j]
-
                         term2 = coeff_B * xx_prod[k][l] * xx_prod[i][j] + B1_over_r * (
                             KD[k][l] * xx_prod[i][j]
                             + xx[k] * (KD[i][l] * xx[j] + xx[i] * KD[j][l])
                         )
-
                         term3 = (
                             B1_over_r * xx[l] * KD[i][k] * xx[j]
                             + B * KD[i][k] * KD[j][l]
                         )
-
                         term4 = (
                             B1_over_r * xx[l] * xx[i] * KD[j][k]
                             + B * KD[i][l] * KD[j][k]
                         )
-
                         self.ghatDDdDD[i][j][k][l] = term1 + term2 + term3 + term4
 
-    # -------------------------------------------------------------------------
-    # Internal helper methods.
-    # -------------------------------------------------------------------------
 
-    def _G_kernel(self, r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
-        """
-        Single transition kernel G(r; R, s) used in the multi transition map.
-
-        The kernel is
-
-            G(r; R, s) =
-                s / (2 * tanh(R / s)) *
-                log( cosh( (r + R) / s ) / cosh( (r - R) / s ) ).
-
-        :param r: Raw radius r (may be a symbol or an expression).
-        :param R: Raw transition center R.
-        :param s: Raw transition width s, assumed to be strictly positive.
-        :return: The kernel value G(r; R, s).
-        """
-        return _fisheye_G_kernel_and_derivs(r=r, R=R, s=s)[0]
-
-    def _build_unscaled_radius_map(self, r: sp.Expr) -> sp.Expr:
-        """
-        Construct the unscaled N transition radius map rbar_unscaled(r).
-
-        The map is
-
-            rbar_unscaled(r) =
-                a_N * r + sum_{i=1}^N (a_{i-1} - a_i) * G(r; R_i, s_i),
-
-        where G(r; R, s) is the single transition kernel defined in _G_kernel.
-
-        :param r: Raw radius r (may be a symbol or an expression).
-        :return: The unscaled physical radius rbar_unscaled(r).
-        """
-        return _build_unscaled_radius_map_and_derivs(
-            r=r,
-            num_transitions=self.num_transitions,
-            a_list=self.a_list,
-            R_list=self.R_list,
-            s_list=self.s_list,
-        )[0]
-
-
-def build_generalrfm_fisheye(
-    n_fisheye_transitions: int,
-    a_default: Optional[List[float]] = None,
-    R_default: Optional[List[float]] = None,
-    s_default: Optional[List[float]] = None,
+def make_fisheye_rfm(
+    num_transitions: int,
+    *,
+    a_defaults: Optional[Sequence[float]] = None,
+    R_defaults: Optional[Sequence[float]] = None,
+    s_defaults: Optional[Sequence[float]] = None,
     c_default: float = 1.0,
+    use_closed_form_derivs: bool = False,
+    use_power_map_subs: bool = False,
+    power_map_max: int = 6,
 ) -> GeneralRFMFisheye:
     """
-    Construct a GeneralRFMFisheye instance.
+    Construct and return a GeneralRFMFisheye instance.
 
-    This function instantiates GeneralRFMFisheye using the input
-    n_fisheye_transitions value and passes through the default plateau
-    stretches, transition centers, widths, and global scale, which in turn
-    define the default values of the underlying NRPy CodeParameters.
-
-    :param n_fisheye_transitions: Number of fisheye transitions N. Must be at least 1.
-    :param a_default: Default plateau stretch factors [a0, ..., aN].
-                      If None, all entries are set to 1.0. Length must be
-                      n_fisheye_transitions + 1.
-    :param R_default: Default raw transition centers [R1, ..., RN].
-                      If None, they are set to [1.0, 2.0, ..., float(N)].
-                      Length must be n_fisheye_transitions.
-    :param s_default: Default raw transition widths [s1, ..., sN].
-                      If None, all entries are set to 0.5. Length must be
-                      n_fisheye_transitions.
-    :param c_default: Default global scaling factor c. Defaults to 1.0.
-    :return: A newly constructed GeneralRFMFisheye instance.
-
-    :raises ValueError: If n_fisheye_transitions is less than 1.
-    :raises ValueError: If any of the default lists have inconsistent lengths.
+    :param num_transitions: Number of fisheye transitions. Must be at least 1.
+    :param a_defaults: Default plateau stretch factors. Length must be num_transitions + 1.
+    :param R_defaults: Default transition centers. Length must be num_transitions.
+    :param s_defaults: Default transition widths. Length must be num_transitions.
+    :param c_default: Default global scaling factor.
+    :param use_closed_form_derivs: If True, use closed form radial derivatives.
+    :param use_power_map_subs: If True, substitute powers of r_sym using r and r^2.
+    :param power_map_max: Maximum power for power map substitutions.
+    :return: A newly constructed GeneralRFMFisheye object.
     """
-    if n_fisheye_transitions < 1:
-        raise ValueError(
-            "n_fisheye_transitions must be >= 1; "
-            f"got n_fisheye_transitions = {n_fisheye_transitions}."
-        )
-
     return GeneralRFMFisheye(
-        num_transitions=n_fisheye_transitions,
-        a_default=a_default,
-        R_default=R_default,
-        s_default=s_default,
+        num_transitions,
+        a_defaults=a_defaults,
+        R_defaults=R_defaults,
+        s_defaults=s_defaults,
         c_default=c_default,
+        use_closed_form_derivs=use_closed_form_derivs,
+        use_power_map_subs=use_power_map_subs,
+        power_map_max=power_map_max,
     )
+
+
+def _as_par_default_list(values: Sequence[float]) -> list[_CodeParameterDefault]:
+    """
+    Convert a float sequence into a list suitable for NRPy parameter registration.
+
+    NRPy register_CodeParameters expects default values of type str, int, float, or a list
+    of those types. This helper converts a sequence of floats into a list of
+    _CodeParameterDefault entries.
+
+    :param values: Sequence of float defaults.
+    :return: List of defaults as _CodeParameterDefault.
+    """
+    defaults: list[_CodeParameterDefault] = []
+    for val in values:
+        defaults.append(float(val))
+    return defaults
+
+
+def _kernel_G(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
+    """
+    Single transition kernel G(r; R, s) used in the multi transition map.
+
+    The kernel is
+
+        G(r; R, s) =
+            s / (2 * tanh(R / s)) *
+            log( cosh((r + R)/s) / cosh((r - R)/s) ).
+
+    :param r: Raw radius r (symbol or expression).
+    :param R: Transition center R.
+    :param s: Transition width s.
+    :return: Kernel value G(r; R, s).
+    """
+    # G(r; R, s) = s / (2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
+    tanh_R_over_s = sp.tanh(R / s)
+    return (s / (2 * tanh_R_over_s)) * sp.log(
+        sp.cosh((r + R) / s) / sp.cosh((r - R) / s)
+    )
+
+
+def _kernel_G_and_derivs(
+    r: sp.Expr, R: sp.Expr, s: sp.Expr
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+    """
+    Return the single transition kernel G(r; R, s) and its first three radial derivatives.
+
+    The kernel is
+
+        G(r; R, s) =
+            s / (2 * tanh(R / s)) *
+            log( cosh((r + R)/s) / cosh((r - R)/s) ).
+
+    Closed form radial derivatives (no sp.diff calls needed):
+
+        G'(r)  = (tanh((r+R)/s) - tanh((r-R)/s)) / (2*tanh(R/s))
+
+        G''(r) = (sech((r+R)/s)^2 - sech((r-R)/s)^2) / (2*s*tanh(R/s))
+
+        G'''(r)= (sech((r-R)/s)^2*tanh((r-R)/s) - sech((r+R)/s)^2*tanh((r+R)/s))
+                 / (s^2*tanh(R/s))
+
+    In the implementation, sech(x)^2 is written as 1/cosh(x)^2 to avoid introducing
+    a separate SymPy sech function.
+
+    :param r: Raw radius r (symbol or expression).
+    :param R: Transition center R.
+    :param s: Transition width s.
+    :return: Tuple (G, G1, G2, G3) where Gk = d^k G / d r^k.
+    """
+    # tanh_R_over_s = tanh(R/s)
+    tanh_R_over_s = sp.tanh(R / s)
+    # inv_2_tanh_R_over_s = 1 / (2*tanh(R/s))
+    inv_2_tanh_R_over_s = sp.Integer(1) / (2 * tanh_R_over_s)
+
+    # arg_plus = (r + R)/s, arg_minus = (r - R)/s
+    arg_plus = (r + R) / s
+    arg_minus = (r - R) / s
+
+    # cosh_plus = cosh((r + R)/s), cosh_minus = cosh((r - R)/s)
+    cosh_plus = sp.cosh(arg_plus)
+    cosh_minus = sp.cosh(arg_minus)
+
+    # G = s/(2*tanh(R/s)) * log(cosh_plus/cosh_minus)
+    G = (s * inv_2_tanh_R_over_s) * sp.log(cosh_plus / cosh_minus)
+
+    # G1 = (tanh(arg_plus) - tanh(arg_minus)) / (2*tanh(R/s))
+    tanh_plus = sp.tanh(arg_plus)
+    tanh_minus = sp.tanh(arg_minus)
+    G1 = inv_2_tanh_R_over_s * (tanh_plus - tanh_minus)
+
+    # sech2(x) = 1/cosh(x)^2, so:
+    # G2 = (sech2(arg_plus) - sech2(arg_minus)) / (2*s*tanh(R/s))
+    sech2_plus = sp.Integer(1) / (cosh_plus * cosh_plus)
+    sech2_minus = sp.Integer(1) / (cosh_minus * cosh_minus)
+    G2 = inv_2_tanh_R_over_s * (sech2_plus - sech2_minus) / s
+
+    # G3 = (sech2(arg_minus)*tanh(arg_minus) - sech2(arg_plus)*tanh(arg_plus)) / (s^2*tanh(R/s))
+    inv_tanh_R_over_s = sp.Integer(1) / tanh_R_over_s
+    G3 = (
+        inv_tanh_R_over_s
+        * (sech2_minus * tanh_minus - sech2_plus * tanh_plus)
+        / (s * s)
+    )
+
+    return G, G1, G2, G3
+
+
+def _unscaled_radius_map_and_derivs(
+    r: sp.Expr,
+    a_list: Sequence[sp.Expr],
+    R_list: Sequence[sp.Expr],
+    s_list: Sequence[sp.Expr],
+    *,
+    use_closed_form_derivs: bool,
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+    """
+    Construct the unscaled N transition radius map and its first three radial derivatives.
+
+    The unscaled radius map is
+
+        rbar_unscaled(r) =
+            a_N * r + sum_{i=1..N} (a_{i-1} - a_i) * G(r; R_i, s_i)
+
+    where G(r; R, s) is the single transition kernel.
+
+    This helper returns:
+    - rb0 = rbar_unscaled(r)
+    - rb1 = d rb0 / d r
+    - rb2 = d^2 rb0 / d r^2
+    - rb3 = d^3 rb0 / d r^3
+
+    There are two computation modes:
+
+    1. If use_closed_form_derivs is True, each transition contributes G, G', G'', G'''
+       from _kernel_G_and_derivs, and the map derivatives are accumulated in a single pass.
+
+    2. If use_closed_form_derivs is False, the map rb0 is built from _kernel_G, then
+       derivatives are computed using sp.diff in 1D.
+
+    :param r: Radial symbol r used for 1D differentiation.
+    :param a_list: Plateau stretch factors [a0, ..., aN] as SymPy expressions.
+    :param R_list: Transition centers [R1, ..., RN] as SymPy expressions.
+    :param s_list: Transition widths [s1, ..., sN] as SymPy expressions.
+    :param use_closed_form_derivs: Select closed form or sp.diff derivatives.
+    :return: Tuple (rb0, rb1, rb2, rb3).
+    :raises ValueError: If the parameter list lengths are inconsistent.
+    """
+    n_transitions = len(R_list)
+    if len(a_list) != n_transitions + 1 or len(s_list) != n_transitions:
+        raise ValueError("Inconsistent fisheye parameter list lengths.")
+
+    a_last = a_list[-1]
+
+    if use_closed_form_derivs:
+        # rb0 = a_N * r
+        rb0 = a_last * r
+        # rb1 = d(rb0)/dr = a_N
+        rb1 = a_last
+        # rb2 = d2(rb0)/dr2 = 0, rb3 = d3(rb0)/dr3 = 0
+        rb2 = sp.Integer(0)
+        rb3 = sp.Integer(0)
+
+        for i in range(n_transitions):
+            # delta_a = a_{i} - a_{i+1}
+            delta_a = a_list[i] - a_list[i + 1]
+            # Add delta_a * (G, G1, G2, G3) to (rb0, rb1, rb2, rb3)
+            G0, G1, G2, G3 = _kernel_G_and_derivs(r, R_list[i], s_list[i])
+            rb0 += delta_a * G0
+            rb1 += delta_a * G1
+            rb2 += delta_a * G2
+            rb3 += delta_a * G3
+
+        return rb0, rb1, rb2, rb3
+
+    # rb0 = a_N * r + sum_i (a_i - a_{i+1}) * G(r; R_i, s_i)
+    rb0 = a_last * r
+    for i in range(n_transitions):
+        delta_a = a_list[i] - a_list[i + 1]
+        rb0 += delta_a * _kernel_G(r, R_list[i], s_list[i])
+
+    # rb1 = d(rb0)/dr, rb2 = d(rb1)/dr, rb3 = d(rb2)/dr
+    rb1 = sp.diff(rb0, r)
+    rb2 = sp.diff(rb1, r)
+    rb3 = sp.diff(rb2, r)
+    return rb0, rb1, rb2, rb3
+
+
+def _radial_metric_scalars(
+    r: sp.Expr, u: sp.Expr, p: sp.Expr, q: sp.Expr, t: sp.Expr
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+    """
+    Build radial scalar functions for the map and for the induced reference metric.
+
+    Inputs are radial quantities:
+    - u = rbar(r)
+    - p = d u / d r
+    - q = d^2 u / d r^2
+    - t = d^3 u / d r^3
+
+    The map is CartU[i] = lam(r) * xx[i] with
+
+        lam(r) = u / r
+
+    and
+
+        d lam / d r = (p * r - u) / r^2.
+
+    The induced metric is written in the radial-tangential decomposition
+
+        ghatDD[i][j] = A(r) * delta_ij + B(r) * xx[i] * xx[j].
+
+    For a spherically symmetric radius map u = rbar(r):
+    - the tangential eigenvalue is A(r) = (u/r)^2 = u^2 / r^2
+    - the radial eigenvalue is (d rbar / d r)^2 = p^2
+      and since the radial eigenvalue in the A,B decomposition is A + B * r^2, we get
+
+          A + B * r^2 = p^2
+
+      so
+
+          B(r) = p^2 / r^2 - u^2 / r^4.
+
+    Radial derivatives are obtained by differentiating with respect to r and using
+    u' = p, p' = q, q' = t. The closed forms used in the code are:
+
+        A1 = dA/dr = 2*u*p/r^2 - 2*u^2/r^3
+
+        B1 = dB/dr = 2*p*q/r^2 - 2*p^2/r^3 - 2*u*p/r^4 + 4*u^2/r^5
+
+        A2 = d^2A/dr^2 = 2*(p^2 + u*q)/r^2 - 8*u*p/r^3 + 6*u^2/r^4
+
+        B2 = d^2B/dr^2 = 2*(q^2 + p*t)/r^2 - 8*p*q/r^3 + (4*p^2 - 2*u*q)/r^4
+                         + 16*u*p/r^5 - 20*u^2/r^6
+
+    :param r: Radial coordinate symbol r.
+    :param u: Physical radius u = rbar(r).
+    :param p: First derivative p = d u / d r.
+    :param q: Second derivative q = d^2 u / d r^2.
+    :param t: Third derivative t = d^3 u / d r^3.
+    :return: Tuple (lam, dlam_dr, A, B, A1, B1, A2, B2).
+    """
+    # lam = u / r
+    lam = u / r
+    # dlam_dr = (p*r - u) / r^2
+    dlam_dr = (p * r - u) / (r**2)
+
+    # A = u^2 / r^2
+    A = u**2 / (r**2)
+    # B = p^2 / r^2 - u^2 / r^4
+    B = p**2 / (r**2) - u**2 / (r**4)
+
+    # A1 = dA/dr = 2*u*p/r^2 - 2*u^2/r^3
+    A1 = 2 * u * p / (r**2) - 2 * u**2 / (r**3)
+    # B1 = dB/dr = 2*p*q/r^2 - 2*p^2/r^3 - 2*u*p/r^4 + 4*u^2/r^5
+    B1 = 2 * p * q / (r**2) - 2 * p**2 / (r**3) - 2 * u * p / (r**4) + 4 * u**2 / (r**5)
+
+    # A2 = d2A/dr2 = 2*(p^2 + u*q)/r^2 - 8*u*p/r^3 + 6*u^2/r^4
+    A2 = 2 * (p**2 + u * q) / (r**2) - 8 * u * p / (r**3) + 6 * u**2 / (r**4)
+    # B2 = d2B/dr2 = 2*(q^2 + p*t)/r^2 - 8*p*q/r^3 + (4*p^2 - 2*u*q)/r^4
+    #               + 16*u*p/r^5 - 20*u^2/r^6
+    B2 = (
+        2 * (q**2 + p * t) / (r**2)
+        - 8 * p * q / (r**3)
+        + (4 * p**2 - 2 * u * q) / (r**4)
+        + 16 * u * p / (r**5)
+        - 20 * u**2 / (r**6)
+    )
+
+    return lam, dlam_dr, A, B, A1, B1, A2, B2
+
+
+def _rsym_substitution_dict(
+    r_sym: sp.Symbol, r: sp.Expr, r2: sp.Expr, *, max_power: int
+) -> Dict[sp.Expr, sp.Expr]:
+    """
+    Build an xreplace substitution dictionary mapping powers of r_sym into expressions of r and r^2.
+
+    This is a codegen-shape optimization: even powers can be expressed without an extra
+    square root. The mapping includes at least:
+    - r_sym -> r
+    - r_sym^2 -> r2
+    - r_sym^-1 -> 1/r
+    - r_sym^-2 -> 1/r2
+
+    and extends to higher powers up to max_power.
+
+    :param r_sym: The 1D radial symbol used in intermediate expressions.
+    :param r: The Cartesian radius expression r(xx).
+    :param r2: The squared radius expression r^2(xx).
+    :param max_power: Maximum absolute power to include in the mapping.
+    :return: Dictionary suitable for expr.xreplace(...).
+    """
+    # inv_r = 1/r, inv_r2 = 1/r2
+    inv_r = 1 / r
+    inv_r2 = 1 / r2
+
+    # Base substitutions:
+    # r_sym -> r
+    # r_sym^2 -> r2
+    # r_sym^-1 -> 1/r
+    # r_sym^-2 -> 1/r2
+    sub: Dict[sp.Expr, sp.Expr] = {
+        r_sym: r,
+        r_sym**2: r2,
+        r_sym**-1: inv_r,
+        r_sym**-2: inv_r2,
+    }
+
+    # Extend to higher powers using r2 and r to reduce sqrt usage
+    for n in range(3, max_power + 1):
+        half = n // 2
+        if n % 2 == 0:
+            # r_sym^n -> (r2)^(n/2)
+            sub[r_sym**n] = r2**half
+            # r_sym^-n -> (1/r2)^(n/2)
+            sub[r_sym**-n] = inv_r2**half
+        else:
+            # r_sym^n -> (r2)^((n-1)/2) * r
+            sub[r_sym**n] = r2**half * r
+            # r_sym^-n -> (1/r2)^((n-1)/2) * (1/r)
+            sub[r_sym**-n] = inv_r2**half * inv_r
+
+    return sub
 
 
 if __name__ == "__main__":
@@ -940,8 +808,6 @@ if __name__ == "__main__":
 
     import nrpy.validate_expressions.validate_expressions as ve
 
-    # Run doctests for this module (none are defined explicitly, but this keeps
-    # behavior consistent with other NRPy modules).
     results = doctest.testmod()
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
@@ -949,13 +815,14 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # Basic validation for a small set of configurations (3D only).
-    # Note: thanks to the radial formulas used for ghat_ij, ghat_ij,k, and
-    # ghat_ij,kl, this validation is significantly faster than an approach
-    # based on repeatedly calling sp.diff with respect to xx^i.
     for N in (1, 2):
         print(f"Setting up GeneralRFMFisheye[N={N}]...")
-        _fisheye = GeneralRFMFisheye(num_transitions=N)
+        _fisheye = GeneralRFMFisheye(
+            num_transitions=N,
+            use_closed_form_derivs=True,
+            use_power_map_subs=True,
+            power_map_max=6,
+        )
         results_dict = ve.process_dictionary_of_expressions(
             _fisheye.__dict__, fixed_mpfs_for_free_symbols=True
         )
