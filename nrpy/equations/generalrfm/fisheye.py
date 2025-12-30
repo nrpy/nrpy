@@ -19,7 +19,7 @@ Compared to the original implementation, this version is optimized for performan
 * All radial derivatives of the transition kernel and radius map are built in closed
   form, avoiding SymPy differentiation (sp.diff) entirely.
 
-This module is the *single source of truth* for the **equations** of the fisheye map:
+This module is the *single source of truth* for the *equations* of the fisheye map:
 * forward mapping xx -> Cart,
 * the radial map r -> rbar(r),
 * the inverse-map 1D root equation f(r) = rbar(r) - rCart (used by Newton-Raphson),
