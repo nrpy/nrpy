@@ -31,7 +31,7 @@ this module and handle C codegen + numerical algorithms externally.
 Summary of the geometry:
 
 * Raw to physical map: xx^i -> Cart^i(xx).
-* Reference metric: ghat_ij = delta_mn (∂ Cart^m / ∂ xx^i) (∂ Cart^n / ∂ xx^j).
+* Reference metric: ghat_ij = delta_mn (partial Cart^m / partial xx^i) (partial Cart^n / partial xx^j).
 * First derivatives: ghat_ij,k computed from analytic radial formulas.
 * Second derivatives: ghat_ij,kl computed from analytic radial formulas.
 
@@ -100,9 +100,9 @@ The first and second derivatives ghat_ij,k and ghat_ij,kl are then built from
 A(r), B(r) and their radial derivatives using the chain rule and the simple
 Cartesian identities
 
-    ∂_k r = xx^k / r,
-    ∂_k xx^i = delta^i_k,
-    ∂_l ∂_k xx^i = 0,
+    partial_k r = xx^k / r,
+    partial_k xx^i = delta^i_k,
+    partial_l partial_k xx^i = 0,
 
 without ever asking SymPy to differentiate huge expressions with respect to xx^i.
 
@@ -605,10 +605,10 @@ class GeneralRFMFisheye:
     :ivar rbar_unscaled: Unscaled physical radius rbar_unscaled(r(xx)).
     :ivar rbar: Scaled physical radius rbar(r(xx)) = c * rbar_unscaled(r(xx)).
     :ivar xx_to_CartU: Raw to physical Cartesian map Cart^i(xx^j).
-    :ivar dCart_dxxUD: Jacobian ∂ Cart^i / ∂ xx^j, built from radial formulas.
+    :ivar dCart_dxxUD: Jacobian partial Cart^i / partial xx^j, built from radial formulas.
     :ivar ghatDD: Reference metric ghat_ij in raw coordinates.
-    :ivar ghatDDdD: First derivatives ∂_k ghat_ij, built from radial formulas.
-    :ivar ghatDDdDD: Second derivatives ∂_l ∂_k ghat_ij, built from radial formulas.
+    :ivar ghatDDdD: First derivatives partial_k ghat_ij, built from radial formulas.
+    :ivar ghatDDdDD: Second derivatives partial_l partial_k ghat_ij, built from radial formulas.
     """
 
     def __init__(
@@ -818,13 +818,13 @@ class GeneralRFMFisheye:
         # For a purely radial map Cart^i = λ(r) xx^i, with r = sqrt(xx^k xx^k),
         # we have
         #
-        #     ∂_j r = xx^j / r,
-        #     ∂_j λ = λ'(r) ∂_j r = λ'(r) xx^j / r,
+        #     partial_j r = xx^j / r,
+        #     partial_j λ = λ'(r) partial_j r = λ'(r) xx^j / r,
         #
         # so
         #
-        #     ∂_j Cart^i = ∂_j (λ xx^i)
-        #                 = λ delta^i_j + xx^i ∂_j λ
+        #     partial_j Cart^i = partial_j (λ xx^i)
+        #                 = λ delta^i_j + xx^i partial_j λ
         #                 = λ delta^i_j + (λ'(r) / r) xx^i xx^j.
         #
         # This avoids any SymPy differentiation with respect to xx^i and is
