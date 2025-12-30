@@ -310,10 +310,10 @@ def _register_fisheye_params(
 
 
 def _fisheye_G_kernel_and_derivs(
-    r: sp.Expr, R: sp.Expr, s: sp.Expr, max_deriv: int
-) -> Tuple[sp.Expr, ...]:
+    r: sp.Expr, R: sp.Expr, s: sp.Expr
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
     """
-    Return the single-transition kernel G(r; R, s) and (optionally) its radial derivatives.
+    Return the single-transition kernel G(r; R, s) and its first three radial derivatives.
 
     The kernel is
 
@@ -333,13 +333,8 @@ def _fisheye_G_kernel_and_derivs(
     :param r: Raw radius r (may be a symbol or an expression).
     :param R: Raw transition center R.
     :param s: Raw transition width s, assumed to be strictly positive.
-    :param max_deriv: Maximum derivative order to return (0..3).
-    :return: Tuple (G,) or (G, G1) or (G, G1, G2) or (G, G1, G2, G3).
-    :raises ValueError: If max_deriv is outside 0..3.
+    :return: Tuple (G, G1, G2, G3), where Gk = d^k G / d r^k.
     """
-    if max_deriv < 0 or max_deriv > 3:
-        raise ValueError(f"max_deriv must be in [0,3]; got max_deriv = {max_deriv}.")
-
     tanh_R_over_s = sp.tanh(R / s)
     inv_2_tanh_R_over_s = sp.Integer(1) / (2 * tanh_R_over_s)
 
@@ -351,22 +346,15 @@ def _fisheye_G_kernel_and_derivs(
 
     G = (s * inv_2_tanh_R_over_s) * sp.log(cosh_plus / cosh_minus)
 
-    if max_deriv == 0:
-        return (G,)
-
     tanh_plus = sp.tanh(arg_plus)
     tanh_minus = sp.tanh(arg_minus)
     G1 = inv_2_tanh_R_over_s * (tanh_plus - tanh_minus)
-    if max_deriv == 1:
-        return (G, G1)
 
     # sech^2(x) = 1/cosh(x)^2. Using cosh(x) avoids introducing sech() as a separate
     # SymPy function (useful for some codegen backends).
     sech2_plus = sp.Integer(1) / (cosh_plus * cosh_plus)
     sech2_minus = sp.Integer(1) / (cosh_minus * cosh_minus)
     G2 = inv_2_tanh_R_over_s * (sech2_plus - sech2_minus) / s
-    if max_deriv == 2:
-        return (G, G1, G2)
 
     inv_tanh_R_over_s = sp.Integer(1) / tanh_R_over_s
     G3 = (
@@ -374,6 +362,7 @@ def _fisheye_G_kernel_and_derivs(
         * (sech2_minus * tanh_minus - sech2_plus * tanh_plus)
         / (s * s)
     )
+
     return (G, G1, G2, G3)
 
 
@@ -383,10 +372,9 @@ def _build_unscaled_radius_map_and_derivs(
     a_list: List[sp.Expr],
     R_list: List[sp.Expr],
     s_list: List[sp.Expr],
-    max_deriv: int,
-) -> Tuple[sp.Expr, ...]:
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
     """
-    Construct the unscaled N transition radius map rbar_unscaled(r) and (optionally) its first three radial derivatives.
+    Construct the unscaled N transition radius map rbar_unscaled(r) and its first three radial derivatives.
 
     The map is
 
@@ -400,56 +388,28 @@ def _build_unscaled_radius_map_and_derivs(
     :param a_list: Plateau stretch factors [a0, ..., aN].
     :param R_list: Transition centers [R1, ..., RN].
     :param s_list: Transition widths [s1, ..., sN].
-    :param max_deriv: Maximum derivative order to return (0..3).
-    :return: Tuple (rb0,) or (rb0, rb1) or (rb0, rb1, rb2) or (rb0, rb1, rb2, rb3),
-             where rbk = d^k rbar_unscaled / d r^k.
-    :raises ValueError: If max_deriv is outside 0..3.
+    :return: Tuple (rb0, rb1, rb2, rb3), where rbk = d^k rbar_unscaled / d r^k.
     """
-    if max_deriv < 0 or max_deriv > 3:
-        raise ValueError(f"max_deriv must be in [0,3]; got max_deriv = {max_deriv}.")
-
     a_N = a_list[-1]
     rbar0 = a_N * r
-
-    # Fast path: only build rbar itself.
-    if max_deriv == 0:
-        for i in range(num_transitions):
-            delta_a_i = a_list[i] - a_list[i + 1]
-            R_i = R_list[i]
-            s_i = s_list[i]
-            G = _fisheye_G_kernel_and_derivs(r, R_i, s_i, max_deriv=0)[0]
-            rbar0 += delta_a_i * G
-        return (rbar0,)
-
     rbar1 = a_N
-    rbar2 = sp.Integer(0) if max_deriv >= 2 else None
-    rbar3 = sp.Integer(0) if max_deriv >= 3 else None
+    rbar2 = sp.Integer(0)
+    rbar3 = sp.Integer(0)
 
+    # Build rbar_unscaled and its derivatives (up through third order) in one pass.
     for i in range(num_transitions):
         delta_a_i = a_list[i] - a_list[i + 1]
         R_i = R_list[i]
         s_i = s_list[i]
 
-        G_terms = _fisheye_G_kernel_and_derivs(r, R_i, s_i, max_deriv=max_deriv)
+        G0, G1, G2, G3 = _fisheye_G_kernel_and_derivs(r, R_i, s_i)
 
-        rbar0 += delta_a_i * G_terms[0]
-        rbar1 += delta_a_i * G_terms[1]
+        rbar0 += delta_a_i * G0
+        rbar1 += delta_a_i * G1
+        rbar2 += delta_a_i * G2
+        rbar3 += delta_a_i * G3
 
-        if max_deriv >= 2:
-            assert rbar2 is not None
-            rbar2 += delta_a_i * G_terms[2]
-        if max_deriv >= 3:
-            assert rbar3 is not None
-            rbar3 += delta_a_i * G_terms[3]
-
-    out: List[sp.Expr] = [rbar0, rbar1]
-    if max_deriv >= 2:
-        assert rbar2 is not None
-        out.append(rbar2)
-    if max_deriv >= 3:
-        assert rbar3 is not None
-        out.append(rbar3)
-    return tuple(out)
+    return (rbar0, rbar1, rbar2, rbar3)
 
 
 def _make_rsym_to_r_xreplace_dict(
@@ -519,14 +479,18 @@ def fisheye_radial_exprs(num_transitions: int) -> FisheyeRadialExprs:
     r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
     rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
 
-    # Build rbar_unscaled(r_sym) and its first radial derivative in closed form.
-    rbar_unscaled_of_r, drbar_unscaled_dr_of_r = _build_unscaled_radius_map_and_derivs(
+    # Build rbar_unscaled(r_sym) and its radial derivatives in closed form.
+    (
+        rbar_unscaled_of_r,
+        drbar_unscaled_dr_of_r,
+        _d2rbar_unscaled_dr2_of_r,
+        _d3rbar_unscaled_dr3_of_r,
+    ) = _build_unscaled_radius_map_and_derivs(
         r=r_sym,
         num_transitions=num_transitions,
         a_list=params.a_list,
         R_list=params.R_list,
         s_list=params.s_list,
-        max_deriv=1,
     )
 
     # Scaled physical radius and radial derivative.
@@ -687,7 +651,6 @@ class GeneralRFMFisheye:
             a_list=self.a_list,
             R_list=self.R_list,
             s_list=self.s_list,
-            max_deriv=3,
         )
 
         # Scaled physical radius and its radial derivatives:
@@ -899,7 +862,7 @@ class GeneralRFMFisheye:
         :param s: Raw transition width s, assumed to be strictly positive.
         :return: The kernel value G(r; R, s).
         """
-        return _fisheye_G_kernel_and_derivs(r=r, R=R, s=s, max_deriv=0)[0]
+        return _fisheye_G_kernel_and_derivs(r=r, R=R, s=s)[0]
 
     def _build_unscaled_radius_map(self, r: sp.Expr) -> sp.Expr:
         """
@@ -921,7 +884,6 @@ class GeneralRFMFisheye:
             a_list=self.a_list,
             R_list=self.R_list,
             s_list=self.s_list,
-            max_deriv=0,
         )[0]
 
 
