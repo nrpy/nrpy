@@ -14,7 +14,7 @@ Compared to the original implementation, this version is optimized for performan
 * All "expensive" derivatives are taken only with respect to a 1D radial symbol r,
   never with respect to the Cartesian coordinates xx^i.
 * The reference metric and its derivatives are expressed in terms of radial scalar
-  functions of r and simple Cartesian tensors (δ_ij and xx^i), avoiding repeated
+  functions of r and simple Cartesian tensors (delta_ij and xx^i), avoiding repeated
   large sympy.diff calls with respect to xx^i.
 * All radial derivatives of the transition kernel and radius map are built in closed
   form, avoiding SymPy differentiation (sp.diff) entirely.
@@ -31,7 +31,7 @@ this module and handle C codegen + numerical algorithms externally.
 Summary of the geometry:
 
 * Raw to physical map: xx^i -> Cart^i(xx).
-* Reference metric: ghat_ij = δ_mn (∂ Cart^m / ∂ xx^i) (∂ Cart^n / ∂ xx^j).
+* Reference metric: ghat_ij = delta_mn (∂ Cart^m / ∂ xx^i) (∂ Cart^n / ∂ xx^j).
 * First derivatives: ghat_ij,k computed from analytic radial formulas.
 * Second derivatives: ghat_ij,kl computed from analytic radial formulas.
 
@@ -44,7 +44,7 @@ The N transition fisheye map is defined by
 * Plateau stretch (zoom out) factors a_0, ..., a_N.
 * Transition centers R_1, ..., R_N.
 * Width parameters s_1, ..., s_N.
-* Differences Δ a_i = a_{i-1} - a_i.
+* Differences delta a_i = a_{i-1} - a_i.
 
 The single transition kernel is
 
@@ -84,7 +84,7 @@ and then recovering
 From this mapping, the flat reference metric in raw coordinates can be written in the
 standard "radial-tangential" decomposition
 
-    ghat_ij(r, xx) = A(r) δ_ij + B(r) xx^i xx^j,
+    ghat_ij(r, xx) = A(r) delta_ij + B(r) xx^i xx^j,
 
 where A(r) encodes the tangential (angular) scaling and A(r) + B(r) r^2 encodes the
 radial scaling. For a spherically symmetric map of the physical radius rbar(r) we have
@@ -101,7 +101,7 @@ A(r), B(r) and their radial derivatives using the chain rule and the simple
 Cartesian identities
 
     ∂_k r = xx^k / r,
-    ∂_k xx^i = δ^i_k,
+    ∂_k xx^i = delta^i_k,
     ∂_l ∂_k xx^i = 0,
 
 without ever asking SymPy to differentiate huge expressions with respect to xx^i.
@@ -579,7 +579,7 @@ class GeneralRFMFisheye:
     From this transformation, the flat space reference metric ghat_ij in the raw
     coordinates admits the decomposition
 
-        ghat_ij = A(r) δ_ij + B(r) xx^i xx^j,
+        ghat_ij = A(r) delta_ij + B(r) xx^i xx^j,
 
     where A(r) = (rbar / r)^2 encodes the tangential scaling and
     A(r) + B(r) r^2 = (d rbar / d r)^2 encodes the radial scaling. The functions
@@ -726,7 +726,7 @@ class GeneralRFMFisheye:
         #     g_T  = (rbar / r)^2,
         #
         # where g_T is the tangential (angular) part. In the Cartesian decomposition
-        #     g_ij = A(r) δ_ij + B(r) xx^i xx^j,
+        #     g_ij = A(r) delta_ij + B(r) xx^i xx^j,
         # the eigenvalues are
         #     g_T     = A(r),
         #     g_rr    = A(r) + B(r) r^2.
@@ -741,24 +741,24 @@ class GeneralRFMFisheye:
         u, p, q, t = rbar_of_r, drbar_dr, d2rbar_dr2, d3rbar_dr3
         r = r_sym  # shorthand for formulas below
 
-        # A(r) = u² / r²
+        # A(r) = u^2 / r^2
         A_of_r = u**2 / r**2
 
-        # B(r) = p²/r² - u²/r⁴
+        # B(r) = p^2/r^2 - u^2/r^4
         B_of_r = p**2 / r**2 - u**2 / r**4
 
-        # A'(r) = 2up/r² - 2u²/r³
+        # A'(r) = 2up/r^2 - 2u^2/r^3
         A1_of_r = 2 * u * p / r**2 - 2 * u**2 / r**3
 
-        # B'(r) = 2pq/r² - 2p²/r³ - 2up/r⁴ + 4u²/r⁵
+        # B'(r) = 2pq/r^2 - 2p^2/r^3 - 2up/r^4 + 4u^2/r^5
         B1_of_r = (
             2 * p * q / r**2 - 2 * p**2 / r**3 - 2 * u * p / r**4 + 4 * u**2 / r**5
         )
 
-        # A''(r) = 2(p² + uq)/r² - 8up/r³ + 6u²/r⁴
+        # A''(r) = 2(p^2 + uq)/r^2 - 8up/r^3 + 6u^2/r^4
         A2_of_r = 2 * (p**2 + u * q) / r**2 - 8 * u * p / r**3 + 6 * u**2 / r**4
 
-        # B''(r) = 2(q² + pt)/r² - 8pq/r³ + (4p² - 2uq)/r⁴ + 16up/r⁵ - 20u²/r⁶
+        # B''(r) = 2(q^2 + pt)/r^2 - 8pq/r^3 + (4p^2 - 2uq)/r^4 + 16up/r^5 - 20u^2/r^6
         B2_of_r = (
             2 * (q**2 + p * t) / r**2
             - 8 * p * q / r**3
@@ -824,8 +824,8 @@ class GeneralRFMFisheye:
         # so
         #
         #     ∂_j Cart^i = ∂_j (λ xx^i)
-        #                 = λ δ^i_j + xx^i ∂_j λ
-        #                 = λ δ^i_j + (λ'(r) / r) xx^i xx^j.
+        #                 = λ delta^i_j + xx^i ∂_j λ
+        #                 = λ delta^i_j + (λ'(r) / r) xx^i xx^j.
         #
         # This avoids any SymPy differentiation with respect to xx^i and is
         # much faster than calling sp.diff on Cart^i(xx^j).
@@ -837,7 +837,7 @@ class GeneralRFMFisheye:
         ]
 
         # ---------------------------------------------------------------------
-        # Step 5: Reference metric ghat_ij = A(r) δ_ij + B(r) xx^i xx^j.
+        # Step 5: Reference metric ghat_ij = A(r) delta_ij + B(r) xx^i xx^j.
         # ---------------------------------------------------------------------
         self.ghatDD = ixp.zerorank2(dimension=3)
         for i in range(3):
