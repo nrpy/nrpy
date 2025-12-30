@@ -352,7 +352,7 @@ def _fisheye_G_kernel_and_derivs(
     G = (s * inv_2_tanh_R_over_s) * sp.log(cosh_plus / cosh_minus)
 
     if max_deriv == 0:
-        return tuple(G)
+        return (G,)
 
     tanh_plus = sp.tanh(arg_plus)
     tanh_minus = sp.tanh(arg_minus)
@@ -419,7 +419,7 @@ def _build_unscaled_radius_map_and_derivs(
             s_i = s_list[i]
             G = _fisheye_G_kernel_and_derivs(r, R_i, s_i, max_deriv=0)[0]
             rbar0 += delta_a_i * G
-        return tuple(rbar0)
+        return (rbar0,)
 
     rbar1 = a_N
     rbar2 = sp.Integer(0) if max_deriv >= 2 else None
