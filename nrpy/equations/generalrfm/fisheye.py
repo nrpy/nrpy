@@ -263,38 +263,32 @@ def _register_fisheye_params(
 
     # Plateau stretch factors a_0..a_N:
     a_names = [f"fisheye_a{i}" for i in range(num_transitions + 1)]
-    a_list = list(
-        par.register_CodeParameters(
-            "REAL",
-            __name__,
-            a_names,
-            cast(_CodeParameterDefaultList, a_default_list),
-            commondata=True,
-        )
+    a_list = par.register_CodeParameters(
+        "REAL",
+        __name__,
+        a_names,
+        cast(_CodeParameterDefaultList, a_default_list),
+        commondata=True,
     )
 
     # Raw transition centers R_1..R_N:
     R_names = [f"fisheye_R{i + 1}" for i in range(num_transitions)]
-    R_list = list(
-        par.register_CodeParameters(
-            "REAL",
-            __name__,
-            R_names,
-            cast(_CodeParameterDefaultList, R_default_list),
-            commondata=True,
-        )
+    R_list = par.register_CodeParameters(
+        "REAL",
+        __name__,
+        R_names,
+        cast(_CodeParameterDefaultList, R_default_list),
+        commondata=True,
     )
 
     # Raw transition widths s_1..s_N:
     s_names = [f"fisheye_s{i + 1}" for i in range(num_transitions)]
-    s_list = list(
-        par.register_CodeParameters(
-            "REAL",
-            __name__,
-            s_names,
-            cast(_CodeParameterDefaultList, s_default_list),
-            commondata=True,
-        )
+    s_list = par.register_CodeParameters(
+        "REAL",
+        __name__,
+        s_names,
+        cast(_CodeParameterDefaultList, s_default_list),
+        commondata=True,
     )
 
     # Global scale factor c:
