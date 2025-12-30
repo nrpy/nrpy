@@ -17,6 +17,15 @@ Compared to the original implementation, this version is optimized for performan
   functions of r and simple Cartesian tensors (δ_ij and xx^i), avoiding repeated
   large sympy.diff calls with respect to xx^i.
 
+This module is the *single source of truth* for the **equations** of the fisheye map:
+* forward mapping xx -> Cart,
+* the radial map r -> rbar(r),
+* the inverse-map 1D root equation f(r) = rbar(r) - rCart (used by Newton-Raphson),
+* and the reference metric induced by the map.
+
+Infrastructure modules (e.g. BHaH codegen) should consume the SymPy expressions from
+this module and handle C codegen + numerical algorithms externally.
+
 Summary of the geometry:
 
 * Raw to physical map: xx^i -> Cart^i(xx).
@@ -56,6 +65,20 @@ The physical Cartesian coordinates are obtained by a purely radial rescaling,
 
 which leaves the angular coordinates unchanged.
 
+Inverse-map equation (Cart -> xx):
+
+Let rCart = ||Cart||. Taking norms of Cart^i = (rbar(r)/r) xx^i gives
+
+    rCart = rbar(r).
+
+So the inverse map reduces to solving the 1D root equation
+
+    f(r) = rbar(r) - rCart = 0,   with f'(r) = d rbar / dr,
+
+and then recovering
+
+    xx^i = (r / rCart) Cart^i    (for rCart > 0), with xx^i = 0 at rCart = 0.
+
 From this mapping, the flat reference metric in raw coordinates can be written in the
 standard "radial-tangential" decomposition
 
@@ -85,6 +108,8 @@ Fisheye parameters are stored as NRPy code parameters so that they can be
 configured at code generation time.
 """
 
+from dataclasses import dataclass
+from functools import lru_cache
 from typing import List, Optional, Union, cast
 
 import sympy as sp
@@ -95,7 +120,112 @@ import nrpy.params as par
 CodeParameterDefaultList = List[Union[str, int, float]]
 
 
-class FisheyeGeneralRFM:
+@dataclass(frozen=True)
+class FisheyeRadialExprs:
+    """
+    Container for 1D radial SymPy expressions for the N-transition fisheye map.
+
+    These expressions are intended for infrastructure code that needs:
+      * rbar(r) and drbar/dr for forward mapping codegen, and/or
+      * f(r) = rbar(r) - rCart and f'(r) for inverse-map Newton-Raphson.
+
+    All expressions are built in terms of a single radial symbol r_sym (1D), not
+    the full Cartesian radius sqrt(xx^i xx^i).
+
+    :ivar num_transitions: Number of fisheye transitions N (>= 1).
+    :ivar r_sym: 1D raw-radius symbol used to build all radial expressions.
+    :ivar rCart_sym: 1D physical-radius symbol rCart = ||Cart|| used in f(r).
+    :ivar rbar_unscaled_of_r: Unscaled radius map rbar_unscaled(r_sym).
+    :ivar rbar_of_r: Scaled radius map rbar(r_sym) = c * rbar_unscaled(r_sym).
+    :ivar drbar_dr_of_r: First derivative d rbar / d r.
+    :ivar lam_of_r: Radial scaling λ(r) = rbar(r)/r.
+    :ivar dlam_dr_of_r: dλ/dr = (r rbar'(r) - rbar(r))/r^2.
+    :ivar lam_at_origin: Limiting λ(0) = c * a0 (useful for safe r->0 handling).
+    :ivar f_of_r: Root function f(r) = rbar(r) - rCart.
+    :ivar fprime_of_r: Root derivative f'(r) = d rbar / d r.
+    """
+
+    num_transitions: int
+    r_sym: sp.Symbol
+    rCart_sym: sp.Symbol
+
+    rbar_unscaled_of_r: sp.Expr
+    rbar_of_r: sp.Expr
+    drbar_dr_of_r: sp.Expr
+
+    lam_of_r: sp.Expr
+    dlam_dr_of_r: sp.Expr
+    lam_at_origin: sp.Expr
+
+    f_of_r: sp.Expr
+    fprime_of_r: sp.Expr
+
+
+@lru_cache(maxsize=None)
+def fisheye_radial_exprs(num_transitions: int) -> FisheyeRadialExprs:
+    """
+    Build and return the canonical 1D radial SymPy expressions for an N-transition fisheye map.
+
+    This function is intentionally cached so that repeated codegen paths (e.g. multiple
+    infrastructure functions needing rbar and/or f(r)) do not repeatedly rebuild the
+    same symbolic expressions.
+
+    NOTE: Calling this function registers the required fisheye CodeParameters:
+      * fisheye_a0..fisheye_aN
+      * fisheye_R1..fisheye_RN
+      * fisheye_s1..fisheye_sN
+      * fisheye_c
+
+    :param num_transitions: Number of fisheye transitions N (>= 1).
+    :return: A FisheyeRadialExprs container holding rbar(r), derivatives, and f(r).
+    :raises ValueError: If num_transitions is less than 1.
+    """
+    if num_transitions < 1:
+        raise ValueError(
+            f"num_transitions must be >= 1 for fisheye; got {num_transitions}."
+        )
+
+    # Register CodeParameters (and optionally build full metric objects) by instantiating
+    # the canonical fisheye builder. The returned expressions below are 1D in r_sym.
+    fisheye = build_generalrfm_fisheye(num_transitions)
+
+    r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
+    rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
+
+    # Build rbar(r_sym) from the defining equations.
+    # Keep all differentiation strictly 1D in r_sym.
+    rbar_unscaled_of_r = fisheye._build_unscaled_radius_map(
+        r_sym
+    )  # pylint: disable=protected-access
+    rbar_of_r = fisheye.c * rbar_unscaled_of_r
+    drbar_dr_of_r = sp.diff(rbar_of_r, r_sym)
+
+    lam_of_r = rbar_of_r / r_sym
+    dlam_dr_of_r = (drbar_dr_of_r * r_sym - rbar_of_r) / (r_sym**2)
+
+    # Safe r->0 limit: rbar(r) ~ c*a0*r => lam(0) = c*a0.
+    lam_at_origin = fisheye.c * fisheye.a_list[0]
+
+    # Inverse-map 1D root equation: rCart = rbar(r).
+    f_of_r = rbar_of_r - rCart_sym
+    fprime_of_r = drbar_dr_of_r
+
+    return FisheyeRadialExprs(
+        num_transitions=num_transitions,
+        r_sym=r_sym,
+        rCart_sym=rCart_sym,
+        rbar_unscaled_of_r=rbar_unscaled_of_r,
+        rbar_of_r=rbar_of_r,
+        drbar_dr_of_r=drbar_dr_of_r,
+        lam_of_r=lam_of_r,
+        dlam_dr_of_r=dlam_dr_of_r,
+        lam_at_origin=lam_at_origin,
+        f_of_r=f_of_r,
+        fprime_of_r=fprime_of_r,
+    )
+
+
+class GeneralRFMFisheye:
     """
     Construct an N transition fisheye raw to physical map and reference metric.
 
@@ -499,17 +629,17 @@ class FisheyeGeneralRFM:
         return cast(sp.Expr, rbar_unscaled)
 
 
-def build_fisheye_generalrfm(
+def build_generalrfm_fisheye(
     n_fisheye_transitions: int,
     a_default: Optional[List[float]] = None,
     R_default: Optional[List[float]] = None,
     s_default: Optional[List[float]] = None,
     c_default: float = 1.0,
-) -> FisheyeGeneralRFM:
+) -> GeneralRFMFisheye:
     """
-    Construct a FisheyeGeneralRFM instance.
+    Construct a GeneralRFMFisheye instance.
 
-    This function instantiates FisheyeGeneralRFM using the input
+    This function instantiates GeneralRFMFisheye using the input
     n_fisheye_transitions value and passes through the default plateau
     stretches, transition centers, widths, and global scale, which in turn
     define the default values of the underlying NRPy CodeParameters.
@@ -525,7 +655,7 @@ def build_fisheye_generalrfm(
                       If None, all entries are set to 0.5. Length must be
                       n_fisheye_transitions.
     :param c_default: Default global scaling factor c. Defaults to 1.0.
-    :return: A newly constructed FisheyeGeneralRFM instance.
+    :return: A newly constructed GeneralRFMFisheye instance.
 
     :raises ValueError: If n_fisheye_transitions is less than 1.
     :raises ValueError: If any of the default lists have inconsistent lengths.
@@ -536,7 +666,7 @@ def build_fisheye_generalrfm(
             f"got n_fisheye_transitions = {n_fisheye_transitions}."
         )
 
-    return FisheyeGeneralRFM(
+    return GeneralRFMFisheye(
         num_transitions=n_fisheye_transitions,
         a_default=a_default,
         R_default=R_default,
@@ -566,10 +696,10 @@ if __name__ == "__main__":
     # ghat_ij,kl, this validation is significantly faster than an approach
     # based on repeatedly calling sp.diff with respect to xx^i.
     for N in (1, 2):
-        print(f"Setting up FisheyeGeneralRFM[N={N}]...")
-        fisheye = FisheyeGeneralRFM(num_transitions=N)
+        print(f"Setting up GeneralRFMFisheye[N={N}]...")
+        _fisheye = GeneralRFMFisheye(num_transitions=N)
         results_dict = ve.process_dictionary_of_expressions(
-            fisheye.__dict__, fixed_mpfs_for_free_symbols=True
+            _fisheye.__dict__, fixed_mpfs_for_free_symbols=True
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

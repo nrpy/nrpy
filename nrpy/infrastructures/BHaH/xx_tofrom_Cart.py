@@ -6,10 +6,9 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from functools import lru_cache
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Any, Dict, List, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Set, Union, cast
 
 import sympy as sp
 
@@ -114,41 +113,6 @@ def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
         return N if N >= 1 else 1
 
     return _default_n_fisheye_transitions()
-
-
-@lru_cache(maxsize=None)
-def _cached_fisheye_rbar_and_drbar_dr(
-    num_transitions: int,
-) -> Tuple[sp.Symbol, sp.Expr, sp.Expr]:
-    """
-    Return (r_sym, rbar(r_sym), drbar_dr(r_sym)) for the N-transition fisheye map.
-
-    IMPORTANT: Instantiating the fisheye builder registers the required CodeParameters
-    (fisheye_a*, fisheye_R*, fisheye_s*, fisheye_c).
-
-    :param num_transitions: Number of fisheye transitions N (>= 1).
-    :return: Tuple (r_sym, rbar(r_sym), drbar_dr(r_sym)).
-    :raises ValueError: If num_transitions is less than 1.
-    """
-    if num_transitions < 1:
-        raise ValueError(
-            f"num_transitions must be >= 1 for fisheye; got {num_transitions}."
-        )
-
-    # Local import to avoid imposing cost on non-fisheye codegen paths.
-    from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
-        build_fisheye_generalrfm,
-    )
-
-    fisheye = build_fisheye_generalrfm(num_transitions)
-
-    r_sym = sp.symbols("r_fisheye", real=True, positive=True)
-    rbar_unscaled = fisheye._build_unscaled_radius_map(
-        r_sym
-    )  # pylint: disable=protected-access
-    rbar = fisheye.c * rbar_unscaled
-    drbar_dr = sp.diff(rbar, r_sym)
-    return r_sym, rbar, drbar_dr
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -302,15 +266,18 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
         # ---------------------------------------------------------------------
         num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        r_sym, rbar_of_r, drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
-            num_transitions
+        # Local import: fisheye equations live in the equations module; this infrastructure
+        # module owns only C codegen + numerical algorithms.
+        from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
+            fisheye_radial_exprs,
         )
+
+        radial = fisheye_radial_exprs(num_transitions)
 
         # Build Newton-Raphson expressions in terms of local C vars r and rCart:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
-        f_of_r_expr = (rbar_of_r - rCart_sym).subs(r_sym, r_local)
-        fprime_of_r_expr = drbar_dr_of_r.subs(r_sym, r_local)
+        f_of_r_expr = radial.f_of_r.subs(radial.r_sym, r_local)
+        fprime_of_r_expr = radial.fprime_of_r.subs(radial.r_sym, r_local)
 
         nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
             [f_of_r_expr, fprime_of_r_expr],
@@ -618,13 +585,17 @@ def register_CFunction_xx_to_Cart(
     # Step 2: Prepare SymPy expressions for C code generation.
     if is_fisheye:
         num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        r_sym, rbar_of_r, _drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
-            num_transitions
+        # Local import: fisheye equations live in the equations module; this infrastructure
+        # module owns only C codegen + numerical algorithms.
+        from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
+            fisheye_radial_exprs,
         )
+
+        radial = fisheye_radial_exprs(num_transitions)
 
         # Codegen for rbar(r) in terms of local C var r:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_expr_local = rbar_of_r.subs(r_sym, r_local)
+        rbar_expr_local = radial.rbar_of_r.subs(radial.r_sym, r_local)
         rbar_processed = _prepare_sympy_exprs_for_codegen(
             [rbar_expr_local], local_C_vars
         )
