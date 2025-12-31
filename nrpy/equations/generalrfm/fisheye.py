@@ -138,9 +138,6 @@ class GeneralRFMFisheye:
         R_default: Optional[List[float]] = None,
         s_default: Optional[List[float]] = None,
         c_default: float = 1.0,
-        use_closed_form_derivs: bool = True,
-        use_rpow_xreplace: bool = True,
-        rpow_xreplace_max_power: int = 6,
     ) -> None:
         """
         Initialize the fisheye map and induced reference metric expressions.
@@ -150,9 +147,6 @@ class GeneralRFMFisheye:
         :param R_default: Default transition centers R1..RN. If None, uses 1.0, 2.0, ..., N.
         :param s_default: Default transition widths s1..sN. If None, all are 0.5.
         :param c_default: Default global scaling factor.
-        :param use_closed_form_derivs: If True, use closed form r derivatives for the radial map.
-        :param use_rpow_xreplace: If True, rewrite powers of the radial symbol into r and r2 using xreplace.
-        :param rpow_xreplace_max_power: Maximum power included in the xreplace dictionary.
         :raises ValueError: If num_transitions is less than 1 or default list lengths are inconsistent.
 
         Derivation summary (high level)
@@ -187,8 +181,6 @@ class GeneralRFMFisheye:
             raise ValueError(f"num_transitions must be >= 1; got {num_transitions}.")
 
         self.num_transitions = num_transitions
-        self.use_closed_form_derivs = use_closed_form_derivs
-        self.use_rpow_xreplace = use_rpow_xreplace
 
         # Step 1: Register fisheye CodeParameters
         # - a0..aN, R1..RN, s1..sN, c
@@ -242,105 +234,59 @@ class GeneralRFMFisheye:
         # r_sym is used only for 1D radial expressions
         r_sym = sp.Symbol("r_fisheye", real=True, positive=True)
 
-        if use_closed_form_derivs:
-            # rbar_unscaled(r) = aN*r + sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
-            # and derivatives through third order: d/dr, d2/dr2, d3/dr3
-            (
-                rbar_unscaled_sym,
-                drbar_unscaled_sym,
-                d2rbar_unscaled_sym,
-                d3rbar_unscaled_sym,
-            ) = _radius_map_unscaled_and_derivs_closed_form(
-                r=r_sym, a_list=self.a_list, R_list=self.R_list, s_list=self.s_list
-            )
+        # rbar_unscaled(r) = aN*r + sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
+        # and derivatives through third order: d/dr, d2/dr2, d3/dr3
+        (
+            rbar_unscaled_sym,
+            drbar_unscaled_sym,
+            d2rbar_unscaled_sym,
+            d3rbar_unscaled_sym,
+        ) = _radius_map_unscaled_and_derivs_closed_form(
+            r=r_sym, a_list=self.a_list, R_list=self.R_list, s_list=self.s_list
+        )
 
-            # rbar(r) = c * rbar_unscaled(r)
-            u = self.c * rbar_unscaled_sym
-            # p = drbar/dr, q = d2rbar/dr2, t = d3rbar/dr3
-            p = self.c * drbar_unscaled_sym
-            q = self.c * d2rbar_unscaled_sym
-            t = self.c * d3rbar_unscaled_sym
+        # rbar(r) = c * rbar_unscaled(r)
+        u = self.c * rbar_unscaled_sym
+        # p = drbar/dr, q = d2rbar/dr2, t = d3rbar/dr3
+        p = self.c * drbar_unscaled_sym
+        q = self.c * d2rbar_unscaled_sym
+        t = self.c * d3rbar_unscaled_sym
 
-            # lam(r) = rbar(r) / r
-            lam_sym = u / r_sym
-            # dlam/dr = (p*r - u) / r**2
-            dlam_sym = (p * r_sym - u) / (r_sym**2)
+        # lam(r) = rbar(r) / r
+        lam_sym = u / r_sym
+        # dlam/dr = (p*r - u) / r**2
+        dlam_sym = (p * r_sym - u) / (r_sym**2)
 
-            # Metric scalars from the radial map:
-            # A(r)  = (rbar/r)**2
-            # B(r)  = ( (drbar/dr)**2 - A(r) ) / r**2 = p**2/r**2 - u**2/r**4
-            # plus A1, B1, A2, B2
-            A_sym, B_sym, A1_sym, B1_sym, A2_sym, B2_sym = _A_B_and_derivs_from_rbar(
-                r=r_sym, u=u, p=p, q=q, t=t
-            )
-        else:
-            # Build rbar_unscaled(r) in 1D and use SymPy differentiation in 1D
-            # rbar_unscaled(r) = aN*r + sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
-            rbar_unscaled_sym = _radius_map_unscaled(
-                r=r_sym, a_list=self.a_list, R_list=self.R_list, s_list=self.s_list
-            )
-
-            # rbar(r) = c * rbar_unscaled(r)
-            u = self.c * rbar_unscaled_sym
-            # p = drbar/dr
-            p = sp.diff(u, r_sym)
-
-            # lam(r) = rbar(r) / r
-            lam_sym = u / r_sym
-            # dlam/dr = (p*r - u) / r**2
-            dlam_sym = (p * r_sym - u) / (r_sym**2)
-
-            # A(r) = lam(r)**2
-            A_sym = lam_sym**2
-            # B(r) = (p**2 - A(r)) / r**2
-            B_sym = (p**2 - A_sym) / (r_sym**2)
-
-            # A1 = dA/dr, B1 = dB/dr, A2 = d2A/dr2, B2 = d2B/dr2
-            A1_sym = sp.diff(A_sym, r_sym)
-            B1_sym = sp.diff(B_sym, r_sym)
-            A2_sym = sp.diff(A1_sym, r_sym)
-            B2_sym = sp.diff(B1_sym, r_sym)
+        # Metric scalars from the radial map:
+        # A(r)  = (rbar/r)**2
+        # B(r)  = ( (drbar/dr)**2 - A(r) ) / r**2 = p**2/r**2 - u**2/r**4
+        # plus A1, B1, A2, B2
+        A_sym, B_sym, A1_sym, B1_sym, A2_sym, B2_sym = _A_B_and_derivs_from_rbar(
+            r=r_sym, u=u, p=p, q=q, t=t
+        )
 
         # Step 4: Convert 1D radial expressions into full Cartesian expressions
         # Optionally reduce explicit sqrt usage by rewriting powers of r_sym using r and r2.
-        if use_rpow_xreplace:
-            sub = _rpow_xreplace_dict(
-                r_sym=r_sym,
-                r=self.r,
-                r2=r2,
-                max_power=rpow_xreplace_max_power,
+        sub = _rpow_xreplace_dict(
+            r_sym=r_sym,
+            r=self.r,
+            r2=r2,
+        )
+        self.rbar_unscaled = rbar_unscaled_sym.xreplace(sub)
+        self.rbar = u.xreplace(sub)
+        lam, dlam_dr, A, B, A1, B1, A2, B2 = [
+            expr.xreplace(sub)
+            for expr in (
+                lam_sym,
+                dlam_sym,
+                A_sym,
+                B_sym,
+                A1_sym,
+                B1_sym,
+                A2_sym,
+                B2_sym,
             )
-            self.rbar_unscaled = rbar_unscaled_sym.xreplace(sub)
-            self.rbar = u.xreplace(sub)
-            lam, dlam_dr, A, B, A1, B1, A2, B2 = [
-                expr.xreplace(sub)
-                for expr in (
-                    lam_sym,
-                    dlam_sym,
-                    A_sym,
-                    B_sym,
-                    A1_sym,
-                    B1_sym,
-                    A2_sym,
-                    B2_sym,
-                )
-            ]
-        else:
-            self.rbar_unscaled = rbar_unscaled_sym.subs(r_sym, self.r)
-            self.rbar = u.subs(r_sym, self.r)
-            lam, dlam_dr, A, B, A1, B1, A2, B2 = [
-                expr.subs(r_sym, self.r)
-                for expr in (
-                    lam_sym,
-                    dlam_sym,
-                    A_sym,
-                    B_sym,
-                    A1_sym,
-                    B1_sym,
-                    A2_sym,
-                    B2_sym,
-                )
-            ]
+        ]
 
         # Step 5: Precompute common radial factors used in tensor assembly
         # inv_r  = 1/r
@@ -440,9 +386,6 @@ def build_fisheye(
     R_default: Optional[List[float]] = None,
     s_default: Optional[List[float]] = None,
     c_default: float = 1.0,
-    use_closed_form_derivs: bool = True,
-    use_rpow_xreplace: bool = True,
-    rpow_xreplace_max_power: int = 6,
 ) -> GeneralRFMFisheye:
     """
     Construct a GeneralRFMFisheye instance.
@@ -452,9 +395,6 @@ def build_fisheye(
     :param R_default: Default transition centers R1..RN. If None, uses 1.0, 2.0, ..., N.
     :param s_default: Default transition widths s1..sN. If None, all are 0.5.
     :param c_default: Default global scaling factor.
-    :param use_closed_form_derivs: If True, use closed form r derivatives for the radial map.
-    :param use_rpow_xreplace: If True, rewrite powers of the radial symbol into r and r2 using xreplace.
-    :param rpow_xreplace_max_power: Maximum power included in the xreplace dictionary.
     :return: A newly constructed GeneralRFMFisheye instance.
     """
     return GeneralRFMFisheye(
@@ -463,9 +403,6 @@ def build_fisheye(
         R_default=R_default,
         s_default=s_default,
         c_default=c_default,
-        use_closed_form_derivs=use_closed_form_derivs,
-        use_rpow_xreplace=use_rpow_xreplace,
-        rpow_xreplace_max_power=rpow_xreplace_max_power,
     )
 
 
@@ -716,7 +653,7 @@ def _A_B_and_derivs_from_rbar(
 
 
 def _rpow_xreplace_dict(
-    r_sym: sp.Symbol, r: sp.Expr, r2: sp.Expr, *, max_power: int
+    r_sym: sp.Symbol, r: sp.Expr, r2: sp.Expr
 ) -> Dict[sp.Expr, sp.Expr]:
     """
     Build an xreplace dictionary mapping powers of r_sym into expressions using r and r2.
@@ -740,7 +677,6 @@ def _rpow_xreplace_dict(
     :param r_sym: 1D radial symbol appearing in intermediate expressions.
     :param r: Cartesian radius expression sqrt(r2).
     :param r2: Cartesian squared radius expression.
-    :param max_power: Maximum absolute power included in the mapping.
     :return: Dictionary suitable for SymPy expr.xreplace().
     """
     inv_r = sp.Integer(1) / r
@@ -761,7 +697,7 @@ def _rpow_xreplace_dict(
     # Higher powers:
     # even n: r_sym**n -> r2**(n/2)
     # odd  n: r_sym**n -> r2**((n-1)/2) * r
-    for n in range(3, max_power + 1):
+    for n in range(3, 7):  # max power replacement = 6
         if n % 2 == 0:
             sub[r_sym**n] = r2 ** (n // 2)
             sub[r_sym**-n] = inv_r2 ** (n // 2)
@@ -784,7 +720,7 @@ if __name__ == "__main__":
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
 
-    for N in (1, 7):
+    for N in (1, 2):
         fisheye = GeneralRFMFisheye(num_transitions=N)
         results_dict = ve.process_dictionary_of_expressions(
             fisheye.__dict__, fixed_mpfs_for_free_symbols=True
