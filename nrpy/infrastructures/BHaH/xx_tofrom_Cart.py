@@ -18,101 +18,7 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-
-
-def _coordsystem_is_fisheye(CoordSystem: str) -> bool:
-    """
-    Return True if CoordSystem indicates a fisheye mapping.
-
-    This intentionally uses only simple string operations (no regex), and is
-    case-insensitive.
-
-    :param CoordSystem: Coordinate system name string to test.
-    :return: True if CoordSystem is interpreted as a fisheye mapping; otherwise False.
-    """
-    return "fisheye" in CoordSystem.lower()
-
-
-def _default_n_fisheye_transitions() -> int:
-    """
-    Get the default number of fisheye transitions from the parameter system.
-
-    This is *lazy* (no import-time param registration side-effects). If the
-    parameter does not exist, it is registered with default value 1 and 1 is
-    returned.
-
-    :return: Default number of fisheye transitions (>= 1).
-    """
-    try:
-        N = int(par.parval_from_str("n_fisheye_transitions"))
-        return N if N >= 1 else 1
-    except (KeyError, ValueError, TypeError):
-        # Register only if missing; swallow errors in case of benign re-registration.
-        try:
-            par.register_param(int, __name__, "n_fisheye_transitions", 1)
-        except (KeyError, ValueError, TypeError, RuntimeError):
-            pass
-        return 1
-
-
-def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
-    """
-    Determine the number of fisheye transitions from the CoordSystem string if present; otherwise fall back to the global parameter n_fisheye_transitions.
-
-    Supported examples (case-insensitive, no regex):
-      - "Fisheye"               -> param fallback
-      - "Fisheye2"              -> 2
-      - "FisheyeN2"             -> 2
-      - "GeneralRFM_FisheyeN3"  -> 3
-      - "Fisheye_N4"            -> 4
-      - "Fisheye-n5"            -> 5
-
-    :param CoordSystem: Coordinate system name string.
-    :return: Parsed number of transitions N (>= 1).
-    """
-    s_lower = CoordSystem.lower()
-    key = "fisheye"
-    pos = s_lower.find(key)
-    if pos < 0:
-        return _default_n_fisheye_transitions()
-
-    tail = s_lower[pos + len(key) :]
-
-    # Skip common separators after "fisheye"
-    while tail and tail[0] in "_-":
-        tail = tail[1:]
-
-    # Optional 'n' marker: "fisheyen2" or "fisheye_n2"
-    if tail.startswith("n"):
-        tail = tail[1:]
-        while tail and tail[0] in "_-":
-            tail = tail[1:]
-
-    # Parse contiguous digits (if any)
-    digits = ""
-    for ch in tail:
-        if ch.isdigit():
-            digits += ch
-        else:
-            break
-
-    if digits:
-        N = int(digits)
-        return N if N >= 1 else 1
-
-    # As a last resort, if the string ends in digits, interpret them as N.
-    # (Only attempted because "fisheye" was found somewhere in the string.)
-    digits_end = ""
-    for ch in reversed(s_lower):
-        if ch.isdigit():
-            digits_end = ch + digits_end
-        else:
-            break
-    if digits_end:
-        N = int(digits_end)
-        return N if N >= 1 else 1
-
-    return _default_n_fisheye_transitions()
+from nrpy.equations.generalrfm import fisheye
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -233,7 +139,21 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+
+    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
+    num_transitions = -1
+    if is_fisheye:
+        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
+        if not suffix.isdigit():
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
+            )
+        num_transitions = int(suffix)
+        if num_transitions < 1:
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
+            )
+
     rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
         {"r", "rCart"} if is_fisheye else set()
@@ -265,19 +185,23 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         # then recover:
         #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
         # ---------------------------------------------------------------------
-        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        # Local import: fisheye equations live in the equations module; this infrastructure
-        # module owns only C codegen + numerical algorithms.
-        from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
-            fisheye_radial_exprs,
-        )
+        # Register fisheye CodeParameters (and reuse their symbols):
+        fe = fisheye.build_fisheye(num_transitions=num_transitions)
 
-        radial = fisheye_radial_exprs(num_transitions)
-
-        # Build Newton-Raphson expressions in terms of local C vars r and rCart:
+        # Closed-form 1D expressions for rbar(r) and drbar/dr:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        f_of_r_expr = radial.f_of_r.subs(radial.r_sym, r_local)
-        fprime_of_r_expr = radial.fprime_of_r.subs(radial.r_sym, r_local)
+        (rbar_unscaled, drbar_unscaled, _, _) = (
+            fisheye._radius_map_unscaled_and_derivs_closed_form(
+                r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
+            )
+        )
+        rbar_of_r_expr = fe.c * rbar_unscaled
+        drbar_dr_expr = fe.c * drbar_unscaled
+
+        # Newton solve: f(r) = rbar(r) - rCart = 0, so f'(r) = drbar/dr
+        rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
+        f_of_r_expr = rbar_of_r_expr - rCart_sym
+        fprime_of_r_expr = drbar_dr_expr
 
         nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
             [f_of_r_expr, fprime_of_r_expr],
@@ -578,30 +502,41 @@ def register_CFunction_xx_to_Cart(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+
+    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
+    num_transitions = -1
+    if is_fisheye:
+        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
+        if not suffix.isdigit():
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
+            )
+        num_transitions = int(suffix)
+        if num_transitions < 1:
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
+            )
+
     rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
     local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye else set())
 
     # Step 2: Prepare SymPy expressions for C code generation.
     if is_fisheye:
-        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        # Local import: fisheye equations live in the equations module; this infrastructure
-        # module owns only C codegen + numerical algorithms.
-        from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
-            fisheye_radial_exprs,
-        )
+        # Register fisheye CodeParameters (and reuse their symbols):
+        fe = fisheye.build_fisheye(num_transitions=num_transitions)
 
-        radial = fisheye_radial_exprs(num_transitions)
-
-        # Codegen for rbar(r) in terms of local C var r:
+        # Closed-form 1D expression for rbar(r):
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_expr_local = radial.rbar_of_r.subs(radial.r_sym, r_local)
+        (rbar_unscaled, _, _, _) = fisheye._radius_map_unscaled_and_derivs_closed_form(
+            r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
+        )
+        rbar_expr_local = fe.c * rbar_unscaled
+
         rbar_processed = _prepare_sympy_exprs_for_codegen(
             [rbar_expr_local], local_C_vars
         )
         rbar_codegen = ccg.c_codegen(rbar_processed, ["rbar"], include_braces=False)
 
-        # Safe r->0 limit: lam(0) = c*a0. (Even though xx=0 at r=0, this is the correct limit.)
         body = f"""
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];

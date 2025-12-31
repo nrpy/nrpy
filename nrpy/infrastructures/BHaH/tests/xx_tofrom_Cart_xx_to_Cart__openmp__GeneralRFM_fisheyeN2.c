@@ -5,7 +5,7 @@
  * local coordinate vector {xx[0], xx[1], xx[2]} = {xx0, xx1, xx2},
  * taking into account the possibility that the origin of this grid is off-center.
  */
-void xx_to_Cart__rfm__GeneralRFM_FisheyeN2(const params_struct *restrict params, const REAL xx[3], REAL xCart[3]) {
+void xx_to_Cart__rfm__GeneralRFM_fisheyeN2(const params_struct *restrict params, const REAL xx[3], REAL xCart[3]) {
   const REAL xx0 = xx[0];
   const REAL xx1 = xx[1];
   const REAL xx2 = xx[2];
@@ -41,4 +41,4 @@ void xx_to_Cart__rfm__GeneralRFM_FisheyeN2(const params_struct *restrict params,
     xCart[1] = lam * xx1 + params->Cart_originy;
     xCart[2] = lam * xx2 + params->Cart_originz;
   }
-} // END FUNCTION xx_to_Cart__rfm__GeneralRFM_FisheyeN2
+} // END FUNCTION xx_to_Cart__rfm__GeneralRFM_fisheyeN2

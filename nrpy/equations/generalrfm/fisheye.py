@@ -7,16 +7,13 @@ from raw Cartesian coordinates xx[i] to physical Cartesian coordinates Cart[i],
 together with the induced flat reference metric in the raw coordinates and its
 first and second derivatives.
 
-Key equations used by this module (human readable summary)
+Key equations used by this module:
 
 Coordinate map and radii
-
 Define the raw radius:
-
     r = sqrt(xx[0]**2 + xx[1]**2 + xx[2]**2)
 
 The map is a purely radial rescaling:
-
     Cart[i](xx) = lam(r) * xx[i]
     lam(r)      = rbar(r) / r
 
@@ -93,7 +90,7 @@ This produces coefficient combinations:
 scalar factors.
 """
 
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Tuple, cast
 
 import sympy as sp
 
@@ -103,8 +100,6 @@ import nrpy.params as par
 thismodule = __name__
 
 __all__ = ["GeneralRFMFisheye", "build_fisheye"]
-
-_CodeParameterDefaultList = List[Union[str, int, float]]
 
 _KRONECKER_DELTA_3D: Tuple[
     Tuple[int, int, int], Tuple[int, int, int], Tuple[int, int, int]
@@ -133,20 +128,11 @@ class GeneralRFMFisheye:
     def __init__(
         self,
         num_transitions: int,
-        *,
-        a_default: Optional[List[float]] = None,
-        R_default: Optional[List[float]] = None,
-        s_default: Optional[List[float]] = None,
-        c_default: float = 1.0,
     ) -> None:
         """
         Initialize the fisheye map and induced reference metric expressions.
 
         :param num_transitions: Number of fisheye transitions. Must be at least 1.
-        :param a_default: Default plateau stretch factors a0..aN. If None, all are 1.0.
-        :param R_default: Default transition centers R1..RN. If None, uses 1.0, 2.0, ..., N.
-        :param s_default: Default transition widths s1..sN. If None, all are 0.5.
-        :param c_default: Default global scaling factor.
         :raises ValueError: If num_transitions is less than 1 or default list lengths are inconsistent.
 
         Derivation summary (high level)
@@ -184,40 +170,29 @@ class GeneralRFMFisheye:
 
         # Step 1: Register fisheye CodeParameters
         # - a0..aN, R1..RN, s1..sN, c
-        a_default_list, R_default_list, s_default_list = _normalize_fisheye_defaults(
-            num_transitions=num_transitions,
-            a_default=a_default,
-            R_default=R_default,
-            s_default=s_default,
-        )
-
-        a_names = [f"fisheye_a{i}" for i in range(num_transitions + 1)]
-        R_names = [f"fisheye_R{i + 1}" for i in range(num_transitions)]
-        s_names = [f"fisheye_s{i + 1}" for i in range(num_transitions)]
-
         self.a_list = par.register_CodeParameters(
             "REAL",
             thismodule,
-            a_names,
-            cast(_CodeParameterDefaultList, a_default_list),
+            [f"fisheye_a{i}" for i in range(num_transitions + 1)],
+            [1.0] * (num_transitions + 1),
             commondata=True,
         )
         self.R_list = par.register_CodeParameters(
             "REAL",
             thismodule,
-            R_names,
-            cast(_CodeParameterDefaultList, R_default_list),
+            [f"fisheye_R{i + 1}" for i in range(num_transitions)],
+            [float(i + 1) for i in range(num_transitions)],
             commondata=True,
         )
         self.s_list = par.register_CodeParameters(
             "REAL",
             thismodule,
-            s_names,
-            cast(_CodeParameterDefaultList, s_default_list),
+            [f"fisheye_s{i + 1}" for i in range(num_transitions)],
+            [0.5] * num_transitions,
             commondata=True,
         )
         self.c = par.register_CodeParameter(
-            "REAL", thismodule, "fisheye_c", defaultvalue=c_default, commondata=True
+            "REAL", thismodule, "fisheye_c", defaultvalue=1.0, commondata=True
         )
 
         # Step 2: Define raw Cartesian coordinates and radius
@@ -379,77 +354,14 @@ class GeneralRFMFisheye:
                         self.ghatDDdDD[i][j][k][l] = termA + termB + termC
 
 
-def build_fisheye(
-    num_transitions: int,
-    *,
-    a_default: Optional[List[float]] = None,
-    R_default: Optional[List[float]] = None,
-    s_default: Optional[List[float]] = None,
-    c_default: float = 1.0,
-) -> GeneralRFMFisheye:
+def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     """
     Construct a GeneralRFMFisheye instance.
 
     :param num_transitions: Number of fisheye transitions. Must be at least 1.
-    :param a_default: Default plateau stretch factors a0..aN. If None, all are 1.0.
-    :param R_default: Default transition centers R1..RN. If None, uses 1.0, 2.0, ..., N.
-    :param s_default: Default transition widths s1..sN. If None, all are 0.5.
-    :param c_default: Default global scaling factor.
     :return: A newly constructed GeneralRFMFisheye instance.
     """
-    return GeneralRFMFisheye(
-        num_transitions=num_transitions,
-        a_default=a_default,
-        R_default=R_default,
-        s_default=s_default,
-        c_default=c_default,
-    )
-
-
-def _normalize_fisheye_defaults(
-    num_transitions: int,
-    a_default: Optional[List[float]],
-    R_default: Optional[List[float]],
-    s_default: Optional[List[float]],
-) -> Tuple[List[float], List[float], List[float]]:
-    """
-    Normalize and validate default parameter lists for a, R, and s.
-
-    :param num_transitions: Number of fisheye transitions.
-    :param a_default: Default plateau stretch factors a0..aN or None.
-    :param R_default: Default transition centers R1..RN or None.
-    :param s_default: Default transition widths s1..sN or None.
-    :return: Tuple (a_default_list, R_default_list, s_default_list).
-    :raises ValueError: If any default list length is inconsistent with num_transitions.
-    """
-    if a_default is None:
-        a_list = [1.0] * (num_transitions + 1)
-    else:
-        a_list = [float(v) for v in a_default]
-    if len(a_list) != num_transitions + 1:
-        raise ValueError(
-            f"a_default must have length {num_transitions + 1}; got {len(a_list)}."
-        )
-
-    if R_default is None:
-        R_list = [float(i + 1) for i in range(num_transitions)]
-    else:
-        R_list = [float(v) for v in R_default]
-    if len(R_list) != num_transitions:
-        raise ValueError(
-            f"R_default must have length {num_transitions}; got {len(R_list)}."
-        )
-
-    if s_default is None:
-        s_list = [0.5] * num_transitions
-    else:
-        s_list = [float(v) for v in s_default]
-    if len(s_list) != num_transitions:
-        raise ValueError(
-            f"s_default must have length {num_transitions}; got {len(s_list)}."
-        )
-
-    return a_list, R_list, s_list
+    return GeneralRFMFisheye(num_transitions=num_transitions)
 
 
 def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:

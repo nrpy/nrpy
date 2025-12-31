@@ -4,8 +4,8 @@
  * Given Cartesian point (x,y,z), this function unshifts the grid back to the origin to output the corresponding
  *             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid
  */
-void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struct *restrict params, const REAL xCart[3], REAL xx[3],
-                                                              int Cart_to_i0i1i2[3]) {
+__host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2(const params_struct *restrict params, const REAL xCart[3],
+                                                                                  REAL xx[3], int Cart_to_i0i1i2[3]) {
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
@@ -51,23 +51,17 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struc
       REAL f_of_r, fprime_of_r;
       {
         const REAL tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL tmp8 = (1.0 / (params->fisheye_s2));
+        const REAL tmp5 = (1.0 / (params->fisheye_s2));
         const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-        const REAL tmp4 = tmp0 * (-params->fisheye_R1 + r);
-        const REAL tmp7 = (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-        const REAL tmp9 = tmp8 * (params->fisheye_R2 + r);
-        const REAL tmp11 = tmp8 * (-params->fisheye_R2 + r);
-        const REAL tmp14 = (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp8);
-        const REAL tmp2 = cosh(tmp1);
-        const REAL tmp5 = cosh(tmp4);
-        const REAL tmp10 = cosh(tmp9);
-        const REAL tmp12 = cosh(tmp11);
-        const REAL tmp6 = (1.0 / (tmp5));
-        const REAL tmp13 = (1.0 / (tmp12));
-        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + tmp14 * log(tmp10 * tmp13) + tmp7 * log(tmp2 * tmp6)) - rCart;
-        fprime_of_r = params->fisheye_c *
-                      (params->fisheye_a2 + tmp5 * tmp7 * (-tmp0 * tmp2 * sinh(tmp4) / ((tmp5) * (tmp5)) + tmp0 * tmp6 * sinh(tmp1)) / tmp2 +
-                       tmp12 * tmp14 * (-tmp10 * tmp8 * sinh(tmp11) / ((tmp12) * (tmp12)) + tmp13 * tmp8 * sinh(tmp9)) / tmp10);
+        const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
+        const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
+        const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
+        const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
+        const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
+        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
+                                      params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
+                 rCart;
+        fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
       }
 
       REAL fN = fabs(f_of_r);
@@ -75,23 +69,17 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struc
       r = r_guess0;
       {
         const REAL tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL tmp8 = (1.0 / (params->fisheye_s2));
+        const REAL tmp5 = (1.0 / (params->fisheye_s2));
         const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-        const REAL tmp4 = tmp0 * (-params->fisheye_R1 + r);
-        const REAL tmp7 = (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-        const REAL tmp9 = tmp8 * (params->fisheye_R2 + r);
-        const REAL tmp11 = tmp8 * (-params->fisheye_R2 + r);
-        const REAL tmp14 = (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp8);
-        const REAL tmp2 = cosh(tmp1);
-        const REAL tmp5 = cosh(tmp4);
-        const REAL tmp10 = cosh(tmp9);
-        const REAL tmp12 = cosh(tmp11);
-        const REAL tmp6 = (1.0 / (tmp5));
-        const REAL tmp13 = (1.0 / (tmp12));
-        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + tmp14 * log(tmp10 * tmp13) + tmp7 * log(tmp2 * tmp6)) - rCart;
-        fprime_of_r = params->fisheye_c *
-                      (params->fisheye_a2 + tmp5 * tmp7 * (-tmp0 * tmp2 * sinh(tmp4) / ((tmp5) * (tmp5)) + tmp0 * tmp6 * sinh(tmp1)) / tmp2 +
-                       tmp12 * tmp14 * (-tmp10 * tmp8 * sinh(tmp11) / ((tmp12) * (tmp12)) + tmp13 * tmp8 * sinh(tmp9)) / tmp10);
+        const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
+        const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
+        const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
+        const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
+        const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
+        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
+                                      params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
+                 rCart;
+        fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
       }
 
       REAL f0 = fabs(f_of_r);
@@ -102,23 +90,17 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struc
 
         {
           const REAL tmp0 = (1.0 / (params->fisheye_s1));
-          const REAL tmp8 = (1.0 / (params->fisheye_s2));
+          const REAL tmp5 = (1.0 / (params->fisheye_s2));
           const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-          const REAL tmp4 = tmp0 * (-params->fisheye_R1 + r);
-          const REAL tmp7 = (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-          const REAL tmp9 = tmp8 * (params->fisheye_R2 + r);
-          const REAL tmp11 = tmp8 * (-params->fisheye_R2 + r);
-          const REAL tmp14 = (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp8);
-          const REAL tmp2 = cosh(tmp1);
-          const REAL tmp5 = cosh(tmp4);
-          const REAL tmp10 = cosh(tmp9);
-          const REAL tmp12 = cosh(tmp11);
-          const REAL tmp6 = (1.0 / (tmp5));
-          const REAL tmp13 = (1.0 / (tmp12));
-          f_of_r = params->fisheye_c * (params->fisheye_a2 * r + tmp14 * log(tmp10 * tmp13) + tmp7 * log(tmp2 * tmp6)) - rCart;
-          fprime_of_r = params->fisheye_c *
-                        (params->fisheye_a2 + tmp5 * tmp7 * (-tmp0 * tmp2 * sinh(tmp4) / ((tmp5) * (tmp5)) + tmp0 * tmp6 * sinh(tmp1)) / tmp2 +
-                         tmp12 * tmp14 * (-tmp10 * tmp8 * sinh(tmp11) / ((tmp12) * (tmp12)) + tmp13 * tmp8 * sinh(tmp9)) / tmp10);
+          const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
+          const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
+          const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
+          const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
+          const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
+          f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
+                                        params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
+                   rCart;
+          fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
         }
 
         // Unnecessary guard against division by zero in Newton step;
@@ -143,11 +125,11 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struc
 
       if (iter >= ITER_MAX || !tolerance_has_been_met) {
 #ifdef __CUDA_ARCH__
-        printf("ERROR: Newton-Raphson failed for GeneralRFM_FisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
+        printf("ERROR: Newton-Raphson failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
                (double)Cartx, (double)Carty, (double)Cartz);
         asm("trap;");
 #else
-        fprintf(stderr, "ERROR: Newton-Raphson failed for GeneralRFM_FisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
+        fprintf(stderr, "ERROR: Newton-Raphson failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
                 (double)Cartx, (double)Carty, (double)Cartz);
         exit(1);
 #endif
@@ -175,4 +157,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2(const params_struc
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_FisheyeN2
+} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2
