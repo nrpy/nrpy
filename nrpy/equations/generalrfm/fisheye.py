@@ -270,7 +270,7 @@ class GeneralRFMFisheye:
         sub = _rpow_xreplace_dict(
             r_sym=r_sym,
             r=self.r,
-            r2=r2,
+            r2=cast(sp.Expr, r2),
         )
         self.rbar_unscaled = rbar_unscaled_sym.xreplace(sub)
         self.rbar = u.xreplace(sub)
@@ -466,8 +466,10 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     :return: The kernel value G(r; R, s).
     """
     # G(r; R, s) = s/(2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
-    return (s / (2 * sp.tanh(R / s))) * sp.log(
-        sp.cosh((r + R) / s) / sp.cosh((r - R) / s)
+    return cast(
+        sp.Expr,
+        (s / (2 * sp.tanh(R / s)))
+        * sp.log(sp.cosh((r + R) / s) / sp.cosh((r - R) / s)),
     )
 
 
@@ -495,7 +497,7 @@ def _radius_map_unscaled(
         delta_a = a_list[i] - a_list[i + 1]
         rb += delta_a * _G_kernel(r=r, R=R_i, s=s_i)
 
-    return rb
+    return cast(sp.Expr, rb)
 
 
 def _G_and_derivs_closed_form(
