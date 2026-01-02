@@ -333,31 +333,8 @@ class ReferenceMetricPrecompute:
 
 
 # --------------------------------------------------------------------------
-# Small C helpers: parameter copies into locals (host/kernels)
+# Small C helpers: parameter copies into locals (host)
 # --------------------------------------------------------------------------
-def _emit_kernel_param_copies(
-    unique_params: List[str], kernel_param_pointer: str, indent_spaces: int = 4
-) -> str:
-    """
-    Generate C code to copy parameters from a struct pointer to local variables.
-
-    This helper creates a block of C code that declares and initializes local `const REAL`
-    variables from the members of a given struct pointer (e.g., `kparams->param_name`).
-
-    :param unique_params: A list of parameter names (strings) to be copied.
-    :param kernel_param_pointer: The name of the C struct pointer (e.g., "kparams").
-    :param indent_spaces: The number of spaces to use for indentation.
-    :return: A string containing the formatted C code block.
-    """
-    if not unique_params:
-        return ""
-    indent = " " * indent_spaces
-    return "".join(
-        f"{indent}const REAL {p} = {kernel_param_pointer}->{p};\n"
-        for p in unique_params
-    )
-
-
 def _emit_host_param_copies(unique_params: List[str], indent_spaces: int = 4) -> str:
     """
     Generate C code to copy parameters from the `params` struct to local variables.
