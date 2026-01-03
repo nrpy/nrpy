@@ -27,62 +27,12 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
-from nrpy.helpers.generic import clang_format, superfast_uniq
+from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures import BHaH
 
 
 # --------------------------------------------------------------------------
-# clang-format helpers (whitespace canonicalization)
-# --------------------------------------------------------------------------
-def _clang_format_toplevel(c_code: str) -> str:
-    """
-    Format top-level C/CUDA code with clang-format.
-
-    :param c_code: C/CUDA source code string.
-    :return: The formatted code string, or the original string if it is empty or only
-        whitespace.
-    """
-    if not c_code or not c_code.strip():
-        return c_code
-    return clang_format(c_code)
-
-
-def _clang_format_statements(c_stmts: str) -> str:
-    """
-    Format a C/CUDA statement block with clang-format.
-
-    The statement block is wrapped in a temporary function with begin/end markers so
-    the formatted inner block can be extracted robustly even when nested braces appear
-    in the statements.
-
-    :param c_stmts: C/CUDA statements (typically a function-body fragment).
-    :return: The formatted statement block, ending with a newline, or the original
-        string if it is empty or only whitespace.
-    """
-    if not c_stmts or not c_stmts.strip():
-        return c_stmts
-
-    begin = "/*__NRPY_BEGIN__*/"
-    end = "/*__NRPY_END__*/"
-    wrapped = f"""
-void __nrpy_clang_format_wrapper(void) {{
-{begin}
-{c_stmts}
-{end}
-}}
-"""
-    formatted = clang_format(wrapped)
-    lines = formatted.splitlines()
-
-    begin_idx = next(i for i, ln in enumerate(lines) if begin in ln)
-    end_idx = next(i for i, ln in enumerate(lines) if end in ln)
-
-    inner = "\n".join(lines[begin_idx + 1 : end_idx]).strip("\n")
-    return inner + "\n"
-
-
-# --------------------------------------------------------------------------
-# Launch-config snippets (classic BHaH style; clang-format handles whitespace)
+# Launch-config snippets (classic BHaH style)
 # --------------------------------------------------------------------------
 def _emit_launch_setup_1d(n_sym_c: str) -> str:
     return f"""
@@ -153,14 +103,14 @@ class ReferenceMetricPrecompute:
         self._apply_intrinsics_mode()
 
         # Finalize kernels/body once; reuse everywhere.
-        self.kernels_prefunc = _clang_format_toplevel("".join(self._kernels_parts))
+        self.kernels_prefunc = "".join(self._kernels_parts)
         defines_body = "".join(self._defines_parts)
         alias_lines = "\n".join(
             [f"MAYBE_UNUSED const REAL * restrict x{d} = xx[{d}];" for d in range(3)]
         )
-        self.rfm_struct__define = _clang_format_statements(
-            alias_lines + "\n" + defines_body
-        )
+        self.rfm_struct__define = alias_lines + "\n" + defines_body
+        if self.rfm_struct__define and not self.rfm_struct__define.endswith("\n"):
+            self.rfm_struct__define += "\n"
 
     # --------------------------- setup ---------------------------
     def _initialize_configuration(self, CoordSystem: str) -> None:
@@ -240,7 +190,7 @@ class ReferenceMetricPrecompute:
 
     # --------------------------- per-symbol processing (single-pass emit) ---------------------------
     def _process_expression(self, symbol: sp.Expr, expr: sp.Expr) -> None:
-        # Dependency detection (compact; identical semantics):
+        # Dependency detection:
         dependencies = [expr.has(self.rfm.xx[i]) for i in range(self.N_DIMS)]
 
         # Register struct member + alloc/free spec:
@@ -286,7 +236,7 @@ class ReferenceMetricPrecompute:
         else:
             raise RuntimeError(f"Unsupported dependency for {symbol}: {expr}")
 
-    # --------------------------- emitters (templates; token-identical modulo whitespace) ---------------------------
+    # --------------------------- emitters ---------------------------
     def _emit_1d(
         self,
         symbol_name: str,
@@ -584,10 +534,12 @@ IFCUDARUN({{
             )
 
             final_body = if_is_host_comment + (func_body if func_body else " ")
-            final_body = _clang_format_statements(final_body)
+            if final_body and not final_body.endswith("\n"):
+                final_body += "\n"
 
             prefunc = prefunc_dict.get(func_name, "")
-            prefunc = _clang_format_toplevel(prefunc) if prefunc.strip() else prefunc
+            if prefunc and not prefunc.endswith("\n"):
+                prefunc += "\n"
 
             cfc.register_CFunction(
                 prefunc=prefunc,
@@ -605,7 +557,6 @@ IFCUDARUN({{
     rfm_struct_typedef = "typedef struct __rfmstruct__ {\n"
     rfm_struct_typedef += "\n".join(sorted(superfast_uniq(combined_BHaH_defines_list)))
     rfm_struct_typedef += "\n} rfm_struct;\n"
-    rfm_struct_typedef = _clang_format_toplevel(rfm_struct_typedef)
     BHaH.BHaH_defines_h.register_BHaH_defines("reference_metric", rfm_struct_typedef)
 
 
