@@ -16,6 +16,8 @@ register_CFunction_diagnostics
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -93,26 +95,17 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  *
  * Scheduling rule:
  *   fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time) < 0.5 * dt
+ * 
+ * 
  *
- * CUDA note: When compiled with CUDA, device-to-host synchronization of selected
- * buffers occurs prior to performing diagnostics that require host-side I/O, and
- * an additional griddata_device parameter is present in the signature.
- *
- * @pre
- * - commondata and griddata are non-null and initialized.
- * - commondata->NUMGRIDS >= 1, grid dimensions are valid, and backing arrays exist.
- * - Generated diagnostics interfaces and indices are consistent with the build.
- *
- * @post
- * - On output steps, all enabled diagnostics execute and may write output.
- * - On non-output steps, no diagnostic I/O occurs and the solution state is unchanged.
- * - The progress indicator advances every call; a newline is printed if time + dt > t_final.
- *
- * @param[in,out] commondata  Global simulation metadata and run-time parameters
- *                            (e.g., time, dt, diagnostics_output_every, t_final, NUMGRIDS).
- * @param[in,out] griddata_device  Device-side per-grid data used for device-to-host
- *                                 synchronization when compiled with CUDA; omitted in non-CUDA builds.
+ * @param[in,out] commondata  Global simulation metadata and run-time parameters.
  * @param[in,out] griddata    Host-side per-grid data (parameters, fields, and workspace).
+ * @param[in,out] griddata_chare  Per-chare grid data used by Charm++ diagnostics routines.
+ * @param[in]     gridfuncs_diags  Per-grid diagnostic gridfunction pointers (may be NULL for setup stages).
+ * @param[in]     chare_index  3D chare index identifying this subdomain.
+ * @param[in]     grid         Grid index within [0, commondata->NUMGRIDS).
+ * @param[in]     token        Ck::IO session token used by I/O routines.
+ * @param[in]     which_diagnostics_part  Enum selecting the diagnostics stage/action.
  *
  * @warning
  * - Diagnostics that encounter allocation or I/O failures may abort the program.
@@ -124,7 +117,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  *
  * @return void
 """
-    parallelization = par.parval_from_str("parallelization")
     _ = par.CodeParameter(
         "REAL",
         __name__,
@@ -135,13 +127,11 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     cfunc_type = "void"
     name = "diagnostics"
     params = (
-    "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, "
-    "const REAL *restrict gridfuncs_diags[MAXNUMGRIDS], "
-    "const int chare_index[3], const int grid, Ck::IO::Session token, const int which_diagnostics_part"
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare, "
+        "const REAL *restrict gridfuncs_diags[MAXNUMGRIDS], "
+        "const int chare_index[3], const int grid, Ck::IO::Session token, const int which_diagnostics_part"
     )
-    
-    newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
-    rnewline = "\\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
+
     body = r"""
   switch (which_diagnostics_part) {
 
@@ -241,7 +231,7 @@ def register_all_diagnostics(
         enable_free_auxevol=enable_free_auxevol,
     )
     if enable_nearest_diagnostics:
-        for CoordSystem in set_of_CoordSystems:            
+        for CoordSystem in set_of_CoordSystems:
             superB.diagnostics.diagnostics_nearest_grid_center.register_CFunction_diagnostics_nearest_grid_center(
                 CoordSystem=CoordSystem
             )
@@ -256,7 +246,7 @@ def register_all_diagnostics(
             BHaH.diagnostics.sqrt_detgammahat_d3xx_volume_element.register_CFunction_sqrt_detgammahat_d3xx_volume_element(
                 CoordSystem=CoordSystem
             )
-            
+
     # Register diagnostic_struct's contribution to griddata_struct:
     BHaH.griddata_commondata.register_griddata_commondata(
         __name__,

@@ -14,6 +14,8 @@ register_CFunction_diagnostics_nearest_grid_center
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr

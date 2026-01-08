@@ -14,6 +14,8 @@ register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -22,11 +24,10 @@ from typing import Dict, Sequence, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-
-from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes  import (
+from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes import (
     bhah_plane_configs,
+    generate_plane_loop_code,
     get_coord_family,
-    generate_plane_loop_code,    
 )
 
 
@@ -56,7 +57,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
         return None
 
     family = get_coord_family(CoordSystem)
-    plane_configs = bhah_plane_configs()  
+    plane_configs = bhah_plane_configs()
     xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
     yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
 
@@ -76,9 +77,8 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
  *    specialized by the runtime coordinate system.
  *  - Converts native coordinates xx to Cartesian coordinates (x, y, z) using xx_to_Cart so that
  *    the first columns of each row contain mapped coordinates.
- *  - Writes two files per call, one for the xy plane and one for the yz plane. Each file begins
- *    with a time comment and a header, followed by one row per interior point that contains the
- *    mapped coordinates and sampled diagnostic values.
+ *  - Writes to two persistent per-grid files, one for the xy plane and one for the yz plane.
+ *  - Chare (0,0,0) writes the time comment and header; all chares write their owned rows at precomputed offsets.
  *  - Performs sampling without interpolation; values are read directly from gridfuncs_diags[grid].
  *
  * Plane selection notes (examples, not exhaustive):
@@ -89,18 +89,24 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
  *
  * If a user-editable block is provided in the implementation, users may insert custom logic such as
  * adding extra columns or filtering before rows are written.
+ * 
+ * @param[in,out] commondata            Pointer to global simulation metadata.
+ * @param[in]     grid                  Grid index.
+ * @param[in]     params                Pointer to per-grid parameters (global grid).
+ * @param[in]     params_chare          Pointer to per-chare parameters (local grid).
+ * @param[in]     xx                    Global-grid logical coordinates.
+ * @param[in]     xx_chare              Chare-local logical coordinates.
+ * @param[in]     NUM_GFS_NEAREST       Number of diagnostic gridfunctions to output per point.
+ * @param[in]     which_gfs             Array of length NUM_GFS_NEAREST giving gridfunction indices.
+ * @param[in]     diagnostic_gf_names   Array of length NUM_GFS_NEAREST giving column names.
+ * @param[in]     gridfuncs_diags       Per-grid pointers to diagnostic data arrays.
+ * @param[in]     charecommstruct       Chare communication metadata/mappings.
+ * @param[in,out] diagnosticstruct      Diagnostic bookkeeping for point indices and file offsets.
+ * @param[in]     chare_index           3D chare index.
+ * @param[in]     token                Ck::IO session token.
+ * @param[in]     which_diagnostics_part Enum selecting diagnostics stage/action.
  *
- * @param[in,out] commondata            Pointer to common runtime data used for time and I/O.
- * @param[in]     grid                  Grid index to process.
- * @param[in]     params                Pointer to simulation and grid parameters (sizes, names, strides).
- * @param[in]     xx                    Native grid coordinates; xx[d][i_d] gives the coordinate along dimension d.
- * @param[in]     NUM_GFS_NEAREST       Number of diagnostic gridfunctions to sample at each interior point.
- * @param[in]     which_gfs             Array of length NUM_GFS_NEAREST specifying which gridfunctions to sample.
- * @param[in]     diagnostic_gf_names   Array of length NUM_GFS_NEAREST with human-readable names for headers.
- * @param[in]     gridfuncs_diags       Array of pointers; gridfuncs_diags[grid] points to this grid's diagnostic data.
- *
- * @return        void                  No return value. On success two text files are written and closed. Fatal I/O
- *                                      or allocation failures result in program termination.
+ * @return        void                  No return value. On success, output is written via the provided Ck::IO session token.
 """
     cfunc_type = "void"
     name = "diagnostics_nearest_2d_xy_and_yz_planes"
@@ -111,7 +117,6 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             const REAL *restrict gridfuncs_diags[],
             const charecomm_struct *restrict charecommstruct, diagnostic_struct *restrict diagnosticstruct,
             const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part"""
-
 
     body = r"""
 #include "set_CodeParameters.h"
@@ -189,7 +194,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             const int idx3 = IDX3P(params, i0, i1, i2);
             if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
                 IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-              // store the local idx3 of diagnostic point
+              // Store the local idx3 of diagnostic point
               int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
               diagnosticstruct->localidx3_diagnostic_2d_xy_pt[which_diagnostics_chare] = localidx3;
               diagnosticstruct->locali0_diagnostic_2d_xy_pt[which_diagnostics_chare] =
@@ -270,7 +275,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
 
     case DIAGNOSTICS_WRITE_XY: {
 
-      // only chare (0,0,0) writes header
+      // Only chare (0,0,0) writes header
       if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
         int header_bytes = diag_time_comment_size_bytes(commondata->time) +
                            diag_header_size_bytes("x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
@@ -400,7 +405,6 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     }
   }
 """
-
 
     cfc.register_CFunction(
         subdirectory="diagnostics",

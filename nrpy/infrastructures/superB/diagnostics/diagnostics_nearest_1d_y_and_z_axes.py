@@ -16,6 +16,8 @@ register_CFunction_diagnostics_nearest_1d_y_and_z_axes
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -24,14 +26,25 @@ from typing import Any, Dict, List, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-
 from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_1d_y_and_z_axes import (
-    bhah_family_from_coord,
     bhah_axis_configs,
+    bhah_family_from_coord,
     count_expr,
 )
 
+
 def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
+    """
+    Return a C code snippet that fills and counts axis-line sample points.
+
+    Given a list of axis-line specifications, emit C loops that populate the
+    appropriate data_point_1d_struct array (y or z) with (axis coordinate, idx3, i0/i1/i2)
+    entries and increment the corresponding counter.
+
+    :param axis_char: Axis selector, "y" or "z".
+    :param lines: Axis-line specifications (varying index and fixed indices).
+    :return: C source code as a string.
+    """
     if not lines:
         return "(void)xx;  // no points for this axis/family\n"
 
@@ -48,9 +61,9 @@ def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
 
     blocks: List[str] = []
     for line in lines:
-        vary = line["vary"]            # e.g., "i0"
-        vary_dim = dim_index[vary]     # e.g., "0"
-        fixed = line["fixed"]          # e.g., {"i1":"i1_mid","i2":"i2_q1"}
+        vary = line["vary"]  # e.g., "i0"
+        vary_dim = dim_index[vary]  # e.g., "0"
+        fixed = line["fixed"]  # e.g., {"i1":"i1_mid","i2":"i2_q1"}
 
         # Build the loop body
         body_lines: List[str] = [
@@ -68,7 +81,7 @@ def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
             "  xx_to_Cart(params, xOrig, xCart);",
             f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
             f"  {arr}[{cnt}].idx3  = idx3;",
-            # NEW: store the indices too (your downstream code expects these!)
+            # store the indices too (your downstream code expects these!)
             f"  {arr}[{cnt}].i0    = i0;",
             f"  {arr}[{cnt}].i1    = i1;",
             f"  {arr}[{cnt}].i2    = i2;",
@@ -114,10 +127,10 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
 
     y_lines = axis_configs["y"][fam]
     z_lines = axis_configs["z"][fam]
-    
+
     y_count_expr = count_expr(y_lines)
     z_count_expr = count_expr(z_lines)
-    
+
     fill_y = gen_fill("y", y_lines)
     fill_z = gen_fill("z", z_lines)
 
@@ -169,8 +182,8 @@ static int compare_by_coord(const void *a, const void *b) {
  *   2) Converts logical coordinates xx to Cartesian via xx_to_Cart and extracts y (xCart[1]) or
  *      z (xCart[2]) as the axis coordinate.
  *   3) Buffers (axis_coord, idx3) pairs, then sorts them in ascending order using qsort.
- *   4) Writes a single-line time comment, an axis-specific header ("y" or "z"), and streams rows:
- *      [axis_coord, values of selected diagnostic gridfunctions].
+ *   4) Chare (0,0,0) writes the single-line time comment and axis-specific header ("y" or "z");
+ *    all chares stream their owned rows at precomputed file offsets.
  *
  * Gridfunction values are loaded from the flattened diagnostic array using IDX4Ppt with a 3D index
  * constructed by IDX3P. Sampling occurs at grid points only; no interpolation is performed.
@@ -178,16 +191,21 @@ static int compare_by_coord(const void *a, const void *b) {
  * If a user-editable block is provided in the implementation, users may add custom logic such as
  * additional columns or filtering before rows are written.
  *
- * @param[in]  commondata           Pointer to global simulation metadata (e.g., time and step counters).
- * @param[in]  grid                 Zero-based grid index used for selecting data and for file naming.
- * @param[in]  params               Pointer to per-grid parameters (sizes, ghost zones, strides, names).
- * @param[in]  xx                   Array of 3 pointers to logical coordinates per dimension; used for
- *                                  coordinate conversion to Cartesian space.
- * @param[in]  NUM_GFS_NEAREST      Number of gridfunctions to include per output row.
- * @param[in]  which_gfs            Array of length NUM_GFS_NEAREST identifying the gridfunction indices.
- * @param[in]  diagnostic_gf_names  Array of NUM_GFS_NEAREST C strings used to construct column headers.
- * @param[in]  gridfuncs_diags      Array of per-grid pointers to flattened diagnostic data; this routine
- *                                  reads from gridfuncs_diags[grid].
+ * @param[in,out] commondata       Pointer to global simulation metadata.
+ * @param[in]     grid             Grid index.
+ * @param[in]     params           Pointer to per-grid parameters (global grid).
+ * @param[in]     params_chare     Pointer to per-chare parameters (local grid).
+ * @param[in]     xx               Global-grid logical coordinates.
+ * @param[in]     xx_chare         Chare-local logical coordinates.
+ * @param[in]     NUM_GFS_NEAREST  Number of diagnostic gridfunctions to output.
+ * @param[in]     which_gfs        Array of length NUM_GFS_NEAREST giving gridfunction indices.
+ * @param[in]     diagnostic_gf_names  Array of length NUM_GFS_NEAREST giving column names.
+ * @param[in]     gridfuncs_diags  Per-grid pointers to diagnostic data arrays.
+ * @param[in]     charecommstruct  Chare communication metadata/mappings.
+ * @param[in,out] diagnosticstruct Diagnostic bookkeeping for point indices and file offsets.
+ * @param[in]     chare_index      3D chare index.
+ * @param[in]     token            Ck::IO session token.
+ * @param[in]     which_diagnostics_part  Enum selecting diagnostics stage/action.
  *
  * @return     void
 """
