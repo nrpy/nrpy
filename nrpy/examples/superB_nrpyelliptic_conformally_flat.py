@@ -178,7 +178,7 @@ superB.diagnostics.diagnostics.register_all_diagnostics(
 BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False
 )
-superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest(CoordSystem)
 BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
 
