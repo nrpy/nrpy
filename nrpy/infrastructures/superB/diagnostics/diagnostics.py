@@ -139,9 +139,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     case DIAGNOSTICS_SETUP_2D: {
 
       // Nearest-point diagnostics, at center, along y,z axes (1D)
-      diagnostics_nearest(commondata, griddata, griddata_chare, NULL, chare_index, token, which_diagnostics_part);
-
-      printf("Finished diag 1d and 2d setupts!!!!!!!!!!!!!!!!!!!\n");
+      diagnostics_nearest(commondata, griddata, griddata_chare, NULL, chare_index, token, which_diagnostics_part);      
 
       break;
     }
