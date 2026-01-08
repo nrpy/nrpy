@@ -333,7 +333,11 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             hdr, (size_t)header_bytes + 1,
             commondata->time, "x y",
             NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-
+        if (written <= 0 || written > header_bytes) {{
+           fprintf(stderr, "Error: failed to build diagnostics header.\n");
+           free(hdr);
+           break;
+        }}
         Ck::IO::write(token, hdr, header_bytes, 0);
         free(hdr);
       }}
@@ -399,7 +403,11 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             hdr, (size_t)header_bytes + 1,
             commondata->time, "y z",
             NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
-
+        if (written <= 0 || written > header_bytes) {{
+           fprintf(stderr, "Error: failed to build diagnostics header.\n");
+           free(hdr);
+           break;
+        }}
         Ck::IO::write(token, hdr, header_bytes, 0);
         free(hdr);
       }}
