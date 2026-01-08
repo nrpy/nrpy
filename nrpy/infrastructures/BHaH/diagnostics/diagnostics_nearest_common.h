@@ -84,7 +84,6 @@ static inline int diag_header_size_bytes(const char *coord_names, const int NUM_
   return n;
 }
 
-
 static inline int diag_ckio_build_time_comment_and_header(
     char *buf, size_t buf_sz,
     REAL time,
@@ -97,20 +96,30 @@ static inline int diag_ckio_build_time_comment_and_header(
   for (const char *cp = coord_names; *cp; ++cp)
     num_spaces_in_coord_names += (*cp == ' ');
 
-  int n = 0;
+  size_t n = 0;
 
-  n += snprintf(buf + n, buf_sz - (size_t)n, DIAG_TIME_COMMENT_FMT, time);
-  n += snprintf(buf + n, buf_sz - (size_t)n, DIAG_HEADER_PREFIX_FMT, coord_names);
+#define APPEND_FMT(...) do {                             \
+    if (n >= buf_sz) return 0;                           \
+    int rc = snprintf(buf + n, buf_sz - n, __VA_ARGS__); \
+    if (rc < 0) return 0;                                \
+    if ((size_t)rc >= buf_sz - n) return 0;              \
+    n += (size_t)rc;                                     \
+  } while (0)
+
+  APPEND_FMT(DIAG_TIME_COMMENT_FMT, time);
+  APPEND_FMT(DIAG_HEADER_PREFIX_FMT, coord_names);
 
   for (int i0 = 0; i0 < NUM_GFS; i0++) {
     const char *name = diagnostic_gf_names[which_gfs[i0]];
     const int col_index = i0 + (num_spaces_in_coord_names + 2);
-    n += snprintf(buf + n, buf_sz - (size_t)n,
-                  DIAG_HEADER_GF_FMT, name, col_index);
+    APPEND_FMT(DIAG_HEADER_GF_FMT, name, col_index);
   }
 
-  n += snprintf(buf + n, buf_sz - (size_t)n, "\n");
-  return n;
+  APPEND_FMT("\n");
+
+#undef APPEND_FMT
+
+  return (int)n;
 }
 
 /**
