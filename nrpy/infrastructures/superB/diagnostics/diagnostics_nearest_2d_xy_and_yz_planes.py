@@ -20,15 +20,105 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, Sequence, Union, cast
+from typing import Any, Dict, Sequence, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes import (
-    bhah_plane_configs,
-    generate_plane_loop_code,
+    bhah_plane_configs,    
     get_coord_family,
 )
+def _indent(code: str, n: int = 8) -> str:
+    pad = " " * n
+    return "\n".join(pad + line if line.strip() else line for line in code.splitlines())
+
+
+def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> tuple[str, str, str]:
+    """
+    Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D,
+    using i0/i1/i2 variable names so IDX3P(...) works unchanged.
+    """
+    fixed_dim: str = cfg["fixed_dim"]
+    fixed_val = cfg["fixed_val"]  # str or list[str]
+    loop_dims: Sequence[str] = cfg["loop_dims"]  # [outer, inner]
+
+    Nint = {"i0": "N0int", "i1": "N1int", "i2": "N2int"}
+    i_end = {"i0": "i0_end", "i1": "i1_end", "i2": "i2_end"}
+
+    # total points expression
+    nslices = len(fixed_val) if isinstance(fixed_val, list) else 1
+    tot_expr = f"{nslices} * {Nint[loop_dims[0]]} * {Nint[loop_dims[1]]}"
+
+    # loop nest builder (outer = loop_dims[0], inner = loop_dims[1])
+    def nest(inner: str) -> str:
+        code = inner
+        # wrap inner first, then outer
+        for dim in reversed(loop_dims):
+            code = (
+                f"for (int {dim} = NGHOSTS; {dim} < {i_end[dim]}; {dim}++) {{\n"
+                f"{_indent(code, 2)}\n"
+                f"}} // END LOOP over {dim}\n"
+            )
+        return code
+
+    owned_check = (
+        "if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==\n"
+        "    IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]))"
+    )
+
+    # counting inner body
+    count_inner = (
+        "const int idx3 = IDX3P(params, i0, i1, i2);\n"
+        f"{owned_check} {{\n"
+        "  num_diagnostics_chare++;\n"
+        "}\n"
+    )
+
+    # fill inner body (plane-specific field names)
+    suf = "xy" if plane == "xy" else "yz"
+    fill_inner = (
+        "const int idx3 = IDX3P(params, i0, i1, i2);\n"
+        f"{owned_check} {{\n"
+        "  const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];\n"
+        f"  diagnosticstruct->localidx3_diagnostic_2d_{suf}_pt[which_diagnostics_chare] = localidx3;\n"
+        f"  diagnosticstruct->locali0_diagnostic_2d_{suf}_pt[which_diagnostics_chare] =\n"
+        "      MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);\n"
+        f"  diagnosticstruct->locali1_diagnostic_2d_{suf}_pt[which_diagnostics_chare] =\n"
+        "      MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);\n"
+        f"  diagnosticstruct->locali2_diagnostic_2d_{suf}_pt[which_diagnostics_chare] =\n"
+        "      MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);\n"
+        f"  diagnosticstruct->offset_diagnostic_2d_{suf}_pt[which_diagnostics_chare] =\n"
+        f"      header_size_bytes_{suf} + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_2d);\n"
+        "  which_diagnostics_chare++;\n"
+        "}\n"
+        "which_diagnostic_global++;\n"
+    )
+
+    count_loops = nest(count_inner)
+    fill_loops = nest(fill_inner)
+
+    # wrap fixed-dim selection (single slice vs multiple slices)
+    if isinstance(fixed_val, list):
+        slices_decl = f"const int {fixed_dim}_slices[{nslices}] = {{{', '.join(fixed_val)}}};"
+        count_loops = (
+            f"{slices_decl}\n"
+            f"for (int slice = 0; slice < {nslices}; slice++) {{\n"
+            f"  const int {fixed_dim} = {fixed_dim}_slices[slice];\n"
+            f"{_indent(count_loops, 2)}\n"
+            f"}} // END LOOP over slices\n"
+        )
+        fill_loops = (
+            f"{slices_decl}\n"
+            f"for (int slice = 0; slice < {nslices}; slice++) {{\n"
+            f"  const int {fixed_dim} = {fixed_dim}_slices[slice];\n"
+            f"{_indent(fill_loops, 2)}\n"
+            f"}} // END LOOP over slices\n"
+        )
+    else:
+        count_loops = f"const int {fixed_dim} = {fixed_val};\n{count_loops}"
+        fill_loops = f"const int {fixed_dim} = {fixed_val};\n{fill_loops}"
+
+    return tot_expr, count_loops, fill_loops
 
 
 def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
@@ -57,9 +147,20 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
         return None
 
     family = get_coord_family(CoordSystem)
+    # ~ plane_configs = bhah_plane_configs()
+    # ~ xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
+    # ~ yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
+    
+    # ~ print(xy_plane_code)
+    
     plane_configs = bhah_plane_configs()
-    xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
-    yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
+    xy_cfg = plane_configs["xy"][family]
+    yz_cfg = plane_configs["yz"][family]
+
+    xy_tot_expr, xy_count_loops, xy_fill_loops = _emit_setup_plane_code(xy_cfg, "xy")
+    yz_tot_expr, yz_count_loops, yz_fill_loops = _emit_setup_plane_code(yz_cfg, "yz")
+
+
 
     includes = [
         "stdlib.h",
@@ -118,13 +219,13 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             const charecomm_struct *restrict charecommstruct, diagnostic_struct *restrict diagnosticstruct,
             const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part"""
 
-    body = r"""
+    body = rf"""
 #include "set_CodeParameters.h"
 
 
-  switch (which_diagnostics_part) {
+  switch (which_diagnostics_part) {{
 
-    case DIAGNOSTICS_SETUP_2D: {
+    case DIAGNOSTICS_SETUP_2D: {{
 
       const int Nxx0chare = params_chare->Nxx0;
       const int Nxx1chare = params_chare->Nxx1;
@@ -160,24 +261,19 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
       MAYBE_UNUSED const int i2_q3 = (int)(NGHOSTS + 0.75 * (REAL)N2int - 0.5);
 
       // --- Sample and setup data for the xy-plane ---
-      {
+      {{
         // Set values
-        diagnosticstruct->tot_num_diagnostic_2d_xy_pts = N0int * N2int;
-        int header_size_bytes_xy = time_bytes + diag_header_size_bytes("x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+        diagnosticstruct->tot_num_diagnostic_2d_xy_pts = {xy_tot_expr};
+        int header_size_bytes_xy =
+            time_bytes + diag_header_size_bytes("x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
         diagnosticstruct->totsizeinbytes_2d_xy =
-            header_size_bytes_xy + (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_xy_pts);
+            header_size_bytes_xy +
+            (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_xy_pts);
 
         int num_diagnostics_chare = 0;
-        int i1 = i1_mid;
-        for (int i2 = NGHOSTS; i2 < i2_end; i2++) {
-          for (int i0 = NGHOSTS; i0 < i0_end; i0++) {
-            const int idx3 = IDX3P(params, i0, i1, i2);
-            if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-                IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-              num_diagnostics_chare++;
-            }
-          } // END LOOP over i0
-        }   // END LOOP over i2
+        {{
+{xy_count_loops}
+        }}
 
         diagnosticstruct->num_diagnostic_2d_xy_pts = num_diagnostics_chare;
         diagnosticstruct->locali0_diagnostic_2d_xy_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
@@ -188,52 +284,25 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
 
         int which_diagnostics_chare = 0;
         int which_diagnostic_global = 0;
-        i1 = i1_mid;
-        for (int i2 = NGHOSTS; i2 < i2_end; i2++) {
-          for (int i0 = NGHOSTS; i0 < i0_end; i0++) {
-            const int idx3 = IDX3P(params, i0, i1, i2);
-            if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-                IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-              // Store the local idx3 of diagnostic point
-              int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
-              diagnosticstruct->localidx3_diagnostic_2d_xy_pt[which_diagnostics_chare] = localidx3;
-              diagnosticstruct->locali0_diagnostic_2d_xy_pt[which_diagnostics_chare] =
-                  MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
-              diagnosticstruct->locali1_diagnostic_2d_xy_pt[which_diagnostics_chare] =
-                  MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
-              diagnosticstruct->locali2_diagnostic_2d_xy_pt[which_diagnostics_chare] =
-                  MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-              diagnosticstruct->offset_diagnostic_2d_xy_pt[which_diagnostics_chare] =
-                  header_size_bytes_xy + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_2d);
-              which_diagnostics_chare++;
-            }
-            which_diagnostic_global++;
-          }
-        }
-      }
+        {{
+{xy_fill_loops}
+        }}
+      }}
 
       // --- Sample and setup data for the yz-plane ---
-      {
+      {{
         // Set values
-        diagnosticstruct->tot_num_diagnostic_2d_yz_pts = 2 * N0int * N1int;
-        int header_size_bytes_yz = time_bytes + diag_header_size_bytes("y z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
+        diagnosticstruct->tot_num_diagnostic_2d_yz_pts = {yz_tot_expr};
+        int header_size_bytes_yz =
+            time_bytes + diag_header_size_bytes("y z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
         diagnosticstruct->totsizeinbytes_2d_yz =
-            header_size_bytes_yz + (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_yz_pts);
+            header_size_bytes_yz +
+            (diagnosticstruct->sizeinbytes_per_pt_2d * diagnosticstruct->tot_num_diagnostic_2d_yz_pts);
 
         int num_diagnostics_chare = 0;
-        int i2_slices[2] = {i2_q1, i2_q3};
-        for (int slice = 0; slice < 2; slice++) {
-          const int i2 = i2_slices[slice];
-          for (int i1 = NGHOSTS; i1 < i1_end; i1++) {
-            for (int i0 = NGHOSTS; i0 < i0_end; i0++) {
-              const int idx3 = IDX3P(params, i0, i1, i2);
-              if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-                  IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-                num_diagnostics_chare++;
-              }
-            } // END LOOP over i0
-          }   // END LOOP over i1
-        }     // END LOOP over slices
+        {{
+{yz_count_loops}
+        }}
 
         diagnosticstruct->num_diagnostic_2d_yz_pts = num_diagnostics_chare;
         diagnosticstruct->locali0_diagnostic_2d_yz_pt = (int *restrict)malloc(sizeof(int) * num_diagnostics_chare);
@@ -244,39 +313,18 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
 
         int which_diagnostics_chare = 0;
         int which_diagnostic_global = 0;
-        for (int slice = 0; slice < 2; slice++) {
-          const int i2 = i2_slices[slice];
-          for (int i1 = NGHOSTS; i1 < i1_end; i1++) {
-            for (int i0 = NGHOSTS; i0 < i0_end; i0++) {
-              const int idx3 = IDX3P(params, i0, i1, i2);
-              if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-                  IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
-                // store the local idx3 of diagnostic point
-                int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
-                diagnosticstruct->localidx3_diagnostic_2d_yz_pt[which_diagnostics_chare] = localidx3;
-                diagnosticstruct->locali0_diagnostic_2d_yz_pt[which_diagnostics_chare] =
-                    MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
-                diagnosticstruct->locali1_diagnostic_2d_yz_pt[which_diagnostics_chare] =
-                    MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
-                diagnosticstruct->locali2_diagnostic_2d_yz_pt[which_diagnostics_chare] =
-                    MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-                diagnosticstruct->offset_diagnostic_2d_yz_pt[which_diagnostics_chare] =
-                    header_size_bytes_yz + (which_diagnostic_global * diagnosticstruct->sizeinbytes_per_pt_2d);
-                which_diagnostics_chare++;
-              }
-              which_diagnostic_global++;
-            } // END LOOP over i0
-          }   // END LOOP over i1
-        }     // END LOOP over slices
-      }
+        {{
+{yz_fill_loops}
+        }}
+      }}
 
       break;
-    }
+    }}
 
-    case DIAGNOSTICS_WRITE_XY: {
+    case DIAGNOSTICS_WRITE_XY: {{
 
       // Only chare (0,0,0) writes header
-      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {{
         int header_bytes = diag_time_comment_size_bytes(commondata->time) +
                            diag_header_size_bytes("x y", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
 
@@ -288,16 +336,16 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
 
         Ck::IO::write(token, hdr, header_bytes, 0);
         free(hdr);
-      }
+      }}
 
       // Active grid data pointer and reusable row buffer
       const REAL *restrict src = gridfuncs_diags[grid];
       const int NUM_COLS = 2 + NUM_GFS_NEAREST;
       REAL *row = (REAL *)malloc(sizeof(REAL) * (size_t)NUM_COLS);
-      if (!row) {
+      if (!row) {{
         fprintf(stderr, "Error: Failed to allocate memory for row buffer.\n");
         exit(1);
-      } // END IF row allocation failure
+      }} // END IF row allocation failure
 
       // Unpack diagnosticstruct
       const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_2d_xy_pts;
@@ -307,42 +355,42 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
       const int *restrict i2_diagnostic_pt = diagnosticstruct->locali2_diagnostic_2d_xy_pt;
       const int *restrict offsetpt_firstfield = diagnosticstruct->offset_diagnostic_2d_xy_pt;
 
-      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {
+      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         const int idx3 = idx3_diagnostic_pt[which_pt];
         const int i0 = i0_diagnostic_pt[which_pt];
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
 
-        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        REAL xOrig[3] = {{xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]}};
         xx_to_Cart(params_chare, xOrig, xCart);
 
         int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_2d;
         char out[sizeinbytes + 1];
         row[0] = xCart[0];
         row[1] = xCart[1];
-        for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {
+        for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {{
           const int gf = which_gfs[gf_idx];
           row[2 + gf_idx] = src[IDX4Ppt(params_chare, gf, idx3)];
-        } // END LOOP over gridfunctions
+        }} // END LOOP over gridfunctions
 
         int n = 0;
         n += sprintf(out + n, "% .15e", row[0]);
-        for (int col = 1; col < NUM_COLS; col++) {
+        for (int col = 1; col < NUM_COLS; col++) {{
           n += sprintf(out + n, " % .15e", row[col]);
-        }
+        }}
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
-      }
+      }}
       // Finalize
       free(row);
       break;
-    }
+    }}
 
-    case DIAGNOSTICS_WRITE_YZ: {
+    case DIAGNOSTICS_WRITE_YZ: {{
 
       // only chare (0,0,0) writes header
-      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {
+      if (chare_index[0] == 0 && chare_index[1] == 0 && chare_index[2] == 0) {{
         int header_bytes = diag_time_comment_size_bytes(commondata->time) +
                            diag_header_size_bytes("y z", NUM_GFS_NEAREST, which_gfs, diagnostic_gf_names);
 
@@ -354,16 +402,16 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
 
         Ck::IO::write(token, hdr, header_bytes, 0);
         free(hdr);
-      }
+      }}
 
       // Active grid data pointer and reusable row buffer
       const REAL *restrict src = gridfuncs_diags[grid];
       const int NUM_COLS = 2 + NUM_GFS_NEAREST;
       REAL *row = (REAL *)malloc(sizeof(REAL) * (size_t)NUM_COLS);
-      if (!row) {
+      if (!row) {{
         fprintf(stderr, "Error: Failed to allocate memory for row buffer.\n");
         exit(1);
-      } // END IF row allocation failure
+      }} // END IF row allocation failure
 
       // Unpack diagnosticstruct
       const int num_diagnostic_pts = diagnosticstruct->num_diagnostic_2d_yz_pts;
@@ -373,37 +421,37 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
       const int *restrict i2_diagnostic_pt = diagnosticstruct->locali2_diagnostic_2d_yz_pt;
       const int *restrict offsetpt_firstfield = diagnosticstruct->offset_diagnostic_2d_yz_pt;
 
-      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {
+      for (int which_pt = 0; which_pt < num_diagnostic_pts; which_pt++) {{
         const int idx3 = idx3_diagnostic_pt[which_pt];
         const int i0 = i0_diagnostic_pt[which_pt];
         const int i1 = i1_diagnostic_pt[which_pt];
         const int i2 = i2_diagnostic_pt[which_pt];
         REAL xCart[3];
-        REAL xOrig[3] = {xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]};
+        REAL xOrig[3] = {{xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2]}};
         xx_to_Cart(params_chare, xOrig, xCart);
 
         int sizeinbytes = diagnosticstruct->sizeinbytes_per_pt_2d;
         char out[sizeinbytes + 1];
         row[0] = xCart[1];
         row[1] = xCart[2];
-        for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {
+        for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {{
           const int gf = which_gfs[gf_idx];
           row[2 + gf_idx] = src[IDX4Ppt(params_chare, gf, idx3)];
-        } // END LOOP over gridfunctions
+        }} // END LOOP over gridfunctions
 
         int n = 0;
         n += sprintf(out + n, "% .15e", row[0]);
-        for (int col = 1; col < NUM_COLS; col++) {
+        for (int col = 1; col < NUM_COLS; col++) {{
           n += sprintf(out + n, " % .15e", row[col]);
-        }
+        }}
         out[sizeinbytes - 1] = '\n';
         Ck::IO::write(token, out, sizeinbytes, offsetpt_firstfield[which_pt]);
-      }
+      }}
       // Finalize
       free(row);
       break;
-    }
-  }
+    }}
+  }}
 """
 
     cfc.register_CFunction(
