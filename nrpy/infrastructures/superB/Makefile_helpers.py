@@ -263,7 +263,7 @@ main.o: main.cpp main.h main.def.h timestepping.decl.h horizon_finder.decl.h int
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
+	$(RM) *.o */*.o */*/*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
 	$(RM) -r log
 """
     # Add the valgrind target
