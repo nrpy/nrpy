@@ -23,6 +23,8 @@ no memory and frees none; ownership remains with the caller.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
+        Nishita Jadoo
+        njadoo **at** uidaho **dot* edu
 """
 
 from inspect import currentframe as cfr
@@ -31,9 +33,8 @@ from typing import Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-
 from nrpy.infrastructures.superB.diagnostics.diagnostics_nearest_grid_center import (
-    get_center_index_exprs_for_coordsystem,        
+    get_center_index_exprs_for_coordsystem,
 )
 
 
@@ -46,8 +47,8 @@ def register_CFunction_diagnostics_nearest(
     This function generates and registers the C routine diagnostics_nearest(), which contains:
       - One USER-EDIT block where users specify per-dimensional which_gfs arrays. These selections apply to all grids.
       - One loop over grids. For each grid, the routine calls the 0D, 1D, and 2D helper functions that handle
-        coordinate selection, sampling from caller-provided diagnostic buffers, and file output.    
-    
+        coordinate selection, sampling from caller-provided diagnostic buffers, and file output.
+
     :param CoordSystem: Name of the coordinate system used to specialize index selection in the
                         generated C function and its wrapper.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -58,8 +59,10 @@ def register_CFunction_diagnostics_nearest(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-        
-    i0_center_expr, i1_center_expr, i2_center_expr = get_center_index_exprs_for_coordsystem(CoordSystem)    
+
+    i0_center_expr, i1_center_expr, i2_center_expr = (
+        get_center_index_exprs_for_coordsystem(CoordSystem)
+    )
 
     # --- C Function Registration ---
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "diagnostic_gfs.h"]
@@ -79,13 +82,15 @@ def register_CFunction_diagnostics_nearest(
  * @param[in] commondata
  *   Pointer to shared simulation metadata and runtime context, including NUMGRIDS and iteration/time information.
  *
- * @param[in] griddata
- *   Pointer to an array of per-grid data structures. For grid index "grid", griddata[grid] provides parameters,
- *   coordinates, and strides required by the diagnostics helper routines.
+ *   griddata_chare
+ *   Pointer to an array of per-grid, chare-local data structures. For grid index "grid", griddata_chare[grid]
+ *   provides chare-local parameters, coordinates, and per-chare diagnostic/charecomm structs required by the
+ *   diagnostics helper routines.
  *
- * @param[in] gridfuncs_diags
+ *   gridfuncs_diags
  *   Array of length MAXNUMGRIDS. For each grid index "grid", gridfuncs_diags[grid] must point to caller-owned
- *   REAL diagnostic gridfunction data that serve as the sampling source.
+ *   REAL diagnostic gridfunction data used as the sampling source during WRITE stages. During SETUP stages
+ *   (DIAGNOSTICS_SETUP_1D/2D), this dispatcher passes NULL for gridfuncs_diags to the helper routines.
  *
  * @pre
  *   - For each active grid, gridfuncs_diags[grid] is non-null and points to valid diagnostic data.
@@ -105,7 +110,7 @@ def register_CFunction_diagnostics_nearest(
     cfunc_type = "void"
     name = "diagnostics_nearest"
     params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_chare,
-            const REAL *restrict gridfuncs_diags[MAXNUMGRIDS], const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part"""              
+            const REAL *restrict gridfuncs_diags[MAXNUMGRIDS], const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part"""
 
     body = r"""
   // --- USER-EDIT: Select diagnostic gridfunctions to sample (applies to all grids) ---
@@ -159,15 +164,15 @@ def register_CFunction_diagnostics_nearest(
       }
 
       case DIAGNOSTICS_WRITE_CENTER: {"""
-      
+
     body += rf"""
         // 0D
-        // Nearest-to-center indices        
+        // Nearest-to-center indices
         const int i0_center = {i0_center_expr};
         const int i1_center = {i1_center_expr};
         const int i2_center = {i2_center_expr};
 """
-    body += r"""        
+    body += r"""
         const int idx3 = IDX3(i0_center, i1_center, i2_center);
 
         if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
