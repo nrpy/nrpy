@@ -14,8 +14,8 @@ from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 # ==============================================================================
 # Code Parameters Registration
 # ==============================================================================
-# Register a parameter to control the frequency of Conservative-to-Primitive (C2P) 
-# diagnostic output. This is useful for debugging C2P failures or monitoring 
+# Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
+# diagnostic output. This is useful for debugging C2P failures or monitoring
 # the health of the primitive recovery routine.
 _ = par.register_CodeParameter(
     "int",
@@ -25,6 +25,7 @@ _ = par.register_CodeParameter(
     commondata=True,
     add_to_parfile=True,
 )
+
 
 def register_all_grhd_gridfunctions(
     CoordSystem: str,
@@ -41,10 +42,7 @@ def register_all_grhd_gridfunctions(
     :param evolving_temperature: If True, register variables for temperature and electron fraction, for evolution with a tabulated equation of state.
     :param evolving_entropy: If True, register variables for entropy evolution.
     :param evolving_neutrinos: If True, register variables for the NRPyLeakage neutrino transport scheme (optical depths, opacities).
-
-    :return: None
     """
-
     # ==========================================================================
     # Spacetime / Metric Gridfunctions
     # ==========================================================================
@@ -56,7 +54,7 @@ def register_all_grhd_gridfunctions(
     else:
         # If the spacetime is static (Cowling approximation) or fixed background,
         # we register metric quantities as AUXEVOL (Auxiliary variables, not evolved via MoL).
-        
+
         # Lapse function alpha
         _ = gri.register_gridfunctions(
             "alpha", group="AUXEVOL", gf_array_name="auxevol_gfs"
@@ -133,7 +131,7 @@ def register_all_grhd_gridfunctions(
         dimension=3,
         group="AUXEVOL",
         gf_array_name="auxevol_gfs",
-        sync_gf_in_superB=True, # Needs synchronization for boundaries
+        sync_gf_in_superB=True,  # Needs synchronization for boundaries
     )
     _ = gri.register_gridfunctions_for_single_rank1(
         "rescaledvrU", dimension=3, group="AUXEVOL", gf_array_name="auxevol_gfs"
@@ -146,7 +144,7 @@ def register_all_grhd_gridfunctions(
     # Hydrodynamic Conserved Variables (EVOL)
     # ==========================================================================
     # These are the variables actually evolved by the Method of Lines (MoL).
-    
+
     # Reference metric rescaled densitized conserved momentum rescaledstildeD
     _ = gri.register_gridfunctions_for_single_rank1(
         "rescaledstildeD", dimension=3, group="EVOL"
@@ -179,7 +177,7 @@ def register_all_grhd_gridfunctions(
     # ==========================================================================
     # Variables used for reconstruction and EOS calls.
     # Note: Primitives are AUXEVOL because they are computed from Conserved vars via C2P.
-    
+
     # Baryon rest mass density rhob
     # Includes Right (_r) and Left (_l) reconstructed states.
     _ = gri.register_gridfunctions(

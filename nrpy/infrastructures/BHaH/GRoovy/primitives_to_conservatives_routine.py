@@ -18,7 +18,8 @@ import nrpy.infrastructures.BHaH.simple_loop as lp
 from nrpy.equations.grhd.GRHD_equations import (
     GRHD_Equations,
 )
-    
+
+
 def register_CFunction_primitives_to_conservatives_routine(
     CoordSystem: str,
     enable_rfm_precompute: bool,
@@ -39,7 +40,7 @@ def register_CFunction_primitives_to_conservatives_routine(
     :param evolving_temperature: If True, register variables for temperature and electron fraction, for evolution with a tabulated equation of state.
     :param evolving_entropy: If True, register variables for entropy evolution.
 
-    :return: None if in registration phase, else the updated NRPy environment.
+    :return: An NRPyEnv_type object if registration is successful, otherwise None.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
