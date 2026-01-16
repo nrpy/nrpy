@@ -131,7 +131,7 @@ gsl_spline_free(spline);
 gsl_interp_accel_free(acc);
 
 
-SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,h_0,hdot_0,phi_0,phidot_0,nsteps_ringdown,commondata);
+SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,t_match,h_0,hdot_0,phi_0,phidot_0,nsteps_ringdown,commondata);
 """
     else:
         body += """

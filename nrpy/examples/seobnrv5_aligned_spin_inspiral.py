@@ -41,7 +41,7 @@ frequency_domain_flag = False
 # Once we have precession in place, we can make this more tunable
 precompute_waveform_coefficients_flag = False
 # Flag to output the commondata struct to a file.
-output_commondata_flag = False
+output_commondata_flag = True
 # Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
 # (set to False for performance checks)
 output_waveform_flag = True
