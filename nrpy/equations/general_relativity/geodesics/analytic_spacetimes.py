@@ -107,8 +107,8 @@ class AnalyticSpacetimes:
 
         # Step 5: Construct the Kerr-Schild metric g_munu = eta_munu + 2H * l_mu * l_nu.
         eta4DD = ixp.zerorank2(dimension=4)
-        eta4DD[0][0] = -1
-        eta4DD[1][1] = eta4DD[2][2] = eta4DD[3][3] = 1
+        eta4DD[0][0] = sp.sympify(-1)
+        eta4DD[1][1] = eta4DD[2][2] = eta4DD[3][3] = sp.sympify(1)
         g4DD = ixp.zerorank2(dimension=4)
         for mu in range(4):
             for nu in range(4):

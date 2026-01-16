@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py
 """
 Omega-based quasilocal spin diagnostics on r = h(theta, phi), constructed intrinsically.
 
@@ -35,12 +36,9 @@ Eigenfunction normalization (critical):
 
 Near-zero and fallback behavior:
 
-- The "near-zero" policy is based on a comparison between ||I|| and a
-  characteristic scale built from the area A and the integral of |Omega|.
-- When fallback_choice="zalpha", the fallback spin direction (if triggered)
-  is constructed from the components of S_alpha, which is invariant under
-  overall rescalings of the z_alpha and thus robust with respect to their
-  normalization. The absolute magnitude S remains sensitive to normalization.
+- This module provides algebraic expressions for nominal and fallback
+  spin-vector constructions. Any near-zero logic and selection between
+  nominal and fallback is implemented in the NRPy-generated C code.
 
 Surface gridfunctions (module-local, to avoid name collisions):
 
@@ -85,7 +83,7 @@ Inputs expected to already exist in BHaHAHA (on-surface samples):
 Everything else below is constructed symbolically within this module.
 """
 
-from typing import Any, Dict, Iterable, List, Optional, Union, cast
+from typing import Any, Dict, Iterable, List, Optional, cast
 
 import sympy as sp
 
@@ -100,7 +98,7 @@ def _sympify_int(x: int) -> sp.Integer:
     :param x: Integer-like input value.
     :return: SymPy Integer representation of the input.
     """
-    return sp.Integer(int(sp.Integer(x)))
+    return cast(sp.Integer, sp.Integer(int(sp.Integer(x))))
 
 
 class SpECTRESpinEstimateClass:
@@ -173,13 +171,15 @@ class SpECTRESpinEstimateClass:
         # Tangent vectors e_A^i in (r, theta, phi) basis:
         # e_theta^i = (partial_theta h, 1, 0)
         # e_phi^i   = (partial_phi h, 0, 1)
-        self._eADU = [[sp.sympify(0) for _ in range(3)] for __ in range(2)]
+        self._eADU: List[List[sp.Expr]] = [
+            [sp.sympify(0) for _ in range(3)] for __ in range(2)
+        ]
         self._eADU[0][0] = self._h_dD[0]
-        self._eADU[0][1] = 1
-        self._eADU[0][2] = 0
+        self._eADU[0][1] = sp.sympify(1)
+        self._eADU[0][2] = sp.sympify(0)
         self._eADU[1][0] = self._h_dD[1]
-        self._eADU[1][1] = 0
-        self._eADU[1][2] = 1
+        self._eADU[1][1] = sp.sympify(0)
+        self._eADU[1][2] = sp.sympify(1)
 
         # Induced 2-metric q_AB = gamma_ij e_A^i e_B^j
         self._SE_qDD = ixp.declarerank2("SE_qDD", symmetry="sym01", dimension=2)
@@ -399,15 +399,19 @@ class SpECTRESpinEstimateClass:
         # Induced metric q_AB
         for A in range(2):
             for B in range(2):
-                assignments[self._SE_qDD[A][B]] = self._SE_qDD_expr[A][B]
+                assignments[cast(sp.Symbol, self._SE_qDD[A][B])] = self._SE_qDD_expr[A][
+                    B
+                ]
 
         # X_B
         for B in range(2):
-            assignments[self._SE_XB[B]] = self._SE_XB_expr[B]
+            assignments[cast(sp.Symbol, self._SE_XB[B])] = self._SE_XB_expr[B]
 
         # Flux density for div(R grad z)
         for A in range(2):
-            assignments[self._SE_flux_densityU[A]] = self._SE_flux_densityU_expr[A]
+            assignments[cast(sp.Symbol, self._SE_flux_densityU[A])] = (
+                self._SE_flux_densityU_expr[A]
+            )
 
         return assignments
 
@@ -448,7 +452,7 @@ class SpECTRESpinEstimateClass:
         - normI:
             Euclidean norm of I^i.
         - nU:
-            Unit direction I^i / normI, or 0 if normI == 0.
+            Unit direction I^i / normI (no conditioning; handled in generated C).
 
         :param sums: Dictionary of accumulated integrals as described above.
         :return: Dictionary with keys "x0U", "xRcorrU", "IU", "normI", and "nU".
@@ -480,10 +484,8 @@ class SpECTRESpinEstimateClass:
 
         normI = sp.sqrt(IU[0] ** 2 + IU[1] ** 2 + IU[2] ** 2)
 
-        # Unit vector; exact zero is handled symbolically via Piecewise
-        nU = [
-            sp.Piecewise((0, sp.Eq(normI, 0)), (IU[i] / normI, True)) for i in range(3)
-        ]
+        # Unit vector (no conditioning; handled in generated C)
+        nU = [IU[i] / normI for i in range(3)]
 
         return {
             "x0U": x0U,
@@ -492,31 +494,6 @@ class SpECTRESpinEstimateClass:
             "normI": normI,
             "nU": nU,
         }
-
-    def near_zero_policy(
-        self,
-        A: sp.Expr,
-        normI: sp.Expr,
-        integral_abs_Omega: sp.Expr,
-        eps: Union[float, sp.Expr],
-    ) -> Dict[str, sp.Expr]:
-        """
-        Define the near-zero norm(I) policy trigger condition.
-
-        The trigger condition is:
-        trigger = [ normI <= eps * R_char * integral_abs_Omega ],
-        where R_char = sqrt( A / (4 * pi) ) is a characteristic radius.
-
-        :param A: Surface area integral, A = integral dA.
-        :param normI: Norm of I^i from reduce_centroids_and_direction.
-        :param integral_abs_Omega: Integral of abs(Omega) dA.
-        :param eps: Dimensionless tolerance factor controlling when the
-            near-zero policy is activated.
-        :return: Dictionary with key "trigger" containing a SymPy relational
-            expression encoding the near-zero condition.
-        """
-        R_char = sp.sqrt(A / (4 * sp.pi))
-        return {"trigger": sp.Le(normI, sp.sympify(eps) * R_char * integral_abs_Omega)}
 
     def Salpha_and_magnitude_from_zOmega(
         self,
@@ -572,113 +549,72 @@ class SpECTRESpinEstimateClass:
         ssum = sp.sympify(0)
         for a in range(3):
             ssum += zOmega_integrals[a] ** 2
-        return sp.sqrt(ssum) / (8 * sp.pi)
+        return cast(sp.Expr, sp.sqrt(ssum) / (8 * sp.pi))
 
-    def compute_spin_vector(
+    def compute_spin_vectors_for_c(
         self,
         sums: Dict[str, Any],
         S: sp.Expr,
-        eps: Union[float, sp.Expr],
-        fallback_choice: str = "zero",
         zOmega_integrals: Optional[List[sp.Expr]] = None,
     ) -> Dict[str, Any]:
         """
-        Compute the spin vector S^i using centroids and Omega-based diagnostics.
+        Construct algebraic nominal and fallback spin-vector expressions.
 
-        This method:
-        1. Uses reduce_centroids_and_direction(sums) to compute:
-           x0U, xRcorrU, IU, normI, and nU.
-        2. Applies near_zero_policy to decide whether the direction integral
-           I^i is sufficiently robust.
-        3. Constructs the nominal spin vector:
-           S_nominal^i = S * n^i.
-        4. If the near-zero trigger is active, applies a fallback:
+        This routine performs no near-zero or exact-zero conditioning.
+        The generated C code is responsible for any near-zero checks and for
+        selecting between nominal and fallback expressions.
 
-           - fallback_choice="zero":
-             Use S^i = 0.
-
-           - fallback_choice="zalpha" (requires zOmega_integrals):
-             * Compute S_alpha = zOmega_integrals[alpha] / (8 * pi).
-             * Form S_alpha as a 3-vector and compute its norm.
-             * If ||S_alpha|| > 0, set fallback direction
-               n_fb^i = S_alpha^i / ||S_alpha|| and use S^i = S * n_fb^i.
-             * If ||S_alpha|| = 0, fall back to S^i = 0.
-
-        The direction built from S_alpha is invariant under common rescalings
-        of the eigenfunctions z_alpha, making it suitable as a fallback axis.
+        Returned expressions:
+        - SU_nominal: S * I / ||I||
+        - SU_fallback_zero: 0
+        - If zOmega_integrals is provided:
+            SalphaU = zOmega_integrals / (8*pi)
+            Salpha_norm = ||SalphaU||
+            SU_fallback_zalpha = S * SalphaU / Salpha_norm
 
         :param sums: Dictionary of precomputed surface integrals, as required
             by reduce_centroids_and_direction.
         :param S: Spin magnitude to be associated with the final vector.
-        :param eps: Tolerance parameter for the near-zero policy.
-        :param fallback_choice: Fallback strategy when the near-zero trigger
-            is active. Supported values:
-            - "zero": Use zero spin vector.
-            - "zalpha": Use direction derived from zOmega_integrals.
         :param zOmega_integrals: Optional list of three integrals:
-            [integral z_0 Omega dA, integral z_1 Omega dA,
-             integral z_2 Omega dA], required if fallback_choice="zalpha".
+            [integral z_0 Omega dA, integral z_1 Omega dA, integral z_2 Omega dA].
         :return: Dictionary containing:
-            - "SU": List of three components of the final spin vector S^i.
-            - "near_zero_trigger": SymPy relational for near-zero condition.
+            - "SU_nominal": List of three components of S * I / ||I||.
+            - "SU_fallback_zero": List of three zeros.
+            - "SalphaU": List of three components (only if zOmega_integrals provided).
+            - "Salpha_norm": Norm of SalphaU (only if zOmega_integrals provided).
+            - "SU_fallback_zalpha": List of three components (only if provided).
             - "normI": Norm of I^i.
             - "x0U", "xRcorrU", "IU", "nU": As returned by
               reduce_centroids_and_direction.
-        :raises ValueError: If fallback_choice is unsupported.
-        :raises ValueError: If fallback_choice="zalpha" is used without
-            providing three zOmega_integrals.
+        :raises ValueError: If zOmega_integrals is provided but does not contain
+            exactly three entries.
         """
         red = self.reduce_centroids_and_direction(sums)
-        Oabs = sums.get(
-            "Oabs",
-            sp.Symbol("integral_abs_Omega", real=True, nonnegative=True),
-        )
-        trigger = self.near_zero_policy(sums["A"], red["normI"], Oabs, eps)["trigger"]
-
         nU = cast(List[sp.Expr], red["nU"])
-        nominal_SU = [S * nU[i] for i in range(3)]
+        SU_nominal = [S * nU[i] for i in range(3)]
 
-        if fallback_choice not in ("zero", "zalpha"):
-            raise ValueError("fallback_choice must be one of {'zero', 'zalpha'}.")
-
-        # Default fallback: zero vector
-        fallback_SU: List[sp.Expr] = [
-            sp.sympify(0),
-            sp.sympify(0),
-            sp.sympify(0),
-        ]
-
-        if fallback_choice == "zalpha":
-            if zOmega_integrals is None or len(zOmega_integrals) != 3:
-                raise ValueError(
-                    "fallback_choice='zalpha' requires zOmega_integrals with three entries."
-                )
-            salpha = [zOmega_integrals[a] / (8 * sp.pi) for a in range(3)]
-            salpha_norm = sp.sqrt(salpha[0] ** 2 + salpha[1] ** 2 + salpha[2] ** 2)
-
-            # If salpha_norm != 0, use its direction as fallback axis:
-            # S_fallback^i = S * salpha^i / salpha_norm
-            for i in range(3):
-                fallback_SU[i] = sp.Piecewise(
-                    (0, sp.Eq(salpha_norm, 0)),
-                    (S * salpha[i] / salpha_norm, True),
-                )
-
-        # Select between fallback and nominal based on near-zero trigger
-        SU = [
-            sp.Piecewise((fallback_SU[i], trigger), (nominal_SU[i], True))
-            for i in range(3)
-        ]
+        SU_fallback_zero: List[sp.Expr] = [sp.sympify(0), sp.sympify(0), sp.sympify(0)]
 
         out: Dict[str, Any] = {
-            "SU": SU,
-            "near_zero_trigger": trigger,
+            "SU_nominal": SU_nominal,
+            "SU_fallback_zero": SU_fallback_zero,
             "normI": red["normI"],
             "x0U": red["x0U"],
             "xRcorrU": red["xRcorrU"],
             "IU": red["IU"],
             "nU": red["nU"],
         }
+
+        if zOmega_integrals is not None:
+            if len(zOmega_integrals) != 3:
+                raise ValueError("zOmega_integrals must have three entries.")
+            SalphaU = [zOmega_integrals[a] / (8 * sp.pi) for a in range(3)]
+            Salpha_norm = sp.sqrt(SalphaU[0] ** 2 + SalphaU[1] ** 2 + SalphaU[2] ** 2)
+            SU_fallback_zalpha = [S * SalphaU[i] / Salpha_norm for i in range(3)]
+            out["SalphaU"] = SalphaU
+            out["Salpha_norm"] = Salpha_norm
+            out["SU_fallback_zalpha"] = SU_fallback_zalpha
+
         return out
 
     # ========================= Internals =========================
@@ -766,11 +702,11 @@ class SpECTRESpinEstimateClass:
         dB_GammaCAC = ixp.zerorank2(dimension=2)
         for A in range(2):
             for B in range(2):
-                dC_GammaCAB[A][B] = sum(
-                    self._GammaU2DD_dD[C][A][B][C] for C in range(2)
+                dC_GammaCAB[A][B] = cast(
+                    sp.Expr, sum(self._GammaU2DD_dD[C][A][B][C] for C in range(2))
                 )
-                dB_GammaCAC[A][B] = sum(
-                    self._GammaU2DD_dD[C][A][C][B] for C in range(2)
+                dB_GammaCAC[A][B] = cast(
+                    sp.Expr, sum(self._GammaU2DD_dD[C][A][C][B] for C in range(2))
                 )
 
         GammaCAB_GammaDCD = ixp.zerorank2(dimension=2)

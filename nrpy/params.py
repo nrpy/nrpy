@@ -1,3 +1,4 @@
+# nrpy/params.py
 """
 Initialize, store, and recall parameters for NRPy.
 
@@ -156,7 +157,7 @@ class CodeParameter:
         self.commondata = commondata
         self.add_to_glb_code_params_dict = add_to_glb_code_params_dict
         self.description = description
-        self.symbol: sp.Symbol
+        self.symbol: sp.Expr
 
         # Step 1: Handle special parameter types like arrays and #defines.
         self._process_parameter_type()
@@ -350,7 +351,7 @@ def register_CodeParameters(
     add_to_set_CodeParameters_h: bool = True,
     add_to_glb_code_params_dict: bool = True,
     descriptions: Union[str, List[str]] = "",
-) -> List[sp.Symbol]:
+) -> List[sp.Expr]:
     """
     Initialize CodeParameters and return their symbolic representation.
 
@@ -508,7 +509,7 @@ def register_CodeParameter(
     add_to_set_CodeParameters_h: bool = True,
     add_to_glb_code_params_dict: bool = True,
     description: str = "",
-) -> sp.Symbol:
+) -> sp.Expr:
     """
     Initialize a CodeParameter and return its symbolic representation.
 

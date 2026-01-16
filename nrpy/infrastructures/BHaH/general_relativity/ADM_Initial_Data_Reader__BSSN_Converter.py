@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 # Initialize core Python/NRPy modules
 # Step 1: Initialize core Python/NRPy modules
-from typing import List, Optional, Sequence, Tuple, cast
+from typing import List, Optional, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -198,7 +198,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
     BCartU = jac.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
         IDCoordSystem, BSphorCartU
     )
-    T4CartUU = cast(Sequence[Sequence[sp.Expr]], ixp.zerorank2(dimension=4))
+    T4CartUU = ixp.zerorank2(dimension=4)
     if enable_T4munu:
         T4CartUU = jac.basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
             IDCoordSystem, T4SphorCartUU
@@ -283,7 +283,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(
   BSSN_Cart_basis->BU1 = ADM_Cart_basis->BU1;
   BSSN_Cart_basis->BU2 = ADM_Cart_basis->BU2;
 """
-    list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
+    list_of_output_exprs: List[sp.Expr] = [adm2bssn.cf, adm2bssn.trK]
     list_of_output_varnames = ["BSSN_Cart_basis->cf", "BSSN_Cart_basis->trK"]
     for i in range(3):
         for j in range(i, 3):

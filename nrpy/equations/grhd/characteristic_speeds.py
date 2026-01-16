@@ -7,7 +7,7 @@ Author: Terrence Pierre Jacques
 """
 
 # Step Import needed modules:
-from typing import Any, Dict, Sequence, Tuple
+from typing import Any, Dict, List, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -17,8 +17,8 @@ from nrpy.equations.general_relativity.g4munu_conversions import ADM_to_g4UU
 
 def find_cp_cm(
     flux_dirn: int,
-    g4UU: Sequence[Sequence[sp.Expr]],
-    u4U: Sequence[sp.Expr],
+    g4UU: List[List[sp.Expr]],
+    u4U: List[sp.Expr],
     cs2: sp.Expr,
 ) -> Tuple[sp.Expr, sp.Expr]:
     """
@@ -66,11 +66,11 @@ def find_cp_cm(
 
 def find_cmax_cmin(
     flux_dirn: int,
-    gamma_faceDD: Sequence[Sequence[sp.Expr]],
-    beta_faceU: Sequence[sp.Expr],
+    gamma_faceDD: List[List[sp.Expr]],
+    beta_faceU: List[sp.Expr],
     alpha_face: sp.Expr,
-    u4U_r: Sequence[sp.Expr],
-    u4U_l: Sequence[sp.Expr],
+    u4U_r: List[sp.Expr],
+    u4U_l: List[sp.Expr],
     cs2_r: sp.Expr,
     cs2_l: sp.Expr,
 ) -> Tuple[sp.Expr, sp.Expr]:
@@ -109,9 +109,9 @@ def find_cmax_cmin(
     #   CCTK_REAL cminL = -MIN(0.0,MIN(cminusl,cminusr));
 
     # Now, we need to set cmax to the larger of cpr,cpl, and 0
-    cmax = noif.max_noif(0.0, noif.max_noif(cpl, cpr))
+    cmax = noif.max_noif(sp.sympify(0.0), noif.max_noif(cpl, cpr))
     # And then, set cmin to the smaller of cmr,cml, and 0
-    cmin = -noif.min_noif(0.0, noif.min_noif(cml, cmr))
+    cmin = -noif.min_noif(sp.sympify(0.0), noif.min_noif(cml, cmr))
 
     # save the rescaled char. speeds
     return cmin, cmax

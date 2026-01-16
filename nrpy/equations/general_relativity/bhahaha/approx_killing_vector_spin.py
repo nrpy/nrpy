@@ -1,5 +1,4 @@
 # equations/general_relativity/bhahaha/approx_killing_vector_spin.py
-
 """
 Single-pass integrands for AKV-based spin diagnostics on apparent horizons.
 
@@ -35,7 +34,7 @@ Sources:
 Author: Wesley Inselman
 """
 
-from typing import Dict, List, cast
+from typing import Dict, List
 
 import sympy as sp
 
@@ -81,10 +80,7 @@ class ApproxKillingSpinClass:
 
         # h_ij (barred-metric deviation) and derivatives
         hDD = ixp.declarerank2("hDD", symmetry="sym01")
-        partial_D_hDD = cast(
-            List[List[List[sp.Expr]]],
-            ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
-        )
+        partial_D_hDD = ixp.declarerank3("partial_D_hDD", symmetry="sym12")
 
         # gammabar_ij
         self._gammabarDD = ixp.zerorank2()

@@ -10,11 +10,13 @@ Authors: Zachariah B. Etienne
 
 from typing import Dict, List, Tuple, Union
 
+import sympy as sp
+
 from nrpy.infrastructures import BHaH
 
 
 def register_BHaH_defines_h(
-    Butcher_dict: Dict[str, Tuple[List[List[Union[int, str]]], int]],
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
 ) -> None:
     """

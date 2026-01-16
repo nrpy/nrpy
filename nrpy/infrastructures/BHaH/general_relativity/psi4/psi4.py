@@ -7,7 +7,9 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -83,7 +85,7 @@ def register_CFunction_psi4(
     for i in range(3):
         body += f"const REAL *restrict x{i} = xx[{i}];\n"
 
-    expr_list = [psi4_class.psi4_re, psi4_class.psi4_im]
+    expr_list: List[sp.Expr] = [psi4_class.psi4_re, psi4_class.psi4_im]
 
     # Find symbols stored in params
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(

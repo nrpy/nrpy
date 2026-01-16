@@ -255,15 +255,17 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
+if parallelization == "cuda":
+    # CUDA intrinsics needed for CUDA-enabled projects.
+    intrinsics_file_list += ["cuda_intrinsics.h"]
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

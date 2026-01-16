@@ -1,3 +1,4 @@
+# nrpy/helpers/conditional_file_updater.py
 """
 The ConditionalFileUpdater class helps users see and understand changes to generated output files.
 

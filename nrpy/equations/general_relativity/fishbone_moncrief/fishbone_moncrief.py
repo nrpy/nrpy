@@ -14,14 +14,15 @@ around a spinning black hole, following:
 - comoving magnetic field using Eqs. 23, 24, 27, and 31 of Noble et al. (2006, astro-ph/0503420),
 - Valencia velocity using Eq. 11 of Porth et al. (2015, arXiv:1501.07276).
 
-Final data are mapped from spherical to the chosen coordinate system (default Cartesian)
-via the NRPy reference-metric framework.
+
+NOTE: Data are constructed in spherical (r, th, ph) coordinates; coordinate-system/Jacobian
+      mapping is performed externally in NRPy 2 and is not part of this module.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot** com
 """
 
-from typing import List
+from typing import List, cast
 
 import sympy as sp
 
@@ -82,6 +83,7 @@ class FishboneMoncriefID:
         self.Valencia3velocityU: List[sp.Expr] = ixp.zerorank1()
 
         # Magnetic field quantities
+        self.BmagU: List[sp.Expr] = ixp.zerorank1()
         self.BtildeU: List[sp.Expr] = ixp.zerorank1()
         self.smallb2: sp.Expr = sp.sympify(0)
 
@@ -104,7 +106,7 @@ class FishboneMoncriefID:
             - a * sp.sqrt(M * r_val) * (r_val**2 - a**2)
         )
         l_val /= r_val**2 - 3 * M * r_val + 2 * a * sp.sqrt(M * r_val)
-        return l_val
+        return cast(sp.Expr, l_val)
 
     def _compute_initial_data(self) -> None:
         """Compute and store all initial-data expressions."""
@@ -187,7 +189,7 @@ class FishboneMoncriefID:
         #         https://github.com/atchekho/harmpi/blob/master/init.c
         transformBLtoKS = ixp.zerorank2(dimension=4)
         for i in range(4):
-            transformBLtoKS[i][i] = 1
+            transformBLtoKS[i][i] = sp.Integer(1)
         transformBLtoKS[0][1] = 2 * M * r / (r**2 - 2 * M * r + a**2)
         transformBLtoKS[3][1] = a / (r**2 - 2 * M * r + a**2)
         uKS4U = ixp.zerorank1(dimension=4)
@@ -308,18 +310,18 @@ class FishboneMoncriefID:
             for j in range(4):
                 uKS4D[i] += gPhys4DD[i][j] * uKS4U[j]
 
-        BU = ixp.zerorank1()
+        self.BmagU = ixp.zerorank1()
         for i in range(3):
-            BU[i] = BtildeU[i] / sp.sqrt(gammaDET)
+            self.BmagU[i] = BtildeU[i] / sp.sqrt(gammaDET)
 
         BU0_u = sp.sympify(0)
         for i in range(3):
-            BU0_u += uKS4D[i + 1] * BU[i] / alpha
+            BU0_u += uKS4D[i + 1] * self.BmagU[i] / alpha
 
         smallbU = ixp.zerorank1(dimension=4)
         smallbU[0] = BU0_u / sp.sqrt(4 * sp.pi)
         for i in range(3):
-            smallbU[i + 1] = (BU[i] / alpha + BU0_u * uKS4U[i + 1]) / (
+            smallbU[i + 1] = (self.BmagU[i] / alpha + BU0_u * uKS4U[i + 1]) / (
                 sp.sqrt(4 * sp.pi) * uKS4U[0]
             )
 

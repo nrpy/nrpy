@@ -7,7 +7,7 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com
 """
 
-from typing import Sequence
+from typing import List
 
 # Step 1.a: import all needed modules from NRPy:
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
@@ -98,40 +98,40 @@ class GRHD_Equations:
                 self.gammaDD[i][j] = sp.together(self.gammaDD[i][j])
 
         # Declare class variables that will be defined later
-        self.T4UU: Sequence[Sequence[sp.Expr]]
-        self.rescaledT4UU: Sequence[Sequence[sp.Expr]]
+        self.T4UU: List[List[sp.Expr]]
+        self.rescaledT4UU: List[List[sp.Expr]]
 
-        self.T4UD: Sequence[Sequence[sp.Expr]]
-        self.rescaledT4UD: Sequence[Sequence[sp.Expr]]
+        self.T4UD: List[List[sp.Expr]]
+        self.rescaledT4UD: List[List[sp.Expr]]
 
         self.rho_star: sp.Expr
         self.Ye_star: sp.Expr
         self.tau_tilde: sp.Expr
-        self.S_tildeD: Sequence[sp.Expr]
-        self.rescaledS_tildeD: Sequence[sp.Expr]
+        self.S_tildeD: List[sp.Expr]
+        self.rescaledS_tildeD: List[sp.Expr]
 
-        self.VU_from_u4U: Sequence[sp.Expr]
+        self.VU_from_u4U: List[sp.Expr]
 
-        self.rho_star_fluxU: Sequence[sp.Expr]
-        self.rescaled_rho_star_fluxU: Sequence[sp.Expr]
+        self.rho_star_fluxU: List[sp.Expr]
+        self.rescaled_rho_star_fluxU: List[sp.Expr]
 
-        self.Ye_star_fluxU: Sequence[sp.Expr]
-        self.rescaled_Ye_star_fluxU: Sequence[sp.Expr]
+        self.Ye_star_fluxU: List[sp.Expr]
+        self.rescaled_Ye_star_fluxU: List[sp.Expr]
 
-        self.tau_tilde_fluxU: Sequence[sp.Expr]
-        self.rescaled_tau_tilde_fluxU: Sequence[sp.Expr]
+        self.tau_tilde_fluxU: List[sp.Expr]
+        self.rescaled_tau_tilde_fluxU: List[sp.Expr]
 
-        self.S_tilde_fluxUD: Sequence[Sequence[sp.Expr]]
-        self.rescaled_S_tilde_fluxUD: Sequence[Sequence[sp.Expr]]
+        self.S_tilde_fluxUD: List[List[sp.Expr]]
+        self.rescaled_S_tilde_fluxUD: List[List[sp.Expr]]
 
         self.tau_source_term: sp.Expr
         self.rho_star_connection_term: sp.Expr
         self.Ye_star_connection_term: sp.Expr
         self.tau_connection_term: sp.Expr
 
-        self.S_tilde_connection_termsD: Sequence[sp.Expr]
+        self.S_tilde_connection_termsD: List[sp.Expr]
 
-        self.S_tilde_source_termD: Sequence[sp.Expr]
+        self.S_tilde_source_termD: List[sp.Expr]
 
     def compute_T4UU(self) -> None:
         """Define T^{mu nu} (a 4-dimensional tensor)."""
