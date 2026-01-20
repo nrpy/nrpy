@@ -88,7 +88,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * Scheduling:
  *   This driver does not decide whether diagnostics run on a given step.
  *   The caller (Charm++ control flow) must invoke the appropriate DIAGNOSTICS_* phase only
- *   on scheduled output steps.* 
+ *   on scheduled output steps.*
  *
  * @param[in,out] commondata  Global simulation metadata and run-time parameters.
  * @param[in,out] griddata    Host-side per-grid data (parameters, fields, and workspace).
@@ -128,11 +128,14 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
   switch (which_diagnostics_part) {
 
     case DIAGNOSTICS_SETUP_1D:
-    case DIAGNOSTICS_SETUP_2D: {
+    case DIAGNOSTICS_SETUP_2D: {"""
 
+    if enable_nearest_diagnostics:
+        body += r"""
       // Nearest-point diagnostics, at center, along y,z axes (1D)
-      diagnostics_nearest(commondata, griddata, griddata_chare, NULL, chare_index, token, which_diagnostics_part);      
+      diagnostics_nearest(commondata, griddata, griddata_chare, NULL, chare_index, token, which_diagnostics_part);"""
 
+    body += r"""
       break;
     }
 
@@ -140,20 +143,26 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     case DIAGNOSTICS_WRITE_Y:
     case DIAGNOSTICS_WRITE_Z:
     case DIAGNOSTICS_WRITE_XY:
-    case DIAGNOSTICS_WRITE_YZ: {
+    case DIAGNOSTICS_WRITE_YZ: {"""
 
+    if enable_nearest_diagnostics:
+        body += r"""
       // Nearest-point diagnostics at xy and yz planes (2D).
-      diagnostics_nearest(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, token, which_diagnostics_part);
+      diagnostics_nearest(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, token, which_diagnostics_part);"""
 
+    body += r"""
       break;
     }
 
     case DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID:
-    case DIAGNOSTICS_VOLUME_WRITE: {
+    case DIAGNOSTICS_VOLUME_WRITE: {"""
 
+    if enable_volume_integration_diagnostics:
+        body += r"""
       // Volume-integration diagnostics.
-      //diagnostics_volume_integration(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, which_diagnostics_part);
+      //diagnostics_volume_integration(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, which_diagnostics_part);"""
 
+    body += r"""
       break;
     }
   }
