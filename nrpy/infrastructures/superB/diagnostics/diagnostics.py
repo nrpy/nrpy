@@ -39,28 +39,28 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_free_auxevol: bool = True,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Construct and register a C function that drives all scheduled diagnostics.
+    Construct and register the top-level C diagnostics dispatcher.
 
-    This function generates and registers the C driver "diagnostics", which is called
-    once per timestep to run the enabled diagnostics families at a user-controlled
-    cadence. It also registers the commondata CodeParameter diagnostics_output_every.
-    At runtime, the generated C code determines whether the current time is within
-    half a timestep of the nearest multiple of diagnostics_output_every. On output
-    steps it allocates and populates diagnostic_gfs via diagnostic_gfs_set(...),
-    invokes the enabled diagnostics routines (diagnostics_nearest(...),
-    diagnostics_interp(...), and/or diagnostics_volume_integration(...)), then frees
-    temporary storage. CUDA builds additionally synchronize host copies of selected
-    device buffers prior to I/O. Hooks to free and later restore MoL scratch arrays
-    exist but are currently disabled in the emitted C code.
+    This function generates and registers the C driver "diagnostics", which is
+    invoked by the Charm++ timestepping/control-flow layer on scheduled diagnostics
+    phases. The driver itself does not decide when diagnostics should run (it does
+    not inspect time, dt, or diagnostics_output_every), and it does not allocate or
+    populate diagnostic gridfunction buffers; instead it operates on already-allocated
+    gridfuncs_diags buffers provided by the caller.
+
+    This function still registers the commondata CodeParameter diagnostics_output_every,
+    but that parameter is consulted by the Charm++ layer (caller) to determine the
+    output cadence.
 
     :param default_diagnostics_out_every: Default value for the commondata parameter
-        "diagnostics_output_every", which controls the diagnostics output cadence.
+        "diagnostics_output_every", which controls the diagnostics output cadence (as
+        interpreted by the caller).
     :param enable_nearest_diagnostics: If True, include a call to diagnostics_nearest(...)
-        on output steps.
+        when the corresponding diagnostics phase is invoked.
     :param enable_interp_diagnostics: If True, include a call to diagnostics_interp(...)
-        on output steps.
+        when the corresponding diagnostics phase is invoked.
     :param enable_volume_integration_diagnostics: If True, include a call to
-        diagnostics_volume_integration(...) on output steps.
+        diagnostics_volume_integration(...) when the corresponding diagnostics phase is invoked.
     :param enable_free_auxevol: Reserved for future use. Intended to control whether MoL
         scratch arrays are freed before diagnostics and restored afterward; currently
         ignored by the generated code.
