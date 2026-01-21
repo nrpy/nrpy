@@ -36,6 +36,8 @@ def bhah_plane_configs() -> Dict[str, Dict[str, Dict[str, Any]]]:
             "fixed_dim" : str
             "fixed_val" : str or list[str]
             "loop_dims" : list[str]
+
+    :return: Dictionary mapping PLANE ("xy" or "yz") and coordinate FAMILY to a CONFIG dict.
     """
     # -----------------------------------------------------------------------------
     # plane_configs SCHEMA (dict of dicts):
@@ -154,6 +156,7 @@ def get_coord_family(cs: str) -> str:
             return family
     raise ValueError(f"Unsupported CoordSystem: {cs}")
 
+
 def generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> str:
     """
     Generate a C code block for sampling a plane based on its config.
@@ -210,7 +213,6 @@ diag_write_row({out_file}, {num_coords} + NUM_GFS_NEAREST, row);
     return f"{{ const int {fixed_dim} = {fixed_val}; {loop_code} }} // END BLOCK {plane}-plane output"
 
 
-
 def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -234,10 +236,10 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None  
+        return None
 
     family = get_coord_family(CoordSystem)
-    plane_configs = bhah_plane_configs()  
+    plane_configs = bhah_plane_configs()
     xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
     yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
 

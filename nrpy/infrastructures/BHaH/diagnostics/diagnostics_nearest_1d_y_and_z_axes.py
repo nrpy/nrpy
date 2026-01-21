@@ -25,12 +25,17 @@ from typing import Any, Dict, List, Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
-from typing import Any, Dict, List
 
 def bhah_family_from_coord(CoordSystem: str) -> str:
     """
     Return the coordinate *family* string given a CoordSystem name.
     Shared between BHaH and superB diagnostics.
+
+    :param CoordSystem: Name of the coordinate system (e.g., Cartesian, Spherical, Cylindrical, SymTP,
+                        Wedge, or Spherical_Ring variants).
+    :return: Coordinate family string (e.g., "Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge",
+             or "Spherical_Ring").
+    :raises ValueError: If CoordSystem does not match a supported family.
     """
     if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
         return "Spherical_Ring"
@@ -46,6 +51,8 @@ def bhah_axis_configs() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
 
     Structure:
       axis_configs[AXIS][FAMILY] -> list[LINE_SPEC]
+
+    :return: Dictionary mapping AXIS ("y" or "z") and FAMILY to a list of LINE_SPEC dictionaries.
     """
     # -------------------------------------------------------------------------
     # axis_configs schema (dict of dicts):
@@ -208,9 +215,19 @@ def bhah_axis_configs() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
             ],
         },
     }
-    return axis_configs 
-    
+    return axis_configs
+
+
 def count_expr(lines: List[Dict[str, Any]]) -> str:
+    """
+    Construct a C expression for the total number of interior sample points implied by `lines`.
+
+    This helper maps each LINE_SPEC's varying index ("i0", "i1", "i2") to the corresponding interior
+    count symbol ("N0int", "N1int", "N1int") and returns a C expression that sums these counts.
+
+    :param lines: List of LINE_SPEC dictionaries, each containing a "vary" key.
+    :return: C expression string for the total point count (e.g., "N0int + N2int" or "0").
+    """
     # Map each index name to the interior count symbol used in C.
     # keys:   "i0","i1","i2" (grid indices)
     # values: "N0int","N1int","N2int" (C locals representing interior sizes)
@@ -220,7 +237,19 @@ def count_expr(lines: List[Dict[str, Any]]) -> str:
     terms = [counts[line["vary"]] for line in lines]
     return " + ".join(terms) if terms else "0"
 
+
 def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
+    """
+    Construct C code that fills (coord, idx3) samples for the requested physical axis from `lines`.
+
+    The generated code loops over each LINE_SPEC, binds fixed indices, converts xx -> Cartesian, and
+    stores the selected axis coordinate (y or z) plus idx3 into the appropriate buffer and counter.
+    If `lines` is empty, a no-op stub is returned.
+
+    :param axis_char: Physical axis selector ("y" or "z").
+    :param lines: List of LINE_SPEC dictionaries describing the axis-line samples.
+    :return: C code string that fills the per-axis sample buffer.
+    """
     if not lines:
         return "(void)xx;  // no points for this axis/family\n"
 
@@ -293,7 +322,6 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-    
 
     fam = bhah_family_from_coord(CoordSystem)
     axis_configs = bhah_axis_configs()
@@ -301,10 +329,9 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     y_lines = axis_configs["y"][fam]
     z_lines = axis_configs["z"][fam]
 
-    
     y_count_expr = count_expr(y_lines)
     z_count_expr = count_expr(z_lines)
-    
+
     fill_y = gen_fill("y", y_lines)
     fill_z = gen_fill("z", z_lines)
 
