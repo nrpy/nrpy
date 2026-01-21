@@ -25,6 +25,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_nrpyelliptic_conformally_flat"
+enable_simd_intrinsics = True
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
@@ -190,7 +191,6 @@ if enable_rfm_precompute:
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
@@ -198,7 +198,7 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd_intrinsics=enable_simd_intrinsics,
     OMP_collapse=OMP_collapse,
 )
 
@@ -319,7 +319,6 @@ if initial_data_type == "axisymmetric":
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
 )
 
 #########################################################
@@ -377,7 +376,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_rfm_precompute=True,
 )
 
 if enable_simd:
