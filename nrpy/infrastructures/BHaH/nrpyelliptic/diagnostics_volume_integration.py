@@ -141,47 +141,9 @@ def register_CFunction_diagnostics_volume_integration() -> (
                 const REAL *restrict gridfuncs_diags[MAXNUMGRIDS]"""
 
     body = r"""
-  // Initialize a recipe book.
+  // Initialize the canonical set of recipes via the shared builder.
   diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES];
-  diags_integration_initialize_recipes(recipes);
-  int NUM_RECIPES = 0;
-
-  // ========================= USER-EDIT: Define recipes =========================
-  // Each recipe has its own set of rules and its own list of integrands.
-  {
-    // Recipe 0: Integrals over the whole domain
-    if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
-      recipes[NUM_RECIPES].name = "whole_domain";
-      recipes[NUM_RECIPES].num_rules = 0; // No rules means the whole domain is used.
-      // Define the integrands for this recipe:
-
-      // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 1;
-
-      NUM_RECIPES++;
-    } // END IF define Recipe 0
-
-    //  Recipe 1: RMS of numerical solution inside a sphere of radius 80
-    if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
-      const REAL R_outer = 80;
-      recipes[NUM_RECIPES].name = "sphere_R_80";
-      recipes[NUM_RECIPES].num_rules = 1;
-
-      // Important: exclude_inside=0 implies outer is excluded.
-      recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
-
-      // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 1;
-
-      NUM_RECIPES++;
-    } // END IF define Recipe 1
-
-    // --- You can continue to add more recipes here, using any combination of rules and integrands ---
-  } // END USER-EDIT recipes block
-
-  // ========================= End of user edits =========================
+  const int NUM_RECIPES = diags_integration_build_default_recipes(recipes);
 
   // Declare a container to hold the integration results
   diags_integration_results_t integration_results;
