@@ -192,10 +192,9 @@ z_neg_ghost_type = "BOTTOM_GHOST"
 def generate_diagnostics_code(
     dimension: str,
     direction: str,
-    totsize_field: str,    
-    which_output: str,     
+    totsize_field: str,
+    which_output: str,
 ) -> str:
-
     """
     Generate code for diagnostics.
 
@@ -440,6 +439,7 @@ def output_timestepping_h(
 #include "timestepping.decl.h"
 #include "diagnostics/diagnostic_gfs.h"
 #include "diagnostics/diagnostics_nearest_common.h"
+#include "diagnostics/diagnostics_volume_integration_helpers.h"
 """
     if enable_psi4_diagnostics:
         file_output_str += r"""
@@ -502,7 +502,8 @@ class Timestepping : public CBase_Timestepping {
     if enable_residual_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
-    void send_wavespeed_at_outer_boundary(const int grid);"""
+    void send_wavespeed_at_outer_boundary(const int grid);
+    void contribute_localsums_for_volume();"""
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]);"""
@@ -757,7 +758,9 @@ def output_timestepping_cpp(
     file_output_str = r"""#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "timestepping.h"
-#include "main.h" """
+#include "main.h"
+#include "diagnostics/diagnostics_volume_integration_helpers.h"
+"""
 
     if enable_BHaHAHA:
         file_output_str += r"""
@@ -1432,6 +1435,32 @@ void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const in
 """
 
     file_output_str += r"""
+void Timestepping::contribute_localsums_for_volume() {
+  // Build the canonical recipe list using the shared builder.
+  diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES];
+  const int NUM_RECIPES = diags_integration_build_default_recipes(recipes);
+
+  // Compute local contributions for each recipe and flatten into double vector
+  std::vector<double> outdoubles;
+  for (int r = 0; r < NUM_RECIPES; r++) {
+    const int prefix = recipes[r].num_rules;
+    REAL selected_volume = 0.0;
+    REAL integrals[DIAGS_INTEGRATION_MAX_INTEGRANDS] = {0.0};
+
+    diagnostics_integration_apply_rules(&commondata, griddata_chare, (const REAL *restrict *)diagnostic_gfs, recipes[r].rules, prefix,
+                      recipes[r].integrands, recipes[r].num_integrands, &selected_volume, integrals);
+
+    // Push volume then integrand integrals in order
+    outdoubles.push_back((double)selected_volume);
+    for (int s = 0; s < recipes[r].num_integrands; s++)
+      outdoubles.push_back((double)integrals[s]);
+  }
+
+  CkCallback cb(CkIndex_Timestepping::report_sums_for_volume(NULL), thisProxy[CkArrayIndex3D(0,0,0)]);
+  contribute(outdoubles, CkReduction::sum_double, cb);
+}
+"""
+    file_output_str += r"""
 #include "timestepping.def.h"
 """
 
@@ -1661,7 +1690,7 @@ def output_timestepping_ci(
         }
       """
     if enable_residual_diagnostics:
-        file_output_str += r"""        
+        file_output_str += r"""
         //when continue_after_residual_H_done() { }
         """
     file_output_str += r"""
@@ -1675,8 +1704,8 @@ def output_timestepping_ci(
                                          commondata.time) < 0.5 * commondata.dt;"""
     file_output_str += r"""
         }"""
-            
-    file_output_str += r"""    
+
+    file_output_str += r"""
             //START DIAGNOSTICS
             if (write_diagnostics_this_step) {
               serial {
@@ -1690,13 +1719,20 @@ def output_timestepping_ci(
                 } // END LOOP over grids
 
                 // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
-                diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);            
-                
-                // Diagnostics center            
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);          
-              }          
-            }  
-         """            
+                diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
+
+                // Diagnostics center
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);"""
+
+    if enable_residual_diagnostics:
+        file_output_str += r"""
+                // Execute volume-integration recipe for this chare and contribute results
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID);"""
+
+    file_output_str += r"""
+              }
+            }
+         """
 
     if enable_BHaHAHA:
         file_output_str += r"""
@@ -1840,13 +1876,21 @@ def output_timestepping_ci(
                 CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_yz, opts);
               }}
-            }}          
+            }}
 """
 
-    file_output_str += generate_diagnostics_code("1d","y",  "totsizeinbytes_1d_y",  "DIAGNOSTICS_WRITE_Y")
-    file_output_str += generate_diagnostics_code("1d","z",  "totsizeinbytes_1d_z",  "DIAGNOSTICS_WRITE_Z")
-    file_output_str += generate_diagnostics_code("2d","xy", "totsizeinbytes_2d_xy", "DIAGNOSTICS_WRITE_XY")
-    file_output_str += generate_diagnostics_code("2d","yz", "totsizeinbytes_2d_yz", "DIAGNOSTICS_WRITE_YZ")
+    file_output_str += generate_diagnostics_code(
+        "1d", "y", "totsizeinbytes_1d_y", "DIAGNOSTICS_WRITE_Y"
+    )
+    file_output_str += generate_diagnostics_code(
+        "1d", "z", "totsizeinbytes_1d_z", "DIAGNOSTICS_WRITE_Z"
+    )
+    file_output_str += generate_diagnostics_code(
+        "2d", "xy", "totsizeinbytes_2d_xy", "DIAGNOSTICS_WRITE_XY"
+    )
+    file_output_str += generate_diagnostics_code(
+        "2d", "yz", "totsizeinbytes_2d_yz", "DIAGNOSTICS_WRITE_YZ"
+    )
 
     file_output_str += r"""
             if (count_filewritten == expected_count_filewritten) {
@@ -1855,7 +1899,7 @@ def output_timestepping_ci(
           } else {
             serial {thisProxy.continue_timestepping(); }
           }
-        }            
+        }
 """
     file_output_str += r"""
         when continue_timestepping() {
@@ -2004,8 +2048,13 @@ def output_timestepping_ci(
     entry void closed_2d_yz(CkReductionMsg *m);
     entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part) {
       serial {
-        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};     
-        diagnostics(&commondata, griddata, griddata_chare, diagnostic_gfs, thisIndex_arr, which_grid_diagnostics, token, which_diagnostics_part);
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
+        if (which_diagnostics_part == DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID || which_diagnostics_part == DIAGNOSTICS_VOLUME_WRITE) {
+          // Compute local volume-integral contributions and participate in a global reduction
+          contribute_localsums_for_volume();
+        } else {
+          diagnostics(&commondata, griddata, griddata_chare, (const REAL *restrict *)diagnostic_gfs, thisIndex_arr, which_grid_diagnostics, token, which_diagnostics_part);
+        }
       }
     }
     entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
@@ -2106,6 +2155,88 @@ def output_timestepping_ci(
     entry [reductiontarget] void startCheckpoint(); //reduction to start checkpointing
     entry void recvCheckPointDone();  //checkpointing done, resume application
     """
+
+    file_output_str += r"""
+    entry void report_sums_for_volume(CkReductionMsg * msg) {
+      serial {
+        // Build canonical recipes via the shared builder so parsing matches contribution order.
+        diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES];
+        const int NUM_RECIPES = diags_integration_build_default_recipes(recipes);
+
+        // Expected reduced array length: for each recipe, one volume + one entry per integrand
+        int expectedLen = 0;
+        for (int r = 0; r < NUM_RECIPES; r++)
+          expectedLen += 1 + recipes[r].num_integrands;
+
+        int reducedArrSize = msg->getSize() / sizeof(double);
+        CkAssert(reducedArrSize == expectedLen);
+        double *output = (double *)msg->getData();
+
+        diags_integration_results_t integration_results;
+        integration_results.num_recipe_results = 0;
+
+        int idx = 0;
+        for (int r = 0; r < NUM_RECIPES; r++) {
+          diags_integration_recipe_result_t *result = &integration_results.recipe_results[integration_results.num_recipe_results];
+          result->recipe_name = recipes[r].name;
+          result->proper_volume = (REAL)output[idx++];
+          result->num_integrand_results = recipes[r].num_integrands;
+
+          // Fill integrand-level data
+          for (int s = 0; s < recipes[r].num_integrands; s++) {
+            diags_integration_integrand_result_t *int_result = &result->integrand_results[s];
+            const diags_integration_integrand_spec_t *spec_ptr = &recipes[r].integrands[s];
+            int_result->gf_index = spec_ptr->gf_index;
+            int_result->is_squared = spec_ptr->is_squared;
+            if (spec_ptr->gf_index == diags_integration_UNIT_INTEGRAND_GFINDEX)
+              int_result->gf_name = "one";
+            else
+              int_result->gf_name = diagnostic_gf_names[spec_ptr->gf_index];
+
+            int_result->integral = (REAL)output[idx++];
+            if (spec_ptr->is_squared) {
+              const double integral_value = (double)int_result->integral;
+              int_result->L2 = sqrt(fmax(integral_value, 0.0));
+              int_result->RMS = (result->proper_volume > 0.0) ? sqrt(fmax(integral_value, 0.0) / (double)result->proper_volume) : 0.0;
+              int_result->L2_valid = 1;
+              int_result->RMS_valid = 1;
+            } else {
+              int_result->L2 = 0.0;
+              int_result->RMS = 0.0;
+              int_result->L2_valid = 0;
+              int_result->RMS_valid = 0;
+            }
+          }
+
+          // Write per-recipe file on root chare only
+          if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+            char filename[256];
+            snprintf(filename, sizeof(filename), "out3d-integrals-conv_factor%.2f-%s.txt", commondata.convergence_factor, recipes[r].name);
+            FILE *file_ptr = diags_integration_open_output_file(commondata.nn, filename);
+            if (commondata.nn == 0)
+              diags_integration_write_header(file_ptr, r, &recipes[r]);
+
+            REAL integrals_arr[DIAGS_INTEGRATION_MAX_INTEGRANDS];
+            for (int s = 0; s < recipes[r].num_integrands; s++)
+              integrals_arr[s] = result->integrand_results[s].integral;
+
+            diags_integration_write_row(file_ptr, (double)commondata.time, (double)result->proper_volume, recipes[r].integrands, integrals_arr,
+                                        recipes[r].num_integrands);
+            fclose(file_ptr);
+          }
+
+          integration_results.num_recipe_results++;
+        }
+
+        // Update a convenience field (same as original user-edit capture)
+        REAL rms_residual_r_80 = NAN;
+        diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUALGF, &rms_residual_r_80);
+        commondata.log10_current_residual = log10(rms_residual_r_80);
+
+        delete msg;
+      }
+    }
+"""
     file_output_str += r"""
   };
 };
