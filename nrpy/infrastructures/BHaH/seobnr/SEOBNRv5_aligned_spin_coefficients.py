@@ -318,9 +318,15 @@ Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
     body = """
 REAL q = commondata->mass_ratio;
 REAL eta = q / (1.0 + q) / (1.0 + q);
+// Ensure eta is consistent if we snap q to 1.0
 if (eta > 0.25){
-  if (fabs(q - 1.) < 1e-13){ q = 1.; } 
-  else { printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta); exit(EXIT_FAILURE); }
+  if (fabs(q - 1.) < 1e-13){
+    q = 1.;
+    eta = 0.25;
+  } else {
+    printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
+    exit(EXIT_FAILURE);
+  }
 }
 commondata->m1 = q / (1.0 + q);
 commondata->m2 = 1.0 / (1.0 + q);
@@ -649,28 +655,37 @@ const REAL imomegaqnm_l5m5[107] = {
   0.0082744, 0.0075832, 0.0068122
 };
 
-
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
+if (spline == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
+  exit(EXIT_FAILURE);
+}
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
+if (acc == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_acc_alloc failed to initialize\\n");
+  gsl_spline_free(spline); // Clean up the first allocation
+  exit(EXIT_FAILURE);
+}
 
 const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
                       ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
 
-#define EVAL_QNM(L, M, TARGET_OMEGA, TARGET_TAU, RE_ARRAY, IM_ARRAY) \\
+#define EVAL_QNM(L, M, TARGET_OMEGA, TARGET_TAU, RE_ARRAY, IM_ARRAY) do { \\
     gsl_spline_init(spline, afinallist, RE_ARRAY, 107); \\
     gsl_interp_accel_reset(acc); \\
     commondata->TARGET_OMEGA = gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f; \\
     gsl_spline_init(spline, afinallist, IM_ARRAY, 107); \\
     gsl_interp_accel_reset(acc); \\
-    commondata->TARGET_TAU = 1. / (gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f);
+    commondata->TARGET_TAU = 1. / (gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f); \\
+} while(0)
 
-EVAL_QNM(2, 2, omega_qnm_l2m2, tau_qnm_l2m2, reomegaqnm_l2m2, imomegaqnm_l2m2)
-EVAL_QNM(2, 1, omega_qnm_l2m1, tau_qnm_l2m1, reomegaqnm_l2m1, imomegaqnm_l2m1)
-EVAL_QNM(3, 3, omega_qnm_l3m3, tau_qnm_l3m3, reomegaqnm_l3m3, imomegaqnm_l3m3)
-EVAL_QNM(3, 2, omega_qnm_l3m2, tau_qnm_l3m2, reomegaqnm_l3m2, imomegaqnm_l3m2)
-EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4)
-EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3)
-EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5)
+EVAL_QNM(2, 2, omega_qnm_l2m2, tau_qnm_l2m2, reomegaqnm_l2m2, imomegaqnm_l2m2);
+EVAL_QNM(2, 1, omega_qnm_l2m1, tau_qnm_l2m1, reomegaqnm_l2m1, imomegaqnm_l2m1);
+EVAL_QNM(3, 3, omega_qnm_l3m3, tau_qnm_l3m3, reomegaqnm_l3m3, imomegaqnm_l3m3);
+EVAL_QNM(3, 2, omega_qnm_l3m2, tau_qnm_l3m2, reomegaqnm_l3m2, imomegaqnm_l3m2);
+EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4);
+EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3);
+EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5);
 
 commondata->omega_qnm = commondata->omega_qnm_l2m2;
 commondata->tau_qnm   = commondata->tau_qnm_l2m2;
