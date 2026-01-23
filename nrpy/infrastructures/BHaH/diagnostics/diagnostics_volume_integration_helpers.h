@@ -491,6 +491,40 @@ static inline void diags_integration_initialize_recipes(diags_integration_recipe
   } // END LOOP over recipes
 } // END FUNCTION diags_integration_initialize_recipes
 
+/**
+ * @brief Build the default set of recipes used by diagnostics_volume_integration and reductions.
+ *
+ * @param[out] recipes Array of length DIAGS_INTEGRATION_MAX_RECIPES to populate.
+ * @return Number of recipes written into @p recipes.
+ *
+ * Note: Keep this function self-contained so callers in different translation units
+ * can construct the same canonical recipe book without duplicating code.
+ */
+static inline int diags_integration_build_default_recipes(diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES]) {
+  diags_integration_initialize_recipes(recipes);
+  int NUM_RECIPES = 0;
+
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+    recipes[NUM_RECIPES].name = "whole_domain";
+    recipes[NUM_RECIPES].num_rules = 0;
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 1;
+    NUM_RECIPES++;
+  }
+
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+    const REAL R_outer = 80;
+    recipes[NUM_RECIPES].name = "sphere_R_80";
+    recipes[NUM_RECIPES].num_rules = 1;
+    recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 1;
+    NUM_RECIPES++;
+  }
+
+  return NUM_RECIPES;
+}
+
 // ======================== Result query functions ========================
 
 /**
