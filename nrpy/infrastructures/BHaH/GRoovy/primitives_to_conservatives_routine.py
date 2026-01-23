@@ -10,14 +10,12 @@ from pathlib import Path
 from types import FrameType as FT
 from typing import Union, cast
 
-import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.simple_loop as lp
-from nrpy.equations.grhd.GRHD_equations import (
-    GRHD_Equations,
-)
+from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
 
 
 def register_CFunction_primitives_to_conservatives_routine(
@@ -30,7 +28,7 @@ def register_CFunction_primitives_to_conservatives_routine(
     evolving_entropy: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register function to compute evolved, conserved variables from primitives
+    Register function to compute evolved, conserved variables from primitives.
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.

@@ -21,16 +21,6 @@ from nrpy.equations.general_relativity.g4munu_conversions import (
     ADM_to_g4UU,
 )
 
-# def together(expr: sp.Expr) -> sp.Expr:
-#     """
-#     Massage sympy expressions, cancelling out any obvious factors. SymTP coordinates need more work however.
-#     """
-#     CoordSystem = par.parval_from_str("reference_metric::CoordSystem")
-#     if "SymTP" not in CoordSystem:
-#         return sp.together(expr)
-#     else:
-#         return sp.simplify(expr)
-
 
 class GRHD_Equations:
     """Construct and store expressions for the GRHD equations."""
@@ -246,7 +236,7 @@ class GRHD_Equations:
         u4U = self.u4U
 
         # Compute rho_star:
-        self.S_star = alpha * e6phi * S * u4U[0]        
+        self.S_star = alpha * e6phi * S * u4U[0]
 
     def compute_tau_tilde(self) -> None:
         """Compute densitized conserved energy."""
