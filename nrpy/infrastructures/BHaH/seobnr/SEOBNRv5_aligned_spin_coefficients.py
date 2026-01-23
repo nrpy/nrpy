@@ -662,7 +662,7 @@ if (spline == NULL){
 }
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
 if (acc == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_acc_alloc failed to initialize\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_accel_alloc failed to initialize\\n");
   gsl_spline_free(spline); // Clean up the first allocation
   exit(EXIT_FAILURE);
 }
