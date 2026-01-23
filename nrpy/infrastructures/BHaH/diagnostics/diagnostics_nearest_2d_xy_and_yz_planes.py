@@ -18,37 +18,27 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, Sequence, Union, cast
+from typing import Any, Dict, Sequence, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
-    CoordSystem: str,
-) -> Union[None, pcg.NRPyEnv_type]:
+def bhah_plane_configs() -> Dict[str, Dict[str, Dict[str, Any]]]:
     """
-    Construct and register a C function that writes 2D diagnostics on the nearest xy and yz planes for a single grid.
+    Return the plane_configs dict used to construct the 2D xy/yz plane sampling.
 
-    This function generates and registers the C helper "diagnostics_nearest_2d_xy_and_yz_planes".
-    The generated C code identifies interior slices nearest to the xy and yz planes based on the
-    provided coordinate system, converts native grid coordinates to Cartesian (x, y, z) for output,
-    and for each call writes two per-timestep files: one for the xy plane and one for the yz plane.
-    Sampling is performed without interpolation; values are read directly from the selected grid's
-    diagnostic gridfunctions. The plane selection and loop ordering are configured via a small
-    data-driven table for Cartesian, Cylindrical, Spherical, SymTP, and Wedge families; some
-    families emit multiple slices for a plane (for example, two phi slices near +/- pi/2 to realize x=0).
+    Schema:
+      plane_configs[PLANE][FAMILY] -> CONFIG, where:
+        PLANE  : "xy" or "yz"
+        FAMILY : one of {"Cartesian","Cylindrical","Spherical","SymTP","Wedge"}
+        CONFIG : dict with keys:
+            "fixed_dim" : str
+            "fixed_val" : str or list[str]
+            "loop_dims" : list[str]
 
-    :param CoordSystem: Name of the coordinate system family that specializes plane selection and the wrapper.
-    :return: None if in registration phase, else the updated NRPy environment.
-
-    Doctests:
-    TBD
+    :return: Dictionary mapping PLANE ("xy" or "yz") and coordinate FAMILY to a CONFIG dict.
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
-
     # -----------------------------------------------------------------------------
     # plane_configs SCHEMA (dict of dicts):
     #
@@ -149,45 +139,49 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             },
         },
     }
+    return plane_configs
 
-    def _get_coord_family(cs: str) -> str:
-        """
-        Return the coordinate system family name from the full CoordSystem string.
 
-        :param cs: The full CoordSystem string.
-        :raises ValueError: If the coordinate system is not supported.
-        :return: The coordinate family name.
-        """
-        for family in plane_configs["xy"]:
-            if family in cs:
-                return family
-        raise ValueError(f"Unsupported CoordSystem: {cs}")
+def get_coord_family(cs: str) -> str:
+    """
+    Return the coordinate system family name from the full CoordSystem string.
 
-    def _generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> str:
-        """
-        Generate a C code block for sampling a plane based on its config.
+    :param cs: The full CoordSystem string.
+    :raises ValueError: If the coordinate system is not supported.
+    :return: The coordinate family name.
+    """
+    plane_configs = bhah_plane_configs()
+    for family in plane_configs["xy"]:
+        if family in cs:
+            return family
+    raise ValueError(f"Unsupported CoordSystem: {cs}")
 
-        :param config: A CONFIG as documented above (fixed_dim, fixed_val, loop_dims).
-        :param plane: Either "xy" or "yz"; determines output mapping and file handle.
-        :return: The generated C code string for the plane loop.
-        """
-        loop_dims, fixed_dim, fixed_val = (
-            config["loop_dims"],
-            config["fixed_dim"],
-            config["fixed_val"],
-        )
 
-        # Map written coordinates and output file by plane:
-        # xy -> write x,y into row[0],row[1] and use out_xy
-        # yz -> write y, z into row[0],row[1] and use out_yz
-        (row_map, num_coords, out_file) = (
-            ("row[0]=xCart[0]; row[1]=xCart[1];", 2, "out_xy")
-            if plane == "xy"
-            else ("row[0]=xCart[1]; row[1]=xCart[2];", 2, "out_yz")
-        )
+def generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> str:
+    """
+    Generate a C code block for sampling a plane based on its config.
 
-        # Innermost loop body: transform coords, sample gfs, write row
-        inner_body = f"""
+    :param config: A CONFIG as documented above (fixed_dim, fixed_val, loop_dims).
+    :param plane: Either "xy" or "yz"; determines output mapping and file handle.
+    :return: The generated C code string for the plane loop.
+    """
+    loop_dims, fixed_dim, fixed_val = (
+        config["loop_dims"],
+        config["fixed_dim"],
+        config["fixed_val"],
+    )
+
+    # Map written coordinates and output file by plane:
+    # xy -> write x,y into row[0],row[1] and use out_xy
+    # yz -> write y, z into row[0],row[1] and use out_yz
+    (row_map, num_coords, out_file) = (
+        ("row[0]=xCart[0]; row[1]=xCart[1];", 2, "out_xy")
+        if plane == "xy"
+        else ("row[0]=xCart[1]; row[1]=xCart[2];", 2, "out_yz")
+    )
+
+    # Innermost loop body: transform coords, sample gfs, write row
+    inner_body = f"""
 const int idx3 = IDX3P(params, i0, i1, i2);
 REAL xCart[3], xOrig[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
 xx_to_Cart(params, xOrig, xCart);
@@ -199,16 +193,16 @@ for (int gf_idx = 0; gf_idx < NUM_GFS_NEAREST; gf_idx++) {{
 diag_write_row({out_file}, {num_coords} + NUM_GFS_NEAREST, row);
 """
 
-        # Build nested loops. The first loop_dims element is intended to be outermost.
-        # We reverse when wrapping so the first becomes the outer loop.
-        loop_code = inner_body
-        for dim in reversed(loop_dims):
-            loop_code = f"for (int {dim}=NGHOSTS; {dim}<{dim}_end; {dim}++) {{{loop_code}}} // END LOOP over {dim}\n"
+    # Build nested loops. The first loop_dims element is intended to be outermost.
+    # We reverse when wrapping so the first becomes the outer loop.
+    loop_code = inner_body
+    for dim in reversed(loop_dims):
+        loop_code = f"for (int {dim}=NGHOSTS; {dim}<{dim}_end; {dim}++) {{{loop_code}}} // END LOOP over {dim}\n"
 
-        # Wrap with fixed_dim logic. If fixed_val is a list, emit multiple slices.
-        if isinstance(fixed_val, list):
-            slices = f"const int {fixed_dim}_slices[{len(fixed_val)}] = {{{', '.join(fixed_val)}}};"
-            return f"""
+    # Wrap with fixed_dim logic. If fixed_val is a list, emit multiple slices.
+    if isinstance(fixed_val, list):
+        slices = f"const int {fixed_dim}_slices[{len(fixed_val)}] = {{{', '.join(fixed_val)}}};"
+        return f"""
 {{
   {slices}
   for (int slice = 0; slice < {len(fixed_val)}; slice++) {{
@@ -216,11 +210,38 @@ diag_write_row({out_file}, {num_coords} + NUM_GFS_NEAREST, row);
     {loop_code}
   }} // END LOOP over slices
 }} // END BLOCK {plane}-plane output"""
-        return f"{{ const int {fixed_dim} = {fixed_val}; {loop_code} }} // END BLOCK {plane}-plane output"
+    return f"{{ const int {fixed_dim} = {fixed_val}; {loop_code} }} // END BLOCK {plane}-plane output"
 
-    family = _get_coord_family(CoordSystem)
-    xy_plane_code = _generate_plane_loop_code(plane_configs["xy"][family], "xy")
-    yz_plane_code = _generate_plane_loop_code(plane_configs["yz"][family], "yz")
+
+def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
+    CoordSystem: str,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Construct and register a C function that writes 2D diagnostics on the nearest xy and yz planes for a single grid.
+
+    This function generates and registers the C helper "diagnostics_nearest_2d_xy_and_yz_planes".
+    The generated C code identifies interior slices nearest to the xy and yz planes based on the
+    provided coordinate system, converts native grid coordinates to Cartesian (x, y, z) for output,
+    and for each call writes two per-timestep files: one for the xy plane and one for the yz plane.
+    Sampling is performed without interpolation; values are read directly from the selected grid's
+    diagnostic gridfunctions. The plane selection and loop ordering are configured via a small
+    data-driven table for Cartesian, Cylindrical, Spherical, SymTP, and Wedge families; some
+    families emit multiple slices for a plane (for example, two phi slices near +/- pi/2 to realize x=0).
+
+    :param CoordSystem: Name of the coordinate system family that specializes plane selection and the wrapper.
+    :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    TBD
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    family = get_coord_family(CoordSystem)
+    plane_configs = bhah_plane_configs()
+    xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
+    yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
 
     includes = [
         "stdlib.h",

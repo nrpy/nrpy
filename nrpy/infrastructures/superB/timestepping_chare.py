@@ -18,6 +18,25 @@ from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures import BHaH, superB
 
 
+def generate_complete_gf_list(
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
+    MoL_method: str,
+) -> List[str]:
+    """
+    Generate the complete list of grid function type names based on the given Method of Lines (MoL) method.
+
+    :param Butcher_dict: Dictionary containing Butcher tableau data.
+    :param MoL_method: Method of Lines (MoL) method name.
+    :return: A list of grid function type names (intermediate-stage names plus
+             'y_n_gfs', 'auxevol_gfs_gfs', and 'diagnostic_output_gfs').
+    """
+    gf_list = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
+        Butcher_dict, MoL_method=MoL_method
+    )
+    gf_list.extend(["y_n_gfs", "auxevol_gfs", "diagnostic_output_gfs"])
+    return gf_list
+
+
 def generate_send_nonlocalinnerbc_data_code(which_gf: str) -> str:
     """
     Generate code for sending nonlocal inner bc data.
@@ -171,8 +190,12 @@ z_neg_ghost_type = "BOTTOM_GHOST"
 
 
 def generate_diagnostics_code(
-    dimension: str, direction: str, num_fields: str, tot_num_diagnostic_pts: str
+    dimension: str,
+    direction: str,
+    totsize_field: str,    
+    which_output: str,     
 ) -> str:
+
     """
     Generate code for diagnostics.
 
@@ -189,16 +212,14 @@ def generate_diagnostics_code(
         f_{dimension}_{direction} = m_{dimension}_{direction}->file;
         CkCallback sessionStart_{dimension}_{direction}(CkIndex_Timestepping::start_write_{dimension}_{direction}(0), thisProxy);
         CkCallback sessionEnd_{dimension}_{direction}(CkIndex_Timestepping::test_written_{dimension}_{direction}(0), thisProxy);
-        int num_fields = {num_fields};
-        int tot_num_diagnostic_pts = {tot_num_diagnostic_pts};
-        int totsizeinbytes = 23 * num_fields * tot_num_diagnostic_pts;
+        int totsizeinbytes = griddata_chare[which_grid_diagnostics].diagnosticstruct.{totsize_field};
         Ck::IO::startSession(f_{dimension}_{direction}, totsizeinbytes, 0, sessionStart_{dimension}_{direction}, sessionEnd_{dimension}_{direction});
         delete m_{dimension}_{direction};
         }}
     }}
     when start_write_{dimension}_{direction}(Ck::IO::SessionReadyMsg *m_{dimension}_{direction}){{
         serial {{
-        thisProxy.diagnostics_ckio(m_{dimension}_{direction}->session, OUTPUT_{dimension.upper()}_{direction.upper()});
+        thisProxy.diagnostics_ckio(m_{dimension}_{direction}->session, {which_output});
         delete m_{dimension}_{direction};
         }}
     }}
@@ -215,7 +236,7 @@ def generate_diagnostics_code(
         delete m_{dimension}_{direction};
         }}
     }}
-    """
+"""
     return code
 
 
@@ -417,6 +438,8 @@ def output_timestepping_h(
 #include "BHaH_function_prototypes.h"
 #include "superB/superB_pup_function_prototypes.h"
 #include "timestepping.decl.h"
+#include "diagnostics/diagnostic_gfs.h"
+#include "diagnostics/diagnostics_nearest_common.h"
 """
     if enable_psi4_diagnostics:
         file_output_str += r"""
@@ -447,7 +470,9 @@ class Timestepping : public CBase_Timestepping {
     REAL time_start;
     //bool contains_gridcenter;
     const int grid = 0;
+    REAL *diagnostic_gfs[MAXNUMGRIDS];
     const int which_grid_diagnostics = 0;
+    const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
     bool write_diagnostics_this_step;"""
     if enable_charm_checkpointing:
         file_output_str += r"""
@@ -523,24 +548,8 @@ def generate_switch_statement_for_gf_types(
     :param set_parity_types: whether to set parity types in switch statements.
     :return: A string representing the switch statement for the grid function types.
     """
-    # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gridfunction_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     switch_statement = """
 switch (type_gfs) {
@@ -612,24 +621,8 @@ def generate_switch_statement_for_gf_types_for_entry_method(
     :param MoL_method: Method of Lines (MoL) method name.
     :return: A string representing the switch statement for the grid function types.
     """
-    # Generating gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list = (
-        [y_n_gridfunctions] if isinstance(y_n_gridfunctions, str) else y_n_gridfunctions
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # Keep synching of y n gfs during initial data distinct to prevent mismatch of messages
     gf_list.append("y_n_gfs_initialdata_part1")
@@ -674,26 +667,8 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :return: A string containing entry method declarations separated by newlines.
     :raises ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
-    # Generate gridfunction names based on the given MoL method
-    (
-        y_n_gridfunctions,
-        non_y_n_gridfunctions_list,
-        _diagnostic_gridfunctions_point_to,
-        _diagnostic_gridfunctions2_point_to,
-    ) = BHaH.MoLtimestepping.intermediate_gf_names_list.generate_gridfunction_names(
-        Butcher_dict, MoL_method=MoL_method
-    )
 
-    # Convert y_n_gridfunctions to a list if it's a string
-    gf_list: List[str] = (
-        [y_n_gridfunctions]
-        if isinstance(y_n_gridfunctions, str)
-        else list(y_n_gridfunctions)
-    )
-    gf_list.extend(non_y_n_gridfunctions_list)
-
-    # Also add case for diagnostic output gfs, they are allocated separate memory for superB and do not to other gfs
-    gf_list.append("diagnostic_output_gfs")
+    gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # need separate entry methods of y n gf during initial data set up to prevent mismatch of messages
     gf_list.append("Y_N_GFS_INITIALDATA_PART1")
@@ -773,34 +748,8 @@ def output_timestepping_cpp(
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
-    :raises ValueError: Raised if any required function is not registered.
     """
     initial_data_desc += " "
-    # Make sure all required C functions are registered
-    missing_functions: List[Tuple[str, str]] = []
-    for func_tuple in [
-        ("params_struct_set_to_default", "CodeParameters.py"),
-        (
-            "numerical_grids_and_timestep",
-            "e.g., numerical_grids_and_timestep.py or user defined",
-        ),
-        ("MoL_malloc_y_n_gfs", "MoL.py"),
-        ("MoL_malloc_non_y_n_gfs", "MoL.py"),
-        ("initial_data", "initial_data.py"),
-        ("MoL_step_forward_in_time", "MoL.py"),
-        ("diagnostics", "log10_L2norm_gf.py"),
-        ("MoL_free_memory_y_n_gfs", "MoL.py"),
-        ("MoL_free_memory_non_y_n_gfs", "MoL.py"),
-    ]:
-        if func_tuple[0] not in cfc.CFunction_dict:
-            missing_functions += [func_tuple]
-    if missing_functions:
-        error_msg = "Error: These functions are required and are not registered.\n"
-        for func_tuple in missing_functions:
-            error_msg += (
-                f'  {func_tuple[0]}, registered by function within "{func_tuple[1]}"\n'
-            )
-        raise ValueError(error_msg)
 
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -875,20 +824,27 @@ Timestepping::Timestepping(CommondataObject &&inData) {
 
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    MoL_malloc_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
     // Define data needed for syncing gfs across chares
     MoL_sync_data_defines(&griddata_chare[grid].gridfuncs);
   }
-
-  // Step 3: Allocate storage for non-y_n gridfunctions, needed for the Runge-Kutta-like timestepping
-  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    MoL_malloc_non_y_n_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
 """
 
     file_output_str += """
-  // Allocate storage for diagnostic gridfunctions
-  for(int grid=0; grid<commondata.NUMGRIDS; grid++)
-    MoL_malloc_diagnostic_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+//Allocate storage for gridfunctions on each grid.
+for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
+  const int Nxx_plus_2NGHOSTS_tot = (griddata[grid].params.Nxx_plus_2NGHOSTS0 * //
+                                     griddata[grid].params.Nxx_plus_2NGHOSTS1 * //
+                                     griddata[grid].params.Nxx_plus_2NGHOSTS2);
+
+  BHAH_MALLOC(griddata_chare[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
+
+  MoL_malloc_intermediate_stage_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs);
+
+  if (NUM_AUXEVOL_GFS > 0) {
+    BHAH_MALLOC(griddata_chare[grid].gridfuncs.auxevol_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_AUXEVOL_GFS);
+  } // END IF NUM_AUXEVOL_GFS > 0
+
+} // END LOOP over grids
 """
 
     file_output_str += """
@@ -917,31 +873,20 @@ Timestepping::Timestepping(CkMigrateMessage *msg): CBase_Timestepping(msg) { }
 
 // destructor
 Timestepping::~Timestepping() {
-  // Step 5: Free all allocated memory
+
+  griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
+
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    MoL_free_memory_y_n_gfs(&griddata_chare[grid].gridfuncs);
-    {
-      const bool free_auxevol_gfs_if_exist = true;
-      MoL_free_memory_non_y_n_gfs(&griddata_chare[grid].gridfuncs, free_auxevol_gfs_if_exist);
-    }
-    MoL_free_memory_diagnostic_gfs(&griddata_chare[grid].gridfuncs);
     timestepping_free_memory_tmpBuffer(&griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);"""
-    if enable_rfm_precompute:
-        file_output_str += r"""
-    rfm_precompute_free(&commondata, &griddata_chare[grid].params, griddata_chare[grid].rfmstruct);
-    free(griddata_chare[grid].rfmstruct);"""
     if enable_CurviBCs:
         file_output_str += r"""
-    free(griddata[grid].bcstruct.inner_bc_array);
     free(griddata_chare[grid].bcstruct.inner_bc_array);
     free(griddata_chare[grid].bcstruct.inner_bc_array_nonlocal);
     for(int ng=0;ng<NGHOSTS*3;ng++) {
-     free(griddata[grid].bcstruct.pure_outer_bc_array[ng]);
      free(griddata_chare[grid].bcstruct.pure_outer_bc_array[ng]);
     }"""
     file_output_str += r"""
     for(int i=0;i<3;i++) {
-      free(griddata[grid].xx[i]);
       free(griddata_chare[grid].xx[i]);
     }
     free(griddata_chare[grid].diagnosticstruct.localidx3_diagnostic_1d_y_pt);
@@ -1015,7 +960,6 @@ Timestepping::~Timestepping() {
     }
     free(griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend);
   }
-  free(griddata);
   free(griddata_chare);
 }
 """
@@ -1715,37 +1659,44 @@ def output_timestepping_ci(
         serial {
           time_start = commondata.time;
         }
-        """
+      """
     if enable_residual_diagnostics:
-        file_output_str += r"""
+        file_output_str += r"""        
+        //when continue_after_residual_H_done() { }
+        """
+    file_output_str += r"""
         serial {
-          Ck::IO::Session token;  //pass a null token
-          const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-          REAL localsums_for_residualH[2];
-          diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_RESIDUAL, which_grid_diagnostics, thisIndex_arr, localsums_for_residualH);
-          contribute_localsums_for_residualH(localsums_for_residualH);
-        }
-        when continue_after_residual_H_done() { }
+          const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
+          write_diagnostics_this_step = fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt;
         """
-    if enable_residual_diagnostics:
+    if enable_charm_checkpointing:
         file_output_str += r"""
-            serial {
-              const int n_step = commondata.nn;
-              const int outevery = commondata.diagnostics_output_every;
-              write_diagnostics_this_step = n_step % outevery == 0;
-            }
-            """
-    else:
-        file_output_str += r"""
-            serial {
-              write_diagnostics_this_step = fabs(round(commondata.time / commondata.diagnostics_output_every) * commondata.diagnostics_output_every - commondata.time) < 0.5 * commondata.dt;
-              """
-        if enable_charm_checkpointing:
-            file_output_str += r"""
-              write_chckpt_this_step = fabs(round(commondata.time / commondata.checkpoint_every) * commondata.checkpoint_every -
-                                             commondata.time) < 0.5 * commondata.dt;"""
-        file_output_str += r"""
-            }"""
+          write_chckpt_this_step = fabs(round(commondata.time / commondata.checkpoint_every) * commondata.checkpoint_every -
+                                         commondata.time) < 0.5 * commondata.dt;"""
+    file_output_str += r"""
+        }"""
+            
+    file_output_str += r"""    
+            //START DIAGNOSTICS
+            if (write_diagnostics_this_step) {
+              serial {
+                // Allocate temporary storage for diagnostic_gfs.
+                for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
+                  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;                                                                      \
+                  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;                                                                      \
+                  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+                  const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+                  BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+                } // END LOOP over grids
+
+                // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
+                diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);            
+                
+                // Diagnostics center            
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);          
+              }          
+            }  
+         """            
 
     if enable_BHaHAHA:
         file_output_str += r"""
@@ -1844,13 +1795,6 @@ def output_timestepping_ci(
         filename_format = "commondata.convergence_factor, commondata.time"
 
     file_output_str += rf"""
-        // 0D and 2D output diagnostics
-        //serial {{
-        //  if (write_diagnostics_this_step && contains_gridcenter) {{
-        //    diagnostics(&commondata, griddata_chare, Ck::IO::Session(), OUTPUT_0D, which_grid_diagnostics);
-        //  }}
-        //}}
-        // Create sessions for ckio file writing from first chare only
         if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {{
           serial {{
             progress_indicator(&commondata, griddata_chare);
@@ -1861,66 +1805,48 @@ def output_timestepping_ci(
             serial {{
               count_filewritten = 0;
               {{
-                char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y, {filename_format});
+                char filename[512];
+                build_outfile_name(filename, sizeof filename, "out1d-y",
+                                   griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y,
+                                   &commondata, /*include_time=*/1);
                 Ck::IO::Options opts;
                 CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_y, opts);
               }}
               {{
-                char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z, {filename_format});
+                char filename[512];
+                build_outfile_name(filename, sizeof filename, "out1d-z",
+                                   griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z,
+                                   &commondata, /*include_time=*/1);
                 Ck::IO::Options opts;
                 CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_z, opts);
               }}
               {{
-                char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy, {filename_format});
+                char filename[512];
+                build_outfile_name(filename, sizeof filename, "out2d-xy",
+                                   griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy,
+                                   &commondata, /*include_time=*/1);
                 Ck::IO::Options opts;
                 CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_xy, opts);
               }}
               {{
-                char filename[256];
-                sprintf(filename, griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz, {filename_format});
+                char filename[512];
+                build_outfile_name(filename, sizeof filename, "out2d-yz",
+                                   griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz,
+                                   &commondata, /*include_time=*/1);
                 Ck::IO::Options opts;
                 CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_yz, opts);
               }}
-            }}
+            }}          
 """
-    # Generate code for 1d y diagnostics
-    file_output_str += generate_diagnostics_code(
-        "1d",
-        "y",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_y_pts",
-    )
 
-    # Generate code for 1d z diagnostics
-    file_output_str += generate_diagnostics_code(
-        "1d",
-        "z",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 1",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_1d_z_pts",
-    )
-
-    # Generate code for 2d xy diagnostics
-    file_output_str += generate_diagnostics_code(
-        "2d",
-        "xy",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_xy_pts",
-    )
-
-    # Generate code for 2d yz diagnostics
-    file_output_str += generate_diagnostics_code(
-        "2d",
-        "yz",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.num_output_quantities + 2",
-        "griddata_chare[which_grid_diagnostics].diagnosticstruct.tot_num_diagnostic_2d_yz_pts",
-    )
+    file_output_str += generate_diagnostics_code("1d","y",  "totsizeinbytes_1d_y",  "DIAGNOSTICS_WRITE_Y")
+    file_output_str += generate_diagnostics_code("1d","z",  "totsizeinbytes_1d_z",  "DIAGNOSTICS_WRITE_Z")
+    file_output_str += generate_diagnostics_code("2d","xy", "totsizeinbytes_2d_xy", "DIAGNOSTICS_WRITE_XY")
+    file_output_str += generate_diagnostics_code("2d","yz", "totsizeinbytes_2d_yz", "DIAGNOSTICS_WRITE_YZ")
 
     file_output_str += r"""
             if (count_filewritten == expected_count_filewritten) {
@@ -1929,9 +1855,20 @@ def output_timestepping_ci(
           } else {
             serial {thisProxy.continue_timestepping(); }
           }
-        }
-        when continue_timestepping() { }
+        }            
 """
+    file_output_str += r"""
+        when continue_timestepping() {
+          //END DIAGNOSTICS
+          if (write_diagnostics_this_step) {
+            serial {
+              // Free temporary storage allocated to diagnostic_gfs.
+              for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
+                free(diagnostic_gfs[grid]);
+            }
+          }
+        }
+    """
 
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""
@@ -2065,17 +2002,10 @@ def output_timestepping_ci(
     entry void closed_1d_z(CkReductionMsg *m);
     entry void closed_2d_xy(CkReductionMsg *m);
     entry void closed_2d_yz(CkReductionMsg *m);
-    entry void diagnostics_ckio(Ck::IO::Session token, int which_output) {
+    entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part) {
       serial {
-        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};"""
-    if enable_residual_diagnostics:
-        file_output_str += r"""
-        REAL unused_var[2];
-        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, unused_var);"""
-    else:
-        file_output_str += r"""
-        diagnostics(&commondata, griddata_chare, griddata, token, which_output, which_grid_diagnostics, thisIndex_arr, NULL);"""
-    file_output_str += r"""
+        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};     
+        diagnostics(&commondata, griddata, griddata_chare, diagnostic_gfs, thisIndex_arr, which_grid_diagnostics, token, which_diagnostics_part);
       }
     }
     entry void east_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
@@ -2095,7 +2025,7 @@ def output_timestepping_ci(
     )
     if enable_residual_diagnostics:
         file_output_str += r"""
-    entry void continue_after_residual_H_done();
+    //entry void continue_after_residual_H_done();
     entry void report_sums_for_residualH(CkReductionMsg *msg) {
       serial {
         int reducedArrSize=msg->getSize()/sizeof(double);
@@ -2119,7 +2049,7 @@ def output_timestepping_ci(
           fclose(outfile);
         }
         delete msg;
-        thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
+        //thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
       }
     }
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""

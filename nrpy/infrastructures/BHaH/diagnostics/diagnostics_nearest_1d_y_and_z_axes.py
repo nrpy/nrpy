@@ -26,44 +26,34 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
-    CoordSystem: str,
-) -> Union[None, pcg.NRPyEnv_type]:
+def bhah_family_from_coord(CoordSystem: str) -> str:
     """
-    Construct & register a C helper for 1D diagnostics along the nearest points to the y- and z-axes.
+    Return the coordinate *family* string given a CoordSystem name.
+    Shared between BHaH and superB diagnostics.
 
-    This function generates and registers the C helper "diagnostics_nearest_1d_y_and_z_axes", which
-    mirrors the interpolation-based diagnostics API so it can serve as a drop-in replacement in
-    calling code that loops over grids. The generated C code (a) selects axis-line samples according
-    to the coordinate family implied by `CoordSystem`, (b) converts logical coordinates to Cartesian,
-    (c) buffers (axis_coord, idx3) pairs, (d) sorts by the physical axis coordinate, and (e) streams
-    rows whose first column is the axis coordinate followed by selected diagnostic gridfunction values.
-    Two persistent per-grid output files are produced per call, one for the y-axis and one for the z-axis.
-    Each file begins with a one-line time comment and an axis-specific header. Sampling is performed at
-    grid points only; no interpolation is used.
-
-    :param CoordSystem: Name of the coordinate system used to specialize axis-line selection and
-                        wrapper generation (e.g., Cartesian, Spherical, Cylindrical, SymTP, Wedge,
-                        Spherical_Ring).
-    :return: None if in registration phase, else the updated NRPy environment.
-
-    Doctests:
-    TBD
+    :param CoordSystem: Name of the coordinate system (e.g., Cartesian, Spherical, Cylindrical, SymTP,
+                        Wedge, or Spherical_Ring variants).
+    :return: Coordinate family string (e.g., "Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge",
+             or "Spherical_Ring").
+    :raises ValueError: If CoordSystem does not match a supported family.
     """
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
-        return None
+    if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
+        return "Spherical_Ring"
+    for fam in ("Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge"):
+        if fam in CoordSystem:
+            return fam
+    raise ValueError(f"Unsupported CoordSystem: {CoordSystem}")
 
-    def _family() -> str:
-        if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
-            return "Spherical_Ring"
-        for fam in ("Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge"):
-            if fam in CoordSystem:
-                return fam
-        raise ValueError(f"Unsupported CoordSystem: {CoordSystem}")
 
-    fam = _family()
+def bhah_axis_configs() -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+    """
+    Return axis_configs dict used to construct the 1D y/z lines.
 
+    Structure:
+      axis_configs[AXIS][FAMILY] -> list[LINE_SPEC]
+
+    :return: Dictionary mapping AXIS ("y" or "z") and FAMILY to a list of LINE_SPEC dictionaries.
+    """
     # -------------------------------------------------------------------------
     # axis_configs schema (dict of dicts):
     # axis_configs[AXIS][FAMILY] -> list[LINE_SPEC], where:
@@ -225,70 +215,125 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
             ],
         },
     }
+    return axis_configs
+
+
+def count_expr(lines: List[Dict[str, Any]]) -> str:
+    """
+    Construct a C expression for the total number of interior sample points implied by `lines`.
+
+    This helper maps each LINE_SPEC's varying index ("i0", "i1", "i2") to the corresponding interior
+    count symbol ("N0int", "N1int", "N1int") and returns a C expression that sums these counts.
+
+    :param lines: List of LINE_SPEC dictionaries, each containing a "vary" key.
+    :return: C expression string for the total point count (e.g., "N0int + N2int" or "0").
+    """
+    # Map each index name to the interior count symbol used in C.
+    # keys:   "i0","i1","i2" (grid indices)
+    # values: "N0int","N1int","N2int" (C locals representing interior sizes)
+    counts = {"i0": "N0int", "i1": "N1int", "i2": "N2int"}
+    # For each LINE_SPEC, the number of points equals the interior length
+    # of the varying dimension; sum across all lines to get the max buffer size.
+    terms = [counts[line["vary"]] for line in lines]
+    return " + ".join(terms) if terms else "0"
+
+
+def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
+    """
+    Construct C code that fills (coord, idx3) samples for the requested physical axis from `lines`.
+
+    The generated code loops over each LINE_SPEC, binds fixed indices, converts xx -> Cartesian, and
+    stores the selected axis coordinate (y or z) plus idx3 into the appropriate buffer and counter.
+    If `lines` is empty, a no-op stub is returned.
+
+    :param axis_char: Physical axis selector ("y" or "z").
+    :param lines: List of LINE_SPEC dictionaries describing the axis-line samples.
+    :return: C code string that fills the per-axis sample buffer.
+    """
+    if not lines:
+        return "(void)xx;  // no points for this axis/family\n"
+
+    # coord_idx selects the physical axis to store in data_point_1d_struct.coord:
+    #   "y" -> xCart[1], "z" -> xCart[2]
+    coord_idx = "1" if axis_char == "y" else "2"
+
+    # Names of the C arrays/counters we fill for each axis
+    arr = "data_points_y" if axis_char == "y" else "data_points_z"
+    cnt = "count_y" if axis_char == "y" else "count_z"
+
+    # Map Python-side index labels to dimension numbers used in params->Nxx_plus_2NGHOSTS{d}
+    # i0 -> dim 0, i1 -> dim 1, i2 -> dim 2
+    dim_index = {"i0": "0", "i1": "1", "i2": "2"}
+
+    blocks = []
+    for line in lines:
+        vary = line["vary"]  # e.g., "i0"
+        vary_dim = dim_index[vary]  # e.g., "0"
+        fixed = line["fixed"]  # dict like {"i1":"i1_mid","i2":"i2_q1"}
+        blocks.append(
+            "\n".join(
+                [
+                    # loop bounds use the correct dimension number from vary_dim
+                    f"for (int {vary} = NGHOSTS; {vary} < params->Nxx_plus_2NGHOSTS{vary_dim} - NGHOSTS; {vary}++) {{",
+                    *(
+                        # For each non-varying index, bind that index to the named constant
+                        f"  const int {i} = {fixed[i]};"
+                        for i in ("i0", "i1", "i2")
+                        if i != vary
+                    ),
+                    "  const int idx3 = IDX3P(params, i0, i1, i2);",
+                    "  REAL xCart[3], xOrig[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };",
+                    "  xx_to_Cart(params, xOrig, xCart);",
+                    # Save the physical coordinate (y or z) and the flat 3D index
+                    f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
+                    f"  {arr}[{cnt}].idx3  = idx3;",
+                    f"  {cnt}++;",
+                    f"}} // END LOOP over {vary}",
+                ]
+            )
+        )
+    return "\n".join(blocks) + "\n"
+
+
+def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
+    CoordSystem: str,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Construct & register a C helper for 1D diagnostics along the nearest points to the y- and z-axes.
+
+    This function generates and registers the C helper "diagnostics_nearest_1d_y_and_z_axes", which
+    mirrors the interpolation-based diagnostics API so it can serve as a drop-in replacement in
+    calling code that loops over grids. The generated C code (a) selects axis-line samples according
+    to the coordinate family implied by `CoordSystem`, (b) converts logical coordinates to Cartesian,
+    (c) buffers (axis_coord, idx3) pairs, (d) sorts by the physical axis coordinate, and (e) streams
+    rows whose first column is the axis coordinate followed by selected diagnostic gridfunction values.
+    Two persistent per-grid output files are produced per call, one for the y-axis and one for the z-axis.
+    Each file begins with a one-line time comment and an axis-specific header. Sampling is performed at
+    grid points only; no interpolation is used.
+
+    :param CoordSystem: Name of the coordinate system used to specialize axis-line selection and
+                        wrapper generation (e.g., Cartesian, Spherical, Cylindrical, SymTP, Wedge,
+                        Spherical_Ring).
+    :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    TBD
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    fam = bhah_family_from_coord(CoordSystem)
+    axis_configs = bhah_axis_configs()
 
     y_lines = axis_configs["y"][fam]
     z_lines = axis_configs["z"][fam]
 
-    def _count_expr(lines: List[Dict[str, Any]]) -> str:
-        # Map each index name to the interior count symbol used in C.
-        # keys:   "i0","i1","i2" (grid indices)
-        # values: "N0int","N1int","N2int" (C locals representing interior sizes)
-        counts = {"i0": "N0int", "i1": "N1int", "i2": "N2int"}
-        # For each LINE_SPEC, the number of points equals the interior length
-        # of the varying dimension; sum across all lines to get the max buffer size.
-        terms = [counts[line["vary"]] for line in lines]
-        return " + ".join(terms) if terms else "0"
+    y_count_expr = count_expr(y_lines)
+    z_count_expr = count_expr(z_lines)
 
-    y_count_expr = _count_expr(y_lines)
-    z_count_expr = _count_expr(z_lines)
-
-    def _gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
-        if not lines:
-            return "(void)xx;  // no points for this axis/family\n"
-
-        # coord_idx selects the physical axis to store in data_point_1d_struct.coord:
-        #   "y" -> xCart[1], "z" -> xCart[2]
-        coord_idx = "1" if axis_char == "y" else "2"
-
-        # Names of the C arrays/counters we fill for each axis
-        arr = "data_points_y" if axis_char == "y" else "data_points_z"
-        cnt = "count_y" if axis_char == "y" else "count_z"
-
-        # Map Python-side index labels to dimension numbers used in params->Nxx_plus_2NGHOSTS{d}
-        # i0 -> dim 0, i1 -> dim 1, i2 -> dim 2
-        dim_index = {"i0": "0", "i1": "1", "i2": "2"}
-
-        blocks = []
-        for line in lines:
-            vary = line["vary"]  # e.g., "i0"
-            vary_dim = dim_index[vary]  # e.g., "0"
-            fixed = line["fixed"]  # dict like {"i1":"i1_mid","i2":"i2_q1"}
-            blocks.append(
-                "\n".join(
-                    [
-                        # loop bounds use the correct dimension number from vary_dim
-                        f"for (int {vary} = NGHOSTS; {vary} < params->Nxx_plus_2NGHOSTS{vary_dim} - NGHOSTS; {vary}++) {{",
-                        *(
-                            # For each non-varying index, bind that index to the named constant
-                            f"  const int {i} = {fixed[i]};"
-                            for i in ("i0", "i1", "i2")
-                            if i != vary
-                        ),
-                        "  const int idx3 = IDX3P(params, i0, i1, i2);",
-                        "  REAL xCart[3], xOrig[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };",
-                        "  xx_to_Cart(params, xOrig, xCart);",
-                        # Save the physical coordinate (y or z) and the flat 3D index
-                        f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
-                        f"  {arr}[{cnt}].idx3  = idx3;",
-                        f"  {cnt}++;",
-                        f"}} // END LOOP over {vary}",
-                    ]
-                )
-            )
-        return "\n".join(blocks) + "\n"
-
-    fill_y = _gen_fill("y", y_lines)
-    fill_z = _gen_fill("z", z_lines)
+    fill_y = gen_fill("y", y_lines)
+    fill_z = gen_fill("z", z_lines)
 
     prefunc = r"""
 // Data point for sorting by physical axis coordinate
