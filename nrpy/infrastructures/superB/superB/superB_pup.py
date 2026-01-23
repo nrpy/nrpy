@@ -216,8 +216,6 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             f"gridfuncs.{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
             "Nxx_plus_2NGHOSTS_tot);\n"
         )
-    # In superB, allocate separate memory for diagnostic_output_gfs.
-    prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
     initialize_yn_and_non_yn_gfs_to_nan(&commondata, &params, &gridfuncs);
   }"""

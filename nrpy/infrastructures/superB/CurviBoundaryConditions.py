@@ -342,7 +342,7 @@ def CurviBoundaryConditions_register_C_functions(
     BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
 
     # Register C function to apply boundary conditions to inner-only boundary points for specific gfs.
-    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_gfs()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only_specific_gfs.register_CFunction_apply_bcs_inner_only_specific_gfs()
 
     # Register C function to apply boundary conditions to nonlocal inner-only boundary points.
     register_CFunction_apply_bcs_inner_only_nonlocal()

@@ -25,11 +25,12 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_nrpyelliptic_conformally_flat"
+enable_simd_intrinsics = True
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
 log10_residual_tolerance = -15.8  # Set tolerance for log10(residual) to stop relaxation
-default_diagnostics_output_every = 100
+default_diagnostics_output_every = 8e-2
 default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
@@ -166,10 +167,21 @@ superB.numerical_grids.register_CFunctions(
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-superB.nrpyelliptic.diagnostics.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
+superB.diagnostics.diagnostics.register_all_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
 )
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False
+)
+superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest(CoordSystem)
+BHaH.nrpyelliptic.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
+
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -179,7 +191,6 @@ if enable_rfm_precompute:
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
@@ -187,13 +198,8 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd_intrinsics=enable_simd_intrinsics,
     OMP_collapse=OMP_collapse,
-)
-
-# Generate diagnostics functions
-superB.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
-    CoordSystem=CoordSystem
 )
 
 # Register function to check for stop conditions
@@ -310,6 +316,11 @@ if initial_data_type == "axisymmetric":
         ]:
             par.adjust_CodeParam_default(param, value)
 
+
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+)
+
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -365,7 +376,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_rfm_precompute=True,
 )
 
 if enable_simd:
