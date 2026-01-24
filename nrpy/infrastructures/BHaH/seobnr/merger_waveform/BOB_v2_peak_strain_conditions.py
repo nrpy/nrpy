@@ -13,7 +13,7 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.BOB_v2_waveform_quantities as BOB_v2_wf
+import nrpy.equations.seobnr.BOB_v2_waveform_quantities_kankani_etal as BOB_v2_wf
 import nrpy.helpers.parallel_codegen as pcg
 
 
@@ -59,9 +59,10 @@ using a root finder.
 """
     cfunc_type = "int"
     name = "BOB_v2_peak_strain_conditions"
-    params = (
-        "const gsl_vector *restrict x , void *restrict params , gsl_vector *restrict f"
-    )
+    #params = (
+    #    "const gsl_vector *restrict x , void *restrict params , gsl_vector *restrict f"
+    #)
+    params = ("double t_val, void *restrict params")
     body = """
 const REAL m1 = ((commondata_struct *restrict) params)->m1;
 const REAL m2 = ((commondata_struct *restrict) params)->m2;
@@ -70,8 +71,12 @@ const REAL chi2 = ((commondata_struct *restrict) params)->chi2;
 const REAL t_0 = ((commondata_struct *restrict) params)->t_attach;
 const REAL omega_qnm = ((commondata_struct *restrict) params)->omega_qnm;
 const REAL tau_qnm = ((commondata_struct *restrict) params)->tau_qnm;
-const REAL t_p = gsl_vector_get(x , 0);
 const REAL Omega_0 = gsl_vector_get(x , 1);
+const REAL Mf = ((commondata_struct *restrict) params)->Mf;
+const REAL a_f = ((commondata_struct *restrict) params)->a_f;
+
+const REAL t_p = 0.0;
+const REAL t = t_val;
 """
     wf = BOB_v2_wf.BOB_v2_waveform_quantities()
     body += ccg.c_codegen(

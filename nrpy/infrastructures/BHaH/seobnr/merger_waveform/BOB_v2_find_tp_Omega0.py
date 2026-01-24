@@ -63,6 +63,8 @@ const REAL chi2 = commondata->chi2;
 const REAL t_0 = commondata->t_attach;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
+const REAL Mf = commondata->Mf;
+const REAL chif = commondata->chif;
 """
     body += initial_guess_code
     body += """

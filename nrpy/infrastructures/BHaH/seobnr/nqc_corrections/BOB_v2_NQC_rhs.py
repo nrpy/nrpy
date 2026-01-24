@@ -13,7 +13,7 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.BOB_v2_waveform_quantities as BOB_wf
+import nrpy.equations.seobnr.BOB_v2_waveform_quantities_kankani_etal as BOB_wf
 import nrpy.helpers.parallel_codegen as pcg
 
 
@@ -40,7 +40,7 @@ def register_CFunction_BOB_v2_NQC_rhs() -> Union[None, pcg.NRPyEnv_type]:
                 wf.wdot_t_attach,
             ],
             [
-                "const REAL h_t_attach",
+                "const COMPLEX h_t_attach",
                 "const REAL hdot_t_attach",
                 "const REAL hddot_t_attach",
                 "const REAL w_t_attach",
@@ -77,14 +77,17 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-const REAL t_0 = commondata->t_attach;
+const REAL M_f = commondata->M_f;
+const REAL a_f = commondata->a_f;
 const REAL t_p = commondata->t_p_BOB;
-const REAL Omega_0 = commondata->Omega_0_BOB;
+const REAL attachment_point = commondata->t_attach;
+printf("t_attach = %f\\n", attachment_point);
+printf("t_p = %f\\n", t_p);
 //compute
 """
     body += BOB_code
     body += """
-amps[0] = creal(h_t_attach);
+amps[0] = cabs(h_t_attach);
 amps[1] = creal(hdot_t_attach);
 amps[2] = creal(hddot_t_attach);
 omegas[0] = creal(w_t_attach);

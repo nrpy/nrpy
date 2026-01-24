@@ -5,7 +5,7 @@ Authors: Siddharth Mahesh
 sm0193 at mix dot wvu dot edu
 Zachariah B. Etienne
 zachetie at gmail *dot com
-Anuj A. Kankani
+Anuj Kankani
 aak00009 at mix dot wvu dot edu
 
 The Backwards-One Body (BOB) formalism is a first principles merger-ringdown model that
@@ -55,11 +55,20 @@ class BOB_v2_waveform_quantities:
 
         :return None:
         """
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t) = sp.symbols(
-            "m1 m2 chi1 chi2 omega_qnm tau_qnm t_attach t_p t", real=True
+        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, attachment_point, t_p, t) = sp.symbols(
+            "m1 m2 chi1 chi2 omega_qnm tau_qnm attachment_point t_p t", real=True
         )
 
-        (Mf, chif) = sp.symbols("Mf chif", real=True)
+        (M_f, a_f) = sp.symbols("M_f a_f", real=True)
+        chif = a_f / M_f
+        
+        # Binary parameters and QNM parameters
+        (m1, m2, chi1, chi2, omega_qnm, tau_qnm) = sp.symbols(
+            "m1 m2 chi1 chi2 omega_qnm tau_qnm", real=True
+        )
+        # NQC/attachment and BOB internal parameters
+        (t_0, t_p, Omega_0, t) = sp.symbols("t_0 t_p Omega_0 t", real=True)
+
         # NQC matching parameters
         M = m1 + m2
         nu = m1 * m2 / M**2
@@ -132,7 +141,7 @@ class BOB_v2_waveform_quantities:
         A = f2r(0.33568227)
         B = f2r(0.03450997)
         C = f2r(-0.18763176)
-        Omega0 = A * Mf + B * chif + C
+        Omega_0 = A * M_f + B * chif + C
 
         # BOB computation begins here
         # We build BOB for the news according to equation (1) for the amplitude and (13) for the phase in https://www.arxiv.org/abs/2510.25012
@@ -140,8 +149,8 @@ class BOB_v2_waveform_quantities:
         T = (t - t_p) / tau_qnm
 
         # Eq. (10) and (11) in https://www.arxiv.org/abs/2510.25012 with t_0 = -infty
-        Omega_minus = Omega_QNM**2 - Omega0**2
-        Omega_plus = Omega_QNM**2 + Omega0**2
+        Omega_minus = Omega_QNM**2 - Omega_0**2
+        Omega_plus = Omega_QNM**2 + Omega_0**2
         Omega_orb = sp.sqrt(
             Omega_minus * sp.tanh(T) / sp.Integer(2) + Omega_plus / sp.Integer(2)
         )
@@ -152,13 +161,13 @@ class BOB_v2_waveform_quantities:
         Omega_minus_Q = (
             Omega_QNM - Omega_orb
         )  # equivalent to |Omega_orb - Omega_QNM| since Omega_orb < Omega_QNM
-        Omega_minus_0 = Omega_orb - Omega0
+        Omega_minus_0 = Omega_orb - Omega_0
         outer = tau_qnm / 2
         inner1 = sp.log((Omega_orb + Omega_QNM) / (Omega_minus_Q))
-        inner2 = sp.log((Omega_orb + Omega0) / (Omega_minus_0))
-        Phi_orb = outer * (Omega_QNM * inner1 - Omega0 * inner2)
-        omega_news = -2 * Omega_orb
-        phi_news = -2 * Phi_orb
+        inner2 = sp.log((Omega_orb + Omega_0) / (Omega_minus_0))
+        Phi_orb = outer * (Omega_QNM * inner1 - Omega_0 * inner2)
+        omega_news = 2 * Omega_orb
+        phi_news = 2 * Phi_orb
 
         # Going from news to strain
         # The BOB strain is given as
@@ -185,46 +194,23 @@ class BOB_v2_waveform_quantities:
         # Since the merger and NQC handling need amplitude and frequency
         # we use the below two identities
         # amp(z) = sqrt(z * zbar)
+        
         strain_amplitude = sp.sqrt(H * Hbar)
+        # This is kept as a class vairable because it is used in BOB_v2_setup_peak_attachment to determine the attachment point
+        self.strain_amp_deriv = sp.diff(strain_amplitude, t)
+        strain_amp_dderiv = sp.diff(strain_amplitude,t,2)
         # frequency(z*exp(i * phi)) = phidot -i * (zbar * zdot - zbardot * z) / (2 * z * zbar)
         strain_frequency = omega_news - sp.I * (
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
-
-        self.h_complex = H * sp.exp(sp.I * phi_news)
-
-        # BOB strain peak values will not match the NR values
-        # Therefore we calculate the new BOB strain peak values and use those for NQCs
-        # Ask Sid for more
-
-        # Note:
-        # For initial guesses,
-        # we can use the closed-form solutions for N = 0
-        # t_p_guess = t_attach + tau_qnm * log(Omega_0/Omega_qnm)
-        # Omega_0_guess = omega22NR/2
-        # This guess is not perfect, but we only need a reasonable value for an initial guess, which this provides.
-
-        # Note 2: the NQC corrections uses
-        # the positive strain frequency convention.
-        # Since the BOB strain frequency is, by definition, negative.
-        # Therefore, we add a minus sign to wdot_t_attach
-        # for consistency.
-
-        # Note 3:
-        # We choose to force hdot_t_attach = 0 to help with attachment to the inspiral in the existing nrpy infrastructure.
-
-        # Note 4:
-        # We set the t_p_guess = t_attach purposely since we do not need to ensure continuity at the NR strain peak
-
-        self.t_p_condition = sp.diff(strain_amplitude, t).subs(t, t_attach)
-        self.t_p_guess = t_attach
-        self.h_t_attach = strain_amplitude.subs(t, t_attach)
-
-        self.hdot_t_attach = sp.sympify(0)
-        hddot = sp.diff(sp.diff(strain_amplitude, t), t)
-        self.hddot_t_attach = hddot.subs(t, t_attach)
-        self.w_t_attach = strain_frequency.subs(t, t_attach)
-        self.wdot_t_attach = -sp.diff(strain_frequency, t).subs(t, t_attach)
+        strain_freq_deriv = sp.diff(strain_frequency, t)
+        self.h_complex = H * sp.exp(-sp.I * phi_news)
+        
+        self.h_t_attach = self.h_complex.subs(t,attachment_point)
+        self.hdot_t_attach = self.strain_amp_deriv.subs(t,attachment_point)
+        self.hddot_t_attach = strain_amp_dderiv.subs(t,attachment_point)
+        self.w_t_attach = strain_frequency.subs(t,attachment_point)
+        self.wdot_t_attach = strain_freq_deriv.subs(t,attachment_point)
 
 
 if __name__ == "__main__":
