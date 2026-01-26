@@ -1731,7 +1731,7 @@ def output_timestepping_ci(
     if nrpyelliptic_project:
         file_output_str += r"""
                 // Execute volume-integration recipe for this chare and contribute results
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID);"""
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);"""
 
     file_output_str += r"""
               }
@@ -2053,7 +2053,7 @@ def output_timestepping_ci(
     entry void diagnostics_ckio(Ck::IO::Session token, const int which_diagnostics_part) {
       serial {
         const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-        if (which_diagnostics_part == DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID || which_diagnostics_part == DIAGNOSTICS_VOLUME_WRITE) {
+        if (which_diagnostics_part == DIAGNOSTICS_VOLUME) {
           // Compute local volume-integral contributions and participate in a global reduction
           contribute_localsums_for_volume();
         } else {

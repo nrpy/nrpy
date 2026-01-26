@@ -59,8 +59,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         when the corresponding diagnostics phase is invoked.
     :param enable_interp_diagnostics: If True, include a call to diagnostics_interp(...)
         when the corresponding diagnostics phase is invoked.
-    :param enable_volume_integration_diagnostics: If True, include a call to
-        diagnostics_volume_integration(...) when the corresponding diagnostics phase is invoked.
     :param enable_free_auxevol: Reserved for future use. Intended to control whether MoL
         scratch arrays are freed before diagnostics and restored afterward; currently
         ignored by the generated code.
@@ -149,18 +147,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         body += r"""
       // Nearest-point diagnostics at xy and yz planes (2D).
       diagnostics_nearest(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, token, which_diagnostics_part);"""
-
-    body += r"""
-      break;
-    }
-
-    case DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID:
-    case DIAGNOSTICS_VOLUME_WRITE: {"""
-
-    if enable_volume_integration_diagnostics:
-        body += r"""
-      // Volume-integration diagnostics.
-      //diagnostics_volume_integration(commondata, griddata, griddata_chare, gridfuncs_diags, chare_index, which_diagnostics_part);"""
 
     body += r"""
       break;
