@@ -235,7 +235,7 @@ class GRHD_Equations:
         S = self.S
         u4U = self.u4U
 
-        # Compute rho_star:
+        # Compute S_star:
         self.S_star = alpha * e6phi * S * u4U[0]
 
     def compute_tau_tilde(self) -> None:
@@ -371,7 +371,7 @@ class GRHD_Equations:
         self.tau_source_term *= alpha * e6phi
 
     def compute_all_connection_terms(self) -> None:
-        """Source terms from connection coefficients, for density, electron fraction, and energy equations."""
+        """Source terms from connection coefficients for density, electron fraction, entropy, and energy equations."""
         self.rho_star_connection_term = sp.sympify(0)
         self.Ye_star_connection_term = sp.sympify(0)
         self.S_star_connection_term = sp.sympify(0)

@@ -1,7 +1,7 @@
 """
 Register necessary gridfunctions to BH@H infrastructure, for GRHD evolution using GRoovy.
 
-Consildated into separate python file for simplicity.
+Consolidated into separate python file for simplicity.
 
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com

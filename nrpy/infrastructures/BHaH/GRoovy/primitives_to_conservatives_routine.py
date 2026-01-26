@@ -35,8 +35,8 @@ def register_CFunction_primitives_to_conservatives_routine(
     :param enable_intrinsics: Whether to enable SIMD.
     :param OMP_collapse: Level of OpenMP loop collapsing.
     :param enable_GoldenKernels: Boolean to enable Golden Kernels.
-    :param evolving_temperature: If True, register variables for temperature and electron fraction, for evolution with a tabulated equation of state.
-    :param evolving_entropy: If True, register variables for entropy evolution.
+    :param evolving_temperature: If True, assume temperature and electron fraction are evolved primitives and also compute the corresponding densitized Ye_star.
+    :param evolving_entropy: If True, assume entropy is an evolved primitive and also compute the corresponding densitized S_star.
 
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
     """
