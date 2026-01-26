@@ -502,9 +502,9 @@ class Timestepping : public CBase_Timestepping {
     void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
     if nrpyelliptic_project:
         file_output_str += r"""
-    void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
-    void send_wavespeed_at_outer_boundary(const int grid);
-    void contribute_localsums_for_volume();"""
+    void send_wavespeed_at_outer_boundary(const int grid);"""
+    file_output_str += r"""
+    void contribute_localsums_for_diagnostic_volume_integ();"""
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]);"""
@@ -1197,14 +1197,6 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 
     if nrpyelliptic_project:
         file_output_str += r"""
-void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residualH[2]) {
-  std::vector<double> outdoubles(2);
-  outdoubles[0] = localsums_for_residualH[0];
-  outdoubles[1] = localsums_for_residualH[1];
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_residualH(NULL), thisProxy);
-  contribute(outdoubles, CkReduction::sum_double, cb);
-}
-
 void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
   const int Nchare0 = commondata.Nchare0;
   const int Nchare1 = commondata.Nchare1;
@@ -1234,6 +1226,34 @@ void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
   }
 }
 """
+
+    file_output_str += r"""
+void Timestepping::contribute_localsums_for_diagnostic_volume_integ() {
+  // Build the canonical recipe list using the shared builder.
+  diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES];
+  const int NUM_RECIPES = diags_integration_build_default_recipes(recipes);
+
+  // Compute local contributions for each recipe and flatten into double vector
+  std::vector<double> outdoubles;
+  for (int r = 0; r < NUM_RECIPES; r++) {
+    const int prefix = recipes[r].num_rules;
+    REAL selected_volume = 0.0;
+    REAL integrals[DIAGS_INTEGRATION_MAX_INTEGRANDS] = {0.0};
+
+    diagnostics_integration_apply_rules(&commondata, griddata_chare, (const REAL *restrict *)diagnostic_gfs, recipes[r].rules, prefix,
+                      recipes[r].integrands, recipes[r].num_integrands, &selected_volume, integrals);
+
+    // Push volume then integrand integrals in order
+    outdoubles.push_back((double)selected_volume);
+    for (int s = 0; s < recipes[r].num_integrands; s++)
+      outdoubles.push_back((double)integrals[s]);
+  }
+
+  CkCallback cb(CkIndex_Timestepping::report_sums_for_volume(NULL), thisProxy[CkArrayIndex3D(0,0,0)]);
+  contribute(outdoubles, CkReduction::sum_double, cb);
+}
+"""
+
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""
 void Timestepping::contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]) {
@@ -1437,32 +1457,6 @@ void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const in
 }
 """
 
-    file_output_str += r"""
-void Timestepping::contribute_localsums_for_volume() {
-  // Build the canonical recipe list using the shared builder.
-  diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES];
-  const int NUM_RECIPES = diags_integration_build_default_recipes(recipes);
-
-  // Compute local contributions for each recipe and flatten into double vector
-  std::vector<double> outdoubles;
-  for (int r = 0; r < NUM_RECIPES; r++) {
-    const int prefix = recipes[r].num_rules;
-    REAL selected_volume = 0.0;
-    REAL integrals[DIAGS_INTEGRATION_MAX_INTEGRANDS] = {0.0};
-
-    diagnostics_integration_apply_rules(&commondata, griddata_chare, (const REAL *restrict *)diagnostic_gfs, recipes[r].rules, prefix,
-                      recipes[r].integrands, recipes[r].num_integrands, &selected_volume, integrals);
-
-    // Push volume then integrand integrals in order
-    outdoubles.push_back((double)selected_volume);
-    for (int s = 0; s < recipes[r].num_integrands; s++)
-      outdoubles.push_back((double)integrals[s]);
-  }
-
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_volume(NULL), thisProxy[CkArrayIndex3D(0,0,0)]);
-  contribute(outdoubles, CkReduction::sum_double, cb);
-}
-"""
     file_output_str += r"""
 #include "timestepping.def.h"
 """
@@ -2055,7 +2049,7 @@ def output_timestepping_ci(
         const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
         if (which_diagnostics_part == DIAGNOSTICS_VOLUME) {
           // Compute local volume-integral contributions and participate in a global reduction
-          contribute_localsums_for_volume();
+          contribute_localsums_for_diagnostic_volume_integ();
         } else {
           diagnostics(&commondata, griddata, griddata_chare, (const REAL *restrict *)diagnostic_gfs, thisIndex_arr, which_grid_diagnostics, token, which_diagnostics_part);
         }
@@ -2076,36 +2070,11 @@ def output_timestepping_ci(
       enable_psi4_diagnostics,
       nrpyelliptic_project,
     )
+
     if nrpyelliptic_project:
         file_output_str += r"""
-    //entry void continue_after_residual_H_done();
-    entry void report_sums_for_residualH(CkReductionMsg *msg) {
-      serial {
-        int reducedArrSize=msg->getSize()/sizeof(double);
-        CkAssert(reducedArrSize == 2);
-        double *output=(double *)msg->getData();
-        // Update residual to be used in stop condition
-        commondata.log10_current_residual = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
-        // Output l2-norm of Hamiltonian constraint violation to file
-        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-          char filename[256];
-          sprintf(filename, "residual_l2_norm.txt");
-          const int nn = commondata.nn;
-          const REAL time = commondata.time;
-          const REAL residual_H =  commondata.log10_current_residual ;
-          FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
-          if (!outfile) {
-            fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-            exit(1);
-          }
-          fprintf(outfile, "%6d %10.4e %.17e\n", nn, time, residual_H);
-          fclose(outfile);
-        }
-        delete msg;
-        //thisProxy[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].continue_after_residual_H_done();
-      }
-    }
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
+
     if enable_L2norm_BSSN_constraints_diagnostics:
         file_output_str += r"""
     entry void report_sums_for_L2norm_BSSN_constraints(CkReductionMsg *msg) {
