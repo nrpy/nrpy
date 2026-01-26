@@ -411,8 +411,8 @@ if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
 
 
 def output_timestepping_h(
-    project_dir: str,
-    enable_residual_diagnostics: bool = False,
+  project_dir: str,
+  nrpyelliptic_project: bool = False,
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
@@ -422,7 +422,8 @@ def output_timestepping_h(
     Generate timestepping.h.
 
     :param project_dir: Directory where the project C code is output.
-    :param enable_residual_diagnostics: Flag to enable residual diagnostics, default is False.
+    :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
+                    diagnostics and NRPyElliptic-specific behavior).
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
@@ -499,7 +500,7 @@ class Timestepping : public CBase_Timestepping {
     void send_nonlocalinnerbc_data(const int type_gfs, const int grid);
     void set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid);
     void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         file_output_str += r"""
     void contribute_localsums_for_residualH(REAL localsums_for_residualH[2]);
     void send_wavespeed_at_outer_boundary(const int grid);
@@ -655,7 +656,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     MoL_method: str,
     outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
-    enable_residual_diagnostics: bool = False,
+    nrpyelliptic_project: bool = False,
 ) -> str:
     """
     Generate entry method declarations based on grid function types.
@@ -664,7 +665,8 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
-    :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
+    :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
+                    diagnostics and NRPyElliptic-specific behavior).
     :return: A string containing entry method declarations separated by newlines.
     :raises ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
@@ -704,7 +706,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
 
     # If anything other than NRPy elliptic, in NRPy elliptic initial data is set up differently
-    if not enable_residual_diagnostics:
+    if not nrpyelliptic_project:
         inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART1")
         inner_bc_synching_gfs.append("Y_N_GFS_INITIALDATA_PART2")
 
@@ -728,7 +730,7 @@ def output_timestepping_cpp(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
     initialize_constant_auxevol: bool = False,
-    enable_residual_diagnostics: bool = False,
+    nrpyelliptic_project: bool = False,
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
@@ -744,7 +746,8 @@ def output_timestepping_cpp(
     :param enable_rfm_precompute: Enable rfm precomputation, default is False.
     :param enable_CurviBCs: Enable CurviBCs, default is False.
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
-    :param enable_residual_diagnostics: Enable residual diagnostics, default is False.
+    :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
+                    diagnostics and NRPyElliptic-specific behavior).
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
@@ -1192,7 +1195,7 @@ void Timestepping::process_ghost(const int type_ghost, const int type_gfs, const
 }
 """
 
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         file_output_str += r"""
 void Timestepping::contribute_localsums_for_residualH(REAL localsums_for_residualH[2]) {
   std::vector<double> outdoubles(2);
@@ -1478,7 +1481,7 @@ def output_timestepping_ci(
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
-    enable_residual_diagnostics: bool = False,
+    nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
@@ -1494,7 +1497,8 @@ def output_timestepping_ci(
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
+    :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
+                    diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
@@ -1580,7 +1584,7 @@ def output_timestepping_ci(
       }"""
 
     # If anything other than NRPy elliptic
-    if not enable_residual_diagnostics:
+    if not nrpyelliptic_project:
         file_output_str += """
       serial {
         initial_data(&commondata, griddata_chare, INITIALDATA_BIN_ONE);
@@ -1689,7 +1693,7 @@ def output_timestepping_ci(
           time_start = commondata.time;
         }
       """
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         file_output_str += r"""
         //when continue_after_residual_H_done() { }
         """
@@ -1724,7 +1728,7 @@ def output_timestepping_ci(
                 // Diagnostics center
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);"""
 
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         file_output_str += r"""
                 // Execute volume-integration recipe for this chare and contribute results
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME_EXECUTE_RECIPE_FOR_CHARE_GRID);"""
@@ -1825,8 +1829,8 @@ def output_timestepping_ci(
           }
         }
         """
-    if enable_residual_diagnostics:
-        filename_format = "commondata.nn"
+    if nrpyelliptic_project:
+      filename_format = "commondata.nn"
     else:
         filename_format = "commondata.convergence_factor, commondata.time"
 
@@ -2066,13 +2070,13 @@ def output_timestepping_ci(
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
-        Butcher_dict,
-        MoL_method,
-        outer_bcs_type,
-        enable_psi4_diagnostics,
-        enable_residual_diagnostics,
+      Butcher_dict,
+      MoL_method,
+      outer_bcs_type,
+      enable_psi4_diagnostics,
+      nrpyelliptic_project,
     )
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         file_output_str += r"""
     //entry void continue_after_residual_H_done();
     entry void report_sums_for_residualH(CkReductionMsg *msg) {
@@ -2256,7 +2260,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
     enable_psi4_diagnostics: bool = False,
-    enable_residual_diagnostics: bool = False,
+    nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
@@ -2272,20 +2276,21 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
-    :param enable_residual_diagnostics: Whether or not to enable residual diagnostics.
+    :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
+                    diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
-    if enable_residual_diagnostics:
+    if nrpyelliptic_project:
         _wavespeed_at_outer_boundary = par.register_CodeParameter(
             "REAL", __name__, "wavespeed_at_outer_boundary", 0.0, commondata=False
         )
 
     output_timestepping_h(
-        project_dir=project_dir,
-        enable_residual_diagnostics=enable_residual_diagnostics,
+      project_dir=project_dir,
+      nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
@@ -2302,7 +2307,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_CurviBCs=True,
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
-        enable_residual_diagnostics=enable_residual_diagnostics,
+      nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
@@ -2317,7 +2322,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         outer_bcs_type=outer_bcs_type,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
-        enable_residual_diagnostics=enable_residual_diagnostics,
+      nrpyelliptic_project=nrpyelliptic_project,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,

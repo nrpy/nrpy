@@ -364,7 +364,7 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_psi4_diagnostics=False,
-    enable_residual_diagnostics=True,
+    nrpyelliptic_project=True,
     post_non_y_n_auxevol_mallocs="auxevol_gfs_set_to_constant(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
