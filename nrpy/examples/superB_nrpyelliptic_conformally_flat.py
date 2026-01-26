@@ -8,6 +8,7 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 Note: This is the superB version.
 """
 
+import argparse
 import os
 
 #########################################################
@@ -21,15 +22,46 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
 
+parser = argparse.ArgumentParser(
+    description="NRPyElliptic Solver for Conformally Flat BBH initial data"
+)
+parser.add_argument(
+    "--floating_point_precision",
+    type=str,
+    help="Floating point precision (e.g. float, double).",
+    default="double",
+)
+args = parser.parse_args()
+
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
+fp_type = args.floating_point_precision.lower()
 project_name = "superB_nrpyelliptic_conformally_flat"
 enable_simd_intrinsics = True
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
-log10_residual_tolerance = -15.8  # Set tolerance for log10(residual) to stop relaxation
+
+def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
+    """
+    Determine the residual tolerance based on the fp_precision.
+
+    :param fp_type_str: string representing the floating point type.
+    :return: float of the residual tolerance based on fp_type.
+    :raises ValueError: If the input fp_type_str branch is not defined.
+    """
+    res: float = -1.0
+    if fp_type_str == "double":
+        res = -11.2
+    elif fp_type_str == "float":
+        res = -6.5
+    else:
+        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+    return res
+
+# Set tolerance for log10(residual) to stop relaxation
+log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
 default_diagnostics_output_every = 8e-2
 default_checkpoint_every = 50.0
 eta_damping = 11.0
