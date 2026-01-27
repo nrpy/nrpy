@@ -411,8 +411,8 @@ if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
 
 
 def output_timestepping_h(
-  project_dir: str,
-  nrpyelliptic_project: bool = False,
+    project_dir: str,
+    nrpyelliptic_project: bool = False,
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_L2norm_BSSN_constraints_diagnostics: bool = False,
@@ -453,6 +453,44 @@ struct sectionBcastMsg : public CkMcastBaseMsg, public CMessage_sectionBcastMsg 
   }
 };
 """
+
+    if nrpyelliptic_project:
+        file_output_str += r"""
+/**
+ * @brief Build the default set of recipes used by diagnostics_volume_integration and reductions.
+ *
+ * @param[out] recipes Array of length DIAGS_INTEGRATION_MAX_RECIPES to populate.
+ * @return Number of recipes written into @p recipes.
+ *
+ * Note: Keep this function self-contained so callers in different translation units
+ * can construct the same canonical recipe book without duplicating code.
+ */
+static inline int diags_integration_build_default_recipes(diags_integration_recipe_t recipes[DIAGS_INTEGRATION_MAX_RECIPES]) {
+  diags_integration_initialize_recipes(recipes);
+  int NUM_RECIPES = 0;
+
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+    recipes[NUM_RECIPES].name = "whole_domain";
+    recipes[NUM_RECIPES].num_rules = 0;
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 1;
+    NUM_RECIPES++;
+  }
+
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+    const REAL R_outer = 80;
+    recipes[NUM_RECIPES].name = "sphere_R_80";
+    recipes[NUM_RECIPES].num_rules = 1;
+    recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 1;
+    NUM_RECIPES++;
+  }
+
+  return NUM_RECIPES;
+}
+"""
+
     file_output_str += r"""
 class Timestepping : public CBase_Timestepping {
   Timestepping_SDAG_CODE
@@ -1824,7 +1862,7 @@ def output_timestepping_ci(
         }
         """
     if nrpyelliptic_project:
-      filename_format = "commondata.nn"
+        filename_format = "commondata.nn"
     else:
         filename_format = "commondata.convergence_factor, commondata.time"
 
@@ -2064,11 +2102,11 @@ def output_timestepping_ci(
     entry void continue_timestepping();
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
-      Butcher_dict,
-      MoL_method,
-      outer_bcs_type,
-      enable_psi4_diagnostics,
-      nrpyelliptic_project,
+        Butcher_dict,
+        MoL_method,
+        outer_bcs_type,
+        enable_psi4_diagnostics,
+        nrpyelliptic_project,
     )
 
     if nrpyelliptic_project:
@@ -2258,8 +2296,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         )
 
     output_timestepping_h(
-      project_dir=project_dir,
-      nrpyelliptic_project=nrpyelliptic_project,
+        project_dir=project_dir,
+        nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
@@ -2276,7 +2314,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_CurviBCs=True,
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
-      nrpyelliptic_project=nrpyelliptic_project,
+        nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
@@ -2291,7 +2329,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         outer_bcs_type=outer_bcs_type,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
-      nrpyelliptic_project=nrpyelliptic_project,
+        nrpyelliptic_project=nrpyelliptic_project,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
