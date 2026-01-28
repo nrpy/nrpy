@@ -193,7 +193,6 @@ BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set
 superB.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest(
     CoordSystem
 )
-BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
