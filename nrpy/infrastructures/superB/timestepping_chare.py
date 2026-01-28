@@ -415,7 +415,6 @@ def output_timestepping_h(
     nrpyelliptic_project: bool = False,
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -426,7 +425,6 @@ def output_timestepping_h(
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
@@ -454,8 +452,7 @@ struct sectionBcastMsg : public CkMcastBaseMsg, public CMessage_sectionBcastMsg 
 };
 """
 
-    if nrpyelliptic_project:
-        file_output_str += r"""
+    file_output_str += r"""
 /**
  * @brief Build the default set of recipes used by diagnostics_volume_integration and reductions.
  *
@@ -469,24 +466,63 @@ static inline int diags_integration_build_default_recipes(diags_integration_reci
   diags_integration_initialize_recipes(recipes);
   int NUM_RECIPES = 0;
 
-  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {"""
+
+    if nrpyelliptic_project:
+        file_output_str += r"""
     recipes[NUM_RECIPES].name = "whole_domain";
-    recipes[NUM_RECIPES].num_rules = 0;
+    recipes[NUM_RECIPES].num_rules = 0; // No rules means the whole domain is used.
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
     recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-    recipes[NUM_RECIPES].num_integrands = 1;
+    recipes[NUM_RECIPES].num_integrands = 1;"""
+
+    else:
+        file_output_str += r"""
+    recipes[NUM_RECIPES].name = "whole_domain";
+    recipes[NUM_RECIPES].num_rules = 0; // No rules means the whole domain is used.
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+    recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 2;"""
+
+    file_output_str += r"""
     NUM_RECIPES++;
   }
 
-  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {"""
+
+    if nrpyelliptic_project:
+        file_output_str += r"""
     const REAL R_outer = 80;
     recipes[NUM_RECIPES].name = "sphere_R_80";
     recipes[NUM_RECIPES].num_rules = 1;
+
+    // Important: exclude_inside=0 implies outer is excluded.
     recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
     recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-    recipes[NUM_RECIPES].num_integrands = 1;
+    recipes[NUM_RECIPES].num_integrands = 1;"""
+
+    else:
+        file_output_str += r"""
+    const REAL R_outer = 8;
+    recipes[NUM_RECIPES].name = "sphere_R_gt_8";
+    recipes[NUM_RECIPES].num_rules = 1;
+
+    // Important: exclude_inside=0 implies outer is excluded.
+    recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 1};
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+    recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 2;"""
+
+    file_output_str += r"""
     NUM_RECIPES++;
   }
-
   return NUM_RECIPES;
 }
 """
@@ -543,9 +579,6 @@ class Timestepping : public CBase_Timestepping {
     void send_wavespeed_at_outer_boundary(const int grid);"""
     file_output_str += r"""
     void contribute_localsums_for_diagnostic_volume_integ();"""
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-    void contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]);"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
@@ -771,7 +804,6 @@ def output_timestepping_cpp(
     nrpyelliptic_project: bool = False,
     enable_psi4_diagnostics: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -788,7 +820,6 @@ def output_timestepping_cpp(
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     initial_data_desc += " "
@@ -1292,18 +1323,6 @@ void Timestepping::contribute_localsums_for_diagnostic_volume_integ() {
 }
 """
 
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-void Timestepping::contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]) {
-  std::vector<double> outdoubles(4);
-  outdoubles[0] = localsums[0];
-  outdoubles[1] = localsums[1];
-  outdoubles[2] = localsums[2];
-  outdoubles[3] = localsums[3];
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_L2norm_BSSN_constraints(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
-  contribute(outdoubles, CkReduction::sum_double, cb);
-}
-"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
 void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid) {
@@ -1515,7 +1534,6 @@ def output_timestepping_ci(
     enable_psi4_diagnostics: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -1532,7 +1550,6 @@ def output_timestepping_ci(
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
@@ -1950,19 +1967,6 @@ def output_timestepping_ci(
         }
     """
 
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-        if (write_diagnostics_this_step) {
-          serial {
-            Ck::IO::Session token;  //pass a null token
-            const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-            REAL localsums[4];
-            diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_L2NORM_BSSN_CONSTRAINTS, which_grid_diagnostics, thisIndex_arr, localsums);
-            contribute_localsums_for_L2norm_BSSN_constraints(localsums);
-          }
-        }
-        """
-
     if enable_charm_checkpointing:
         file_output_str += r"""
         // periodically checkpointing
@@ -2113,31 +2117,6 @@ def output_timestepping_ci(
         file_output_str += r"""
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
 
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-    entry void report_sums_for_L2norm_BSSN_constraints(CkReductionMsg *msg) {
-      serial {
-        int reducedArrSize = msg->getSize() / sizeof(REAL);
-        CkAssert(reducedArrSize == 4);
-        REAL *output = (REAL *)msg->getData();
-        REAL log10_H = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
-        REAL log10_M = log10(1e-16 + pow((output[2] / output[3]), 0.25)); // 1e-16 + ... avoids log10(0)
-
-        // Output l2-norm of BSSN constraints to file
-        char filename[256];
-        sprintf(filename, "l2_norm_BSSN_constraints.txt");
-        const int nn = commondata.nn;
-        const REAL time = commondata.time;
-        FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
-        if (!outfile) {
-          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-          exit(1);
-        }
-        fprintf(outfile, "%6d %10.4e %.17e %.17e\n", nn, time, log10_H, log10_M);
-        fclose(outfile);
-        delete msg;
-      }
-    }"""
     if enable_psi4_diagnostics:
         file_output_str += r"""
     entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
@@ -2237,12 +2216,15 @@ def output_timestepping_ci(
           }
 
           integration_results.num_recipe_results++;
-        }
-
+        }    """
+    if nrpyelliptic_project:
+        file_output_str += r"""
         // Update a convenience field (same as original user-edit capture)
         REAL rms_residual_r_80 = NAN;
         diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUALGF, &rms_residual_r_80);
-        commondata.log10_current_residual = log10(rms_residual_r_80);
+        commondata.log10_current_residual = log10(rms_residual_r_80);    """
+
+    file_output_str += r"""
 
         delete msg;
       }
@@ -2269,7 +2251,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     enable_psi4_diagnostics: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -2286,7 +2267,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
@@ -2300,7 +2280,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
@@ -2317,7 +2296,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         nrpyelliptic_project=nrpyelliptic_project,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
@@ -2332,7 +2310,6 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         nrpyelliptic_project=nrpyelliptic_project,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
