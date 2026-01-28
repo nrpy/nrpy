@@ -1742,10 +1742,7 @@ def output_timestepping_ci(
           time_start = commondata.time;
         }
       """
-    if nrpyelliptic_project:
-        file_output_str += r"""
-        //when continue_after_residual_H_done() { }
-        """
+
     file_output_str += r"""
         serial {
           const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
@@ -1775,10 +1772,8 @@ def output_timestepping_ci(
                 diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
 
                 // Diagnostics center
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);"""
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);
 
-    if nrpyelliptic_project:
-        file_output_str += r"""
                 // Execute volume-integration recipe for this chare and contribute results
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);"""
 
