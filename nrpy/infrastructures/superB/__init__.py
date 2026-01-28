@@ -14,4 +14,5 @@ from . import (
     simple_loop_diagnostic,
     superB,
     timestepping_chare,
+    general_relativity,
 )

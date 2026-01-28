@@ -69,7 +69,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     elif fp_type_str == "float":
         res = -6.5
     else:
-        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+        raise ValueError(f"residual tolerance not defined for {fp_type_str} precision")
     return res
 
 
