@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/BHaH_device_defines_h.py
 """
 Construct BHaH_gpu_defines from data registered to griddata_commondata, CodeParameters, and NRPyParameters.
 

@@ -57,14 +57,15 @@
 
 #define IDX4PSI4(R, l, m, r_i, Nl, Nm, Nr_i) ((r_i) + (Nr_i) * ((m) + (Nm) * ((l) + (Nl) * (R))))
 
-#define OUTPUT_0D 0
-#define OUTPUT_1D_Y 1
-#define OUTPUT_1D_Z 2
-#define OUTPUT_2D_XY 3
-#define OUTPUT_2D_YZ 4
-#define OUTPUT_PSI4 5
-#define OUTPUT_RESIDUAL 6
-#define OUTPUT_L2NORM_BSSN_CONSTRAINTS 7
+#define DIAGNOSTICS_SETUP_1D 0
+#define DIAGNOSTICS_SETUP_2D 1
+#define DIAGNOSTICS_WRITE_CENTER 2
+#define DIAGNOSTICS_WRITE_Y 3
+#define DIAGNOSTICS_WRITE_Z 4
+#define DIAGNOSTICS_WRITE_XY 5
+#define DIAGNOSTICS_WRITE_YZ 6
+#define DIAGNOSTICS_CENTER 7
+#define DIAGNOSTICS_VOLUME 8
 
 #define EAST_WEST 0
 #define NORTH_SOUTH 1
@@ -125,6 +126,12 @@ typedef struct __diagnostic_struct__ {
   int *locali1_diagnostic_2d_yz_pt;
   int *locali2_diagnostic_2d_yz_pt;
   int *offset_diagnostic_2d_yz_pt;
+  int sizeinbytes_per_pt_1d;
+  int sizeinbytes_per_pt_2d;
+  int totsizeinbytes_1d_y;
+  int totsizeinbytes_1d_z;
+  int totsizeinbytes_2d_xy;
+  int totsizeinbytes_2d_yz;
   char filename_1d_y[256];
   char filename_1d_z[256];
   char filename_2d_xy[256];

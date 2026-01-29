@@ -17,7 +17,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List
+from typing import List, cast
 
 import sympy as sp
 
@@ -68,7 +68,7 @@ def area() -> sp.Expr:
         + physgammahatDD[1][2] * h**2 * sp.sin(rfm.xx[1])
     )
     area_element = sp.sqrt(term1a * term1b - term2**2).replace(sp.sympify("xx0"), h)
-    return area_element
+    return cast(sp.Expr, area_element)
 
 
 def area2() -> sp.Expr:
@@ -104,7 +104,7 @@ def area2() -> sp.Expr:
         + Th.gammaDD[1][2]
     )
     area_element = sp.sqrt((term1a * term1b - term2**2).replace(sp.sympify("xx0"), h))
-    return area_element
+    return cast(sp.Expr, area_element)
 
 
 def compute_q2DD() -> List[List[sp.Expr]]:
@@ -162,7 +162,7 @@ def compute_q2DD() -> List[List[sp.Expr]]:
     pU_dD = ixp.zerorank2()  # Initialize a 2D array (rank-2 tensor) with all zeros
 
     # Setting derivatives of the radial coordinate (h) with respect to theta and phi
-    pU_dD[0][0] = 0  # dh/dr = 0, since h is a function of (theta, phi)
+    pU_dD[0][0] = sp.sympify(0)  # dh/dr = 0, since h is a function of (theta, phi)
     pU_dD[0][1] = h_dD[1]  # dh/dtheta = partial derivative of h with respect to theta
     pU_dD[0][2] = h_dD[2]  # dh/dphi = partial derivative of h with respect to phi
 
@@ -228,7 +228,7 @@ def area3() -> sp.Expr:
     # Returning the square root of the determinant, which represents the area element
     # Replace the placeholder variable "xx0" with the actual radius function h
     area_element = sp.sqrt(q2det.replace(sp.sympify("xx0"), sp.Symbol("hh")))
-    return area_element
+    return cast(sp.Expr, area_element)
 
 
 def spin_NewtonRaphson() -> sp.Expr:
@@ -265,7 +265,7 @@ def spin_NewtonRaphson() -> sp.Expr:
     f_of_x = f_of_x.subs({sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E})
 
     # Return the Newton-Raphson iteration formula
-    return x - f_of_x / fprime_of_x
+    return cast(sp.Expr, x - f_of_x / fprime_of_x)
 
 
 def spin_HalleysMethod() -> sp.Expr:
@@ -312,7 +312,9 @@ def spin_HalleysMethod() -> sp.Expr:
     ).simplify()
 
     # Return the Halley's iteration formula
-    return x - 2 * f_of_x * fp_of_x / (2 * fp_of_x * fp_of_x - f_of_x * fpp_of_x)
+    return cast(
+        sp.Expr, x - 2 * f_of_x * fp_of_x / (2 * fp_of_x * fp_of_x - f_of_x * fpp_of_x)
+    )
 
 
 def circumferential_arclength(direction: str) -> sp.Expr:
@@ -352,7 +354,7 @@ def circumferential_arclength(direction: str) -> sp.Expr:
     else:
         raise ValueError("Invalid direction specified. Use 'theta' or 'phi'.")
 
-    return arclength_expr
+    return cast(sp.Expr, arclength_expr)
 
 
 if __name__ == "__main__":

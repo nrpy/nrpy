@@ -54,8 +54,8 @@ perform_iterative_refinement = True
 # Command-line-tunable flags (tuned through choice of approximant, defaults to all BOBs)
 # Flag to use numerical relativity fits to evaluate Non Quasi-Circular corrections to the inspiral.
 numerical_relativity_nqc_flag = False
-# Flag to compute SEOBNRv5's phenomological fit for the merger-ringdown waveform.
-seobnv5_merger_ringdown_flag = False
+# Flag to compute SEOBNRv5's phenomenological fit for the merger-ringdown waveform.
+seobnrv5_merger_ringdown_flag = False
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -177,9 +177,6 @@ BHaH.seobnr.utils.root_finding_1d.register_CFunction_root_finding_1d()
 BHaH.seobnr.utils.root_finding_multidimensional.register_CFunction_root_finding_multidimensional()
 
 
-# register SEOBNRv5 coefficients
-BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients()
-
 # register initial condition routines
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
@@ -238,17 +235,39 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
     parser.add_argument(
         "-seobnrv5_nrpy", action="store_true", help="native SEOBNRv5 model"
     )
+    parser.add_argument(
+        "-calibration_no_spin",
+        action="store_true",
+        help="Set up par file and Hamiltonian coefficients for non-spinning calibration",
+    )
+    parser.add_argument(
+        "-calibration_spin",
+        action="store_true",
+        help="Set up par file and Hamiltonian coefficients for spin-dependent calibration",
+    )
     args = parser.parse_args()
-
+    # The SEOBNRv5 calibration process is done in two steps:
+    # 1. Calibration of the non-spinning coefficients
+    # 2. Calibration of the spin-dependent coefficients
+    # Therefore, the C code can only be generated for one of the above calibration options.
     if not args.seobnrv5_bob and not args.seobnrv5_nrnqc_bob and not args.seobnrv5_nrpy:
         print("Defaulting to seobnrv5_bob.")
         args.seobnrv5_bob = True
-    if args.seobnrv5_nrnqc_bob:
-        use_numerical_relativity_nqc_flag = True
-    if args.seobnrv5_nrpy:
-        use_numerical_relativity_nqc_flag = True
-        use_seobnrv5_merger_ringdown_flag = True
+    if args.calibration_no_spin and args.calibration_spin:
+        raise ValueError(
+            "calibration_no_spin and calibration_spin cannot both be True."
+        )
+    # register SEOBNRv5 coefficients
+    BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients(
+        args.calibration_no_spin, args.calibration_spin
+    )
 
+    if args.seobnrv5_nrnqc_bob:
+        numerical_relativity_nqc_flag = True
+    if args.seobnrv5_nrpy:
+        print("Using native SEOBNRv5 model.")
+        numerical_relativity_nqc_flag = True
+        seobnrv5_merger_ringdown_flag = True
     # Register some functions/code parameters based on input flags
     if frequency_domain_flag:
         par.register_CodeParameter(
@@ -280,16 +299,17 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
         BHaH.seobnr.nqc_corrections.BOB_aligned_spin_NQC_rhs.register_CFunction_BOB_aligned_spin_NQC_rhs()
 
     # set up merger-ringdown routines based on input flags
-    if seobnv5_merger_ringdown_flag:
+    if seobnrv5_merger_ringdown_flag:
         BHaH.seobnr.merger_waveform.SEOBNRv5_aligned_spin_merger_waveform.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform()
         BHaH.seobnr.merger_waveform.SEOBNRv5_aligned_spin_merger_waveform_from_times.register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times()
     else:
+        print("Using BOB merger-ringdown waveform.")
         BHaH.seobnr.merger_waveform.BOB_aligned_spin_waveform.register_CFunction_BOB_aligned_spin_waveform()
         BHaH.seobnr.merger_waveform.BOB_aligned_spin_waveform_from_times.register_CFunction_BOB_aligned_spin_waveform_from_times()
 
     # register IMR waveform generation routine
     BHaH.seobnr.SEOBNRv5_aligned_spin_IMR_waveform.register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
-        seobnv5_merger_ringdown_flag
+        seobnrv5_merger_ringdown_flag
     )
     pcg.do_parallel_codegen()
 #########################################################

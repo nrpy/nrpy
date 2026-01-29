@@ -1,3 +1,4 @@
+# nrpy/helpers/colorize_text.py
 """
 Colorize text output in terminal or Jupyter notebooks.
 

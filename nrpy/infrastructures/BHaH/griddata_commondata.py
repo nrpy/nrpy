@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/griddata_commondata.py
 """
 Manage registration and storage of data stored within griddata_struct and commondata_struct.
 

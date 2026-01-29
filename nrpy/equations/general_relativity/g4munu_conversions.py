@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/g4munu_conversions.py
 """
 Construct expressions for ADM or BSSN quantities in terms of the 4-metric g4DD, and g4DD/g4UU in terms of ADM/BSSN quantities.
 
@@ -5,7 +6,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, Dict, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -18,10 +19,10 @@ from nrpy.helpers.cached_functions import cached_simplify
 
 # g_{mu nu} in terms of BSSN (if inputvars=="BSSN") or ADM (if inputvars=="ADM") variables.
 def ADM_to_g4DD(
-    gammaDD: Sequence[Sequence[sp.Expr]],
-    betaU: Sequence[sp.Expr],
+    gammaDD: List[List[sp.Expr]],
+    betaU: List[sp.Expr],
     alpha: sp.Expr,
-) -> Sequence[Sequence[sp.Expr]]:
+) -> List[List[sp.Expr]]:
     """
     Convert the 3+1 decomposed ADM variables to the 4-metric g_{mu nu}.
 
@@ -57,7 +58,7 @@ def ADM_to_g4DD(
 
 def BSSN_to_g4DD(
     CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
-) -> Sequence[Sequence[sp.Expr]]:
+) -> List[List[sp.Expr]]:
     """
     Convert BSSN variables to the 4-metric g_{mu nu}.
 
@@ -80,11 +81,11 @@ def BSSN_to_g4DD(
 
 
 def ADM_to_g4UU(
-    gammaDD: Sequence[Sequence[sp.Expr]],
-    betaU: Sequence[sp.Expr],
+    gammaDD: List[List[sp.Expr]],
+    betaU: List[sp.Expr],
     alpha: sp.Expr,
-    gammaUU: Optional[Sequence[Sequence[sp.Expr]]] = None,
-) -> Sequence[Sequence[sp.Expr]]:
+    gammaUU: Optional[List[List[sp.Expr]]] = None,
+) -> List[List[sp.Expr]]:
     """
     Construct the contravariant 4-metric tensor, g^{mu nu}, using ADM variables.
 
@@ -114,7 +115,7 @@ def ADM_to_g4UU(
 
 def BSSN_to_g4UU(
     CoordSystem: str = "Cartesian", enable_rfm_precompute: bool = False
-) -> Sequence[Sequence[sp.Expr]]:
+) -> List[List[sp.Expr]]:
     """
     Convert BSSN variables to the contravariant 4-metric g^{mu nu}.
 
@@ -137,8 +138,8 @@ def BSSN_to_g4UU(
 
 # g_{mu nu} -> ADM variables
 def g4DD_to_ADM(
-    g4DD: Optional[Sequence[Sequence[sp.Expr]]] = None,
-) -> Tuple[Sequence[Sequence[sp.Expr]], sp.Expr, Sequence[sp.Expr]]:
+    g4DD: Optional[List[List[sp.Expr]]] = None,
+) -> Tuple[List[List[sp.Expr]], sp.Expr, List[sp.Expr]]:
     """
     Convert a 4-metric tensor (g_{mu nu}) to ADM variables (gamma_{ij}), (alpha), (beta^i).
 
@@ -186,10 +187,10 @@ def g4DD_to_ADM(
 
 
 def g4DD_to_BSSN(
-    g4DD: Optional[Sequence[Sequence[sp.Expr]]] = None,
+    g4DD: Optional[List[List[sp.Expr]]] = None,
     CoordSystem: str = "Cartesian",
     enable_rfm_precompute: bool = False,
-) -> Tuple[Sequence[Sequence[sp.Expr]], sp.Expr, Sequence[sp.Expr], sp.Expr]:
+) -> Tuple[List[List[sp.Expr]], sp.Expr, List[sp.Expr], sp.Expr]:
     """
     Convert a 4-metric tensor (g_{mu nu}) to BSSN variables.
 

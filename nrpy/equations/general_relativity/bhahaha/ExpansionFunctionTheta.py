@@ -26,7 +26,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List, cast
+from typing import Dict, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -133,10 +133,7 @@ class ExpansionFunctionThetaClass:
                 self.gammaDD[i][j] = 1 / W**2 * gammabarDD[i][j]
         gammabarDDdD = ixp.zerorank3()
         # IMPORTANT: partial_D_hDD[i][j][k] = h_{jk,i}, so sym12 is correct here:
-        partial_D_hDD = cast(
-            List[List[List[sp.Expr]]],
-            ixp.declarerank3("partial_D_hDD", symmetry="sym12"),
-        )
+        partial_D_hDD = ixp.declarerank3("partial_D_hDD", symmetry="sym12")
         for i in range(3):
             for j in range(3):
                 for k in range(3):
@@ -298,7 +295,9 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 Theta += self.sU[i] * self.sU[j] * self.KDD[i][j]
 
-        return Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
+        return cast(
+            sp.Expr, Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
+        )
 
 
 # Class to manage different configurations of ExpansionFunctionThetaClass

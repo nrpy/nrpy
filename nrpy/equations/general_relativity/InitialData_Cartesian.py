@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/InitialData_Cartesian.py
 """
 Set up initial data for solving Einstein's equations of general relativity, for data most naturally specified in Cartesian coordinates.
 
@@ -13,7 +14,6 @@ import sympy as sp
 
 # NRPy: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
-import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN

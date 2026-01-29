@@ -90,10 +90,10 @@ class SEOBNRv5_MergerRingdown_Quantities:
         omega_prec_retrograde = self.omega_QNM_J_l2_mn1 - self.omega_QNM_J_l2_mn2
 
         prograde_part = omega_prec_prograde * coord_greater_bound(
-            self.chi_f_dot_L_f, 0
+            self.chi_f_dot_L_f, sp.sympify(0)
         ).subs(sp.Function("nrpyAbs"), sp.Abs)
         retrograde_part = omega_prec_retrograde * coord_less_bound(
-            self.chi_f_dot_L_f, 0
+            self.chi_f_dot_L_f, sp.sympify(0)
         ).subs(sp.Function("nrpyAbs"), sp.Abs)
         self.omega_prec = prograde_part + retrograde_part
 
