@@ -586,7 +586,10 @@ class Timestepping : public CBase_Timestepping {
 """
     if enable_BHaHAHA:
         file_output_str += r"""
+    void send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
+                                                             const int num_gfs, const int request_type);
     void send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid);
+    void send_psi4_gfs_to_corresponding_interpolator_chare(const int grid);
 """
     file_output_str += r"""
   public:
@@ -1488,6 +1491,12 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
     if enable_BHaHAHA:
         file_output_str += r"""
 void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid) {
+  send_interp_gfs_to_corresponding_interpolator_chare(grid, griddata_chare[grid].gridfuncs.y_n_gfs, bhahaha_gf_interp_indices, BHAHAHA_NUM_INTERP_GFS,
+                                                      INTERP_REQUEST_BHAHAHA);
+}
+
+void Timestepping::send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
+                                                                       const int num_gfs, const int request_type) {
   const int Nchare0 = commondata.Nchare0;
   const int Nchare1 = commondata.Nchare1;
   const int Nchare2 = commondata.Nchare2;
@@ -1497,20 +1506,29 @@ void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const in
   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   REAL *restrict tmpBuffer = griddata_chare[grid].tmpBuffers.tmpBuffer_bhahaha_gfs;
-  const REAL *restrict gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
 
-  int idx =  0;
-  for (int which_gf = 0; which_gf < BHAHAHA_NUM_INTERP_GFS; which_gf++) {
+
+  int idx = 0;
+  for (int which_gf = 0; which_gf < num_gfs; which_gf++) {
     for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
       for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
         for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-          tmpBuffer[idx] = gfs[IDX4(bhahaha_gf_interp_indices[which_gf], i0, i1, i2)];
+          tmpBuffer[idx] = gfs[IDX4(gf_indices[which_gf], i0, i1, i2)];
           idx++;
         }
       }
     }
   }
- interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].receiv_bhahaha_gfs(BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
+  interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].receiv_interp_gfs(request_type, num_gfs, commondata.nn,
+                                                                                               num_gfs * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
+}
+
+void Timestepping::send_psi4_gfs_to_corresponding_interpolator_chare(const int grid) {
+  const int psi4_gf_indices[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
+  if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+    CkPrintf("Timestepping: sending PSI4 gfs at nn=%d (t=%e)\n", commondata.nn, (double)commondata.time);
+  }
+  send_interp_gfs_to_corresponding_interpolator_chare(grid, diagnostic_gfs[grid], psi4_gf_indices, 2, INTERP_REQUEST_PSI4);
 }
 """
 
@@ -1770,6 +1788,11 @@ def output_timestepping_ci(
 
                 // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
                 diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
+
+                // Send psi4 diagnostic gfs to interpolator chares for psi4 decomposition.
+                if (commondata.num_psi4_extraction_radii > 0) {
+                  send_psi4_gfs_to_corresponding_interpolator_chare(grid);
+                }
 
                 // Diagnostics center
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);

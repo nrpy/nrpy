@@ -10,6 +10,7 @@
 #ifndef __SUPERB_H__
 #define __SUPERB_H__
 
+#include <stddef.h>
 #include "ckio.h"
 #include "pup.h"
 #ifndef REAL
@@ -89,6 +90,33 @@
 
 #define BHAHAHA_FIND_HORIZONS_SETUP 0
 #define BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE 1
+
+typedef struct __commondata_struct__ commondata_struct;
+typedef struct __params_struct__ params_struct;
+
+#ifndef PSI4_SHELL_ANGULAR_GRID_T_DEFINED
+#define PSI4_SHELL_ANGULAR_GRID_T_DEFINED
+typedef struct psi4_shell_angular_grid_struct {
+  int N_theta;
+  int N_phi;
+  int num_pts;
+  REAL dtheta;
+  REAL dphi;
+  REAL *theta_array;
+  REAL *phi_array;
+  REAL *sin_theta_array;
+  REAL *cos_theta_array;
+  REAL *sin_phi_array;
+  REAL *cos_phi_array;
+} psi4_shell_angular_grid_t;
+#endif
+void psi4_spinweightm2_shell_init(const commondata_struct *restrict commondata, psi4_shell_angular_grid_t *restrict shell);
+void psi4_spinweightm2_shell_free(psi4_shell_angular_grid_t *restrict shell);
+void psi4_spinweightm2_shell_fill_points(const params_struct *restrict params, const psi4_shell_angular_grid_t *restrict shell, const REAL R_ext,
+                                         REAL (*dst_pts)[3], int *all_points_interior);
+void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commondata, const psi4_shell_angular_grid_t *restrict shell, const REAL curr_time,
+                                       const REAL R_ext, const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext);
+int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]);
 
 typedef struct __charecomm_struct__ {
   int *globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point

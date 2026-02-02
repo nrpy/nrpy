@@ -64,7 +64,9 @@ def output_interp_buf_msg_h(
 
 class InterpBufMsg : public CMessage_InterpBufMsg {
 public:
-  int horizon_idx;
+  int request_type;
+  int request_id;
+  int num_gfs;
   int len;
   char *buf;
 };
@@ -91,32 +93,39 @@ def output_interpolator3d_h(
 #define __INTERPOLATOR3D_H__
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
-#include "superB/superB_pup_function_prototypes.h"
 #include "interpolator3d.decl.h"
+#include "superB/superB_pup_function_prototypes.h"
 
 class Interpolator3d : public CBase_Interpolator3d {
 Interpolator3d_SDAG_CODE
 
     private :
-  /// Member Variables (Object State) ///
-  commondata_struct commondata;
+    /// Member Variables (Object State) ///
+    commondata_struct commondata;
   griddata_struct *griddata_chare;
   const int grid = 0;
   REAL (*dst_x0x1x2)[3] = NULL;
   REAL (*dst_x0x1x2_chare)[3];
-  REAL *dst_data_ptrs_chare[BHAHAHA_NUM_INTERP_GFS];
+  REAL **dst_data_ptrs_chare = nullptr;
   int total_elements_chare;
-  const REAL *restrict src_gf_ptrs[BHAHAHA_NUM_INTERP_GFS];
+  const REAL *restrict *src_gf_ptrs = nullptr;
+  int src_gf_ptrs_capacity = 0;
   int *dst_indices_chare = nullptr;
   int iter = 0;
-  char **interp_bufs=nullptr;
-  int *interp_lens=nullptr;
+  char **interp_bufs = nullptr;
+  int *interp_lens = nullptr;
   int interp_count = 0;
   int interp_total = 0;
-  int interp_horizon_idx = 0;
+  int interp_request_type = -1;
+  int interp_request_id = -1;
+  int interp_num_gfs = 0;
+  psi4_shell_angular_grid_t psi4_shell = {};
+  REAL *psi4r_at_R_ext = nullptr;
+  REAL *psi4i_at_R_ext = nullptr;
 
   /// Member Functions (private) ///
   void contribute_interpolation_results(int curr_index_horizonfinder_chare);
+  void perform_interpolation(int request_type, int request_id, int num_gfs, int total_elements, REAL *dst_x0x1x2_linear);
 
 public:
   /// Constructors ///
@@ -128,7 +137,6 @@ public:
   void send_interp_concat();
 
   /// Entry Methods ///
-
 };
 
 #endif //__INTERPOLATOR3D_H__
@@ -169,28 +177,88 @@ Interpolator3d::Interpolator3d() {
 Interpolator3d::Interpolator3d(CkMigrateMessage *msg) : CBase_Interpolator3d(msg) {}
 
 // destructor
-Interpolator3d::~Interpolator3d() {}
+Interpolator3d::~Interpolator3d() {
+  delete[] src_gf_ptrs;
+}
+
+void Interpolator3d::perform_interpolation(int request_type, int request_id, int num_gfs, int total_elements, REAL *dst_x0x1x2_linear) {
+  dst_x0x1x2 = (REAL(*)[3])dst_x0x1x2_linear;
+  int count_total_elements_chare = 0;
+  for (int i = 0; i < total_elements; i++) {
+    if ((griddata_chare->params.xxmin0 <= dst_x0x1x2[i][0] && dst_x0x1x2[i][0] <= griddata_chare->params.xxmax0) &&
+        (griddata_chare->params.xxmin1 <= dst_x0x1x2[i][1] && dst_x0x1x2[i][1] <= griddata_chare->params.xxmax1) &&
+        (griddata_chare->params.xxmin2 <= dst_x0x1x2[i][2] && dst_x0x1x2[i][2] <= griddata_chare->params.xxmax2)) {
+      count_total_elements_chare++;
+    }
+  }
+  total_elements_chare = count_total_elements_chare;
+  dst_x0x1x2_chare = (REAL(*)[3])malloc(total_elements_chare * 3 * sizeof(REAL));
+  dst_indices_chare = (int *)malloc(total_elements_chare * sizeof(int));
+
+  count_total_elements_chare = 0;
+  for (int i = 0; i < total_elements; i++) {
+    if (griddata_chare->params.xxmin0 <= dst_x0x1x2[i][0] && dst_x0x1x2[i][0] <= griddata_chare->params.xxmax0 &&
+        griddata_chare->params.xxmin1 <= dst_x0x1x2[i][1] && dst_x0x1x2[i][1] <= griddata_chare->params.xxmax1 &&
+        griddata_chare->params.xxmin2 <= dst_x0x1x2[i][2] && dst_x0x1x2[i][2] <= griddata_chare->params.xxmax2) {
+      dst_x0x1x2_chare[count_total_elements_chare][0] = dst_x0x1x2[i][0];
+      dst_x0x1x2_chare[count_total_elements_chare][1] = dst_x0x1x2[i][1];
+      dst_x0x1x2_chare[count_total_elements_chare][2] = dst_x0x1x2[i][2];
+
+      dst_indices_chare[count_total_elements_chare] = i;
+      count_total_elements_chare++;
+    }
+  }
+
+  interp_request_type = request_type;
+  interp_request_id = request_id;
+  interp_num_gfs = num_gfs;
+  dst_data_ptrs_chare = (REAL **)malloc(interp_num_gfs * sizeof(REAL *));
+  for (int i = 0; i < interp_num_gfs; i++) {
+    dst_data_ptrs_chare[i] = (REAL *)malloc(total_elements_chare * sizeof(REAL));
+  }
+  const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+
+  interpolation_3d_general__uniform_src_grid((NGHOSTS), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1,
+                                             griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+                                             interp_num_gfs, griddata_chare[grid].xx, src_gf_ptrs, total_elements_chare, dst_x0x1x2_chare,
+                                             dst_data_ptrs_chare);
+  contribute_interpolation_results(request_id);
+  free(dst_x0x1x2_chare);
+  free(dst_indices_chare);
+  for (int i = 0; i < interp_num_gfs; i++) {
+    free(dst_data_ptrs_chare[i]);
+  }
+  free(dst_data_ptrs_chare);
+  dst_data_ptrs_chare = nullptr;
+}
 
 void Interpolator3d::contribute_interpolation_results(int curr_index_horizonfinder_chare) {
   // We have total_elements_chare number of grid points
   // For each grid point, we send its index in the original dst_x0x1x2 array
-  // and BHAHAHA_NUM_INTERP_GFS number of gfs values at that grid point
+  // and interp_num_gfs number of gfs values at that grid point
 
   // 1) compute how many bytes each point contributes:
-  size_t bytes_per_point = sizeof(int) + BHAHAHA_NUM_INTERP_GFS * sizeof(REAL);
+  size_t bytes_per_point = sizeof(int) + interp_num_gfs * sizeof(REAL);
   size_t total_bytes = total_elements_chare * bytes_per_point;
 
   // 2) pack into a raw buffer with memcpy
   char *packbuf = (char*)malloc(total_bytes);
   char *p = packbuf;
 
+  if (interp_request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+    CkPrintf("Interpolator3d: packing PSI4 results for request_id=%d, elems=%d, num_gfs=%d\n",
+             interp_request_id, total_elements_chare, interp_num_gfs);
+  }
+
   for (int k = 0; k < total_elements_chare; ++k) {
     // copy the integer index
     std::memcpy(p, &dst_indices_chare[k], sizeof(int));
     p += sizeof(int);
 
-    // copy the BHAHAHA_NUM_INTERP_GFS REAL values
-    for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; ++i) {
+    // copy the interp_num_gfs REAL values
+    for (int i = 0; i < interp_num_gfs; ++i) {
       std::memcpy(p, &dst_data_ptrs_chare[i][k], sizeof(REAL));
       p += sizeof(REAL);
     }
@@ -198,7 +266,9 @@ void Interpolator3d::contribute_interpolation_results(int curr_index_horizonfind
 
   {
      InterpBufMsg *m = new (total_bytes) InterpBufMsg();
-     m->horizon_idx = curr_index_horizonfinder_chare;
+     m->request_type = interp_request_type;
+     m->request_id = curr_index_horizonfinder_chare;
+     m->num_gfs = interp_num_gfs;
      m->len = (int) total_bytes;
      memcpy(m->buf, packbuf, total_bytes);
      thisProxy[CkArrayIndex3D(0,0,0)].recv_interp_msg(m);
@@ -213,9 +283,17 @@ void Interpolator3d::recv_interp_msg(InterpBufMsg *m){
     int Nchare2 = commondata.Nchare2;
     int Ncharetotal = Nchare0 * Nchare1 * Nchare2;
     interp_total = Ncharetotal;
-    interp_horizon_idx = m->horizon_idx;
+    interp_request_type = m->request_type;
+    interp_request_id = m->request_id;
+    interp_num_gfs = m->num_gfs;
     interp_bufs = new char*[interp_total];
     interp_lens = new int[interp_total];
+    if (interp_request_type == INTERP_REQUEST_PSI4) {
+      CkPrintf("Interpolator3d: recv_interp_msg begin PSI4 request_id=%d num_gfs=%d from %d chares\n",
+               interp_request_id, interp_num_gfs, interp_total);
+    }
+  } else if (interp_request_type != m->request_type || interp_request_id != m->request_id || interp_num_gfs != m->num_gfs) {
+    CkAbort("Error: Interpolator3d received mismatched interpolation messages in recv_interp_msg.");
   }
   interp_lens[interp_count] = m->len;
 
@@ -236,6 +314,9 @@ void Interpolator3d::send_interp_concat(){
   for(int i=0; i<interp_total; i++){
      tot += interp_lens[i];
   }
+  if (interp_request_type == INTERP_REQUEST_PSI4) {
+    CkPrintf("Interpolator3d: send_interp_concat PSI4 request_id=%d total_bytes=%zu\n", interp_request_id, tot);
+  }
   char *agg=(char*)malloc(tot);
   size_t off=0;
   for(int i=0;i<interp_total;i++){
@@ -243,10 +324,38 @@ void Interpolator3d::send_interp_concat(){
     off += interp_lens[i];
   }
   InterpBufMsg *out = new (tot) InterpBufMsg();
-  out->horizon_idx = interp_horizon_idx;
+  out->request_type = interp_request_type;
+  out->request_id = interp_request_id;
+  out->num_gfs = interp_num_gfs;
   out->len = (int) tot;
   memcpy(out->buf, agg, tot);
-  horizon_finderProxy[CkArrayIndex1D(interp_horizon_idx)].report_interpolation_results(out);
+  if (interp_request_type == INTERP_REQUEST_BHAHAHA) {
+    horizon_finderProxy[CkArrayIndex1D(interp_request_id)].report_interpolation_results(out);
+  } else if (interp_request_type == INTERP_REQUEST_PSI4) {
+    if (psi4r_at_R_ext == nullptr || psi4i_at_R_ext == nullptr) {
+      CkAbort("Error: PSI4 interpolation results received without allocated psi4 buffers.");
+    }
+    if (interp_num_gfs != 2) {
+      CkAbort("Error: PSI4 interpolation expects exactly 2 gridfunctions.");
+    }
+    REAL *dst_data_ptrs[2] = {psi4r_at_R_ext, psi4i_at_R_ext};
+    CkPrintf("Interpolator3d: unpack PSI4 request_id=%d bytes=%zu\n", interp_request_id, tot);
+    if (unpack_interpolation_buffer(interp_num_gfs, agg, tot, dst_data_ptrs) != 0) {
+      CkAbort("Error: Failed to unpack PSI4 interpolation buffer.");
+    }
+    const REAL R_ext = commondata.list_of_psi4_extraction_radii[interp_request_id];
+    CkPrintf("Interpolator3d: call psi4 decomposition at t=%e R_ext=%e request_id=%d\n",
+             (double)commondata.time, (double)R_ext, interp_request_id);
+    psi4_spinweightm2_decompose_shell(&commondata, &psi4_shell, commondata.time, R_ext, psi4r_at_R_ext, psi4i_at_R_ext);
+    CkPrintf("PSI4 decomposition done at t=%e R_ext=%e (request_id=%d)\n", (double)commondata.time, (double)R_ext, interp_request_id);
+    free(psi4r_at_R_ext);
+    free(psi4i_at_R_ext);
+    psi4r_at_R_ext = nullptr;
+    psi4i_at_R_ext = nullptr;
+    delete out;
+  } else {
+    CkAbort("Error: Unknown interpolation request type in send_interp_concat.");
+  }
 
   free(agg);
 
@@ -260,7 +369,10 @@ void Interpolator3d::send_interp_concat(){
   delete[] interp_lens;
   interp_bufs=nullptr;
   interp_lens=nullptr;
-  interp_count=interp_total=interp_horizon_idx=0;
+  interp_count=interp_total=0;
+  interp_request_type = -1;
+  interp_request_id = -1;
+  interp_num_gfs = 0;
 
   thisProxy.interp_concatenation_complete();
 }
@@ -269,6 +381,48 @@ void Interpolator3d::send_interp_concat(){
 """
     interpolator3d_cpp_file = project_Path / "interpolator3d.cpp"
     with interpolator3d_cpp_file.open("w", encoding="utf-8") as file:
+        file.write(file_output_str)
+
+
+def output_interpolation_buffer_utils_cpp(
+    project_dir: str,
+) -> None:
+    """
+    Generate interpolation_buffer_utils.cpp.
+    :param project_dir: Directory where the project C code is output
+    """
+    project_Path = Path(project_dir)
+    project_Path.mkdir(parents=True, exist_ok=True)
+
+    file_output_str = r"""#include "BHaH_defines.h"
+#include "BHaH_function_prototypes.h"
+#include <cstring>
+
+int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]) {
+  if (num_gfs <= 0) {
+    return -1;
+  }
+  const size_t bytes_per_pt = sizeof(int) + (size_t)num_gfs * sizeof(REAL);
+  if (bytes_per_pt == 0 || (buf_sz % bytes_per_pt) != 0) {
+    return -1;
+  }
+
+  const int npts = (int)(buf_sz / bytes_per_pt);
+  const char *p = buf;
+  for (int k = 0; k < npts; ++k) {
+    int idx = 0;
+    std::memcpy(&idx, p, sizeof(int));
+    p += sizeof(int);
+    for (int gf = 0; gf < num_gfs; ++gf) {
+      std::memcpy(&dst_data_ptrs[gf][idx], p, sizeof(REAL));
+      p += sizeof(REAL);
+    }
+  }
+  return 0;
+}
+"""
+    interpolation_buffer_utils_file = project_Path / "interpolation_buffer_utils.cpp"
+    with interpolation_buffer_utils_file.open("w", encoding="utf-8") as file:
         file.write(file_output_str)
 
 
@@ -293,7 +447,9 @@ module interpolator3d {
   include "pup_stl.h";
 
   message InterpBufMsg {
-    int horizon_idx;
+    int request_type;
+    int request_id;
+    int num_gfs;
     int len;
     char buf[];
   };
@@ -306,107 +462,100 @@ module interpolator3d {
         griddata_chare = inData2.griddata;
       }
       while (commondata.time < commondata.t_final) {
-        when receiv_bhahaha_gfs(int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
+        when receiv_interp_gfs(int request_type, int num_gfs, int nn, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]) {
           serial {
+            commondata.nn = nn;
+            commondata.time = (REAL)nn * commondata.dt;
+            if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              CkPrintf("Interpolator3d: received PSI4 gfs at nn=%d (t=%e), num_gfs=%d\\n", nn, (double)commondata.time, num_gfs);
+            }
             const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
             const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
             const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
             const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-            for (int idx = 0; idx < BHAHAHA_NUM_INTERP_GFS; idx++) {
+            interp_num_gfs = num_gfs;
+            interp_request_type = request_type;
+            if (src_gf_ptrs == nullptr) {
+              src_gf_ptrs = new const REAL *[interp_num_gfs];
+              src_gf_ptrs_capacity = interp_num_gfs;
+            } else if (src_gf_ptrs_capacity < interp_num_gfs) {
+              delete[] src_gf_ptrs;
+              src_gf_ptrs = new const REAL *[interp_num_gfs];
+              src_gf_ptrs_capacity = interp_num_gfs;
+            }
+            for (int idx = 0; idx < interp_num_gfs; idx++) {
               src_gf_ptrs[idx] = tmpBuffer + idx * Nxx_plus_2NGHOSTS_tot;
             }
           }
 
-          if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-            serial {
-              horizon_finderProxy.ready_for_interpolation();
+          if (request_type == INTERP_REQUEST_BHAHAHA) {
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              serial { horizon_finderProxy.ready_for_interpolation(); }
+            }
+            for (iter = 0; iter < commondata.bah_max_num_horizons; iter++) {
+              when start_interpolation(int request_type, int request_id, int num_gfs, int total_elements,
+                                       REAL dst_x0x1x2_linear[3 * total_elements]) {
+                serial {
+                  if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                    CkPrintf("Interpolator3d: start_interpolation PSI4 request_id=%d total_elements=%d\\n", request_id, total_elements);
+                  }
+                  perform_interpolation(request_type, request_id, num_gfs, total_elements, dst_x0x1x2_linear);
+                }
+
+                // Only continue when custom reduction on interpolator chare 0 is complete
+                when interp_concatenation_complete() {
+                  serial {}
+                }
+              }
+            } // end for (iter = 0; iter < commondata.bah_max_num_horizons; iter++)
+          } else if (request_type == INTERP_REQUEST_PSI4) {
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              serial { psi4_spinweightm2_shell_init(&commondata, &psi4_shell); }
+            }
+            for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++) {
+              if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                serial {
+                  const REAL R_ext = commondata.list_of_psi4_extraction_radii[iter];
+                  const int num_pts = psi4_shell.num_pts;
+                  REAL(*dst_pts)[3] = (REAL(*)[3])malloc(sizeof(REAL) * num_pts * 3);
+                  psi4r_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
+                  psi4i_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
+                  psi4_spinweightm2_shell_fill_points(&griddata_chare[grid].params, &psi4_shell, R_ext, dst_pts, NULL);
+                  CkPrintf("Interpolator3d: start PSI4 interp for R_ext=%e (iter=%d), num_pts=%d\\n", (double)R_ext, iter, num_pts);
+                  thisProxy.start_interpolation(INTERP_REQUEST_PSI4, iter, num_gfs, num_pts, (REAL *)dst_pts);
+                  free(dst_pts);
+                }
+              }
+              when start_interpolation(int request_type, int request_id, int num_gfs, int total_elements,
+                                       REAL dst_x0x1x2_linear[3 * total_elements]) {
+                serial {
+                  perform_interpolation(request_type, request_id, num_gfs, total_elements, dst_x0x1x2_linear);
+                }
+
+                // Only continue when custom reduction on interpolator chare 0 is complete
+                when interp_concatenation_complete() {
+                  serial {}
+                }
+              }
+            } // end for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++)
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              serial { psi4_spinweightm2_shell_free(&psi4_shell); }
             }
           }
-          for (iter = 0; iter < commondata.bah_max_num_horizons; iter++) {
-            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-              when charezero_start_interpolation[iter](int index_horizonfinder_chare, int bhahaha_num_interp_gfs, int total_elements, REAL dst_x0x1x2_linear[3*total_elements]) {
-                serial {
-                  thisProxy.start_interpolation(index_horizonfinder_chare, bhahaha_num_interp_gfs, total_elements, dst_x0x1x2_linear);
-                }
-              }
-            }
-
-            when start_interpolation(int index_horizonfinder_chare, int bhahaha_num_interp_gfs, int total_elements, REAL dst_x0x1x2_linear[3*total_elements]) {
-              serial {
-                dst_x0x1x2 = (REAL (*)[3])dst_x0x1x2_linear;
-                int count_total_elements_chare = 0;
-                for (int i = 0; i < total_elements; i++) {
-                  if ((griddata_chare->params.xxmin0 <= dst_x0x1x2[i][0] && dst_x0x1x2[i][0] <= griddata_chare->params.xxmax0) &&
-                      (griddata_chare->params.xxmin1 <= dst_x0x1x2[i][1] && dst_x0x1x2[i][1] <= griddata_chare->params.xxmax1) &&
-                      (griddata_chare->params.xxmin2 <= dst_x0x1x2[i][2] && dst_x0x1x2[i][2] <= griddata_chare->params.xxmax2)) {
-
-                    count_total_elements_chare++;
-                  }
-                }
-                total_elements_chare = count_total_elements_chare;
-                dst_x0x1x2_chare = malloc(total_elements_chare * 3 * sizeof(REAL));
-                dst_indices_chare = (int*)malloc(total_elements_chare * sizeof(int));
-
-                count_total_elements_chare = 0;
-                for (int i = 0; i < total_elements; i++) {
-                  if (griddata_chare->params.xxmin0 <= dst_x0x1x2[i][0] && dst_x0x1x2[i][0] <= griddata_chare->params.xxmax0 &&
-                      griddata_chare->params.xxmin1 <= dst_x0x1x2[i][1] && dst_x0x1x2[i][1] <= griddata_chare->params.xxmax1 &&
-                      griddata_chare->params.xxmin2 <= dst_x0x1x2[i][2] && dst_x0x1x2[i][2] <= griddata_chare->params.xxmax2) {
-                    dst_x0x1x2_chare[count_total_elements_chare][0] = dst_x0x1x2[i][0];
-                    dst_x0x1x2_chare[count_total_elements_chare][1] = dst_x0x1x2[i][1];
-                    dst_x0x1x2_chare[count_total_elements_chare][2] = dst_x0x1x2[i][2];
-
-                    dst_indices_chare[count_total_elements_chare] = i;
-
-                    count_total_elements_chare++;
-                  }
-                }
-                for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
-                  dst_data_ptrs_chare[i] = (REAL *)malloc(total_elements_chare * sizeof(REAL));
-                }
-                const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
-                const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
-                const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
-
-                interpolation_3d_general__uniform_src_grid((NGHOSTS), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1, griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0,
-                                                       Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, BHAHAHA_NUM_INTERP_GFS, griddata_chare[grid].xx, src_gf_ptrs,
-                                                       total_elements_chare, dst_x0x1x2_chare, dst_data_ptrs_chare);
-                contribute_interpolation_results(index_horizonfinder_chare);
-                free(dst_x0x1x2_chare);
-                free(dst_indices_chare);
-                for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
-                    free(dst_data_ptrs_chare[i]);
-                }
-              }
-
-              // Only continue when custom reduction on interpolator chare 0 is complete
-              when interp_concatenation_complete() {
-                serial {}
-              }
-            }
-          } // end for (iter = 0; iter < commondata.bah_max_num_horizons; iter++)
-        } // end when receiv_bhahaha_gfs
-        serial {
-          // Adding dt to commondata.time many times will induce roundoff error,
-          //   so here we set time based on the iteration number.
-          commondata.time = (REAL)(commondata.nn + 1) * commondata.dt;
-          // Finally, increment the timestep n:
-          commondata.nn++;
-        }
-      }// end while (commondata.time < commondata.t_final)
+        } // end when receiv_interp_gfs
+      } // end while (commondata.time < commondata.t_final)
     };
-    entry void start_interpolation(int index_horizonfinder_chare, int bhahaha_num_interp_gfs, int total_elements, REAL dst_x0x1x2_linear[3*total_elements]);
-    entry void charezero_start_interpolation(int index_horizonfinder_chare, int bhahaha_num_interp_gfs, int total_elements, REAL dst_x0x1x2_linear[3*total_elements]);
-    entry void receiv_bhahaha_gfs(int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
-    entry void recv_interp_msg(InterpBufMsg *m);
+    entry void start_interpolation(int request_type, int request_id, int num_gfs, int total_elements, REAL dst_x0x1x2_linear[3 * total_elements]);
+    entry void receiv_interp_gfs(int request_type, int num_gfs, int nn, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
+    entry void recv_interp_msg(InterpBufMsg * m);
     entry void send_interp_concat();
     entry void interp_concatenation_complete();
-   };
+  };
 };
 """
     interpolator3d_ci_file = project_Path / "interpolator3d.ci"
     with interpolator3d_ci_file.open("w", encoding="utf-8") as file:
-        file.write(clang_format(file_output_str))
+        file.write(file_output_str)
 
 
 def output_interpolator3d_h_cpp_ci(
@@ -429,6 +578,10 @@ def output_interpolator3d_h_cpp_ci(
     )
 
     output_interpolator3d_cpp(
+        project_dir=project_dir,
+    )
+
+    output_interpolation_buffer_utils_cpp(
         project_dir=project_dir,
     )
 

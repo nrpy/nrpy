@@ -108,23 +108,21 @@ Horizon_finder::~Horizon_finder() {
 void Horizon_finder::process_interpolation_results(InterpBufMsg *msg) {
   char *buf = msg->buf;
   size_t bufSz = msg->len;
-  const size_t bytes_per_pt = sizeof(int) + BHAHAHA_NUM_INTERP_GFS * sizeof(REAL);
+  const int num_gfs = msg->num_gfs;
+  // Keep this path quiet during normal runs.
+  if (num_gfs != BHAHAHA_NUM_INTERP_GFS) {
+      CkAbort("Error: Horizon interpolation received unexpected number of gridfunctions.");
+  }
+  const size_t bytes_per_pt = sizeof(int) + (size_t)num_gfs * sizeof(REAL);
 
   // Sanity check
   if (bufSz % bytes_per_pt != 0) {
       CkAbort("Error: Buffer size is not a multiple of bytes_per_pt in report_interpolation_results!");
   }
-  int npts = bufSz / bytes_per_pt;
-  char *p = buf;
-  for (int k = 0; k < npts; ++k) {
-      int idx;
-      memcpy(&idx, p, sizeof(int));
-      p += sizeof(int);
-      for (int gf = 0; gf < BHAHAHA_NUM_INTERP_GFS; gf++) {
-          memcpy(&dst_data_ptrs[gf][idx], p, sizeof(REAL));
-          p += sizeof(REAL);
-      }
+  if (unpack_interpolation_buffer(num_gfs, buf, bufSz, dst_data_ptrs) != 0) {
+      CkAbort("Error: Failed to unpack interpolation buffer in report_interpolation_results!");
   }
+  (void)bytes_per_pt;
   delete msg;
 }
 
@@ -156,7 +154,9 @@ module horizon_finder {
   include "pup_stl.h";
 
   extern message InterpBufMsg {
-    int horizon_idx;
+    int request_type;
+    int request_id;
+    int num_gfs;
     int len;
     char buf[];
   };
@@ -201,7 +201,8 @@ module horizon_finder {
 
             when ready_for_interpolation() {
               serial {
-                interpolator3dArray[CkArrayIndex3D(0, 0, 0)].charezero_start_interpolation(thisIndex, BHAHAHA_NUM_INTERP_GFS, total_elements, (REAL*)dst_x0x1x2);
+                interpolator3dArray.start_interpolation(INTERP_REQUEST_BHAHAHA, thisIndex, BHAHAHA_NUM_INTERP_GFS,
+                                                       total_elements, (REAL *)dst_x0x1x2);
               }
             }
 
