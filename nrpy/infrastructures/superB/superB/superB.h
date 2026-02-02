@@ -164,20 +164,6 @@ typedef struct __diagnostic_struct__ {
   char filename_1d_z[256];
   char filename_2d_xy[256];
   char filename_2d_yz[256];
-  // psi4:
-  int num_of_R_exts_chare;
-  int psi4_spinweightm2_sph_harmonics_max_l;
-  int length_localsums_for_psi4_decomp;
-  REAL *list_of_R_exts_chare;
-  REAL *localsums_for_psi4_decomp;
-  REAL *globalsums_for_psi4_decomp;
-  // psi4 cylindrical-like coords only:
-  int tot_N_shell_pts_chare;
-  REAL dtheta;
-  int *N_shell_pts_chare; // of shape int [num_of_R_exts_chare]
-  int *N_theta_shell_chare; // of shape int [num_of_R_exts_chare]
-  REAL ***xx_shell_chare; // of shape [num_of_R_exts_chare][N_shell_pts_chare][3]
-  REAL **theta_shell_chare; // of shape [num_of_R_exts_chare][N_theta_shell_chare]
 } diagnostic_struct;
 
 typedef struct __tmpBuffers_struct__ {

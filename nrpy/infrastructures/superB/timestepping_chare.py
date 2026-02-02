@@ -240,12 +240,10 @@ def generate_diagnostics_code(
 
 
 def generate_PUP_code(
-    enable_psi4_diagnostics: bool = False,
 ) -> str:
     """
     Generate code for PUP routine for Timestepping class.
 
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :return: A string representing the PUP routine for Timestepping class.
     """
     code = r"""
@@ -281,15 +279,6 @@ void Timestepping::pup(PUP::er &p) {
   p | const_cast<int&>(grid);
   p | const_cast<int&>(which_grid_diagnostics);
   p | const_cast<int&>(expected_count_filewritten);
-"""
-    if enable_psi4_diagnostics:
-        code += r"""
-  if (p.isUnpacking()) {
-      // Recreate the section proxy after restart
-      create_section();
-  }
-"""
-    code += r"""
 }
 """
     return code
@@ -440,18 +429,6 @@ def output_timestepping_h(
 #include "diagnostics/diagnostics_nearest_common.h"
 #include "diagnostics/diagnostics_volume_integration_helpers.h"
 """
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-struct sectionBcastMsg : public CkMcastBaseMsg, public CMessage_sectionBcastMsg {
-  int k;
-  sectionBcastMsg(int _k) : k(_k) {}
-  void pup(PUP::er &p) {
-    CMessage_sectionBcastMsg::pup(p);
-    p|k;
-  }
-};
-"""
-
     file_output_str += r"""
 /**
  * @brief Build the default set of recipes used by diagnostics_volume_integration and reductions.
@@ -533,10 +510,6 @@ class Timestepping : public CBase_Timestepping {
 
   private:
     /// Member Variables (Object State) ///"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    CProxySection_Timestepping secProxy;
-    CkSectionInfo cookie;"""
     file_output_str += r"""
     commondata_struct commondata;
     griddata_struct *griddata;
@@ -579,11 +552,7 @@ class Timestepping : public CBase_Timestepping {
     void send_wavespeed_at_outer_boundary(const int grid);"""
     file_output_str += r"""
     void contribute_localsums_for_diagnostic_volume_integ();"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
-    void create_section();
-"""
+
     if enable_BHaHAHA:
         file_output_str += r"""
     void send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
@@ -987,34 +956,7 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
-    free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
-    free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
 
-    if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
-        if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i] != NULL) {
-          for (int j = 0; j < griddata_chare[grid].diagnosticstruct.N_shell_pts_chare[i]; j++) {
-            if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j] != NULL) {
-              free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j]);
-            }
-          }
-          free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i]);
-        }
-      }
-      free(griddata_chare[grid].diagnosticstruct.xx_shell_chare);
-      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
-        if (griddata_chare[grid].diagnosticstruct.theta_shell_chare[i] != NULL) {
-          free(griddata_chare[grid].diagnosticstruct.theta_shell_chare[i]);
-        }
-      }
-      free(griddata_chare[grid].diagnosticstruct.theta_shell_chare);
-      free(griddata_chare[grid].diagnosticstruct.N_shell_pts_chare);
-      free(griddata_chare[grid].diagnosticstruct.N_theta_shell_chare);
-    }
-    """
     file_output_str += r"""
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
@@ -1326,49 +1268,6 @@ void Timestepping::contribute_localsums_for_diagnostic_volume_integ() {
 }
 """
 
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid) {
-  // Unpack diagnosticptoffset struct:
-  const int length_localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.length_localsums_for_psi4_decomp;
-  const REAL *restrict localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp;
-
-  // Initialize outdoubles with the correct size
-  std::vector<double> outdoubles(length_localsums_for_psi4_decomp);
-
-  // Copy and convert data from localsums_for_psi4_decomp to outdoubles
-  for (int i = 0; i < length_localsums_for_psi4_decomp; ++i) {
-    outdoubles[i] = static_cast<double>(localsums_for_psi4_decomp[i]);
-  }
-
-  CkGetSectionInfo(cookie, msg);
-  CkCallback cb;
-  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
-    // for spherical-like coords, cb to chare thisindex.x, 0, 0
-    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
-  } else {
-    // for cylindrical-like coords, cb to chare 0, 0, 0
-    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
-  }
-  CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
-  delete msg;
-}
-
-
-void Timestepping::create_section() {
-  const int grid = 0;
-  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
-    // section creation for reduction along section of chares for psi4 integration along theta and phi for spherical-like coords
-    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
-                                                     commondata.Nchare2 - 1, 1);
-  } else {
-    // for cylindrical-like coords, the reduction is over all chares
-    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), 0, commondata.Nchare0 - 1, 1, 0, commondata.Nchare1 - 1, 1, 0,
-                                               commondata.Nchare2 - 1, 1);
-  }
-}
-"""
-
     file_output_str += r"""
 void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
   // Unpack griddata_chare[grid].nonlocalinnerbcstruct
@@ -1580,10 +1479,7 @@ def output_timestepping_ci(
   include "ckio.h";
   include "pup_stl.h";
   """
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-  message sectionBcastMsg;
-        """
+
     file_output_str += r"""
   array [3D] Timestepping {
     entry Timestepping(CommondataObject &inData);
@@ -1593,13 +1489,6 @@ def output_timestepping_ci(
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
     entry void start() {
-"""
-
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-      serial {
-        create_section();
-      }
 """
 
     if enable_BHaHAHA:
@@ -1876,26 +1765,6 @@ def output_timestepping_ci(
                 loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
             )
 
-        file_output_str += """
-              // chare 0, 0, 0 sends msg to contribute to section reduction
-              serial {
-                if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-                  sectionBcastMsg *msg = new sectionBcastMsg(1);
-                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
-                }
-              }
-            } else {
-              // chare thisindex.x, 0, 0 sends msg to contribute to section reduction
-              serial {
-                if (thisIndex.y == 0 && thisIndex.z == 0) {
-                  sectionBcastMsg *msg = new sectionBcastMsg(1);
-                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
-                }
-              }
-            }
-          }
-        }
-        """
     if nrpyelliptic_project:
         filename_format = "commondata.nn"
     else:
@@ -2134,29 +2003,6 @@ def output_timestepping_ci(
     if nrpyelliptic_project:
         file_output_str += r"""
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
-
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
-      serial {
-        Ck::IO::Session token; // pass a null token
-        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-        diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr, NULL);
-        contribute_localsums_for_psi4_decomp(msg, which_grid_diagnostics);
-      }
-    }
-    entry void report_sums_for_psi4_diagnostics(CkReductionMsg * msg) {
-      serial {
-        int reducedArrSize = msg->getSize() / sizeof(double);
-        double *output = (double *)msg->getData();
-        const int length_localsums_for_psi4_decomp = griddata_chare[which_grid_diagnostics].diagnosticstruct.length_localsums_for_psi4_decomp;
-        for (int i = 0; i < length_localsums_for_psi4_decomp; i++) {
-          griddata_chare[which_grid_diagnostics].diagnosticstruct.globalsums_for_psi4_decomp[i] = (REAL)output[i];
-        }
-        psi4_spinweightm2_decomposition_file_write(&commondata, &griddata_chare[which_grid_diagnostics].diagnosticstruct);
-        delete msg;
-      }
-    }"""
 
     if enable_charm_checkpointing:
         file_output_str += r"""

@@ -295,7 +295,6 @@ superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    enable_psi4_diagnostics=True,
 )
 superB.chare_communication_maps.chare_comm_register_C_functions(
     set_of_CoordSystems={CoordSystem}
@@ -456,7 +455,8 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
-    enable_psi4_diagnostics=True,
+    # ~ enable_psi4_diagnostics=True,
+    enable_psi4_diagnostics=False,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",

@@ -321,55 +321,6 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   PUParray(p, ds.filename_1d_z, 256);
   PUParray(p, ds.filename_2d_xy, 256);
   PUParray(p, ds.filename_2d_yz, 256);
-"""
-
-    if enable_psi4_diagnostics:
-        prefunc += r"""
-  p | ds.num_of_R_exts_chare;
-  p | ds.psi4_spinweightm2_sph_harmonics_max_l;
-  p | ds.length_localsums_for_psi4_decomp;
-
-  if (p.isUnpacking()) {
-    ds.list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * ds.num_of_R_exts_chare);
-    ds.localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-    ds.globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-  }
-  PUParray(p, ds.list_of_R_exts_chare, ds.num_of_R_exts_chare);
-
-  if (strstr(params_chare.CoordSystemName, "Cylindrical") != NULL) {
-    p | ds.tot_N_shell_pts_chare;
-    p | ds.dtheta;
-    if (p.isUnpacking()) {
-      ds.N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
-      ds.N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
-      ds.xx_shell_chare = (REAL ***restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL **));
-      ds.theta_shell_chare = (REAL **restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL *));
-    }
-    PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
-    PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
-    if (p.isUnpacking()) {
-      ds.theta_shell_chare = (REAL * *restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
-      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-        ds.theta_shell_chare[i] = (REAL *restrict)malloc(sizeof(REAL) * ds.N_theta_shell_chare[i]);
-      }
-      ds.xx_shell_chare = (REAL * **restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
-      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-        ds.xx_shell_chare[i] = (REAL * *restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
-        for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-          ds.xx_shell_chare[i][j] = (REAL *restrict)malloc(sizeof(REAL) * 3);
-        }
-      }
-    }
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-        PUParray(p, ds.xx_shell_chare[i][j], 3);
-      }
-    }
-     for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
-    }
-  }"""
-    prefunc += r"""
 }"""
 
     # PUP routine for tmpBuffers_struct
