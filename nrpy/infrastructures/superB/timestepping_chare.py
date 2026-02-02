@@ -402,7 +402,7 @@ if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
 def output_timestepping_h(
     project_dir: str,
     nrpyelliptic_project: bool = False,
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
@@ -412,7 +412,7 @@ def output_timestepping_h(
     :param project_dir: Directory where the project C code is output.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
@@ -698,7 +698,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
 ) -> str:
     """
@@ -707,7 +707,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
+    :param enable_psi4: Whether to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :return: A string containing entry method declarations separated by newlines.
@@ -745,7 +745,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         )
 
     inner_bc_synching_gfs.append("AUXEVOL_GFS")
-    if enable_psi4_diagnostics:
+    if enable_psi4:
         inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
 
     # If anything other than NRPy elliptic, in NRPy elliptic initial data is set up differently
@@ -774,7 +774,7 @@ def output_timestepping_cpp(
     enable_CurviBCs: bool = False,
     initialize_constant_auxevol: bool = False,
     nrpyelliptic_project: bool = False,
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
@@ -790,7 +790,7 @@ def output_timestepping_cpp(
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
@@ -1385,7 +1385,7 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
 """
 
     if enable_charm_checkpointing:
-        file_output_str += generate_PUP_code(enable_psi4_diagnostics)
+        file_output_str += generate_PUP_code(enable_psi4)
 
     if enable_BHaHAHA:
         file_output_str += r"""
@@ -1448,7 +1448,7 @@ def output_timestepping_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
@@ -1463,7 +1463,7 @@ def output_timestepping_ci(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
@@ -1720,7 +1720,7 @@ def output_timestepping_ci(
         """
     file_output_str += """
          // Step 5.a: Main loop, part 1: Output diagnostics"""
-    if enable_psi4_diagnostics:
+    if enable_psi4:
         file_output_str += r"""
         // psi4 diagnostics
         if (write_diagnostics_this_step) {
@@ -1996,7 +1996,7 @@ def output_timestepping_ci(
         Butcher_dict,
         MoL_method,
         outer_bcs_type,
-        enable_psi4_diagnostics,
+        enable_psi4,
         nrpyelliptic_project,
     )
 
@@ -2112,7 +2112,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
@@ -2127,7 +2127,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
@@ -2142,7 +2142,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     output_timestepping_h(
         project_dir=project_dir,
         nrpyelliptic_project=nrpyelliptic_project,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_BHaHAHA=enable_BHaHAHA,
     )
@@ -2158,7 +2158,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
         nrpyelliptic_project=nrpyelliptic_project,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_BHaHAHA=enable_BHaHAHA,
     )
@@ -2170,7 +2170,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         outer_bcs_type=outer_bcs_type,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         nrpyelliptic_project=nrpyelliptic_project,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,

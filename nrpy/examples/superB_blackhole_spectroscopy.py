@@ -447,16 +447,16 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
-    # ~ enable_psi4_diagnostics=True,
-    enable_psi4_diagnostics=False,
+    # ~ enable_psi4=True,
+    enable_psi4=False,
     enable_charm_checkpointing=enable_charm_checkpointing,
     enable_BHaHAHA=enable_BHaHAHA,
 )
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
-    # ~ enable_psi4_diagnostics=True,
-    enable_psi4_diagnostics=False,
+    # ~ enable_psi4=True,
+    enable_psi4=False,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",

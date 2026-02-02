@@ -52,14 +52,14 @@ def generate_pup_serialization_lines_for_CodeParams(
 
 def register_CFunction_superB_pup_routines(
     MoL_method: str = "RK4",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Register the C function "superB_pup_routines", which is a collection of Pack-Unpack (PUP) routines for various structs.
     These routines are used for checkpointing and load balancing in Charm++.
 
     :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
-    :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
+    :param enable_psi4: Flag to enable psi4 diagnostics.
 
     DocTests:
         >>> register_CFunction_superB_pup_routines()
