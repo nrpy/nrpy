@@ -157,9 +157,11 @@ compute time component of four velocity, via
         )
 
     # Clamp the squared norm to the maximum allowed value
-    one_minus_one_over_alpha_u0_squared = noif.min_noif(
+    clamp_result = noif.min_noif(
         one_minus_one_over_W_max_squared, one_minus_one_over_alpha_u0_squared
     )
+
+    one_minus_one_over_alpha_u0_squared = clamp_result
 
     # Step 8: Compute final u^0
     # alpha * u^0 = 1 / sqrt(1 - (1 - 1/(alpha*u^0)^2))
