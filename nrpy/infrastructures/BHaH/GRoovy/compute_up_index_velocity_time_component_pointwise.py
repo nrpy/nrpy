@@ -106,7 +106,9 @@ compute time component of four velocity, via
 
     # Step 6: Compute the squared norm used for Lorentz factor calculation
     # We calculate: (1 - 1/(alpha*u^0)^2) = gamma_{ij} (v^i + beta^i)(v^j + beta^j) / alpha^2
-    one_minus_one_over_alpha_u0_squared = sp.sympify(0.0)
+    # NOTE: We type hint as sp.Expr to prevent mypy from narrowing the type to Float,
+    # which causes errors when assigning the clamped result later.
+    one_minus_one_over_alpha_u0_squared: sp.Expr = sp.sympify(0)
     for i in range(3):
         for j in range(3):
             one_minus_one_over_alpha_u0_squared += (
@@ -157,11 +159,9 @@ compute time component of four velocity, via
         )
 
     # Clamp the squared norm to the maximum allowed value
-    clamp_result = noif.min_noif(
+    one_minus_one_over_alpha_u0_squared = noif.min_noif(
         one_minus_one_over_W_max_squared, one_minus_one_over_alpha_u0_squared
     )
-
-    one_minus_one_over_alpha_u0_squared = clamp_result
 
     # Step 8: Compute final u^0
     # alpha * u^0 = 1 / sqrt(1 - (1 - 1/(alpha*u^0)^2))
