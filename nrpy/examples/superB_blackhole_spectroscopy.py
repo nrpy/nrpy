@@ -70,7 +70,6 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
 grid_physical_size = 300.0
 diagnostics_output_every = 0.5
-# ~ enable_charm_checkpointing = True
 enable_charm_checkpointing = False
 default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size

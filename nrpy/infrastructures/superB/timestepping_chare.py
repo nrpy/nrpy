@@ -1388,7 +1388,7 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
 """
 
     if enable_charm_checkpointing:
-        file_output_str += generate_PUP_code(enable_psi4)
+        file_output_str += generate_PUP_code()
 
     if enable_BHaHAHA:
         file_output_str += r"""
