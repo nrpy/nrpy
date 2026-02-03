@@ -1,7 +1,10 @@
 """
 Register CFunction for BOBv2-informed NQC right hand sides.
 
-Authors: Siddharth Mahesh
+Authors:
+        Anuj Kankani
+        aak00009 **at** mix **dot** wvu **dot** edu
+        Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -81,8 +84,7 @@ const REAL M_f = commondata->M_f;
 const REAL a_f = commondata->a_f;
 const REAL t_p = commondata->t_p_BOB;
 const REAL attachment_point = commondata->t_attach;
-printf("t_attach = %f\\n", attachment_point);
-printf("t_p = %f\\n", t_p);
+
 //compute
 """
     body += BOB_code

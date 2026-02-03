@@ -48,6 +48,7 @@ plt.axvline(t_peak, color='k', linestyle='--', alpha=0.5, label='Peak')
 
 # 3. Frequency
 plt.subplot(4, 1, 3)
+plt.scatter(t[:-1], np.abs(omega), color='green', label=r'$\omega$',s=5.)
 plt.plot(t[:-1], np.abs(omega), color='green', label=r'$\omega$')
 plt.ylabel("Frequency")
 plt.xlim(t_peak - 100, t_peak + 100)

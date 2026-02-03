@@ -1,7 +1,9 @@
 """
 Set up C function library for the BOBv2 peak strain conditions.
 
-Authors: Siddharth Mahesh
+Authors: Anuj Kankani
+        aak00009 **at** mix **dot** wvu **dot** edu
+        Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -30,24 +32,10 @@ def register_CFunction_BOB_v2_peak_strain_conditions() -> Union[None, pcg.NRPyEn
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Evaluates the BOBv2 peak strain conditions, 
-given peak news time t_p, and reference orbital frequency Omega_0.
-The peak strain conditions are given by
-d |h_BOB| |
-_         |           = 0
-dt        |_(t = t_0)
-
-d phi_BOB |
-_         |           = omega22NR
-dt        |_(t = t_0)
-
-where t_0 is the time at which the strain amplitude |h_BOB| is maximum.
 The BOB waveform is computed using the inputs
 Binary parameters - m1, m2, chi1, chi2
 QNM parameters - omega_qnm, tau_qnm
-Reference orbital frequency - Omega_0
-Peak strain time - t_0
-Peak news time - t_p
-
+`
 Since all parameters except t_p are known, the function evaluates
 the derivative of the strain amplitude at t_0 to find the value of t_p
 using a root finder.

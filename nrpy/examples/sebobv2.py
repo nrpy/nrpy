@@ -148,7 +148,6 @@ for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
     , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
 }
-printf("Waveform printed\n");
 """
         else:
             body += r"""
@@ -288,16 +287,11 @@ if __name__ == "__main__":
         BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_process_waveform.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
 
     
-
-    # set up merger-ringdown routines based on input flags
-    #BHaH.seobnr.merger_waveform.BOB_v2_find_tp_Omega0.register_CFunction_BOB_v2_find_tp_Omega0()
-    #BHaH.seobnr.merger_waveform.BOB_v2_peak_strain_conditions.register_CFunction_BOB_v2_peak_strain_conditions()
-    
-
-    BHaH.seobnr.merger_waveform.BOB_v2_setup_peak_attachment.register_CFunction_BOB_v2_setup_peak_attachment()
     BHaH.seobnr.nqc_corrections.SEBOBv2_NQC_corrections.register_CFunction_SEBOBv2_NQC_corrections()
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
-    #BHaH.seobnr.merger_waveform.BOB_v2_waveform_quantities_kankani_etal.register_CFunction_BOB_v2_waveform_quantities_kankani_etal()
+
+    # set up merger-ringdown routines based on input flags
+    BHaH.seobnr.merger_waveform.BOB_v2_setup_peak_attachment.register_CFunction_BOB_v2_setup_peak_attachment()
     BHaH.seobnr.merger_waveform.BOB_v2_waveform.register_CFunction_BOB_v2_waveform()
     BHaH.seobnr.merger_waveform.BOB_v2_waveform_from_times.register_CFunction_BOB_v2_waveform_from_times()
     # register IMR waveform generation routine

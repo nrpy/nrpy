@@ -12,9 +12,11 @@ The Backwards-One Body (BOB) formalism is a first principles merger-ringdown mod
 maps the properties of null congruences in the spacetime of the remnant black hole to
 the merger-ringdown waveform of a binary black hole merger.
 
-
 The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi2),
 the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0).
+
+We implement an uncalibrated version of the BOBv2 waveform. Because the peak of the BOB strain will not match the NR peak strain time,
+calibrations are reuqired to determine the ideal attachment point.
 
 License: BSD 2-Clause
 """
@@ -43,16 +45,14 @@ class BOB_v2_waveform_quantities:
         debugging/sanity checks. Higher mode information will be added in an
         upcoming commit.
         The key outputs of the BOB_v2_waveform_quantities class are:
+            - 'strain_amp_deriv' : time derivative of the strain amplitude
             - 'h_complex' : complex merger-ringdown strain for the (2,2) mode
             - 'h_t_attach' : the strain amplitude of the BOB merger-ringdown strain for the (l=2,m=2) mode at t_attach
             - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l=2,m=2) mode
                                 at t_attach.
             - 'w_t_attach' : the angular frequency of the (2,2) mode at t_attach
-
             - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at t_attach.
-            - 't_p_condition' : the BOBv2 peak strain condition.
-
         :return None:
         """
         (m1, m2, chi1, chi2, omega_qnm, tau_qnm, attachment_point, t_p, t) = sp.symbols(
@@ -180,10 +180,13 @@ class BOB_v2_waveform_quantities:
         # news→strain mismatch, but that study did not assess NQC calibrations and some configurations
         # (e.g., chi_eff <= 0) favor smaller N. We therefore default to 0 here until an NQC-optimized
         # choice is established.
-        N_provisional = 0
+
+        #Going beyond N_provisional=3 causes issues with this sympy implementation due to the complexity of the expressions
+        #However, Kankani & McWilliams found that beyond N_provisional=3, the improvements are marginal while the expresssions increase dramatically in complexity
+        N_provisional = 3
         i_times_omega = sp.I * omega_news
-        H_n = Ap / i_times_omega
-        Hbar_n = -Ap / i_times_omega
+        H_n = 1. / i_times_omega
+        Hbar_n = -1. / i_times_omega
         H = H_n
         Hbar = Hbar_n
         for _ in range(1, N_provisional + 1):
@@ -191,10 +194,9 @@ class BOB_v2_waveform_quantities:
             Hbar_n = sp.diff(Hbar_n, t) / i_times_omega
             H += H_n
             Hbar += Hbar_n
-        # Since the merger and NQC handling need amplitude and frequency
-        # we use the below two identities
-        # amp(z) = sqrt(z * zbar)
-        
+        H*= Ap
+        Hbar*= Ap
+
         strain_amplitude = sp.sqrt(H * Hbar)
         # This is kept as a class vairable because it is used in BOB_v2_setup_peak_attachment to determine the attachment point
         self.strain_amp_deriv = sp.diff(strain_amplitude, t)
@@ -204,7 +206,7 @@ class BOB_v2_waveform_quantities:
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
         strain_freq_deriv = sp.diff(strain_frequency, t)
-        self.h_complex = H * sp.exp(-sp.I * phi_news)
+        self.h_complex = H * sp.exp(sp.I * phi_news)
         
         self.h_t_attach = self.h_complex.subs(t,attachment_point)
         self.hdot_t_attach = self.strain_amp_deriv.subs(t,attachment_point)

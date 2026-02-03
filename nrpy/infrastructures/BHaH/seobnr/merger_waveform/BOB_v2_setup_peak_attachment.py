@@ -1,5 +1,15 @@
 """
 Set up C function to force BOBv2 strain peak to align with attachment time.
+
+Authors: Siddharth Mahesh
+sm0193 at mix dot wvu dot edu
+Authors: Siddharth Mahesh
+sm0193 at mix dot wvu dot edu
+Zachariah B. Etienne
+zachetie at gmail *dot com
+Anuj Kankani
+aak00009 at mix dot wvu dot edu
+
 """
 from inspect import currentframe as cfr
 from types import FrameType as FT
@@ -32,7 +42,6 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     
     body_helper = """
     commondata_struct *commondata = (commondata_struct *)params;
-    // Unpack necessary parameters
     const REAL m1 = commondata->m1;
     const REAL m2 = commondata->m2;
     const REAL chi1 = commondata->chi1;
@@ -58,9 +67,7 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
         cfunc_type="double", name=name_helper, params=params_helper, body=body_helper
     )
 
-    # --------------------------------------------------------
-    # 2. Main Setup Function
-    # --------------------------------------------------------
+
     desc = """
     1. Finds the Lag (time delay) between News Peak and Strain Peak.
     2. Calculates |h|, omega, dot_omega at that peak for NQC.
@@ -113,7 +120,6 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     // We know: t_strain_peak = t_p_news + lag
     // Therefore: t_p_news = t_attach - lag
     commondata->t_p_BOB = commondata->t_attach - lag;
-    //return lag;
     return GSL_SUCCESS;
     """
 
