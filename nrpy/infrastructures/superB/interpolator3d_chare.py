@@ -137,6 +137,7 @@ public:
   /// Constructors ///
   Interpolator3d();
   Interpolator3d(CkMigrateMessage *msg);
+  void pup(PUP::er &p);
   /// Destructor ///
   ~Interpolator3d();
   void recv_interp_msg(InterpBufMsg *m);
@@ -207,6 +208,61 @@ Interpolator3d::Interpolator3d() {
 
 // migration constructor
 Interpolator3d::Interpolator3d(CkMigrateMessage *msg) : CBase_Interpolator3d(msg) {}
+
+// PUP routine for class Interpolator3d
+void Interpolator3d::pup(PUP::er &p) {
+  CBase_Interpolator3d::pup(p);
+  __sdag_pup(p);
+  pup_commondata_struct(p, commondata);
+
+  int size_griddata = commondata.NUMGRIDS;
+  p | size_griddata;
+  if (p.isUnpacking()) {
+    griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
+  }
+  for (int i = 0; i < size_griddata; i++) {
+    pup_griddata(p, griddata_chare[i]);
+  }
+
+  p | iter;
+  p | interp_count;
+  p | interp_total;
+  p | interp_request_type;
+  p | interp_request_id;
+  p | interp_num_gfs;
+
+  if (p.isUnpacking()) {
+    if (interp_total > 0) {
+      interp_bufs = new char *[interp_total];
+      interp_lens = new int[interp_total];
+      for (int i = 0; i < interp_total; i++) {
+        interp_bufs[i] = nullptr;
+        interp_lens[i] = 0;
+      }
+    } else {
+      interp_bufs = nullptr;
+      interp_lens = nullptr;
+    }
+  }
+
+  for (int i = 0; i < interp_count; i++) {
+    p | interp_lens[i];
+    if (p.isUnpacking()) {
+      interp_bufs[i] = new char[interp_lens[i]];
+    }
+    p(interp_bufs[i], interp_lens[i]);
+  }
+
+  if (p.isUnpacking()) {
+    dst_x0x1x2 = nullptr;
+    dst_x0x1x2_chare = nullptr;
+    dst_data_ptrs_chare = nullptr;
+    dst_indices_chare = nullptr;
+    src_gf_ptrs = nullptr;
+    src_gf_ptrs_capacity = 0;
+    total_elements_chare = 0;
+  }
+}
 
 // destructor
 Interpolator3d::~Interpolator3d() {
