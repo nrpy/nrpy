@@ -25,6 +25,10 @@ from nrpy.equations.seobnr.BOB_v2_waveform_quantities_kankani_etal import (
 
 
 def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register C function to calculate the attachment related properties such that we can attach an inspiral to BOB.
+    :return: None if in registration phase, else the updated NRPy environment.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None

@@ -182,7 +182,7 @@ class BOB_v2_waveform_quantities:
 
         # Going beyond N_provisional=3 causes issues with this sympy implementation due to the complexity of the expressions
         # However, Kankani & McWilliams found that beyond N_provisional=3, the improvements are marginal while the expresssions increase dramatically in complexity
-        N_provisional = 3
+        N_provisional = 0
         i_times_omega = sp.I * omega_news
         H_n = 1.0 / i_times_omega
         Hbar_n = -1.0 / i_times_omega
@@ -205,7 +205,7 @@ class BOB_v2_waveform_quantities:
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
         strain_freq_deriv = sp.diff(strain_frequency, t)
-        self.h_complex = H * sp.exp(sp.I * phi_news)
+        self.h_complex = H * sp.exp(-sp.I * phi_news)
 
         self.h_t_attach = self.h_complex.subs(t, t_attach)
         self.hdot_t_attach = self.strain_amp_deriv.subs(t, t_attach)

@@ -54,9 +54,7 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-const REAL t_0 = commondata->t_attach;
 const REAL t_p = commondata->t_p_BOB;
-const REAL Omega_0 = commondata->Omega_0_BOB;
 const REAL M_f = commondata->M_f;
 const REAL a_f = commondata->a_f;
 //compute
