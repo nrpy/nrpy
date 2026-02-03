@@ -83,7 +83,7 @@ const REAL tau_qnm = commondata->tau_qnm;
 const REAL M_f = commondata->M_f;
 const REAL a_f = commondata->a_f;
 const REAL t_p = commondata->t_p_BOB;
-const REAL attachment_point = commondata->t_attach;
+const REAL t_attach = commondata->t_attach;
 
 //compute
 """

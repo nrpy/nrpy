@@ -1,5 +1,5 @@
 """
-Set up C function to force BOBv2 strain peak to align with attachment time.
+Set up C function to calculate the attachment related properties such that we can attach an inspiral to BOB.
 
 Authors: Siddharth Mahesh
 sm0193 at mix dot wvu dot edu
@@ -11,6 +11,7 @@ Anuj Kankani
 aak00009 at mix dot wvu dot edu
 
 """
+
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
@@ -18,7 +19,10 @@ from typing import Union, cast
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.equations.seobnr.BOB_v2_waveform_quantities_kankani_etal import BOB_v2_waveform_quantities
+from nrpy.equations.seobnr.BOB_v2_waveform_quantities_kankani_etal import (
+    BOB_v2_waveform_quantities,
+)
+
 
 def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv_type]:
     if pcg.pcg_registration_phase():
@@ -37,9 +41,9 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     desc_helper = "Helper: Evaluates d|h|/dt assuming t_p_news=0."
     name_helper = "BOB_v2_strain_deriv_lag_helper"
     params_helper = "double t_val, void *params"
-    
+
     wf = BOB_v2_waveform_quantities()
-    
+
     body_helper = """
     commondata_struct *commondata = (commondata_struct *)params;
     const REAL m1 = commondata->m1;
@@ -57,25 +61,28 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     
     """
     body_helper += ccg.c_codegen(
-        [wf.strain_amp_deriv], ["REAL deriv_val"], 
-        verbose=False, include_braces=False
+        [wf.strain_amp_deriv], ["REAL deriv_val"], verbose=False, include_braces=False
     )
     body_helper += "return deriv_val;\n"
-    
-    cfc.register_CFunction(
-        subdirectory="merger_waveform", includes=includes,prefunc=prefunc, desc=desc_helper,
-        cfunc_type="double", name=name_helper, params=params_helper, body=body_helper
-    )
 
+    cfc.register_CFunction(
+        subdirectory="merger_waveform",
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc_helper,
+        cfunc_type="double",
+        name=name_helper,
+        params=params_helper,
+        body=body_helper,
+    )
 
     desc = """
     1. Finds the Lag (time delay) between News Peak and Strain Peak.
-    2. Calculates |h|, omega, dot_omega at that peak for NQC.
     """
     cfunc_type = "int"
     name = "BOB_v2_setup_peak_attachment"
     params = "commondata_struct *restrict commondata"
-    
+
     body = """
     // Step 1: Find the Lag
     const gsl_root_fsolver_type *T = gsl_root_fsolver_brent;
