@@ -24,7 +24,7 @@ the following improvements over the current SEBOBv1:
 Currently, this examples calculates:
 Aligned-spin (2,2) IMR modes using SEOBNRv5 and BOBv2.
 
-Authors: 
+Authors:
         Anuj Kankani
         aak00009 **at** mix **dot** wvu **dot** edu
         Siddharth Mahesh
@@ -251,7 +251,7 @@ else:
 par.register_CodeParameters(
     "REAL",
     __name__,
-    ["t_lag_BOB","t_p_BOB", "Omega_0_BOB"],
+    ["t_lag_BOB", "t_p_BOB", "Omega_0_BOB"],
     commondata=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
@@ -286,7 +286,6 @@ if __name__ == "__main__":
         BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_FD_waveform.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
         BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_process_waveform.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
 
-    
     BHaH.seobnr.nqc_corrections.SEBOBv2_NQC_corrections.register_CFunction_SEBOBv2_NQC_corrections()
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
 
