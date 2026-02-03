@@ -74,9 +74,10 @@ diagnostics_output_every = 0.5
 enable_charm_checkpointing = False
 default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
+enable_psi4 = False
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
-if paper:
+if paper and enable_psi4:
     list_of_psi4_extraction_radii = [80.0, 160.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
@@ -178,7 +179,10 @@ if enable_BHaHAHA:
     BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         CoordSystem=CoordSystem, max_horizons=3
     )
-    superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(project_dir=project_dir)
+    superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(
+        project_dir=project_dir,
+        enable_psi4=enable_psi4,
+    )
     superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 #########################################################
@@ -221,7 +225,7 @@ superB.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics=False, enable_psi4=True
+    enable_interp_diagnostics=False, enable_psi4=enable_psi4
 )
 superB.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest(
     CoordSystem
@@ -270,19 +274,21 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
-    CoordSystem=CoordSystem,
-    OMP_collapse=OMP_collapse,
-    enable_fd_functions=enable_fd_functions,
-)
-BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
-    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
-)
+if enable_psi4:
+    BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
+        CoordSystem=CoordSystem,
+        OMP_collapse=OMP_collapse,
+        enable_fd_functions=enable_fd_functions,
+    )
+    BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+        swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+    )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
+if enable_psi4:
+    superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
@@ -338,7 +344,7 @@ superB.MoL.register_CFunctions(
     post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
-    enable_psi4=True,
+    enable_psi4=enable_psi4,
 )
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
@@ -373,10 +379,11 @@ par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
 par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
-par.adjust_CodeParam_default(
-    "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
-)
-if paper:
+if enable_psi4:
+    par.adjust_CodeParam_default(
+        "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
+    )
+if paper and enable_psi4:
     par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
     par.adjust_CodeParam_default(
         "list_of_psi4_extraction_radii",
@@ -448,15 +455,14 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
-    enable_psi4=True,
+    enable_psi4=enable_psi4,
     enable_charm_checkpointing=enable_charm_checkpointing,
     enable_BHaHAHA=enable_BHaHAHA,
 )
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
-    # ~ enable_psi4=True,
-    enable_psi4=False,
+    enable_psi4=enable_psi4,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",

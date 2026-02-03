@@ -80,6 +80,7 @@ public:
 
 def output_interpolator3d_h(
     project_dir: str,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Generate interpolator3d.h.
@@ -87,6 +88,13 @@ def output_interpolator3d_h(
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
+
+    psi4_member_vars = ""
+    if enable_psi4:
+        psi4_member_vars = """  psi4_shell_angular_grid_t psi4_shell = {};
+  REAL *psi4r_at_R_ext = nullptr;
+  REAL *psi4i_at_R_ext = nullptr;
+"""
 
     file_output_str = """
 #ifndef __INTERPOLATOR3D_H__
@@ -119,9 +127,7 @@ Interpolator3d_SDAG_CODE
   int interp_request_type = -1;
   int interp_request_id = -1;
   int interp_num_gfs = 0;
-  psi4_shell_angular_grid_t psi4_shell = {};
-  REAL *psi4r_at_R_ext = nullptr;
-  REAL *psi4i_at_R_ext = nullptr;
+<<PSI4_MEMBER_VARS>>
 
   /// Member Functions (private) ///
   void contribute_interpolation_results(int curr_index_horizonfinder_chare);
@@ -141,6 +147,7 @@ public:
 
 #endif //__INTERPOLATOR3D_H__
 """
+    file_output_str = file_output_str.replace("<<PSI4_MEMBER_VARS>>", psi4_member_vars)
     interpolator3d_h_file = project_Path / "interpolator3d.h"
     with interpolator3d_h_file.open("w", encoding="utf-8") as file:
         file.write(clang_format(file_output_str))
@@ -148,6 +155,7 @@ public:
 
 def output_interpolator3d_cpp(
     project_dir: str,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Generate the interpolator3d.cpp.
@@ -155,6 +163,39 @@ def output_interpolator3d_cpp(
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
+
+    psi4_send_concat_log = ""
+    psi4_send_concat_block = ""
+    if enable_psi4:
+        psi4_send_concat_log = r"""
+  if (interp_request_type == INTERP_REQUEST_PSI4) {
+    CkPrintf("Interpolator3d: send_interp_concat PSI4 request_id=%d total_bytes=%zu\n", interp_request_id, tot);
+  }
+"""
+        psi4_send_concat_block = r"""
+  } else if (interp_request_type == INTERP_REQUEST_PSI4) {
+    if (psi4r_at_R_ext == nullptr || psi4i_at_R_ext == nullptr) {
+      CkAbort("Error: PSI4 interpolation results received without allocated psi4 buffers.");
+    }
+    if (interp_num_gfs != 2) {
+      CkAbort("Error: PSI4 interpolation expects exactly 2 gridfunctions.");
+    }
+    REAL *dst_data_ptrs[2] = {psi4r_at_R_ext, psi4i_at_R_ext};
+    CkPrintf("Interpolator3d: unpack PSI4 request_id=%d bytes=%zu\n", interp_request_id, tot);
+    if (unpack_interpolation_buffer(interp_num_gfs, agg, tot, dst_data_ptrs) != 0) {
+      CkAbort("Error: Failed to unpack PSI4 interpolation buffer.");
+    }
+    const REAL R_ext = commondata.list_of_psi4_extraction_radii[interp_request_id];
+    CkPrintf("Interpolator3d: call psi4 decomposition at t=%e R_ext=%e request_id=%d\n",
+             (double)commondata.time, (double)R_ext, interp_request_id);
+    psi4_spinweightm2_decompose_shell(&commondata, &psi4_shell, commondata.time, R_ext, psi4r_at_R_ext, psi4i_at_R_ext);
+    CkPrintf("PSI4 decomposition done at t=%e R_ext=%e (request_id=%d)\n", (double)commondata.time, (double)R_ext, interp_request_id);
+    free(psi4r_at_R_ext);
+    free(psi4i_at_R_ext);
+    psi4r_at_R_ext = nullptr;
+    psi4i_at_R_ext = nullptr;
+    delete out;
+"""
 
     file_output_str = r"""
 #include "BHaH_defines.h"
@@ -314,9 +355,7 @@ void Interpolator3d::send_interp_concat(){
   for(int i=0; i<interp_total; i++){
      tot += interp_lens[i];
   }
-  if (interp_request_type == INTERP_REQUEST_PSI4) {
-    CkPrintf("Interpolator3d: send_interp_concat PSI4 request_id=%d total_bytes=%zu\n", interp_request_id, tot);
-  }
+<<PSI4_SEND_CONCAT_LOG>>
   char *agg=(char*)malloc(tot);
   size_t off=0;
   for(int i=0;i<interp_total;i++){
@@ -331,28 +370,7 @@ void Interpolator3d::send_interp_concat(){
   memcpy(out->buf, agg, tot);
   if (interp_request_type == INTERP_REQUEST_BHAHAHA) {
     horizon_finderProxy[CkArrayIndex1D(interp_request_id)].report_interpolation_results(out);
-  } else if (interp_request_type == INTERP_REQUEST_PSI4) {
-    if (psi4r_at_R_ext == nullptr || psi4i_at_R_ext == nullptr) {
-      CkAbort("Error: PSI4 interpolation results received without allocated psi4 buffers.");
-    }
-    if (interp_num_gfs != 2) {
-      CkAbort("Error: PSI4 interpolation expects exactly 2 gridfunctions.");
-    }
-    REAL *dst_data_ptrs[2] = {psi4r_at_R_ext, psi4i_at_R_ext};
-    CkPrintf("Interpolator3d: unpack PSI4 request_id=%d bytes=%zu\n", interp_request_id, tot);
-    if (unpack_interpolation_buffer(interp_num_gfs, agg, tot, dst_data_ptrs) != 0) {
-      CkAbort("Error: Failed to unpack PSI4 interpolation buffer.");
-    }
-    const REAL R_ext = commondata.list_of_psi4_extraction_radii[interp_request_id];
-    CkPrintf("Interpolator3d: call psi4 decomposition at t=%e R_ext=%e request_id=%d\n",
-             (double)commondata.time, (double)R_ext, interp_request_id);
-    psi4_spinweightm2_decompose_shell(&commondata, &psi4_shell, commondata.time, R_ext, psi4r_at_R_ext, psi4i_at_R_ext);
-    CkPrintf("PSI4 decomposition done at t=%e R_ext=%e (request_id=%d)\n", (double)commondata.time, (double)R_ext, interp_request_id);
-    free(psi4r_at_R_ext);
-    free(psi4i_at_R_ext);
-    psi4r_at_R_ext = nullptr;
-    psi4i_at_R_ext = nullptr;
-    delete out;
+<<PSI4_SEND_CONCAT_BLOCK>>
   } else {
     CkAbort("Error: Unknown interpolation request type in send_interp_concat.");
   }
@@ -379,6 +397,12 @@ void Interpolator3d::send_interp_concat(){
 
 #include "interpolator3d.def.h"
 """
+    file_output_str = file_output_str.replace(
+        "<<PSI4_SEND_CONCAT_LOG>>", psi4_send_concat_log
+    )
+    file_output_str = file_output_str.replace(
+        "<<PSI4_SEND_CONCAT_BLOCK>>", psi4_send_concat_block
+    )
     interpolator3d_cpp_file = project_Path / "interpolator3d.cpp"
     with interpolator3d_cpp_file.open("w", encoding="utf-8") as file:
         file.write(file_output_str)
@@ -428,6 +452,7 @@ int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t
 
 def output_interpolator3d_ci(
     project_dir: str,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Generate interpolator3d.ci.
@@ -436,6 +461,52 @@ def output_interpolator3d_ci(
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
+
+    psi4_recv_log = ""
+    psi4_start_interp_log = ""
+    psi4_request_block = "\n          }\n"
+    if enable_psi4:
+        psi4_recv_log = r"""
+<<PSI4_RECV_LOG>>
+"""
+        psi4_start_interp_log = r"""
+<<PSI4_START_INTERP_LOG>>
+"""
+        psi4_request_block = r"""
+          } else if (request_type == INTERP_REQUEST_PSI4) {
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              serial { psi4_spinweightm2_shell_init(&commondata, &psi4_shell); }
+            }
+            for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++) {
+              if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                serial {
+                  const REAL R_ext = commondata.list_of_psi4_extraction_radii[iter];
+                  const int num_pts = psi4_shell.num_pts;
+                  REAL(*dst_pts)[3] = (REAL(*)[3])malloc(sizeof(REAL) * num_pts * 3);
+                  psi4r_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
+                  psi4i_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
+                  psi4_spinweightm2_shell_fill_points(&griddata_chare[grid].params, &psi4_shell, R_ext, dst_pts, NULL);
+                  CkPrintf("Interpolator3d: start PSI4 interp for R_ext=%e (iter=%d), num_pts=%d\\n", (double)R_ext, iter, num_pts);
+                  thisProxy.start_interpolation(INTERP_REQUEST_PSI4, iter, num_gfs, num_pts, (REAL *)dst_pts);
+                  free(dst_pts);
+                }
+              }
+              when start_interpolation(int request_type, int request_id, int num_gfs, int total_elements,
+                                       REAL dst_x0x1x2_linear[3 * total_elements]) {
+                serial {
+                  perform_interpolation(request_type, request_id, num_gfs, total_elements, dst_x0x1x2_linear);
+                }
+
+                // Only continue when custom reduction on interpolator chare 0 is complete
+                when interp_concatenation_complete() {
+                  serial {}
+                }
+              }
+            } // end for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++)
+            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              serial { psi4_spinweightm2_shell_free(&psi4_shell); }
+            }
+"""
 
     file_output_str = """
 module interpolator3d {
@@ -508,40 +579,7 @@ module interpolator3d {
                 }
               }
             } // end for (iter = 0; iter < commondata.bah_max_num_horizons; iter++)
-          } else if (request_type == INTERP_REQUEST_PSI4) {
-            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-              serial { psi4_spinweightm2_shell_init(&commondata, &psi4_shell); }
-            }
-            for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++) {
-              if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-                serial {
-                  const REAL R_ext = commondata.list_of_psi4_extraction_radii[iter];
-                  const int num_pts = psi4_shell.num_pts;
-                  REAL(*dst_pts)[3] = (REAL(*)[3])malloc(sizeof(REAL) * num_pts * 3);
-                  psi4r_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
-                  psi4i_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
-                  psi4_spinweightm2_shell_fill_points(&griddata_chare[grid].params, &psi4_shell, R_ext, dst_pts, NULL);
-                  CkPrintf("Interpolator3d: start PSI4 interp for R_ext=%e (iter=%d), num_pts=%d\\n", (double)R_ext, iter, num_pts);
-                  thisProxy.start_interpolation(INTERP_REQUEST_PSI4, iter, num_gfs, num_pts, (REAL *)dst_pts);
-                  free(dst_pts);
-                }
-              }
-              when start_interpolation(int request_type, int request_id, int num_gfs, int total_elements,
-                                       REAL dst_x0x1x2_linear[3 * total_elements]) {
-                serial {
-                  perform_interpolation(request_type, request_id, num_gfs, total_elements, dst_x0x1x2_linear);
-                }
-
-                // Only continue when custom reduction on interpolator chare 0 is complete
-                when interp_concatenation_complete() {
-                  serial {}
-                }
-              }
-            } // end for (iter = 0; iter < commondata.num_psi4_extraction_radii; iter++)
-            if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-              serial { psi4_spinweightm2_shell_free(&psi4_shell); }
-            }
-          }
+{psi4_request_block}
         } // end when receiv_interp_gfs
       } // end while (commondata.time < commondata.t_final)
     };
@@ -553,6 +591,23 @@ module interpolator3d {
   };
 };
 """
+    file_output_str = file_output_str.replace(
+        """            if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              CkPrintf("Interpolator3d: received PSI4 gfs at nn=%d (t=%e), num_gfs=%d\\n", nn, (double)commondata.time, num_gfs);
+            }
+""",
+        psi4_recv_log,
+    )
+    file_output_str = file_output_str.replace(
+        """                  if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                    CkPrintf("Interpolator3d: start_interpolation PSI4 request_id=%d total_elements=%d\\n", request_id, total_elements);
+                  }
+""",
+        psi4_start_interp_log,
+    )
+    file_output_str = file_output_str.replace(
+        "{psi4_request_block}", psi4_request_block
+    )
     interpolator3d_ci_file = project_Path / "interpolator3d.ci"
     with interpolator3d_ci_file.open("w", encoding="utf-8") as file:
         file.write(file_output_str)
@@ -560,6 +615,7 @@ module interpolator3d {
 
 def output_interpolator3d_h_cpp_ci(
     project_dir: str,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Generate interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
@@ -575,10 +631,12 @@ def output_interpolator3d_h_cpp_ci(
 
     output_interpolator3d_h(
         project_dir=project_dir,
+        enable_psi4=enable_psi4,
     )
 
     output_interpolator3d_cpp(
         project_dir=project_dir,
+        enable_psi4=enable_psi4,
     )
 
     output_interpolation_buffer_utils_cpp(
@@ -587,4 +645,5 @@ def output_interpolator3d_h_cpp_ci(
 
     output_interpolator3d_ci(
         project_dir=project_dir,
+        enable_psi4=enable_psi4,
     )

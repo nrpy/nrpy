@@ -557,6 +557,9 @@ class Timestepping : public CBase_Timestepping {
     void send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
                                                              const int num_gfs, const int request_type);
     void send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid);
+"""
+        if enable_psi4:
+            file_output_str += r"""
     void send_psi4_gfs_to_corresponding_interpolator_chare(const int grid);
 """
     file_output_str += r"""
@@ -744,6 +747,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         )
 
     inner_bc_synching_gfs.append("AUXEVOL_GFS")
+
     if enable_psi4:
         inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
 
@@ -1421,6 +1425,9 @@ void Timestepping::send_interp_gfs_to_corresponding_interpolator_chare(const int
                                                                                                num_gfs * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
 }
 
+"""
+        if enable_psi4:
+            file_output_str += r"""
 void Timestepping::send_psi4_gfs_to_corresponding_interpolator_chare(const int grid) {
   const int psi4_gf_indices[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
   if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
@@ -1673,7 +1680,7 @@ def output_timestepping_ci(
                   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
                   BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
 
-                  //Initialize to NANs to safeguard against outer boundary points not set
+                  // Initialize to NaNs so any unfilled outer-boundary points are obvious in diagnostics.
                   for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot; ii++) {
                     diagnostic_gfs[grid][ii] = NAN;
                   }
@@ -1688,41 +1695,50 @@ def output_timestepping_ci(
                 }
               }
                 """
-
-    file_output_str += generate_send_nonlocalinnerbc_data_code("DIAGNOSTIC_OUTPUT_GFS")
-    file_output_str += generate_process_nonlocalinnerbc_code("DIAGNOSTIC_OUTPUT_GFS")
-    for loop_direction in ["x", "y", "z"]:
-        # Determine ghost types and configuration based on the current axis
-        if loop_direction == "x":
-            pos_ghost_type = x_pos_ghost_type
-            neg_ghost_type = x_neg_ghost_type
-            nchare_var = "commondata.Nchare0"
-            grid_split_direction = "EAST_WEST"
-        elif loop_direction == "y":
-            pos_ghost_type = y_pos_ghost_type
-            neg_ghost_type = y_neg_ghost_type
-            nchare_var = "commondata.Nchare1"
-            grid_split_direction = "NORTH_SOUTH"
-        else:  # loop_direction == "z"
-            pos_ghost_type = z_pos_ghost_type
-            neg_ghost_type = z_neg_ghost_type
-            nchare_var = "commondata.Nchare2"
-            grid_split_direction = "TOP_BOTTOM"
-
-        file_output_str += generate_send_neighbor_data_code(
-            "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
+    # Sync psi4
+    if enable_psi4:
+        file_output_str += generate_send_nonlocalinnerbc_data_code(
+            "DIAGNOSTIC_OUTPUT_GFS"
         )
-        file_output_str += generate_process_ghost_code(
-            loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+        file_output_str += generate_process_nonlocalinnerbc_code(
+            "DIAGNOSTIC_OUTPUT_GFS"
         )
+        for loop_direction in ["x", "y", "z"]:
+            # Determine ghost types and configuration based on the current axis
+            if loop_direction == "x":
+                pos_ghost_type = x_pos_ghost_type
+                neg_ghost_type = x_neg_ghost_type
+                nchare_var = "commondata.Nchare0"
+                grid_split_direction = "EAST_WEST"
+            elif loop_direction == "y":
+                pos_ghost_type = y_pos_ghost_type
+                neg_ghost_type = y_neg_ghost_type
+                nchare_var = "commondata.Nchare1"
+                grid_split_direction = "NORTH_SOUTH"
+            else:  # loop_direction == "z"
+                pos_ghost_type = z_pos_ghost_type
+                neg_ghost_type = z_neg_ghost_type
+                nchare_var = "commondata.Nchare2"
+                grid_split_direction = "TOP_BOTTOM"
+
+            file_output_str += generate_send_neighbor_data_code(
+                "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
+            )
+            file_output_str += generate_process_ghost_code(
+                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+            )
 
     file_output_str += r"""
               serial {
+"""
+    if enable_psi4:
+        file_output_str += r"""
                 // Send psi4 diagnostic gfs to interpolator chares for psi4 decomposition.
                 if (commondata.num_psi4_extraction_radii > 0) {
                   send_psi4_gfs_to_corresponding_interpolator_chare(grid);
                 }
-
+"""
+    file_output_str += r"""
                 // Diagnostics center
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);
 
