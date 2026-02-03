@@ -74,7 +74,9 @@ diagnostics_output_every = 0.5
 enable_charm_checkpointing = False
 default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
-enable_psi4 = False
+enable_psi4 = True
+if enable_psi4 and not enable_BHaHAHA:
+    raise ValueError("enable_psi4 requires enable_BHaHAHA to be True.")
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
 if paper and enable_psi4:

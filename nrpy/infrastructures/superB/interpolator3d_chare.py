@@ -467,10 +467,14 @@ def output_interpolator3d_ci(
     psi4_request_block = "\n          }\n"
     if enable_psi4:
         psi4_recv_log = r"""
-<<PSI4_RECV_LOG>>
+            if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+              CkPrintf("Interpolator3d: received PSI4 gfs at nn=%d (t=%e), num_gfs=%d\\n", nn, (double)commondata.time, num_gfs);
+            }
 """
         psi4_start_interp_log = r"""
-<<PSI4_START_INTERP_LOG>>
+                  if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+                    CkPrintf("Interpolator3d: start_interpolation PSI4 request_id=%d total_elements=%d\\n", request_id, total_elements);
+                  }
 """
         psi4_request_block = r"""
           } else if (request_type == INTERP_REQUEST_PSI4) {
@@ -507,6 +511,7 @@ def output_interpolator3d_ci(
               serial { psi4_spinweightm2_shell_free(&psi4_shell); }
             }
 """
+        psi4_request_block += "\n          }\n"
 
     file_output_str = """
 module interpolator3d {
