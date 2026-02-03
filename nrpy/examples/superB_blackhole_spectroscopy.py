@@ -338,6 +338,7 @@ superB.MoL.register_CFunctions(
     post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    enable_psi4=True,
 )
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
@@ -447,8 +448,7 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
-    # ~ enable_psi4=True,
-    enable_psi4=False,
+    enable_psi4=True,
     enable_charm_checkpointing=enable_charm_checkpointing,
     enable_BHaHAHA=enable_BHaHAHA,
 )

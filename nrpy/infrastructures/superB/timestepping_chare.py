@@ -239,8 +239,7 @@ def generate_diagnostics_code(
     return code
 
 
-def generate_PUP_code(
-) -> str:
+def generate_PUP_code() -> str:
     """
     Generate code for PUP routine for Timestepping class.
 
@@ -1673,11 +1672,52 @@ def output_timestepping_ci(
                   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
                   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
                   BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+
+                  //Initialize to NANs to safeguard against outer boundary points not set
+                  for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot; ii++) {
+                    diagnostic_gfs[grid][ii] = NAN;
+                  }
                 } // END LOOP over grids
 
                 // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
                 diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
 
+                // Alias MoL's diagnostic_output_gfs to Timestepping's per-grid diagnostic_gfs storage.
+                for (int grid = 0; grid < commondata.NUMGRIDS; ++grid) {
+                  griddata_chare[grid].gridfuncs.diagnostic_output_gfs = diagnostic_gfs[grid];
+                }
+              }
+                """
+
+    file_output_str += generate_send_nonlocalinnerbc_data_code("DIAGNOSTIC_OUTPUT_GFS")
+    file_output_str += generate_process_nonlocalinnerbc_code("DIAGNOSTIC_OUTPUT_GFS")
+    for loop_direction in ["x", "y", "z"]:
+        # Determine ghost types and configuration based on the current axis
+        if loop_direction == "x":
+            pos_ghost_type = x_pos_ghost_type
+            neg_ghost_type = x_neg_ghost_type
+            nchare_var = "commondata.Nchare0"
+            grid_split_direction = "EAST_WEST"
+        elif loop_direction == "y":
+            pos_ghost_type = y_pos_ghost_type
+            neg_ghost_type = y_neg_ghost_type
+            nchare_var = "commondata.Nchare1"
+            grid_split_direction = "NORTH_SOUTH"
+        else:  # loop_direction == "z"
+            pos_ghost_type = z_pos_ghost_type
+            neg_ghost_type = z_neg_ghost_type
+            nchare_var = "commondata.Nchare2"
+            grid_split_direction = "TOP_BOTTOM"
+
+        file_output_str += generate_send_neighbor_data_code(
+            "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
+        )
+        file_output_str += generate_process_ghost_code(
+            loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
+        )
+
+    file_output_str += r"""
+              serial {
                 // Send psi4 diagnostic gfs to interpolator chares for psi4 decomposition.
                 if (commondata.num_psi4_extraction_radii > 0) {
                   send_psi4_gfs_to_corresponding_interpolator_chare(grid);
@@ -1687,10 +1727,10 @@ def output_timestepping_ci(
                 diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);
 
                 // Execute volume-integration recipe for this chare and contribute results
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);"""
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);
+              }"""
 
     file_output_str += r"""
-              }
             }
          """
 
@@ -1718,52 +1758,6 @@ def output_timestepping_ci(
               serial { send_bhahaha_gfs_to_corresponding_interpolator_chare(grid); }
           }
         """
-    file_output_str += """
-         // Step 5.a: Main loop, part 1: Output diagnostics"""
-    if enable_psi4:
-        file_output_str += r"""
-        // psi4 diagnostics
-        if (write_diagnostics_this_step) {
-          if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL || strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-            // Need to sync psi4 across chares for cylindrical-like coordinates
-            if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-              serial {
-                // Set psi4.
-                psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
-                // Apply outer and inner bcs to psi4
-                apply_bcs_inner_only_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
-              }"""
-
-        file_output_str += generate_send_nonlocalinnerbc_data_code(
-            "DIAGNOSTIC_OUTPUT_GFS"
-        )
-        file_output_str += generate_process_nonlocalinnerbc_code(
-            "DIAGNOSTIC_OUTPUT_GFS"
-        )
-        for loop_direction in ["x", "y", "z"]:
-            # Determine ghost types and configuration based on the current axis
-            if loop_direction == "x":
-                pos_ghost_type = x_pos_ghost_type
-                neg_ghost_type = x_neg_ghost_type
-                nchare_var = "commondata.Nchare0"
-                grid_split_direction = "EAST_WEST"
-            elif loop_direction == "y":
-                pos_ghost_type = y_pos_ghost_type
-                neg_ghost_type = y_neg_ghost_type
-                nchare_var = "commondata.Nchare1"
-                grid_split_direction = "NORTH_SOUTH"
-            else:  # loop_direction == "z"
-                pos_ghost_type = z_pos_ghost_type
-                neg_ghost_type = z_neg_ghost_type
-                nchare_var = "commondata.Nchare2"
-                grid_split_direction = "TOP_BOTTOM"
-
-            file_output_str += generate_send_neighbor_data_code(
-                "DIAGNOSTIC_OUTPUT_GFS", grid_split_direction
-            )
-            file_output_str += generate_process_ghost_code(
-                loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
-            )
 
     if nrpyelliptic_project:
         filename_format = "commondata.nn"
