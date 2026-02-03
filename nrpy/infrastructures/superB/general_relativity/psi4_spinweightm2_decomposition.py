@@ -150,8 +150,6 @@ void psi4_spinweightm2_shell_fill_points(const params_struct *restrict params, c
 
 void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commondata, const psi4_shell_angular_grid_t *restrict shell, const REAL curr_time,
                                        const REAL R_ext, const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext) {
-  CkPrintf("psi4_spinweightm2_decompose_shell: t=%e R_ext=%e N_theta=%d N_phi=%d\n",
-           (double)curr_time, (double)R_ext, shell->N_theta, shell->N_phi);
   lowlevel_decompose_psi4_into_swm2_modes(shell->dtheta, shell->dphi, commondata->swm2sh_maximum_l_mode_to_compute, curr_time, R_ext, shell->N_theta,
                                          shell->N_phi, shell->theta_array, shell->phi_array, psi4r_at_R_ext, psi4i_at_R_ext);
 }

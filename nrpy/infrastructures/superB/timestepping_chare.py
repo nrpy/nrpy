@@ -1430,9 +1430,6 @@ void Timestepping::send_interp_gfs_to_corresponding_interpolator_chare(const int
             file_output_str += r"""
 void Timestepping::send_psi4_gfs_to_corresponding_interpolator_chare(const int grid) {
   const int psi4_gf_indices[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
-  if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-    CkPrintf("Timestepping: sending PSI4 gfs at nn=%d (t=%e)\n", commondata.nn, (double)commondata.time);
-  }
   send_interp_gfs_to_corresponding_interpolator_chare(grid, diagnostic_gfs[grid], psi4_gf_indices, 2, INTERP_REQUEST_PSI4);
 }
 """

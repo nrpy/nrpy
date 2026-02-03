@@ -167,11 +167,6 @@ def output_interpolator3d_cpp(
     psi4_send_concat_log = ""
     psi4_send_concat_block = ""
     if enable_psi4:
-        psi4_send_concat_log = r"""
-  if (interp_request_type == INTERP_REQUEST_PSI4) {
-    CkPrintf("Interpolator3d: send_interp_concat PSI4 request_id=%d total_bytes=%zu\n", interp_request_id, tot);
-  }
-"""
         psi4_send_concat_block = r"""
   } else if (interp_request_type == INTERP_REQUEST_PSI4) {
     if (psi4r_at_R_ext == nullptr || psi4i_at_R_ext == nullptr) {
@@ -181,15 +176,11 @@ def output_interpolator3d_cpp(
       CkAbort("Error: PSI4 interpolation expects exactly 2 gridfunctions.");
     }
     REAL *dst_data_ptrs[2] = {psi4r_at_R_ext, psi4i_at_R_ext};
-    CkPrintf("Interpolator3d: unpack PSI4 request_id=%d bytes=%zu\n", interp_request_id, tot);
     if (unpack_interpolation_buffer(interp_num_gfs, agg, tot, dst_data_ptrs) != 0) {
       CkAbort("Error: Failed to unpack PSI4 interpolation buffer.");
     }
     const REAL R_ext = commondata.list_of_psi4_extraction_radii[interp_request_id];
-    CkPrintf("Interpolator3d: call psi4 decomposition at t=%e R_ext=%e request_id=%d\n",
-             (double)commondata.time, (double)R_ext, interp_request_id);
     psi4_spinweightm2_decompose_shell(&commondata, &psi4_shell, commondata.time, R_ext, psi4r_at_R_ext, psi4i_at_R_ext);
-    CkPrintf("PSI4 decomposition done at t=%e R_ext=%e (request_id=%d)\n", (double)commondata.time, (double)R_ext, interp_request_id);
     free(psi4r_at_R_ext);
     free(psi4i_at_R_ext);
     psi4r_at_R_ext = nullptr;
@@ -288,11 +279,6 @@ void Interpolator3d::contribute_interpolation_results(int curr_index_horizonfind
   char *packbuf = (char*)malloc(total_bytes);
   char *p = packbuf;
 
-  if (interp_request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-    CkPrintf("Interpolator3d: packing PSI4 results for request_id=%d, elems=%d, num_gfs=%d\n",
-             interp_request_id, total_elements_chare, interp_num_gfs);
-  }
-
   for (int k = 0; k < total_elements_chare; ++k) {
     // copy the integer index
     std::memcpy(p, &dst_indices_chare[k], sizeof(int));
@@ -329,10 +315,6 @@ void Interpolator3d::recv_interp_msg(InterpBufMsg *m){
     interp_num_gfs = m->num_gfs;
     interp_bufs = new char*[interp_total];
     interp_lens = new int[interp_total];
-    if (interp_request_type == INTERP_REQUEST_PSI4) {
-      CkPrintf("Interpolator3d: recv_interp_msg begin PSI4 request_id=%d num_gfs=%d from %d chares\n",
-               interp_request_id, interp_num_gfs, interp_total);
-    }
   } else if (interp_request_type != m->request_type || interp_request_id != m->request_id || interp_num_gfs != m->num_gfs) {
     CkAbort("Error: Interpolator3d received mismatched interpolation messages in recv_interp_msg.");
   }
@@ -466,16 +448,8 @@ def output_interpolator3d_ci(
     psi4_start_interp_log = ""
     psi4_request_block = "\n          }\n"
     if enable_psi4:
-        psi4_recv_log = r"""
-            if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-              CkPrintf("Interpolator3d: received PSI4 gfs at nn=%d (t=%e), num_gfs=%d\\n", nn, (double)commondata.time, num_gfs);
-            }
-"""
-        psi4_start_interp_log = r"""
-                  if (request_type == INTERP_REQUEST_PSI4 && thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-                    CkPrintf("Interpolator3d: start_interpolation PSI4 request_id=%d total_elements=%d\\n", request_id, total_elements);
-                  }
-"""
+        psi4_recv_log = ""
+        psi4_start_interp_log = ""
         psi4_request_block = r"""
           } else if (request_type == INTERP_REQUEST_PSI4) {
             if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
@@ -490,7 +464,6 @@ def output_interpolator3d_ci(
                   psi4r_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
                   psi4i_at_R_ext = (REAL *)calloc(num_pts, sizeof(REAL));
                   psi4_spinweightm2_shell_fill_points(&griddata_chare[grid].params, &psi4_shell, R_ext, dst_pts, NULL);
-                  CkPrintf("Interpolator3d: start PSI4 interp for R_ext=%e (iter=%d), num_pts=%d\\n", (double)R_ext, iter, num_pts);
                   thisProxy.start_interpolation(INTERP_REQUEST_PSI4, iter, num_gfs, num_pts, (REAL *)dst_pts);
                   free(dst_pts);
                 }
