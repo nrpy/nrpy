@@ -170,9 +170,6 @@ if enable_BHaHAHA:
             ],
             check=True,
         )
-    from nrpy.infrastructures.BHaH.BHaHAHA import (
-        interpolation_3d_general__uniform_src_grid,
-    )
     from nrpy.infrastructures.superB import (
         BHaH_implementation,
     )
