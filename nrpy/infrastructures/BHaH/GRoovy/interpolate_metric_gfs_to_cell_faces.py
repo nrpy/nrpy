@@ -100,12 +100,13 @@ def register_CFunction_interpolate_metric_gfs_to_cell_faces(
         const int dirn2 = (flux_dirn == 2);
 
         // Loop over all metric gridfunctions to interpolate
+        #pragma omp parallel
         for(int gf = 0;gf < num_metric_gfs;gf++) {
             in_gf  = metric_gfs_list[gf];
             out_gf = metric_gfs_face_list[gf];
             
             // Parallel loop over the grid, respecting ghost zones
-            #pragma omp for
+            #pragma omp for schedule(static)
             for (int i2 = 2;i2 < Nxx_plus_2NGHOSTS2-1;i2++) {
                 for (int i1 = 2;i1 < Nxx_plus_2NGHOSTS1-1;i1++) {
                     for (int i0 = 2;i0 < Nxx_plus_2NGHOSTS0-1;i0++) {
@@ -118,10 +119,10 @@ def register_CFunction_interpolate_metric_gfs_to_cell_faces(
                         // Compute and store interpolated value at face i-1/2
                         auxevol_gfs[IDX4(out_gf,i0,i1,i2)] = COMPUTE_FCVAL(Qm2,Qm1,Qp0,Qp1);
 
+                    }
                 }
             }
         }
-    }
     """
 
     # Step 5: Handle static vs dynamic spacetime
