@@ -45,9 +45,7 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
     r_defaults: List[Union[str, int, float]] = [
         2.0 * (i + 1) for i in range(num_transitions)
     ]
-    w_defaults: List[Union[str, int, float]] = [
-        1.0 for _ in range(num_transitions)
-    ]
+    w_defaults: List[Union[str, int, float]] = [1.0 for _ in range(num_transitions)]
 
     _ = par.register_CodeParameters(
         "REAL",
