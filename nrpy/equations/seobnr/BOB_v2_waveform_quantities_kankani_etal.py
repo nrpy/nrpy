@@ -201,13 +201,13 @@ class BOB_v2_waveform_quantities:
         self.strain_amp_deriv = sp.diff(strain_amplitude, t)
         strain_amp_dderiv = sp.diff(strain_amplitude, t, 2)
         # frequency(z*exp(i * phi)) = phidot -i * (zbar * zdot - zbardot * z) / (2 * z * zbar)
-        strain_frequency = omega_news - sp.I * (
+        strain_frequency = omega_news + sp.I * (
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
         strain_freq_deriv = sp.diff(strain_frequency, t)
         self.h_complex = H * sp.exp(-sp.I * phi_news)
 
-        self.h_t_attach = self.h_complex.subs(t, t_attach)
+        self.h_t_attach = strain_amplitude.subs(t, t_attach)
         self.hdot_t_attach = self.strain_amp_deriv.subs(t, t_attach)
         self.hddot_t_attach = strain_amp_dderiv.subs(t, t_attach)
         self.w_t_attach = strain_frequency.subs(t, t_attach)

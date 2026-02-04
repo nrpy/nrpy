@@ -251,7 +251,7 @@ else:
 par.register_CodeParameters(
     "REAL",
     __name__,
-    ["t_lag_BOB", "t_p_BOB", "Omega_0_BOB"],
+    ["t_p_BOB"],
     commondata=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,

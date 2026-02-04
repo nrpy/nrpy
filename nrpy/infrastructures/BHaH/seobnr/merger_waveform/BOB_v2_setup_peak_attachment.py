@@ -3,8 +3,6 @@ Set up C function to calculate the attachment related properties such that we ca
 
 Authors: Siddharth Mahesh
 sm0193 at mix dot wvu dot edu
-Authors: Siddharth Mahesh
-sm0193 at mix dot wvu dot edu
 Zachariah B. Etienne
 zachetie at gmail *dot com
 Anuj Kankani

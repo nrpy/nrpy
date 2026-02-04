@@ -43,7 +43,7 @@ def register_CFunction_BOB_v2_NQC_rhs() -> Union[None, pcg.NRPyEnv_type]:
                 wf.wdot_t_attach,
             ],
             [
-                "const COMPLEX h_t_attach",
+                "const REAL h_t_attach",
                 "const REAL hdot_t_attach",
                 "const REAL hddot_t_attach",
                 "const REAL w_t_attach",
