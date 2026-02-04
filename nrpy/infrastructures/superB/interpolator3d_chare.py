@@ -111,6 +111,7 @@ Interpolator3d_SDAG_CODE
     /// Member Variables (Object State) ///
     commondata_struct commondata;
   griddata_struct *griddata_chare;
+  bool owns_griddata_chare = false;
   const int grid = 0;
   REAL (*dst_x0x1x2)[3] = NULL;
   REAL (*dst_x0x1x2_chare)[3];
@@ -219,6 +220,7 @@ void Interpolator3d::pup(PUP::er &p) {
   int size_griddata = commondata.NUMGRIDS;
   p | size_griddata;
   if (p.isUnpacking()) {
+    owns_griddata_chare = true;
     griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
   }
   for (int i = 0; i < size_griddata; i++) {
@@ -267,6 +269,10 @@ void Interpolator3d::pup(PUP::er &p) {
 
 // destructor
 Interpolator3d::~Interpolator3d() {
+  if (owns_griddata_chare && griddata_chare != nullptr) {
+    free(griddata_chare);
+    griddata_chare = nullptr;
+  }
   delete[] src_gf_ptrs;
 }
 
