@@ -285,6 +285,7 @@ static inline int solve_linear_system(const int n,
       R[i] = x[2 * i + 0];
       s[i] = x[2 * i + 1];
       if (!(R[i] > (REAL)0.0) || !(s[i] > (REAL)0.0)) return 1;
+      if (!(R[i] > s[i])) return 1;
     }}
 
     REAL F[NUNK];
@@ -330,6 +331,13 @@ static inline int solve_linear_system(const int n,
       for (int i = 0; i < NUNK; i++) {{
         const REAL trial = x[i] + alpha * delta[i];
         if (!(trial > (REAL)0.0)) {{ ok = 0; break; }}
+      }}
+      if (ok) {{
+        for (int i = 0; i < NTRANS; i++) {{
+          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
+          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
+          if (!(Rtrial > strial)) {{ ok = 0; break; }}
+        }}
       }}
       if (ok) {{
         REAL x_trial[NUNK];
@@ -444,6 +452,8 @@ static int write_fisheye_grid_txt(const char *fname) {{
     for (int i = 0; i < NTRANS; i++) {{
       R[i] = x[2 * i + 0];
       s[i] = x[2 * i + 1];
+      if (!(R[i] > s[i]))
+        return 1;
     }}
     REAL F[NUNK];
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c)) return 1;
@@ -492,6 +502,13 @@ static int write_fisheye_grid_txt(const char *fname) {{
         if (!(x_trial[i] > (REAL)0.0)) ok = 0;
       }}
       if (ok) {{
+        for (int i = 0; i < NTRANS; i++) {{
+          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
+          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
+          if (!(Rtrial > strial)) ok = 0;
+        }}
+      }}
+      if (ok) {{
         REAL Rt[NTRANS];
         REAL st[NTRANS];
         for (int i = 0; i < NTRANS; i++) {{
@@ -521,6 +538,8 @@ static int write_fisheye_grid_txt(const char *fname) {{
   for (int i = 0; i < NTRANS; i++) {{
     R[i] = x[2 * i + 0];
     s[i] = x[2 * i + 1];
+    if (!(R[i] > s[i]))
+      return 1;
   }}
   const REAL dx = (REAL)2.0 * L / (REAL)(N - 1);
 

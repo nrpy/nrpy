@@ -35,10 +35,15 @@ static inline REAL rbar_unscaled(const REAL r, const REAL a[], const REAL R[], c
   return rb;
 }
 
-static inline void evaluate_constraints(const REAL L, const REAL r_trans[], const REAL w_trans[], const REAL a[], const REAL R[], const REAL s[],
-                                        const int N, REAL F[], REAL *c_out) {
+// Return 0 on success, nonzero on failure (invalid/non-finite scaling).
+static inline int evaluate_constraints(const REAL L, const REAL r_trans[], const REAL w_trans[], const REAL a[], const REAL R[], const REAL s[],
+                                       const int N, REAL F[], REAL *c_out) {
   const REAL rbar_L = rbar_unscaled(L, a, R, s, N);
+  if (!(isfinite(rbar_L)) || !(fabs(rbar_L) > (REAL)0.0))
+    return 1;
   const REAL c = L / rbar_L;
+  if (!(isfinite(c)))
+    return 1;
 
   for (int i = 0; i < N; i++) {
     const REAL Rm = R[i] - s[i];
@@ -52,6 +57,7 @@ static inline void evaluate_constraints(const REAL L, const REAL r_trans[], cons
 
   if (c_out)
     *c_out = c;
+  return 0;
 }
 
 static inline int solve_linear_system(const int n, const REAL *A_in, const REAL *b_in, REAL *x_out) {
@@ -116,6 +122,10 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
   const REAL r_trans[2] = {commondata->fisheye_phys_r_trans1, commondata->fisheye_phys_r_trans2};
   const REAL w_trans[2] = {commondata->fisheye_phys_w_trans1, commondata->fisheye_phys_w_trans2};
 
+  for (int i = 0; i < NTRANS + 1; i++) {
+    if (!(a[i] > (REAL)0.0))
+      return 1;
+  }
   if (!(L > (REAL)0.0))
     return 1;
   for (int i = 0; i < NTRANS; i++) {
@@ -147,10 +157,13 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
       s[i] = x[2 * i + 1];
       if (!(R[i] > (REAL)0.0) || !(s[i] > (REAL)0.0))
         return 1;
+      if (!(R[i] > s[i]))
+        return 1;
     }
 
     REAL F[NUNK];
-    evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c);
+    if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
+      return 1;
 
     REAL Fnorm = (REAL)0.0;
     for (int i = 0; i < NUNK; i++)
@@ -175,7 +188,8 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
       }
 
       REAL Fp[NUNK];
-      evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL);
+      if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL))
+        return 1;
       for (int i = 0; i < NUNK; i++) {
         J[i][j] = (Fp[i] - F[i]) / dx;
       }
@@ -203,6 +217,16 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
         }
       }
       if (ok) {
+        for (int i = 0; i < NTRANS; i++) {
+          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
+          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
+          if (!(Rtrial > strial)) {
+            ok = 0;
+            break;
+          }
+        }
+      }
+      if (ok) {
         REAL x_trial[NUNK];
         for (int i = 0; i < NUNK; i++)
           x_trial[i] = x[i] + alpha * delta[i];
@@ -213,7 +237,8 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
           st[i] = x_trial[2 * i + 1];
         }
         REAL F_trial[NUNK];
-        evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL);
+        if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
+          return 1;
         REAL Fnorm_trial = (REAL)0.0;
         for (int i = 0; i < NUNK; i++)
           Fnorm_trial += fabs(F_trial[i]);
@@ -269,6 +294,11 @@ static int write_fisheye_grid_txt(const char *fname) {
   const int NTRANS = (int)(sizeof(r_trans) / sizeof(r_trans[0]));
   const int NUNK = 2 * NTRANS;
 
+  for (int i = 0; i < NTRANS + 1; i++) {
+    if (!(a[i] > (REAL)0.0))
+      return 1;
+  }
+
   REAL x[NUNK];
   for (int i = 0; i < NTRANS; i++) {
     x[2 * i + 0] = r_trans[i];
@@ -290,9 +320,12 @@ static int write_fisheye_grid_txt(const char *fname) {
     for (int i = 0; i < NTRANS; i++) {
       R[i] = x[2 * i + 0];
       s[i] = x[2 * i + 1];
+      if (!(R[i] > s[i]))
+        return 1;
     }
     REAL F[NUNK];
-    evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c);
+    if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
+      return 1;
 
     REAL Fnorm = (REAL)0.0;
     for (int i = 0; i < NUNK; i++)
@@ -316,7 +349,8 @@ static int write_fisheye_grid_txt(const char *fname) {
         sp[i] = x[2 * i + 1];
       }
       REAL Fp[NUNK];
-      evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL);
+      if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL))
+        return 1;
       for (int i = 0; i < NUNK; i++) {
         J[i][j] = (Fp[i] - F[i]) / dx;
       }
@@ -341,6 +375,14 @@ static int write_fisheye_grid_txt(const char *fname) {
           ok = 0;
       }
       if (ok) {
+        for (int i = 0; i < NTRANS; i++) {
+          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
+          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
+          if (!(Rtrial > strial))
+            ok = 0;
+        }
+      }
+      if (ok) {
         REAL Rt[NTRANS];
         REAL st[NTRANS];
         for (int i = 0; i < NTRANS; i++) {
@@ -348,7 +390,8 @@ static int write_fisheye_grid_txt(const char *fname) {
           st[i] = x_trial[2 * i + 1];
         }
         REAL F_trial[NUNK];
-        evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL);
+        if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
+          return 1;
         REAL Fnorm_trial = (REAL)0.0;
         for (int i = 0; i < NUNK; i++)
           Fnorm_trial += fabs(F_trial[i]);
@@ -372,6 +415,8 @@ static int write_fisheye_grid_txt(const char *fname) {
   for (int i = 0; i < NTRANS; i++) {
     R[i] = x[2 * i + 0];
     s[i] = x[2 * i + 1];
+    if (!(R[i] > s[i]))
+      return 1;
   }
   const REAL dx = (REAL)2.0 * L / (REAL)(N - 1);
 
