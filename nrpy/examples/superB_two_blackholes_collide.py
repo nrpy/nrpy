@@ -339,7 +339,6 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_psi4_diagnostics=False,
     enable_BHaHAHA=enable_BHaHAHA,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(

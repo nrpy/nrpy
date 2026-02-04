@@ -25,6 +25,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+import subprocess
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
@@ -61,6 +62,7 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
+enable_BHaHAHA = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
@@ -71,9 +73,12 @@ diagnostics_output_every = 0.5
 enable_charm_checkpointing = True
 default_checkpoint_every = 20.0
 t_final = 1.5 * grid_physical_size
+enable_psi4 = True
+if enable_psi4 and not enable_BHaHAHA:
+    raise ValueError("enable_psi4 requires enable_BHaHAHA to be True.")
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
-if paper:
+if paper and enable_psi4:
     list_of_psi4_extraction_radii = [80.0, 160.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
@@ -105,6 +110,10 @@ if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 1)
     par.adjust_CodeParam_default("Nchare2", 4)
 
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
 OMP_collapse = 1
 sinh_width = 0.2
 if "Spherical" in CoordSystem:
@@ -125,6 +134,54 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
+
+if enable_BHaHAHA:
+    #########################################################
+    # STEP 2: Declare core C functions & register each to
+    #         cfc.CFunction_dict["function_name"]
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+                "--cpp",
+                "--no-openmp",
+            ],
+            check=True,
+        )
+    from nrpy.infrastructures.superB import (
+        BHaH_implementation,
+    )
+
+    BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        CoordSystem=CoordSystem, max_horizons=3
+    )
+    superB.interpolator3d_chare.output_interpolator3d_h_cpp_ci(
+        project_dir=project_dir,
+        enable_psi4=enable_psi4,
+    )
+    superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -166,7 +223,7 @@ superB.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics=False, enable_psi4=True
+    enable_interp_diagnostics=False, enable_psi4=enable_psi4
 )
 superB.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest(
     CoordSystem
@@ -215,18 +272,22 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
-    CoordSystem=CoordSystem,
-    OMP_collapse=OMP_collapse,
-    enable_fd_functions=enable_fd_functions,
-)
-BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
-    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
-)
+if enable_psi4:
+    BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
+        CoordSystem=CoordSystem,
+        OMP_collapse=OMP_collapse,
+        enable_fd_functions=enable_fd_functions,
+    )
+    BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+        swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+    )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
+if enable_psi4:
+    superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
+
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     list_of_grid_physical_sizes=[grid_physical_size],
@@ -238,7 +299,6 @@ superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    enable_psi4_diagnostics=True,
 )
 superB.chare_communication_maps.chare_comm_register_C_functions(
     set_of_CoordSystems={CoordSystem}
@@ -282,6 +342,7 @@ superB.MoL.register_CFunctions(
     post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
+    enable_psi4=enable_psi4,
 )
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
@@ -316,16 +377,36 @@ par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
 par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
-par.adjust_CodeParam_default(
-    "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
-)
-if paper:
+if enable_psi4:
+    par.adjust_CodeParam_default(
+        "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
+    )
+if paper and enable_psi4:
     par.adjust_CodeParam_default("num_psi4_extraction_radii", num_psi4_extraction_radii)
     par.adjust_CodeParam_default(
         "list_of_psi4_extraction_radii",
         list_of_psi4_extraction_radii,
         new_cparam_type=f"REAL[{num_psi4_extraction_radii}]",
     )
+if enable_BHaHAHA:
+    # Set BHaHAHA defaults to reasonable values.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.1 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -354,6 +435,7 @@ copy_files(
 superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
     enable_charm_checkpointing=enable_charm_checkpointing,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
@@ -371,14 +453,14 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     enable_rfm_precompute=enable_rfm_precompute,
     outer_bcs_type=outer_bcs_type,
-    # ~ enable_psi4_diagnostics=True,
-    enable_psi4_diagnostics=False,
+    enable_psi4=enable_psi4,
     enable_charm_checkpointing=enable_charm_checkpointing,
+    enable_BHaHAHA=enable_BHaHAHA,
 )
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
-    enable_psi4_diagnostics=True,
+    enable_psi4=enable_psi4,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",
@@ -391,6 +473,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[
         str(Path("TwoPunctures") / Path("TwoPunctures.h")),
         str(Path("superB") / Path("superB.h")),
+        *([os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_BHaHAHA else []),
     ],
     project_dir=project_dir,
     enable_rfm_precompute=enable_rfm_precompute,
@@ -408,15 +491,19 @@ if enable_intrinsics:
 superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
+    addl_dirs_to_make=[*([BHaHAHA_subdir] if enable_BHaHAHA else [])],
     exec_or_library_name=project_name,
     compiler_opt_option="default",
     addl_CFLAGS=["$(shell gsl-config --cflags)", "-fpermissive "],
     addl_libraries=[
         "$(shell gsl-config --libs)",
         "-module CkIO",
+        *([f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_BHaHAHA else []),
     ],
     CC="charmc",
+    enable_BHaHAHA=enable_BHaHAHA,
 )
+
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )

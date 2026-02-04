@@ -119,7 +119,6 @@ for (int j = 0; j < params_chare->Nxx_plus_2NGHOSTS2; j++)
 def register_CFunction_numerical_grids_chare(
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
-    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register a C function to set up all numerical grids and timestep.
@@ -130,7 +129,6 @@ def register_CFunction_numerical_grids_chare(
 
     :param enable_rfm_precompute: Whether to enable reference metric precomputation (default: False).
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions (default: False).
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Set up a cell-centered grids of size grid_physical_size."
@@ -172,12 +170,12 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
     else:
         body += "// (curvilinear boundary conditions bcstruct disabled)\n"
-    
+
     body += r"""
     // Initialize the diagnostics struct with zero
     griddata_chare[grid].diagnosticstruct = (diagnostic_struct){0};
   }
-  
+
   // 1D diagnostics set up
   diagnostics(commondata, griddata, griddata_chare, NULL, chare_index, 0, Ck::IO::Session{}, DIAGNOSTICS_SETUP_1D);
 
@@ -201,7 +199,6 @@ def register_CFunctions(
     set_of_CoordSystems: Set[str],
     enable_rfm_precompute: bool = False,
     enable_CurviBCs: bool = False,
-    enable_psi4_diagnostics: bool = False,
 ) -> None:
     """
     Register C functions related to coordinate systems and grid parameters.
@@ -209,7 +206,6 @@ def register_CFunctions(
     :param set_of_CoordSystems: Set of CoordSystems
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_CurviBCs: Whether to enable curvilinear boundary conditions.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     """
     for CoordSystem in set_of_CoordSystems:
         register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare(
@@ -218,5 +214,4 @@ def register_CFunctions(
     register_CFunction_numerical_grids_chare(
         enable_rfm_precompute=enable_rfm_precompute,
         enable_CurviBCs=enable_CurviBCs,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
     )

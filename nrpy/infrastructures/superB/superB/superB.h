@@ -10,6 +10,7 @@
 #ifndef __SUPERB_H__
 #define __SUPERB_H__
 
+#include <stddef.h>
 #include "ckio.h"
 #include "pup.h"
 #ifndef REAL
@@ -90,6 +91,33 @@
 #define BHAHAHA_FIND_HORIZONS_SETUP 0
 #define BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE 1
 
+typedef struct __commondata_struct__ commondata_struct;
+typedef struct __params_struct__ params_struct;
+
+#ifndef PSI4_SHELL_ANGULAR_GRID_T_DEFINED
+#define PSI4_SHELL_ANGULAR_GRID_T_DEFINED
+typedef struct psi4_shell_angular_grid_struct {
+  int N_theta;
+  int N_phi;
+  int num_pts;
+  REAL dtheta;
+  REAL dphi;
+  REAL *theta_array;
+  REAL *phi_array;
+  REAL *sin_theta_array;
+  REAL *cos_theta_array;
+  REAL *sin_phi_array;
+  REAL *cos_phi_array;
+} psi4_shell_angular_grid_t;
+#endif
+void psi4_spinweightm2_shell_init(const commondata_struct *restrict commondata, psi4_shell_angular_grid_t *restrict shell);
+void psi4_spinweightm2_shell_free(psi4_shell_angular_grid_t *restrict shell);
+void psi4_spinweightm2_shell_fill_points(const params_struct *restrict params, const psi4_shell_angular_grid_t *restrict shell, const REAL R_ext,
+                                         REAL (*dst_pts)[3], int *all_points_interior);
+void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commondata, const psi4_shell_angular_grid_t *restrict shell, const REAL curr_time,
+                                       const REAL R_ext, const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext);
+int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]);
+
 typedef struct __charecomm_struct__ {
   int *globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
   int *globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
@@ -136,20 +164,6 @@ typedef struct __diagnostic_struct__ {
   char filename_1d_z[256];
   char filename_2d_xy[256];
   char filename_2d_yz[256];
-  // psi4:
-  int num_of_R_exts_chare;
-  int psi4_spinweightm2_sph_harmonics_max_l;
-  int length_localsums_for_psi4_decomp;
-  REAL *list_of_R_exts_chare;
-  REAL *localsums_for_psi4_decomp;
-  REAL *globalsums_for_psi4_decomp;
-  // psi4 cylindrical-like coords only:
-  int tot_N_shell_pts_chare;
-  REAL dtheta;
-  int *N_shell_pts_chare; // of shape int [num_of_R_exts_chare]
-  int *N_theta_shell_chare; // of shape int [num_of_R_exts_chare]
-  REAL ***xx_shell_chare; // of shape [num_of_R_exts_chare][N_shell_pts_chare][3]
-  REAL **theta_shell_chare; // of shape [num_of_R_exts_chare][N_theta_shell_chare]
 } diagnostic_struct;
 
 typedef struct __tmpBuffers_struct__ {
