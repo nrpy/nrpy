@@ -17,14 +17,17 @@ Physical parameter meanings (physical radius):
 
 from typing import List, Union
 
-from nrpy.c_function import register_CFunction
-import nrpy.c_function as cfc
-from nrpy.equations.generalrfm import fisheye as fisheye_eqs
 import nrpy.params as par
+from nrpy.c_function import register_CFunction
+from nrpy.equations.generalrfm import fisheye as fisheye_eqs
 
 
 def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
-    """Register physical fisheye CodeParameters (in commondata, parfile-visible)."""
+    """
+    Register physical fisheye CodeParameters (in commondata, parfile-visible).
+
+    :param num_transitions: Number of fisheye transitions.
+    """
     _ = par.register_CodeParameter(
         "REAL",
         __name__,
@@ -95,6 +98,9 @@ def register_CFunction_fisheye_params_from_physical_N(
     ...     name = f"fisheye_params_from_physical_N{n}"
     ...     generated_str = cfc.CFunction_dict[name].full_function
     ...     validate_strings(generated_str, name, file_ext="c")
+
+    :param num_transitions: Number of fisheye transitions.
+    :raises ValueError: If num_transitions is less than 1.
     """
     if num_transitions < 1:
         raise ValueError("num_transitions must be >= 1")
