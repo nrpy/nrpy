@@ -179,7 +179,8 @@ static inline REAL rbar_unscaled(const REAL r,
   return rb;
 }}
 
-static inline void evaluate_constraints(const REAL L,
+// Return 0 on success, nonzero on failure (invalid/non-finite scaling).
+static inline int evaluate_constraints(const REAL L,
                                         const REAL r_trans[],
                                         const REAL w_trans[],
                                         const REAL a[],
@@ -188,7 +189,9 @@ static inline void evaluate_constraints(const REAL L,
                                         const int N,
                                         REAL F[], REAL *c_out) {{
   const REAL rbar_L = rbar_unscaled(L, a, R, s, N);
+  if (!(isfinite(rbar_L)) || !(fabs(rbar_L) > (REAL)0.0)) return 1;
   const REAL c = L / rbar_L;
+  if (!(isfinite(c))) return 1;
 
   for (int i = 0; i < N; i++) {{
     const REAL Rm = R[i] - s[i];
@@ -201,6 +204,7 @@ static inline void evaluate_constraints(const REAL L,
   }}
 
   if (c_out) *c_out = c;
+  return 0;
 }}
 
 static inline int solve_linear_system(const int n,
@@ -251,6 +255,9 @@ static inline int solve_linear_system(const int n,
   const REAL r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
   const REAL w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
 
+  for (int i = 0; i < NTRANS + 1; i++) {{
+    if (!(a[i] > (REAL)0.0)) return 1;
+  }}
   if (!(L > (REAL)0.0)) return 1;
   for (int i = 0; i < NTRANS; i++) {{
     if (!(r_trans[i] > (REAL)0.0) || !(w_trans[i] > (REAL)0.0)) return 1;
@@ -281,7 +288,7 @@ static inline int solve_linear_system(const int n,
     }}
 
     REAL F[NUNK];
-    evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c);
+    if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c)) return 1;
 
     REAL Fnorm = (REAL)0.0;
     for (int i = 0; i < NUNK; i++) Fnorm += fabs(F[i]);
@@ -302,7 +309,7 @@ static inline int solve_linear_system(const int n,
       }}
 
       REAL Fp[NUNK];
-      evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL);
+      if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL)) return 1;
       for (int i = 0; i < NUNK; i++) {{
         J[i][j] = (Fp[i] - F[i]) / dx;
       }}
@@ -334,7 +341,7 @@ static inline int solve_linear_system(const int n,
           st[i] = x_trial[2 * i + 1];
         }}
         REAL F_trial[NUNK];
-        evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL);
+        if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL)) return 1;
         REAL Fnorm_trial = (REAL)0.0;
         for (int i = 0; i < NUNK; i++) Fnorm_trial += fabs(F_trial[i]);
         if (Fnorm_trial < Fnorm) {{
@@ -411,6 +418,11 @@ static int write_fisheye_grid_txt(const char *fname) {{
   const int NTRANS = (int)(sizeof(r_trans) / sizeof(r_trans[0]));
   const int NUNK = 2 * NTRANS;
 
+  for (int i = 0; i < NTRANS + 1; i++) {{
+    if (!(a[i] > (REAL)0.0))
+      return 1;
+  }}
+
   REAL x[NUNK];
   for (int i = 0; i < NTRANS; i++) {{
     x[2 * i + 0] = r_trans[i];
@@ -422,7 +434,7 @@ static int write_fisheye_grid_txt(const char *fname) {{
 
   int converged = 0;
   for (int iter = 0; iter < max_iter; iter++) {{
-    for (int i = 0; i < NUNK; i++) {{
+  for (int i = 0; i < NUNK; i++) {{
       if (!(x[i] > (REAL)0.0))
         return 1;
     }}
@@ -434,7 +446,7 @@ static int write_fisheye_grid_txt(const char *fname) {{
       s[i] = x[2 * i + 1];
     }}
     REAL F[NUNK];
-    evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c);
+    if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c)) return 1;
 
     REAL Fnorm = (REAL)0.0;
     for (int i = 0; i < NUNK; i++) Fnorm += fabs(F[i]);
@@ -457,7 +469,7 @@ static int write_fisheye_grid_txt(const char *fname) {{
         sp[i] = x[2 * i + 1];
       }}
       REAL Fp[NUNK];
-      evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL);
+      if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL)) return 1;
       for (int i = 0; i < NUNK; i++) {{
         J[i][j] = (Fp[i] - F[i]) / dx;
       }}
@@ -487,7 +499,7 @@ static int write_fisheye_grid_txt(const char *fname) {{
           st[i] = x_trial[2 * i + 1];
         }}
         REAL F_trial[NUNK];
-        evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL);
+        if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL)) return 1;
         REAL Fnorm_trial = (REAL)0.0;
         for (int i = 0; i < NUNK; i++) Fnorm_trial += fabs(F_trial[i]);
         if (Fnorm_trial < Fnorm) {{
