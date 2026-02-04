@@ -197,6 +197,7 @@ def output_interpolator3d_cpp(
 #include "interpolator3d.h"
 #include "InterpBufMsg.h"
 #include <cstring>
+#include <cstdlib>
 
 extern/* readonly */ CProxy_Timestepping timesteppingArray;
 extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
@@ -459,6 +460,7 @@ def output_interpolation_buffer_utils_cpp(
     file_output_str = r"""#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include <cstring>
+#include <cstdlib>
 
 int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]) {
   if (num_gfs <= 0) {
