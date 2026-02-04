@@ -309,10 +309,13 @@ void Interpolator3d::perform_interpolation(int request_type, int request_id, int
   const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
 
-  interpolation_3d_general__uniform_src_grid((NGHOSTS), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1,
-                                             griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
-                                             interp_num_gfs, griddata_chare[grid].xx, src_gf_ptrs, total_elements_chare, dst_x0x1x2_chare,
-                                             dst_data_ptrs_chare);
+  const int interp_err = interpolation_3d_general__uniform_src_grid((NGHOSTS), griddata_chare[grid].params.dxx0, griddata_chare[grid].params.dxx1,
+                                                                    griddata_chare[grid].params.dxx2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+                                                                    interp_num_gfs, griddata_chare[grid].xx, src_gf_ptrs, total_elements_chare, dst_x0x1x2_chare,
+                                                                    dst_data_ptrs_chare);
+  if (interp_err != 0) {
+    CkAbort("Error: interpolation_3d_general__uniform_src_grid failed in perform_interpolation.");
+  }
   contribute_interpolation_results(request_id);
   free(dst_x0x1x2_chare);
   free(dst_indices_chare);
