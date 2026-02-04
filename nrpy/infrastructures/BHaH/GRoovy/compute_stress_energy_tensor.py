@@ -152,8 +152,8 @@ ghl_compute_h_and_cs2(eos, &prims, &h, &cs2);
         VU[i] = rescaledvU[i] * rfm.ReU[i]
 
     # Step 5b: Compute the Lorentz factor term W = alpha * u^0.
-    # We use the relationship: 1 = -(alpha u^0)^2 + gamma_{ij} (u^i + beta^i u^0) (u^j + beta^j u^0)
-    # This implies 1/(alpha u^0)^2 = 1 - gamma_{ij} (v^i + beta^i) (v^j + beta^j) / alpha^2
+    # We use the normalization: -1 = g_{mu nu} u^mu u^nu
+    # => -1 = -(alpha u^0)^2 + gamma_{ij} (u^i + beta^i u^0) (u^j + beta^j u^0)
     one_minus_one_over_alpha_u0_squared = sp.sympify(0.0)
     for i in range(3):
         for j in range(3):
