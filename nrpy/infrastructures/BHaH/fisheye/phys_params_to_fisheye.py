@@ -15,7 +15,7 @@ Physical parameter meanings (physical radius):
 - fisheye_phys_w_trans{i}: physical width of transition i.
 """
 
-from typing import List
+from typing import List, Union
 
 from nrpy.c_function import register_CFunction
 import nrpy.c_function as cfc
@@ -39,8 +39,12 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
     w_names = [f"fisheye_phys_w_trans{i + 1}" for i in range(num_transitions)]
 
     # Reasonable defaults: increasing centers, moderate widths.
-    r_defaults = [2.0 * (i + 1) for i in range(num_transitions)]
-    w_defaults = [1.0 for _ in range(num_transitions)]
+    r_defaults: List[Union[str, int, float]] = [
+        2.0 * (i + 1) for i in range(num_transitions)
+    ]
+    w_defaults: List[Union[str, int, float]] = [
+        1.0 for _ in range(num_transitions)
+    ]
 
     _ = par.register_CodeParameters(
         "REAL",
