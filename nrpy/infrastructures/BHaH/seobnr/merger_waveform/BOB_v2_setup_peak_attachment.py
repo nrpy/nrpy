@@ -88,7 +88,6 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     body = """
     // Step 1: Find the Lag
     const gsl_root_fsolver_type *T = gsl_root_fsolver_brent;
-    gsl_root_fsolver *s = gsl_root_fsolver_alloc(T);
     gsl_function F;
     F.function = &BOB_v2_strain_deriv_lag_helper;
     F.params = commondata;
@@ -97,30 +96,7 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     double x_lo = -20.0;
     double x_hi = 20.0;
     
-    if(gsl_root_fsolver_set(s, &F, x_lo, x_hi) != GSL_SUCCESS) {
-        fprintf(stderr, "Error: BOB_v2 lag solver initialization failed.\\n");
-        exit(EXIT_FAILURE);
-    }
-    
-    int status;
-    int iter = 0;
-    double lag = 0.0;
-    
-    do {
-        iter++;
-        status = gsl_root_fsolver_iterate(s);
-        lag = gsl_root_fsolver_root(s);
-        x_lo = gsl_root_fsolver_x_lower(s);
-        x_hi = gsl_root_fsolver_x_upper(s);
-        status = gsl_root_test_interval(x_lo, x_hi, 0, 1e-9);
-    } while (status == GSL_CONTINUE && iter < 100);
-    
-    gsl_root_fsolver_free(s);
-
-    if (status != GSL_SUCCESS) {
-        fprintf(stderr, "Warning: BOB_v2 lag solver did not converge. Using lag=0.\\n");
-        lag = 0.0;
-    }
+    double lag = root_finding_1d(x_lo, x_hi, &F);
 
     // Step 2: Set the News Peak Time
     // We set the time of the news peak such that the time of the strain peak equals t_attach.

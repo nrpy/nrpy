@@ -61,13 +61,6 @@ class BOB_v2_waveform_quantities:
         (M_f, a_f) = sp.symbols("M_f a_f", real=True)
         chif = a_f / M_f
 
-        # Binary parameters and QNM parameters
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm) = sp.symbols(
-            "m1 m2 chi1 chi2 omega_qnm tau_qnm", real=True
-        )
-        # NQC/attachment and BOB internal parameters
-        (t_p, t) = sp.symbols("t_p t", real=True)
-
         # NQC matching parameters
         M = m1 + m2
         nu = m1 * m2 / M**2
@@ -200,7 +193,8 @@ class BOB_v2_waveform_quantities:
         # This is kept as a class vairable because it is used in BOB_v2_setup_peak_attachment to determine the attachment point
         self.strain_amp_deriv = sp.diff(strain_amplitude, t)
         strain_amp_dderiv = sp.diff(strain_amplitude, t, 2)
-        # frequency(z*exp(i * phi)) = phidot -i * (zbar * zdot - zbardot * z) / (2 * z * zbar)
+        # For h = H*exp(-i*phi_news) and defining omega := -d/dt arg(h) = -Im(hdot/h):
+        # omega = phidot + i*(Hbar*Hdot - Hbardot*H)/(2*H*Hbar)
         strain_frequency = omega_news + sp.I * (
             Hbar * sp.diff(H, t) - sp.diff(Hbar, t) * H
         ) / (2 * H * Hbar)
