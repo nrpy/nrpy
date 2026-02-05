@@ -8,6 +8,7 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 Note: This is the superB version.
 """
 
+import argparse
 import os
 
 #########################################################
@@ -21,15 +22,49 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
 
+parser = argparse.ArgumentParser(
+    description="NRPyElliptic Solver for Conformally Flat BBH initial data"
+)
+parser.add_argument(
+    "--floating_point_precision",
+    type=str,
+    help="Floating point precision (e.g. float, double).",
+    default="double",
+)
+args = parser.parse_args()
+
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
+fp_type = args.floating_point_precision.lower()
 project_name = "superB_nrpyelliptic_conformally_flat"
+enable_simd_intrinsics = True
 grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
-log10_residual_tolerance = -15.8  # Set tolerance for log10(residual) to stop relaxation
-default_diagnostics_output_every = 100
+
+
+def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
+    """
+    Determine the residual tolerance based on the fp_precision.
+
+    :param fp_type_str: string representing the floating point type.
+    :return: float of the residual tolerance based on fp_type.
+    :raises ValueError: If the input fp_type_str branch is not defined.
+    """
+    res: float = -1.0
+    if fp_type_str == "double":
+        res = -11.2
+    elif fp_type_str == "float":
+        res = -6.5
+    else:
+        raise ValueError(f"residual tolerance not defined for {fp_type_str} precision")
+    return res
+
+
+# Set tolerance for log10(residual) to stop relaxation
+log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
+default_diagnostics_output_every = 8e-2
 default_checkpoint_every = 50.0
 eta_damping = 11.0
 MINIMUM_GLOBAL_WAVESPEED = 0.7
@@ -166,9 +201,20 @@ superB.numerical_grids.register_CFunctions(
 )
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
-superB.nrpyelliptic.diagnostics.register_CFunction_diagnostics(
-    CoordSystem=CoordSystem,
+superB.diagnostics.diagnostics.register_all_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=default_diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
+)
+BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False
+)
+superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest(
+    CoordSystem
 )
 
 if enable_rfm_precompute:
@@ -179,7 +225,6 @@ if enable_rfm_precompute:
 # Generate function to compute RHSs
 BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_simd,
     OMP_collapse=OMP_collapse,
 )
@@ -187,13 +232,8 @@ BHaH.nrpyelliptic.rhs_eval.register_CFunction_rhs_eval(
 # Generate function to compute residuals
 BHaH.nrpyelliptic.residual_H_compute_all_points.register_CFunction_residual_H_compute_all_points(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_simd_intrinsics=enable_simd_intrinsics,
     OMP_collapse=OMP_collapse,
-)
-
-# Generate diagnostics functions
-superB.nrpyelliptic.log10_L2norm_gf.register_CFunction_log10_L2norm_gf(
-    CoordSystem=CoordSystem
 )
 
 # Register function to check for stop conditions
@@ -310,6 +350,11 @@ if initial_data_type == "axisymmetric":
         ]:
             par.adjust_CodeParam_default(param, value)
 
+
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir,
+)
+
 #########################################################
 # STEP 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
@@ -352,8 +397,7 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_psi4_diagnostics=False,
-    enable_residual_diagnostics=True,
+    nrpyelliptic_project=True,
     post_non_y_n_auxevol_mallocs="auxevol_gfs_set_to_constant(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
 )
@@ -365,7 +409,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[str(Path("superB") / Path("superB.h"))],
     project_dir=project_dir,
-    enable_intrinsics=enable_simd,
+    enable_rfm_precompute=True,
 )
 
 if enable_simd:

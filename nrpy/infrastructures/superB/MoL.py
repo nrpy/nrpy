@@ -27,6 +27,8 @@ from nrpy.c_codegen import c_codegen
 from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures import superB
+
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
@@ -331,73 +333,6 @@ def generate_rhs_output_exprs(
     return (
         rhs_output_expr  # Return the list of strings representing the RHS output expr
     )
-
-
-def register_CFunction_MoL_malloc_diagnostic_gfs() -> None:
-    """
-    Register the CFunction 'MoL_malloc_diagnostic_gfs'.
-    This function allocates memory for diagnostic grid functions.
-    :raises RuntimeError: If an error occurs while registering the CFunction
-    :return None
-    """
-    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc: str = "Allocate memory for diagnostic gfs"
-    cfunc_type: str = "void"
-    name: str = "MoL_malloc_diagnostic_gfs"
-    params: str = (
-        "const commondata_struct *restrict commondata, const params_struct *restrict params, MoL_gridfunctions_struct *restrict gridfuncs"
-    )
-    body: str = """
-const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-gridfuncs->diagnostic_output_gfs = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-"""
-    try:
-        cfc.register_CFunction(
-            includes=includes,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            name=name,
-            params=params,
-            include_CodeParameters_h=True,
-            body=body,
-        )
-    except Exception as e:
-        raise RuntimeError(
-            f"Error registering CFunction 'MoL_malloc_diagnostic_gfs': {str(e)}"
-        ) from e
-
-
-def register_CFunction_MoL_free_memory_diagnostic_gfs() -> None:
-    """
-    Register the CFunction 'MoL_free_memory_diagnostic_gfs'.
-
-    This function frees the memory allocated for diagnostic grid functions.
-
-    :raises RuntimeError: If an error occurs while registering the CFunction
-
-    :return None
-    """
-    includes: List[str] = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc: str = "Free memory for diagnostic gfs"
-    cfunc_type: str = "void"
-    name: str = "MoL_free_memory_diagnostic_gfs"
-    params: str = "MoL_gridfunctions_struct *restrict gridfuncs"
-    body: str = """
-  free(gridfuncs->diagnostic_output_gfs);
-"""
-    try:
-        cfc.register_CFunction(
-            includes=includes,
-            desc=desc,
-            cfunc_type=cfunc_type,
-            name=name,
-            params=params,
-            body=body,
-        )
-    except Exception as e:
-        raise RuntimeError(
-            f"Error registering CFunction 'MoL_free_memory_diagnostic_gfs': {str(e)}"
-        ) from e
 
 
 def register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(
@@ -892,14 +827,21 @@ def create_rk_substep_constants(num_steps: int) -> str:
     return "\n".join(f"#define RK_SUBSTEP_K{s+1} {s+1}" for s in range(num_steps))
 
 
-def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int, int]:
+def register_CFunction_MoL_sync_data_defines(
+    enable_psi4: bool = False,
+) -> Tuple[int, int, int]:
     """
     Register the CFunction 'MoL_sync_data_defines'.
     This function sets up data required for communicating gfs between chares.
+
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :raises RuntimeError: If an error occurs while registering the CFunction
     :return: None
     """
     includes: List[str] = ["BHaH_defines.h"]
+    if enable_psi4:
+        includes.append("diagnostics/diagnostic_gfs.h")
+
     desc: str = "Define data needed for syncing data across chares"
     cfunc_type: str = "void"
     name: str = "MoL_sync_data_defines"
@@ -926,8 +868,12 @@ def register_CFunction_MoL_sync_data_defines() -> Tuple[int, int, int]:
             elif gf_class_obj.group == "AUXEVOL":
                 num_sync_auxevol_gfs += 1
                 sync_auxevol_list.append(gf_name)
-            # sync of psi4 is needed for cylindrical-like coords
-            elif gf_class_obj.group == "AUX" and gf_name in ["PSI4_RE", "PSI4_IM"]:
+
+        if enable_psi4:
+            if gf_class_obj.group == "DIAG" and gf_name in [
+                "DIAG_PSI4_RE",
+                "DIAG_PSI4_IM",
+            ]:
                 num_sync_aux_gfs += 1
                 sync_aux_list.append(gf_name)
 
@@ -975,6 +921,7 @@ def register_CFunctions(
     enable_curviBCs: bool = False,
     enable_simd: bool = False,
     register_MoL_step_forward_in_time: bool = True,
+    enable_psi4: bool = False,
 ) -> None:
     r"""
     Register all MoL C functions and NRPy basic defines.
@@ -987,6 +934,7 @@ def register_CFunctions(
     :param enable_curviBCs: Enable curvilinear boundary conditions. Default is False.
     :param enable_simd: Enable Single Instruction, Multiple Data (SIMD). Default is False.
     :param register_MoL_step_forward_in_time: Whether to register the MoL step forward function. Default is True.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
 
     :return None
 
@@ -1008,11 +956,8 @@ def register_CFunctions(
     )
     register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
 
-    register_CFunction_MoL_malloc_diagnostic_gfs()
-    register_CFunction_MoL_free_memory_diagnostic_gfs()
-
     (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync) = (
-        register_CFunction_MoL_sync_data_defines()
+        register_CFunction_MoL_sync_data_defines(enable_psi4)
     )
 
     if register_MoL_step_forward_in_time:
@@ -1031,14 +976,15 @@ def register_CFunctions(
         __name__, "MoL_gridfunctions_struct gridfuncs", "MoL gridfunctions"
     )
 
-    # Generating gridfunction names based on the given MoL method
-    intermediate_stage_gfs = BHaH.MoLtimestepping.rk_butcher_table_dictionary.intermediate_stage_gf_names_list(
-        Butcher_dict, MoL_method=MoL_method
+    gf_list_in_MoL_gridfunctions_struct = (
+        superB.timestepping_chare.generate_complete_gf_list(Butcher_dict, MoL_method)
     )
-    gf_list = ["y_n_gfs"] + intermediate_stage_gfs + ["auxevoL_gfs"]
 
     # Define constants to keep synching of y n gfs during initial data distinct
-    gf_list += ["y_n_gfs_initialdata_part1", "y_n_gfs_initialdata_part2"]
+    gf_list = gf_list_in_MoL_gridfunctions_struct + [
+        "y_n_gfs_initialdata_part1",
+        "y_n_gfs_initialdata_part2",
+    ]
 
     gf_constants = create_gf_constants(gf_list)
 
@@ -1057,9 +1003,8 @@ def register_CFunctions(
         int evol_gfs_to_sync[{num_evol_gfs_to_sync}];
         int auxevol_gfs_to_sync[{num_auxevol_gfs_to_sync}];
         int aux_gfs_to_sync[{num_aux_gfs_to_sync}];\n"""
-        "REAL *y_n_gfs;\n"
-        + "".join(f"REAL *{gfs};\n" for gfs in intermediate_stage_gfs)
-        + """REAL *auxevol_gfs;
+        + "".join(f"REAL *{gfs};\n" for gfs in gf_list_in_MoL_gridfunctions_struct)
+        + """
 } MoL_gridfunctions_struct;
 """
         + rf"""// Define constants for accessing gridfunction types

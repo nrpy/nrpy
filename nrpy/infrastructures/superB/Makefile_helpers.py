@@ -252,10 +252,13 @@ interpolator3d.o: interpolator3d.cpp interpolator3d.h timestepping.h horizon_fin
 horizon_finder.o: horizon_finder.cpp horizon_finder.h interpolator3d.h timestepping.h main.h horizon_finder.def.h
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
+interpolation_buffer_utils.o: interpolation_buffer_utils.cpp BHaH_function_prototypes.h
+	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
+
 main.o: main.cpp main.h main.def.h timestepping.decl.h horizon_finder.decl.h interpolator3d.decl.h
 	$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@
 
-{exec_or_library_name}: $(OBJ_FILES) interpolator3d.o horizon_finder.o timestepping.o main.o
+{exec_or_library_name}: $(OBJ_FILES) interpolator3d.o horizon_finder.o timestepping.o main.o interpolation_buffer_utils.o
 """
 
     Makefile_str += "".join(f"\t$(MAKE) -C {d}\n" for d in local_addl_dirs_to_make)
@@ -263,7 +266,7 @@ main.o: main.cpp main.h main.def.h timestepping.decl.h horizon_finder.decl.h int
 
 # Use $(RM) to be cross-platform compatible.
 clean:
-	$(RM) *.o */*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
+	$(RM) *.o */*.o */*/*.o *~ */*~ ./#* *.txt *.gp *.dat *.avi *.png {exec_or_library_name} *.decl.h *.def.h charmrun
 	$(RM) -r log
 """
     # Add the valgrind target
