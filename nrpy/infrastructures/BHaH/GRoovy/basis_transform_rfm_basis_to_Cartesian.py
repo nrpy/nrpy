@@ -85,13 +85,13 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian(
     ]
 
     # Step 4: Define Symbolic Variables for Scalar Quantities
-    rhob, P, rho_star, tau_tilde = sp.symbols(["rhob P rho_star tau_tilde"], real=True)
+    rhob, P, rho_star, tau_tilde = sp.symbols("rhob P rho_star tau_tilde", real=True)
 
     if evolving_temperature:
-        Ye, Ye_star, temperature = sp.symbols(["Ye Ye_star temperature"], real=True)
+        Ye, Ye_star, temperature = sp.symbols("Ye Ye_star temperature", real=True)
 
     if evolving_entropy:
-        S, S_star = sp.symbols(["S S_star"], real=True)
+        S, S_star = sp.symbols("S S_star", real=True)
 
     # Step 5: Process Vector Quantities
     # Declare rank-1 variables for velocity and momentum
