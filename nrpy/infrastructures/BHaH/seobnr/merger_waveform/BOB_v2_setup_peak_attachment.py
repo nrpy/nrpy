@@ -87,7 +87,6 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
 
     body = """
     // Step 1: Find the Lag
-    const gsl_root_fsolver_type *T = gsl_root_fsolver_brent;
     gsl_function F;
     F.function = &BOB_v2_strain_deriv_lag_helper;
     F.params = commondata;
