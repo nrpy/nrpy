@@ -24,7 +24,10 @@ the following improvements over the current SEBOBv1:
 Currently, this examples calculates:
 Aligned-spin (2,2) IMR modes using SEOBNRv5 and BOBv2.
 
-Authors: Siddharth Mahesh
+Authors:
+        Anuj Kankani
+        aak00009 **at** mix **dot** wvu **dot** edu
+        Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -128,6 +131,7 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 SEBOBv2_NQC_corrections(&commondata);
 // Step TBD: Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
+
 """
     if frequency_domain:
         body += r"""
@@ -247,7 +251,7 @@ else:
 par.register_CodeParameters(
     "REAL",
     __name__,
-    ["t_p_BOB", "Omega_0_BOB"],
+    ["t_p_BOB"],
     commondata=True,
     add_to_parfile=False,
     add_to_set_CodeParameters_h=False,
@@ -286,8 +290,7 @@ if __name__ == "__main__":
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
 
     # set up merger-ringdown routines based on input flags
-    BHaH.seobnr.merger_waveform.BOB_v2_find_tp_Omega0.register_CFunction_BOB_v2_find_tp_Omega0()
-    BHaH.seobnr.merger_waveform.BOB_v2_peak_strain_conditions.register_CFunction_BOB_v2_peak_strain_conditions()
+    BHaH.seobnr.merger_waveform.BOB_v2_setup_peak_attachment.register_CFunction_BOB_v2_setup_peak_attachment()
     BHaH.seobnr.merger_waveform.BOB_v2_waveform.register_CFunction_BOB_v2_waveform()
     BHaH.seobnr.merger_waveform.BOB_v2_waveform_from_times.register_CFunction_BOB_v2_waveform_from_times()
     # register IMR waveform generation routine
