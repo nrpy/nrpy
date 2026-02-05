@@ -15,8 +15,9 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
     Register CFunction for integrating the SEOBNRv5 equations of motion using GSL.
 
