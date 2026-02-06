@@ -97,7 +97,7 @@ class SEOBNR_aligned_spin_constants:
         chi21A = (chiS / (1 - 1.3 * nu)) * delta + chiA
         chi33 = chiS * delta + chiA
 
-        self.hNR["(2,1)"] = sp.Abs(
+        self.hNR["(2, 1)"] = sp.Abs(
             -0.033175 * chi21A**3 * delta
             + 0.086356 * chi21A**2 * delta * nu
             - 0.049897 * chi21A**2 * delta
@@ -108,7 +108,7 @@ class SEOBNR_aligned_spin_constants:
             - 0.189346 * delta * nu
             + 0.431426 * delta
         )
-        self.hNR["(4,3)"] = sp.Abs(
+        self.hNR["(4, 3)"] = sp.Abs(
             -0.071554 * chi33**2 * delta * nu
             + 0.021932 * chi33**2 * delta
             - 1.738079 * chi33 * nu**2
@@ -118,7 +118,7 @@ class SEOBNR_aligned_spin_constants:
             - 0.273364 * delta * nu
             + 0.07442 * delta
         )
-        self.hNR["(5,5)"] = sp.Abs(
+        self.hNR["(5, 5)"] = sp.Abs(
             -7.402839 * chi33 * nu**3
             + 3.965852 * chi33 * nu**2
             - 0.762776 * chi33 * nu

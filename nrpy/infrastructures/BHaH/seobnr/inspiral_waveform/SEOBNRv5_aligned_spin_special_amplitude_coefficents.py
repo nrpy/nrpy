@@ -56,7 +56,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
         mode = ast.literal_eval(key)
         l, m = mode
         for mode in modes:
-            hNR.append(hNR_fits.hNR[f"({l} , {m})"])
+            hNR.append(hNR_fits[f"({l} , {m})"])
             hNR_labels.append(f"const REAL hNR{l}{m}")
 
     rholm_code = ccg.c_codegen(
@@ -157,12 +157,12 @@ const REAL c_21 = commondata->c_21;
 const REAL c_43 = commondata->c_43;
 const REAL c_55 = commondata->c_55;
 const REAL Omega = dynamics[OMEGA];
-const REAL rho21 = rhos[RHO21];
-const REAL rho43 = rhos[RHO43];
-const REAL rho55 = rhos[RHO55];
-const REAL hNR21 = hNR[hNR21];
-const REAL hNR43 = hNR[hNR43];
-const REAL hNR55 = hNR[hNR55];
+REAL rho21 = rhos[RHO21];
+REAL rho43 = rhos[RHO43];
+REAL rho55 = rhos[RHO55];
+const REAL hnr21 = hNR[hNR21];
+const REAL hnr43 = hNR[hNR43];
+const REAL hnr55 = hNR[hNR55];
 double complex h21 = inspiral_modes[STRAIN21];
 double complex h43 = inspiral_modes[STRAIN43];
 double complex h55 = inspiral_modes[STRAIN55];
@@ -173,51 +173,20 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   h21[i] = commondata->waveform_fine[IDX_WF(i,STRAIN21)];
   h43[i] = commondata->waveform_fine[IDX_WF(i,STRAIN43)];
+  h55[i] = commondata->waveform_fine[IDX_WF(i,STRAIN55)];
+  R[i] = commondata->dynamics_fine[IDX(i,R)];
+  phi[i] = commondata->dynamics_fine[IDX(i,PHI)];
+  prstar[i] = commondata->dynamics_fine[IDX(i,PRSTAR)];
+  pphi[i] = commondata->dynamics_fine[IDX(i,PPHI)];
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   K21[i] = h21[i] / rho21;
   K43[i] = h43[i] / rho43;
-  v[i] = cbrt(Omega[i])
-  
-}
-
-SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
-// Find t_ISCO:
-
-if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
-  commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-}
-else{
-  const REAL dt_ISCO = 0.001;
-  const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
-  REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
-  REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
-  gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
-  gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
-  gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
-  for (i = 0; i < N_zoom; i++){
-    t_zoom[i] = times[0] + i * dt_ISCO;
-    minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }
-  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
-  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
-
-  gsl_interp_accel_free(acc_r);
-  gsl_spline_free(spline_r);
-  free(t_zoom);
-  free(minus_r_zoom);
-}
-
-
-for (i = 0; i < commondata->nsteps_fine; i++){
-  Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  h55[i] = commondata->waveform_fine[IDX_WF(i,STRAIN55)];
-  times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   K55[i] = h55[i] / rho55;
-  v[i] = cbrt(Omega[i])
+  v[i] = cpow(Omega[i], 1, 3);
   
 }
+// (2,1) (4,3) modes
 
-SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -227,9 +196,25 @@ else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (t_zoom == NULL) {
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\n");
+      exit(1);
+    }
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (minus_r_zoom == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\n");
+      exit(1);
+    }
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  if (acc_r == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_r == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
@@ -243,4 +228,61 @@ else{
   free(t_zoom);
   free(minus_r_zoom);
 }
+
+REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
+size_t peak_idx; 
+
+if (t_peak_22 > times[commondata->nsteps_fine - 1]){
+  t_peak_22 = times[commondata->nsteps_fine - 2];
+  peak_idx = commondata->nsteps_fine - 2;
+}
+else{
+  peak_idx = gsl_interp_bsearch(times, t_peak_22, 0, commondata->nsteps_fine);
+}  
+commondata->t_attach = t_peak_22;
+
+for (i = 0; i< commondata->nsteps_fine; i++){
+    Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
+    h21[i] = commondata->waveform_fine[IDX_WF(i,STRAIN21)];
+    h43[i] = commondata->waveform_fine[IDX_WF(i,STRAIN43)];
+    rho21[i] = commondata->dynamics_fine[IDX(i, RHO21)];
+    rho43[i] = commondata->dynamics_fine[IDX(i, RHO43)];
+    K21[i] = h21[i] / rho21[i];
+    K43[i] = h43[i] / rho43[i];
+    v[i] = cpow(Omega[i], 1, 3);
+    c_21 = (hNR21/K[i] - rho21[i])/v[i];
+    c_43 = (hNR43/K[i] - rho43[i])/v[i];
+} 
+
+// (5,5) mode
+
+REAL t_peak_55 = t_peak_22 + 10;
+
+for (i = 0; i< commondata->nsteps_fine; i++){
+    Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
+    h55[i] = commondata->waveform_fine[IDX_WF(i,STRAIN55)];
+    rho55[i] = commondata->dynamics_fine[IDX(i, RHO55)];
+    K55[i] = h55[i] / rho55[i];
+    v[i] = cpow(Omega[i], 1, 3);
+    c_55 = (hNR55/K[i] - rho55)/v[i];
+}
+
+//save to commondata
+
+commondata->c_21 = c21
+commondata->c_43 = c43
+commondata->c_55 = c55
+
 """
+    cfc.register_CFunction(
+        subdirectory="inspiral_waveform",
+        includes=includes,
+        desc=desc,
+        prefunc=prefunc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return pcg.NRPyEnv()
