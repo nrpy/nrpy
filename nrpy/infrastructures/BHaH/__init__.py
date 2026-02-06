@@ -12,6 +12,7 @@ from . import (
     diagnostics,
     general_relativity,
     griddata_commondata,
+    fisheye,
     main_c,
     nrpyelliptic,
     numerical_grids_and_timestep,
