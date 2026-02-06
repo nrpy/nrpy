@@ -20,7 +20,7 @@ PERTURBATION_MAGNITUDE = 1e-14
 
 
 # --- Helper Functions ---
-def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.float64]:
+def run_sebobv2(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.float64]:
     """
     Run sebob executable with a single set of inputs.
 
@@ -28,7 +28,7 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    executable_file = executable_path + "/seobnrv5_aligned_spin_inspiral"
+    executable_file = executable_path + "/sebobv2"
     parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
@@ -86,9 +86,9 @@ def process_input_set(
     nominal_inputs, nominal_trusted_exec, nominal_current_exec = nominal_args
 
     # 1. Run trusted code with nominal inputs
-    trusted_output = run_sebob(nominal_trusted_exec, nominal_inputs)
+    trusted_output = run_sebobv2(nominal_trusted_exec, nominal_inputs)
     # 2. Run current code with nominal inputs
-    current_output = run_sebob(nominal_current_exec, nominal_inputs)
+    current_output = run_sebobv2(nominal_current_exec, nominal_inputs)
 
     # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
     rng = np.random.default_rng(0)
@@ -101,7 +101,7 @@ def process_input_set(
     perturbed_inputs[0] = nominal_inputs[0] * (1 + perturbation[0])
     perturbed_inputs[1] = nominal_inputs[1] * (1 + perturbation[1])
     perturbed_inputs[2] = nominal_inputs[2] * (1 + perturbation[2])
-    perturbed_output = run_sebob(nominal_trusted_exec, perturbed_inputs)
+    perturbed_output = run_sebobv2(nominal_trusted_exec, perturbed_inputs)
 
     # Calculate errors
     baseline_error = calculate_rmse(trusted_output, perturbed_output)
