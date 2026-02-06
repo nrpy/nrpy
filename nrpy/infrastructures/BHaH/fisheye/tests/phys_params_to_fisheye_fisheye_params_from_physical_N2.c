@@ -24,12 +24,23 @@ typedef struct __commondata_struct__ {
 } commondata_struct;
 #endif
 
+// Numerically stable log(cosh(x)) helper for large |x|.
+// log(cosh(x)) = |x| + log(1 + exp(-2|x|)) - log(2)
+static inline REAL logcosh_stable(const REAL x) {
+  const REAL ax = fabs(x);
+  return ax + log1p(exp((REAL)-2.0 * ax)) - log((REAL)2.0);
+}
+
+static inline REAL log_cosh_ratio(const REAL u, const REAL v) { return logcosh_stable(u) - logcosh_stable(v); }
+
 static inline REAL rbar_unscaled(const REAL r, const REAL a[], const REAL R[], const REAL s[], const int N) {
   REAL rb = a[N] * r;
   for (int i = 0; i < N; i++) {
     const REAL delta_a = a[i] - a[i + 1];
     const REAL denom = (REAL)2.0 * tanh(R[i] / s[i]);
-    const REAL term = (delta_a * s[i]) / denom * log(cosh((r + R[i]) / s[i]) / cosh((r - R[i]) / s[i]));
+    const REAL u = (r + R[i]) / s[i];
+    const REAL v = (r - R[i]) / s[i];
+    const REAL term = (delta_a * s[i]) / denom * log_cosh_ratio(u, v);
     rb += term;
   }
   return rb;
@@ -39,10 +50,10 @@ static inline REAL rbar_unscaled(const REAL r, const REAL a[], const REAL R[], c
 static inline int evaluate_constraints(const REAL L, const REAL r_trans[], const REAL w_trans[], const REAL a[], const REAL R[], const REAL s[],
                                        const int N, REAL F[], REAL *c_out) {
   const REAL rbar_L = rbar_unscaled(L, a, R, s, N);
-  if (!(isfinite(rbar_L)) || !(fabs(rbar_L) > (REAL)0.0))
+  if (!(isfinite(rbar_L)) || !(rbar_L > (REAL)0.0))
     return 1;
   const REAL c = L / rbar_L;
-  if (!(isfinite(c)))
+  if (!(isfinite(c)) || !(c > (REAL)0.0))
     return 1;
 
   for (int i = 0; i < N; i++) {
@@ -105,7 +116,7 @@ static inline int solve_linear_system(const int n, const REAL *A_in, const REAL 
 }
 
 /**
- * Compute fisheye internal parameters (R_i, s_i, c) from physical fisheye inputs
+ * Compute fisheye internal parameters (R_i, s_i) and compute c from physical fisheye inputs
  * (r_trans_i, w_trans_i, L) for an N-transition fisheye.
  *
  * Physical parameter meanings (physical radius):
