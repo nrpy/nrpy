@@ -1,7 +1,7 @@
 """
 Register a C helper that converts physical fisheye parameters to internal fisheye parameters.
 
-This module registers a C function that solves for (R_i, s_i, c) given physical
+This module registers a C function that solves for (R_i, s_i) and computes c given physical
 transition centers and widths (r_trans_i, w_trans_i) and the outer radius L,
 matching the conventions in nrpy/equations/generalrfm/fisheye.py for an
 N-transition fisheye (zoom factors a0 -> a1 -> ... -> aN).
@@ -53,6 +53,7 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         r_names,
         r_defaults,
         commondata=True,
+        add_to_parfile=True,
         descriptions=[
             f"Physical center radius of transition {i + 1}."
             for i in range(num_transitions)
@@ -64,6 +65,7 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         w_names,
         w_defaults,
         commondata=True,
+        add_to_parfile=True,
         descriptions=[
             f"Physical width of transition {i + 1}." for i in range(num_transitions)
         ],
@@ -78,7 +80,7 @@ def register_CFunction_fisheye_params_from_physical_N(
     num_transitions: int = 2,
 ) -> None:
     """
-    Register a C function that solves for fisheye (R_i, s_i, c) from physical parameters.
+    Register a C function that solves for fisheye (R_i, s_i) and computes c from physical parameters.
 
     The solver uses a damped Newton method with a numerical Jacobian to enforce:
       R_phys(R_i) = r_trans_i,
@@ -111,7 +113,7 @@ def register_CFunction_fisheye_params_from_physical_N(
 
     includes = ["<math.h>", "<stdio.h>", "<stdlib.h>"]
     desc = """\
-Compute fisheye internal parameters (R_i, s_i, c) from physical fisheye inputs
+Compute fisheye internal parameters (R_i, s_i) and compute c from physical fisheye inputs
 (r_trans_i, w_trans_i, L) for an N-transition fisheye.
 
 Physical parameter meanings (physical radius):
@@ -163,6 +165,17 @@ typedef struct __commondata_struct__ {{
 }} commondata_struct;
 #endif
 
+// Numerically stable log(cosh(x)) helper for large |x|.
+// log(cosh(x)) = |x| + log(1 + exp(-2|x|)) - log(2)
+static inline REAL logcosh_stable(const REAL x) {{
+  const REAL ax = fabs(x);
+  return ax + log1p(exp((REAL)-2.0 * ax)) - log((REAL)2.0);
+}}
+
+static inline REAL log_cosh_ratio(const REAL u, const REAL v) {{
+  return logcosh_stable(u) - logcosh_stable(v);
+}}
+
 static inline REAL rbar_unscaled(const REAL r,
                                  const REAL a[],
                                  const REAL R[],
@@ -172,8 +185,9 @@ static inline REAL rbar_unscaled(const REAL r,
   for (int i = 0; i < N; i++) {{
     const REAL delta_a = a[i] - a[i + 1];
     const REAL denom = (REAL)2.0 * tanh(R[i] / s[i]);
-    const REAL term = (delta_a * s[i]) / denom *
-                      log(cosh((r + R[i]) / s[i]) / cosh((r - R[i]) / s[i]));
+    const REAL u = (r + R[i]) / s[i];
+    const REAL v = (r - R[i]) / s[i];
+    const REAL term = (delta_a * s[i]) / denom * log_cosh_ratio(u, v);
     rb += term;
   }}
   return rb;
@@ -189,9 +203,9 @@ static inline int evaluate_constraints(const REAL L,
                                         const int N,
                                         REAL F[], REAL *c_out) {{
   const REAL rbar_L = rbar_unscaled(L, a, R, s, N);
-  if (!(isfinite(rbar_L)) || !(fabs(rbar_L) > (REAL)0.0)) return 1;
+  if (!(isfinite(rbar_L)) || !(rbar_L > (REAL)0.0)) return 1;
   const REAL c = L / rbar_L;
-  if (!(isfinite(c))) return 1;
+  if (!(isfinite(c)) || !(c > (REAL)0.0)) return 1;
 
   for (int i = 0; i < N; i++) {{
     const REAL Rm = R[i] - s[i];
