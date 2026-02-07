@@ -201,7 +201,7 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
             "calibration_no_spin and calibration_spin cannot both be True."
         )
     # Code-generation-time parameters:
-    project_name = "seobnrv5_aligned_spin_inspiral"
+    project_name = "seobnrv5_nrpy"
     if args.seobnrv5_bob:
         project_name = "seobnrv5_bob"
     if args.seobnrv5_nrnqc_bob:
