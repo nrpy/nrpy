@@ -55,7 +55,7 @@ import doctest
 import logging
 import os
 import sys
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -170,7 +170,7 @@ class GeodesicDiagnostics:
         for mu in range(4):
             # Exploit symmetry: g_{0,mu} = g_{mu,0}. Use upper triangle.
             p_0 += self.g4DD[0][mu] * pU[mu]
-        return -p_0
+        return cast(sp.Expr, -p_0)
 
     def compute_angular_momentum_cartesian(self, pU: List[sp.Symbol]) -> List[sp.Expr]:
         """
@@ -211,7 +211,7 @@ class GeodesicDiagnostics:
         L_y = z * p_x - x * p_z
         L_z = x * p_y - y * p_x
 
-        return [L_x, L_y, L_z]
+        return [cast(sp.Expr, L_x), cast(sp.Expr, L_y), cast(sp.Expr, L_z)]
 
     def compute_carter_constant_KerrSchild_Cartesian(
         self,
@@ -295,7 +295,7 @@ class GeodesicDiagnostics:
 
         Q_formula = p_theta_sq + second_term
 
-        return Q_formula
+        return cast(sp.Expr, Q_formula)
 
 
 class GeodesicDiagnostics_dict(Dict[str, GeodesicDiagnostics]):
@@ -367,9 +367,16 @@ if __name__ == "__main__":
     # Extract the main formula from the diagnostic expression.
     assert kerr_diag.Q_expr is not None
     Q_expr = kerr_diag.Q_expr
+
     if isinstance(Q_expr, sp.Piecewise):
+        # FIX: Explicitly cast .args to a list of tuples (Expression, Condition)
+        # generic SymPy .args is Tuple[Basic, ...], which isn't unpackable.
+        piecewise_args = cast(Tuple[Tuple[sp.Expr, Any], ...], Q_expr.args)
+
         Q_kerr_formula = next(
-            expr for (expr, cond) in Q_expr.args if (cond is True) or (cond == sp.true)
+            expr
+            for (expr, cond) in piecewise_args
+            if (cond is True) or (cond == sp.true)
         )
     else:
         Q_kerr_formula = Q_expr
