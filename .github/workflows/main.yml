@@ -338,7 +338,7 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
@@ -390,7 +390,7 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
