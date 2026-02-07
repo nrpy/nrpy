@@ -1,6 +1,6 @@
 """
 Set up on-the-fly accuracy comparison for sebob.
-usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
+usage: sebobv2_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu

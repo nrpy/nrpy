@@ -338,7 +338,7 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
@@ -390,7 +390,7 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
@@ -432,7 +432,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: 'd96fdd6190f5c7273ebd93db3bb17f933b66d480'
+          ref: '0f87516bab9480e4e87a93acdafd0f5258b7c10e'
           path: trusted_code
 
       - name: Build trusted sebob executable
@@ -446,13 +446,13 @@ jobs:
         run: |
           pwd &&
           pip install . &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make)
 
       - name: Run on-the-fly comparison
         run: |
-          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral --current-exec ./project/seobnrv5_aligned_spin_inspiral
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral --current-exec ./project/seobnrv5_bob
 
       - name: Clean up
         run: |
           (cd trusted_code/project/seobnrv5_aligned_spin_inspiral && make clean) &&
-          (cd project/seobnrv5_aligned_spin_inspiral && make clean)
+          (cd project/seobnrv5_bob && make clean)

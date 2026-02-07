@@ -21,17 +21,7 @@ import nrpy.params as par
 from nrpy.infrastructures import BHaH
 
 par.set_parval_from_str("Infrastructure", "BHaH")
-
-# Code-generation-time parameters:
-project_name = "seobnrv5_aligned_spin_inspiral"
-
 enable_parallel_codegen = True
-
-project_dir = os.path.join("project", project_name)
-
-# First clean the project directory, if it exists.
-shutil.rmtree(project_dir, ignore_errors=True)
-
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 # Development flags (NOT command-line-tunable)
@@ -210,6 +200,21 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
         raise ValueError(
             "calibration_no_spin and calibration_spin cannot both be True."
         )
+    # Code-generation-time parameters:
+    project_name = "seobnrv5_nrpy"
+    if args.seobnrv5_bob:
+        project_name = "seobnrv5_bob"
+    if args.seobnrv5_nrnqc_bob:
+        project_name = "seobnrv5_nrnqc_bob"
+    if args.calibration_no_spin:
+        project_name = f"{project_name}_calibration_no_spin"
+    if args.calibration_spin:
+        project_name = f"{project_name}_calibration_spin"
+    project_dir = os.path.join("project", project_name)
+
+    # First clean the project directory, if it exists.
+    shutil.rmtree(project_dir, ignore_errors=True)
+
     # register SEOBNRv5 coefficients
     BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         args.calibration_no_spin, args.calibration_spin
