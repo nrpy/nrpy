@@ -34,6 +34,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 # Code-generation-time parameters:
 project_name = "superB_two_blackholes_collide"
 CoordSystem = "Spherical"
+set_of_CoordSystems = {CoordSystem}
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 LapseEvolutionOption = "OnePlusLog"
@@ -177,28 +178,27 @@ superB.numerical_grids.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superB.diagnostics.register_CFunction_diagnostics(
-    set_of_CoordSystems={CoordSystem},
+superB.diagnostics.diagnostics.register_all_diagnostics(
+    set_of_CoordSystems=set_of_CoordSystems,
+    project_dir=project_dir,
     default_diagnostics_out_every=diagnostics_output_every,
-    grid_center_filename_tuple=("out0d-conv_factor%.2f.txt", "convergence_factor"),
-    axis_filename_tuple=(
-        "out1d-AXIS-conv_factor%.2f-t%08.4f.txt",
-        "convergence_factor, time",
-    ),
-    plane_filename_tuple=(
-        "out2d-PLANE-conv_factor%.2f-t%08.4f.txt",
-        "convergence_factor, time",
-    ),
-    out_quantities_dict="default",
-    enable_psi4_diagnostics=False,
-    enable_L2norm_BSSN_constraints_diagnostics=True,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_free_auxevol=False,
+)
+BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics=False, enable_psi4=False
+)
+superB.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest(
+    CoordSystem
 )
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems={CoordSystem}
     )
-BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
+BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
@@ -211,25 +211,21 @@ BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.Ricci_eval.register_CFunction_Ricci_eval(
+BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
     enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
-BHaH.general_relativity.BSSN.constraints.register_CFunction_constraints_eval(
+BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=False,
-    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -312,6 +308,9 @@ if enable_BHaHAHA:
     )
     par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
+BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
+    project_dir=project_dir
+)
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()
 BHaH.cmdline_input_and_parfiles.generate_default_parfile(
@@ -340,18 +339,18 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_psi4_diagnostics=False,
-    enable_L2norm_BSSN_constraints_diagnostics=True,
     enable_BHaHAHA=enable_BHaHAHA,
 )
-
+BHaH.griddata_commondata.register_CFunction_griddata_free(
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+)
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     additional_includes=[
         str(Path("superB") / "superB.h"),
         *([os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_BHaHAHA else []),
     ],
     project_dir=project_dir,
-    enable_intrinsics=enable_intrinsics,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
 )

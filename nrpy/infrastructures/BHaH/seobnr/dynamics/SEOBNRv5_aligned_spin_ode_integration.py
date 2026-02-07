@@ -15,13 +15,12 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 
 
-def register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
-    perform_iterative_refinement: bool,
-) -> Union[None, pcg.NRPyEnv_type]:
+def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
+    Union[None, pcg.NRPyEnv_type]
+):
     """
     Register CFunction for integrating the SEOBNRv5 equations of motion using GSL.
 
-    :param perform_iterative_refinement: True/False if using iterative refinement to find the frequency peak.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -216,9 +215,6 @@ free(dynamics_RK);
 // t_peak = dynamics[-1] if there is no peak
 
 REAL t_peak = times_fine_prelim[nsteps_fine_prelim - 1];
-"""
-    if perform_iterative_refinement:
-        body += """
 // perform iterative refinement to find the true peak of the dynamics
 if (stop == OMEGA) {
   REAL *t_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
@@ -288,8 +284,6 @@ if (stop == PRSTAR) {
   gsl_spline_free(spline);
   gsl_interp_accel_free(acc);
 }    
-"""
-    body += """
 // interpolate the dynamics
 
 SEOBNRv5_aligned_spin_interpolate_dynamics(commondata,dynamics_fine_prelim,nsteps_fine_prelim,t_peak,stop);

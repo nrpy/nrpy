@@ -239,13 +239,10 @@ def generate_diagnostics_code(
     return code
 
 
-def generate_PUP_code(
-    enable_psi4_diagnostics: bool = False,
-) -> str:
+def generate_PUP_code() -> str:
     """
     Generate code for PUP routine for Timestepping class.
 
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
     :return: A string representing the PUP routine for Timestepping class.
     """
     code = r"""
@@ -281,15 +278,6 @@ void Timestepping::pup(PUP::er &p) {
   p | const_cast<int&>(grid);
   p | const_cast<int&>(which_grid_diagnostics);
   p | const_cast<int&>(expected_count_filewritten);
-"""
-    if enable_psi4_diagnostics:
-        code += r"""
-  if (p.isUnpacking()) {
-      // Recreate the section proxy after restart
-      create_section();
-  }
-"""
-    code += r"""
 }
 """
     return code
@@ -413,9 +401,8 @@ if (tmpBuffers->tmpBuffer_bhahaha_gfs != NULL)
 def output_timestepping_h(
     project_dir: str,
     nrpyelliptic_project: bool = False,
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -424,9 +411,8 @@ def output_timestepping_h(
     :param project_dir: Directory where the project C code is output.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
@@ -442,20 +428,7 @@ def output_timestepping_h(
 #include "diagnostics/diagnostics_nearest_common.h"
 #include "diagnostics/diagnostics_volume_integration_helpers.h"
 """
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-struct sectionBcastMsg : public CkMcastBaseMsg, public CMessage_sectionBcastMsg {
-  int k;
-  sectionBcastMsg(int _k) : k(_k) {}
-  void pup(PUP::er &p) {
-    CMessage_sectionBcastMsg::pup(p);
-    p|k;
-  }
-};
-"""
-
-    if nrpyelliptic_project:
-        file_output_str += r"""
+    file_output_str += r"""
 /**
  * @brief Build the default set of recipes used by diagnostics_volume_integration and reductions.
  *
@@ -469,24 +442,63 @@ static inline int diags_integration_build_default_recipes(diags_integration_reci
   diags_integration_initialize_recipes(recipes);
   int NUM_RECIPES = 0;
 
-  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {"""
+
+    if nrpyelliptic_project:
+        file_output_str += r"""
     recipes[NUM_RECIPES].name = "whole_domain";
-    recipes[NUM_RECIPES].num_rules = 0;
+    recipes[NUM_RECIPES].num_rules = 0; // No rules means the whole domain is used.
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
     recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-    recipes[NUM_RECIPES].num_integrands = 1;
+    recipes[NUM_RECIPES].num_integrands = 1;"""
+
+    else:
+        file_output_str += r"""
+    recipes[NUM_RECIPES].name = "whole_domain";
+    recipes[NUM_RECIPES].num_rules = 0; // No rules means the whole domain is used.
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+    recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 2;"""
+
+    file_output_str += r"""
     NUM_RECIPES++;
   }
 
-  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {
+  if (NUM_RECIPES < DIAGS_INTEGRATION_MAX_RECIPES) {"""
+
+    if nrpyelliptic_project:
+        file_output_str += r"""
     const REAL R_outer = 80;
     recipes[NUM_RECIPES].name = "sphere_R_80";
     recipes[NUM_RECIPES].num_rules = 1;
+
+    // Important: exclude_inside=0 implies outer is excluded.
     recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
     recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
-    recipes[NUM_RECIPES].num_integrands = 1;
+    recipes[NUM_RECIPES].num_integrands = 1;"""
+
+    else:
+        file_output_str += r"""
+    const REAL R_outer = 8;
+    recipes[NUM_RECIPES].name = "sphere_R_gt_8";
+    recipes[NUM_RECIPES].num_rules = 1;
+
+    // Important: exclude_inside=0 implies outer is excluded.
+    recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 1};
+
+    // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
+    recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
+    recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+    recipes[NUM_RECIPES].num_integrands = 2;"""
+
+    file_output_str += r"""
     NUM_RECIPES++;
   }
-
   return NUM_RECIPES;
 }
 """
@@ -497,10 +509,6 @@ class Timestepping : public CBase_Timestepping {
 
   private:
     /// Member Variables (Object State) ///"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    CProxySection_Timestepping secProxy;
-    CkSectionInfo cookie;"""
     file_output_str += r"""
     commondata_struct commondata;
     griddata_struct *griddata;
@@ -543,17 +551,16 @@ class Timestepping : public CBase_Timestepping {
     void send_wavespeed_at_outer_boundary(const int grid);"""
     file_output_str += r"""
     void contribute_localsums_for_diagnostic_volume_integ();"""
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-    void contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]);"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    void contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid);
-    void create_section();
-"""
+
     if enable_BHaHAHA:
         file_output_str += r"""
+    void send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
+                                                             const int num_gfs, const int request_type);
     void send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid);
+"""
+        if enable_psi4:
+            file_output_str += r"""
+    void send_psi4_gfs_to_corresponding_interpolator_chare(const int grid);
 """
     file_output_str += r"""
   public:
@@ -693,7 +700,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
 ) -> str:
     """
@@ -702,7 +709,7 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :param Butcher_dict: Dictionary containing Butcher tableau data.
     :param MoL_method: Method of Lines (MoL) method name.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether to enable psi4 diagnostics.
+    :param enable_psi4: Whether to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :return: A string containing entry method declarations separated by newlines.
@@ -740,7 +747,8 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         )
 
     inner_bc_synching_gfs.append("AUXEVOL_GFS")
-    if enable_psi4_diagnostics:
+
+    if enable_psi4:
         inner_bc_synching_gfs.append("DIAGNOSTIC_OUTPUT_GFS")
 
     # If anything other than NRPy elliptic, in NRPy elliptic initial data is set up differently
@@ -769,9 +777,8 @@ def output_timestepping_cpp(
     enable_CurviBCs: bool = False,
     initialize_constant_auxevol: bool = False,
     nrpyelliptic_project: bool = False,
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -786,9 +793,8 @@ def output_timestepping_cpp(
     :param initialize_constant_auxevol: If set to True, `initialize_constant_auxevol` function will be called during the simulation initialization phase to set these constants. Default is False.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Enable diagnostics for the L2 norm of BSSN constraint violations.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     initial_data_desc += " "
@@ -953,34 +959,7 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.locali1_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.locali2_diagnostic_2d_yz_pt);
     free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    free(griddata_chare[grid].diagnosticstruct.list_of_R_exts_chare);
-    free(griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp);
-    free(griddata_chare[grid].diagnosticstruct.globalsums_for_psi4_decomp);
 
-    if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
-        if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i] != NULL) {
-          for (int j = 0; j < griddata_chare[grid].diagnosticstruct.N_shell_pts_chare[i]; j++) {
-            if (griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j] != NULL) {
-              free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i][j]);
-            }
-          }
-          free(griddata_chare[grid].diagnosticstruct.xx_shell_chare[i]);
-        }
-      }
-      free(griddata_chare[grid].diagnosticstruct.xx_shell_chare);
-      for (int i = 0; i < griddata_chare[grid].diagnosticstruct.num_of_R_exts_chare; i++) {
-        if (griddata_chare[grid].diagnosticstruct.theta_shell_chare[i] != NULL) {
-          free(griddata_chare[grid].diagnosticstruct.theta_shell_chare[i]);
-        }
-      }
-      free(griddata_chare[grid].diagnosticstruct.theta_shell_chare);
-      free(griddata_chare[grid].diagnosticstruct.N_shell_pts_chare);
-      free(griddata_chare[grid].diagnosticstruct.N_theta_shell_chare);
-    }
-    """
     file_output_str += r"""
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
     free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
@@ -1292,61 +1271,6 @@ void Timestepping::contribute_localsums_for_diagnostic_volume_integ() {
 }
 """
 
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-void Timestepping::contribute_localsums_for_L2norm_BSSN_constraints(REAL localsums[4]) {
-  std::vector<double> outdoubles(4);
-  outdoubles[0] = localsums[0];
-  outdoubles[1] = localsums[1];
-  outdoubles[2] = localsums[2];
-  outdoubles[3] = localsums[3];
-  CkCallback cb(CkIndex_Timestepping::report_sums_for_L2norm_BSSN_constraints(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
-  contribute(outdoubles, CkReduction::sum_double, cb);
-}
-"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-void Timestepping::contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg, const int grid) {
-  // Unpack diagnosticptoffset struct:
-  const int length_localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.length_localsums_for_psi4_decomp;
-  const REAL *restrict localsums_for_psi4_decomp = griddata_chare[grid].diagnosticstruct.localsums_for_psi4_decomp;
-
-  // Initialize outdoubles with the correct size
-  std::vector<double> outdoubles(length_localsums_for_psi4_decomp);
-
-  // Copy and convert data from localsums_for_psi4_decomp to outdoubles
-  for (int i = 0; i < length_localsums_for_psi4_decomp; ++i) {
-    outdoubles[i] = static_cast<double>(localsums_for_psi4_decomp[i]);
-  }
-
-  CkGetSectionInfo(cookie, msg);
-  CkCallback cb;
-  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
-    // for spherical-like coords, cb to chare thisindex.x, 0, 0
-    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(thisIndex.x, 0, 0)]);
-  } else {
-    // for cylindrical-like coords, cb to chare 0, 0, 0
-    cb = CkCallback(CkIndex_Timestepping::report_sums_for_psi4_diagnostics(NULL), thisProxy[CkArrayIndex3D(0, 0, 0)]);
-  }
-  CProxySection_Timestepping::contribute(outdoubles, CkReduction::sum_double, cookie, cb);
-  delete msg;
-}
-
-
-void Timestepping::create_section() {
-  const int grid = 0;
-  if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL) {
-    // section creation for reduction along section of chares for psi4 integration along theta and phi for spherical-like coords
-    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), thisIndex.x, thisIndex.x, 1, 0, commondata.Nchare1 - 1, 1, 0,
-                                                     commondata.Nchare2 - 1, 1);
-  } else {
-    // for cylindrical-like coords, the reduction is over all chares
-    secProxy = CProxySection_Timestepping::ckNew(thisProxy.ckGetArrayID(), 0, commondata.Nchare0 - 1, 1, 0, commondata.Nchare1 - 1, 1, 0,
-                                               commondata.Nchare2 - 1, 1);
-  }
-}
-"""
-
     file_output_str += r"""
 void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
   // Unpack griddata_chare[grid].nonlocalinnerbcstruct
@@ -1464,11 +1388,17 @@ void Timestepping::process_nonlocalinnerbc(const int type_gfs, const int grid) {
 """
 
     if enable_charm_checkpointing:
-        file_output_str += generate_PUP_code(enable_psi4_diagnostics)
+        file_output_str += generate_PUP_code()
 
     if enable_BHaHAHA:
         file_output_str += r"""
 void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const int grid) {
+  send_interp_gfs_to_corresponding_interpolator_chare(grid, griddata_chare[grid].gridfuncs.y_n_gfs, bhahaha_gf_interp_indices, BHAHAHA_NUM_INTERP_GFS,
+                                                      INTERP_REQUEST_BHAHAHA);
+}
+
+void Timestepping::send_interp_gfs_to_corresponding_interpolator_chare(const int grid, const REAL *restrict gfs, const int *restrict gf_indices,
+                                                                       const int num_gfs, const int request_type) {
   const int Nchare0 = commondata.Nchare0;
   const int Nchare1 = commondata.Nchare1;
   const int Nchare2 = commondata.Nchare2;
@@ -1478,20 +1408,29 @@ void Timestepping::send_bhahaha_gfs_to_corresponding_interpolator_chare(const in
   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
 
   REAL *restrict tmpBuffer = griddata_chare[grid].tmpBuffers.tmpBuffer_bhahaha_gfs;
-  const REAL *restrict gfs = griddata_chare[grid].gridfuncs.y_n_gfs;
 
-  int idx =  0;
-  for (int which_gf = 0; which_gf < BHAHAHA_NUM_INTERP_GFS; which_gf++) {
+
+  int idx = 0;
+  for (int which_gf = 0; which_gf < num_gfs; which_gf++) {
     for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
       for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
         for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-          tmpBuffer[idx] = gfs[IDX4(bhahaha_gf_interp_indices[which_gf], i0, i1, i2)];
+          tmpBuffer[idx] = gfs[IDX4(gf_indices[which_gf], i0, i1, i2)];
           idx++;
         }
       }
     }
   }
- interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].receiv_bhahaha_gfs(BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
+  interpolator3dArray[CkArrayIndex3D(thisIndex.x, thisIndex.y, thisIndex.z)].receiv_interp_gfs(request_type, num_gfs, commondata.nn,
+                                                                                               num_gfs * Nxx_plus_2NGHOSTS_tot, tmpBuffer);
+}
+
+"""
+        if enable_psi4:
+            file_output_str += r"""
+void Timestepping::send_psi4_gfs_to_corresponding_interpolator_chare(const int grid) {
+  const int psi4_gf_indices[2] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
+  send_interp_gfs_to_corresponding_interpolator_chare(grid, diagnostic_gfs[grid], psi4_gf_indices, 2, INTERP_REQUEST_PSI4);
 }
 """
 
@@ -1512,10 +1451,9 @@ def output_timestepping_ci(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -1528,11 +1466,10 @@ def output_timestepping_ci(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     project_Path = Path(project_dir)
@@ -1545,10 +1482,7 @@ def output_timestepping_ci(
   include "ckio.h";
   include "pup_stl.h";
   """
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-  message sectionBcastMsg;
-        """
+
     file_output_str += r"""
   array [3D] Timestepping {
     entry Timestepping(CommondataObject &inData);
@@ -1558,13 +1492,6 @@ def output_timestepping_ci(
     entry void ready_2d_yz(Ck::IO::FileReadyMsg *m);
     // Step 5: MAIN SIMULATION LOOP
     entry void start() {
-"""
-
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-      serial {
-        create_section();
-      }
 """
 
     if enable_BHaHAHA:
@@ -1725,10 +1652,7 @@ def output_timestepping_ci(
           time_start = commondata.time;
         }
       """
-    if nrpyelliptic_project:
-        file_output_str += r"""
-        //when continue_after_residual_H_done() { }
-        """
+
     file_output_str += r"""
         serial {
           const REAL currtime = commondata.time, currdt = commondata.dt, outevery = commondata.diagnostics_output_every;
@@ -1752,64 +1676,24 @@ def output_timestepping_ci(
                   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
                   const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
                   BHAH_MALLOC(diagnostic_gfs[grid], TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+
+                  // Initialize to NaNs so any unfilled outer-boundary points are obvious in diagnostics.
+                  for (int ii = 0; ii < TOTAL_NUM_DIAG_GFS * Nxx_plus_2NGHOSTS_tot; ii++) {
+                    diagnostic_gfs[grid][ii] = NAN;
+                  }
                 } // END LOOP over grids
 
                 // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
                 diagnostic_gfs_set(&commondata, griddata_chare, diagnostic_gfs);
 
-                // Diagnostics center
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);"""
-
-    if nrpyelliptic_project:
-        file_output_str += r"""
-                // Execute volume-integration recipe for this chare and contribute results
-                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);"""
-
-    file_output_str += r"""
+                // Alias MoL's diagnostic_output_gfs to Timestepping's per-grid diagnostic_gfs storage.
+                for (int grid = 0; grid < commondata.NUMGRIDS; ++grid) {
+                  griddata_chare[grid].gridfuncs.diagnostic_output_gfs = diagnostic_gfs[grid];
+                }
               }
-            }
-         """
-
-    if enable_BHaHAHA:
-        file_output_str += r"""
-          serial {
-            do_horizon_find = true;  // default: yes, find horizon
-            // STEP 1: Check if horizon find is scheduled for the current iteration.
-            if (commondata.diagnostics_output_every <= 0 ||
-                (commondata.nn % (int)(commondata.diagnostics_output_every / commondata.dt + 0.5)) != 0) {
-              int bah_find_every = 1;  // Placeholder: find every iteration. This should be a commondata param.
-              if (commondata.diagnostics_output_every > commondata.dt) {
-                // A basic way to get find_every from time interval
-                bah_find_every = (int)(commondata.diagnostics_output_every / commondata.dt + 0.5);
-                if (bah_find_every == 0)
-                  bah_find_every = 1;
-              }
-              if (bah_find_every <= 0 || (commondata.nn % bah_find_every) != 0) {
-                do_horizon_find = false;  // not scheduled this iteration
-              }
-            } // END IF: diagnostics_output_every > 0
-          }
-          // If do horison for this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
-          if (do_horizon_find) {
-              serial { send_bhahaha_gfs_to_corresponding_interpolator_chare(grid); }
-          }
-        """
-    file_output_str += """
-         // Step 5.a: Main loop, part 1: Output diagnostics"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-        // psi4 diagnostics
-        if (write_diagnostics_this_step) {
-          if (strstr(griddata_chare[grid].params.CoordSystemName, "Spherical") != NULL || strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-            // Need to sync psi4 across chares for cylindrical-like coordinates
-            if (strstr(griddata_chare[grid].params.CoordSystemName, "Cylindrical") != NULL) {
-              serial {
-                // Set psi4.
-                psi4(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.y_n_gfs, griddata_chare[grid].gridfuncs.diagnostic_output_gfs);
-                // Apply outer and inner bcs to psi4
-                apply_bcs_inner_only_specific_gfs(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].bcstruct, griddata_chare[grid].gridfuncs.diagnostic_output_gfs, griddata_chare[grid].gridfuncs.num_aux_gfs_to_sync, griddata_chare[grid].gridfuncs.aux_gfs_to_sync);
-              }"""
-
+                """
+    # Sync psi4
+    if enable_psi4:
         file_output_str += generate_send_nonlocalinnerbc_data_code(
             "DIAGNOSTIC_OUTPUT_GFS"
         )
@@ -1841,26 +1725,53 @@ def output_timestepping_ci(
                 loop_direction, pos_ghost_type, neg_ghost_type, nchare_var
             )
 
-        file_output_str += """
-              // chare 0, 0, 0 sends msg to contribute to section reduction
+    file_output_str += r"""
               serial {
-                if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
-                  sectionBcastMsg *msg = new sectionBcastMsg(1);
-                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
+"""
+    if enable_psi4:
+        file_output_str += r"""
+                // Send psi4 diagnostic gfs to interpolator chares for psi4 decomposition.
+                if (commondata.num_psi4_extraction_radii > 0) {
+                  send_psi4_gfs_to_corresponding_interpolator_chare(grid);
                 }
-              }
-            } else {
-              // chare thisindex.x, 0, 0 sends msg to contribute to section reduction
-              serial {
-                if (thisIndex.y == 0 && thisIndex.z == 0) {
-                  sectionBcastMsg *msg = new sectionBcastMsg(1);
-                  secProxy.recvMsg_to_contribute_localsums_for_psi4_decomp(msg);
-                }
-              }
+"""
+    file_output_str += r"""
+                // Diagnostics center
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER);
+
+                // Execute volume-integration recipe for this chare and contribute results
+                diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_VOLUME);
+              }"""
+
+    file_output_str += r"""
             }
+         """
+
+    if enable_BHaHAHA:
+        file_output_str += r"""
+          serial {
+            do_horizon_find = true;  // default: yes, find horizon
+            // STEP 1: Check if horizon find is scheduled for the current iteration.
+            if (commondata.diagnostics_output_every <= 0 ||
+                (commondata.nn % (int)(commondata.diagnostics_output_every / commondata.dt + 0.5)) != 0) {
+              int bah_find_every = 1;  // Placeholder: find every iteration. This should be a commondata param.
+              if (commondata.diagnostics_output_every > commondata.dt) {
+                // A basic way to get find_every from time interval
+                bah_find_every = (int)(commondata.diagnostics_output_every / commondata.dt + 0.5);
+                if (bah_find_every == 0)
+                  bah_find_every = 1;
+              }
+              if (bah_find_every <= 0 || (commondata.nn % bah_find_every) != 0) {
+                do_horizon_find = false;  // not scheduled this iteration
+              }
+            } // END IF: diagnostics_output_every > 0
           }
-        }
+          // If do horison for this step, send the entire set of required BHaHAHA gridfunctions to the corresponding Interpolator3d chare
+          if (do_horizon_find) {
+              serial { send_bhahaha_gfs_to_corresponding_interpolator_chare(grid); }
+          }
         """
+
     if nrpyelliptic_project:
         filename_format = "commondata.nn"
     else:
@@ -1949,19 +1860,6 @@ def output_timestepping_ci(
           }
         }
     """
-
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-        if (write_diagnostics_this_step) {
-          serial {
-            Ck::IO::Session token;  //pass a null token
-            const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-            REAL localsums[4];
-            diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_L2NORM_BSSN_CONSTRAINTS, which_grid_diagnostics, thisIndex_arr, localsums);
-            contribute_localsums_for_L2norm_BSSN_constraints(localsums);
-          }
-        }
-        """
 
     if enable_charm_checkpointing:
         file_output_str += r"""
@@ -2105,61 +2003,13 @@ def output_timestepping_ci(
         Butcher_dict,
         MoL_method,
         outer_bcs_type,
-        enable_psi4_diagnostics,
+        enable_psi4,
         nrpyelliptic_project,
     )
 
     if nrpyelliptic_project:
         file_output_str += r"""
     entry void receiv_wavespeed_at_outer_boundary(REAL wavespeed_at_outer_boundary);"""
-
-    if enable_L2norm_BSSN_constraints_diagnostics:
-        file_output_str += r"""
-    entry void report_sums_for_L2norm_BSSN_constraints(CkReductionMsg *msg) {
-      serial {
-        int reducedArrSize = msg->getSize() / sizeof(REAL);
-        CkAssert(reducedArrSize == 4);
-        REAL *output = (REAL *)msg->getData();
-        REAL log10_H = log10(1e-16 + sqrt(output[0] / output[1])); // 1e-16 + ... avoids log10(0)
-        REAL log10_M = log10(1e-16 + pow((output[2] / output[3]), 0.25)); // 1e-16 + ... avoids log10(0)
-
-        // Output l2-norm of BSSN constraints to file
-        char filename[256];
-        sprintf(filename, "l2_norm_BSSN_constraints.txt");
-        const int nn = commondata.nn;
-        const REAL time = commondata.time;
-        FILE *outfile = (nn == 0) ? fopen(filename, "w") : fopen(filename, "a");
-        if (!outfile) {
-          fprintf(stderr, "Error: Cannot open file %s for writing.\n", filename);
-          exit(1);
-        }
-        fprintf(outfile, "%6d %10.4e %.17e %.17e\n", nn, time, log10_H, log10_M);
-        fclose(outfile);
-        delete msg;
-      }
-    }"""
-    if enable_psi4_diagnostics:
-        file_output_str += r"""
-    entry void recvMsg_to_contribute_localsums_for_psi4_decomp(sectionBcastMsg *msg){
-      serial {
-        Ck::IO::Session token; // pass a null token
-        const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
-        diagnostics(&commondata, griddata_chare, griddata, token, OUTPUT_PSI4, which_grid_diagnostics, thisIndex_arr, NULL);
-        contribute_localsums_for_psi4_decomp(msg, which_grid_diagnostics);
-      }
-    }
-    entry void report_sums_for_psi4_diagnostics(CkReductionMsg * msg) {
-      serial {
-        int reducedArrSize = msg->getSize() / sizeof(double);
-        double *output = (double *)msg->getData();
-        const int length_localsums_for_psi4_decomp = griddata_chare[which_grid_diagnostics].diagnosticstruct.length_localsums_for_psi4_decomp;
-        for (int i = 0; i < length_localsums_for_psi4_decomp; i++) {
-          griddata_chare[which_grid_diagnostics].diagnosticstruct.globalsums_for_psi4_decomp[i] = (REAL)output[i];
-        }
-        psi4_spinweightm2_decomposition_file_write(&commondata, &griddata_chare[which_grid_diagnostics].diagnosticstruct);
-        delete msg;
-      }
-    }"""
 
     if enable_charm_checkpointing:
         file_output_str += r"""
@@ -2237,12 +2087,15 @@ def output_timestepping_ci(
           }
 
           integration_results.num_recipe_results++;
-        }
-
+        }    """
+    if nrpyelliptic_project:
+        file_output_str += r"""
         // Update a convenience field (same as original user-edit capture)
         REAL rms_residual_r_80 = NAN;
         diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUALGF, &rms_residual_r_80);
-        commondata.log10_current_residual = log10(rms_residual_r_80);
+        commondata.log10_current_residual = log10(rms_residual_r_80);    """
+
+    file_output_str += r"""
 
         delete msg;
       }
@@ -2266,10 +2119,9 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
     outer_bcs_type: str = "radiation",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
-    enable_L2norm_BSSN_constraints_diagnostics: bool = False,
     enable_BHaHAHA: bool = False,
 ) -> None:
     """
@@ -2282,11 +2134,10 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     :param pre_MoL_step_forward_in_time: Code for handling pre-right-hand-side operations, default is an empty string.
     :param post_MoL_step_forward_in_time: Code for handling post-right-hand-side operations, default is an empty string.
     :param outer_bcs_type: type of outer boundary BCs to apply. Only options are radiation or extrapolation in superB.
-    :param enable_psi4_diagnostics: Whether or not to enable psi4 diagnostics.
+    :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param nrpyelliptic_project: If True, enable NRPyElliptic project mode (enables residual
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
-    :param enable_L2norm_BSSN_constraints_diagnostics: Whether or not to enable L2norm of BSSN_constraints diagnostics.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
@@ -2298,9 +2149,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     output_timestepping_h(
         project_dir=project_dir,
         nrpyelliptic_project=nrpyelliptic_project,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
@@ -2315,9 +2165,8 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         Butcher_dict=Butcher_dict,
         MoL_method=MoL_method,
         nrpyelliptic_project=nrpyelliptic_project,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 
@@ -2328,11 +2177,10 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         pre_MoL_step_forward_in_time=pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
         outer_bcs_type=outer_bcs_type,
-        enable_psi4_diagnostics=enable_psi4_diagnostics,
+        enable_psi4=enable_psi4,
         nrpyelliptic_project=nrpyelliptic_project,
         Butcher_dict=Butcher_dict,
         enable_charm_checkpointing=enable_charm_checkpointing,
-        enable_L2norm_BSSN_constraints_diagnostics=enable_L2norm_BSSN_constraints_diagnostics,
         enable_BHaHAHA=enable_BHaHAHA,
     )
 

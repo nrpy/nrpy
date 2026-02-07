@@ -43,6 +43,7 @@ grid_physical_size = 1.0e6
 t_final = grid_physical_size  # This parameter is effectively not used in NRPyElliptic
 nn_max = 10000  # Sets the maximum number of relaxation steps
 
+
 def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     """
     Determine the residual tolerance based on the fp_precision.
@@ -57,8 +58,9 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     elif fp_type_str == "float":
         res = -6.5
     else:
-        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+        raise ValueError(f"residual tolerance not defined for {fp_type_str} precision")
     return res
+
 
 # Set tolerance for log10(residual) to stop relaxation
 log10_residual_tolerance = get_log10_residual_tolerance(fp_type_str=fp_type)
@@ -211,7 +213,9 @@ superB.diagnostics.diagnostics.register_all_diagnostics(
 BHaH.nrpyelliptic.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False
 )
-superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest(CoordSystem)
+superB.nrpyelliptic.diagnostics_nearest.register_CFunction_diagnostics_nearest(
+    CoordSystem
+)
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -393,7 +397,6 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_psi4_diagnostics=False,
     nrpyelliptic_project=True,
     post_non_y_n_auxevol_mallocs="auxevol_gfs_set_to_constant(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx, &griddata_chare[grid].gridfuncs);\n",
     post_MoL_step_forward_in_time=post_MoL_step_forward_in_time,
