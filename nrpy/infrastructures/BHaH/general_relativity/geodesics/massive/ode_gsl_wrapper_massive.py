@@ -1,11 +1,15 @@
 """
-Generate the C wrapper function to interface with the GSL ODE solver.
+Register C wrapper function to interface with the GSL ODE solver.
+
+This module registers the 'ode_gsl_wrapper_massive_{spacetime}' C function.
+It acts as a dispatcher, unpacking the generic `void *params` pointer into
+NRPy-specific structures (commondata), computing the metric and Christoffel
+symbols, and invoking the RHS calculation engine.
 
 Author: Dalton J. Moone
 """
+
 import nrpy.c_function as cfc
-import nrpy.params as par
-from nrpy.helpers.generic import clang_format
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 
 
@@ -17,44 +21,45 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     to access simulation data, calling our project-specific dispatchers and
     engines, and returning the computed derivatives to the GSL solver.
 
-    It also registers the `gsl_params` struct definition to BHaH_defines.h.
+    :param spacetime_name: String used to define metric in analytic_spacetimes.py.
 
-    :param spacetime_name: Name of the spacetime used to construct function calls.
     """
-    # Register the gsl_params struct definition
-    gsl_params_def = r"""
-typedef struct __gsl_params__ {
-    commondata_struct *restrict commondata;
-    params_struct *restrict params;
-    metric_params *restrict metric;
-} gsl_params;
-"""
-    Bdefines_h.register_BHaH_defines("after_general", gsl_params_def)
-
-    name = f"ode_gsl_wrapper_massive_{spacetime_name}"
-    cfunc_type = "int"
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
-    desc = f"GSL wrapper for the massive particle geodesic ODEs in {spacetime_name}."
+    desc = (
+        f"@brief GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.\n"
+        "\n"
+        "Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, "
+        "computes the local metric and connections, and calls the RHS calculation routine.\n"
+        "\n"
+        "Input:\n"
+        "    t: Current proper time (unused in autonomous systems).\n"
+        "    y[8]: Current state vector.\n"
+        "    params: Pointer to commondata_struct.\n"
+        "Output:\n"
+        "    f[8]: Computed derivatives (RHS)."
+    )
+    cfunc_type = "int"
+    name = f"ode_gsl_wrapper_massive_{spacetime_name}"
     params = "double t, const double y[8], double f[8], void *params"
 
     # Construct the body with specific function calls
     body = f"""
     (void)t; // Mark proper time 't' as unused to avoid compiler warnings.
     
-    // 1. Unpack generic parameters
-    gsl_params *gsl_parameters = (gsl_params *)params;
+    // 1. Unpack parameters
+    commondata_struct *commondata = (commondata_struct *)params;
     
     // 2. Declare geometric structs to hold intermediate results
     metric_struct g4DD;
     connection_struct conn;
     
     // 3. Compute Metric
-    // Signature: (commondata, params, y, &g4DD)
-    g4DD_metric_{spacetime_name}(gsl_parameters->commondata, gsl_parameters->params, y, &g4DD);
+    // Signature: (commondata, y, &g4DD)
+    g4DD_metric_{spacetime_name}(commondata, y, &g4DD);
     
     // 4. Compute Connections (Christoffel Symbols)
-    // Signature: (commondata, params, y, &conn)
-    connections_{spacetime_name}(gsl_parameters->commondata, gsl_parameters->params, y, &conn);
+    // Signature: (commondata, y, &conn)
+    connections_{spacetime_name}(commondata, y, &conn);
     
     // 5. Compute Geodesic RHS
     // Signature: (y, &conn, f)
@@ -64,10 +69,10 @@ typedef struct __gsl_params__ {
     """
 
     cfc.register_CFunction(
-        name=name,
-        cfunc_type=cfunc_type,
         includes=includes,
         desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
         params=params,
         body=body,
     )
@@ -75,8 +80,8 @@ typedef struct __gsl_params__ {
 
 if __name__ == "__main__":
     import logging
-    import sys
     import os
+    import sys
 
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())
@@ -99,7 +104,7 @@ if __name__ == "__main__":
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(cfc.CFunction_dict[func_name].full_function)
-            logger.info(f" -> Success! Wrote {filename}")
+            logger.info(" -> Success! Wrote %s", filename)
 
             # Also output defines to check struct registration
             Bdefines_h.output_BHaH_defines_h(project_dir=".")
@@ -107,6 +112,6 @@ if __name__ == "__main__":
         else:
             raise RuntimeError(f"Function {func_name} not registered.")
 
-    except Exception as e:
-        logger.error(f"Test failed: {e}")
+    except (RuntimeError, OSError) as e:
+        logger.error("Test failed: %s", e)
         sys.exit(1)

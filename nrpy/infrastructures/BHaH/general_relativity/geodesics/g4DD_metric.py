@@ -6,11 +6,13 @@ the 10 unique components of the metric tensor for a specific spacetime.
 It also registers the required 'metric_struct' in BHaH_defines.h using
 the specific infrastructure hook "after_general".
 
+It generates a preamble to unpack f[8] -> coordinates and commondata -> parameters.
+
 Author: Dalton J. Moone
 """
 
 # Step 0.a: Import standard Python modules
-from typing import List
+from typing import List, Set
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -20,11 +22,12 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
+from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
+    Analytic_Spacetimes,
+)
 
 
-def g4DD_metric(
-    g4DD_exprs: List[List[sp.Expr]], spacetime_name: str
-) -> None:
+def g4DD_metric(g4DD_exprs: List[List[sp.Expr]], spacetime_name: str) -> None:
     """
     Generate and register the C function to compute metric components.
 
@@ -37,18 +40,26 @@ def g4DD_metric(
     """
     # Step 1: Register metric_struct in BHaH_defines.h
     # The struct stores the 10 unique components of the symmetric metric tensor.
-    # We use list comprehension to generate components: g00, g01, g02, g03, g11...
+    # We use list comprehension to generate components: g4DD00, g4DD01, g4DD02, g4DD03, g4DD11...
     metric_components = [f"g4DD{i}{j}" for i in range(4) for j in range(i, 4)]
     metric_struct_str = (
-        "typedef struct { double "
-        + ", ".join(metric_components)
-        + "; } metric_struct;"
+        "typedef struct { double " + ", ".join(metric_components) + "; } metric_struct;"
     )
 
     # Register under the "after_general" section of BHaH_defines.h
     Bdefines_h.register_BHaH_defines("after_general", metric_struct_str)
 
-    # Step 2: Prepare symbolic expressions and C variable names
+    # Step 2: Define C function metadata
+    includes = ["BHaH_defines.h"]
+    desc = f"@brief Computes the 10 unique components of the {spacetime_name} metric.\n"
+    name = f"g4DD_metric_{spacetime_name}"
+    params = (
+        "const commondata_struct *restrict commondata, "
+        "const double f[8], "
+        "metric_struct *restrict metric"
+    )
+
+    # Step 3: Prepare symbolic expressions and C variable names
     # We only compute the upper triangle (mu <= nu) due to symmetry.
     list_of_g4DD_syms = []
     list_of_g4DD_C_vars = []
@@ -58,52 +69,64 @@ def g4DD_metric(
             list_of_g4DD_syms.append(g4DD_exprs[mu][nu])
             list_of_g4DD_C_vars.append(f"metric->g4DD{mu}{nu}")
 
-    # Step 3: Define C function metadata
-    includes = ["BHaH_defines.h"]
-    desc = (
-        f"@brief Computes the 10 unique components of the {spacetime_name} metric.\n"
-        "Standard interface function for GSL wrapper."
-    )
-    # Standard name required by generic C-code architecture
-    name = f"g4DD_metric_{spacetime_name}"
-    params = (
-        "const commondata_struct *restrict commondata, "
-        "const params_struct *restrict params, "
-        "const double y[4], "
-        "metric_struct *restrict metric"
-    )
+    # Step 4: Generate the Dynamic Preamble
+    # This unpacks y[] -> (t,x,y,z) and commondata -> (a_spin, M_scale, etc)
 
-    # Step 4: Generate C body using CSE (Common Subexpression Elimination)
+    # 4.a: Analyze symbols used in the expressions
+    used_symbol_names: Set[str] = set()
+    for expr in list_of_g4DD_syms:
+        for sym in expr.free_symbols:
+            used_symbol_names.add(str(sym))
+
+    # 4.b: Retrieve coordinate symbols from the Analytic Spacetime registry
+    # Note: Removed "if not in" check because Analytic_Spacetimes uses lazy loading.
+    # Accessing it directly triggers the load/validation.
+    xx_symbols = Analytic_Spacetimes[spacetime_name].xx
+    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
+
+    for i, symbol in enumerate(xx_symbols):
+        sym_name = str(symbol)
+        # Check if symbol is used before unpacking to avoid unused variable warnings
+        if sym_name in used_symbol_names:
+            preamble_lines.append(f"const double {sym_name} = f[{i}];")
+
+    # Use 2 spaces for indentation to match existing style
+    preamble = "\n  ".join(preamble_lines)
+
+    # Step 5: Generate C body
     print(f" -> Generating C worker function: {name} (Spacetime: {spacetime_name})...")
-    body = ccg.c_codegen(list_of_g4DD_syms, list_of_g4DD_C_vars, enable_cse=True, verbose=False)
 
-    # Step 5: Register the C function
+    # Generate kernel without braces to combine with preamble
+    kernel = ccg.c_codegen(
+        list_of_g4DD_syms,
+        list_of_g4DD_C_vars,
+        enable_cse=True,
+        verbose=False,
+        include_braces=False,
+    )
+
+    # Combine Preamble + Kernel
+    body = preamble + "\n\n" + kernel
+
+    # Step 6: Register the C function
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
         name=name,
         params=params,
-        body=body,
         include_CodeParameters_h=True,
+        body=body,
     )
     print(f"    ... {name}() registration complete.")
 
 
 if __name__ == "__main__":
     import logging
-    import sys
     import os
+    import sys
 
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())
-
-    try:
-        from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
-    Analytic_Spacetimes,
-)
-    except ImportError:
-        print("Error: Could not import Analytic_Spacetimes for testing.")
-        sys.exit(1)
 
     # Configure logging
     logging.basicConfig(level=logging.INFO)
@@ -128,14 +151,12 @@ if __name__ == "__main__":
             raise RuntimeError(
                 f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
             )
-        logger.info(f" -> PASS: '{cfunc_name}' function registered successfully.")
+        logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
 
         # Check Struct Registration
         bhah_defines_dict = par.glb_extras_dict.get("BHaH_defines", {})
         if "after_general" not in bhah_defines_dict:
-            raise RuntimeError(
-                "FAIL: BHaH_defines_h 'after_general' section is empty."
-            )
+            raise RuntimeError("FAIL: BHaH_defines_h 'after_general' section is empty.")
 
         defines_str = bhah_defines_dict["after_general"]
         if "typedef struct { double g4DD00" not in defines_str:
@@ -144,15 +165,7 @@ if __name__ == "__main__":
             )
         logger.info(" -> PASS: metric_struct registered successfully in BHaH_defines.")
 
-        # Preview Code
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        print("\nGenerated C Function Body Preview (first 5 lines):")
-        print("-" * 40)
-        print("\n".join(cfunc.body.splitlines()[:5]))
-        print("-" * 40)
-
-
-		# 4. Output Files to Current Directory
+        # 4. Output Files to Current Directory
         logger.info(" -> Writing C files to current directory...")
 
         # A. Generate BHaH_defines.h
@@ -166,10 +179,10 @@ if __name__ == "__main__":
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(c_function.full_function)
-            logger.info(f"    ... Wrote {filename}")
+            logger.info("    ... Wrote %s", filename)
 
         logger.info(" -> Success! All files generated.")
-        
-    except Exception as e:
+
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: g4dd_analytic test failed with error: %s", e)
         sys.exit(1)

@@ -5,11 +5,13 @@ This module registers the 'connections_{spacetime_name}' C function, which calcu
 the 40 unique components of the Christoffel symbols (Gamma^alpha_mu_nu)
 for a specific spacetime. It also registers the required 'connection_struct'.
 
+It generates a preamble to unpack f[8] -> coordinates and commondata -> parameters.
+
 Author: Dalton J. Moone
 """
 
 # Step 0.a: Import standard Python modules
-from typing import List
+from typing import List, Set
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -19,9 +21,12 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
+from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
+    Analytic_Spacetimes,
+)
 
 
-def connections_analytic(
+def connections(
     Gamma4UDD_exprs: List[List[List[sp.Expr]]], spacetime_name: str
 ) -> None:
     """
@@ -58,28 +63,52 @@ def connections_analytic(
                 list_of_Gamma_syms.append(Gamma4UDD_exprs[alpha][mu][nu])
                 list_of_Gamma_C_vars.append(f"conn->Gamma4UDD{alpha}{mu}{nu}")
 
-    # Step 3: Define C function metadata
+    # Step 3: Generate the Dynamic Preamble
+    # This unpacks y[] -> (t,x,y,z)
+
+    # 3.a: Analyze symbols used in the expressions first
+    used_symbol_names: Set[str] = set()
+    for expr in list_of_Gamma_syms:
+        for sym in expr.free_symbols:
+            used_symbol_names.add(str(sym))
+
+    # 3.b: Retrieve coordinate symbols from the Analytic Spacetime registry
+    xx_symbols = Analytic_Spacetimes[spacetime_name].xx
+    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
+
+    for i, symbol in enumerate(xx_symbols):
+        sym_name = str(symbol)
+        # Check if symbol is used before unpacking to avoid unused variable warnings
+        if sym_name in used_symbol_names:
+            preamble_lines.append(f"const double {sym_name} = f[{i}];")
+    preamble = "\n  ".join(preamble_lines)
+
+    # Step 4: Define C function metadata
     includes = ["BHaH_defines.h"]
-    desc = (
-        f"@brief Computes the 40 unique Christoffel symbols for the {spacetime_name} metric.\n"
-        "Standard interface function for GSL wrapper."
-    )
-    # Standard name required by generic C-code architecture
+    desc = f"@brief Computes the 40 unique Christoffel symbols for the {spacetime_name} metric.\n"
     name = f"connections_{spacetime_name}"
     params = (
         "const commondata_struct *restrict commondata, "
-        "const params_struct *restrict params, "
-        "const double y[4], "
+        "const double f[8], "
         "connection_struct *restrict conn"
     )
 
-    # Step 4: Generate C body using CSE
+    # Step 5: Generate C Body
     print(f" -> Generating C worker function: {name} (Spacetime: {spacetime_name})...")
-    body = ccg.c_codegen(
-        list_of_Gamma_syms, list_of_Gamma_C_vars, enable_cse=True, verbose=False
+
+    # Generate kernel without braces so we can wrap preamble + kernel together
+    kernel = ccg.c_codegen(
+        list_of_Gamma_syms,
+        list_of_Gamma_C_vars,
+        enable_cse=True,
+        verbose=False,
+        include_braces=False,
     )
 
-    # Step 5: Register the C function
+    # Combine Preamble + Kernel
+    body = preamble + "\n\n" + kernel
+
+    # Step 6: Register the C function
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -93,16 +122,16 @@ def connections_analytic(
 
 if __name__ == "__main__":
     import logging
-    import sys
     import os
+    import sys
 
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())
 
     try:
         from nrpy.equations.general_relativity.geodesics.geodesics import (
-    Geodesic_Equations,
-)
+            Geodesic_Equations,
+        )
     except ImportError:
         print("Error: Could not import Geodesic_Equations for testing.")
         sys.exit(1)
@@ -125,7 +154,7 @@ if __name__ == "__main__":
 
         # 2. Run the Generator
         logger.info(" -> Calling connections_analytic()...")
-        connections_analytic(geodesic_data.Gamma4UDD, SPACETIME)
+        connections(geodesic_data.Gamma4UDD, SPACETIME)
 
         # 3. Validation
         cfunc_name = f"connections_{SPACETIME}"
@@ -135,15 +164,14 @@ if __name__ == "__main__":
             raise RuntimeError(
                 f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
             )
-        logger.info(f" -> PASS: '{cfunc_name}' function registered successfully.")
+
+        logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
 
         # Check Struct Registration
         # Use par.glb_extras_dict instead of looking for BHaH_defines_h_dict
         bhah_defines_dict = par.glb_extras_dict.get("BHaH_defines", {})
         if "after_general" not in bhah_defines_dict:
-            raise RuntimeError(
-                "FAIL: BHaH_defines_h 'after_general' section is empty."
-            )
+            raise RuntimeError("FAIL: BHaH_defines_h 'after_general' section is empty.")
 
         defines_str = bhah_defines_dict["after_general"]
         if "typedef struct { double Gamma4UDD000" not in defines_str:
@@ -153,13 +181,6 @@ if __name__ == "__main__":
         logger.info(
             " -> PASS: connection_struct registered successfully in BHaH_defines."
         )
-
-        # Preview Code
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        print("\nGenerated C Function Body Preview (first 5 lines):")
-        print("-" * 40)
-        print("\n".join(cfunc.body.splitlines()[:5]))
-        print("-" * 40)
 
         # 4. Output Files to Current Directory
         logger.info(" -> Writing C files to current directory...")
@@ -175,10 +196,13 @@ if __name__ == "__main__":
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:
                 f.write(c_function.full_function)
-            logger.info(f"    ... Wrote {filename}")
+            logger.info("    ... Wrote %s", filename)
 
         logger.info(" -> Success! All files generated.")
 
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: connections_analytic test failed with error: %s", e)
+        import traceback
+
+        traceback.print_exc()
         sys.exit(1)
