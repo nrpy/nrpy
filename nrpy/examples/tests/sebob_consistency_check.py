@@ -184,10 +184,10 @@ if __name__ == "__main__":
     print(f"Test Error Median:      {test_median:.6e}")
     print(f"Baseline Error Median:  {baseline_median:.6e}")
     if test_median <= baseline_median:
-        print("\nPASSED: Median error is within roundoff baseline.")
+        print("\nPASSED: Median error is within roundoff baseline.\n")
         sys.exit(0)
     else:
         print(
-            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e})."
+            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e}).\n"
         )
         sys.exit(1)
