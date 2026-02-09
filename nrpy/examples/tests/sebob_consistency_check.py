@@ -131,14 +131,26 @@ if __name__ == "__main__":
         help="Path to current sebob executable.",
     )
     args = parser.parse_args()
+    # add a test to make sure the same approximants are being compared:
+    approx_trusted = Path(args.trusted_exec).name
+    approx_current = Path(args.current_exec).name
+    if approx_trusted != approx_current:
+        print(f"Error: Approximants do not match: {approx_trusted} vs {approx_current}")
+        sys.exit(1)
+    
     num_sets = 10
     rng = np.random.default_rng(0)
     q = np.linspace(1.01, 10, num_sets)
     rng.shuffle(q)
-    chi_1 = np.linspace(-0.9, 0.9, num_sets)
-    rng.shuffle(chi_1)
-    chi_2 = np.linspace(-0.9, 0.9, num_sets)
-    rng.shuffle(chi_2)
+    # ensure that non-spinning calibration approximants are passed zero spins.
+    if "no_spin" in approx_trusted:
+        chi_1 = np.zeros(num_sets)
+        chi_2 = np.zeros(num_sets)
+    else:
+        chi_1 = np.linspace(-0.9, 0.9, num_sets)
+        rng.shuffle(chi_1)
+        chi_2 = np.linspace(-0.9, 0.9, num_sets)
+        rng.shuffle(chi_2)
     M = 50
     omega_0 = 0.011
     dt = 2.4627455127717882e-05
