@@ -1,5 +1,5 @@
 """
-Set up on-the-fly accuracy comparison for sebob.
+Set up on-the-fly accuracy comparison for sebobv2.
 usage: sebobv2_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
 
 Authors: Siddharth Mahesh
@@ -25,7 +25,8 @@ def run_sebobv2(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the sebob executable.
+    :param executable_path: Path to the directory containing the executable; 
+                                the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """

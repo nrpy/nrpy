@@ -25,7 +25,8 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the sebob executable.
+    :param executable_path: Path to the directory containing the executable; 
+                                the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
