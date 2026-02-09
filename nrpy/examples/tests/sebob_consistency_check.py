@@ -7,6 +7,7 @@ Authors: Siddharth Mahesh
 """
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 from io import StringIO
@@ -28,8 +29,9 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    approximant = executable_path.split("/")[-1]
-    executable_file = executable_path + f"/{approximant}"
+    executable_dir = Path(executable_path)
+    approximant = executable_dir.name
+    executable_file = str(executable_dir / approximant)
     parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
