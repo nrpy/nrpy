@@ -243,7 +243,11 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    rhs_string += """#ifdef DETGAMMAHATGF
+  Ricci_eval(params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, auxevol_gfs);
+#else
+  Ricci_eval(params, rfmstruct, RK_OUTPUT_GFS, RK_INPUT_GFS, auxevol_gfs);
+#endif"""
 if outer_bcs_type == "radiation":
     rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -266,7 +270,7 @@ superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
+    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )

@@ -12,6 +12,8 @@ from . import (
     diagnostics,
     general_relativity,
     griddata_commondata,
+    generalrfm_cart_to_xx,
+    generalrfm_precompute,
     main_c,
     nrpyelliptic,
     numerical_grids_and_timestep,

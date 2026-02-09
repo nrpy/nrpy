@@ -85,6 +85,8 @@ def register_CFunction_initial_data(
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
     )
+    if CoordSystem.startswith("GeneralRFM"):
+        BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(CoordSystem)
 
     desc = "Set initial data."
     cfunc_type = "void"
@@ -120,6 +122,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         else f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
         f"(const REAL *restrict *) {host_griddata}[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype});"
     )
+    if CoordSystem.startswith("GeneralRFM"):
+        body += f"\n  generalrfm_precompute__{CoordSystem}(commondata, params, (const REAL *restrict *) {host_griddata}[grid].xx, {host_griddata}[grid].gridfuncs.auxevol_gfs);"
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
 }

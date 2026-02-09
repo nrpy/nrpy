@@ -86,7 +86,6 @@ def register_CFunction_diagnostic_gfs_set(
             dimension=4,
             group="DIAG",
         )
-
     diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
         sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
     )
@@ -145,9 +144,13 @@ def register_CFunction_diagnostic_gfs_set(
 """
     parallelization = par.parval_from_str("parallelization")
     ricci_call = (
-        "Ricci_eval_host(params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);"
+        "Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"
         if parallelization == "cuda"
-        else "Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);"
+        else """#ifdef DETGAMMAHATGF
+    Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
+#else
+    Ricci_eval(params, rfmstruct, diagnostic_gfs[grid], y_n_gfs, auxevol_gfs);
+#endif"""
     )
     body += f"""
     // Set Ricci and constraints gridfunctions

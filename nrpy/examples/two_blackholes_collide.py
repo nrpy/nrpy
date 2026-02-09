@@ -237,7 +237,11 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
+    rhs_string += """#ifdef DETGAMMAHATGF
+  Ricci_eval(params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, auxevol_gfs);
+#else
+  Ricci_eval(params, rfmstruct, RK_OUTPUT_GFS, RK_INPUT_GFS, auxevol_gfs);
+#endif"""
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -252,7 +256,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     rational_const_alias=(

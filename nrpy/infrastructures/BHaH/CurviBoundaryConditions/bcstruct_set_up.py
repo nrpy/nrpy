@@ -45,6 +45,17 @@ def parity_conditions_symbolic_dot_products(
     :return: C code string representing the unit vector dot products for the ten parity conditions.
     """
     rfm = reference_metric.reference_metric[CoordSystem]
+    if rfm.CoordSystem.startswith("GeneralRFM"):
+        outstr = """/*
+NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
+     ten parity conditions, in given coordinate system.
+     Needed for automatically determining sign of tensor across coordinate boundary.
+Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
+*/
+"""
+        return outstr + "\n".join(
+            [f"REAL_parity_array[{i}] = 1.0;" for i in range(10)]
+        ) + "\n"
     parity = indexedexp.zerorank1(dimension=10)
     UnitVectors_inner = indexedexp.zerorank2()
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
@@ -252,9 +263,35 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     fp_type_alias = "DOUBLE" if fp_type == "float" else "REAL"
     # Load up the EigenCoordinate corresponding to reference_metric::CoordSystem
     rfm_orig = reference_metric.reference_metric[CoordSystem]
-    rfm = reference_metric.reference_metric[rfm_orig.EigenCoord]
+    if rfm_orig.CoordSystem.startswith("GeneralRFM"):
+        rfm = rfm_orig
+    else:
+        rfm = reference_metric.reference_metric[rfm_orig.EigenCoord]
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
+    xx_to_Cart_eigen = c_codegen.c_codegen(
+        [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
+        ["xCart[0]", "xCart[1]", "xCart[2]"],
+        fp_type_alias=fp_type_alias,
+    )
+    xx_to_Cart_orig = c_codegen.c_codegen(
+        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
+        ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
+        include_braces=False,
+        fp_type_alias=fp_type_alias,
+    )
+    xx_to_Cart_inbounds = c_codegen.c_codegen(
+        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
+        ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
+        include_braces=False,
+        fp_type_alias=fp_type_alias,
+    )
+    if not rfm.CoordSystem.startswith("GeneralRFM"):
+        cart_to_xx_eigen = c_codegen.c_codegen(
+            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+            ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+            fp_type_alias=fp_type_alias,
+        )
     body = rf"""
   // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates:
   //         (x0,x1,x2) -> (Cartx,Carty,Cartz)
@@ -269,9 +306,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     DOUBLE xx0 = xx[0][i0];
     DOUBLE xx1 = xx[1][i1];
     DOUBLE xx2 = xx[2][i2];
-    {c_codegen.c_codegen([rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
-                         ["xCart[0]", "xCart[1]", "xCart[2]"],
-                         fp_type_alias=fp_type_alias)}
+    {xx_to_Cart_eigen}
   }}
   DOUBLE Cartx = xCart[0];
   DOUBLE Carty = xCart[1];
@@ -292,22 +327,38 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
   //                   multiplied by the appropriate parity condition (+1 or -1).
   DOUBLE Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
 """
-    # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
-    if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
-        raise RuntimeError(
-            f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
-            f"reference_metric::CoordSystem = {CoordSystem}. "
-            "Boundary conditions in curvilinear coordinates REQUiRE this be set."
-        )
-    # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-    body += rf"""
-  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem})
-  {c_codegen.c_codegen(
-        [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-        ['Cart_to_xx0_inbounds', 'Cart_to_xx1_inbounds', 'Cart_to_xx2_inbounds'],
-        fp_type_alias=fp_type_alias,
-    )}
+    # Step 2.a/2.b: Cartesian->xx map
+    if rfm.CoordSystem.startswith("GeneralRFM"):
+        body += rf"""
+  // Cart_to_xx for GeneralRFM (numerical inverse):
+  const REAL Cart_inbounds[3] = {{Cartx, Carty, Cartz}};
+  REAL xx_inbounds[3];
+  if (generalrfm_Cart_to_xx__{rfm.CoordSystem}(params, Cart_inbounds, xx_inbounds) != 0) {{
+    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: generalrfm_Cart_to_xx__{rfm.CoordSystem} failed at Cart=(%.15e, %.15e, %.15e)\\n",
+            (DOUBLE)Cartx, (DOUBLE)Carty, (DOUBLE)Cartz);
+    exit(1);
+  }}
+  Cart_to_xx0_inbounds = xx_inbounds[0];
+  Cart_to_xx1_inbounds = xx_inbounds[1];
+  Cart_to_xx2_inbounds = xx_inbounds[2];
   // Next compute xxmin[i]. By definition,
+"""
+    else:
+        # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
+        if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
+            raise RuntimeError(
+                f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
+                f"reference_metric::CoordSystem = {CoordSystem}. "
+                "Boundary conditions in curvilinear coordinates REQUiRE this be set."
+            )
+        # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
+        body += rf"""
+  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem})
+  {cart_to_xx_eigen}
+  // Next compute xxmin[i]. By definition,
+"""
+    eps_rel = "1e-6" if fp_type == "float" else "1e-8"
+    body += f"""
   //    xx[i][j] = xxmin[i] + ((DOUBLE)(j-NGHOSTS) + (1.0/2.0))*dxxi;
   // -> xxmin[i] = xx[i][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxxi
   const DOUBLE xxmin[3] = {{
@@ -334,12 +385,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     DOUBLE xx0 = xx[0][i0];
     DOUBLE xx1 = xx[1][i1];
     DOUBLE xx2 = xx[2][i2];
-    {c_codegen.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ['xCart_from_xx', 'yCart_from_xx', 'zCart_from_xx'],
-        include_braces=False,
-        fp_type_alias=fp_type_alias,
-    )}
+    {xx_to_Cart_orig}
   }}
 
   // Step 3.b: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
@@ -350,22 +396,17 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     DOUBLE xx0 = xx[0][i0_inbounds];
     DOUBLE xx1 = xx[1][i1_inbounds];
     DOUBLE xx2 = xx[2][i2_inbounds];
-    {c_codegen.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ['xCart_from_xx_inbounds', 'yCart_from_xx_inbounds', 'zCart_from_xx_inbounds'],
-        include_braces=False,
-        fp_type_alias=fp_type_alias,
-    )}
+    {xx_to_Cart_inbounds}
   }}
 
   // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
   //           they should be identical!!!
-#define EPS_REL {"1e-6" if fp_type == "float" else "1e-8"}
+#define EPS_REL {eps_rel}
   const DOUBLE norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
   if(fabs( (DOUBLE)(xCart_from_xx - xCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
      fabs( (DOUBLE)(yCart_from_xx - yCart_from_xx_inbounds) ) > EPS_REL * norm_factor ||
      fabs( (DOUBLE)(zCart_from_xx - zCart_from_xx_inbounds) ) > EPS_REL * norm_factor) {{
-    fprintf(stderr,"Error in {rfm_orig.CoordSystem} coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\n",
+    fprintf(stderr,"Error in {rfm_orig.CoordSystem} coordinate system: Inner boundary point does not map to grid interior point: ( %.15e %.15e %.15e ) != ( %.15e %.15e %.15e ) | xx: %e %e %e -> %e %e %e | %d %d %d\\n",
             (DOUBLE)xCart_from_xx,(DOUBLE)yCart_from_xx,(DOUBLE)zCart_from_xx,
             (DOUBLE)xCart_from_xx_inbounds,(DOUBLE)yCart_from_xx_inbounds,(DOUBLE)zCart_from_xx_inbounds,
             xx[0][i0],xx[1][i1],xx[2][i2],
@@ -535,7 +576,17 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     } // END LOOP over all points
     // Store num_inner to bc_info:
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
-
+"""
+    if CoordSystem.startswith("GeneralRFM"):
+        body += f"""
+    if (num_inner != 0) {{
+      fprintf(stderr,
+              "Error: {CoordSystem} assumes outer-only boundaries, but bcstruct_set_up found %d inner boundary points.\\n",
+              num_inner);
+      exit(1);
+    }}
+"""
+    body += """
     // Next allocate memory for inner_boundary_points:
     bcstruct->inner_bc_array = (innerpt_bc_struct *)malloc(sizeof(innerpt_bc_struct) * num_inner);
   } // END count number of inner boundary points and allocate memory for inner_bc_array.
@@ -565,7 +616,9 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
       } // END IF point lies on grid boundary
     } // END LOOP over all points
   } // END set inner_bc_array.
+"""
 
+    body += r"""
   ////////////////////////////////////////
   // STEP 2: SET UP OUTER BOUNDARY STRUCTS
   // First set up loop bounds for outer boundary condition updates,
@@ -663,13 +716,15 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
         LOOP_NOOMP(i0, bcstruct->bc_info.bc_loop_bounds[which_gz][face][0], bcstruct->bc_info.bc_loop_bounds[which_gz][face][1], //
                    i1, bcstruct->bc_info.bc_loop_bounds[which_gz][face][2], bcstruct->bc_info.bc_loop_bounds[which_gz][face][3], //
                    i2, bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
-          REAL x0x1x2_inbounds[3];
-          int i0i1i2_inbounds[3];
-          EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
 """
     outer_boundary_mask_check = ""
     if enable_masks:
         outer_boundary_mask_check = "&& mask[IDX3(i0, i1, i2)] == OUTER_BOUNDARY"
+    body += """
+          REAL x0x1x2_inbounds[3];
+          int i0i1i2_inbounds[3];
+          EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
+"""
     body += f"if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2] {outer_boundary_mask_check}) {{"
     body += """
             bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0 = i0;
@@ -691,6 +746,8 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
         LOOP_NOOMP(i0, bcstruct->bc_info.bc_loop_bounds[which_gz][face][0], bcstruct->bc_info.bc_loop_bounds[which_gz][face][1], i1,
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][2], bcstruct->bc_info.bc_loop_bounds[which_gz][face][3], i2,
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
+"""
+    body += """
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);

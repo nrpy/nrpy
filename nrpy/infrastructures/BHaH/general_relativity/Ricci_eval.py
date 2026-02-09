@@ -71,9 +71,13 @@ def register_CFunction_Ricci_eval(
     name = "Ricci_eval"
     if host_only_version:
         name += "_host"
+    is_general_rfm = CoordSystem.startswith("GeneralRFM")
+    gfs_ptr_qual = "" if is_general_rfm else " restrict"
+
     arg_dict_cuda = {
+        "auxevol_gfs": f"const REAL *{gfs_ptr_qual}",
         "in_gfs": "const REAL *restrict",
-        "out_gfs": "REAL *restrict",
+        "out_gfs": f"REAL *{gfs_ptr_qual}",
     }
     arg_dict_cuda = {
         "rfmstruct": "const rfm_struct *restrict",

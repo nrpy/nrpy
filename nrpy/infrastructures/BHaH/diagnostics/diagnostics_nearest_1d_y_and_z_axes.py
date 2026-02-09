@@ -39,6 +39,8 @@ def bhah_family_from_coord(CoordSystem: str) -> str:
     """
     if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
         return "Spherical_Ring"
+    if "GeneralRFM" in CoordSystem:
+        return "Cartesian"
     for fam in ("Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge"):
         if fam in CoordSystem:
             return fam
@@ -510,7 +512,6 @@ static int compare_by_coord(const void *a, const void *b) {
   fclose(out_y);
   fclose(out_z);
 """
-
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,

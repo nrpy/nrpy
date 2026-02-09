@@ -175,24 +175,24 @@ class GeneralRFMFisheye:
             thismodule,
             [f"fisheye_a{i}" for i in range(num_transitions + 1)],
             [1.0] * (num_transitions + 1),
-            commondata=True,
+            commondata=False,
         )
         self.R_list = par.register_CodeParameters(
             "REAL",
             thismodule,
             [f"fisheye_R{i + 1}" for i in range(num_transitions)],
             [float(i + 1) for i in range(num_transitions)],
-            commondata=True,
+            commondata=False,
         )
         self.s_list = par.register_CodeParameters(
             "REAL",
             thismodule,
             [f"fisheye_s{i + 1}" for i in range(num_transitions)],
             [0.5] * num_transitions,
-            commondata=True,
+            commondata=False,
         )
         self.c = par.register_CodeParameter(
-            "REAL", thismodule, "fisheye_c", defaultvalue=1.0, commondata=True
+            "REAL", thismodule, "fisheye_c", defaultvalue=1.0, commondata=False
         )
 
         # Step 2: Define raw Cartesian coordinates and radius
