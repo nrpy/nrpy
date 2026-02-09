@@ -7,6 +7,7 @@ Authors: Siddharth Mahesh
 """
 
 import os
+from pathlib import Path
 import subprocess
 import sys
 from io import StringIO
@@ -24,11 +25,14 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the sebob executable.
+    :param executable_path: Path to the directory containing the executable; 
+                                the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    executable_file = executable_path + "/seobnrv5_aligned_spin_inspiral"
+    executable_dir = Path(executable_path)
+    approximant = executable_dir.name
+    executable_file = str(executable_dir / approximant)
     parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(

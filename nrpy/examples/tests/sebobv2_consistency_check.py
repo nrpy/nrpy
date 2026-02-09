@@ -1,6 +1,6 @@
 """
-Set up on-the-fly accuracy comparison for sebob.
-usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
+Set up on-the-fly accuracy comparison for sebobv2.
+usage: sebobv2_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -9,6 +9,7 @@ Authors: Siddharth Mahesh
 import os
 import subprocess
 import sys
+from pathlib import Path
 from io import StringIO
 from typing import Any, Tuple, Union
 
@@ -24,11 +25,14 @@ def run_sebobv2(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the sebob executable.
+    :param executable_path: Path to the directory containing the executable; 
+                                the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    executable_file = executable_path + "/sebobv2"
+    executable_dir = Path(executable_path)
+    approximant = executable_dir.name
+    executable_file = str(executable_dir / approximant)
     parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
