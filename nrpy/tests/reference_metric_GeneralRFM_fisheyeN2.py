@@ -1,3 +1,10 @@
+"""
+Trusted validation data for reference_metric GeneralRFM_fisheyeN2.
+
+Author: Nishita Jadoo
+        njadoo@uidaho.edu
+"""
+
 from mpmath import mpf  # type: ignore
 
 trusted_dict = {

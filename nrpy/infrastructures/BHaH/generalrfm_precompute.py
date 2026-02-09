@@ -11,6 +11,9 @@ Design:
     (from the GeneralRFM provider) once per gridpoint and stores the results.
 
 Note: CUDA is not yet supported for this precompute path.
+
+Author: Nishita Jadoo
+        njadoo@uidaho.edu
 """
 from __future__ import annotations
 
