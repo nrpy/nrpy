@@ -455,7 +455,7 @@ jobs:
         run: |
           cd trusted_code &&
           pip install . &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make)
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy && (cd project/seobnrv5_nrpy && make)
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob && (cd project/seobnrv5_nrnqc_bob && make)
           python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_no_spin && (cd project/seobnrv5_bob_calibration_no_spin && make)
