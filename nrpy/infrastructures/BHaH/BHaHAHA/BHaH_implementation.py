@@ -492,11 +492,17 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
     rfm = refmetric.reference_metric[CoordSystem]
     rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
     rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
+    ghatDD = rfm.ghatDD
+    if CoordSystem.startswith("GeneralRFM"):
+        provider = getattr(rfm, "general_rfm_provider", None)
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        ghatDD = provider.ghatDD
     rfm_gammabarDD = ixp.zerorank2()
     rfm_AbarDD = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
-            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
+            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + ghatDD[i][j]
             rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
     Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
         CoordSystem, rfm_gammabarDD

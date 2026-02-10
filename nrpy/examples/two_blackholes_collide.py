@@ -55,9 +55,15 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "Spherical"
+# ~ CoordSystem = "Spherical"
+CoordSystem = "GeneralRFM_fisheyeN2"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -65,6 +71,7 @@ grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
 Nxx_dict = {
+    "GeneralRFM_fisheyeN2": [64, 64, 64],
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
@@ -72,6 +79,23 @@ Nxx_dict = {
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
+initial_sep = abs(default_BH1_z_posn - default_BH2_z_posn)
+# Fisheye parameter defaults (all in params_struct, set here in the example).
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+    if num_fisheye_transitions == 2:
+        # Width defaults are chosen to avoid overflow in xx<->Cart generated expressions.
+        fisheye_param_defaults.update(
+            {
+                "fisheye_phys_r_trans1": 1.5 * initial_sep,
+                "fisheye_phys_w_trans1": 0.8 * initial_sep,
+                "fisheye_phys_r_trans2": 3.5 * initial_sep,
+                "fisheye_phys_w_trans2": 1.5 * initial_sep,
+            }
+        )
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
@@ -88,6 +112,7 @@ set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+enable_bhahaha = parallelization == "openmp"
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
@@ -113,7 +138,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-if parallelization != "cuda":
+if enable_bhahaha:
     try:
         # Attempt to run as a script path
         subprocess.run(
@@ -141,9 +166,7 @@ if parallelization != "cuda":
             ],
             check=True,
         )
-    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
-        CoordSystem=CoordSystem, max_horizons=3
-    )
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(CoordSystem=CoordSystem, max_horizons=3)
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics, project_dir=project_dir
     )
@@ -176,7 +199,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
-    enable_bhahaha=(False if parallelization == "cuda" else True),
+    enable_bhahaha=enable_bhahaha,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
@@ -231,6 +254,11 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
+
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
@@ -277,7 +305,10 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
-if parallelization == "openmp":
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
+if enable_bhahaha:
     # Set BHaHAHA defaults to reasonable values.
     par.adjust_CodeParam_default(
         "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
@@ -292,25 +323,24 @@ if parallelization == "openmp":
         [
             0.6 * default_BH1_mass,
             0.6 * default_BH2_mass,
-            1.9 * (default_BH1_mass + default_BH2_mass),
+            1.1 * (default_BH1_mass + default_BH2_mass),
         ],
     )
-    par.adjust_CodeParam_default(
-        "bah_Theta_L2_times_M_tolerance",
-        [2e-4, 2e-4, 2e-4],
-    )
-    par.adjust_CodeParam_default(
-        "bah_Nphi_array_multigrid",
-        [2, 2, 2],
-    )
-    par.adjust_CodeParam_default(
-        "bah_Nr_interp_max",
-        40,
-    )
-    par.adjust_CodeParam_default(
-        "bah_enable_BBH_mode",
-        1,
-    )
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
+
+    # Previous custom settings (kept commented for reference):
+    # par.adjust_CodeParam_default(
+    #     "bah_Theta_L2_times_M_tolerance",
+    #     [2e-4, 2e-4, 2e-4],
+    # )
+    # par.adjust_CodeParam_default(
+    #     "bah_Nphi_array_multigrid",
+    #     [2, 2, 2],
+    # )
+    # par.adjust_CodeParam_default(
+    #     "bah_enable_BBH_mode",
+    #     1,
+    # )
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
@@ -330,7 +360,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=(
         [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")]
-        if parallelization == "openmp"
+        if enable_bhahaha
         else []
     ),
     enable_rfm_precompute=enable_rfm_precompute,
@@ -339,15 +369,27 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 
+# Set griddata struct used for calculations to griddata_device for certain parallelizations
+compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
+post_params_struct_set_to_default = ""
+if num_fisheye_transitions is not None:
+    post_params_struct_set_to_default = (
+        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+            num_transitions=num_fisheye_transitions,
+            compute_griddata=compute_griddata,
+        )
+    )
+
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-    enable_bhahaha=(parallelization == "openmp"),
+    enable_bhahaha=enable_bhahaha,
 )
 
 # SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
@@ -367,12 +409,12 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     project_name=project_name,
     exec_or_library_name=project_name,
     compiler_opt_option=("nvcc" if parallelization == "cuda" else "default"),
-    addl_dirs_to_make=([BHaHAHA_subdir] if parallelization == "openmp" else []),
+    addl_dirs_to_make=([BHaHAHA_subdir] if enable_bhahaha else []),
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
     addl_libraries=(
         [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"]
-        if parallelization == "openmp"
+        if enable_bhahaha
         else []
     ),
 )
