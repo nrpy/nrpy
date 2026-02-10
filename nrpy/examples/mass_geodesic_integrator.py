@@ -145,10 +145,10 @@ def main_c() -> None:
 
     // 2. Initial Conditions
     double y[8];
-    y[0] = 1.0;
+    y[0] = 0.0;
     y[1] = 10.0;
-    y[2] = 0.0;
-    y[3] = 0.0;
+    y[2] = 1.0;
+    y[3] = 1.0;
 
     // Initial Spatial Velocity
     y[5] = -0.1; // u^x
