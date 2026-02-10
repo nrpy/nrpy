@@ -22,16 +22,15 @@ parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
 )
 parser.add_argument(
-    "--parallelization",
-    type=str,
-    help="Parallelization strategy to use (e.g. openmp, cuda).",
-    default="openmp",
-)
-parser.add_argument(
     "--floating_point_precision",
     type=str,
     help="Floating point precision (e.g. float, double).",
     default="double",
+)
+parser.add_argument(
+    "--cuda",
+    action="store_true",
+    help="Use CUDA parallelization.",
 )
 parser.add_argument(
     "--disable_intrinsics",
@@ -49,10 +48,11 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
-parallelization = args.parallelization.lower()
 enable_intrinsics = not args.disable_intrinsics
 enable_rfm_precompute = not args.disable_rfm_precompute
 
+# Default to openmp; override with cuda if --cuda is set
+parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
@@ -221,7 +221,6 @@ par.adjust_CodeParam_default("t_final", t_final)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
 )
 
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
@@ -256,15 +255,17 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+# SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
+intrinsics_file_list = ["simd_intrinsics.h"]
+if parallelization == "cuda":
+    # CUDA intrinsics needed for CUDA-enabled projects.
+    intrinsics_file_list += ["cuda_intrinsics.h"]
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

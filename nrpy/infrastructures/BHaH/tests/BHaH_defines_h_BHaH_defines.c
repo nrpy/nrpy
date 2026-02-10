@@ -127,11 +127,11 @@ typedef struct __MoL_gridfunctions_struct__ {
 // EVOL VARIABLES:
 #define NUM_EVOL_GFS 0
 
-// AUX VARIABLES:
-#define NUM_AUX_GFS 0
-
 // AUXEVOL VARIABLES:
 #define NUM_AUXEVOL_GFS 0
+
+// AUX VARIABLES:
+#define NUM_AUX_GFS 0
 
 // ----------------------------
 // Indexing macros

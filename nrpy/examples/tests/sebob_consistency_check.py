@@ -1,6 +1,6 @@
 """
 Set up on-the-fly accuracy comparison for sebob.
-usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC --inputs INPUTS
+usage: sebob_consistency_check.py [-h] --current-exec CURRENT_EXEC --trusted-exec TRUSTED_EXEC
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 from io import StringIO
+from pathlib import Path
 from typing import Any, Tuple, Union
 
 import numpy as np
@@ -24,11 +25,14 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the sebob executable.
+    :param executable_path: Path to the directory containing the executable;
+                                the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
     """
-    executable_file = executable_path + "/seobnrv5_aligned_spin_inspiral"
+    executable_dir = Path(executable_path)
+    approximant = executable_dir.name
+    executable_file = str(executable_dir / approximant)
     parameters_file = executable_file + ".par"
     inputs_str = [f"{elt:.15f}" for elt in inputs]
     result = subprocess.run(
@@ -56,7 +60,7 @@ def calculate_rmse(
     h22_2 = data2[:, 1] + 1j * data2[:, 2]
     amp2, phase2 = np.abs(h22_2), np.unwrap(np.angle(h22_2))
     t_min = max(data1[0, 0], data2[0, 0])
-    t_max = min(data1[0, -1], data2[0, -1])
+    t_max = min(data1[-1, 0], data2[-1, 0])
     # sample at 10% of the total number of points
     sampled_times = np.linspace(t_min, t_max, data1.shape[0] // 10)
     sampled_amp_data1 = np.interp(sampled_times, data1[:, 0], amp1)
@@ -91,9 +95,10 @@ def process_input_set(
     current_output = run_sebob(nominal_current_exec, nominal_inputs)
 
     # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
+    rng_perturbation = np.random.default_rng(0)
     perturbation = (
-        np.random.choice([-1, 1], size=3, replace=True)
-        * np.random.uniform(1, 3, size=3)
+        rng_perturbation.choice([-1, 1], size=3, replace=True)
+        * rng_perturbation.uniform(1, 3, size=3)
         * PERTURBATION_MAGNITUDE
     )
     perturbed_inputs = nominal_inputs.copy()
@@ -126,13 +131,26 @@ if __name__ == "__main__":
         help="Path to current sebob executable.",
     )
     args = parser.parse_args()
+    # add a test to make sure the same approximants are being compared:
+    approx_trusted = Path(args.trusted_exec).name
+    approx_current = Path(args.current_exec).name
+    if approx_trusted != approx_current:
+        print(f"Error: Approximants do not match: {approx_trusted} vs {approx_current}")
+        sys.exit(1)
+
     num_sets = 10
+    rng = np.random.default_rng(0)
     q = np.linspace(1.01, 10, num_sets)
-    np.random.shuffle(q)
-    chi_1 = np.linspace(-0.9, 0.9, num_sets)
-    np.random.shuffle(chi_1)
-    chi_2 = np.linspace(-0.9, 0.9, num_sets)
-    np.random.shuffle(chi_2)
+    rng.shuffle(q)
+    # ensure that non-spinning calibration approximants are passed zero spins.
+    if "no_spin" in approx_trusted:
+        chi_1 = np.zeros(num_sets)
+        chi_2 = np.zeros(num_sets)
+    else:
+        chi_1 = np.linspace(-0.9, 0.9, num_sets)
+        rng.shuffle(chi_1)
+        chi_2 = np.linspace(-0.9, 0.9, num_sets)
+        rng.shuffle(chi_2)
     M = 50
     omega_0 = 0.011
     dt = 2.4627455127717882e-05
@@ -178,10 +196,10 @@ if __name__ == "__main__":
     print(f"Test Error Median:      {test_median:.6e}")
     print(f"Baseline Error Median:  {baseline_median:.6e}")
     if test_median <= baseline_median:
-        print("\nPASSED: Median error is within roundoff baseline.")
+        print("\nPASSED: Median error is within roundoff baseline.\n")
         sys.exit(0)
     else:
         print(
-            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e})."
+            f"\nFAILED: Median error ({test_median:.6e}) exceeds the baseline ({baseline_median:.6e}).\n"
         )
         sys.exit(1)

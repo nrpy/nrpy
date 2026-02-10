@@ -187,7 +187,7 @@ Computes proper circumferences along the equator and polar directions for appare
   const int NUM_THETA = Nxx_plus_2NGHOSTS1; // Needed for IDX2() macro.
 
   REAL *restrict metric_data_gfs;
-  BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS);
+  BHAH_MALLOC(metric_data_gfs, Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
 
   // Compute the line element in the phi direction (sqrt(q_{phi phi})) across the entire grid.
   {

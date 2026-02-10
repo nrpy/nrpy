@@ -1,3 +1,4 @@
+# nrpy/infrastructures/BHaH/main_c.py
 """
 Generates the main C `main()` function for simulations within the BHaH infrastructure.
 

@@ -342,7 +342,7 @@ def CurviBoundaryConditions_register_C_functions(
     BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
 
     # Register C function to apply boundary conditions to inner-only boundary points for specific gfs.
-    BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only_specific_auxgfs()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only_specific_gfs.register_CFunction_apply_bcs_inner_only_specific_gfs()
 
     # Register C function to apply boundary conditions to nonlocal inner-only boundary points.
     register_CFunction_apply_bcs_inner_only_nonlocal()
@@ -352,7 +352,7 @@ def CurviBoundaryConditions_register_C_functions(
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points for specific gfs.
     # Was once needed for psi4, now unused.
-    # CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_auxgfs()
+    # CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner_specific_gfs()
 
     # Register bcstruct's contribution to griddata_struct:
     BHaH.griddata_commondata.register_griddata_commondata(

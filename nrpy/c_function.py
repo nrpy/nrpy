@@ -1,3 +1,4 @@
+# nrpy/c_function.py
 """
 Provide classes and functions for managing and registering C functions.
 
@@ -19,13 +20,13 @@ class CFunction:
     :param enable_simd: Boolean to enable SIMD. Default is False.
     :param includes: A list of strings representing include files.
     :param prefunc: A string containing code above the core function declaration. Defaults to an empty string.
-    :param desc: A description of the function.
+    :param desc: A *required* description of the function.
     :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :param cfunc_type: The C type of the function (e.g., void, int). Default is "void".
-    :param name: The name of the function.
+    :param name: The *required* name of the function.
     :param params: A string representing the function's input parameters. Defaults to an empty string.
     :param include_CodeParameters_h: Boolean to enable C parameters. Default is False.
-    :param body: The body of the function.
+    :param body: The *required* body of the function.
     :param postfunc: A string containing code below the core function definition. Defaults to an empty string.
     :param CoordSystem_for_wrapper_func: (BHaH only) Coordinate system for the wrapper function. E.g., if set to Cartesian -> create subdirectory/name() wrapper function and subdirectory/Cartesian/name__rfm__Cartesian(). Defaults to an empty string.
     :param ET_thorn_name: (ET only) Thorn home for this function.
@@ -260,10 +261,6 @@ class CFunction:
 
         :raises TypeError: If any item in the `includes` list is not a string.
         """
-        rel_path_to_root_directory = ""
-        for _ in range(self.subdirectory_depth(self.subdirectory)):
-            rel_path_to_root_directory = os.path.join(rel_path_to_root_directory, "..")
-
         include_Cparams_str = ""
         if self.include_CodeParameters_h:
             CodeParameters_file_name = (

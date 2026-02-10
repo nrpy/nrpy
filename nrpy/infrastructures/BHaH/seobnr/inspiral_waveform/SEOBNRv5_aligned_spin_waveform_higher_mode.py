@@ -37,14 +37,17 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     khatm = []
     khatm_labels = []
 
-    for key in hlms_dict.keys():
-        mode = ast.literal_eval(key)
-        l, m = mode
-        hlms.append(hlms_dict[f"({l} , {m})"])
+    # Iterate the dictionary directly and use its values
+    seen_m = set()  # preserves insertion order via the lists, uniqueness via this set
+    for key, h in hlms_dict.items():
+        l, m = ast.literal_eval(key)
+        hlms.append(h)  # no need to rebuild the key string
         hlms_labels.append(f"const double complex h{l}{m}")
-        if wf.khat[m] not in khatm:
+        if m not in seen_m:
             khatm.append(wf.khat[m])
             khatm_labels.append(f"const REAL khat{m}")
+            seen_m.add(m)
+
     # We are going to be doing this twice;
     # once for the fine dynamics and once for the coarse.
     h_code = ccg.c_codegen(
@@ -98,9 +101,8 @@ const REAL Omega_circ = dynamics[OMEGA_CIRC];
 //compute
 """
     body += khat_code
-    for key in hlms_dict.keys():
-        mode = ast.literal_eval(key)
-        l, m = mode
+    for key in hlms_dict:
+        l, m = ast.literal_eval(key)
         body += f"""
     gamma_{l}{m} = SEOBNRv5_aligned_spin_gamma_wrapper({l} + 1, -2.*khat{m});
 """

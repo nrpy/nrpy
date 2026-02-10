@@ -52,14 +52,14 @@ def generate_pup_serialization_lines_for_CodeParams(
 
 def register_CFunction_superB_pup_routines(
     MoL_method: str = "RK4",
-    enable_psi4_diagnostics: bool = False,
+    enable_psi4: bool = False,
 ) -> None:
     """
     Register the C function "superB_pup_routines", which is a collection of Pack-Unpack (PUP) routines for various structs.
     These routines are used for checkpointing and load balancing in Charm++.
 
     :param MoL_method: The Method of Lines (MoL) method to be used (default is "RK4").
-    :param enable_psi4_diagnostics: Flag to enable psi4 diagnostics.
+    :param enable_psi4: Flag to enable psi4 diagnostics.
 
     DocTests:
         >>> register_CFunction_superB_pup_routines()
@@ -216,8 +216,6 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             f"gridfuncs.{gridfunctions} = (REAL *restrict)malloc(sizeof(REAL) * {num_gfs} * "
             "Nxx_plus_2NGHOSTS_tot);\n"
         )
-    # In superB, allocate separate memory for diagnostic_output_gfs.
-    prefunc += "gridfuncs.diagnostic_output_gfs  = (REAL *restrict)malloc(sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);\n"
     prefunc += """
     initialize_yn_and_non_yn_gfs_to_nan(&commondata, &params, &gridfuncs);
   }"""
@@ -323,55 +321,6 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   PUParray(p, ds.filename_1d_z, 256);
   PUParray(p, ds.filename_2d_xy, 256);
   PUParray(p, ds.filename_2d_yz, 256);
-"""
-
-    if enable_psi4_diagnostics:
-        prefunc += r"""
-  p | ds.num_of_R_exts_chare;
-  p | ds.psi4_spinweightm2_sph_harmonics_max_l;
-  p | ds.length_localsums_for_psi4_decomp;
-
-  if (p.isUnpacking()) {
-    ds.list_of_R_exts_chare = (REAL *restrict)malloc(sizeof(REAL) * ds.num_of_R_exts_chare);
-    ds.localsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-    ds.globalsums_for_psi4_decomp = (REAL *restrict)malloc(sizeof(REAL) * ds.length_localsums_for_psi4_decomp);
-  }
-  PUParray(p, ds.list_of_R_exts_chare, ds.num_of_R_exts_chare);
-
-  if (strstr(params_chare.CoordSystemName, "Cylindrical") != NULL) {
-    p | ds.tot_N_shell_pts_chare;
-    p | ds.dtheta;
-    if (p.isUnpacking()) {
-      ds.N_shell_pts_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
-      ds.N_theta_shell_chare = (int *restrict)malloc(sizeof(int) * ds.num_of_R_exts_chare);
-      ds.xx_shell_chare = (REAL ***restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL **));
-      ds.theta_shell_chare = (REAL **restrict)malloc(ds.num_of_R_exts_chare * sizeof(REAL *));
-    }
-    PUParray(p, ds.N_shell_pts_chare, ds.num_of_R_exts_chare);
-    PUParray(p, ds.N_theta_shell_chare, ds.num_of_R_exts_chare);
-    if (p.isUnpacking()) {
-      ds.theta_shell_chare = (REAL * *restrict)malloc(sizeof(REAL *) * ds.num_of_R_exts_chare);
-      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-        ds.theta_shell_chare[i] = (REAL *restrict)malloc(sizeof(REAL) * ds.N_theta_shell_chare[i]);
-      }
-      ds.xx_shell_chare = (REAL * **restrict)malloc(sizeof(REAL **) * ds.num_of_R_exts_chare);
-      for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-        ds.xx_shell_chare[i] = (REAL * *restrict)malloc(sizeof(REAL *) * ds.N_shell_pts_chare[i]);
-        for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-          ds.xx_shell_chare[i][j] = (REAL *restrict)malloc(sizeof(REAL) * 3);
-        }
-      }
-    }
-    for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      for (int j = 0; j < ds.N_shell_pts_chare[i]; j++) {
-        PUParray(p, ds.xx_shell_chare[i][j], 3);
-      }
-    }
-     for (int i = 0; i < ds.num_of_R_exts_chare; i++) {
-      PUParray(p, ds.theta_shell_chare[i], ds.N_theta_shell_chare[i]);
-    }
-  }"""
-    prefunc += r"""
 }"""
 
     # PUP routine for tmpBuffers_struct
@@ -381,6 +330,7 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
   const int Nxx_plus_2NGHOSTS_face0 = params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_face1 = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS2;
   const int Nxx_plus_2NGHOSTS_face2 = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS_tot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
   const int max_sync_gfs = gridfuncs.max_sync_gfs;
   size_t size_EW = static_cast<size_t>(max_sync_gfs) * NGHOSTS * Nxx_plus_2NGHOSTS_face0;
   size_t size_NS = static_cast<size_t>(max_sync_gfs) * NGHOSTS * Nxx_plus_2NGHOSTS_face1;
@@ -390,6 +340,11 @@ void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const para
     tmpBuffers.tmpBuffer_NS = (REAL *restrict)malloc(sizeof(REAL) * size_NS);
     tmpBuffers.tmpBuffer_TB = (REAL *restrict)malloc(sizeof(REAL) * size_TB);
   }
+#ifdef BHAHAHA_NUM_INTERP_GFS
+  if (p.isUnpacking()) {
+    tmpBuffers.tmpBuffer_bhahaha_gfs = (REAL *restrict)malloc(sizeof(REAL) * BHAHAHA_NUM_INTERP_GFS * Nxx_plus_2NGHOSTS_tot);
+  }
+#endif
   const int tot_num_dst_chares = nonlocalinnerbc.tot_num_dst_chares;
   const int tot_num_src_chares = nonlocalinnerbc.tot_num_src_chares;
   const int *num_srcpts_tosend_each_chare = nonlocalinnerbc.num_srcpts_tosend_each_chare;

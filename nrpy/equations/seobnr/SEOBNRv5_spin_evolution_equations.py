@@ -1080,12 +1080,12 @@ class SEOBNRv5_spin_evolution_equations:
         # Equation 71a of https://arxiv.org/pdf/2303.18143
         ln_dot = ln_dot_spin_orbit + ln_dot_spin1_spin2 + ln_dot_spin_squared
         # Collect all vector components
-        self.S1_dot_x = S1_dot[0]
-        self.S1_dot_y = S1_dot[1]
-        self.S1_dot_z = S1_dot[2]
-        self.S2_dot_x = S2_dot[0]
-        self.S2_dot_y = S2_dot[1]
-        self.S2_dot_z = S2_dot[2]
+        self.chi1_dot_x = S1_dot[0] / self.m1**2
+        self.chi1_dot_y = S1_dot[1] / self.m1**2
+        self.chi1_dot_z = S1_dot[2] / self.m1**2
+        self.chi2_dot_x = S2_dot[0] / self.m2**2
+        self.chi2_dot_y = S2_dot[1] / self.m2**2
+        self.chi2_dot_z = S2_dot[2] / self.m2**2
         self.ln_dot_x = ln_dot[0]
         self.ln_dot_y = ln_dot[1]
         self.ln_dot_z = ln_dot[2]

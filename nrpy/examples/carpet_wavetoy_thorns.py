@@ -69,7 +69,7 @@ standard_ET_includes = ["math.h", "cctk.h", "cctk_Arguments.h", "cctk_Parameters
 _ = par.register_CodeParameter(
     "CCTK_INT",
     __name__,
-    "FD_order",
+    "fd_order",
     fd_order,
     add_to_glb_code_params_dict=True,
 )

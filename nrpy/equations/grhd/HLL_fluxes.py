@@ -6,7 +6,7 @@ Author: Terrence Pierre Jacques
 """
 
 # Step Import needed modules:
-from typing import Any, Dict, Sequence, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
@@ -17,15 +17,15 @@ from nrpy.equations.grhd.GRHD_equations import GRHD_Equations
 
 def calculate_GRHD_Tmunu_and_contractions(
     flux_dirn: int,
-    gammaDD: Sequence[Sequence[sp.Expr]],
-    betaU: Sequence[sp.Expr],
+    gammaDD: List[List[sp.Expr]],
+    betaU: List[sp.Expr],
     alpha: sp.Expr,
     e6phi: sp.Expr,
     rho_b: sp.Expr,
     Ye: sp.Expr,
     P: sp.Expr,
     h: sp.Expr,
-    u4U: Sequence[sp.Expr],
+    u4U: List[sp.Expr],
 ) -> Tuple[
     sp.Expr,
     sp.Expr,
@@ -33,8 +33,8 @@ def calculate_GRHD_Tmunu_and_contractions(
     sp.Expr,
     sp.Expr,
     sp.Expr,
-    Sequence[sp.Expr],
-    Sequence[sp.Expr],
+    List[sp.Expr],
+    List[sp.Expr],
 ]:
     """
     Compute the maximum and minimum characteristic speeds c_max and c_min.
@@ -63,9 +63,9 @@ def calculate_GRHD_Tmunu_and_contractions(
     """
     grhd_eqs = GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
 
-    grhd_eqs.gammaDD = gammaDD.copy()  # type: ignore
-    grhd_eqs.betaU = betaU.copy()  # type: ignore
-    grhd_eqs.u4U = u4U.copy()  # type: ignore
+    grhd_eqs.gammaDD = gammaDD.copy()
+    grhd_eqs.betaU = betaU.copy()
+    grhd_eqs.u4U = u4U.copy()
     grhd_eqs.alpha = alpha
     grhd_eqs.e6phi = e6phi
     grhd_eqs.rho_b = rho_b
@@ -75,7 +75,7 @@ def calculate_GRHD_Tmunu_and_contractions(
 
     grhd_eqs.compute_vU_from_u4U__no_speed_limit()
 
-    grhd_eqs.VU = grhd_eqs.VU_from_u4U  # type: ignore
+    grhd_eqs.VU = grhd_eqs.VU_from_u4U
 
     # First compute stress-energy tensor T4UU and T4UD:
     grhd_eqs.compute_T4UU()
@@ -102,8 +102,8 @@ def calculate_GRHD_Tmunu_and_contractions(
     U_tau_tilde = grhd_eqs.tau_tilde
     F_tau_tilde = grhd_eqs.tau_tilde_fluxU[flux_dirn]
 
-    U_S_tildeD = grhd_eqs.S_tildeD.copy()  # type: ignore
-    F_S_tildeD = grhd_eqs.S_tilde_fluxUD[flux_dirn].copy()  # type: ignore
+    U_S_tildeD = grhd_eqs.S_tildeD.copy()
+    F_S_tildeD = grhd_eqs.S_tilde_fluxUD[flux_dirn].copy()
 
     return (
         U_rho_star,
@@ -136,17 +136,19 @@ def HLL_solver(
     :param Ul: conserved quantity at left interface
     :return: HLL flux at an interface
     """
-    return (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    return cast(
+        sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    )
 
 
 def calculate_HLL_fluxes(
     flux_dirn: int,
     alpha_face: sp.Expr,
-    gamma_faceDD: Sequence[Sequence[sp.Expr]],
-    beta_faceU: Sequence[sp.Expr],
+    gamma_faceDD: List[List[sp.Expr]],
+    beta_faceU: List[sp.Expr],
     e6phi_face: sp.Expr,
-    u4rU: Sequence[sp.Expr],
-    u4lU: Sequence[sp.Expr],
+    u4rU: List[sp.Expr],
+    u4lU: List[sp.Expr],
     rho_b_r: sp.Expr,
     rho_b_l: sp.Expr,
     Ye_r: sp.Expr,
@@ -157,7 +159,7 @@ def calculate_HLL_fluxes(
     h_l: sp.Expr,
     cs2_r: sp.Expr,
     cs2_l: sp.Expr,
-) -> Tuple[sp.Expr, sp.Expr, sp.Expr, Sequence[sp.Expr]]:
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, List[sp.Expr]]:
     """
     Calculate symbolic expressions for the hydrodynamic fluxes using the HLL approximate Riemann solver.
 

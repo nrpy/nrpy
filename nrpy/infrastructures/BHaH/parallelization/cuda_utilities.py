@@ -8,13 +8,11 @@ import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
 
-"""
-    Define the default launch dictionary for CUDA kernels.
-
-    threads_per_block: Number of threads per block. Default is 32 in the x direction, 1 in the y and z directions.
-    blocks_per_grid: Number of blocks needed in the [x,y,z] direction.  Default is computed based on Nxx and threads_per_block.
-    stream: Stream ID for the kernel.  Empty string defaults to param_streamid % NUM_STREAMS. Exclude from dictionary to use null stream.
-"""
+# Define the default launch dictionary for CUDA kernels.
+#
+# threads_per_block: Number of threads per block. Default is 32 in the x direction, 1 in the y and z directions.
+# blocks_per_grid: Number of blocks needed in the [x,y,z] direction. Default is computed based on Nxx and threads_per_block.
+# stream: Stream ID for the kernel. Empty string defaults to param_streamid % NUM_STREAMS.
 default_launch_dictionary = {
     "blocks_per_grid": [],
     "threads_per_block": [
@@ -421,7 +419,7 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
     <BLANKLINE>
       int offset_gpu = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
       int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
-      cudaMemcpyAsync(&gf_gpu[offset_host], &gf_host[offset_gpu], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
+      cudaMemcpyAsync(&gf_gpu[offset_gpu], &gf_host[offset_host], sizeof(REAL) * Nxx_plus_2NGHOSTS_tot, cudaMemcpyHostToDevice, streams[streamid]);
       cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");
     } // END FUNCTION cpyHosttoDevice__gf
     <BLANKLINE>
@@ -440,8 +438,8 @@ def register_CFunction_cpyHosttoDevice__gf() -> None:
 
   int offset_gpu  = Nxx_plus_2NGHOSTS_tot * gpu_GF_IDX;
   int offset_host = Nxx_plus_2NGHOSTS_tot * host_GF_IDX;
-  cudaMemcpyAsync(&gf_gpu[offset_host],
-                  &gf_host[offset_gpu],
+  cudaMemcpyAsync(&gf_gpu[offset_gpu],
+                  &gf_host[offset_host],
                   sizeof(REAL) * Nxx_plus_2NGHOSTS_tot,
                   cudaMemcpyHostToDevice, streams[streamid]);
   cudaCheckErrors(cudaMemcpyAsync, "Copy of gf data failed");

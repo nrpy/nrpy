@@ -63,6 +63,7 @@ def register_C_functions(
 
     # Register C function to apply boundary conditions to inner-only boundary points.
     BHaH.CurviBoundaryConditions.apply_bcs_inner_only.register_CFunction_apply_bcs_inner_only()
+    BHaH.CurviBoundaryConditions.apply_bcs_inner_only_specific_gfs.register_CFunction_apply_bcs_inner_only_specific_gfs()
 
     # Register C function to apply boundary conditions to outer-extrapolated and inner boundary points.
     BHaH.CurviBoundaryConditions.apply_bcs_outerextrap_and_inner.register_CFunction_apply_bcs_outerextrap_and_inner()

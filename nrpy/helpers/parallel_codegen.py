@@ -1,3 +1,4 @@
+# nrpy/helpers/parallel_codegen.py
 """
 Core functions that enable registering and calling functions in parallel.
 
@@ -14,6 +15,7 @@ from typing import Any, Callable, Dict, Tuple, Union, cast
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.params as par
+import nrpy.py_function as pyfc
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 par.register_param(bool, __name__, "enable_parallel_codegen", False)
@@ -43,6 +45,7 @@ NRPyEnv_type = Tuple[
     Dict[str, par.NRPyParameter],
     Dict[str, par.CodeParameter],
     Dict[str, cfc.CFunction],
+    Dict[str, pyfc.PyFunction],
     Dict[
         str,
         Union[
@@ -66,6 +69,7 @@ def NRPyEnv() -> NRPyEnv_type:
         par.glb_params_dict,
         par.glb_code_params_dict,
         cfc.CFunction_dict,
+        pyfc.PyFunction_dict,
         gri.glb_gridfcs_dict,
         par.glb_extras_dict,
     )
@@ -105,8 +109,9 @@ def unpack_NRPy_environment_dict(
         par.glb_params_dict.update(env[0])
         par.glb_code_params_dict.update(env[1])
         cfc.CFunction_dict.update(env[2])
-        gri.glb_gridfcs_dict.update(env[3])
-        deep_update(par.glb_extras_dict, env[4])
+        pyfc.PyFunction_dict.update(env[3])
+        gri.glb_gridfcs_dict.update(env[4])
+        deep_update(par.glb_extras_dict, env[5])
 
 
 def pcg_registration_phase() -> bool:

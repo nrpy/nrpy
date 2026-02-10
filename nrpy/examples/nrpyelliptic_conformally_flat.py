@@ -7,6 +7,7 @@ Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -21,10 +22,9 @@ parser = argparse.ArgumentParser(
     description="NRPyElliptic Solver for Conformally Flat BBH initial data"
 )
 parser.add_argument(
-    "--parallelization",
-    type=str,
-    help="Parallelization strategy to use (e.g. openmp, cuda).",
-    default="openmp",
+    "--cuda",
+    action="store_true",
+    help="Use CUDA parallelization.",
 )
 parser.add_argument(
     "--floating_point_precision",
@@ -36,8 +36,8 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
-parallelization = args.parallelization.lower()
-
+# Default to openmp; override with cuda if --cuda is set
+parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
@@ -69,7 +69,7 @@ def get_log10_residual_tolerance(fp_type_str: str = "double") -> float:
     elif fp_type_str == "float":
         res = -6.5
     else:
-        raise ValueError(f"residual tolerence not defined for {fp_type_str} precision")
+        raise ValueError(f"residual tolerance not defined for {fp_type_str} precision")
     return res
 
 
@@ -356,8 +356,7 @@ if initial_data_type == "axisymmetric":
             par.adjust_CodeParam_default(param, value)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
-    project_dir=project_dir,
-    diagnostic_gfs_names_dict=par.glb_extras_dict["diagnostic_gfs_names_dict"],
+    project_dir=project_dir
 )
 BHaH.CodeParameters.write_CodeParameters_h_files(project_dir=project_dir)
 BHaH.CodeParameters.register_CFunctions_params_commondata_struct_set_to_default()

@@ -1,3 +1,4 @@
+# nrpy/c_codegen.py
 """
 Core NRPy module used for generating C code kernels.
 
@@ -5,10 +6,8 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
 
-import logging
-import re  # Regular expressions can be toxic due to edge cases -- we use them sparingly
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
@@ -89,7 +88,7 @@ class CCodeGen:
         enforce_c_parameters_must_be_defined: bool = False,
         enable_fd_functions: bool = False,
         mem_alloc_style: Literal["210", "012"] = "210",
-        upwind_control_vec: Union[List[sp.Symbol], sp.Symbol] = sp.Symbol("unset"),
+        upwind_control_vec: Union[List[sp.Expr], sp.Expr] = sp.Symbol("unset"),
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
@@ -200,7 +199,7 @@ class CCodeGen:
         # Set fp_type and fp_type_alias
         Infrastructure = par.parval_from_str("Infrastructure")
         if self.enable_simd:
-            if self.fp_type not in "double":
+            if self.fp_type != "double":
                 raise ValueError(
                     "SIMD output currently only supports double precision. Sorry!"
                 )
@@ -230,15 +229,15 @@ class CCodeGen:
             self.simd_find_more_FMAsFMSs = True
 
         if self.enable_cse_preprocess:
-            sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
-            sympy_major_version = int(sympy_version.split(".")[0])
-            sympy_minor_version = int(sympy_version.split(".")[1])
-            if sympy_major_version < 1 or (
-                sympy_major_version == 1 and sympy_minor_version < 3
-            ):
-                logging.warning(
-                    "SymPy version %s does not support CSE preprocessing. Disabling...",
-                    sympy_version,
+            sp_version = (
+                sp.__version__.lower().replace("rc", ".").replace("b", ".")
+            )  # turn 1.2rc1 -> 1.2.1, 1.11b1 -> 1.11.1
+            parts = sp_version.split(".")
+            major = int(parts[0])
+            minor = int(parts[1])
+            if (major, minor) < (1, 3):
+                print(
+                    f"Warning: SymPy version {sp.__version__} does not support CSE preprocessing. Disabling..."
                 )
                 self.enable_cse_preprocess = False
 
@@ -559,8 +558,12 @@ def c_codegen(
                 sympyexprs_SCALAR_TMPs_are_sp_Eq.append(expr)
 
         # Check sympy version and process the main group
-        sympy_version = tuple(map(int, re.findall(r"\d+", sp.__version__)))
-        if sympy_version < (1, 3):
+        sympy_version = sp.__version__.replace("rc", "...").replace("b", "...")
+        sympy_major_version = int(sympy_version.split(".")[0])
+        sympy_minor_version = int(sympy_version.split(".")[1])
+        if sympy_major_version < 1 or (
+            sympy_major_version == 1 and sympy_minor_version < 3
+        ):
             print(
                 f"Warning: SymPy version {sp.__version__} does not support CSE postprocessing."
             )
@@ -1090,10 +1093,10 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
             for dirn in upwind_directions:
                 Coutput += f"const {CCGParams.fp_type_alias} Upwind{dirn} = UPWIND_ALG(UpwindControlVectorU{dirn});\n"
 
-        upwindU = [sp.sympify(0) for _ in range(3)]
+        upwindU = [cast(sp.Expr, sp.sympify(0)) for _ in range(3)]
         # Populate upwindU with symbolic expressions based on direction
         for direction in upwind_directions:
-            upwindU[direction] = sp.sympify(f"Upwind{direction}")
+            upwindU[direction] = cast(sp.Expr, sp.sympify(f"Upwind{direction}"))
 
         upwind_expr_list, var_list = [], []
 
@@ -1104,9 +1107,10 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
 
             # Check if the operator is a 5-length string and contains "dupD"
             if len(operator) == 5 and "dupD" in operator:
-                var_dupD = sp.sympify(f"UpwindAlgInput{deriv_var}")
-                var_ddnD = sp.sympify(
-                    f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"
+                var_dupD = cast(sp.Expr, sp.sympify(f"UpwindAlgInput{deriv_var}"))
+                var_ddnD = cast(
+                    sp.Expr,
+                    sp.sympify(f"UpwindAlgInput{deriv_var.replace('_dupD', '_ddnD')}"),
                 )
 
                 # Extract direction for upwind operation

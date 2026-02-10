@@ -156,7 +156,7 @@ def register_CFunction_diagnostics_volume_integration() -> (
       // Define the integrands for this recipe:
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUAL, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 1;
 
       NUM_RECIPES++;
@@ -172,7 +172,7 @@ def register_CFunction_diagnostics_volume_integration() -> (
       recipes[NUM_RECIPES].rules[0] = (diags_integration_sphere_rule_t){.center_xyz = {0, 0, 0}, .radius = R_outer, .exclude_inside = 0};
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
-      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUAL, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_RESIDUALGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 1;
 
       NUM_RECIPES++;
@@ -191,7 +191,7 @@ def register_CFunction_diagnostics_volume_integration() -> (
   // Execute all defined recipes and capture results
   {
     REAL rms_residual_r_80 = NAN;
-    diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUAL, &rms_residual_r_80);
+    diags_integration_get_rms(&integration_results, "sphere_R_80", DIAG_RESIDUALGF, &rms_residual_r_80);
     commondata->log10_current_residual = log10(rms_residual_r_80);
   } // END USER-EDIT capture results block
   // ========================= End of user edits =========================

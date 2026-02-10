@@ -1,3 +1,4 @@
+# nrpy/equations/general_relativity/ADM_to_BSSN.py
 """
 Construct expressions for BSSN quantities in terms of ADM quantities.
 
@@ -6,16 +7,20 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Import needed core NRPy modules
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 # NRPy: This module depends on the parameter EvolvedConformalFactor_cf,
 #        which is defined in BSSN.BSSN_quantities
-import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=unused-import
+import nrpy.equations.general_relativity.BSSN_quantities  # pylint: disable=import-error, unused-import
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
+
+_ = (
+    nrpy.equations.general_relativity.BSSN_quantities
+)  # Prevent PyCharm from optimizing this out
 
 
 class ADM_to_BSSN:
@@ -23,10 +28,10 @@ class ADM_to_BSSN:
 
     def __init__(
         self,
-        gammaDD: Sequence[Sequence[sp.Expr]],
-        KDD: Sequence[Sequence[sp.Expr]],
-        betaU: Sequence[sp.Expr],
-        BU: Sequence[sp.Expr],
+        gammaDD: List[List[sp.Expr]],
+        KDD: List[List[sp.Expr]],
+        betaU: List[sp.Expr],
+        BU: List[sp.Expr],
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
         compute_cf_only: bool = False,

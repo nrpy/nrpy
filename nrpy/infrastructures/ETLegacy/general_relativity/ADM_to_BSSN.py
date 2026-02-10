@@ -8,7 +8,9 @@ Authors: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -100,7 +102,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
 
     cf_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="cf")
     trK_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name="trK")
-    list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
+    list_of_output_exprs: List[sp.Expr] = [adm2bssn.cf, adm2bssn.trK]
     list_of_output_varnames = [cf_gf_access, trK_gf_access]
     for i in range(3):
         vetU_gf_access = gri.ETLegacyGridFunction.access_gf(gf_name=f"vetU{i}")
@@ -181,7 +183,7 @@ as initial data are given in terms of ADM quantities, and {thorn_name} evolves t
 """
 
     schedule = f"""
-if(FD_order == {fd_order}) {{
+if(fd_order == {fd_order}) {{
   schedule FUNC_NAME at CCTK_INITIAL after ADMBase_PostInitial
   {{
     LANG: C

@@ -167,7 +167,9 @@ else{
 }
 commondata->t_attach = t_peak;
 // Compute t_p and Omega_0 in BOB
-BOB_v2_find_tp_Omega0(commondata);
+//not needed anymore
+//BOB_v2_find_tp_Omega0(commondata);
+BOB_v2_setup_peak_attachment(commondata);
 // Compute Q_cropped, P_cropped, t_cropped, phase_cropped, amp_cropped
 size_t N = 5;
 size_t left = MAX(peak_idx, N) - N;

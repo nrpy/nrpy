@@ -1,3 +1,4 @@
+# nrpy/reference_metric.py
 """
 Define the ReferenceMetric class and its related functionalities.
 
@@ -43,6 +44,9 @@ class ReferenceMetric:
         :param SymPySimplifyExpressions: A boolean indicating whether to simplify expressions using SymPy. Default is False.
         :raises ValueError: If an unrecognized coordinate system is specified.
         """
+        self.CoordSystem = CoordSystem
+        self.SymPySimplifyExpressions = SymPySimplifyExpressions
+
         # grid_physical_size is set based entirely on CoordSystem. So it is a rfm parameter not a grid parameter.
         par.register_param(bool, __name__, "enable_grid_physical_size", True)
         # For multipatch runs, set to "All". For single grid runs, set to the grid's CoordSystem.
@@ -71,13 +75,11 @@ class ReferenceMetric:
             add_to_set_CodeParameters_h=True,
         )
 
-        self.CoordSystem = CoordSystem
-        self.SymPySimplifyExpressions = SymPySimplifyExpressions
-
         # Lower corner of the grid:
-        self.xxmin = [sp.sympify(0)] * 3
+        # Annotated as List[Any] because it can hold Integers, Exprs, or Strings ("xmin")
+        self.xxmin: List[Any] = [sp.sympify(0)] * 3
         # Upper corner of the grid:
-        self.xxmax = [sp.sympify(0)] * 3
+        self.xxmax: List[Any] = [sp.sympify(0)] * 3
         # Physical extent of the grid;
         # grid_physical_size_dict automatically sets rfm parameters related
         #    to domain size as functions of grid_physical_size CodeParameter
@@ -91,19 +93,20 @@ class ReferenceMetric:
             "enable_grid_physical_size"
         )
         # Grid coordinates. In Cartesian self.xx[0],xx[1],xx[2] = x,y,z; in Spherical r, theta, phi, etc.
-        self.xx = cast(List[sp.Symbol], ixp.declarerank1("xx", dimension=3))
+        self.xx = ixp.declarerank1("xx", dimension=3)
         # Cartesian coordinate; will only be a linear function of self.xx if CoordSystem==Cartesian.
         self.Cartx, self.Carty, self.Cartz = sp.symbols("Cartx Carty Cartz")
         # self.xx_to_Cart must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.xx_to_Cart = [sp.sympify(0)] * 3
+        self.xx_to_Cart: List[sp.Expr] = [sp.sympify(0)] * 3
         # self.Cart_to_xx must be set as a function of (Cartx, Carty, Cartz)
-        self.Cart_to_xx = [sp.sympify(0)] * 3
+        # Annotated as List[Any] because it may hold "NewtonRaphson" string
+        self.Cart_to_xx: List[Any] = [sp.sympify(0)] * 3
         # self.xxSph must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.xxSph = [sp.sympify(0)] * 3
+        self.xxSph: List[sp.Expr] = [sp.sympify(0)] * 3
         # self.scalefactor_orthog must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.scalefactor_orthog = [sp.sympify(0)] * 3
+        self.scalefactor_orthog: List[sp.Expr] = [sp.sympify(0)] * 3
         # UnitVectors must be set as a function of (self.xx[0],xx[1],xx[2])
-        self.UnitVectors = ixp.zerorank2(dimension=3)
+        self.UnitVectors: List[List[sp.Expr]] = ixp.zerorank2(dimension=3)
         # Non-angular coordinate directions
         self.radial_like_dirns: List[int] = []
         # module name for CodeParameters
@@ -126,6 +129,8 @@ class ReferenceMetric:
         self.f2_of_xx0_funcform = sp.Function("f2_of_xx0_funcform")(self.xx[0])
         self.f3_of_xx2_funcform = sp.Function("f3_of_xx2_funcform")(self.xx[2])
         self.f4_of_xx1_funcform = sp.Function("f4_of_xx1_funcform")(self.xx[1])
+
+        # Annotate these as Expr because they are initialized as Symbols but later assigned full Expressions
         (
             self.f0_of_xx0,
             self.f1_of_xx1,
@@ -147,7 +152,12 @@ class ReferenceMetric:
         )
         # END: RFM PRECOMPUTE STUFF
 
-        if "Cartesian" in CoordSystem:
+        if CoordSystem.startswith("GeneralRFM"):
+            # Fully general reference metric coordinate system; coordinates are
+            # treated as Cartesian-labeled with identity maps to/from Cartesian.
+            self.EigenCoord = "Cartesian"
+            self.general_rfm_like()
+        elif "Cartesian" in CoordSystem:
             self.EigenCoord = "Cartesian"
             self.cartesian_like()
         elif "Spherical" in CoordSystem:
@@ -174,7 +184,9 @@ class ReferenceMetric:
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
             # Step 2.a: First construct Jacobian matrix:
 
-            Jac_dUCart_dDrfmUD = [[sp.sympify(0) for _ in range(3)] for _ in range(3)]
+            Jac_dUCart_dDrfmUD: List[List[sp.Expr]] = [
+                [sp.sympify(0) for _ in range(3)] for _ in range(3)
+            ]
             for i in range(3):
                 for j in range(3):
                     Jac_dUCart_dDrfmUD[i][j] = sp.diff(self.xx_to_Cart[i], self.xx[j])
@@ -214,7 +226,22 @@ class ReferenceMetric:
         self.ReD = ixp.zerorank1()
         self.ReDD = ixp.zerorank2()
         self.ghatDD = ixp.zerorank2()
-        if not enable_rfm_precompute:
+        if self.CoordSystem.startswith("GeneralRFM"):
+            # GeneralRFM* reference metrics are symmetric rank-2 tensors in 3 dimensions.
+            # Unlike all other reference metrics, it is *not* diagonal, and unlike
+            # *some* other reference metrics, it is *nonsingular*. As such the
+            # rescaling infrastructure (used to combat singular behavior) is *not needed*,
+            # so we set ReU = ReD = 1, and ReDD = 1 for all components.
+            for i in range(3):
+                self.ReU[i] = sp.sympify(1)
+                self.ReD[i] = sp.sympify(1)
+                for j in range(3):
+                    self.ReDD[i][j] = sp.sympify(1)
+
+            # Treat the six independent components of ghatDD[i][j] as primitive
+            # symmetric symbols.
+            self.ghatDD = ixp.declarerank2("ghatDD", dimension=3, symmetry="sym01")
+        elif not enable_rfm_precompute:
             for i in range(3):
                 self.scalefactor_orthog[i] = sp.sympify(self.scalefactor_orthog[i])
                 self.ghatDD[i][i] = self.scalefactor_orthog[i] ** 2
@@ -261,10 +288,6 @@ class ReferenceMetric:
         # Step 2: Compute det(ghat) and its 1st & 2nd derivatives
         self.detgammahatdD = ixp.zerorank1(3)
         self.detgammahatdDD = ixp.zerorank2(3)
-        for i in range(3):
-            self.detgammahatdD[i] = sp.diff(self.detgammahat, self.xx[i])
-            for j in range(3):
-                self.detgammahatdDD[i][j] = sp.diff(self.detgammahatdD[i], self.xx[j])
 
         # Step 3a: Compute 1st & 2nd derivatives of rescaling vectors.
         #          (E.g., needed in BSSN for betaUdDD computation)
@@ -272,6 +295,94 @@ class ReferenceMetric:
         self.ReUdDD = ixp.zerorank3(3)
         self.ReDdD = ixp.zerorank2(3)
         self.ReDdDD = ixp.zerorank3(3)
+
+        # Step 3b: Compute 1st & 2nd derivatives of rescaling matrix.
+        self.ReDDdD = ixp.zerorank3(3)
+        self.ReDDdDD = ixp.zerorank4(3)
+
+        # Step 3c: Compute 1st & 2nd derivatives of reference metric.
+        self.ghatDDdD = ixp.zerorank3(3)
+        self.ghatDDdDD = ixp.zerorank4(3)
+
+        if self.CoordSystem.startswith("GeneralRFM"):
+            # In GeneralRFM, the first and second derivatives of the reference
+            # metric are treated as *primitive* tensors, never obtained by
+            # differentiating ghatDD inside ReferenceMetric.
+            # First derivatives: symmetric in (i,j).
+            self.ghatDDdD = ixp.declarerank3("ghatDDdD", dimension=3, symmetry="sym01")
+            self.ghatDDdDD = ixp.declarerank4(
+                "ghatDDdDD", dimension=3, symmetry="sym01sym23"
+            )
+        else:
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        if self.SymPySimplifyExpressions:
+                            self.ghatDDdD[i][j][k] = cached_simplify(
+                                sp.diff(self.ghatDD[i][j], self.xx[k])
+                            )
+                        else:
+                            self.ghatDDdD[i][j][k] = sp.diff(
+                                self.ghatDD[i][j], self.xx[k]
+                            )
+                        for l in range(3):
+                            self.ghatDDdDD[i][j][k][l] = sp.diff(
+                                self.ghatDDdD[i][j][k], self.xx[l]
+                            )
+
+        # Algebraic computation of detgammahatdD using Jacobi's formula:
+        # D_{,k} = D * g^{ij} * g_{ij,k}
+        self.detgammahatdD = ixp.zerorank1(dimension=3)
+        for k in range(3):
+            for i in range(3):
+                for j in range(3):
+                    self.detgammahatdD[k] += (
+                        self.detgammahat * self.ghatUU[i][j] * self.ghatDDdD[i][j][k]
+                    )
+
+        # Algebraic computation of detgammahatdDD:
+        # D_{,kl} = D * [ g^{mn} g_{mn,l} * g^{ij} g_{ij,k} <- TERM 1
+        #                - g^{ip} g^{jq} g_{pq,l} g_{ij,k}  <- TERM 2
+        #                + g^{ij} g_{ij,kl} ]               <- TERM 3
+        self.detgammahatdDD = ixp.zerorank2(dimension=3)
+        # TERM 1:
+        # D * ( g^{mn} g_{mn,l} * g^{ij} g_{ij,k} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        for m in range(3):
+                            for n in range(3):
+                                self.detgammahatdDD[k][l] += self.detgammahat * (
+                                    self.ghatUU[m][n]
+                                    * self.ghatDDdD[m][n][l]
+                                    * self.ghatUU[i][j]
+                                    * self.ghatDDdD[i][j][k]
+                                )
+        # TERM 2:
+        # D * ( - g^{ip} g^{jq} g_{pq,l} g_{ij,k} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        for p in range(3):
+                            for q in range(3):
+                                self.detgammahatdDD[k][l] += self.detgammahat * (
+                                    -self.ghatUU[i][p]
+                                    * self.ghatUU[j][q]
+                                    * self.ghatDDdD[p][q][l]
+                                    * self.ghatDDdD[i][j][k]
+                                )
+        # TERM 3:
+        # D * ( g^{ij} g_{ij,kl} )
+        for k in range(3):
+            for l in range(3):
+                for i in range(3):
+                    for j in range(3):
+                        self.detgammahatdDD[k][l] += self.detgammahat * (
+                            self.ghatUU[i][j] * self.ghatDDdDD[i][j][k][l]
+                        )
+
         for i in range(3):
             for j in range(3):
                 self.ReUdD[i][j] = sp.diff(self.ReU[i], self.xx[j])
@@ -280,9 +391,6 @@ class ReferenceMetric:
                     self.ReUdDD[i][j][k] = sp.diff(self.ReUdD[i][j], self.xx[k])
                     self.ReDdDD[i][j][k] = sp.diff(self.ReDdD[i][j], self.xx[k])
 
-        # Step 3b: Compute 1st & 2nd derivatives of rescaling matrix.
-        self.ReDDdD = ixp.zerorank3(3)
-        self.ReDDdDD = ixp.zerorank4(3)
         for i in range(3):
             for j in range(3):
                 for k in range(3):
@@ -293,33 +401,13 @@ class ReferenceMetric:
                             self.ReDDdD[i][j][k], self.xx[l]
                         )
 
-        # Step 3c: Compute 1st & 2nd derivatives of reference metric.
-        self.ghatDDdD = ixp.zerorank3(3)
-        self.ghatDDdDD = ixp.zerorank4(3)
-        for i in range(3):
-            for j in range(3):
-                for k in range(3):
-                    if self.SymPySimplifyExpressions:
-                        #                    ghatDDdD[i][j][k] = sp.trigsimp(sp.diff(ghatDD[i][j], xx[k])) # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                        self.ghatDDdD[i][j][k] = cached_simplify(
-                            sp.diff(self.ghatDD[i][j], self.xx[k])
-                        )  # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                    else:
-                        self.ghatDDdD[i][j][k] = sp.diff(
-                            self.ghatDD[i][j], self.xx[k]
-                        )  # FIXME: BAD: MUST BE SIMPLIFIED OR ANSWER IS INCORRECT! Must be some bug in sympy...
-                    for l in range(3):
-                        self.ghatDDdDD[i][j][k][l] = sp.diff(
-                            self.ghatDDdD[i][j][k], self.xx[l]
-                        )
-
         # Step 4a: Compute Christoffel symbols of reference metric.
+        # (Standard algebraic construction works for all systems including GeneralRFM)
         self.GammahatUDD = ixp.zerorank3(3)
         for i in range(3):
             for k in range(3):
                 for l in range(3):
                     for m in range(3):
-                        #                    GammahatUDD[i][k][l] += sp.trigsimp((sp.Rational(1,2))*ghatUU[i][m]*\
                         self.GammahatUDD[i][k][l] += (
                             (sp.Rational(1, 2))
                             * self.ghatUU[i][m]
@@ -332,17 +420,61 @@ class ReferenceMetric:
 
         # Step 4b: Compute derivs of Christoffel symbols of reference metric.
         self.GammahatUDDdD = ixp.zerorank4(3)
+        # Algebraic construction of GammahatUDDdD from ghatUU, ghatDDdD, ghatDDdDD.
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        #  where Gamma_{cab} = 1/2 ( g_{ca,b} + g_{cb,a} - g_{ab,c} )
+        GammahatDDD = ixp.zerorank3()
+        for c in range(3):
+            for a in range(3):
+                for b in range(3):
+                    GammahatDDD[c][a][b] += sp.Rational(1, 2) * (
+                        self.ghatDDdD[c][a][b]
+                        + self.ghatDDdD[c][b][a]
+                        - self.ghatDDdD[a][b][c]
+                    )
+        #  Then, Gamma_{cab,d} = 1/2 ( g_{ca,bd} + g_{cb,ad} - g_{ab,cd} )
+        GammahatDDDdD = ixp.zerorank4()
+        for c in range(3):
+            for a in range(3):
+                for b in range(3):
+                    for d in range(3):
+                        GammahatDDDdD[c][a][b][d] += sp.Rational(1, 2) * (
+                            self.ghatDDdDD[c][a][b][d]
+                            + self.ghatDDdDD[c][b][a][d]
+                            - self.ghatDDdDD[a][b][c][d]
+                        )
+        # So we have
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        # where we can use the identity g^{mi}_{,l} = -g^{ip} g^{mq} g_{pq,l}
+        ghatUUdD = ixp.zerorank3()
+        for i in range(3):
+            for l in range(3):
+                for m in range(3):
+                    for p in range(3):
+                        for q in range(3):
+                            ghatUUdD[m][i][l] += (
+                                -self.ghatUU[i][p]
+                                * self.ghatUU[m][q]
+                                * self.ghatDDdD[p][q][l]
+                            )
+        # Gamma^i_{jk,l} = [g^{mi} Gamma_{mjk}],l
+        #                 = g^{mi}_{,l} Gamma_{mjk} + g^{mi} Gamma_{mjk,l},
+        self.GammahatUDDdD = ixp.zerorank4()
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     for l in range(3):
-                        self.GammahatUDDdD[i][j][k][l] = sp.diff(
-                            self.GammahatUDD[i][j][k], self.xx[l]
-                        )
+                        for m in range(3):
+                            self.GammahatUDDdD[i][j][k][l] += (
+                                ghatUUdD[m][i][l] * GammahatDDD[m][j][k]
+                                + self.ghatUU[m][i] * GammahatDDDdD[m][j][k][l]
+                            )
 
         # Step 4c: If rfm_precompute is disabled, then we are finished with this function.
         #          Otherwise continue to Step 5.
-        if not enable_rfm_precompute:
+        if not enable_rfm_precompute or CoordSystem.startswith("GeneralRFM"):
             return
 
         # Step 5: Now that all hatted quantities are written in terms of generic SymPy functions,
@@ -355,15 +487,13 @@ class ReferenceMetric:
             :param expr: SymPy expression to be replaced
             :return: Expression with replaced variables
             """
-            sympy_version = sp.__version__.replace("rc", "...").replace(
-                "b", "..."
-            )  # Ignore the rc's and b's
-            # (release candidates & betas).
-            sympy_version_decimal = float(
-                int(sympy_version.split(".")[0])
-                + int(sympy_version.split(".")[1]) / 10.0
-            )
-            is_old_sympy_version = sympy_version_decimal < 1.2
+            sp_version = (
+                sp.__version__.lower().replace("rc", ".").replace("b", ".")
+            )  # turn 1.2rc1 -> 1.2.1, 1.11b1 -> 1.11.1
+            parts = sp_version.split(".")
+            major = int(parts[0])
+            minor = int(parts[1])
+            is_old_sympy_version = (major, minor) < (1, 2)
             # The derivative representation changed with SymPy 1.2, forcing version-dependent behavior.
 
             # Example: Derivative(f0_of_xx0_funcform(xx0)(xx0), (xx0, 2)) >> f0_of_xx0__DD00
@@ -377,7 +507,8 @@ class ReferenceMetric:
                         var, order = str(item.args[1])[2:], len(item.args) - 1
                     else:
                         # extract differentiation variable and derivative order (SymPy >= 1.2)
-                        var, order = str(item.args[1][0])[2:], item.args[1][1]
+                        args1 = cast(Tuple[Any, ...], item.args[1])
+                        var, order = str(args1[0])[2:], args1[1]
                     # build derivative operator with format: __DD...D(var)(var)...(var) where
                     # D and (var) are repeated for every derivative order
                     oper = "__D" + "D" * (order - 1) + var * order
@@ -479,7 +610,7 @@ class ReferenceMetric:
                         freevars.extend(self.ghatDDdDD[i][j][k][l].free_symbols)
                         freevars.extend(self.GammahatUDDdD[i][j][k][l].free_symbols)
 
-        freevars_uniq = superfast_uniq(freevars)
+        freevars_uniq = superfast_uniq(list(freevars))
 
         self.freevars_uniq_xx_indep = []
         for freevar in freevars_uniq:
@@ -524,7 +655,7 @@ class ReferenceMetric:
                         diff_result = sp.diff(diff_result, derivwrt)
             self.freevars_uniq_vals.append(diff_result)
 
-            frees_uniq = superfast_uniq(diff_result.free_symbols)
+            frees_uniq = superfast_uniq(list(diff_result.free_symbols))
             has_xx_dependence: bool = False
             for dirn in range(3):
                 if self.xx[dirn] in frees_uniq:
@@ -593,7 +724,7 @@ class ReferenceMetric:
                                 k
                             ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
 
-    def Sinhv1(self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol) -> Any:
+    def Sinhv1(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr) -> Any:
         """
         Set the sinh transformation used by SinhSpherical, SinhCylindrical, and SinhCartesian.
 
@@ -608,9 +739,7 @@ class ReferenceMetric:
             / (sp.exp(1 / SINHW) - sp.exp(-1 / SINHW))
         )
 
-    def Sinhv2(
-        self, x: sp.Symbol, AMPL: sp.Symbol, SINHW: sp.Symbol, slope: sp.Symbol
-    ) -> Any:
+    def Sinhv2(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr, slope: sp.Expr) -> Any:
         """
         Set the sinh transformation used by SinhSphericalv2*, SinhCylindricalv2, and SinhCartesianv2 (future).
 
@@ -678,8 +807,8 @@ class ReferenceMetric:
         # Extract the suffix after the prefix
         suffix = self.CoordSystem[len(prefix) :]
 
-        # Check if the suffix is an integer
-        if suffix.isdigit() and int(suffix) % 2 == 0:
+        # Check if the suffix is a positive even integer
+        if suffix.isdigit() and int(suffix) >= 2 and int(suffix) % 2 == 0:
             power_n = int(suffix)  # Convert the suffix to an integer
         else:
             raise ValueError(
@@ -1243,10 +1372,10 @@ class ReferenceMetric:
 
             # Inverse transformation derived from Mathematica (see validation script)
             def acsch(x: sp.Expr) -> sp.Expr:
-                return sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x)
+                return cast(sp.Expr, sp.log(sp.sqrt(1 + x ** (-2)) + 1 / x))
 
             def csch(x: sp.Expr) -> sp.Expr:
-                return 2 / (sp.exp(x) - sp.exp(-x))
+                return cast(sp.Expr, 2 / (sp.exp(x) - sp.exp(-x)))
 
             self.Cart_to_xx[0] = SINHWAA * acsch(
                 sp.sqrt(sp.Integer(2)) * AMAX * csch(1 / SINHWAA) / (denom_sqrt_x0)
@@ -1263,7 +1392,11 @@ class ReferenceMetric:
         self.scalefactor_orthog[1] = var1
         self.scalefactor_orthog[2] = AA * sp.sin(self.xx[1])
 
-        # In prolate-spheroidal-like coords, only the 2th coordinate direction is angular; the rest are radial-like:
+        # In (Sinh)SymTP coords:
+        #   xx[2] (phi) is an azimuthal angle everywhere.
+        #   xx[1] (theta) approaches the usual polar angle for AA >> bScale, but as AA -> 0 it
+        #   primarily parametrizes the focal line segment via z -> bScale*cos(theta). Some
+        #   boundary/regularity logic therefore treats xx[1] as "radial-like" near AA ~ 0.
         self.radial_like_dirns = [0, 1]
 
         self.f0_of_xx0 = AA
@@ -1422,9 +1555,7 @@ class ReferenceMetric:
             self.NewtonRaphson_f_of_xx[0] = RHOCYL - sp.sqrt(
                 self.Cartx**2 + self.Carty**2
             )
-            self.Cart_to_xx[1] = sp.atan2(
-                sp.Symbol("Carty", real=True), sp.Symbol("Cartx", real=True)
-            )
+            self.Cart_to_xx[1] = sp.atan2(self.Carty, self.Cartx)
             self.Cart_to_xx[2] = "NewtonRaphson"
             self.NewtonRaphson_f_of_xx[2] = ZCYL - self.Cartz
         else:
@@ -1465,7 +1596,7 @@ class ReferenceMetric:
         ]
         # END: Set universal attributes for all Cylindrical-like coordinate systems:
 
-    def register_pi(self) -> sp.Symbol:
+    def register_pi(self) -> sp.Expr:
         """
         Register the mathematical constant pi as a code parameter and return PI as a sympy symbol.
 
@@ -1481,7 +1612,7 @@ class ReferenceMetric:
             add_to_glb_code_params_dict=True,
         )
 
-    def register_sqrt1_2(self) -> sp.Symbol:
+    def register_sqrt1_2(self) -> sp.Expr:
         """
         Register the mathematical constant sqrt(1/2) as a code parameter and return SQRT1_2 as a sympy symbol.
 
@@ -1497,6 +1628,63 @@ class ReferenceMetric:
             add_to_glb_code_params_dict=True,
         )
 
+    def general_rfm_like(self) -> None:
+        """
+        Initialize class attributes for the GeneralRFM coordinate system.
+
+        The coordinates xx^i are treated as Cartesian-labeled coordinates
+        with identity maps to and from the Cartesian variables (Cartx,
+        Carty, Cartz). The reference metric itself is specified separately
+        and may be fully general and non-orthogonal.
+        """
+        # Neutral default domain; users are free to override these bounds.
+        par.register_CodeParameters(
+            "REAL",
+            self.CodeParam_modulename,
+            ["xmin", "xmax", "ymin", "ymax", "zmin", "zmax"],
+            [-1.0, 1.0, -1.0, 1.0, -1.0, 1.0],
+            add_to_parfile=self.add_rfm_params_to_parfile,
+            add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+        )
+        self.xxmin = ["xmin", "ymin", "zmin"]
+        self.xxmax = ["xmax", "ymax", "zmax"]
+        self.grid_physical_size_dict = {
+            "xmin": "-grid_physical_size",
+            "ymin": "-grid_physical_size",
+            "zmin": "-grid_physical_size",
+            "xmax": "grid_physical_size",
+            "ymax": "grid_physical_size",
+            "zmax": "grid_physical_size",
+        }
+
+        # Identity map between reference-metric coordinates and Cartesian.
+        self.xx_to_Cart[0] = self.xx[0]
+        self.xx_to_Cart[1] = self.xx[1]
+        self.xx_to_Cart[2] = self.xx[2]
+
+        self.Cart_to_xx[0] = self.Cartx
+        self.Cart_to_xx[1] = self.Carty
+        self.Cart_to_xx[2] = self.Cartz
+
+        # Define spherical coordinates from these Cartesian-like coordinates
+        # (for ancillary purposes only; not used for metric construction).
+        self.xxSph[0] = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
+        self.xxSph[1] = sp.acos(self.xx[2] / self.xxSph[0])
+        self.xxSph[2] = sp.atan2(self.xx[1], self.xx[0])
+
+        # Trivial scale factors (placeholders; not used to build metric in GeneralRFM).
+        self.scalefactor_orthog[0] = sp.sympify(1)
+        self.scalefactor_orthog[1] = sp.sympify(1)
+        self.scalefactor_orthog[2] = sp.sympify(1)
+
+        # Unit vectors: identity; all directions are "radial-like".
+        self.UnitVectors = [
+            [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
+        ]
+        self.radial_like_dirns = [0, 1, 2]
+
 
 class rfm_dict(Dict[str, ReferenceMetric]):
     """Custom dictionary for storing ReferenceMetric objects."""
@@ -1507,13 +1695,20 @@ class rfm_dict(Dict[str, ReferenceMetric]):
 
             # In case [CoordSystem]_rfm_precompute is passed:
             CoordSystem = CoordSystem_in.replace("_rfm_precompute", "")
-            self.__setitem__(
-                CoordSystem, ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
-            )
-            self.__setitem__(
-                CoordSystem + "_rfm_precompute",
-                ReferenceMetric(CoordSystem, enable_rfm_precompute=True),
-            )
+
+            # Base ReferenceMetric without precomputation:
+            base_rfm = ReferenceMetric(CoordSystem, enable_rfm_precompute=False)
+            self.__setitem__(CoordSystem, base_rfm)
+
+            # For GeneralRFM, rfm_precompute is enabled by design; map the
+            # _rfm_precompute variant to the same underlying object.
+            if CoordSystem.startswith("GeneralRFM"):
+                self.__setitem__(CoordSystem + "_rfm_precompute", base_rfm)
+            else:
+                self.__setitem__(
+                    CoordSystem + "_rfm_precompute",
+                    ReferenceMetric(CoordSystem, enable_rfm_precompute=True),
+                )
         return dict.__getitem__(self, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: ReferenceMetric) -> None:
@@ -1540,6 +1735,7 @@ supported_CoordSystems = [
     "UWedgeHSinhSph",
     "RingHoleySinhSpherical",
     "HoleySinhSpherical",
+    "GeneralRFM_fisheyeN2",
 ]
 
 unittest_CoordSystems = [
@@ -1584,7 +1780,8 @@ if __name__ == "__main__":
     rfm_sinhsymtp = reference_metric["SinhSymTP"]
 
     # Define the substitution dictionary: xx[0], xx[1], xx[2] mapped to Cart_to_xx expressions
-    sub_dict_backward_in_forward = {
+    # Typing as Dict[Any, Any] resolves the variance issue with sp.Expr.subs() expecting strict Mappings
+    sub_dict_backward_in_forward: Dict[Any, Any] = {
         rfm_sinhsymtp.xx[0]: rfm_sinhsymtp.Cart_to_xx[0],
         rfm_sinhsymtp.xx[1]: rfm_sinhsymtp.Cart_to_xx[1],
         rfm_sinhsymtp.xx[2]: rfm_sinhsymtp.Cart_to_xx[2],

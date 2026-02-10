@@ -1,3 +1,4 @@
+# nrpy/finite_difference.py
 """
 Provide helper functions for c_codegen to generate finite-difference C-code kernels.
 
@@ -7,7 +8,7 @@ Author: Zachariah B. Etienne
 
 import sys  # Standard Python module for multiplatform OS-level functions
 from operator import itemgetter
-from typing import Any, Dict, List, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -954,7 +955,7 @@ def proto_FD_operators_to_sympy_expressions(
     fdcoeffs: List[List[sp.Rational]],
     fdstencl: List[List[List[int]]],
     enable_simd: bool = False,
-) -> Tuple[List[sp.Basic], List[str], Dict[sp.Basic, sp.Rational]]:
+) -> Tuple[List[sp.Expr], List[str], Dict[sp.Basic, sp.Rational]]:
     """
     Convert finite difference (FD) operators to SymPy expressions.
 
@@ -1013,8 +1014,8 @@ def proto_FD_operators_to_sympy_expressions(
     const REAL_SIMD_ARRAY UpwindAlgInputFDPROTO_dupD2
     """
     # Set invdxx symbol list:
-    invdxx = [sp.sympify(f"invdxx{d}") for d in range(3)]
-    FDexprs = [sp.sympify(0)] * len(list_of_proto_deriv_symbs)
+    invdxx = [cast(sp.Expr, sp.sympify(f"invdxx{d}")) for d in range(3)]
+    FDexprs = [cast(sp.Expr, sp.sympify(0))] * len(list_of_proto_deriv_symbs)
     FDlhsvarnames = [""] * len(list_of_proto_deriv_symbs)
     symbol_to_Rational_dicts: List[Dict[sp.Basic, sp.Rational]] = [{}] * len(
         list_of_proto_deriv_symbs
@@ -1079,7 +1080,7 @@ def proto_FD_operators_to_sympy_expressions(
             negative=enable_simd,
             factor=True,
         )
-        FDexprs[i] = processed_FDexpr[0]
+        FDexprs[i] = cast(sp.Expr, processed_FDexpr[0])
 
         FDFunctions_dict[operator] = FDFunction(
             fp_type_alias=gf_type,

@@ -138,7 +138,8 @@ def output_main_cpp(
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
 
-    file_output_str = r"""#include "BHaH_defines.h"
+    file_output_str = r"""#include <cstring>
+#include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
 #include "main.h"
 #include "timestepping.decl.h" """
@@ -158,7 +159,7 @@ def output_main_cpp(
 /* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 /* readonly */ CProxy_Interpolator3d interpolator3dArray; """
 
-    if enable_BHaHAHA:
+    if enable_BHaHAHA and not enable_charm_checkpointing:
         file_output_str += r"""
 //===============================================
 // RRMap_with_offset
@@ -173,6 +174,13 @@ class RRMap_with_offset : public CkArrayMap {
 public:
     RRMap_with_offset(int _offset = 0, int _Nchare0 = 1, int _Nchare1 = 1)
         : offset(_offset), Nchare0(_Nchare0), Nchare1(_Nchare1) {}
+    RRMap_with_offset(CkMigrateMessage* /*msg*/) {}
+
+    void pup(PUP::er &p) override {
+        p | offset;
+        p | Nchare0;
+        p | Nchare1;
+    }
 
     int procNum(int /*unused*/, const CkArrayIndex& idx) override {
         const int x = idx.data()[0];
@@ -181,7 +189,8 @@ public:
         const int linear = x + Nchare0 * y + Nchare0 * Nchare1 * z;
         return (linear + offset) % CkNumPes();
     }
-};"""
+};
+"""
 
     file_output_str += r"""
 /*
@@ -218,7 +227,7 @@ Main::Main(CkArgMsg* msg) {
 }
 """
     else:
-        # Horizons + Round-Robin(RR) with offset placement
+        # Horizons + Timestepping + Interpolator
         file_output_str += r"""
   // Dimensions & counts
   const int Nchare0 = commondataObj.commondata.Nchare0;
@@ -227,28 +236,30 @@ Main::Main(CkArgMsg* msg) {
   const int Ncharetotal = Nchare0 * Nchare1 * Nchare2;
   const int numHorizons = commondataObj.commondata.bah_max_num_horizons;
 
-  int rr_offset = 0;
-
-  // Horizons first (1D) to maximize chance of distinct PEs
-  CProxy_RRMap_with_offset rrMapH = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
   CkArrayOptions optsH(numHorizons);
-  optsH.setMap(rrMapH);
   horizon_finderProxy = CProxy_Horizon_finder::ckNew(optsH);
-  rr_offset += numHorizons;
 
-  // Timestepping (3D)
-  CProxy_RRMap_with_offset rrMapTS = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
   CkArrayOptions optsTS(Nchare0, Nchare1, Nchare2);
-  optsTS.setMap(rrMapTS);
+"""
+        if not enable_charm_checkpointing:
+            file_output_str += r"""
+  CProxy_RRMap_with_offset rrMap = CProxy_RRMap_with_offset::ckNew(0, Nchare0, Nchare1);
+  optsTS.setMap(rrMap);
+"""
+        file_output_str += r"""
   timesteppingArray = CProxy_Timestepping::ckNew(commondataObj, optsTS);
-  rr_offset += Ncharetotal;
 
-  // Interpolator3d (3D) after timesteppers
-  CProxy_RRMap_with_offset rrMapI = CProxy_RRMap_with_offset::ckNew(rr_offset, Nchare0, Nchare1);
   CkArrayOptions optsI(Nchare0, Nchare1, Nchare2);
-  optsI.setMap(rrMapI);
+"""
+        if not enable_charm_checkpointing:
+            file_output_str += r"""
+  optsI.setMap(rrMap);
+"""
+        file_output_str += r"""
   interpolator3dArray = CProxy_Interpolator3d::ckNew(optsI);
 
+"""
+        file_output_str += r"""
   timesteppingArray.start();
 }
 """
@@ -281,12 +292,14 @@ void Main::pup(PUP::er &p) {
 def output_main_ci(
     project_dir: str,
     enable_BHaHAHA: bool = False,
+    enable_charm_checkpointing: bool = False,
 ) -> None:
     """
     Generate main.ci.
 
     :param project_dir: Directory where the project C code is output
     :param enable_BHaHAHA: If True, include horizon_finder and interpolator3d declarations.
+    :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -317,7 +330,7 @@ def output_main_ci(
     entry Main(CkArgMsg* msg);
     entry void done();
   };"""
-    if enable_BHaHAHA:
+    if enable_BHaHAHA and not enable_charm_checkpointing:
         file_output_str += r"""
   //-----------------------------------------------
   // RRMap_with_offset: round-robin array mapper with a start offset.
@@ -325,7 +338,7 @@ def output_main_ci(
   //-----------------------------------------------
   group RRMap_with_offset : CkArrayMap {
     entry RRMap_with_offset(int offset, int Nchare0, int Nchare1);
-  }"""
+  };"""
 
     file_output_str += r"""
 }
@@ -365,4 +378,5 @@ def output_commondata_object_h_and_main_h_cpp_ci(
     output_main_ci(
         project_dir=project_dir,
         enable_BHaHAHA=enable_BHaHAHA,
+        enable_charm_checkpointing=enable_charm_checkpointing,
     )
