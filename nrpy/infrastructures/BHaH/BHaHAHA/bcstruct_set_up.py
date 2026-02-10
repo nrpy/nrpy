@@ -290,11 +290,10 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
         include_braces=False,
     )
-    if not rfm.CoordSystem.startswith("GeneralRFM"):
-        cart_to_xx_eigen = ccg.c_codegen(
-            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-            ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
-        )
+    cart_to_xx_eigen = ccg.c_codegen(
+        [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+        ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+    )
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
     body += (
@@ -326,30 +325,16 @@ REAL Cartz = xCart[2];
   //      appropriate parity condition (+/- 1).
 REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
 """
-    # Step 2.a/2.b: Cartesian->xx map
-    if rfm.CoordSystem.startswith("GeneralRFM"):
-        body += f"""
-  // Cart_to_xx for GeneralRFM (numerical inverse):
-  const REAL Cart_inbounds[3] = {{Cartx, Carty, Cartz}};
-  REAL xx_inbounds[3];
-  if (generalrfm_Cart_to_xx__{rfm.CoordSystem}(params, Cart_inbounds, xx_inbounds) != 0) {{
-    return BCSTRUCT_EIGENCOORD_FAILURE;
-  }}
-  Cart_to_xx0_inbounds = xx_inbounds[0];
-  Cart_to_xx1_inbounds = xx_inbounds[1];
-  Cart_to_xx2_inbounds = xx_inbounds[2];
-"""
-    else:
-        # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
-        if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
-            raise RuntimeError(
-                f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
-                f"reference_metric::CoordSystem = {CoordSystem}. "
-                "Boundary conditions in curvilinear coordinates REQUIRE this to be set."
-            )
-        # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-        body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
-        body += cart_to_xx_eigen
+    # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
+    if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
+        raise RuntimeError(
+            f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
+            f"reference_metric::CoordSystem = {CoordSystem}. "
+            "Boundary conditions in curvilinear coordinates REQUIRE this to be set."
+        )
+    # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
+    body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
+    body += cart_to_xx_eigen
     body += r"""
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + ((REAL)(j-NGHOSTS) + (1.0/2.0))*dxxi;
@@ -695,15 +680,6 @@ typedef struct {
 
     // Store num_inner to bc_info:
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
-"""
-    if CoordSystem.startswith("GeneralRFM"):
-        body += f"""
-    if (num_inner != 0) {{
-      fprintf(stderr,
-              "Error: {CoordSystem} assumes outer-only boundaries, but bcstruct_set_up found %d inner boundary points.\\n",
-              num_inner);
-      return BCSTRUCT_EIGENCOORD_FAILURE;
-    }}
 """
     body += r"""
     // Next allocate memory for inner_boundary_points:

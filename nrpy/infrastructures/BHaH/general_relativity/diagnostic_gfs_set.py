@@ -143,15 +143,16 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 """
     parallelization = par.parval_from_str("parallelization")
-    ricci_call = (
-        "Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"
-        if parallelization == "cuda"
-        else """#ifdef DETGAMMAHATGF
-    Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
-#else
-    Ricci_eval(params, rfmstruct, diagnostic_gfs[grid], y_n_gfs, auxevol_gfs);
-#endif"""
-    )
+    if parallelization == "cuda":
+        ricci_call = """if (strncmp(params->CoordSystemName, "GeneralRFM", 10) == 0)
+      Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
+    else
+      Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"""
+    else:
+        ricci_call = """if (strncmp(params->CoordSystemName, "GeneralRFM", 10) == 0)
+      Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
+    else
+      Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"""
     body += f"""
     // Set Ricci and constraints gridfunctions
     {ricci_call}
