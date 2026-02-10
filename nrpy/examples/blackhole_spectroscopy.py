@@ -59,6 +59,11 @@ project_name = "blackhole_spectroscopy"
 CoordSystem = "GeneralRFM_fisheyeN2"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 
 initial_sep = 0.5
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
@@ -88,8 +93,24 @@ enable_psi4_diagnostics = not CoordSystem.startswith("GeneralRFM_fisheyeN")
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
-    "GeneralRFM_fisheyeN2": [32, 32, 32],
+    "GeneralRFM_fisheyeN2": [100, 100, 100],
 }
+# Fisheye parameter defaults (all in params_struct, set here in the example).
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+    if num_fisheye_transitions == 2:
+        # Width defaults are chosen to avoid overflow in xx<->Cart generated expressions.
+        fisheye_param_defaults.update(
+            {
+                "fisheye_phys_r_trans1": 4.0 * initial_sep,
+                "fisheye_phys_w_trans1": 6.0 * initial_sep,
+                "fisheye_phys_r_trans2": 20.0 * initial_sep,
+                "fisheye_phys_w_trans2": 20.0 * initial_sep,
+            }
+        )
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
@@ -251,6 +272,11 @@ if __name__ == "__main__":
 if enable_psi4_diagnostics:
     BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
+
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
@@ -336,6 +362,9 @@ if enable_psi4_diagnostics:
     par.adjust_CodeParam_default(
         "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
     )
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -382,6 +411,14 @@ if enable_CAHD:
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
+post_params_struct_set_to_default = ""
+if num_fisheye_transitions is not None:
+    post_params_struct_set_to_default = (
+        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+            num_transitions=num_fisheye_transitions,
+            compute_griddata=compute_griddata,
+        )
+    )
 
 # Define post_MoL_step_forward_in_time string for main function
 BHaH.main_c.register_CFunction_main_c(
@@ -389,6 +426,7 @@ BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
     pre_MoL_step_forward_in_time=(
         f"write_checkpoint(&commondata, "
         f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
