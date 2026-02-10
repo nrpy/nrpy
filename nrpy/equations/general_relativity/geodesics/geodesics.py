@@ -195,7 +195,11 @@ class GeodesicEquations:
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
         Note: In the referenced equation, a parameter $g$ encodes the causal character of the curve; for massive particles (timelike curves) one has $g = -1$.)
 
-
+		.. warning::
+           This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
+           It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
+           Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.
+           
         :return: A SymPy expression for the positive root of u^0.
         """
         uU = ixp.declarerank1("uU", dimension=4)
@@ -300,6 +304,11 @@ class GeodesicEquations:
         Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
          Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.)
+         
+         .. warning::
+           This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
+           It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
+           Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.
 
         :return: A SymPy expression for the negative root of p^0.
         """

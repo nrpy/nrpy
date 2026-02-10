@@ -3,13 +3,13 @@ Register C function for computing conserved quantities along geodesics.
 
 This module registers the 'conserved_quantities_{spacetime}_{particle_type}' C function.
 It uses a C-code preamble to unpack the input state vector y[8] into local variables
-matching the symbolic names (e.g., xx0, p0) used in the physics modules.
+matching the symbolic names (e.g., xx0, p0) used in the physics modules. Assumes mass
+of all massive particle is m=1.
 
 Author: Dalton J. Moone
 """
 
 # Step 0.a: Import standard Python modules
-import sys
 from typing import List
 
 # Step 0.b: Import third-party modules
@@ -29,6 +29,8 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
 
     This function instantiates the GeodesicDiagnostics class, identifies available
     conserved quantities (E, L, Q), and generates a C function.
+    Assumes mass of all massive particle is m=1.
+
 
     It generates a preamble to unpack f[8] -> {coordinates, momentum}.
 
@@ -78,6 +80,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
 
     preamble_lines.append("")
     preamble_lines.append("// Unpack 4-momentum components from f[4]..f[7]")
+    preamble_lines.append("// If particle is massive the mass is assumed to be m=1")
 
     # 3.b: Unpack Momentum (p0, p1, p2, p3)
     # conserved_quantities.py explicitly uses symbols named "p0", "p1", "p2", "p3".
@@ -127,6 +130,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
 if __name__ == "__main__":
     import logging
     import os
+    import sys
 
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())
