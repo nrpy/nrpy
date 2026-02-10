@@ -489,6 +489,8 @@ jobs:
           python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrpy_calibration_no_spin --current-exec ./project/seobnrv5_nrpy_calibration_no_spin
           python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrpy_calibration_spin --current-exec ./project/seobnrv5_nrpy_calibration_spin
           python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob --current-exec ./project/seobnrv5_nrnqc_bob
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob_calibration_no_spin --current-exec ./project/seobnrv5_nrnqc_bob_calibration_no_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob_calibration_spin --current-exec ./project/seobnrv5_nrnqc_bob_calibration_spin
 
       - name: Clean up
         run: |
