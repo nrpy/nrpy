@@ -50,7 +50,7 @@ jobs:
           # FIXME: until NRPyLaTeX is updated in pypi.
           pip install -U nrpylatex
           pip install -U ipython setuptools
-          sudo apt-get -y install libgsl-dev
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       - name: Display sympy and clang-format versions
         run: |
@@ -318,7 +318,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
                pip install -U pylint clang-format ipython setuptools
-               sudo apt-get -y install libgsl-dev
+               sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       #    - name: Setup tmate session
       #      uses: mxschmitt/action-tmate@v3
@@ -443,7 +443,7 @@ jobs:
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
           pip install -U pylint clang-format ipython setuptools
           pip install numpy
-          sudo apt-get -y install libgsl-dev
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
@@ -542,7 +542,7 @@ jobs:
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
           pip install -U pylint clang-format ipython setuptools
           pip install numpy
-          sudo apt-get -y install libgsl-dev
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       - name: Checkout trusted commit code
         uses: actions/checkout@v4

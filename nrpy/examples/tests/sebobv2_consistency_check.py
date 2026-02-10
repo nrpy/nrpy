@@ -9,8 +9,8 @@ Authors: Siddharth Mahesh
 import os
 import subprocess
 import sys
-from pathlib import Path
 from io import StringIO
+from pathlib import Path
 from typing import Any, Tuple, Union
 
 import numpy as np
@@ -21,11 +21,13 @@ PERTURBATION_MAGNITUDE = 1e-14
 
 
 # --- Helper Functions ---
-def run_sebobv2(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.float64]:
+def run_sebobv2(
+    executable_path: str, inputs: NDArray[np.float64]
+) -> NDArray[np.float64]:
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the directory containing the executable; 
+    :param executable_path: Path to the directory containing the executable;
                                 the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
@@ -95,10 +97,10 @@ def process_input_set(
     current_output = run_sebobv2(nominal_current_exec, nominal_inputs)
 
     # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
-    rng = np.random.default_rng(0)
+    rng_perturbation = np.random.default_rng(0)
     perturbation = (
-        rng.choice([-1, 1], size=3, replace=True)
-        * rng.uniform(1, 3, size=3)
+        rng_perturbation.choice([-1, 1], size=3, replace=True)
+        * rng_perturbation.uniform(1, 3, size=3)
         * PERTURBATION_MAGNITUDE
     )
     perturbed_inputs = nominal_inputs.copy()

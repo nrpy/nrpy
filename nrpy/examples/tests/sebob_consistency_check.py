@@ -7,10 +7,10 @@ Authors: Siddharth Mahesh
 """
 
 import os
-from pathlib import Path
 import subprocess
 import sys
 from io import StringIO
+from pathlib import Path
 from typing import Any, Tuple, Union
 
 import numpy as np
@@ -25,7 +25,7 @@ def run_sebob(executable_path: str, inputs: NDArray[np.float64]) -> NDArray[np.f
     """
     Run sebob executable with a single set of inputs.
 
-    :param executable_path: Path to the directory containing the executable; 
+    :param executable_path: Path to the directory containing the executable;
                                 the executable is expected to be named the same as this directory.
     :param inputs: List of inputs to the sebob executable.
     :return: Output of the sebob executable.
@@ -95,10 +95,10 @@ def process_input_set(
     current_output = run_sebob(nominal_current_exec, nominal_inputs)
 
     # 3. Create perturbed inputs only for mass ratio and spins and run trusted code again
-    rng = np.random.default_rng(0)
+    rng_perturbation = np.random.default_rng(0)
     perturbation = (
-        rng.choice([-1, 1], size=3, replace=True)
-        * rng.uniform(1, 3, size=3)
+        rng_perturbation.choice([-1, 1], size=3, replace=True)
+        * rng_perturbation.uniform(1, 3, size=3)
         * PERTURBATION_MAGNITUDE
     )
     perturbed_inputs = nominal_inputs.copy()
@@ -137,7 +137,7 @@ if __name__ == "__main__":
     if approx_trusted != approx_current:
         print(f"Error: Approximants do not match: {approx_trusted} vs {approx_current}")
         sys.exit(1)
-    
+
     num_sets = 10
     rng = np.random.default_rng(0)
     q = np.linspace(1.01, 10, num_sets)
