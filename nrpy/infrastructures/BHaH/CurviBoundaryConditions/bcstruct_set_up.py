@@ -286,11 +286,12 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         include_braces=False,
         fp_type_alias=fp_type_alias,
     )
-    cart_to_xx_eigen = c_codegen.c_codegen(
-        [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-        ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
-        fp_type_alias=fp_type_alias,
-    )
+    if not rfm.CoordSystem.startswith("GeneralRFM"):
+        cart_to_xx_eigen = c_codegen.c_codegen(
+            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+            ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+            fp_type_alias=fp_type_alias,
+        )
     body = rf"""
   // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates:
   //         (x0,x1,x2) -> (Cartx,Carty,Cartz)
@@ -326,15 +327,32 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
   //                   multiplied by the appropriate parity condition (+1 or -1).
   DOUBLE Cart_to_xx0_inbounds,Cart_to_xx1_inbounds,Cart_to_xx2_inbounds;
 """
-    # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
-    if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
-        raise RuntimeError(
-            f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
-            f"reference_metric::CoordSystem = {CoordSystem}. "
-            "Boundary conditions in curvilinear coordinates REQUiRE this be set."
-        )
-    # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-    body += rf"""
+    # Step 2.a/2.b: Cartesian->xx map
+    if rfm.CoordSystem.startswith("GeneralRFM"):
+        body += rf"""
+  // Cart_to_xx for GeneralRFM (numerical inverse):
+  const REAL Cart_inbounds[3] = {{Cartx, Carty, Cartz}};
+  REAL xx_inbounds[3];
+  if (generalrfm_Cart_to_xx__{rfm.CoordSystem}(params, Cart_inbounds, xx_inbounds) != 0) {{
+    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: generalrfm_Cart_to_xx__{rfm.CoordSystem} failed at Cart=(%.15e, %.15e, %.15e)\\n",
+            (DOUBLE)Cartx, (DOUBLE)Carty, (DOUBLE)Cartz);
+    exit(1);
+  }}
+  Cart_to_xx0_inbounds = xx_inbounds[0];
+  Cart_to_xx1_inbounds = xx_inbounds[1];
+  Cart_to_xx2_inbounds = xx_inbounds[2];
+  // Next compute xxmin[i]. By definition,
+"""
+    else:
+        # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
+        if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
+            raise RuntimeError(
+                f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
+                f"reference_metric::CoordSystem = {CoordSystem}. "
+                "Boundary conditions in curvilinear coordinates REQUiRE this be set."
+            )
+        # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
+        body += rf"""
   // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (orig coord = {rfm_orig.CoordSystem})
   {cart_to_xx_eigen}
   // Next compute xxmin[i]. By definition,

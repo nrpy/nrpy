@@ -9,7 +9,6 @@ Author: Nishita Jadoo
 """
 from __future__ import annotations
 
-import re
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
@@ -19,22 +18,12 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
 import nrpy.helpers.parallel_codegen as pcg
-
-
-def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
-    match = re.match(r"GeneralRFM_fisheyeN(\d+)$", CoordSystem)
-    if not match:
-        raise ValueError(
-            f"GeneralRFM CoordSystem {CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
-        )
-    return int(match.group(1))
-
 
 def register_CFunction_generalrfm_Cart_to_xx(
     CoordSystem: str,
@@ -47,8 +36,17 @@ def register_CFunction_generalrfm_Cart_to_xx(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-    fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
+    rfm = refmetric.reference_metric[CoordSystem]
+    if not CoordSystem.startswith("GeneralRFM"):
+        raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
+    provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    if provider_name != "fisheye":
+        raise ValueError(
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_Cart_to_xx."
+        )
+    fisheye = getattr(rfm, "general_rfm_provider", None)
+    if fisheye is None:
+        raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
 
     xx_to_Cart = fisheye.xx_to_CartU
     dCart_dxx = fisheye.dCart_dxxUD

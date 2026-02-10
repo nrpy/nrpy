@@ -11,6 +11,7 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 from typing import Any, Dict, List, Tuple, cast
+import re
 
 import sympy as sp
 
@@ -1635,9 +1636,9 @@ class ReferenceMetric:
         Initialize class attributes for the GeneralRFM coordinate system.
 
         The coordinates xx^i are treated as Cartesian-labeled coordinates
-        with identity maps to and from the Cartesian variables (Cartx,
-        Carty, Cartz). The reference metric itself is specified separately
-        and may be fully general and non-orthogonal.
+        for the forward map xx->Cart. GeneralRFM providers define metric
+        tensors and potentially nonlinear forward maps; inverse maps are
+        handled numerically in infrastructure code.
         """
         # Neutral default domain; users are free to override these bounds.
         par.register_CodeParameters(
@@ -1664,10 +1665,33 @@ class ReferenceMetric:
         self.xx_to_Cart[1] = self.xx[1]
         self.xx_to_Cart[2] = self.xx[2]
 
-        # Placeholder inverse map in GeneralRFM.
-        self.Cart_to_xx[0] = self.Cartx
-        self.Cart_to_xx[1] = self.Carty
-        self.Cart_to_xx[2] = self.Cartz
+        # GeneralRFM has no analytic Cart->xx inverse by default.
+        # Use explicit sentinels to prevent accidental misuse.
+        self.Cart_to_xx[0] = sp.nan
+        self.Cart_to_xx[1] = sp.nan
+        self.Cart_to_xx[2] = sp.nan
+
+        # Provider metadata for downstream infrastructure.
+        self.general_rfm_provider_name = "identity_placeholder"
+        self.general_rfm_provider = None
+        self.general_rfm_provider_meta: Dict[str, Any] = {}
+
+        # If this is a known GeneralRFM provider, override the default map.
+        if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
+            from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+
+            match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
+            if not match:
+                raise ValueError(
+                    f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
+                )
+            num_transitions = int(match.group(1))
+            provider = generalrfm_fisheye.build_fisheye(num_transitions)
+            for i in range(3):
+                self.xx_to_Cart[i] = provider.xx_to_CartU[i]
+            self.general_rfm_provider_name = "fisheye"
+            self.general_rfm_provider = provider
+            self.general_rfm_provider_meta = {"num_transitions": num_transitions}
 
         # Define spherical coordinates from the Cartesian map
         # (for ancillary purposes only; not used for metric construction).

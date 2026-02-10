@@ -150,7 +150,7 @@ def get_coord_family(cs: str) -> str:
     :raises ValueError: If the coordinate system is not supported.
     :return: The coordinate family name.
     """
-    if "GeneralRFM" in cs:
+    if cs.startswith("GeneralRFM_fisheye"):
         return "Cartesian"
     plane_configs = bhah_plane_configs()
     for family in plane_configs["xy"]:

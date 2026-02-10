@@ -353,6 +353,22 @@ class GeneralRFMFisheye:
 
                         self.ghatDDdDD[i][j][k][l] = termA + termB + termC
 
+    def radius_map_unscaled_and_derivs_closed_form(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return the unscaled fisheye radial map and first 3 derivatives.
+
+        :param r: Radial coordinate.
+        :return: (rbar_unscaled, drbar_unscaled, d2rbar_unscaled, d3rbar_unscaled)
+        """
+        return _radius_map_unscaled_and_derivs_closed_form(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     """

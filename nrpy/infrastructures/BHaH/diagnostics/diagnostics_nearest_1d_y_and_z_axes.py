@@ -39,7 +39,7 @@ def bhah_family_from_coord(CoordSystem: str) -> str:
     """
     if ("Spherical" in CoordSystem) and ("Ring" in CoordSystem):
         return "Spherical_Ring"
-    if "GeneralRFM" in CoordSystem:
+    if CoordSystem.startswith("GeneralRFM_fisheye"):
         return "Cartesian"
     for fam in ("Cartesian", "Spherical", "Cylindrical", "SymTP", "Wedge"):
         if fam in CoordSystem:

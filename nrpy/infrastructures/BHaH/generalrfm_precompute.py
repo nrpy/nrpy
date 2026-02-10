@@ -18,7 +18,6 @@ Author: Nishita Jadoo
 """
 from __future__ import annotations
 
-import re
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Dict, List, Tuple, Union, cast
@@ -30,27 +29,12 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
 import nrpy.helpers.parallel_codegen as pcg
-
-
-def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
-    match = re.match(r"GeneralRFM_fisheyeN(\d+)$", CoordSystem)
-    if not match:
-        raise ValueError(
-            f"GeneralRFM CoordSystem {CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
-        )
-    return int(match.group(1))
-
-
-def _build_fisheye_exprs(CoordSystem: str):
-    num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-    fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-    return fisheye
 
 
 def _access_auxevol_gf(name: str, i0: str = "i0", i1: str = "i1", i2: str = "i2") -> str:
@@ -86,7 +70,17 @@ def register_CFunction_generalrfm_precompute(
             "GeneralRFM precompute to AUXEVOL gridfunctions does not yet support CUDA."
         )
 
-    fisheye = _build_fisheye_exprs(CoordSystem)
+    rfm = refmetric.reference_metric[CoordSystem]
+    if not CoordSystem.startswith("GeneralRFM"):
+        raise ValueError(f"{CoordSystem} is not a GeneralRFM coordinate system.")
+    provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    if provider_name != "fisheye":
+        raise ValueError(
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in generalrfm_precompute."
+        )
+    fisheye = getattr(rfm, "general_rfm_provider", None)
+    if fisheye is None:
+        raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
 
     ghatDD = fisheye.ghatDD
     ghatDDdD = fisheye.ghatDDdD
