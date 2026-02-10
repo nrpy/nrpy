@@ -11,7 +11,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
 """
 
 from typing import Any, Dict, List, Tuple, cast
-import re
 
 import sympy as sp
 
@@ -131,6 +130,8 @@ class ReferenceMetric:
         self.f2_of_xx0_funcform = sp.Function("f2_of_xx0_funcform")(self.xx[0])
         self.f3_of_xx2_funcform = sp.Function("f3_of_xx2_funcform")(self.xx[2])
         self.f4_of_xx1_funcform = sp.Function("f4_of_xx1_funcform")(self.xx[1])
+        self.freevars_uniq_xx_indep: List[sp.Basic] = []
+        self.freevars_uniq_vals: List[sp.Basic] = []
 
         # Annotate these as Expr because they are initialized as Symbols but later assigned full Expressions
         (
@@ -240,22 +241,11 @@ class ReferenceMetric:
                 for j in range(3):
                     self.ReDD[i][j] = sp.sympify(1)
 
-            # For GeneralRFM, reference-metric tensors are provided as fixed gridfunctions.
-            # Register gridfunctions and return early; do not compute analytic derivatives here.
+            # For GeneralRFM, ghat and its first/second derivatives are provided
+            # as fixed gridfunctions. Derived quantities (ghatUU, detgammahat,
+            # Gammahat*) are computed algebraically from these, as in other rfms.
             self.ghatDD = gri.register_gridfunctions_for_single_rankN(
                 "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
-            )
-            self.ghatUU = gri.register_gridfunctions_for_single_rankN(
-                "ghatUU", rank=2, symmetry="sym01", group="AUXEVOL"
-            )
-            self.detgammahat = gri.register_gridfunctions(
-                ["detgammahat"], group="AUXEVOL"
-            )[0]
-            self.detgammahatdD = gri.register_gridfunctions_for_single_rankN(
-                "detgammahatdD", rank=1, group="AUXEVOL"
-            )
-            self.detgammahatdDD = gri.register_gridfunctions_for_single_rankN(
-                "detgammahatdDD", rank=2, symmetry="sym01", group="AUXEVOL"
             )
             self.ghatDDdD = gri.register_gridfunctions_for_single_rankN(
                 "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
@@ -263,25 +253,6 @@ class ReferenceMetric:
             self.ghatDDdDD = gri.register_gridfunctions_for_single_rankN(
                 "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
             )
-            self.GammahatUDD = gri.register_gridfunctions_for_single_rankN(
-                "GammahatUDD", rank=3, symmetry="sym12", group="AUXEVOL"
-            )
-            self.GammahatUDDdD = gri.register_gridfunctions_for_single_rankN(
-                "GammahatUDDdD", rank=4, group="AUXEVOL"
-            )
-
-            # No rescaling in GeneralRFM: derivatives of rescaling factors are zero.
-            self.ReUdD = ixp.zerorank2(3)
-            self.ReUdDD = ixp.zerorank3(3)
-            self.ReDdD = ixp.zerorank2(3)
-            self.ReDdDD = ixp.zerorank3(3)
-            self.ReDDdD = ixp.zerorank3(3)
-            self.ReDDdDD = ixp.zerorank4(3)
-
-            # GeneralRFM does not use rfm_precompute.
-            self.freevars_uniq_xx_indep = []
-            self.freevars_uniq_vals = []
-            return
         elif not enable_rfm_precompute:
             for i in range(3):
                 self.scalefactor_orthog[i] = sp.sympify(self.scalefactor_orthog[i])
@@ -342,19 +313,9 @@ class ReferenceMetric:
         self.ReDDdDD = ixp.zerorank4(3)
 
         # Step 3c: Compute 1st & 2nd derivatives of reference metric.
-        self.ghatDDdD = ixp.zerorank3(3)
-        self.ghatDDdDD = ixp.zerorank4(3)
-
-        if self.CoordSystem.startswith("GeneralRFM"):
-            # In GeneralRFM, the first and second derivatives of the reference
-            # metric are treated as *primitive* tensors, never obtained by
-            # differentiating ghatDD inside ReferenceMetric.
-            # First derivatives: symmetric in (i,j).
-            self.ghatDDdD = ixp.declarerank3("ghatDDdD", dimension=3, symmetry="sym01")
-            self.ghatDDdDD = ixp.declarerank4(
-                "ghatDDdDD", dimension=3, symmetry="sym01sym23"
-            )
-        else:
+        if not self.CoordSystem.startswith("GeneralRFM"):
+            self.ghatDDdD = ixp.zerorank3(3)
+            self.ghatDDdDD = ixp.zerorank4(3)
             for i in range(3):
                 for j in range(3):
                     for k in range(3):
@@ -1703,24 +1664,10 @@ class ReferenceMetric:
         self.xx_to_Cart[1] = self.xx[1]
         self.xx_to_Cart[2] = self.xx[2]
 
-        # No analytic inverse map by default in GeneralRFM.
-        self.Cart_to_xx[0] = sp.nan
-        self.Cart_to_xx[1] = sp.nan
-        self.Cart_to_xx[2] = sp.nan
-
-        # If this is a known GeneralRFM provider, override the forward map.
-        if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
-            from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
-
-            match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
-            if not match:
-                raise ValueError(
-                    f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
-                )
-            num_transitions = int(match.group(1))
-            fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-            for i in range(3):
-                self.xx_to_Cart[i] = fisheye.xx_to_CartU[i]
+        # Placeholder inverse map in GeneralRFM.
+        self.Cart_to_xx[0] = self.Cartx
+        self.Cart_to_xx[1] = self.Carty
+        self.Cart_to_xx[2] = self.Cartz
 
         # Define spherical coordinates from the Cartesian map
         # (for ancillary purposes only; not used for metric construction).
@@ -1731,16 +1678,16 @@ class ReferenceMetric:
         self.xxSph[1] = sp.acos(zCart / self.xxSph[0])
         self.xxSph[2] = sp.atan2(yCart, xCart)
 
-        # Trivial scale factors (placeholders; not used to build metric in GeneralRFM).
+        # Trivial placeholders (not used to construct ghat in GeneralRFM).
         self.scalefactor_orthog[0] = sp.sympify(1)
         self.scalefactor_orthog[1] = sp.sympify(1)
         self.scalefactor_orthog[2] = sp.sympify(1)
 
-        # Unit vectors are not well-defined for non-orthogonal GeneralRFM.
+        # Placeholder unit vectors.
         self.UnitVectors = [
-            [sp.nan, sp.nan, sp.nan],
-            [sp.nan, sp.nan, sp.nan],
-            [sp.nan, sp.nan, sp.nan],
+            [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(1), sp.sympify(0)],
+            [sp.sympify(0), sp.sympify(0), sp.sympify(1)],
         ]
         self.radial_like_dirns = [0, 1, 2]
 

@@ -5,8 +5,9 @@ Generate C functions that precompute GeneralRFM quantities into AUXEVOL gridfunc
 Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
 
 Design:
-  * For GeneralRFM, reference-metric tensors (ghat*, Gammahat*, detgammahat*, etc.)
-    are treated as fixed AUXEVOL gridfunctions.
+  * For GeneralRFM, ghat and derivatives are treated as fixed AUXEVOL gridfunctions.
+  * Derived quantities (e.g., Gammahat*) are computed algebraically from ghat
+    expressions and are not stored as AUXEVOL gridfunctions.
   * This module generates a C function that evaluates the analytic expressions
     (from the GeneralRFM provider) once per gridpoint and stores the results.
 
@@ -52,100 +53,6 @@ def _build_fisheye_exprs(CoordSystem: str):
     return fisheye
 
 
-def _compute_detgammahat_derivs(
-    detgammahat: sp.Expr, ghatUU: List[List[sp.Expr]], ghatDDdD, ghatDDdDD
-):
-    detgammahatdD = ixp.zerorank1(dimension=3)
-    for k in range(3):
-        for i in range(3):
-            for j in range(3):
-                detgammahatdD[k] += detgammahat * ghatUU[i][j] * ghatDDdD[i][j][k]
-
-    detgammahatdDD = ixp.zerorank2(dimension=3)
-    for k in range(3):
-        for l in range(3):
-            for i in range(3):
-                for j in range(3):
-                    for m in range(3):
-                        for n in range(3):
-                            detgammahatdDD[k][l] += detgammahat * (
-                                ghatUU[m][n]
-                                * ghatDDdD[m][n][l]
-                                * ghatUU[i][j]
-                                * ghatDDdD[i][j][k]
-                            )
-            for i in range(3):
-                for j in range(3):
-                    for p in range(3):
-                        for q in range(3):
-                            detgammahatdDD[k][l] += detgammahat * (
-                                -ghatUU[i][p]
-                                * ghatUU[j][q]
-                                * ghatDDdD[p][q][l]
-                                * ghatDDdD[i][j][k]
-                            )
-            for i in range(3):
-                for j in range(3):
-                    detgammahatdDD[k][l] += detgammahat * (
-                        ghatUU[i][j] * ghatDDdDD[i][j][k][l]
-                    )
-    return detgammahatdD, detgammahatdDD
-
-
-def _compute_GammahatUDD_and_dD(ghatUU, ghatDDdD, ghatDDdDD):
-    GammahatUDD = ixp.zerorank3(3)
-    for i in range(3):
-        for k in range(3):
-            for l in range(3):
-                for m in range(3):
-                    GammahatUDD[i][k][l] += sp.Rational(1, 2) * ghatUU[i][m] * (
-                        ghatDDdD[m][k][l] + ghatDDdD[m][l][k] - ghatDDdD[k][l][m]
-                    )
-
-    GammahatUDDdD = ixp.zerorank4(3)
-
-    GammahatDDD = ixp.zerorank3()
-    for c in range(3):
-        for a in range(3):
-            for b in range(3):
-                GammahatDDD[c][a][b] += sp.Rational(1, 2) * (
-                    ghatDDdD[c][a][b] + ghatDDdD[c][b][a] - ghatDDdD[a][b][c]
-                )
-
-    GammahatDDDdD = ixp.zerorank4()
-    for c in range(3):
-        for a in range(3):
-            for b in range(3):
-                for d in range(3):
-                    GammahatDDDdD[c][a][b][d] += sp.Rational(1, 2) * (
-                        ghatDDdDD[c][a][b][d]
-                        + ghatDDdDD[c][b][a][d]
-                        - ghatDDdDD[a][b][c][d]
-                    )
-
-    ghatUUdD = ixp.zerorank3()
-    for m in range(3):
-        for i in range(3):
-            for l in range(3):
-                for p in range(3):
-                    for q in range(3):
-                        ghatUUdD[m][i][l] += (
-                            -ghatUU[i][p] * ghatUU[m][q] * ghatDDdD[p][q][l]
-                        )
-
-    for i in range(3):
-        for j in range(3):
-            for k in range(3):
-                for l in range(3):
-                    for m in range(3):
-                        GammahatUDDdD[i][j][k][l] += (
-                            ghatUUdD[m][i][l] * GammahatDDD[m][j][k]
-                            + ghatUU[m][i] * GammahatDDDdD[m][j][k][l]
-                        )
-
-    return GammahatUDD, GammahatUDDdD
-
-
 def _access_auxevol_gf(name: str, i0: str = "i0", i1: str = "i1", i2: str = "i2") -> str:
     return gri.BHaHGridFunction.access_gf(name, 0, 0, 0, gf_array_name="auxevol_gfs").replace(
         "i0", i0
@@ -186,13 +93,6 @@ def register_CFunction_generalrfm_precompute(
     ghatDDdDD = fisheye.ghatDDdDD
 
     ghatUU, detgammahat = ixp.symm_matrix_inverter3x3(ghatDD)
-    detgammahatdD, detgammahatdDD = _compute_detgammahat_derivs(
-        detgammahat, ghatUU, ghatDDdD, ghatDDdDD
-    )
-    GammahatUDD, GammahatUDDdD = _compute_GammahatUDD_and_dD(
-        ghatUU, ghatDDdD, ghatDDdDD
-    )
-
     # Register gridfunctions (AUXEVOL) only if they are not already present.
     # ReferenceMetric (GeneralRFM branch) should have already registered these.
     if "ghatDD00" not in gri.glb_gridfcs_dict:
@@ -205,14 +105,6 @@ def register_CFunction_generalrfm_precompute(
         )
     if "detgammahat" not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions(["detgammahat"], group="AUXEVOL")
-    if "detgammahatdD0" not in gri.glb_gridfcs_dict:
-        _ = gri.register_gridfunctions_for_single_rankN(
-            "detgammahatdD", rank=1, group="AUXEVOL"
-        )
-    if "detgammahatdDD00" not in gri.glb_gridfcs_dict:
-        _ = gri.register_gridfunctions_for_single_rankN(
-            "detgammahatdDD", rank=2, symmetry="sym01", group="AUXEVOL"
-        )
     if "ghatDDdD000" not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions_for_single_rankN(
             "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
@@ -221,15 +113,6 @@ def register_CFunction_generalrfm_precompute(
         _ = gri.register_gridfunctions_for_single_rankN(
             "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
         )
-    if "GammahatUDD000" not in gri.glb_gridfcs_dict:
-        _ = gri.register_gridfunctions_for_single_rankN(
-            "GammahatUDD", rank=3, symmetry="sym12", group="AUXEVOL"
-        )
-    if "GammahatUDDdD0000" not in gri.glb_gridfcs_dict:
-        _ = gri.register_gridfunctions_for_single_rankN(
-            "GammahatUDDdD", rank=4, group="AUXEVOL"
-        )
-
     assignments: List[Tuple[str, sp.Expr]] = []
 
     # ghatDD, ghatUU (sym01)
@@ -238,14 +121,8 @@ def register_CFunction_generalrfm_precompute(
             assignments.append((_access_auxevol_gf(f"ghatDD{i}{j}"), ghatDD[i][j]))
             assignments.append((_access_auxevol_gf(f"ghatUU{i}{j}"), ghatUU[i][j]))
 
-    # detgammahat and derivatives
+    # detgammahat
     assignments.append((_access_auxevol_gf("detgammahat"), detgammahat))
-    for i in range(3):
-        assignments.append((_access_auxevol_gf(f"detgammahatdD{i}"), detgammahatdD[i]))
-        for j in range(i, 3):
-            assignments.append(
-                (_access_auxevol_gf(f"detgammahatdDD{i}{j}"), detgammahatdDD[i][j])
-            )
 
     # ghatDD derivatives
     for i in range(3):
@@ -259,24 +136,6 @@ def register_CFunction_generalrfm_precompute(
                         (
                             _access_auxevol_gf(f"ghatDDdDD{i}{j}{k}{l}"),
                             ghatDDdDD[i][j][k][l],
-                        )
-                    )
-
-    # Gammahat
-    for i in range(3):
-        for j in range(3):
-            for k in range(j, 3):
-                assignments.append(
-                    (
-                        _access_auxevol_gf(f"GammahatUDD{i}{j}{k}"),
-                        GammahatUDD[i][j][k],
-                    )
-                )
-                for l in range(3):
-                    assignments.append(
-                        (
-                            _access_auxevol_gf(f"GammahatUDDdD{i}{j}{k}{l}"),
-                            GammahatUDDdD[i][j][k][l],
                         )
                     )
 
