@@ -10,7 +10,6 @@ Author: Dalton J. Moone
 """
 
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 
 
 def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
@@ -50,18 +49,13 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     commondata_struct *commondata = (commondata_struct *)params;
     
     // 2. Declare geometric structs to hold intermediate results
-    metric_struct g4DD;
     connection_struct conn;
     
-    // 3. Compute Metric
-    // Signature: (commondata, y, &g4DD)
-    g4DD_metric_{spacetime_name}(commondata, y, &g4DD);
-    
-    // 4. Compute Connections (Christoffel Symbols)
+    // 3. Compute Connections (Christoffel Symbols)
     // Signature: (commondata, y, &conn)
     connections_{spacetime_name}(commondata, y, &conn);
     
-    // 5. Compute Geodesic RHS
+    // 4. Compute Geodesic RHS
     // Signature: (y, &conn, f)
     calculate_ode_rhs_massive(y, &conn, f);
     
@@ -82,6 +76,8 @@ if __name__ == "__main__":
     import logging
     import os
     import sys
+
+    import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())

@@ -313,10 +313,10 @@ class GeodesicEquations:
         # A = g4DD_00
         A = g4DD[0][0]
 
-        # B = 2 * sum(g_4DD0i * u^i) for i in {1,2,3}
+        # B = 2 * sum(g_4DD0i * p^i) for i in {1,2,3}
         B = 2 * (g4DD[0][1] * pU[1] + g4DD[0][2] * pU[2] + g4DD[0][3] * pU[3])
 
-        # C = sum(g_4DDij * u^i * u^j)
+        # C = sum(g_4DDij * p^i * p^j)
         # We manually unroll the loops to ensure we only access the upper triangle (i <= j)
 
         # Diagonal terms (i == j)
