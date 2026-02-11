@@ -70,32 +70,46 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-Nxx_dict = {
-    "GeneralRFM_fisheyeN2": [64, 64, 64],
+Nxx_dict = {        
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
+    "GeneralRFM_fisheyeN1": [64, 64, 64],
+    "GeneralRFM_fisheyeN2": [64, 64, 64],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
 initial_sep = abs(default_BH1_z_posn - default_BH2_z_posn)
-# Fisheye parameter defaults (all in params_struct, set here in the example).
+# Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions is not None:
     for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)        
     fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
-    if num_fisheye_transitions == 2:
-        # Width defaults are chosen to avoid overflow in xx<->Cart generated expressions.
-        fisheye_param_defaults.update(
-            {
-                "fisheye_phys_r_trans1": 1.5 * initial_sep,
-                "fisheye_phys_w_trans1": 0.8 * initial_sep,
-                "fisheye_phys_r_trans2": 3.5 * initial_sep,
-                "fisheye_phys_w_trans2": 1.5 * initial_sep,
-            }
-        )
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 4.13,
+            "fisheye_phys_w_trans1": 1.88,
+        }
+    )
+if num_fisheye_transitions == 2:    
+    fisheye_param_defaults.update(
+        {            
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_a2": 3.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 4.50,
+            "fisheye_phys_w_trans1": 1.30,
+            "fisheye_phys_r_trans2": 6.50,
+            "fisheye_phys_w_trans2": 1.80,
+        }
+    )
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
