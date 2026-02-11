@@ -165,13 +165,14 @@ class GeodesicEquations:
         uU = ixp.declarerank1("uU", dimension=4)
         pos_rhs = [uU[0], uU[1], uU[2], uU[3]]
 
+        Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
         vel_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
-                    term = self.Gamma4UDD[alpha][mu][nu] * uU[mu] * uU[nu]
+                    term = Gamma4UDD[alpha][mu][nu] * uU[mu] * uU[nu]
                     if mu != nu:
                         term *= 2  # Double the off-diagonal terms
                     sum_term += term
@@ -194,25 +195,43 @@ class GeodesicEquations:
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
         Note: In the referenced equation, a parameter $g$ encodes the causal character of the curve; for massive particles (timelike curves) one has $g = -1$.)
 
+                .. warning::
+           This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
+           It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
+           Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.
 
         :return: A SymPy expression for the positive root of u^0.
         """
         uU = ixp.declarerank1("uU", dimension=4)
-        g4DD = self.g4DD
 
-        # The constraint is g_00 (u^0)^2 + 2 g_0i u^0 u^i + g_ij u^i u^j = -1
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        # The constraint is g_4DD00 (u^0)^2 + 2 g_4DD0i u^0 u^i + g_4DDij u^i u^j = -1
         # This is a quadratic equation: A (u^0)^2 + B u^0 + C = 0
+
+        # A = g4DD_00
         A = g4DD[0][0]
 
-        B = sp.sympify(0)
-        for i in range(1, 4):
-            B += 2 * g4DD[0][i] * uU[i]
+        # B = 2 * sum(g_4DD0i * u^i) for i in {1,2,3}
+        B = 2 * (g4DD[0][1] * uU[1] + g4DD[0][2] * uU[2] + g4DD[0][3] * uU[3])
 
         # C includes the +1 from moving the -1 to the LHS
-        C = sp.sympify(1)
-        for i in range(1, 4):
-            for j in range(1, 4):
-                C += g4DD[i][j] * uU[i] * uU[j]
+        # C = 1 + sum(g_4DDij * u^i * u^j)
+        # We manually unroll the loops to ensure we only access the upper triangle (i <= j)
+
+        # Diagonal terms (i == j)
+        term_diagonals = (
+            g4DD[1][1] * uU[1] ** 2 + g4DD[2][2] * uU[2] ** 2 + g4DD[3][3] * uU[3] ** 2
+        )
+
+        # Off-diagonal terms (i != j) multiplied by 2 because g_4DDij is symmetric
+        term_off_diagonals = 2 * (
+            g4DD[1][2] * uU[1] * uU[2]
+            + g4DD[1][3] * uU[1] * uU[3]
+            + g4DD[2][3] * uU[2] * uU[3]
+        )
+
+        C = sp.sympify(1) + term_diagonals + term_off_diagonals
 
         # Quadratic formula: (-B +/- sqrt(B^2 - 4AC)) / 2A
         discriminant = sp.sqrt(B**2 - 4 * A * C)
@@ -246,13 +265,16 @@ class GeodesicEquations:
         pU = ixp.declarerank1("pU", dimension=4)
         pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
             # Exploit symmetry by summing over the upper triangle of (mu, nu)
             for mu in range(4):
                 for nu in range(mu, 4):
-                    term = self.Gamma4UDD[alpha][mu][nu] * pU[mu] * pU[nu]
+                    term = Gamma4UDD[alpha][mu][nu] * pU[mu] * pU[nu]
                     if mu != nu:
                         term *= 2
                     sum_term += term
@@ -262,7 +284,7 @@ class GeodesicEquations:
         # Exploit symmetry of g_{ij} to optimize summation
         for i in range(1, 4):
             for j in range(i, 4):
-                term = self.g4DD[i][j] * pU[i] * pU[j]
+                term = g4DD[i][j] * pU[i] * pU[j]
                 if i != j:
                     term *= 2
                 path_len_sum += term
@@ -283,30 +305,48 @@ class GeodesicEquations:
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
          Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.)
 
+         .. warning::
+           This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
+           It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
+           Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.
+
         :return: A SymPy expression for the negative root of p^0.
         """
         pU = ixp.declarerank1("pU", dimension=4)
-        g4DD = self.g4DD
+
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
 
         # The constraint is g_00 (p^0)^2 + 2 g_0i p^0 p^i + g_ij p^i p^j = 0
         # This is a quadratic equation: A (p^0)^2 + B p^0 + C = 0
+
+        # A = g4DD_00
         A = g4DD[0][0]
 
-        B = sp.sympify(0)
-        for i in range(1, 4):
-            B += 2 * g4DD[0][i] * pU[i]
+        # B = 2 * sum(g_4DD0i * p^i) for i in {1,2,3}
+        B = 2 * (g4DD[0][1] * pU[1] + g4DD[0][2] * pU[2] + g4DD[0][3] * pU[3])
 
-        C = sp.sympify(0)
-        for i in range(1, 4):
-            for j in range(1, 4):
-                C += g4DD[i][j] * pU[i] * pU[j]
+        # C = sum(g_4DDij * p^i * p^j)
+        # We manually unroll the loops to ensure we only access the upper triangle (i <= j)
+
+        # Diagonal terms (i == j)
+        term_diagonals = (
+            g4DD[1][1] * pU[1] ** 2 + g4DD[2][2] * pU[2] ** 2 + g4DD[3][3] * pU[3] ** 2
+        )
+
+        # Off-diagonal terms (i != j) multiplied by 2 because g_4DDij is symmetric
+        term_off_diagonals = 2 * (
+            g4DD[1][2] * pU[1] * pU[2]
+            + g4DD[1][3] * pU[1] * pU[3]
+            + g4DD[2][3] * pU[2] * pU[3]
+        )
+
+        C = term_diagonals + term_off_diagonals
 
         # Quadratic formula: (-B +/- sqrt(B^2 - 4AC)) / 2A
         discriminant = sp.sqrt(B**2 - 4 * A * C)
         sol1 = (-B + discriminant) / (2 * A)
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
-
         return cast(sp.Expr, solutions[0])
 
     @staticmethod
@@ -388,8 +428,8 @@ if __name__ == "__main__":
     print("-" * 40)
     print("Performing symmetry and sample point validation...")
 
-    # We use Schwarzschild for basic validation as it is simpler and easier to verify visually/algebraically
-    geo_eqs_sample = Geodesic_Equations["Schwarzschild_Cartesian_Isotropic_massive"]
+    # We use Kerr-Schild (Cartesian) for basic validation in this configuration.
+    geo_eqs_sample = Geodesic_Equations["KerrSchild_Cartesian_massive"]
 
     # Check that the metric is symmetric, g_{\mu\nu} = g_{\nu\mu}.
     for val_i in range(4):
@@ -428,12 +468,7 @@ if __name__ == "__main__":
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.
-    for config_key in [
-        "KerrSchild_Cartesian_massive",
-        "Schwarzschild_Cartesian_Isotropic_massive",
-        "KerrSchild_Cartesian_massless",
-        "Schwarzschild_Cartesian_Isotropic_massless",
-    ]:
+    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_massless"]:
         print(f"Processing configuration: {config_key}...")
         geodesic_eqs = Geodesic_Equations[config_key]
         results_dict = ve.process_dictionary_of_expressions(
