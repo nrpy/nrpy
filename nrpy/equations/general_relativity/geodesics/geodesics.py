@@ -371,6 +371,8 @@ class GeodesicEquations:
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
             Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.
             Note: In the referenced equation for massive particles (timelike curves) $g = -1$.)
+            
+        .. warning:: This function is meant for validation purposes
 
         :return: A SymPy expression for the contraction g_{\mu\nu} v^\mu v^\nu.
         """
