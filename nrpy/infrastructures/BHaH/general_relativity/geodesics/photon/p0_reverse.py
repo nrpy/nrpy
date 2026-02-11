@@ -1,11 +1,11 @@
 """
 Register C function for computing the initial time component of 4-momentum.
 
-This module registers the 'p0_massive_{spacetime_name}' C function. It enforces
+This module registers the 'p0_massive' C function. It enforces
 the 4-momentum normalization constraint for photons (p.p = 0) by solving
 the quadratic Hamiltonian constraint for the time component p^0.
 
-It generates a preamble to unpack the state vector f[8] into local coordinates
+It generates a preamble to unpack the state vector f[9] into local coordinates
 and spatial momentum components (p^i) required for the calculation.
 
 Author: Dalton J. Moone
@@ -15,7 +15,6 @@ import logging
 
 # Step 0.a: Import standard Python modules
 import sys
-from typing import List
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -25,16 +24,11 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
 
-def p0_reverse(
-    p0_expr: sp.Expr, spacetime_name: str, coord_symbols: List[sp.Symbol]
-) -> None:
+def p0_reverse(p0_expr: sp.Expr) -> None:
     """
     Generate and register the C function to compute p^0 for a photon.
 
     :param p0_expr: The SymPy expression for p^0.
-    :param spacetime_name: Name of the spacetime (used for function naming).
-    :param coord_symbols: A list of SymPy symbols representing the coordinates
-                          (e.g., [t, x, y, z]).
     """
     # Step 3: Define C function metadata
     includes = ["BHaH_defines.h"]
@@ -47,20 +41,20 @@ def p0_reverse(
         Input:
             commondata: Simulation parameters (mass, spin, etc.).
             metric: The metric tensor components at the current location.
-            f[8]: The state vector (specifically spatial momentum f[5]..f[7]).
+            f[9]: The state vector (specifically spatial momentum f[5]..f[7]).
         Output:
             p0_out: The computed p^0 component."""
-    name = f"p0_reverse_{spacetime_name}"
+    name = "p0_reverse"
 
     params = (
         "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
-        "const double f[8], "
+        "const double f[9], "
         "double *restrict p0_out"
     )
 
     # Step 4: Generate C body
-    print(f" -> Generating C worker function: {name} (Spacetime: {spacetime_name})...")
+    print(f" -> Generating C worker function: {name} ...")
 
     # 4a. Generate the Math Body (using CSE)
     body_math = ccg.c_codegen(
@@ -137,10 +131,10 @@ if __name__ == "__main__":
 
         # 3. Run the Generator
         logger.info(" -> Calling p0_reverse()...")
-        p0_reverse(geodesic_data.p0_massless, SPACETIME, spacetime_data.xx)
+        p0_reverse(geodesic_data.p0_massless)
 
         # 4. Validation
-        cfunc_name = f"p0_reverse_{SPACETIME}"
+        cfunc_name = "p0_reverse"
 
         if cfunc_name not in cfc.CFunction_dict:
             raise RuntimeError(

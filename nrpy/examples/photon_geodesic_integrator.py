@@ -46,6 +46,9 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.conserved_quantities
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.g4DD_metric import (
     g4DD_metric,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constraint import (
+    normalization_constraint,
+)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.calculate_ode_rhs import (
     calculate_ode_rhs,
 )
@@ -95,12 +98,15 @@ calculate_ode_rhs(geodesic_data.geodesic_rhs, metric_data.xx)
 # 4. Hamiltonian Constraint Solver (for initial u^0)
 if geodesic_data.p0_massless is None:
     raise ValueError(f"p0_massless is None for {GEO_KEY}")
-p0_reverse(geodesic_data.p0_massless, SPACETIME, metric_data.xx)
+p0_reverse(geodesic_data.p0_massless)
 
 # 5. Conserved Quantities (Diagnostics)
 conserved_quantities(SPACETIME, PARTICLE)
 
-# 6. GSL Wrapper
+# 6. Normalization Constraint
+normalization_constraint(geodesic_data.norm_constraint_expr, PARTICLE)
+
+# 7. GSL Wrapper
 ode_gsl_wrapper(SPACETIME)
 
 
@@ -165,13 +171,13 @@ def main_c() -> None:
     // C. Solve for u^0 using the pre-calculated metric
     double p0_val = 0.0;
     // Signature: (commondata, metric, y, u0_out)
-    p0_reverse_{SPACETIME}(&commondata, &g4DD_local, y, &p0_val);
+    p0_reverse(&commondata, &g4DD_local, y, &p0_val);
     y[4] = p0_val;
     // ---------------------------------------------------------
 
     printf("Initial State:\\n");
     printf("  Pos: (%.4f, %.4f, %.4f)\\n", y[1], y[2], y[3]);
-    printf("  Vel: (%.4f, %.4f, %.4f, %.4f)\\n", y[4], y[5], y[6], y[7]);
+    printf("  Mom: (%.4f, %.4f, %.4f, %.4f)\\n", y[4], y[5], y[6], y[7]);
     printf("  Length: (%.4f)\\n", y[8]);
 
     // 3. Pre-Integration Diagnostics
@@ -230,30 +236,28 @@ def main_c() -> None:
     printf("Integration finished after %d steps. Final lambda = %.4f\\n", steps, lambda);
 
     // 7. Post-Integration Diagnostics
-    double E_final, Lx_final, Ly_final, Lz_final, Q_final, p0_final;
+    double E_final, Lx_final, Ly_final, Lz_final, Q_final, norm_final;
     conserved_quantities_{SPACETIME}_{PARTICLE}(&commondata, y,
-                                                &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);                                         
+                                                &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);   
+
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
-    p0_reverse_{SPACETIME}(&commondata, &g4DD_local, y, &p0_final);
+    normalization_constraint_photon(&commondata, &g4DD_local, y, &norm_final);
+
+    printf("Final norm: \\n");
+    printf("  norm = %.4e\\n", norm_final);
+
 
     printf("Final Conserved Quantities:\\n");
     printf("  E = %.8f, Lz = %.8f, Q = %.8f\\n", E_final, Lz_final, Q_final);
 
-    printf("Final p0: \\n");
-    printf("  p0 = %.8f\\n", p0_final);
-
     double E_err = fabs(E_final - E_init);
     double Lz_err = fabs(Lz_final - Lz_init);
     double Q_err = fabs(Q_final - Q_init);
-    double p0_err = fabs(p0_final - y[4]);
 
     printf("Conservation Check (Absolute Error):\\n");
     printf("  Delta E  = %.4e\\n", E_err);
     printf("  Delta Lz = %.4e\\n", Lz_err);
     printf("  Delta Q  = %.4e\\n", Q_err);
-
-    printf("p0 Check (Absolute Error):\\n");
-    printf("  Delta p0 = %.4e\\n", p0_err);
 
     gsl_odeiv2_evolve_free(e);
     gsl_odeiv2_control_free(c);
