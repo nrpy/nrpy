@@ -40,6 +40,7 @@ class GeodesicEquations:
     geodesic_rhs: List[sp.Expr]
     u0_massive: Optional[sp.Expr]
     p0_massless: Optional[sp.Expr]
+    norm_constraint_expr: sp.Expr
     Gamma4UDD_from_generic_metric: List[List[List[sp.Expr]]]
 
     def __init__(self, spacetime: str, particle_type: str = "massive") -> None:
@@ -84,6 +85,9 @@ class GeodesicEquations:
 
         # Step 4: Reuse the precomputed symbolic recipe for Christoffel symbols from a generic metric.
         self.Gamma4UDD_from_generic_metric = _GAMMA4UDD_GENERIC_RECIPE
+
+        # Step 5: Generate generic normalization constraint for validation
+        self.norm_constraint_expr = self.normalization_constraint()
 
     def derivative_g4DD(self) -> List[List[List[sp.Expr]]]:
         r"""
@@ -348,6 +352,48 @@ class GeodesicEquations:
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[0])
+
+    def normalization_constraint(self) -> sp.Expr:
+        r"""
+        Generate the symbolic expression for the metric normalization constraint.
+
+        This computes the scalar invariant: C = g_{\mu\nu} v^\mu v^\nu.
+
+        The variable 'vU' represents the tangent vector to the geodesic curve:
+        - For massive particles, vU corresponds to 4-velocity (u^\mu).
+            Expected Result: -1 (in -+++ signature).
+        - For massless particles, vU corresponds to 4-momentum (p^\mu).
+            Expected Result: 0.
+
+        Reference:
+        Wikipedia: Line element
+        Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
+        (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
+            Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.
+            Note: In the referenced equation for massive particles (timelike curves) $g = -1$.)
+
+        :return: A SymPy expression for the contraction g_{\mu\nu} v^\mu v^\nu.
+        """
+        # Generic tangent vector v^mu (vU0, vU1, vU2, vU3)
+        vU = ixp.declarerank1("vU", dimension=4)
+
+        # Generic metric g_mu_nu
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        constraint = sp.sympify(0)
+
+        # Loop over indices, exploiting g_{mu,nu} = g_{nu,mu} symmetry
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = g4DD[mu][nu] * vU[mu] * vU[nu]
+
+                # Double the off-diagonal terms (mu != nu)
+                if mu != nu:
+                    term *= 2
+
+                constraint += term
+
+        return constraint
 
     @staticmethod
     def symbolic_numerical_christoffel_recipe() -> List[List[List[sp.Expr]]]:
