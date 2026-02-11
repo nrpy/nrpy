@@ -1,12 +1,12 @@
 """
-Register C function for computing the initial time component of 4-velocity.
+Register C function for computing the initial time component of 4-momentum.
 
-This module registers the 'u0_massive_{spacetime_name}' C function. It enforces
-the 4-velocity normalization constraint for massive particles (u.u = -1) by solving
-the quadratic Hamiltonian constraint for the time component u^0.
+This module registers the 'p0_massive_{spacetime_name}' C function. It enforces
+the 4-momentum normalization constraint for photons (p.p = 0) by solving
+the quadratic Hamiltonian constraint for the time component p^0.
 
 It generates a preamble to unpack the state vector f[8] into local coordinates
-and spatial velocity components (u^i) required for the calculation.
+and spatial momentum components (p^i) required for the calculation.
 
 Author: Dalton J. Moone
 """
@@ -25,40 +25,38 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
 
-def u0_massive(
-    u0_expr: sp.Expr, spacetime_name: str, coord_symbols: List[sp.Symbol]
+def p0_reverse(
+    p0_expr: sp.Expr, spacetime_name: str, coord_symbols: List[sp.Symbol]
 ) -> None:
     """
-    Generate and register the C function to compute u^0 for a massive particle.
+    Generate and register the C function to compute p^0 for a photon.
 
-    :param u0_expr: The SymPy expression for u^0.
+    :param p0_expr: The SymPy expression for p^0.
     :param spacetime_name: Name of the spacetime (used for function naming).
     :param coord_symbols: A list of SymPy symbols representing the coordinates
                           (e.g., [t, x, y, z]).
     """
     # Step 3: Define C function metadata
     includes = ["BHaH_defines.h"]
-    desc = (
-        """@brief Computes the initial time-component of the 4-velocity (u^0)
-        
+    desc = """@brief Computes the initial time-component of the 4-momentum (p^0).
+
         Solves the quadratic Hamiltonian constraint equation:
-            g_munu u^mu u^nu = -1
-        for the positive root of u^0, given the spatial velocity components.
-        
+            g_munu u^mu u^nu = 0
+        for the positive root of p^0, given the spatial momentum components.
+
         Input:
             commondata: Simulation parameters (mass, spin, etc.).
             metric: The metric tensor components at the current location.
-            f[8]: The state vector (specifically spatial velocities f[5]..f[7]).
+            f[8]: The state vector (specifically spatial momentum f[5]..f[7]).
         Output:
-        "    u0_out: The computed u^0 component."""
-    )
-    name = f"u0_massive_{spacetime_name}"
+            p0_out: The computed p^0 component."""
+    name = f"p0_reverse_{spacetime_name}"
 
     params = (
         "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
         "const double f[8], "
-        "double *restrict u0_out"
+        "double *restrict p0_out"
     )
 
     # Step 4: Generate C body
@@ -66,27 +64,20 @@ def u0_massive(
 
     # 4a. Generate the Math Body (using CSE)
     body_math = ccg.c_codegen(
-        [u0_expr], ["*u0_out"], enable_cse=True, verbose=False, include_braces=False
+        [p0_expr], ["*p0_out"], enable_cse=True, verbose=False, include_braces=False
     )
 
     # 4b. Generate the Dynamic Preamble
-    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
-
-    # Unpack coordinates: y[0] -> t, y[1] -> x, etc.
-    for i, symbol in enumerate(coord_symbols):
-        preamble_lines.append(f"const double {str(symbol)} = f[{i}];")
-
-    preamble_lines.append("")
-    preamble_lines.append("// Unpack spatial velocity components from f[5]..f[7]")
+    preamble_lines = ["// Unpack spatial momentum components from f[5]..f[7]"]
     preamble_lines.append(
-        "// Note: f[4] is u^0 (which we are computing), so we skip it."
+        "// Note: f[4] is p^0 (which we are computing), so we skip it."
     )
 
-    # Standard 3-velocity components usually map to uU1, uU2, uU3
-    # We map y[5]->uU1, y[6]->uU2, y[7]->uU3
-    preamble_lines.append("const double uU1 = f[5];")
-    preamble_lines.append("const double uU2 = f[6];")
-    preamble_lines.append("const double uU3 = f[7];")
+    # Standard 3-momentum components usually map to pU1, pU2, pU3
+    # We map f[5]->pU1, f[6]->pU2, f[7]->pU3
+    preamble_lines.append("const double pU1 = f[5];")
+    preamble_lines.append("const double pU2 = f[6];")
+    preamble_lines.append("const double pU3 = f[7];")
     preamble_lines.append("")
 
     preamble = "\n  ".join(preamble_lines)
@@ -125,31 +116,31 @@ if __name__ == "__main__":
 
     # Configure logging
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("TestU0MassiveAnalytic")
+    logger = logging.getLogger("Testp0ReverseAnalytic")
 
     SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massive"
+    GEO_KEY = f"{SPACETIME}_massless"
 
-    logger.info("Test: Generating u0_massive C-code for %s...", SPACETIME)
+    logger.info("Test: Generating p0_reverse C-code for %s...", SPACETIME)
 
     try:
         # 1. Acquire Symbolic Data
-        logger.info(" -> Acquiring symbolic Hamiltonian constraint (u^0)...")
+        logger.info(" -> Acquiring symbolic Hamiltonian constraint (p^0)...")
         geodesic_data = Geodesic_Equations[GEO_KEY]
 
         # 2. Acquire Coordinate Symbols
         logger.info(" -> Acquiring coordinate symbols from AnalyticSpacetimes...")
         spacetime_data = Analytic_Spacetimes[SPACETIME]
 
-        if geodesic_data.u0_massive is None:
-            raise ValueError(f"u0_massive is None for key {GEO_KEY}")
+        if geodesic_data.p0_massless is None:
+            raise ValueError(f"p0_massive is None for key {GEO_KEY}")
 
         # 3. Run the Generator
-        logger.info(" -> Calling u0_massive_analytic()...")
-        u0_massive(geodesic_data.u0_massive, SPACETIME, spacetime_data.xx)
+        logger.info(" -> Calling p0_reverse()...")
+        p0_reverse(geodesic_data.p0_massless, SPACETIME, spacetime_data.xx)
 
         # 4. Validation
-        cfunc_name = f"u0_massive_{SPACETIME}"
+        cfunc_name = f"p0_reverse_{SPACETIME}"
 
         if cfunc_name not in cfc.CFunction_dict:
             raise RuntimeError(
@@ -165,7 +156,7 @@ if __name__ == "__main__":
         logger.info(" -> Written to %s", filename)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(" -> FAIL: u0_massive_analytic test failed with error: %s", e)
+        logger.error(" -> FAIL: p0_reverse test failed with error: %s", e)
         import traceback
 
         traceback.print_exc()
