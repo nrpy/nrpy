@@ -264,6 +264,8 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
 
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
+        # For fisheye GeneralRFM (generally non-orthogonal), this function still
+        # follows its contract: examine the three coordinate directions at a point.
         for dirn in rfm.radial_like_dirns:
             ds_expr_list += [sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])]
             ds_str_list += [f"ds{dirn}"]
@@ -363,7 +365,8 @@ def register_CFunction_ds_min_single_pt(
 
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-        # Conservative non-orthogonal estimate from metric diagonal terms.
+        # For fisheye GeneralRFM (generally non-orthogonal), this function still
+        # follows its contract: examine the three coordinate directions at a point.
         expr_list = [
             sp.sqrt(sp.Abs(fisheye.ghatDD[0][0])) * sp.Abs(dxx0),
             sp.sqrt(sp.Abs(fisheye.ghatDD[1][1])) * sp.Abs(dxx1),
