@@ -372,6 +372,8 @@ class GeodesicEquations:
             Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.
             Note: In the referenced equation for massive particles (timelike curves) $g = -1$.)
 
+        .. warning:: This function is meant for validation purposes
+
         :return: A SymPy expression for the contraction g_{\mu\nu} v^\mu v^\nu.
         """
         # Generic tangent vector v^mu (vU0, vU1, vU2, vU3)
