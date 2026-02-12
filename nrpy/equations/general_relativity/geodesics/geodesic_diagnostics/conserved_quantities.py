@@ -4,7 +4,7 @@ Construct symbolic expressions for diagnostic quantities along geodesics.
 When the spacetime admits the relevant symmetries, this includes constants
 of motion such as Energy, L_z, and (in Kerr) the Carter constant. Other
 returned quantities may be non-conserved diagnostics.
-It supports both massive and photon (photon) particles.
+It supports both massive and photon particles.
 
 Author: Dalton J. Moone
 

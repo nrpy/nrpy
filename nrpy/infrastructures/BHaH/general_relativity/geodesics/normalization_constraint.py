@@ -1,7 +1,7 @@
 """
 Register C function for computing the normalization constraint of the state vector.
 
-This module registers the 'normalization_check_{PARTICLE}' C function.
+This module registers the 'normalization_constraint_{PARTICLE}' C function.
 It computes the scalar invariant C = g_munu v^mu v^nu, where v^mu is the
 4-vector (4-velocity or 4-momentum) contained in the state vector f.
 

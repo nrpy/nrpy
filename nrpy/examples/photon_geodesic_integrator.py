@@ -9,7 +9,7 @@ links them with the GNU Scientific Library (GSL) for high-order time integration
 Physics Context:
     The simulation solves the geodesic equation for a photon:
         d(p^mu)/d(lambda) = -Gamma^mu_{alpha beta} p^alpha p^beta
-    subject to the normalzation constraint p^mu p_mu = 0.
+    subject to the normalization constraint p^mu p_mu = 0.
 
     Numerical fidelity is validated by monitoring constants of motion associated
     with the spacetime's symmetries (Killing vectors and tensors):
@@ -168,7 +168,7 @@ def main_c() -> None:
     // Signature: (commondata, y, metric_struct_out)
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
 
-    // C. Solve for u^0 using the pre-calculated metric
+    // C. Solve for p^0 using the precd .-calculated metric
     double p0_val = 0.0;
     // Signature: (cmetric, y, u0_out)
     p0_reverse(&g4DD_local, y, &p0_val);

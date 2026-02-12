@@ -1,7 +1,7 @@
 """
 Register C function for computing the initial time component of 4-momentum.
 
-This module registers the 'p0_massive' C function. It enforces
+This module registers the 'p0_reverse' C function. It enforces
 the 4-momentum normalization constraint for photons (p.p = 0) by solving
 the quadratic Hamiltonian constraint for the time component p^0.
 
@@ -39,7 +39,6 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
         for the positive root of p^0, given the spatial momentum components.
 
         Input:
-            commondata: Simulation parameters (mass, spin, etc.).
             metric: The metric tensor components at the current location.
             f[9]: The state vector (specifically spatial momentum f[5]..f[7]).
         Output:

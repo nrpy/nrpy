@@ -34,7 +34,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
             y[9]: Current state vector.
             params: Pointer to commondata_struct.
         Output:
-        "    f[9]: Computed derivatives (RHS)."""
+            f[9]: Computed derivatives (RHS)."""
 
     cfunc_type = "int"
     name = f"ode_gsl_wrapper_{spacetime_name}"
