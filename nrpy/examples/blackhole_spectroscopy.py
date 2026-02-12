@@ -89,10 +89,11 @@ default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
-enable_psi4_diagnostics = not CoordSystem.startswith("GeneralRFM_fisheyeN")
+enable_psi4_diagnostics = True
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
+    "GeneralRFM_fisheyeN1": [100, 100, 100],
     "GeneralRFM_fisheyeN2": [100, 100, 100],
 }
 # Fisheye parameter defaults (all in params_struct, set here in the example).
@@ -101,16 +102,29 @@ if num_fisheye_transitions is not None:
     for i in range(num_fisheye_transitions + 1):
         fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
     fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
-    if num_fisheye_transitions == 2:
-        # Width defaults are chosen to avoid overflow in xx<->Cart generated expressions.
-        fisheye_param_defaults.update(
-            {
-                "fisheye_phys_r_trans1": 4.0 * initial_sep,
-                "fisheye_phys_w_trans1": 6.0 * initial_sep,
-                "fisheye_phys_r_trans2": 20.0 * initial_sep,
-                "fisheye_phys_w_trans2": 20.0 * initial_sep,
-            }
-        )
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 18.0,
+            "fisheye_phys_w_trans1": 12.0,
+        }
+    )
+if num_fisheye_transitions == 2:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_a2": 3.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 12.0,
+            "fisheye_phys_w_trans1": 10.0,
+            "fisheye_phys_r_trans2": 80.0,
+            "fisheye_phys_w_trans2": 40.0,
+        }
+    )
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
