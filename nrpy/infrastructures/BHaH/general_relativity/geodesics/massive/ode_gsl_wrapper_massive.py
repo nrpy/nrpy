@@ -24,19 +24,17 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
 
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
-    desc = (
-        f"@brief GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.\n"
-        "\n"
-        "Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, "
-        "computes the local metric and connections, and calls the RHS calculation routine.\n"
-        "\n"
-        "Input:\n"
-        "    t: Current proper time (unused in autonomous systems).\n"
-        "    y[8]: Current state vector.\n"
-        "    params: Pointer to commondata_struct.\n"
-        "Output:\n"
-        "    f[8]: Computed derivatives (RHS)."
-    )
+    desc = f"""@brief GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.
+        
+        Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, 
+        computes the local metric and connections, and calls the RHS calculation routine.
+        
+        Input:
+            t: Current proper time (unused in autonomous systems).
+            y[8]: Current state vector.
+            params: Pointer to commondata_struct.
+        Output:
+            f[8]: Computed derivatives (RHS)."""
     cfunc_type = "int"
     name = f"ode_gsl_wrapper_massive_{spacetime_name}"
     params = "double t, const double y[8], double f[8], void *params"

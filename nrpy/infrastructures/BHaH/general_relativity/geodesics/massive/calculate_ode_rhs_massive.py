@@ -34,18 +34,16 @@ def calculate_ode_rhs_massive(
     """
     # 1. Define metadata
     includes = ["BHaH_defines.h"]
-    desc = (
-        "@brief Computes the 8 derivatives required for the geodesic ODE system.\n"
-        "\n"
-        "Calculates dx^mu/dtau and du^mu/dtau using the provided state vector and "
-        "pre-computed Christoffel symbols.\n"
-        "\n"
-        "Input:\n"
-        "    f[8]: State vector [t, x, y, z, u^t, u^x, u^y, u^z].\n"
-        "    conn: Struct containing analytic Christoffel symbols.\n"
-        "Output:\n"
-        "    rhs_out[8]: The computed derivatives [dt, dx, dy, dz, du^t, du^x, du^y, du^z]."
-    )
+    desc = """@brief Computes the 8 derivatives required for the geodesic ODE system.
+        
+        Calculates dx^mu/dtau and du^mu/dtau using the provided state vector and 
+        pre-computed Christoffel symbols.
+        
+        Input:
+            f[8]: State vector [t, x, y, z, u^t, u^x, u^y, u^z].
+            conn: Struct containing analytic Christoffel symbols.
+        Output:
+            rhs_out[8]: The computed derivatives [dt, dx, dy, dz, du^t, du^x, du^y, du^z]."""
     name = "calculate_ode_rhs_massive"
 
     c_params_str = """

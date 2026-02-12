@@ -171,8 +171,8 @@ def main_c() -> None:
 
     // C. Solve for u^0 using the pre-calculated metric
     double u0_val = 0.0;
-    // Signature: (commondata, metric, y, u0_out)
-    u0_massive(&commondata, &g4DD_local, y, &u0_val);
+    // Signature: (metric, y, u0_out)
+    u0_massive(&g4DD_local, y, &u0_val);
     y[4] = u0_val;
     // ---------------------------------------------------------
 
@@ -240,7 +240,7 @@ def main_c() -> None:
     conserved_quantities_{SPACETIME}_{PARTICLE}(&commondata, y,
                                                 &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
-    normalization_constraint_massive(&commondata, &g4DD_local, y, &norm_final);
+    normalization_constraint_massive(&g4DD_local, y, &norm_final);
 
 
     printf("Final norm (plus 1): \\n");

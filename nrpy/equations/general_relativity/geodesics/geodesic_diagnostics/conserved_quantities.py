@@ -4,7 +4,7 @@ Construct symbolic expressions for diagnostic quantities along geodesics.
 When the spacetime admits the relevant symmetries, this includes constants
 of motion such as Energy, L_z, and (in Kerr) the Carter constant. Other
 returned quantities may be non-conserved diagnostics.
-It supports both massive and massless (photon) particles.
+It supports both massive and photon (photon) particles.
 
 Author: Dalton J. Moone
 
@@ -22,7 +22,7 @@ Physical Assumptions:
 4.  **Mass Normalization (m=1):** In the massive particle case for the Carter
     Constant, the code uses the term (1 - E**2). This implies the code assumes
     particle mass m=1 (or affine parameter normalization p_mu p^mu = -1).
-5.  **Massless Particles:** For the massless case, the code assumes m=0.
+5.  **Photon Particles:** For the photon case, the code assumes m=0.
 6.  **Geometric Units:** The code assumes geometric units where G = c = 1 (implied
     by the usage of M_scale and a_spin without constants).
 
@@ -96,7 +96,7 @@ class GeodesicDiagnostics:
         Initialize and generate all symbolic diagnostic expressions.
 
         :param spacetime: The spacetime to use (e.g., "KerrSchild_Cartesian") or "Numerical".
-        :param particle_type: The type of particle ("massive" or "massless").
+        :param particle_type: The type of particle ("massive" or "photon").
         :raises ValueError: If the particle type is not supported or spacetime is invalid.
         """
         self.spacetime = spacetime
@@ -107,7 +107,7 @@ class GeodesicDiagnostics:
         self.L_exprs = []
         self.Q_expr = None
 
-        if self.particle_type not in ["massive", "massless"]:
+        if self.particle_type not in ["massive", "photon"]:
             raise ValueError(f"Unsupported particle_type: {self.particle_type}")
 
         # Step 1: Set up coordinates and metric
@@ -399,7 +399,7 @@ if __name__ == "__main__":
     # Step 3: Generate trusted results
     for config in [
         "KerrSchild_Cartesian_massive",
-        "KerrSchild_Cartesian_massless",
+        "KerrSchild_Cartesian_photon",
     ]:
         geo_diags = Geodesic_Diagnostics[config]
         results_dict = ve.process_dictionary_of_expressions(

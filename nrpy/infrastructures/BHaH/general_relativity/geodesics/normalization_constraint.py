@@ -1,13 +1,13 @@
 """
 Register C function for computing the normalization constraint of the state vector.
 
-This module registers the 'normalization_check_{particle}' C function.
+This module registers the 'normalization_check_{PARTICLE}' C function.
 It computes the scalar invariant C = g_munu v^mu v^nu, where v^mu is the
 4-vector (4-velocity or 4-momentum) contained in the state vector f.
 
 Particle Support:
 - Massive: f[8], v^mu = u^mu (4-velocity). Expected C = -1.
-- Massless: f[9], v^mu = p^mu (4-momentum). Expected C = 0.
+- Photon (Photon): f[9], v^mu = p^mu (4-momentum). Expected C = 0.
 
 It generates a preamble to unpack the full 4-vector from the state vector f
 (specifically f[4]..f[7]) into the local symbolic names (vU0..vU3).
@@ -26,33 +26,31 @@ import nrpy.c_function as cfc
 # [Fix 1] Removed unused 'List' import
 
 
-def normalization_constraint(norm_expr: sp.Expr, particle_type: str) -> None:
+def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     """
     Generate and register the C function to compute the normalization constraint.
 
     :param norm_expr: The SymPy expression for the contraction g_munu v^mu v^nu.
-    :param particle_type: The type of particle ("massive" or "massless").
+    :param PARTICLE: The type of particle ("massive" or "photon").
                           Determines array size and naming convention.
-    :raises ValueError: If particle_type is not "massive" or "massless".
+    :raises ValueError: If PARTICLE is not "massive" or "photon".
     """
     # Step 1: Specific setup based on particle type
-    if particle_type == "massive":
-        suffix = "massive"
+    if PARTICLE == "massive":
         array_size = 8
         vec_desc = "4-velocity u^mu"
         expected_val = "-1.0"
-    elif particle_type == "massless":
-        suffix = "photon"
+    elif PARTICLE == "photon":
         array_size = 9
         vec_desc = "4-momentum p^mu"
         expected_val = "0.0"
     else:
-        raise ValueError(f"Unsupported particle_type: {particle_type}")
+        raise ValueError(f"Unsupported PARTICLE: {PARTICLE}")
 
     # Step 2: Define C function metadata
     includes = ["BHaH_defines.h"]
     # The name is now just based on the particle type, not the spacetime
-    name = f"normalization_constraint_{suffix}"
+    name = f"normalization_constraint_{PARTICLE}"
 
     desc = f"""@brief Computes the normalization constraint of the 4-vector.
 
@@ -63,7 +61,6 @@ def normalization_constraint(norm_expr: sp.Expr, particle_type: str) -> None:
         Expected Value: {expected_val}
 
         Input:
-            commondata: Simulation parameters (mass, spin, etc.).
             metric: The metric tensor components at the current location.
             f[{array_size}]: The state vector.
                   f[4] -> v^0 (time component)
@@ -74,7 +71,6 @@ def normalization_constraint(norm_expr: sp.Expr, particle_type: str) -> None:
             norm_out: The computed value of the constraint."""
 
     params = (
-        "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
         f"const double f[{array_size}], "
         "double *restrict norm_out"
@@ -97,7 +93,7 @@ def normalization_constraint(norm_expr: sp.Expr, particle_type: str) -> None:
     preamble_lines = [f"// Unpack {vec_desc} components from f[4]..f[7]"]
 
     # Map f indices to the symbolic names expected by norm_expr (vU0..vU3)
-    # Note: Indices 4-7 are consistent for both massive (8 elements) and massless (9 elements)
+    # Note: Indices 4-7 are consistent for both massive (8 elements) and photon (9 elements)
     preamble_lines.append("const double vU0 = f[4];")
     preamble_lines.append("const double vU1 = f[5];")
     preamble_lines.append("const double vU2 = f[6];")
@@ -115,7 +111,7 @@ def normalization_constraint(norm_expr: sp.Expr, particle_type: str) -> None:
         desc=desc,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=full_body,
     )
     print(f"    ... {name}() registration complete.")
@@ -143,7 +139,7 @@ if __name__ == "__main__":
     # We still need a valid key to grab the symbolic expression from Geodesic_Equations,
     # even though the final C function name won't include the spacetime.
     SPACETIME = "KerrSchild_Cartesian"
-    PARTICLE = "massless"  # Change to "massless" to test photon logic
+    PARTICLE = "photon"
     # ---------------------
 
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
@@ -173,7 +169,7 @@ if __name__ == "__main__":
         # 3. Validation
         # Construct expected name to verify registration
         # [Fix 3] Renamed variable to avoid shadowing local variable in function
-        test_suffix = "photon" if PARTICLE == "massless" else "massive"
+        test_suffix = "photon" if PARTICLE == "photon" else "massive"
         cfunc_name = f"normalization_constraint_{test_suffix}"
 
         if cfunc_name not in cfc.CFunction_dict:

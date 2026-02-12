@@ -39,15 +39,13 @@ def u0_massive(u0_expr: sp.Expr) -> None:
         for the positive root of u^0, given the spatial velocity components.
         
         Input:
-            commondata: Simulation parameters (mass, spin, etc.).
             metric: The metric tensor components at the current location.
             f[8]: The state vector (specifically spatial velocities f[5]..f[7]).
         Output:
-        "    u0_out: The computed u^0 component."""
+            u0_out: The computed u^0 component."""
     name = "u0_massive"
 
     params = (
-        "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
         "const double f[8], "
         "double *restrict u0_out"
@@ -85,7 +83,7 @@ def u0_massive(u0_expr: sp.Expr) -> None:
         desc=desc,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=full_body,
     )
     print(f"    ... {name}() registration complete.")

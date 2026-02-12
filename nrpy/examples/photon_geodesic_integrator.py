@@ -7,7 +7,7 @@ spacetime-specific physics kernels (Metric, Christoffel Symbols, ODE RHS) and
 links them with the GNU Scientific Library (GSL) for high-order time integration.
 
 Physics Context:
-    The simulation solves the geodesic equation for a particle with non-zero mass:
+    The simulation solves the geodesic equation for a photon:
         d(p^mu)/d(lambda) = -Gamma^mu_{alpha beta} p^alpha p^beta
     subject to the normalzation constraint p^mu p_mu = 0.
 
@@ -71,7 +71,7 @@ if os.path.exists(project_dir):
 
 # Spacetime configuration
 SPACETIME = "KerrSchild_Cartesian"
-PARTICLE = "massless"
+PARTICLE = "photon"
 GEO_KEY = f"{SPACETIME}_{PARTICLE}"
 
 #########################################################
@@ -96,9 +96,9 @@ connections(geodesic_data.Gamma4UDD, SPACETIME)
 calculate_ode_rhs(geodesic_data.geodesic_rhs, metric_data.xx)
 
 # 4. Hamiltonian Constraint Solver (for initial u^0)
-if geodesic_data.p0_massless is None:
-    raise ValueError(f"p0_massless is None for {GEO_KEY}")
-p0_reverse(geodesic_data.p0_massless)
+if geodesic_data.p0_photon is None:
+    raise ValueError(f"p0_photon is None for {GEO_KEY}")
+p0_reverse(geodesic_data.p0_photon)
 
 # 5. Conserved Quantities (Diagnostics)
 conserved_quantities(SPACETIME, PARTICLE)
@@ -126,7 +126,7 @@ def main_c() -> None:
         "gsl/gsl_math.h",
         "string.h",
     ]
-    desc = """@brief Main driver function for the massive geodesic integrator.
+    desc = """@brief Main driver function for the photon geodesic integrator.
 
         Initializes the BHaH infrastructure, sets initial particle conditions, 
         performs time integration using GSL (RKF45), and outputs trajectory data 
@@ -170,8 +170,8 @@ def main_c() -> None:
 
     // C. Solve for u^0 using the pre-calculated metric
     double p0_val = 0.0;
-    // Signature: (commondata, metric, y, u0_out)
-    p0_reverse(&commondata, &g4DD_local, y, &p0_val);
+    // Signature: (cmetric, y, u0_out)
+    p0_reverse(&g4DD_local, y, &p0_val);
     y[4] = p0_val;
     // ---------------------------------------------------------
 
@@ -241,7 +241,7 @@ def main_c() -> None:
                                                 &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);   
 
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
-    normalization_constraint_photon(&commondata, &g4DD_local, y, &norm_final);
+    normalization_constraint_photon(&g4DD_local, y, &norm_final);
 
     printf("Final norm: \\n");
     printf("  norm = %.4e\\n", norm_final);

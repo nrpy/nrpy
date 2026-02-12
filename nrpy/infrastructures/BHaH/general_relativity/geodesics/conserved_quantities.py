@@ -35,7 +35,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
     It generates a preamble to unpack f[8] -> {coordinates, momentum}.
 
     :param spacetime_name: Name of the spacetime (e.g., "KerrSchild_Cartesian").
-    :param particle_type: "massive" or "massless".
+    :param particle_type: "massive" or "photon".
     """
     # Step 1: Acquire Symbolic Diagnostics
     config_key = f"{spacetime_name}_{particle_type}"

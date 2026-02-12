@@ -35,7 +35,7 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     desc = """@brief Computes the initial time-component of the 4-momentum (p^0).
 
         Solves the quadratic Hamiltonian constraint equation:
-            g_munu u^mu u^nu = 0
+            g_munu p^mu p^nu = 0
         for the positive root of p^0, given the spatial momentum components.
 
         Input:
@@ -47,7 +47,6 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     name = "p0_reverse"
 
     params = (
-        "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
         "const double f[9], "
         "double *restrict p0_out"
@@ -85,7 +84,7 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
         desc=desc,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=full_body,
     )
     print(f"    ... {name}() registration complete.")
@@ -113,7 +112,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("Testp0ReverseAnalytic")
 
     SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massless"
+    GEO_KEY = f"{SPACETIME}_photon"
 
     logger.info("Test: Generating p0_reverse C-code for %s...", SPACETIME)
 
@@ -126,12 +125,12 @@ if __name__ == "__main__":
         logger.info(" -> Acquiring coordinate symbols from AnalyticSpacetimes...")
         spacetime_data = Analytic_Spacetimes[SPACETIME]
 
-        if geodesic_data.p0_massless is None:
+        if geodesic_data.p0_photon is None:
             raise ValueError(f"p0_massive is None for key {GEO_KEY}")
 
         # 3. Run the Generator
         logger.info(" -> Calling p0_reverse()...")
-        p0_reverse(geodesic_data.p0_massless)
+        p0_reverse(geodesic_data.p0_photon)
 
         # 4. Validation
         cfunc_name = "p0_reverse"

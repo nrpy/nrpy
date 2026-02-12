@@ -24,7 +24,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
 
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
-    desc = """@brief GSL-compatible wrapper for photon geodesics in {spacetime_name}.
+    desc = f"""@brief GSL-compatible wrapper for photon geodesics in {spacetime_name}.
         
         Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, "
         computes the local metric and connections, and calls the RHS calculation routine.
@@ -33,7 +33,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
             t: Current proper time (unused in autonomous systems).
             y[9]: Current state vector.
             params: Pointer to commondata_struct.
-        "Output:\n"
+        Output:
         "    f[9]: Computed derivatives (RHS)."""
 
     cfunc_type = "int"

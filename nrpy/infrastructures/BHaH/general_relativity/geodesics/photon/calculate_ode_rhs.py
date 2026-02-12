@@ -36,15 +36,15 @@ def calculate_ode_rhs(
     includes = ["BHaH_defines.h"]
     desc = """@brief Computes the 9 derivatives required for the geodesic ODE system.
         
-        Calculates dx^mu/dtau and du^mu/dtau using the provided state vector and 
+        Calculates dx^mu/dlambda and dp^mu/dlambda using the provided state vector and 
         pre-computed Christoffel symbols.
         
         Input:
-            f[9]: State vector [t, x, y, z, u^t, u^x, u^y, u^z, L].
+            f[9]: State vector [t, x, y, z, p^t, p^x, p^y, p^z, L].
             metric: Struct containing analytic metric symbols
             conn: Struct containing analytic Christoffel symbols.
         Output:
-            rhs_out[9]: The computed derivatives (e.g. [dt, dx, dy, dz, du^t, du^x, du^y, du^z, dL])."""
+            rhs_out[9]: The computed derivatives (e.g. [dt, dx, dy, dz, dp^t, dp^x, dp^y, dp^z, dL])."""
     name = "calculate_ode_rhs"
 
     c_params_str = """
@@ -75,7 +75,7 @@ def calculate_ode_rhs(
         preamble_lines.append("")
 
     # 4. Unpack f[4]..f[7] (4-momentum)
-    # We check for standard momentum names used in GeodesicEquations (massless)
+    # We check for standard momentum names used in GeodesicEquations (photon)
     preamble_lines.append("// Unpack 4-momentum components from f[4]..f[7]")
     for i in range(4):
         coord_name = f"pU{i}"
@@ -127,7 +127,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("TestCalculateODERHS")
 
     SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massless"
+    GEO_KEY = f"{SPACETIME}_photon"
 
     logger.info("Test: Generating ODE RHS C-code...")
 
