@@ -4,17 +4,27 @@ Generate the C header file `diagnostic_gfs.h`.
 This module provides a single function, `diagnostics_gfs_h_create`, that
 generates a C header file defining all available diagnostic quantities for the
 simulation. The header serves as the single source of truth for diagnostic
-gridfunctions.
+gridfunctions registered as diagnostics within NRPy.
 
-The generated header contains two key components based on a user-provided
-Python dictionary:
-  - An enum where each token corresponds to a diagnostic gridfunction (e.g.,
-    `DIAG_RHO`), terminated by a `TOTAL_NUM_DIAG_GFS` counter.
-  - A companion `const char *` array that maps each enum token to a short,
-    human-readable C string name (e.g., "rho") using C99 designated
-    initializers.
+The list of diagnostics is taken from NRPy's global gridfunction registry
+`nrpy.grid.glb_gridfcs_dict`, filtered to only those gridfunctions whose
+`group` is `"DIAG"`.
 
-This module is intended to be called after NRPy's parallel code generation phase.
+The generated header contains two key components:
+
+  - An anonymous enum where each token corresponds to a diagnostic gridfunction.
+    Each enumerator is the gridfunction's C base name with a `GF` suffix
+    (e.g., `rhoGF`, `lapseGF`), and the list is terminated by a
+    `TOTAL_NUM_DIAG_GFS` counter.
+
+  - A companion `const char *` array that maps each enum token to a
+    human-readable description string (taken from the gridfunction's `desc`
+    field). This mapping is implemented using a `DIAG_INIT` macro so that:
+      * When compiled as C, it uses C99 designated initializers.
+      * When compiled as C++, it falls back to simple positional initializers.
+
+This module is intended to be called after NRPy's parallel code generation
+phase, once all diagnostic gridfunctions have been registered.
 
 Functions
 ---------
@@ -39,20 +49,27 @@ def diagnostics_gfs_h_create(
     """
     Generate and write the `diagnostic_gfs.h` C header file.
 
-    This function takes a dictionary of diagnostic gridfunction names and uses it
-    to construct a C header file. The file defines an enum of all diagnostic
-    quantities and a parallel array of corresponding string names.
+    This function inspects NRPy's global gridfunction registry and constructs
+    a C header that enumerates all diagnostic gridfunctions (those whose
+    `group` is `"DIAG"`). For each such gridfunction, it emits:
 
-    The process involves:
-      1. Creating an enum from the keys of `diagnostic_gfs_names_dict`, with
-         a final `TOTAL_NUM_DIAG_GFS` member to count the total number.
-      2. Creating a `const char *` array `diagnostic_gf_names` that maps each
-         enum token to its string name from the dictionary's values. This mapping
-         is made robust by using C99 designated initializers.
-      3. Wrapping the definitions in standard header guards and an `extern "C"`
-         block for C++ compatibility.
-      4. Formatting the generated C code using clang-format.
-      5. Writing the final content to `project_dir/diagnostics/diagnostic_gfs.h`.
+      1. An enum constant whose name is the gridfunction's C base name
+         suffixed with `GF` (e.g., `rhoGF`).
+      2. A corresponding entry in a `const char *` array,
+         `diagnostic_gf_names`, which holds a human-readable description
+         string taken from the gridfunction's `desc` field.
+
+    The mapping from enum token to string is implemented using a `DIAG_INIT`
+    macro in the generated C code:
+
+      * In C, `DIAG_INIT(idx, val)` expands to `[idx] = val`, using C99
+        designated initializers. This makes the mapping robust to reordering.
+      * In C++, `DIAG_INIT(idx, val)` expands to `val`, yielding a standard
+        positional initializer list that is accepted by C++ compilers.
+
+    The definitions are wrapped in standard header guards and an `extern "C"`
+    block for C++ compatibility. The final C code is formatted with
+    `clang-format` and written to `project_dir/diagnostics/diagnostic_gfs.h`.
 
     :param project_dir: The root output directory for the project. The header
                         is written into a "diagnostics" subdirectory within it.
@@ -64,35 +81,45 @@ def diagnostics_gfs_h_create(
             "diagnostics_gfs_h_create() must be called AFTER parallel codegen."
         )
 
+    # Collect all diagnostic gridfunctions from the global registry, and sort
+    # them by name (case-insensitive) for deterministic output.
     diag_items: List[Tuple[str, str]] = sorted(
         ((v.name, v.desc) for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"),
         key=lambda t: t[0].lower(),  # case-insensitive by name
     )
-    # If you also want parallel lists:
+
+    # Parallel lists of base names and description strings.
     diag_gfs_names = [name for name, _ in diag_items]
     diag_gfs_descs = [desc for _, desc in diag_items]
 
     newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
-    body = rf"""
+    body = f"""
 /**
  * @file diagnostic_gfs.h
  * @brief Defines the enum and name table for all diagnostic gridfunctions.
  * @details
  * This header provides the single source of truth for all diagnostic
  * quantities available for interpolation and output. It is automatically
- * generated by NRPy from a Python dictionary.
+ * generated by NRPy from the global gridfunction registry
+ * (`nrpy.grid.glb_gridfcs_dict`), including only gridfunctions with
+ * `group == "DIAG"`.
  *
  * It defines two key components:
  *
- *   1. An anonymous enum that lists all diagnostic gridfunction tokens (e.g.,
- *      DIAG_RHO, DIAG_UX). This list is terminated by the special member
+ *   1. An anonymous enum that lists all diagnostic gridfunction tokens. Each
+ *      token is the gridfunction's C base name with a `GF` suffix (e.g.,
+ *      rhoGF, lapseGF). This list is terminated by the special member
  *      `TOTAL_NUM_DIAG_GFS`, which provides a convenient compile-time count
  *      of the total number of diagnostics.
  *
  *   2. A static const array of C strings, `diagnostic_gf_names`, which maps
- *      each enum token to a short, human-readable name (e.g., "rho", "ux").
- *      This mapping uses C99 designated initializers for robustness against
- *      changes in the enum's order.
+ *      each enum token to a human-readable description string (taken from the
+ *      gridfunction's `desc` field). The mapping uses the `DIAG_INIT` macro:
+ *
+ *         - In C, `DIAG_INIT(idx, val)` expands to `[idx] = val`, leveraging
+ *           C99 designated initializers for robustness against reordering.
+ *         - In C++, `DIAG_INIT(idx, val)` expands to `val`, yielding a
+ *           standard positional initializer list that is valid in C++.
  *
  * The contents are wrapped in an `extern "C"` block to ensure
  * compatibility with C++ compilers.
@@ -111,32 +138,33 @@ def diagnostics_gfs_h_create(
 extern "C" {{
 #endif
 
-// This enum defines all available diagnostic gridfunctions.
-// It is the single source of truth for diagnostic quantities.
+// This enum defines all available diagnostic gridfunctions registered
+// in NRPy's global gridfunction registry with group "DIAG".
+// Each enumerator is the corresponding gridfunction base name with a
+// trailing 'GF' (e.g., rhoGF, lapseGF).
 enum {{
-{
-    newline.join(
-        [f"     {gf_name}GF," for gf_name in diag_gfs_names] +
-        ["      TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)"]
-    )
-    }
+{newline.join(
+        f"  {gf_name}GF,"
+        for gf_name in diag_gfs_names
+    )}
+  TOTAL_NUM_DIAG_GFS // must be last: total produced diagnostics (== count)
 }};
 
 #ifdef __cplusplus
+  // In C++, use positional initializers, as array designators are not supported.
   #define DIAG_INIT(idx, val) val
 #else
+  // In C, use C99 designated initializers for robustness against reordering.
   #define DIAG_INIT(idx, val) [idx] = val
 #endif
 
-// Human-friendly, one-word names for each diagnostic gridfunction.
-// Using C99 designated initializers makes this robust against reordering the enum.
+// Human-readable description strings for each diagnostic gridfunction.
+// In C, C99 designated initializers make this robust against reordering the enum.
 MAYBE_UNUSED static const char *diagnostic_gf_names[TOTAL_NUM_DIAG_GFS] = {{
-{
-    newline.join(
-        f'      DIAG_INIT({gf_name_desc_tuple[0]}GF, "{gf_name_desc_tuple[1]}"), //'
-        for gf_name_desc_tuple in list(zip(diag_gfs_names, diag_gfs_descs))
-    )
-    }
+{newline.join(
+        f'  DIAG_INIT({name}GF, "{desc}"), //'
+        for name, desc in zip(diag_gfs_names, diag_gfs_descs)
+    )}
 }};
 
 #ifdef __cplusplus
