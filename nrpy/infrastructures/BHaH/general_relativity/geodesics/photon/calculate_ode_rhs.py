@@ -1,16 +1,16 @@
 """
-Register C function for computing massive particle geodesic ODE right-hand sides.
+Register C function for computing photon geodesic ODE right-hand sides.
 
-This module registers the 'calculate_ode_rhs_massive' C function, which evaluates
-the right-hand sides (RHS) of the coupled system of 8 first-order ODEs governing
-massive particle geodesics.
+This module registers the 'calculate_ode_rhs' C function, which evaluates
+the right-hand sides (RHS) of the coupled system of 9 first-order ODEs governing
+photon geodesics.
 
-It generates a C-code preamble to unpack the state vector f[8] into local
-coordinate (x^mu) and 4-velocity (u^mu) variables before computing the derivatives.
+It generates a C-code preamble to unpack the state vector f[9] into local
+coordinate (x^mu) and 4-momentum (p^mu) variables before computing the derivatives.
 
 The system is derived from:
-    d(u^mu)/d(tau) = -Gamma^mu_{alpha beta} u^alpha u^beta
-    d(x^mu)/d(tau) = u^mu
+    d(p^mu)/d(lambda) = -Gamma^mu_{alpha beta} p^alpha p^beta
+    d(x^mu)/d(lambda) = p^mu
 
 Author: Dalton J. Moone
 """
@@ -23,33 +23,35 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
 
-def calculate_ode_rhs_massive(
+def calculate_ode_rhs(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
     """
-    Generate the C engine for the massive particle geodesic ODE right-hand sides.
+    Generate the C engine for the photon geodesic ODE right-hand sides.
 
-    :param geodesic_rhs_expressions: List of 8 symbolic expressions for the RHS.
+    :param geodesic_rhs_expressions: List of 9 symbolic expressions for the RHS.
     :param coordinate_symbols: List of 4 symbolic coordinates (e.g., [t, x, y, z]) mapping to f[0]..f[3].
     """
     # 1. Define metadata
     includes = ["BHaH_defines.h"]
-    desc = """@brief Computes the 8 derivatives required for the geodesic ODE system.
+    desc = """@brief Computes the 9 derivatives required for the geodesic ODE system.
         
-        Calculates dx^mu/dtau and du^mu/dtau using the provided state vector and 
+        Calculates dx^mu/dlambda and dp^mu/dlambda using the provided state vector and 
         pre-computed Christoffel symbols.
         
         Input:
-            f[8]: State vector [t, x, y, z, u^t, u^x, u^y, u^z].
+            f[9]: State vector [t, x, y, z, p^t, p^x, p^y, p^z, L].
+            metric: Struct containing analytic metric symbols
             conn: Struct containing analytic Christoffel symbols.
         Output:
-            rhs_out[8]: The computed derivatives [dt, dx, dy, dz, du^t, du^x, du^y, du^z]."""
-    name = "calculate_ode_rhs_massive"
+            rhs_out[9]: The computed derivatives (e.g. [dt, dx, dy, dz, dp^t, dp^x, dp^y, dp^z, dL])."""
+    name = "calculate_ode_rhs"
 
     c_params_str = """
-                  const double f[8],
+                  const double f[9],
+                  const metric_struct *restrict metric,
                   const connection_struct *restrict conn,
-                  double rhs_out[8]"""
+                  double rhs_out[9]"""
 
     # 2. Analyze symbols used in the expressions
     used_symbol_names = set()
@@ -59,7 +61,7 @@ def calculate_ode_rhs_massive(
 
     preamble_lines = []
 
-    # 3. Unpack y[0]..y[3] (Coordinates) using the provided coordinate_symbols list
+    # 3. Unpack f[0]..f[3] (Coordinates) using the provided coordinate_symbols list
     # We iterate through the list to map the specific spacetime coordinates
     # to the state vector indices 0-3.
     preamble_lines.append("// Unpack position coordinates from f[0]..f[3]")
@@ -72,11 +74,11 @@ def calculate_ode_rhs_massive(
     if preamble_lines:
         preamble_lines.append("")
 
-    # 4. Unpack y[4]..y[7] (4-Velocity)
-    # We check for standard velocity names used in GeodesicEquations (massive)
-    preamble_lines.append("// Unpack 4-velocity components from f[4]..f[7]")
+    # 4. Unpack f[4]..f[7] (4-momentum)
+    # We check for standard momentum names used in GeodesicEquations (photon)
+    preamble_lines.append("// Unpack 4-momentum components from f[4]..f[7]")
     for i in range(4):
-        coord_name = f"uU{i}"
+        coord_name = f"pU{i}"
         if coord_name in used_symbol_names:
             preamble_lines.append(f"const double {coord_name} = f[{i+4}];")
 
@@ -86,7 +88,7 @@ def calculate_ode_rhs_massive(
     # Use include_braces=False to cleanly prepend our preamble
     kernel = ccg.c_codegen(
         geodesic_rhs_expressions,
-        [f"rhs_out[{i}]" for i in range(8)],
+        [f"rhs_out[{i}]" for i in range(9)],
         enable_cse=True,
         verbose=False,
         include_braces=False,
@@ -125,7 +127,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("TestCalculateODERHS")
 
     SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massive"
+    GEO_KEY = f"{SPACETIME}_photon"
 
     logger.info("Test: Generating ODE RHS C-code...")
 
@@ -134,10 +136,10 @@ if __name__ == "__main__":
         geodesic_data = Geodesic_Equations[GEO_KEY]
 
         # 2. Run the Generator (Passing both RHS expressions and Coordinate list)
-        calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, geodesic_data.xx)
+        calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
 
         # 3. Output
-        func_name = "calculate_ode_rhs_massive"
+        func_name = "calculate_ode_rhs"
         if func_name in cfc.CFunction_dict:
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:

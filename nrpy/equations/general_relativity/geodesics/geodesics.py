@@ -4,7 +4,7 @@ Construct symbolic expressions for geodesic equations in various spacetime backg
 This module can provide symbolic Christoffel symbols and geodesic equations of motion for numerical spacetime data.
 It also can take a pre-defined analytic spacetime metric and compute the geometric quantities necessary for geodesic
 integration, namely the Christoffel symbols and the geodesic equations of motion.
-It supports both massive and massless (photon) particles.
+It supports both massive and photon particles.
 
 Author: Dalton J. Moone
 """
@@ -39,7 +39,8 @@ class GeodesicEquations:
     Gamma4UDD: List[List[List[sp.Expr]]]
     geodesic_rhs: List[sp.Expr]
     u0_massive: Optional[sp.Expr]
-    p0_massless: Optional[sp.Expr]
+    p0_photon: Optional[sp.Expr]
+    norm_constraint_expr: sp.Expr
     Gamma4UDD_from_generic_metric: List[List[List[sp.Expr]]]
 
     def __init__(self, spacetime: str, particle_type: str = "massive") -> None:
@@ -52,7 +53,7 @@ class GeodesicEquations:
         specified particle type.
 
         :param spacetime: The spacetime to use (e.g., "KerrSchild_Cartesian").
-        :param particle_type: The type of particle, either "massive" or "massless".
+        :param particle_type: The type of particle, either "massive" or "photon".
         :raises ValueError: If the particle type is not supported.
         """
         self.spacetime = spacetime
@@ -60,7 +61,7 @@ class GeodesicEquations:
 
         # Initialize optional attributes to None to satisfy type safety
         self.u0_massive = None
-        self.p0_massless = None
+        self.p0_photon = None
 
         # Step 1: Acquire the metric and its associated coordinates.
         metric = Analytic_Spacetimes[spacetime]
@@ -76,14 +77,17 @@ class GeodesicEquations:
         if self.particle_type == "massive":
             self.geodesic_rhs = self.geodesic_eom_rhs_massive()
             self.u0_massive = self.hamiltonian_constraint_massive()
-        elif self.particle_type == "massless":
-            self.geodesic_rhs = self.geodesic_eom_rhs_massless()
-            self.p0_massless = self.hamiltonian_constraint_massless()
+        elif self.particle_type == "photon":
+            self.geodesic_rhs = self.geodesic_eom_rhs_photon()
+            self.p0_photon = self.hamiltonian_constraint_photon()
         else:
             raise ValueError(f"Particle type '{self.particle_type}' is not supported.")
 
         # Step 4: Reuse the precomputed symbolic recipe for Christoffel symbols from a generic metric.
         self.Gamma4UDD_from_generic_metric = _GAMMA4UDD_GENERIC_RECIPE
+
+        # Step 5: Generate generic normalization constraint for validation
+        self.norm_constraint_expr = self.normalization_constraint()
 
     def derivative_g4DD(self) -> List[List[List[sp.Expr]]]:
         r"""
@@ -240,13 +244,19 @@ class GeodesicEquations:
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[1])
 
-    def geodesic_eom_rhs_massless(self) -> List[sp.Expr]:
+    def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
         r"""
-        Generate the symbolic right-hand-side for the 9 massless geodesic ODEs.
+        Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
-        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
-        This function exploits the symmetry of the Christoffel symbols and the
-        metric to optimize the summations.
+        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu.
+        The ninth ODE provides a spatial coordinate–length diagnostic along the ray,
+
+            dL/d\lambda = \sqrt{|g_{ij} p^i p^j|},  i,j = 1,2,3,
+
+        using the spatial block g_{ij} of the 4-metric in the chosen coordinates.
+        In coordinate systems with g_{0i} \neq 0 (for example Kerr–Schild), g_{ij} is
+        not the induced 3-metric on a constant-time hypersurface, so L is a
+        coordinate-dependent diagnostic rather than a strictly invariant proper length.
 
         Reference:
         Wikipedia: Geodesics in general relativity
@@ -292,9 +302,9 @@ class GeodesicEquations:
 
         return pos_rhs + mom_rhs + path_len_rhs
 
-    def hamiltonian_constraint_massless(self) -> sp.Expr:
+    def hamiltonian_constraint_photon(self) -> sp.Expr:
         r"""
-        Symbolically derive p^0 from the Hamiltonian constraint for a massless particle.
+        Symbolically derive p^0 from the Hamiltonian constraint for a photon particle.
 
         This function solves the null geodesic condition: g_{\mu\nu} p^\mu p^\nu = 0.
         Assuming the usual (-,+,+,+) signature with g_{00} < 0, this returns the negative p^0 root, conventional for reverse ray tracing.
@@ -303,7 +313,7 @@ class GeodesicEquations:
         Wikipedia: Line element
         Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
-         Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.)
+         Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for photon particles.)
 
          .. warning::
            This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
@@ -348,6 +358,50 @@ class GeodesicEquations:
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[0])
+
+    def normalization_constraint(self) -> sp.Expr:
+        r"""
+        Generate the symbolic expression for the metric normalization constraint.
+
+        This computes the scalar invariant: C = g_{\mu\nu} v^\mu v^\nu.
+
+        The variable 'vU' represents the tangent vector to the geodesic curve:
+        - For massive particles, vU corresponds to 4-velocity (u^\mu).
+            Expected Result: -1 (in -+++ signature).
+        - For photon particles, vU corresponds to 4-momentum (p^\mu).
+            Expected Result: 0.
+
+        Reference:
+        Wikipedia: Line element
+        Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
+        (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
+            Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for photon particles.
+            Note: In the referenced equation for massive particles (timelike curves) $g = -1$.)
+
+        .. warning:: This function is meant for validation purposes
+
+        :return: A SymPy expression for the contraction g_{\mu\nu} v^\mu v^\nu.
+        """
+        # Generic tangent vector v^mu (vU0, vU1, vU2, vU3)
+        vU = ixp.declarerank1("vU", dimension=4)
+
+        # Generic metric g_mu_nu
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        constraint = sp.sympify(0)
+
+        # Loop over indices, exploiting g_{mu,nu} = g_{nu,mu} symmetry
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = g4DD[mu][nu] * vU[mu] * vU[nu]
+
+                # Double the off-diagonal terms (mu != nu)
+                if mu != nu:
+                    term *= 2
+
+                constraint += term
+
+        return constraint
 
     @staticmethod
     def symbolic_numerical_christoffel_recipe() -> List[List[List[sp.Expr]]]:
@@ -468,7 +522,7 @@ if __name__ == "__main__":
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.
-    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_massless"]:
+    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_photon"]:
         print(f"Processing configuration: {config_key}...")
         geodesic_eqs = Geodesic_Equations[config_key]
         results_dict = ve.process_dictionary_of_expressions(
