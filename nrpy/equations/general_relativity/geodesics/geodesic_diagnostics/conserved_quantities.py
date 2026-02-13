@@ -115,7 +115,7 @@ class GeodesicDiagnostics:
             # Generate generic symbolic metric and coordinates
             self.xx = [sp.Symbol(f"x{i}", real=True) for i in range(4)]
             # Suppress mypy complaint about Sequence vs List
-            self.g4DD = ixp.declarerank2("g4DD", symmetry="sym01", dimension=4)
+            self.g4DD = ixp.declarerank2("g4DD", sym="sym01", dimension=4)
         else:
             # Try to load from analytic module.
             try:

@@ -95,9 +95,6 @@ if __name__ == "__main__":
     sys.path.append(os.getcwd())
 
     try:
-        from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
-            Analytic_Spacetimes,
-        )
         from nrpy.equations.general_relativity.geodesics.geodesics import (
             Geodesic_Equations,
         )
@@ -118,10 +115,6 @@ if __name__ == "__main__":
         # 1. Acquire Symbolic Data
         logger.info(" -> Acquiring symbolic Hamiltonian constraint (u^0)...")
         geodesic_data = Geodesic_Equations[GEO_KEY]
-
-        # 2. Acquire Coordinate Symbols
-        logger.info(" -> Acquiring coordinate symbols from AnalyticSpacetimes...")
-        spacetime_data = Analytic_Spacetimes[SPACETIME]
 
         if geodesic_data.u0_massive is None:
             raise ValueError(f"u0_massive is None for key {GEO_KEY}")
@@ -147,7 +140,7 @@ if __name__ == "__main__":
         logger.info(" -> Written to %s", filename)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(" -> FAIL: u0_massive_analytic test failed with error: %s", e)
+        logger.error(" -> FAIL: u0_massive test failed with error: %s", e)
         import traceback
 
         traceback.print_exc()

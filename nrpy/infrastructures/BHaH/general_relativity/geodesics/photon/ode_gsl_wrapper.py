@@ -61,7 +61,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     connections_{spacetime_name}(commondata, y, &conn);
     
     // 4. Compute Geodesic RHS
-    // // Signature: (y, metric, conn, rhs_out)
+    // Signature: (y, metric, conn, rhs_out)
     calculate_ode_rhs(y, &metric, &conn, f);
     
     return GSL_SUCCESS;
