@@ -248,9 +248,15 @@ class GeodesicEquations:
         r"""
         Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
-        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
-        This function exploits the symmetry of the Christoffel symbols and the
-        metric to optimize the summations.
+        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu.
+        The ninth ODE provides a spatial coordinate–length diagnostic along the ray,
+
+            dL/d\lambda = \sqrt{|g_{ij} p^i p^j|},  i,j = 1,2,3,
+
+        using the spatial block g_{ij} of the 4-metric in the chosen coordinates.
+        In coordinate systems with g_{0i} \neq 0 (for example Kerr–Schild), g_{ij} is
+        not the induced 3-metric on a constant-time hypersurface, so L is a
+        coordinate-dependent diagnostic rather than a strictly invariant proper length.
 
         Reference:
         Wikipedia: Geodesics in general relativity

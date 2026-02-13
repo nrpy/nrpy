@@ -2,9 +2,10 @@
 Register C function for computing conserved quantities along geodesics.
 
 This module registers the 'conserved_quantities_{spacetime}_{particle_type}' C function.
-It uses a C-code preamble to unpack the input state vector f[8] into local variables
-matching the symbolic names (e.g., xx0, p0) used in the physics modules. Assumes mass
-of all massive particles is m=1.
+It uses a C-code preamble to unpack the input state vector f[N_state] into local variables
+matching the symbolic names (e.g., xx0, p0) used in the physics modules. For massive
+particles N_state = 8 (position + 4-velocity, assuming m=1); for photon particles
+N_state = 9 (position + 4-momentum + path-length diagnostic).
 
 Author: Dalton J. Moone
 """
@@ -47,7 +48,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
         array_size = 9
         vec_desc = "4-momentum p^mu"
     else:
-        raise ValueError(f"Unsupported PARTICLE: {particle_type}")
+        raise ValueError(f"Unsupported particle_type: {particle_type}")
 
     # Step 2: Acquire Symbolic Diagnostics
     config_key = f"{spacetime_name}_{particle_type}"

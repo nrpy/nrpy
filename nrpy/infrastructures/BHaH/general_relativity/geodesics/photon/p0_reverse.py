@@ -117,7 +117,7 @@ if __name__ == "__main__":
         geodesic_data = Geodesic_Equations[GEO_KEY]
 
         if geodesic_data.p0_photon is None:
-            raise ValueError(f"p0_reverse is None for key {GEO_KEY}")
+            raise ValueError(f"p0_photon is None for key {GEO_KEY}")
 
         # 3. Run the Generator
         logger.info(" -> Calling p0_reverse()...")
