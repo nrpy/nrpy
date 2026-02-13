@@ -86,7 +86,6 @@ def register_CFunction_diagnostic_gfs_set(
             dimension=4,
             group="DIAG",
         )
-
     diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
         sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
     )
@@ -144,11 +143,16 @@ def register_CFunction_diagnostic_gfs_set(
     //     } // END LOOP over all points & gridfunctions, poisoning diagnostic_gfs
 """
     parallelization = par.parval_from_str("parallelization")
-    ricci_call = (
-        "Ricci_eval_host(params, rfmstruct, y_n_gfs, diagnostic_gfs[grid]);"
-        if parallelization == "cuda"
-        else "Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);"
-    )
+    if parallelization == "cuda":
+        ricci_call = """if (strncmp(params->CoordSystemName, "GeneralRFM", 10) == 0)
+      Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
+    else
+      Ricci_eval_host(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"""
+    else:
+        ricci_call = """if (strncmp(params->CoordSystemName, "GeneralRFM", 10) == 0)
+      Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, auxevol_gfs);
+    else
+      Ricci_eval(params, rfmstruct, auxevol_gfs, y_n_gfs, diagnostic_gfs[grid]);"""
     body += f"""
     // Set Ricci and constraints gridfunctions
     {ricci_call}

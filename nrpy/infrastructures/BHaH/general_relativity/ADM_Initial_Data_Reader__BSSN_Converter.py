@@ -165,17 +165,34 @@ def Cfunction_ADM_SphorCart_to_Cart(
 
       // Set destination xx[3] based on desired xCart[3]
       REAL xx0,xx1,xx2;
-      """ + ccg.c_codegen(
-            rfm.Cart_to_xx,
-            ["xx0", "xx1", "xx2"],
-            include_braces=True,
-        ).replace(
-            "Cartx", "xCart[0]"
-        ).replace(
-            "Carty", "xCart[1]"
-        ).replace(
-            "Cartz", "xCart[2]"
-        )
+"""
+        if IDCoordSystem.startswith("GeneralRFM"):
+            body += rf"""
+      {{
+        const REAL Cart_in[3] = {{xCart[0], xCart[1], xCart[2]}};
+        REAL xx_out[3];
+        if (generalrfm_Cart_to_xx__{IDCoordSystem}(params, Cart_in, xx_out) != 0) {{
+          fprintf(stderr, "Error: generalrfm_Cart_to_xx__{IDCoordSystem} failed at Cart=(%.15e, %.15e, %.15e)\\n",
+                  (double)xCart[0], (double)xCart[1], (double)xCart[2]);
+          exit(1);
+        }}
+        xx0 = xx_out[0];
+        xx1 = xx_out[1];
+        xx2 = xx_out[2];
+      }}
+"""
+        else:
+            body += ccg.c_codegen(
+                rfm.Cart_to_xx,
+                ["xx0", "xx1", "xx2"],
+                include_braces=True,
+            ).replace(
+                "Cartx", "xCart[0]"
+            ).replace(
+                "Carty", "xCart[1]"
+            ).replace(
+                "Cartz", "xCart[2]"
+            )
 
     # Define the input variables:
     gammaSphorCartDD = ixp.declarerank2("gammaSphorCartDD", symmetry="sym01")
@@ -338,6 +355,7 @@ After the basis transform, all BSSN quantities are rescaled."""
     cfunc_type = "static void"
     name = "BSSN_Cart_to_rescaled_BSSN_rfm"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xxL[3],
+                                           const REAL *restrict auxevol_gfs, const int i0, const int i1, const int i2,
                                            const BSSN_Cart_basis_struct *restrict BSSN_Cart_basis,
                                            rescaled_BSSN_rfm_basis_struct *restrict rescaled_BSSN_rfm_basis"""
 
@@ -424,6 +442,7 @@ After the basis transform, all BSSN quantities are rescaled."""
         list_of_output_varnames,
         verbose=False,
         include_braces=False,
+        automatically_read_gf_data_from_memory=CoordSystem.startswith("GeneralRFM"),
     )
 
     return cfc.CFunction(
@@ -453,6 +472,7 @@ def Cfunction_initial_data_lambdaU_grid_interior(
     desc = f"Compute lambdaU in {CoordSystem} coordinates"
     name = "initial_data_lambdaU_grid_interior"
     parallelization = par.parval_from_str("parallelization")
+    is_general_rfm = CoordSystem.startswith("GeneralRFM")
     arg_dict_cuda = {
         "x0": "const REAL *restrict",
         "x1": "const REAL *restrict",
@@ -464,6 +484,15 @@ def Cfunction_initial_data_lambdaU_grid_interior(
         "xx[3]": "const REAL *restrict",
         "in_gfs": "REAL *restrict",
     }
+    if is_general_rfm:
+        arg_dict_cuda = {
+            "auxevol_gfs": "const REAL *restrict",
+            **arg_dict_cuda,
+        }
+        arg_dict_host = {
+            "auxevol_gfs": "const REAL *restrict",
+            **arg_dict_host,
+        }
     # Step 7: Compute $\bar{\Lambda}^i$ from finite-difference derivatives of rescaled metric quantities
 
     # We will need all BSSN gridfunctions to be defined, as well as
@@ -537,6 +566,8 @@ def Cfunction_initial_data_lambdaU_grid_interior(
     )
 
     launch_body = launch_body.replace("in_gfs", "gridfuncs->y_n_gfs")
+    if is_general_rfm:
+        launch_body = launch_body.replace("auxevol_gfs", "gridfuncs->auxevol_gfs")
     for i in range(3):
         launch_body = (
             launch_body.replace(f"x{i},", f"xx[{i}],")
@@ -773,6 +804,7 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
     BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params,
                                    xxL,
+                                   gridfuncs->auxevol_gfs, i0, i1, i2,
                                    &BSSN_Cart_basis,
                                    &rescaled_BSSN_rfm_basis);
 
