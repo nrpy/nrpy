@@ -5,8 +5,7 @@ This module registers the 'p0_reverse' C function. It enforces
 the 4-momentum normalization constraint for photons (p.p = 0) by solving
 the quadratic Hamiltonian constraint for the time component p^0.
 
-It generates a preamble to unpack the state vector f[9] into local coordinates
-and spatial momentum components (p^i) required for the calculation.
+It generates a preamble to unpack the state vector f[9] into spatial momentum components (p^i) required for the calculation.
 
 Author: Dalton J. Moone
 """
@@ -36,7 +35,7 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
 
         Solves the quadratic Hamiltonian constraint equation:
             g_munu p^mu p^nu = 0
-        for the positive root of p^0, given the spatial momentum components.
+        for the negative root of p^0, given the spatial momentum components.
 
         Input:
             metric: The metric tensor components at the current location.
@@ -125,7 +124,7 @@ if __name__ == "__main__":
         spacetime_data = Analytic_Spacetimes[SPACETIME]
 
         if geodesic_data.p0_photon is None:
-            raise ValueError(f"p0_massive is None for key {GEO_KEY}")
+            raise ValueError(f"p0_reverse is None for key {GEO_KEY}")
 
         # 3. Run the Generator
         logger.info(" -> Calling p0_reverse()...")

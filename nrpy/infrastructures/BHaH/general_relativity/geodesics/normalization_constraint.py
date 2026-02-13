@@ -7,7 +7,7 @@ It computes the scalar invariant C = g_munu v^mu v^nu, where v^mu is the
 
 Particle Support:
 - Massive: f[8], v^mu = u^mu (4-velocity). Expected C = -1.
-- Photon (Photon): f[9], v^mu = p^mu (4-momentum). Expected C = 0.
+- Photon: f[9], v^mu = p^mu (4-momentum). Expected C = 0.
 
 It generates a preamble to unpack the full 4-vector from the state vector f
 (specifically f[4]..f[7]) into the local symbolic names (vU0..vU3).

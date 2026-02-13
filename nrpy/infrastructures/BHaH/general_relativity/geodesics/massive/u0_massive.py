@@ -5,8 +5,7 @@ This module registers the 'u0_massive' C function. It enforces
 the 4-velocity normalization constraint for massive particles (u.u = -1) by solving
 the quadratic Hamiltonian constraint for the time component u^0.
 
-It generates a preamble to unpack the state vector f[8] into local coordinates
-and spatial velocity components (u^i) required for the calculation.
+It generates a preamble to unpack the state vector f[8] into spatial velocity components (u^i) required for the calculation.
 
 Author: Dalton J. Moone
 """
@@ -128,7 +127,7 @@ if __name__ == "__main__":
             raise ValueError(f"u0_massive is None for key {GEO_KEY}")
 
         # 3. Run the Generator
-        logger.info(" -> Calling u0_massive_analytic()...")
+        logger.info(" -> Calling u0_massive()...")
         u0_massive(geodesic_data.u0_massive)
 
         # 4. Validation

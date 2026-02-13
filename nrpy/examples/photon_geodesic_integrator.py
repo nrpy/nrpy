@@ -95,7 +95,7 @@ connections(geodesic_data.Gamma4UDD, SPACETIME)
 # 3. ODE Right-Hand Side
 calculate_ode_rhs(geodesic_data.geodesic_rhs, metric_data.xx)
 
-# 4. Hamiltonian Constraint Solver (for initial u^0)
+# 4. Hamiltonian Constraint Solver (for initial p^0)
 if geodesic_data.p0_photon is None:
     raise ValueError(f"p0_photon is None for {GEO_KEY}")
 p0_reverse(geodesic_data.p0_photon)
@@ -168,9 +168,9 @@ def main_c() -> None:
     // Signature: (commondata, y, metric_struct_out)
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
 
-    // C. Solve for p^0 using the precd .-calculated metric
+    // C. Solve for p^0 using the pre-calculated metric
     double p0_val = 0.0;
-    // Signature: (cmetric, y, u0_out)
+    // Signature: (metric, y, p0_val)
     p0_reverse(&g4DD_local, y, &p0_val);
     y[4] = p0_val;
     // ---------------------------------------------------------
