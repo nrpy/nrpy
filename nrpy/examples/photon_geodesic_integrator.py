@@ -154,7 +154,7 @@ def main_c() -> None:
     y[2] = 1.0;
     y[3] = 1.0;
 
-    // Initial Spatial Velocity
+    // Initial Spatial Momentum
     y[5] = -0.1; // p^x
     y[6] = 0.33;  // p^y
     y[7] = 0.0;   // p^z
