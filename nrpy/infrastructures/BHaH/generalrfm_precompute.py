@@ -166,11 +166,12 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
 }}
 """
 
-    name = f"generalrfm_precompute__{CoordSystem}"
+    name = "generalrfm_precompute"
     cfc.register_CFunction(
         includes=["BHaH_defines.h", "BHaH_function_prototypes.h"],
         desc=f"Precompute GeneralRFM quantities for {CoordSystem}.",
         cfunc_type="void",
+        CoordSystem_for_wrapper_func=CoordSystem,
         name=name,
         params="const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *restrict xx[3], REAL *restrict auxevol_gfs",
         include_CodeParameters_h=True,

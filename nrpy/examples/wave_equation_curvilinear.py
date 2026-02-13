@@ -86,7 +86,37 @@ Nxx_dict = {
     "SinhCylindrical": [64, 2, 64],
     "Cartesian": [64, 64, 64],
     "SinhCartesian": [64, 64, 64],
+    "GeneralRFM_fisheyeN1": [64, 64, 64],
+    "GeneralRFM_fisheyeN2": [64, 64, 64],
 }
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 4.0,
+            "fisheye_phys_w_trans1": 2.0,
+        }
+    )
+if num_fisheye_transitions == 2:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_a2": 3.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 3.5,
+            "fisheye_phys_w_trans1": 1.5,
+            "fisheye_phys_r_trans2": 7.5,
+            "fisheye_phys_w_trans2": 2.0,
+        }
+    )
 OMP_collapse = 1
 if (
     "Spherical" in CoordSystem
@@ -156,6 +186,16 @@ for CoordSystem in set_of_CoordSystems:
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         OMP_collapse=OMP_collapse,
     )
+    BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
+        CoordSystem=CoordSystem
+    )
+    if CoordSystem.startswith("GeneralRFM"):
+        BHaH.generalrfm_cart_to_xx.register_CFunction_generalrfm_Cart_to_xx(
+            CoordSystem=CoordSystem
+        )
+        BHaH.generalrfm_precompute.register_CFunction_generalrfm_precompute(
+            CoordSystem=CoordSystem
+        )
     BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 # Diagnostics C code registration
@@ -186,6 +226,10 @@ if __name__ == "__main__" and enable_parallel_codegen:
 #         parameters, set up boundary conditions, and
 #         create a Makefile for this project.
 #         Project is output to project/[project_name]/
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -196,7 +240,7 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
-rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
+rhs_string = """rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
@@ -218,6 +262,9 @@ BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 par.adjust_CodeParam_default("t_final", t_final)
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir,
@@ -242,6 +289,23 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 
+# Ensure fisheye params are converted before any computations that depend on fisheye ghat/rfm precompute data.
+compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
+post_params_struct_set_to_default = ""
+if num_fisheye_transitions is not None:
+    post_params_struct_set_to_default = (
+        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+            num_transitions=num_fisheye_transitions,
+            compute_griddata=compute_griddata,
+        )
+    )
+
+post_non_y_n_auxevol_mallocs = ""
+if CoordSystem.startswith("GeneralRFM"):
+    post_non_y_n_auxevol_mallocs = """for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
+  generalrfm_precompute(&commondata, &griddata[grid].params, griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
+}\n"""
+
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=WaveType,
     MoL_method=MoL_method,
@@ -249,7 +313,9 @@ BHaH.main_c.register_CFunction_main_c(
         f"write_checkpoint(&commondata, "
         f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
     ),
+    post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True

@@ -115,7 +115,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   params_struct *restrict params = &griddata[grid].params;
 """
     if CoordSystem.startswith("GeneralRFM"):
-        body += f"  generalrfm_precompute__{CoordSystem}(commondata, params, (const REAL *restrict *) {host_griddata}[grid].xx, {host_griddata}[grid].gridfuncs.auxevol_gfs);\n"
+        body += f"  generalrfm_precompute(commondata, params, (const REAL *restrict *) {host_griddata}[grid].xx, {host_griddata}[grid].gridfuncs.auxevol_gfs);\n"
     body += (
         f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
         f"(const REAL *restrict *) {host_griddata}[grid].xx, (const REAL *restrict *) griddata[grid].xx,"
