@@ -95,9 +95,6 @@ if __name__ == "__main__":
     sys.path.append(os.getcwd())
 
     try:
-        from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
-            Analytic_Spacetimes,
-        )
         from nrpy.equations.general_relativity.geodesics.geodesics import (
             Geodesic_Equations,
         )
@@ -118,10 +115,6 @@ if __name__ == "__main__":
         # 1. Acquire Symbolic Data
         logger.info(" -> Acquiring symbolic Hamiltonian constraint (p^0)...")
         geodesic_data = Geodesic_Equations[GEO_KEY]
-
-        # 2. Acquire Coordinate Symbols
-        logger.info(" -> Acquiring coordinate symbols from AnalyticSpacetimes...")
-        spacetime_data = Analytic_Spacetimes[SPACETIME]
 
         if geodesic_data.p0_photon is None:
             raise ValueError(f"p0_reverse is None for key {GEO_KEY}")
