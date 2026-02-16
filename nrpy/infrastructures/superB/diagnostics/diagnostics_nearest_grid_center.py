@@ -39,7 +39,6 @@ def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, 
     :return: Tuple (i0_center_expr, i1_center_expr, i2_center_expr) as strings.
     :raises ValueError: If CoordSystem is unsupported.
     """
-
     is_spherical_family = (
         ("Spherical" in CoordSystem)
         or ("Cylindrical" in CoordSystem)
@@ -79,7 +78,6 @@ def register_CFunction_diagnostics_nearest_grid_center(
 
     :param CoordSystem: Name of the coordinate system used to specialize index selection in the
                         generated C function and its wrapper.
-    :raises ValueError: If the coordinate system is not supported by this helper.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
