@@ -10,8 +10,8 @@ temporary storage; and advances the progress indicator. Hooks to free and later
 restore MoL scratch arrays are present but currently disabled in the emitted code.
 
 Preconditions / constraints (documentation only; not enforced here):
-- $diagnostics_output_every > 0$ (the scheduling rule divides by this value).
-- $NUMGRIDS <= MAXNUMGRIDS$ (the generated driver uses a fixed-size pointer array
+- diagnostics_output_every > 0 (the scheduling rule divides by this value).
+- NUMGRIDS <= MAXNUMGRIDS (the generated driver uses a fixed-size pointer array
   sized by MAXNUMGRIDS and loops over NUMGRIDS).
 
 Functions
@@ -27,7 +27,7 @@ _register_CFunction_diagnostics
     parallel-codegen registration phase.
 
 Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot** com
+        zachetie **at** gmail **dot* com
 """
 
 from inspect import currentframe as cfr
@@ -67,7 +67,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     and optional extensions), then frees temporary storage.
 
     Scheduling note:
-    The rule uses a tolerance window of $0.5 * dt$ around the nominal output times.
+    The rule uses a tolerance window of 0.5 * dt around the nominal output times.
     With floating-point time accumulation and/or variable dt, an output may occur up to
     that tolerance early/late relative to exact multiples of diagnostics_output_every.
 
@@ -80,13 +80,13 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
       with additional optional transfers guarded by feature macros (e.g., T4UU00GF).
 
     Preconditions / constraints (documentation only; not enforced here):
-    - $diagnostics_output_every > 0$ (the scheduling rule divides by this value).
-    - $NUMGRIDS <= MAXNUMGRIDS$ (the driver uses a fixed-size pointer array sized by
+    - diagnostics_output_every > 0 (the scheduling rule divides by this value).
+    - NUMGRIDS <= MAXNUMGRIDS (the driver uses a fixed-size pointer array sized by
       MAXNUMGRIDS and loops over NUMGRIDS).
 
     :param default_diagnostics_out_every: Default value for the commondata parameter
         "diagnostics_output_every", which controls the diagnostics output cadence.
-        Must satisfy $diagnostics_output_every > 0$.
+        Must satisfy diagnostics_output_every > 0.
     :param enable_nearest_diagnostics: If True, include a call to diagnostics_nearest(...)
         on output steps.
     :param enable_interp_diagnostics: If True, include a call to diagnostics_interp(...)
@@ -294,7 +294,7 @@ def register_all_diagnostics(
     :param set_of_CoordSystems: Set of coordinate-system names to generate helpers for.
     :param default_diagnostics_out_every: Default value for the commondata parameter
         "diagnostics_output_every" controlling output cadence. Must satisfy
-        $diagnostics_output_every > 0$.
+        diagnostics_output_every > 0.
     :param enable_nearest_diagnostics: If True, include sampling-based "nearest" diagnostics.
     :param enable_interp_diagnostics: If True, include interpolation-based diagnostics (driver call only).
     :param enable_volume_integration_diagnostics: If True, include volume-integration diagnostics.
