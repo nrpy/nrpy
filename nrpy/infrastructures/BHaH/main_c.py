@@ -244,40 +244,34 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++)
 
     # Step 5: Main simulation loop.
     diagnostics_call_args = f"&commondata, {f'{compute_griddata}, griddata_host' if is_cuda else compute_griddata}"
-    body_parts.append(
-        """
+    body_parts.append("""
 // Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
   // Step 5.a: Main loop, part 1 (pre_diagnostics): Functions to run prior to diagnostics. E.g., regridding.
-"""
-    )
+""")
     body_parts.append(
         pre_diagnostics
         or "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
     )
 
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
   // Step 5.b: Main loop, part 2: Output diagnostics
   diagnostics({diagnostics_call_args});
 
   // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
-"""
-    )
+""")
     body_parts.append(
         pre_MoL_step_forward_in_time
         or "// (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
     )
 
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
   // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
   //           applying {boundary_conditions_desc} boundary conditions.
   MoL_step_forward_in_time(&commondata, {compute_griddata});
 
   // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-"""
-    )
+""")
     body_parts.append(
         post_MoL_step_forward_in_time
         or "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
@@ -303,17 +297,13 @@ for (int i = 0; i < NUM_STREAMS; ++i) {{
 BHAH_DEVICE_SYNC();
 cudaDeviceReset();
 """
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
 }} // End main loop to progress forward in time.
 {device_sync}
 // Step 6: Free all allocated memory
-{{{free_memory_code}"""
-    )
-    body_parts.append(
-        r"""return 0;
-"""
-    )
+{{{free_memory_code}""")
+    body_parts.append(r"""return 0;
+""")
 
     # Construct the final body string and perform necessary replacements.
     body = "".join(body_parts)

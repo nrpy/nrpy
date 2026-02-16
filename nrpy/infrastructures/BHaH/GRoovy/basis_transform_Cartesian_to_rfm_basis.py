@@ -93,14 +93,11 @@ def register_CFunction_basis_transform_Cartesian_to_rfm_basis(
     const REAL xx2 = xx[2][i2];
     """
 
-    pre_body = (
-        read_rfm_xx_arrays
-        + r"""
+    pre_body = read_rfm_xx_arrays + r"""
 
     auxevol_gfs[IDX4(RHOBGF, i0, i1, i2)] = prims->rho;
     auxevol_gfs[IDX4(PGF, i0, i1, i2)] = prims->press;
     """
-    )
 
     if evolving_temperature:
         pre_body += r"""

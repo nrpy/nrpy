@@ -643,13 +643,11 @@ switch (type_gfs) {
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = aux_gf_parity;")
         switch_cases.append("    break;")
-    switch_cases.append(
-        """
+    switch_cases.append("""
   default:
     break;
 }
-"""
-    )
+""")
 
     switch_body = "\n".join(switch_cases)
 
@@ -683,13 +681,11 @@ switch (type_gfs) {
             f"    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data_{gf.lower()}(idx3_this_chare, type_gfs, NUM_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);"
         )
         switch_cases.append("    break;")
-    switch_cases.append(
-        """
+    switch_cases.append("""
   default:
     break;
 }
-"""
-    )
+""")
     switch_body = "\n".join(switch_cases)
     return switch_statement + switch_body
 

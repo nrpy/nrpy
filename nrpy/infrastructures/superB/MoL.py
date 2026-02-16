@@ -954,7 +954,7 @@ def register_CFunctions(
     )
     register_CFunction_initialize_yn_and_non_yn_gfs_to_nan(Butcher_dict, MoL_method)
 
-    (num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync) = (
+    num_evol_gfs_to_sync, num_auxevol_gfs_to_sync, num_aux_gfs_to_sync = (
         register_CFunction_MoL_sync_data_defines(enable_psi4)
     )
 

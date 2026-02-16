@@ -176,10 +176,8 @@ def supplemental_defines_dict_bhah_lib() -> Dict[str, str]:
 
     :return: Dictionary of Infrastructure : Struct.
     """
-    return {
-        "BHaH Lib": """
+    return {"BHaH Lib": """
 typedef struct BHaH_struct {
   commondata_struct *commondata;
   griddata_struct *griddata;
-} BHaH_struct;"""
-    }
+} BHaH_struct;"""}

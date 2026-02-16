@@ -273,8 +273,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
     enable_rfm_precompute=False,
-    supplemental_defines_dict={
-        "SEOBNR": """
+    supplemental_defines_dict={"SEOBNR": """
 #include<complex.h>
 #define COMPLEX double complex
 #define NUMVARS_SPIN 10
@@ -310,8 +309,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
 #define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
-"""
-    },
+"""},
 )
 register_CFunction_main_c(
     output_waveform_flag,

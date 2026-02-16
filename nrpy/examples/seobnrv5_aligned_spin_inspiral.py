@@ -283,8 +283,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
     enable_rfm_precompute=False,
-    supplemental_defines_dict={
-        "SEOBNR": """
+    supplemental_defines_dict={"SEOBNR": """
 #include<complex.h>
 #define COMPLEX double complex
 #define NUMVARS 8
@@ -304,8 +303,7 @@ typedef struct {
   gsl_spline *spline;
   gsl_interp_accel *acc;
 } spline_data;
-"""
-    },
+"""},
 )
 register_CFunction_main_c(
     output_waveform_flag,
