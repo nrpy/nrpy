@@ -11,7 +11,6 @@ from . import (
     main_chare,
     nrpyelliptic,
     numerical_grids,
-    simple_loop_diagnostic,
     superB,
     timestepping_chare,
 )

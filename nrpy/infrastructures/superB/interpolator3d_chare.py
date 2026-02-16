@@ -85,6 +85,7 @@ def output_interpolator3d_h(
     """
     Generate interpolator3d.h.
     :param project_dir: Directory where the project C code is output
+    :param enable_psi4: Enable psi4 interpolation
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -162,6 +163,7 @@ def output_interpolator3d_cpp(
     """
     Generate the interpolator3d.cpp.
     :param project_dir: Directory where the project C code is output
+    :param enable_psi4: Enable psi4 interpolation
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -507,6 +509,7 @@ def output_interpolator3d_ci(
     Generate interpolator3d.ci.
 
     :param project_dir: Directory where the project C code is output
+    :param enable_psi4: Enable psi4 interpolation
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -665,6 +668,7 @@ def output_interpolator3d_h_cpp_ci(
     """
     Generate interpolator3d.h, interpolator3d.cpp and interpolator3d.ci.
     :param project_dir: Directory where the project C code is output.
+    :param enable_psi4: Enable psi4 interpolation
     """
     output_griddata_object_h(
         project_dir=project_dir,
