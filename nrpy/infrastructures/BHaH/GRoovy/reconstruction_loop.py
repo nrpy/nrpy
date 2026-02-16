@@ -69,7 +69,15 @@ ghl_tabulated_enforce_bounds_rho_Ye_S(eos,
 
 
 def _scheme_settings(reconstruction_scheme: str) -> tuple[str, int, int]:
-    """Return (reconstruction_call, stencil_size, stencil_shift)."""
+    """
+    Return reconstruction call details for a named scheme.
+
+    :param reconstruction_scheme: Reconstruction scheme name (`"wenoz"` or `"mc"`).
+
+    :return: Tuple of (reconstruction_call, stencil_size, stencil_shift).
+
+    :raises ValueError: If `reconstruction_scheme` is not a supported scheme.
+    """
     if reconstruction_scheme == "wenoz":
         return "ghl_wenoz_reconstruction", 6, 3
     if reconstruction_scheme == "mc":
@@ -84,8 +92,20 @@ def _build_reconstruction_body(
     VL_GFs: Sequence[str],
     post_reconstruction: str = "",
 ) -> str:
-    """Generate a reconstruction loop body for a given scheme and set of gridfunctions."""
-    if not (len(V_GFs) == len(VR_GFs) == len(VL_GFs)):
+    """
+    Generate a reconstruction loop body for a given scheme and set of gridfunctions.
+
+    :param reconstruction_scheme: Reconstruction scheme name (`"wenoz"` or `"mc"`).
+    :param V_GFs: Volume-centered gridfunctions to reconstruct.
+    :param VR_GFs: Right-state interface gridfunctions.
+    :param VL_GFs: Left-state interface gridfunctions.
+    :param post_reconstruction: Optional C code block applied after reconstruction per point.
+
+    :return: Full C body string for the reconstruction loop.
+
+    :raises ValueError: If provided gridfunction sequences are empty or have mismatched lengths.
+    """
+    if len(V_GFs) != len(VR_GFs) or len(V_GFs) != len(VL_GFs):
         raise ValueError("V_GFs, VR_GFs, and VL_GFs must have identical lengths.")
     if not V_GFs:
         raise ValueError("At least one gridfunction must be provided.")
@@ -138,7 +158,14 @@ def _register_reconstruction_cfunc(
     desc: str,
     body: str,
 ) -> None:
-    """Register a reconstruction C function."""
+    """
+    Register a reconstruction C function.
+
+    :param CoordSystem: Coordinate system for wrapper generation.
+    :param name: C function name to register.
+    :param desc: Description string for function metadata.
+    :param body: C function body string.
+    """
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=_INCLUDES,
@@ -157,8 +184,23 @@ def _register_reconstruction_loops(
     evolving_temperature: bool,
     evolving_entropy: bool,
 ) -> pcg.NRPyEnv_type:
-    """Register primitive reconstruction loop and, optionally, entropy reconstruction loop."""
+    """
+    Register primitive reconstruction loop and, optionally, entropy reconstruction loop.
+
+    :param CoordSystem: Coordinate system for wrapper generation.
+    :param reconstruction_scheme: Reconstruction scheme name (`"wenoz"` or `"mc"`).
+    :param evolving_temperature: Whether primitives include temperature-based evolution fields.
+    :param evolving_entropy: Whether to also register `reconstruction_entropy_loop`.
+
+    :return: Updated NRPy environment.
+
+    :raises ValueError: If `reconstruction_scheme` is not a supported scheme.
+    """
     scheme_label = reconstruction_scheme.upper()
+    primitive_V: Sequence[str]
+    primitive_VR: Sequence[str]
+    primitive_VL: Sequence[str]
+    primitive_postprocess: str
 
     if reconstruction_scheme == "wenoz":
         if evolving_temperature:

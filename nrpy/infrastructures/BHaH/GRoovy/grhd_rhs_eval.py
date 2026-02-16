@@ -21,13 +21,13 @@ def register_CFunction_grhd_rhs_eval(
     """
     Register function for complete GRHD right hand side evaluation.
 
-    This function orchestrates the evaluation of $\partial_t U = -\partial_i F^i + S$.
+    This function orchestrates the evaluation of partial_t U = -partial_i F^i + S.
     It calculates source terms (S), then loops over spatial directions to:
     1. Interpolate metric terms to cell faces.
     2. Reconstruct primitive variables to cell faces (Left/Right states).
     3. Compute u^0 at cell faces.
-    4. Solve the Riemann problem (HLL) to get fluxes ($F^i$).
-    5. Compute flux divergences ($-\partial_i F^i$) and add to the RHS.
+    4. Solve the Riemann problem (HLL) to get fluxes (F^i).
+    5. Compute flux divergences (-partial_i F^i) and add to the RHS.
 
     :param CoordSystem: The coordinate system.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
