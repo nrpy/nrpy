@@ -20,7 +20,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Any, Dict, Sequence, Union, cast
+from typing import Any, Dict, Sequence, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -35,10 +35,15 @@ def _indent(code: str, n: int = 8) -> str:
     return "\n".join(pad + line if line.strip() else line for line in code.splitlines())
 
 
-def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> tuple[str, str, str]:
+def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, str]:
     """
-    Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D,
-    using i0/i1/i2 variable names so IDX3P(...) works unchanged.
+    Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D.
+
+    Uses i0/i1/i2 variable names so IDX3P(...) works unchanged.
+
+    :param cfg: Plane configuration dict with keys "fixed_dim", "fixed_val", and "loop_dims".
+    :param plane: Plane selector used to choose field suffixes ("xy" or "yz").
+    :return: Tuple of (tot_pts_expr, count_loops_code, fill_loops_code).
     """
     fixed_dim: str = cfg["fixed_dim"]
     fixed_val = cfg["fixed_val"]  # str or list[str]
