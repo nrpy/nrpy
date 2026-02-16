@@ -8,7 +8,7 @@ Author: Terrence Pierre Jacques
 import textwrap
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Sequence, Union, cast
+from typing import Sequence, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -68,7 +68,7 @@ ghl_tabulated_enforce_bounds_rho_Ye_S(eos,
 """
 
 
-def _scheme_settings(reconstruction_scheme: str) -> tuple[str, int, int]:
+def _scheme_settings(reconstruction_scheme: str) -> Tuple[str, int, int]:
     """
     Return reconstruction call details for a named scheme.
 
