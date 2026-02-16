@@ -20,7 +20,6 @@ Note: This is the superB version.
 
 import argparse
 import os
-
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
@@ -460,7 +459,6 @@ superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
 
 superB.superB.superB_pup.register_CFunction_superB_pup_routines(
     MoL_method=MoL_method,
-    enable_psi4=enable_psi4,
 )
 copy_files(
     package="nrpy.infrastructures.superB.superB",
