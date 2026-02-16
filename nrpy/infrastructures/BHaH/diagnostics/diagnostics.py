@@ -4,15 +4,27 @@ C function registration for the top-level diagnostics() driver.
 This module constructs and registers the C diagnostics() driver and the commondata
 parameter diagnostics_output_every. The generated C code determines whether the
 current step is an output step from time, dt, and diagnostics_output_every; allocates
-and initializes diagnostic_gfs; conditionally calls enabled diagnostics families
-(nearest, interpolation, and volume integration); releases temporary storage; and
-advances the progress indicator. Hooks to free and later restore MoL scratch arrays
-are present but currently disabled in the emitted code.
+and initializes diagnostic_gfs; conditionally calls enabled diagnostics routines
+(nearest, interpolation, volume integration, and optional extensions); releases
+temporary storage; and advances the progress indicator. Hooks to free and later
+restore MoL scratch arrays are present but currently disabled in the emitted code.
 
-Function
+Preconditions / constraints (documentation only; not enforced here):
+- diagnostics_output_every > 0 (the scheduling rule divides by this value).
+- NUMGRIDS <= MAXNUMGRIDS (the generated driver uses a fixed-size pointer array
+  sized by MAXNUMGRIDS and loops over NUMGRIDS).
+
+Functions
 ---------
-register_CFunction_diagnostics
-    Construct and register the "diagnostics()" C driver; also registers "diagnostics_output_every".
+register_all_diagnostics
+    Public entry point. Stages required helper headers (nearest + volume integration
+    only, in this module), registers the "diagnostics()" C driver, and registers
+    family-specific helpers for the families that require per-coordinate registration
+    here.
+_register_CFunction_diagnostics
+    Internal helper that generates and registers the "diagnostics()" C driver and
+    the CodeParameter "diagnostics_output_every". This helper participates in the
+    parallel-codegen registration phase.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -41,37 +53,56 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     """
     Construct and register a C function that drives all scheduled diagnostics.
 
-    This function generates and registers the C driver "diagnostics", which is called
-    once per timestep to run the enabled diagnostics families at a user-controlled
-    cadence. It also registers the commondata CodeParameter diagnostics_output_every.
-    At runtime, the generated C code determines whether the current time is within
-    half a timestep of the nearest multiple of diagnostics_output_every. On output
-    steps it allocates and populates diagnostic_gfs via diagnostic_gfs_set(...),
-    invokes the enabled diagnostics routines (diagnostics_nearest(...),
-    diagnostics_interp(...), and/or diagnostics_volume_integration(...)), then frees
-    temporary storage. CUDA builds additionally synchronize host copies of selected
-    device buffers prior to I/O. Hooks to free and later restore MoL scratch arrays
-    exist but are currently disabled in the emitted C code.
+    Two-phase behavior:
+    - During the parallel-codegen registration phase, this function records the call
+      (including argument values) and returns None.
+    - Outside the registration phase, this function generates and registers the C
+      driver "diagnostics" and returns the updated NRPy environment.
+
+    The generated driver is invoked once per timestep. It decides whether the current
+    time is within half a timestep of the nearest multiple of diagnostics_output_every,
+    and on output steps it allocates and populates diagnostic_gfs via
+    diagnostic_gfs_set(...), invokes the enabled diagnostics routines
+    (diagnostics_nearest(...), diagnostics_interp(...), diagnostics_volume_integration(...),
+    and optional extensions), then frees temporary storage.
+
+    Scheduling note:
+    The rule uses a tolerance window of 0.5 * dt around the nominal output times.
+    With floating-point time accumulation and/or variable dt, an output may occur up to
+    that tolerance early/late relative to exact multiples of diagnostics_output_every.
+
+    CUDA note (generation-time vs compile-time):
+    - If the code is generated with parallelization="cuda", the driver signature includes
+      griddata_device. Separately, device-to-host transfers in the body are compiled only
+      under __CUDACC__.
+    - On output steps in the CUDA path, the driver copies all NUM_EVOL_GFS evolution
+      gridfunctions from device to host prior to diagnostics that require host-side I/O,
+      with additional optional transfers guarded by feature macros (e.g., T4UU00GF).
+
+    Preconditions / constraints (documentation only; not enforced here):
+    - diagnostics_output_every > 0 (the scheduling rule divides by this value).
+    - NUMGRIDS <= MAXNUMGRIDS (the driver uses a fixed-size pointer array sized by
+      MAXNUMGRIDS and loops over NUMGRIDS).
 
     :param default_diagnostics_out_every: Default value for the commondata parameter
         "diagnostics_output_every", which controls the diagnostics output cadence.
+        Must satisfy diagnostics_output_every > 0.
     :param enable_nearest_diagnostics: If True, include a call to diagnostics_nearest(...)
         on output steps.
     :param enable_interp_diagnostics: If True, include a call to diagnostics_interp(...)
         on output steps.
     :param enable_volume_integration_diagnostics: If True, include a call to
         diagnostics_volume_integration(...) on output steps.
-    :param enable_free_auxevol: Reserved for future use. Intended to control whether MoL
-        scratch arrays are freed before diagnostics and restored afterward; currently
-        ignored by the generated code.
+    :param enable_free_auxevol: Currently ignored and has no effect on emitted C code.
+        The MoL scratch free/restore hooks remain commented out in the generated driver.
     :param enable_psi4_diagnostics: If True, include a call to
         psi4_spinweightm2_decomposition(...) on output steps.
-    :param enable_bhahaha: If True, include a call to bhahaha_find_horizon(...) on output steps.
+    :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
 
     Doctests:
-    TBD
+    None.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -90,22 +121,28 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * The function "diagnostics" is generated by NRPy and invoked once per timestep.
  * It checks whether the current time falls on a diagnostics output step. On output
  * steps it allocates per-grid temporary arrays (diagnostic_gfs), initializes them
- * via diagnostic_gfs_set(...), and runs the enabled diagnostics families
- * (for example diagnostics_nearest(...), diagnostics_interp(...), and
- * diagnostics_volume_integration(...)). Temporary storage is freed before
- * returning. Independently of output steps, a progress indicator is advanced
- * every call, and a trailing newline is printed when the run is about to finish.
+ * via diagnostic_gfs_set(...), and runs the enabled diagnostics routines
+ * (for example diagnostics_nearest(...), diagnostics_interp(...),
+ * diagnostics_volume_integration(...), and optional extensions). Temporary storage is
+ * freed before returning. Independently of output steps, a progress indicator is
+ * advanced every call, and a trailing newline is printed when the run is about to finish.
  *
- * Scheduling rule:
+ * Scheduling rule (time-based with tolerance window):
  *   fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time) < 0.5 * dt
  *
- * CUDA note: When compiled with CUDA, device-to-host synchronization of selected
- * buffers occurs prior to performing diagnostics that require host-side I/O, and
- * an additional griddata_device parameter is present in the signature.
+ * CUDA note (generation-time vs compile-time):
+ * - If this file is generated with parallelization="cuda", the signature includes
+ *   griddata_device. Separately, device-to-host transfers are compiled only under
+ *   __CUDACC__.
+ * - On output steps in the CUDA path, the driver copies all NUM_EVOL_GFS evolution
+ *   gridfunctions from device to host prior to diagnostics that require host-side I/O,
+ *   with additional optional transfers guarded by feature macros (e.g., T4UU00GF).
  *
  * @pre
  * - commondata and griddata are non-null and initialized.
- * - commondata->NUMGRIDS >= 1, grid dimensions are valid, and backing arrays exist.
+ * - commondata->NUMGRIDS >= 1 and commondata->NUMGRIDS <= MAXNUMGRIDS.
+ * - diagnostics_output_every > 0.
+ * - grid dimensions are valid, and backing arrays exist.
  * - Generated diagnostics interfaces and indices are consistent with the build.
  *
  * @post
@@ -116,16 +153,14 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * @param[in,out] commondata  Global simulation metadata and run-time parameters
  *                            (e.g., time, dt, diagnostics_output_every, t_final, NUMGRIDS).
  * @param[in,out] griddata_device  Device-side per-grid data used for device-to-host
- *                                 synchronization when compiled with CUDA; omitted in non-CUDA builds.
+ *                                 synchronization when generated with parallelization="cuda";
+ *                                 omitted otherwise.
  * @param[in,out] griddata    Host-side per-grid data (parameters, fields, and workspace).
  *
  * @warning
  * - Diagnostics that encounter allocation or I/O failures may abort the program.
  * - The set of diagnostics compiled in is fixed at code generation time; manual changes
  *   must remain consistent with generated headers and prototypes.
- *
- * If a user-editable block is provided by the build, it may be used to add custom
- * diagnostics or I/O behaviors; details are intentionally omitted here.
  *
  * @return void
 """
@@ -144,17 +179,18 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     )
     if parallelization == "cuda":
         params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
-    newline = "\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
-    rnewline = "\\n"  # Backslashes aren't allowed in Python 3.7 f-strings; this is our workaround.
+    newline = "\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
+    rnewline = "\\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-  // Explanation of the if() below:
+  // Explanation of the if() below (time-based scheduling with a 0.5*dt tolerance window):
   // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+  // Step 2: Multiplying by outevery yields the nominal output time, t_out.
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is within half a timestep of t_out.
+  // Note: This rule divides by outevery; outevery must be > 0.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
-    // Diagnostics require additional memory, so first free all scratch storage needed for MoL timestepping.
-    // FIXME: will address this later. Make code work first, then optimize later.
+    // Optional hook: free MoL scratch storage before diagnostics and restore afterward.
+    // Currently disabled in emitted code (calls are commented out below).
     // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
     //   MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
 
@@ -175,11 +211,11 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
       const params_struct *restrict params = &griddata_device[grid].params;
       size_t streamid = params->grid_idx % NUM_STREAMS;
       cpyHosttoDevice_params__constant(&griddata_device[grid].params, streamid);
-      // Copy solution to host
+      // Copy solution to host (all evolution gridfunctions).
       for(int gf=0;gf<NUM_EVOL_GFS;gf++)
         cpyDevicetoHost__gf(commondata, params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf,gf, streamid);
 #ifdef T4UU00GF
-      // Transfer the 10 T4UU gridfunctions from device to host.
+      // Transfer the 10 T4UU gridfunctions from device to host (optional; requires T4UU00GF).
       const int idx0_host = IDX4pt(DIAG_T4UU00GF, 0), idx0_device = IDX4pt(T4UU00GF, 0);
       cudaMemcpyAsync(&diagnostic_gfs[grid][idx0_host], &griddata_device[grid].gridfuncs.auxevol_gfs[idx0_device],
                       10 * Nxx_plus_2NGHOSTS_tot * sizeof(REAL), cudaMemcpyDeviceToHost, streams[streamid]);
@@ -189,7 +225,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 #endif // __CUDACC__
     }} // END LOOP over grids
 
-    // Set diagnostics_gfs -- see nrpy/infrastructures/BHaH/[project]/diagnostics/ for definition.
+    // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
 
     {"// Nearest-point diagnostics, at center, along y,z axes (1D) and xy and yz planes (2D)." if enable_nearest_diagnostics else ""}
@@ -205,8 +241,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     for(int grid=0; grid<commondata->NUMGRIDS; grid++)
       free(diagnostic_gfs[grid]);
 
-    // Re-allocate all scratch storage needed for resumption of MoL timestepping.
-    // FIXME: will address this later. Make code work first, then optimize later.
+    // Optional hook: restore MoL scratch storage after diagnostics (currently disabled).
     // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
     //   MoL_malloc_intermediate_stage_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
   }} // END if output step
@@ -239,26 +274,38 @@ def register_all_diagnostics(
     enable_bhahaha: bool = False,
 ) -> None:
     """
-    Register and stage all diagnostics-related C code and helper headers.
+    Register and stage diagnostics-related C code and helper headers.
 
-    This function copies required helper headers into the project's diagnostics
-    subdirectory based on which diagnostics families are enabled, registers the
-    top-level diagnostics() C driver with the requested default output cadence,
-    and registers any family-specific C helpers for each coordinate system.
+    What this function does in this module:
+    - Copies helper headers for the nearest and volume-integration diagnostics families
+      into the project's diagnostics/ subdirectory (when enabled).
+    - Registers the top-level diagnostics() C driver with the requested default output cadence.
+    - Registers per-coordinate helper C functions for:
+        - nearest diagnostics (several sampling helpers), and
+        - volume integration (volume-element helper).
+
+    What this function does NOT do here:
+    - It does not copy/register any interpolation-specific helper headers or per-coordinate
+      helper functions in this module.
+    - It does not stage/register psi4 or bhahaha helper code in this module; enabling those
+      flags only affects whether the top-level driver emits calls on output steps.
 
     :param project_dir: Target project directory for emitted diagnostics assets.
     :param set_of_CoordSystems: Set of coordinate-system names to generate helpers for.
     :param default_diagnostics_out_every: Default value for the commondata parameter
-        "diagnostics_output_every" controlling output cadence.
+        "diagnostics_output_every" controlling output cadence. Must satisfy
+        diagnostics_output_every > 0.
     :param enable_nearest_diagnostics: If True, include sampling-based "nearest" diagnostics.
-    :param enable_interp_diagnostics: If True, include interpolation-based diagnostics.
+    :param enable_interp_diagnostics: If True, include interpolation-based diagnostics (driver call only).
     :param enable_volume_integration_diagnostics: If True, include volume-integration diagnostics.
-    :param enable_free_auxevol: Reserved for future use; currently ignored by the generated code.
-    :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics.
-    :param enable_bhahaha: If True, include a call to bhahaha_find_horizon(...) on output steps.
+    :param enable_free_auxevol: Currently ignored and has no effect on emitted C code.
+        The MoL scratch free/restore hooks remain commented out in the generated driver.
+    :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics
+        (driver call only).
+    :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
 
     Doctests:
-    TBD
+    None.
     """
     filenames_list_to_copy = []
     if enable_nearest_diagnostics:

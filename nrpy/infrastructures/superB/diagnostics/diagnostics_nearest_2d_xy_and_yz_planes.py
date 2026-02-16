@@ -20,23 +20,30 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Any, Dict, Sequence, Union, cast
+from typing import Any, Dict, Sequence, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.infrastructures.BHaH.diagnostics.diagnostics_nearest_2d_xy_and_yz_planes import (
-    bhah_plane_configs,    
+    bhah_plane_configs,
     get_coord_family,
 )
+
+
 def _indent(code: str, n: int = 8) -> str:
     pad = " " * n
     return "\n".join(pad + line if line.strip() else line for line in code.splitlines())
 
 
-def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> tuple[str, str, str]:
+def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, str]:
     """
-    Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D,
-    using i0/i1/i2 variable names so IDX3P(...) works unchanged.
+    Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D.
+
+    Uses i0/i1/i2 variable names so IDX3P(...) works unchanged.
+
+    :param cfg: Plane configuration dict with keys "fixed_dim", "fixed_val", and "loop_dims".
+    :param plane: Plane selector used to choose field suffixes ("xy" or "yz").
+    :return: Tuple of (tot_pts_expr, count_loops_code, fill_loops_code).
     """
     fixed_dim: str = cfg["fixed_dim"]
     fixed_val = cfg["fixed_val"]  # str or list[str]
@@ -99,7 +106,9 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> tuple[str, str, s
 
     # wrap fixed-dim selection (single slice vs multiple slices)
     if isinstance(fixed_val, list):
-        slices_decl = f"const int {fixed_dim}_slices[{nslices}] = {{{', '.join(fixed_val)}}};"
+        slices_decl = (
+            f"const int {fixed_dim}_slices[{nslices}] = {{{', '.join(fixed_val)}}};"
+        )
         count_loops = (
             f"{slices_decl}\n"
             f"for (int slice = 0; slice < {nslices}; slice++) {{\n"
@@ -150,17 +159,15 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     # ~ plane_configs = bhah_plane_configs()
     # ~ xy_plane_code = generate_plane_loop_code(plane_configs["xy"][family], "xy")
     # ~ yz_plane_code = generate_plane_loop_code(plane_configs["yz"][family], "yz")
-    
+
     # ~ print(xy_plane_code)
-    
+
     plane_configs = bhah_plane_configs()
     xy_cfg = plane_configs["xy"][family]
     yz_cfg = plane_configs["yz"][family]
 
     xy_tot_expr, xy_count_loops, xy_fill_loops = _emit_setup_plane_code(xy_cfg, "xy")
     yz_tot_expr, yz_count_loops, yz_fill_loops = _emit_setup_plane_code(yz_cfg, "yz")
-
-
 
     includes = [
         "stdlib.h",

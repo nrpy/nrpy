@@ -26,9 +26,7 @@ import nrpy.params as par  # NRPy: Parameter interface
 from nrpy.c_codegen import c_codegen
 from nrpy.grid import BHaHGridFunction, glb_gridfcs_dict
 from nrpy.helpers.generic import superfast_uniq
-from nrpy.infrastructures import BHaH
-from nrpy.infrastructures import superB
-
+from nrpy.infrastructures import BHaH, superB
 
 # fmt: off
 _ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
