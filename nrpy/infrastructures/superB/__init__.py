@@ -11,7 +11,6 @@ from . import (
     main_chare,
     nrpyelliptic,
     numerical_grids,
-    output_0d_1d_2d_nearest_gridpoint_slices,
     simple_loop_diagnostic,
     superB,
     timestepping_chare,
