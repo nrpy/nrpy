@@ -20,6 +20,7 @@ Note: This is the superB version.
 
 import argparse
 import os
+
 #########################################################
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
