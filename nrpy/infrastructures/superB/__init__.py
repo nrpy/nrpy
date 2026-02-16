@@ -4,6 +4,7 @@ from . import (
     MoL,
     chare_communication_maps,
     diagnostics,
+    general_relativity,
     horizon_finder_chare,
     initial_data,
     interpolator3d_chare,
@@ -14,5 +15,4 @@ from . import (
     simple_loop_diagnostic,
     superB,
     timestepping_chare,
-    general_relativity,
 )

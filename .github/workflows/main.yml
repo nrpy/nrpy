@@ -103,7 +103,6 @@ jobs:
             ! -path './project/*' \
             ! -path './build/*' \
             ! -path '*/tests/*' \
-            ! -path '*superB*' \
             ! -path '*manga*' \
             ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
 

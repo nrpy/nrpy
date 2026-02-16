@@ -183,7 +183,6 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   diagnostics(commondata, griddata, griddata_chare, NULL, chare_index, 0, Ck::IO::Session{}, DIAGNOSTICS_SETUP_2D);
 """
 
-
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

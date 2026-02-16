@@ -20,11 +20,10 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast, Tuple
+from typing import Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
-
 
 
 def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, str]:
@@ -40,13 +39,17 @@ def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, 
     :return: Tuple (i0_center_expr, i1_center_expr, i2_center_expr) as strings.
     :raises ValueError: If CoordSystem is unsupported.
     """
-      
-    is_spherical_family = ("Spherical" in CoordSystem) or ("Cylindrical" in CoordSystem) or ("SymTP" in CoordSystem)
+
+    is_spherical_family = (
+        ("Spherical" in CoordSystem)
+        or ("Cylindrical" in CoordSystem)
+        or ("SymTP" in CoordSystem)
+    )
     is_cartesian = "Cartesian" in CoordSystem
-    
+
     # Choose expressions for the nearest-to-center grid indices based on CoordSystem.
     # Cartesian: (i0,i1,i2) = (mid,mid,mid)
-    # Spherical/Cylindrical/SymTP: (i0,i1,i2) = (radial_min, mid, mid)    
+    # Spherical/Cylindrical/SymTP: (i0,i1,i2) = (radial_min, mid, mid)
     if is_spherical_family:
         i0_center_expr = "NGHOSTS"
     elif is_cartesian:
@@ -57,7 +60,6 @@ def get_center_index_exprs_for_coordsystem(CoordSystem: str) -> Tuple[str, str, 
     i1_center_expr = "params->Nxx_plus_2NGHOSTS1/2"
     i2_center_expr = "params->Nxx_plus_2NGHOSTS2/2"
     return i0_center_expr, i1_center_expr, i2_center_expr
-
 
 
 def register_CFunction_diagnostics_nearest_grid_center(
@@ -86,8 +88,10 @@ def register_CFunction_diagnostics_nearest_grid_center(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-            
-    i0_center_expr, i1_center_expr, i2_center_expr = get_center_index_exprs_for_coordsystem(CoordSystem)    
+
+    i0_center_expr, i1_center_expr, i2_center_expr = (
+        get_center_index_exprs_for_coordsystem(CoordSystem)
+    )
 
     includes = [
         "BHaH_defines.h",
