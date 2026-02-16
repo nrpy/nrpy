@@ -57,12 +57,6 @@ jobs:
           echo "Running CI tests with SymPy version = $(isympy --version)"
           echo "Running CI tests with clang-format version = $(clang-format --version)"
 
-      - name: Check mypy and black versions when Python != 3.7.13 chosen (they are too broken in those Python versions).
-        if: matrix.python-version != '3.7.13'
-        run: |
-          mypy --version
-          black --version
-
       - name: Run static analysis on each file.
         run: |
           #!/bin/bash
@@ -92,6 +86,10 @@ jobs:
           # Get Python version
           python_version=$(python --version 2>&1)
           echo "Python version: $python_version"
+          python_minor=$(python -c 'import sys; print(sys.version_info.minor)')
+          echo "Python minor version: $python_minor"
+          run_black=false
+          if (( python_minor >= 10 )); then run_black=true; fi
 
           # Initialize array to store failed tests
           failed_tests=()
@@ -127,12 +125,14 @@ jobs:
               run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
             fi
 
-            # Turns out that black in Python 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
-            # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
-            if [[ "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.12"* ]]; then
+            # Run black only on Python >= 3.10.
+            if [[ "$run_black" == "true" ]]; then
               # Step: black
               run_test_step "black" "black --check \"$python_file\"" "black"
+            fi
 
+            # Skip isort & mypy for Python < 3.9
+            if [[ "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.12"* ]]; then
               # Step: isort
               run_test_step "isort" "isort --check-only \"$python_file\"" "isort"
 
