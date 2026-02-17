@@ -66,13 +66,18 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
 
-  // If the checkpoint doesn't exist then return 0.
-  if (access(filename, F_OK) != 0)
-    return 0;
-
+  // If the checkpoint doesn't exist then return 0; if it does exist and can't be read, then error out.
   FILE *cp_file = fopen(filename, "r");
+  if (cp_file == NULL) {
+    if (errno == ENOENT) return 0;  // checkpoint doesn't exist
+    fprintf(stderr,
+            "read_checkpoint: FATAL: could not open %s for reading: %s\n",
+            filename, strerror(errno));
+    exit(EXIT_FAILURE);
+  } // if (cp_file == NULL)
+
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
-  fprintf(stderr, "cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
+  fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 """
     if enable_bhahaha:
         body += r"""
@@ -102,8 +107,14 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    const int ntot_grid =
-        griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    const int ntot_grid = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+    if (count < 0 || count > ntot_grid) {
+      fprintf(stderr,
+              "read_checkpoint: FATAL: invalid count=%d for grid=%d (ntot_grid=%d) in %s\n",
+              count, grid, ntot_grid, filename);
+      exit(EXIT_FAILURE);
+    } // END IF count is invalid, error out.
     fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot_grid, Nxx_plus_2NGHOSTS2);
     FREAD(out_data_indices, sizeof(int), count, cp_file, filename, "out_data_indices");
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file, filename, "compact_out_data");
@@ -156,9 +167,9 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
 
 def register_CFunction_write_checkpoint(
-    default_checkpoint_every: float = 2.0,
-    enable_multipatch: bool = False,
-    enable_bhahaha: bool = False,
+        default_checkpoint_every: float = 2.0,
+        enable_multipatch: bool = False,
+        enable_bhahaha: bool = False,
 ) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
@@ -226,7 +237,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
   } // END IF wrote != nmemb
 } // END FUNCTION BHAH_safe_write_impl()
 
-#define BHAH_SAFE_WRITE(ptr, size, nmemb, fp, what)                                                                                                  \
+#define FWRITE(ptr, size, nmemb, fp, what)                                                                                                  \
   BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
 """
     body = r"""
@@ -245,16 +256,16 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
       exit(1);
     } // END IF cp_file == NULL
-    BHAH_SAFE_WRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
+    FWRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
     fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 """
     if enable_bhahaha:
         body += r"""
     for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
-      BHAH_SAFE_WRITE(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file, "bhahaha_params_and_data_struct");
-      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m1");
-      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m2");
-      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m3");
+      FWRITE(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file, "bhahaha_params_and_data_struct");
+      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m1");
+      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m2");
+      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m3");
     } // END LOOP over all apparent horizons
 """
     body += r"""
@@ -266,7 +277,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     BHAH_CPY_DEVICE_TO_HOST_PARAMS();
     BHAH_CPY_DEVICE_TO_HOST_ALL_GFS();
 #endif // __CUDACC__
-      BHAH_SAFE_WRITE(&griddata[grid].params, sizeof(params_struct), 1, cp_file, "params_struct");
+      FWRITE(&griddata[grid].params, sizeof(params_struct), 1, cp_file, "params_struct");
 
       // First we free up memory so we can malloc more.
       MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
@@ -283,7 +294,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
         if (maskval >= +0)
           count++;
       } // END LOOP over all gridpoints
-      BHAH_SAFE_WRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
+      FWRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
 
       int *restrict out_data_indices;
       BHAH_MALLOC(out_data_indices, sizeof(int) * count);
@@ -306,8 +317,8 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
         } // END IF maskval >= +0
       } // END LOOP over all gridpoints
 
-      BHAH_SAFE_WRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");
-      BHAH_SAFE_WRITE(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file, "compact_out_data");
+      FWRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");
+      FWRITE(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file, "compact_out_data");
       free(out_data_indices);
       free(compact_out_data);
 
@@ -331,9 +342,9 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
 
 def register_CFunctions(
-    default_checkpoint_every: float = 2.0,
-    enable_multipatch: bool = False,
-    enable_bhahaha: bool = False,
+        default_checkpoint_every: float = 2.0,
+        enable_multipatch: bool = False,
+        enable_bhahaha: bool = False,
 ) -> None:
     """
     Register CFunctions for checkpointing.
