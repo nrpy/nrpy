@@ -210,14 +210,19 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
 
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
+  if (outevery <= (REAL)0.0) return; // outevery <= 0 means do not checkpoint.
   // Explanation of the if() below:
   // Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.
   // Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.
   // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
-    FILE *cp_file = fopen(filename, "w+");
-    fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
-    fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
+    FILE *cp_file = fopen(filename, "wb");
+     if (cp_file == NULL) {
+       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
+       exit(1);
+     } // END IF cp_file == NULL
+     fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
+    fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 """
     if enable_bhahaha:
         body += r"""
