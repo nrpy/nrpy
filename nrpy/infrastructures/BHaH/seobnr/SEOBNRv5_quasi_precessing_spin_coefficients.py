@@ -173,6 +173,23 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "c_21",
+            "c_43",
+            "c_55",
+        ],
+        [
+            0,
+            0,
+            0,
+        ],
+        commondata=True,
+        add_to_parfile=False,
+    )
+
     # This is sufficient for initial conditions.
     # Including chi1 and chi2 for now to be consistent with the aligned spin case.
     # For the precessing spin case, we use spin vectors.

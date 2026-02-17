@@ -84,7 +84,7 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_special_coefficients_rholm_calculation"
-    params = "commondata_struct *restrict commondata, REAL *rhos, REAL *restrict dynamics, REAL *hNR"
+    params = "commondata_struct *restrict commondata,  REAL *restrict dynamics, REAL *rhos, REAL *hNR"
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
@@ -153,41 +153,144 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-const REAL c_21 = commondata->c_21;
-const REAL c_43 = commondata->c_43;
-const REAL c_55 = commondata->c_55;
 const REAL Omega = dynamics[OMEGA];
-REAL rho21 = rhos[RHO21];
-REAL rho43 = rhos[RHO43];
-REAL rho55 = rhos[RHO55];
-const REAL hnr21 = hNR[hNR21];
-const REAL hnr43 = hNR[hNR43];
-const REAL hnr55 = hNR[hNR55];
-double complex h21 = inspiral_modes[STRAIN21];
-double complex h43 = inspiral_modes[STRAIN43];
-double complex h55 = inspiral_modes[STRAIN55];
+REAL c_21 = c_21;
+REAL c_43 = c_43;
+REAL c_55 = c_55;
+REAL rhos[3];
+REAL hNR[3];
+REAL inspiral_modes[NUMMODES];
 
 size_t i;
 
 for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  h21[i] = commondata->waveform_fine[IDX_WF(i,STRAIN21)];
-  h43[i] = commondata->waveform_fine[IDX_WF(i,STRAIN43)];
-  h55[i] = commondata->waveform_fine[IDX_WF(i,STRAIN55)];
+  Omega_circ[i] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
+  Hreal[i] = commondata->dynamics_fine[IDX(i,HREAL)];
   R[i] = commondata->dynamics_fine[IDX(i,R)];
   phi[i] = commondata->dynamics_fine[IDX(i,PHI)];
   prstar[i] = commondata->dynamics_fine[IDX(i,PRSTAR)];
   pphi[i] = commondata->dynamics_fine[IDX(i,PPHI)];
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
-  K21[i] = h21[i] / rho21;
-  K43[i] = h43[i] / rho43;
-  K55[i] = h55[i] / rho55;
-  v[i] = cpow(Omega[i], 1, 3);
   
 }
 // (2,1) (4,3) modes
 
 // Find t_ISCO:
+
+gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  if (acc_r == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_r == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
+
+gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
+  if (acc_phi == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_phi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_phi == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_phi,times,phi,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_phi_zoom[i] = -1.0*gsl_spline_eval(spline_phi,t_zoom[i],acc_phi);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_phi_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
+
+gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
+  if (acc_prstar == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_prstar = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_prstar == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_prstar,times,prstar,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_prstar_zoom[i] = -1.0*gsl_spline_eval(spline_prstar,t_zoom[i],acc_prstar);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_prstar_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
+
+gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
+  if (acc_pphi == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_pphi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_pphi == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_pphi,times,pphi,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_pphi_zoom[i] = -1.0*gsl_spline_eval(spline_pphi,t_zoom[i],acc_pphi);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_pphi_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
+
+gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
+  if (acc_Omega == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_Omega = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_Omega == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_Omega,times,Omega,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_Omega_zoom[i] = -1.0*gsl_spline_eval(spline_Omega,t_zoom[i],acc_Omega);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_Omega_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
+
+gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
+  if (acc_Omega_circ == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_Omegcirc = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_Omega_circ == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_Omega_circ,times,Omega_circ,commondata->nsteps_fine);
+  for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_Omega_circ_zoom[i] = -1.0*gsl_spline_eval(spline_Omega_circ,t_zoom[i],acc_Omega_circ);
+  }
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_Omega_circ_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
@@ -222,18 +325,15 @@ else{
   }
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
-
-  gsl_interp_accel_free(acc_r);
-  gsl_spline_free(spline_r);
-  free(t_zoom);
-  free(minus_r_zoom);
 }
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
-size_t peak_idx; 
+REAL t_peak_55 = t_peak_22 + 10;
+size_t_22 peak_idx; 
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[commondata->nsteps_fine - 2];
+  t_peak_55 = t_peak_22;
   peak_idx = commondata->nsteps_fine - 2;
 }
 else{
@@ -241,31 +341,34 @@ else{
 }  
 commondata->t_attach = t_peak_22;
 
-for (i = 0; i< commondata->nsteps_fine; i++){
-    Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-    h21[i] = commondata->waveform_fine[IDX_WF(i,STRAIN21)];
-    h43[i] = commondata->waveform_fine[IDX_WF(i,STRAIN43)];
-    rho21[i] = commondata->dynamics_fine[IDX(i, RHO21)];
-    rho43[i] = commondata->dynamics_fine[IDX(i, RHO43)];
-    K21[i] = h21[i] / rho21[i];
-    K43[i] = h43[i] / rho43[i];
-    v[i] = cpow(Omega[i], 1, 3);
-    c_21 = (hNR21/K[i] - rho21[i])/v[i];
-    c_43 = (hNR43/K[i] - rho43[i])/v[i];
-} 
+REAL dynamics_22[NUMVARS];
+REAL dynamics_55[NUMVARS];
 
-// (5,5) mode
+for(i = 0; i < size_t_22; i++){
+    dynamics_22[R] = 
 
-REAL t_peak_55 = t_peak_22 + 10;
 
-for (i = 0; i< commondata->nsteps_fine; i++){
-    Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-    h55[i] = commondata->waveform_fine[IDX_WF(i,STRAIN55)];
-    rho55[i] = commondata->dynamics_fine[IDX(i, RHO55)];
-    K55[i] = h55[i] / rho55[i];
-    v[i] = cpow(Omega[i], 1, 3);
-    c_55 = (hNR55/K[i] - rho55)/v[i];
-}
+SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics, rhos, hNR);
+rho21 = rhos[RHO21 - 1]
+rho43 = rhos[RHO43 - 1]
+rho55 = rhos[RHO55 - 1]
+hNR21 = hNR[hNR21 - 1]
+hNR43 = hNR[hNR43 - 1]
+hNR55 = hNR[hNR55 - 1]
+
+SEOBNRv5_aligned_spin_waveform(commondata, dynamics, inspiral_modes);
+h21 = inspiral_modes[STRAIN21 - 1];
+h43 = inspiral_modes[STRAIN43 - 1];
+h55 = inspiral_modes[STRAIN55 - 1];
+
+v22 = cpow(dynamics_22[Omega], 1, 3);
+K21 = h21 / rho21;
+K43 = h43 / rho43;
+v55 = cpow(dynamics_55[Omega], 1, 3);
+K55 = h55/rho55;
+c21 = (hNR21/K21)/v22;
+c43 = (hNR43/K43)/v22;
+c55 = (hNR55/K55)/v55;
 
 //save to commondata
 

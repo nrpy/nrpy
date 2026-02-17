@@ -5,4 +5,5 @@ from . import (
     SEOBNRv5_aligned_spin_waveform_from_dynamics,
     SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode,
     SEOBNRv5_aligned_spin_waveform_higher_mode,
+    SEOBNRv5_aligned_spin_special_amplitude_coefficents,
 )
