@@ -204,6 +204,30 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
   cpyDevicetoHost__gf(commondata, &griddata[grid].params, griddata[grid].gridfuncs.y_n_gfs, griddata_device[grid].gridfuncs.y_n_gfs, gf, gf, stream_id); \
 }
 #endif // __CUDACC__
+
+static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nmemb, FILE *fp, const char *what, const char *file, int line,
+                                        const char *func) {
+  clearerr(fp);
+  errno = 0;
+
+  const size_t wrote = fwrite(ptr, size, nmemb, fp);
+  if (wrote != nmemb) {
+    const int err = errno;
+    fprintf(stderr, "%s:%d: %s: fwrite failed writing %s (wanted %zu, wrote %zu)\n", file, line, func, what, nmemb, wrote);
+
+    if (err != 0) {
+      fprintf(stderr, "%s:%d: %s: errno=%d (%s)\n", file, line, func, err, strerror(err));
+    } else if (ferror(fp)) {
+      fprintf(stderr, "%s:%d: %s: stream error set but errno not set\n", file, line, func);
+    } // END IF/ELSE no error
+
+    // Fatal: checkpoint output must not silently continue on partial write.
+    exit(1);
+  } // END IF wrote != nmemb
+} // END FUNCTION BHAH_safe_write_impl()
+
+#define BHAH_SAFE_WRITE(ptr, size, nmemb, fp, what)                                                                                                  \
+  BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
 """
     body = r"""
   char filename[256];
@@ -217,20 +241,20 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
   // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     FILE *cp_file = fopen(filename, "wb");
-     if (cp_file == NULL) {
-       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
-       exit(1);
-     } // END IF cp_file == NULL
-     fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
+    if (cp_file == NULL) {
+      perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
+      exit(1);
+    } // END IF cp_file == NULL
+    BHAH_SAFE_WRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
     fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 """
     if enable_bhahaha:
         body += r"""
     for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
-      fwrite(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file);
-      fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file);
-      fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file);
-      fwrite(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file);
+      BHAH_SAFE_WRITE(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file, "bhahaha_params_and_data_struct");
+      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m1");
+      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m2");
+      BHAH_SAFE_WRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m3");
     } // END LOOP over all apparent horizons
 """
     body += r"""
@@ -242,7 +266,7 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
     BHAH_CPY_DEVICE_TO_HOST_PARAMS();
     BHAH_CPY_DEVICE_TO_HOST_ALL_GFS();
 #endif // __CUDACC__
-      fwrite(&griddata[grid].params, sizeof(params_struct), 1, cp_file);
+      BHAH_SAFE_WRITE(&griddata[grid].params, sizeof(params_struct), 1, cp_file, "params_struct");
 
       // First we free up memory so we can malloc more.
       MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
@@ -259,7 +283,7 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
         if (maskval >= +0)
           count++;
       } // END LOOP over all gridpoints
-      fwrite(&count, sizeof(int), 1, cp_file);
+      BHAH_SAFE_WRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
 
       int *restrict out_data_indices;
       BHAH_MALLOC(out_data_indices, sizeof(int) * count);
@@ -282,8 +306,8 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
         } // END IF maskval >= +0
       } // END LOOP over all gridpoints
 
-      fwrite(out_data_indices, sizeof(int), count, cp_file);
-      fwrite(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file);
+      BHAH_SAFE_WRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");
+      BHAH_SAFE_WRITE(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file, "compact_out_data");
       free(out_data_indices);
       free(compact_out_data);
 
