@@ -155,12 +155,14 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
 def register_CFunction_write_checkpoint(
     default_checkpoint_every: float = 2.0,
+    enable_multipatch: bool = False,
     enable_bhahaha: bool = False,
 ) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
 
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :param enable_multipatch: Whether to enable multipatch support.
     :param enable_bhahaha: Whether to enable BHaHAHA.
 
     Doctest:
@@ -239,9 +241,14 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
       MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
 
       int count = 0;
-      const int maskval = 1; // to be replaced with griddata[grid].mask[i].
 #pragma omp parallel for reduction(+ : count)
       for (int i = 0; i < ntot_grid; i++) {
+"""
+    if enable_multipatch:
+        body += "const int maskval = griddata[grid].mask[i];\n"
+    else:
+        body += "const int maskval = 1;\n"
+    body += r"""
         if (maskval >= +0)
           count++;
       } // END LOOP over all gridpoints
@@ -252,6 +259,12 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
       int which_el = 0;
 
       for (int i = 0; i < ntot_grid; i++) {
+"""
+    if enable_multipatch:
+        body += "const int maskval = griddata[grid].mask[i];\n"
+    else:
+        body += "const int maskval = 1;\n"
+    body += r"""
         if (maskval >= +0) {
           out_data_indices[which_el] = i;
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
@@ -286,17 +299,20 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
 
 def register_CFunctions(
     default_checkpoint_every: float = 2.0,
+    enable_multipatch: bool = False,
     enable_bhahaha: bool = False,
 ) -> None:
     """
     Register CFunctions for checkpointing.
 
     :param default_checkpoint_every: The default checkpoint interval in physical time units.
+    :param enable_multipatch: Whether to enable multipatch support.
     :param enable_bhahaha: Whether to enable BHaHAHA.
     """
     register_CFunction_read_checkpoint(enable_bhahaha=enable_bhahaha)
     register_CFunction_write_checkpoint(
         default_checkpoint_every=default_checkpoint_every,
+        enable_multipatch=enable_multipatch,
         enable_bhahaha=enable_bhahaha,
     )
 
