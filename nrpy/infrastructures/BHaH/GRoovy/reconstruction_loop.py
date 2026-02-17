@@ -2,7 +2,7 @@
 C function registrations for staging GRHD primitive variable reconstruction routines.
 
 Author: Terrence Pierre Jacques
-        terrencepierrej **at** gmail **dot* com
+        terrencepierrej **at** gmail **dot** com
 """
 
 import textwrap
@@ -278,6 +278,7 @@ def _register_reconstruction_loops(
                 "RESCALEDVLU2GF",
                 "YE_LGF",
             )
+            primitive_postprocess = _TEMPERATURE_POSTPROCESS
         else:
             primitive_V = (
                 "RHOBGF",

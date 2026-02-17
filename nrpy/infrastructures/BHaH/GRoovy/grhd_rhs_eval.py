@@ -2,7 +2,7 @@
 C function responsible for handling all calculations responsible for right hand sides of GRHD equations.
 
 Author: Terrence Pierre Jacques
-        terrencepierrej **at** gmail **dot* com
+        terrencepierrej **at** gmail **dot** com
 """
 
 from inspect import currentframe as cfr
@@ -68,7 +68,7 @@ REAL *restrict rhs_gfs"""
   void (*calculate_HLL_fluxes)(const commondata_struct *, const params_struct *,
   const ghl_eos_parameters *restrict, REAL *);
 
-  calculate_all_source_terms(commondata, params, xx, &commondata->eos, auxevol_gfs, evol_gfs, rhs_gfs);
+  calculate_all_source_terms(commondata, params, xx, eos, auxevol_gfs, evol_gfs, rhs_gfs);
 
   //Loop over flux directions (x, y, z)
   for(int flux_dir=0; flux_dir<3; flux_dir++) {
@@ -126,7 +126,7 @@ REAL *restrict rhs_gfs"""
       const int index = IDX3(i0, i1, i2);
 
       // Compute u^0 for the Right state
-      compute_up_index_velocity_time_component_pointwise(commondata, params, &commondata->ghl_params,
+      compute_up_index_velocity_time_component_pointwise(commondata, params, ghl_params,
       auxevol_gfs[IDX4pt(ALPHA_FACEGF, index)], auxevol_gfs[IDX4pt(VET_FACEU0GF, index)],
       auxevol_gfs[IDX4pt(VET_FACEU1GF, index)], auxevol_gfs[IDX4pt(VET_FACEU2GF, index)],
       auxevol_gfs[IDX4pt(H_FACEDD00GF, index)], auxevol_gfs[IDX4pt(H_FACEDD01GF, index)],
@@ -137,7 +137,7 @@ REAL *restrict rhs_gfs"""
       &auxevol_gfs[IDX4pt(RESCALEDVRU2GF, index)], &auxevol_gfs[IDX4pt(U4RUTGF, index)]);
 
       // Compute u^0 for the Left state
-      compute_up_index_velocity_time_component_pointwise(commondata, params, &commondata->ghl_params,
+      compute_up_index_velocity_time_component_pointwise(commondata, params, ghl_params,
       auxevol_gfs[IDX4pt(ALPHA_FACEGF, index)], auxevol_gfs[IDX4pt(VET_FACEU0GF, index)],
       auxevol_gfs[IDX4pt(VET_FACEU1GF, index)], auxevol_gfs[IDX4pt(VET_FACEU2GF, index)],
       auxevol_gfs[IDX4pt(H_FACEDD00GF, index)], auxevol_gfs[IDX4pt(H_FACEDD01GF, index)],
@@ -149,11 +149,11 @@ REAL *restrict rhs_gfs"""
     }
 
     //Calculate HLL Fluxes at interfaces
-    calculate_HLL_fluxes(commondata, params, &commondata->eos, auxevol_gfs);
+    calculate_HLL_fluxes(commondata, params, eos, auxevol_gfs);
 
     //Calculate Flux Divergences and update RHS
     //          RHS -= \partial_i F^i
-    calculate_flux_divergences(flux_dir, commondata, params, xx, &commondata->eos, auxevol_gfs, evol_gfs, rhs_gfs);
+    calculate_flux_divergences(flux_dir, commondata, params, xx, eos, auxevol_gfs, evol_gfs, rhs_gfs);
   }
 """
     if enable_rfm_precompute:
