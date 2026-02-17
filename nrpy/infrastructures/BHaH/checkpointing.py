@@ -94,8 +94,10 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     int count;
     FREAD(&count, sizeof(int), 1, cp_file, filename, "count");
 
-    int *out_data_indices = (int *)malloc(sizeof(int) * count);
-    REAL *compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
+    int *restrict out_data_indices;
+    BHAH_MALLOC(out_data_indices, sizeof(int) * count);
+    REAL *restrict compact_out_data;
+    BHAH_MALLOC(compact_out_data, sizeof(REAL) * NUM_EVOL_GFS * count);
 
     const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
@@ -254,9 +256,9 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
       } // END LOOP over all gridpoints
       fwrite(&count, sizeof(int), 1, cp_file);
 
-      int *out_data_indices;
+      int *restrict out_data_indices;
       BHAH_MALLOC(out_data_indices, sizeof(int) * count);
-      REAL *compact_out_data;
+      REAL *restrict compact_out_data;
       BHAH_MALLOC(compact_out_data, sizeof(REAL) * NUM_EVOL_GFS * count);
       int which_el = 0;
 
