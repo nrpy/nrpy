@@ -167,9 +167,9 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
 
 def register_CFunction_write_checkpoint(
-        default_checkpoint_every: float = 2.0,
-        enable_multipatch: bool = False,
-        enable_bhahaha: bool = False,
+    default_checkpoint_every: float = 2.0,
+    enable_multipatch: bool = False,
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
@@ -342,9 +342,9 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
 
 def register_CFunctions(
-        default_checkpoint_every: float = 2.0,
-        enable_multipatch: bool = False,
-        enable_bhahaha: bool = False,
+    default_checkpoint_every: float = 2.0,
+    enable_multipatch: bool = False,
+    enable_bhahaha: bool = False,
 ) -> None:
     """
     Register CFunctions for checkpointing.
