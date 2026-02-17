@@ -183,10 +183,10 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     rnewline = "\\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-  // Explanation of the if() below (time-based scheduling with a 0.5*dt tolerance window):
-  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the nominal output time, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is within half a timestep of t_out.
+  // Explanation of the if() below:                                                                                                                                                                                                           
+  // Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.                                                                                                                                           
+  // Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.                                                                                                                                                     
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.                                                                                                                                        
   // Note: This rule divides by outevery; outevery must be > 0.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
     // Optional hook: free MoL scratch storage before diagnostics and restore afterward.
