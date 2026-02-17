@@ -156,9 +156,9 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
 
 def register_CFunction_write_checkpoint(
-    default_checkpoint_every: float = 2.0,
-    enable_multipatch: bool = False,
-    enable_bhahaha: bool = False,
+        default_checkpoint_every: float = 2.0,
+        enable_multipatch: bool = False,
+        enable_bhahaha: bool = False,
 ) -> None:
     """
     Register write_checkpoint CFunction for writing checkpoints.
@@ -211,9 +211,9 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
 
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
   // Explanation of the if() below:
-  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+  // Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.
+  // Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     FILE *cp_file = fopen(filename, "w+");
     fwrite(commondata, sizeof(commondata_struct), 1, cp_file);
@@ -302,9 +302,9 @@ for (int gf = 0; gf < NUM_EVOL_GFS; ++gf) { \
 
 
 def register_CFunctions(
-    default_checkpoint_every: float = 2.0,
-    enable_multipatch: bool = False,
-    enable_bhahaha: bool = False,
+        default_checkpoint_every: float = 2.0,
+        enable_multipatch: bool = False,
+        enable_bhahaha: bool = False,
 ) -> None:
     """
     Register CFunctions for checkpointing.

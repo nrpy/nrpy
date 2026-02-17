@@ -57,6 +57,8 @@ for i in range(3):
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
+
+
 # fmt: on
 
 
@@ -137,11 +139,11 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
 
 
 def register_CFunction_exact_solution_single_Cartesian_point(
-    in_WaveType: str = "SphericalGaussian",
-    in_default_sigma: float = 3.0,
-    default_k0: float = 1.0,
-    default_k1: float = 1.0,
-    default_k2: float = 1.0,
+        in_WaveType: str = "SphericalGaussian",
+        in_default_sigma: float = 3.0,
+        default_k0: float = 1.0,
+        default_k1: float = 1.0,
+        default_k2: float = 1.0,
 ) -> None:
     """
     Register a C function for the exact solution at a single point.
@@ -209,11 +211,11 @@ def register_CFunction_initial_data() -> None:
     """
     body += BHaH.simple_loop.simple_loop(
         loop_body="// exact_solution_single_Cartesian_point() takes Cartesian coordinates as input.\n"
-        "// To avoid confusion in other reference metrics, we make this explicit here.\n"
-        "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
-        "exact_solution_single_Cartesian_point(commondata, params, xCart0,xCart1,xCart2,"
-        f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
-        f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
+                  "// To avoid confusion in other reference metrics, we make this explicit here.\n"
+                  "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
+                  "exact_solution_single_Cartesian_point(commondata, params, xCart0,xCart1,xCart2,"
+                  f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
+                  f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
         read_xxs=True,
         loop_region="all points",
     )
@@ -247,10 +249,10 @@ def register_CFunction_diagnostics() -> None:
 
     body = r"""
 const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-// Explanation of the if() below:
-// Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
-// Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+// Explanation of the if() below:                                                                                                                                                                                                           
+// Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.                                                                                                                                           
+// Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.                                                                                                                                                     
+// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.                                                                                                                                        
 if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:

@@ -20,9 +20,9 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
 
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->checkpoint_every;
   // Explanation of the if() below:
-  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+  // Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.
+  // Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {
     FILE *cp_file = fopen(filename, "w+");
     fwrite(commondata, sizeof(commondata_struct), 1, cp_file);

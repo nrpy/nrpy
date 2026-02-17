@@ -42,13 +42,13 @@ from nrpy.infrastructures import BHaH
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
-    default_diagnostics_out_every: float,
-    enable_nearest_diagnostics: bool,
-    enable_interp_diagnostics: bool,
-    enable_volume_integration_diagnostics: bool,
-    enable_free_auxevol: bool = True,
-    enable_psi4_diagnostics: bool = False,
-    enable_bhahaha: bool = False,
+        default_diagnostics_out_every: float,
+        enable_nearest_diagnostics: bool,
+        enable_interp_diagnostics: bool,
+        enable_volume_integration_diagnostics: bool,
+        enable_free_auxevol: bool = True,
+        enable_psi4_diagnostics: bool = False,
+        enable_bhahaha: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -183,10 +183,10 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     rnewline = "\\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-  // Explanation of the if() below (time-based scheduling with a 0.5*dt tolerance window):
-  // Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime/outevery.
-  // Step 2: Multiplying by outevery yields the nominal output time, t_out.
-  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is within half a timestep of t_out.
+  // Explanation of the if() below:                                                                                                                                                                                                           
+  // Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.                                                                                                                                           
+  // Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.                                                                                                                                                     
+  // Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.                                                                                                                                        
   // Note: This rule divides by outevery; outevery must be > 0.
   if (fabs(round(currtime / outevery) * outevery - currtime) < 0.5 * currdt) {{
     // Optional hook: free MoL scratch storage before diagnostics and restore afterward.
@@ -263,15 +263,15 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 
 
 def register_all_diagnostics(
-    project_dir: str,
-    set_of_CoordSystems: Set[str],
-    default_diagnostics_out_every: float,
-    enable_nearest_diagnostics: bool,
-    enable_interp_diagnostics: bool,
-    enable_volume_integration_diagnostics: bool,
-    enable_free_auxevol: bool = True,
-    enable_psi4_diagnostics: bool = False,
-    enable_bhahaha: bool = False,
+        project_dir: str,
+        set_of_CoordSystems: Set[str],
+        default_diagnostics_out_every: float,
+        enable_nearest_diagnostics: bool,
+        enable_interp_diagnostics: bool,
+        enable_volume_integration_diagnostics: bool,
+        enable_free_auxevol: bool = True,
+        enable_psi4_diagnostics: bool = False,
+        enable_bhahaha: bool = False,
 ) -> None:
     """
     Register and stage diagnostics-related C code and helper headers.
