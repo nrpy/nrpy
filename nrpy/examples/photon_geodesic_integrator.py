@@ -87,10 +87,10 @@ geodesic_data = Geodesic_Equations[GEO_KEY]
 print("Registering C functions...")
 
 # 1. Metric
-g4DD_metric(metric_data.g4DD, SPACETIME)
+g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
 
 # 2. Connections (Christoffel Symbols)
-connections(geodesic_data.Gamma4UDD, SPACETIME)
+connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
 
 # 3. ODE Right-Hand Side
 calculate_ode_rhs(geodesic_data.geodesic_rhs, metric_data.xx)

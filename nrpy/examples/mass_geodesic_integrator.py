@@ -87,10 +87,10 @@ geodesic_data = Geodesic_Equations[GEO_KEY]
 print("Registering C functions...")
 
 # 1. Metric
-g4DD_metric(metric_data.g4DD, SPACETIME)
+g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
 
 # 2. Connections (Christoffel Symbols)
-connections(geodesic_data.Gamma4UDD, SPACETIME)
+connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
 
 # 3. ODE Right-Hand Side
 calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, metric_data.xx)
@@ -126,13 +126,11 @@ def main_c() -> None:
         "gsl/gsl_math.h",
         "string.h",
     ]
-    desc = (
-        "@brief Main driver function for the massive geodesic integrator.\n"
-        "\n"
-        "Initializes the BHaH infrastructure, sets initial particle conditions, "
-        "performs time integration using GSL (RKF45), and outputs trajectory data "
-        "and conservation checks to stdout/files."
-    )
+    desc = """@brief Main driver function for the massive geodesic integrator.
+        
+        Initializes the BHaH infrastructure, sets initial particle conditions, 
+        performs time integration using GSL (RKF45), and outputs trajectory data 
+        and conservation checks to stdout/files."""
     cfunc_type = "int"
     name = "main"
     params = "int argc, char *argv[]"

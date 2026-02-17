@@ -23,8 +23,6 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
-# [Fix 1] Removed unused 'List' import
-
 
 def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     """
@@ -139,15 +137,15 @@ if __name__ == "__main__":
     # We still need a valid key to grab the symbolic expression from Geodesic_Equations,
     # even though the final C function name won't include the spacetime.
     SPACETIME = "KerrSchild_Cartesian"
-    PARTICLE = "photon"
+    PARTICLE_test = "photon"
     # ---------------------
 
-    GEO_KEY = f"{SPACETIME}_{PARTICLE}"
+    GEO_KEY = f"{SPACETIME}_{PARTICLE_test}"
 
     logger.info(
         "Test: Generating normalization_constraint C-code for %s (%s)...",
         SPACETIME,
-        PARTICLE,
+        PARTICLE_test,
     )
 
     try:
@@ -164,12 +162,12 @@ if __name__ == "__main__":
         # Note: We pass PARTICLE here to handle array sizing and naming.
         # Spacetime name is no longer passed.
         logger.info(" -> Calling normalization_constraint()...")
-        normalization_constraint(test_norm_expr, PARTICLE)
+        normalization_constraint(test_norm_expr, PARTICLE_test)
 
         # 3. Validation
         # Construct expected name to verify registration
         # [Fix 3] Renamed variable to avoid shadowing local variable in function
-        test_suffix = "photon" if PARTICLE == "photon" else "massive"
+        test_suffix = "photon" if PARTICLE_test == "photon" else "massive"
         cfunc_name = f"normalization_constraint_{test_suffix}"
 
         if cfunc_name not in cfc.CFunction_dict:
