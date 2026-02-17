@@ -42,19 +42,24 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
       MoL_free_intermediate_stage_gfs(&griddata[grid].gridfuncs);
 
       int count = 0;
-      const int maskval = 1; // to be replaced with griddata[grid].mask[i].
 #pragma omp parallel for reduction(+ : count)
       for (int i = 0; i < ntot_grid; i++) {
+        const int maskval = 1;
+
         if (maskval >= +0)
           count++;
       } // END LOOP over all gridpoints
       fwrite(&count, sizeof(int), 1, cp_file);
 
-      int *out_data_indices = (int *)malloc(sizeof(int) * count);
-      REAL *compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
+      int *restrict out_data_indices;
+      BHAH_MALLOC(out_data_indices, sizeof(int) * count);
+      REAL *restrict compact_out_data;
+      BHAH_MALLOC(compact_out_data, sizeof(REAL) * NUM_EVOL_GFS * count);
       int which_el = 0;
 
       for (int i = 0; i < ntot_grid; i++) {
+        const int maskval = 1;
+
         if (maskval >= +0) {
           out_data_indices[which_el] = i;
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
