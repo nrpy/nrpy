@@ -139,11 +139,11 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
 
 
 def register_CFunction_exact_solution_single_Cartesian_point(
-        in_WaveType: str = "SphericalGaussian",
-        in_default_sigma: float = 3.0,
-        default_k0: float = 1.0,
-        default_k1: float = 1.0,
-        default_k2: float = 1.0,
+    in_WaveType: str = "SphericalGaussian",
+    in_default_sigma: float = 3.0,
+    default_k0: float = 1.0,
+    default_k1: float = 1.0,
+    default_k2: float = 1.0,
 ) -> None:
     """
     Register a C function for the exact solution at a single point.
@@ -211,11 +211,11 @@ def register_CFunction_initial_data() -> None:
     """
     body += BHaH.simple_loop.simple_loop(
         loop_body="// exact_solution_single_Cartesian_point() takes Cartesian coordinates as input.\n"
-                  "// To avoid confusion in other reference metrics, we make this explicit here.\n"
-                  "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
-                  "exact_solution_single_Cartesian_point(commondata, params, xCart0,xCart1,xCart2,"
-                  f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
-                  f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
+        "// To avoid confusion in other reference metrics, we make this explicit here.\n"
+        "const REAL xCart0 = xx0; const REAL xCart1 = xx1; const REAL xCart2 = xx2;\n"
+        "exact_solution_single_Cartesian_point(commondata, params, xCart0,xCart1,xCart2,"
+        f"&{uu_gf_obj.read_gf_from_memory_Ccode_onept()},"
+        f"&{vv_gf_obj.read_gf_from_memory_Ccode_onept()});",
         read_xxs=True,
         loop_region="all points",
     )
