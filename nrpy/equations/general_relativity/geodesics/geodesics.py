@@ -249,26 +249,43 @@ class GeodesicEquations:
         Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
         The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu.
-        The ninth ODE provides a spatial coordinate–length diagnostic along the ray,
+        The ninth ODE provides a diagnostic for the spatial distance traveled by the photon,
+        as measured by a local Eulerian observer.
 
-            dL/d\lambda = \sqrt{|g_{ij} p^i p^j|},  i,j = 1,2,3,
+        **Equation 9: Eulerian Distance**
+        The rate of change of the proper spatial distance L_Euler with respect
+        to the affine parameter \lambda is given by:
 
-        using the spatial block g_{ij} of the 4-metric in the chosen coordinates.
-        In coordinate systems with g_{0i} \neq 0 (for example Kerr–Schild), g_{ij} is
-        not the induced 3-metric on a constant-time hypersurface, so L is a
-        coordinate-dependent diagnostic rather than a strictly invariant proper length.
+            dL_Euler/d\lambda = \alpha p^0 = p^0 / sqrt(-g^00)
+
+        **Physical Interpretation:**
+        This value represents the "lab frame" distance measured by an **Eulerian Observer**
+        (also known as a Normal Observer). This observer has a 4-velocity n^\mu normal
+        to the spatial hypersurface (slice of constant coordinate time t).
+
+        * **Observer:** The Eulerian observer is "hovering" at a specific spatial coordinate,
+            moving orthogonal to the spatial slice. In the ADM formalism, their 4-velocity
+            is n_\mu = (-\alpha, 0, 0, 0).
+        * **Measurement:** It answers the question: "How much distance does the local
+            Eulerian observer see the photon cover in this instant?"
+        * **Invariance:** This scalar is spatially invariant (valid under spatial rotations)
+            but slicing dependent (depends on the definition of time t).
+
+        **Variables:**
+        * p^0: Time component of the photon 4-momentum (dt/d\lambda).
+        * g^00: Time-time component of the **inverse** metric tensor.
+        * \alpha: The Lapse function, defined as \alpha = 1/sqrt(-g^00) (assuming g^00 < 0).
+
+        .. note::
+            This formulation assumes a metric signature where g^00 < 0 (e.g., -+++).
+            It is well-behaved in horizon-penetrating coordinates (like Kerr-Schild) where
+            g^00 remains finite, but may diverge in static coordinates (like Schwarzschild)
+            at the horizon where the Eulerian observer cannot exist.
 
         Reference:
         Wikipedia: Geodesics in general relativity
         Permanent Link: https://en.wikipedia.org/w/index.php?title=Geodesics_in_general_relativity&oldid=1320086873
         (See first equation in Section: Mathematical expression)
-
-
-        Reference:
-        Wikipedia: Proper length
-        Permanent Link: https://en.wikipedia.org/w/index.php?title=Proper_length&oldid=1323993083
-        (See first equation in Section: Proper distance along a path)
-
 
         :return: A list of 9 SymPy expressions for the RHS of the ODEs.
         """
@@ -276,6 +293,9 @@ class GeodesicEquations:
         pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
         g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        # We need the inverse metric g^UU to compute g^00 for the lapse function.
+        g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
 
         Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
@@ -290,15 +310,10 @@ class GeodesicEquations:
                     sum_term += term
             mom_rhs[alpha] = -sum_term
 
-        path_len_sum = sp.sympify(0)
-        # Exploit symmetry of g_{ij} to optimize summation
-        for i in range(1, 4):
-            for j in range(i, 4):
-                term = g4DD[i][j] * pU[i] * pU[j]
-                if i != j:
-                    term *= 2
-                path_len_sum += term
-        path_len_rhs = [sp.sqrt(sp.Abs(path_len_sum))]
+        # Ninth Equation: Eulerian Distance Evolution
+        # dL/dlambda = p^0 / sqrt(-g^00)
+        # We use g4UU (inverse metric) to match the definition of lapse alpha.
+        path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
 
