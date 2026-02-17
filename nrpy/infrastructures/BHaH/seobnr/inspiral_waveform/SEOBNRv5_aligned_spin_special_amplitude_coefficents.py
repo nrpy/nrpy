@@ -52,7 +52,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
             rholm.append(wf.rho[f"({l} , {m})"])
             rholm_labels.append(f"const REAL rho{l}{m}")
 
-    for key in hNR_fits():
+    for key in hNR_fits.keys():
         mode = ast.literal_eval(key)
         l, m = mode
         for mode in modes:
@@ -366,6 +366,7 @@ K21 = h21 / rho21;
 K43 = h43 / rho43;
 v55 = cpow(dynamics_55[Omega], 1, 3);
 K55 = h55/rho55;
+
 c21 = (hNR21/K21)/v22;
 c43 = (hNR43/K43)/v22;
 c55 = (hNR55/K55)/v55;
