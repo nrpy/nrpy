@@ -165,9 +165,10 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     default_diagnostics_out_every=default_diagnostics_output_every,
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
-    enable_volume_integration_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
 )
+BHaH.wave_equation.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 BHaH.wave_equation.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     WaveType=WaveType,
     default_k0=default_k0,

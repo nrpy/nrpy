@@ -24,6 +24,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
+
 import os
 import warnings
 from typing import Dict, List, Tuple, Union

@@ -174,7 +174,7 @@ def generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> st
     # Map written coordinates and output file by plane:
     # xy -> write x,y into row[0],row[1] and use out_xy
     # yz -> write y, z into row[0],row[1] and use out_yz
-    (row_map, num_coords, out_file) = (
+    row_map, num_coords, out_file = (
         ("row[0]=xCart[0]; row[1]=xCart[1];", 2, "out_xy")
         if plane == "xy"
         else ("row[0]=xCart[1]; row[1]=xCart[2];", 2, "out_yz")

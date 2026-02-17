@@ -277,9 +277,7 @@ test =
 [egg_info]
 tag_build = 
 tag_date = 0
-""".format(
-        name=project_name
-    )
+""".format(name=project_name)
     (project_path / "setup.cfg").write_text(setup_cfg_content, encoding="utf-8")
 
     # Create requirements.txt
