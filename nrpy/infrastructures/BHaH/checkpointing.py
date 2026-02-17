@@ -74,7 +74,7 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
             "read_checkpoint: FATAL: could not open %s for reading: %s\n",
             filename, strerror(errno));
     exit(EXIT_FAILURE);
-  } // if (cp_file == NULL)
+  } // END IF fopen failed
 
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
   fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
