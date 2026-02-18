@@ -147,8 +147,57 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_special_coefficients"
-    params = "commondata_struct *restrict commondata, REAL *rhos, double complex *inspiral_modes, REAL *restrict dynamics"
+    params = "commondata_struct *restrict commondata"
     body = """
+    
+REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict phi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict pphi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict prstar = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict Hreal = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
+REAL *restrict Omega_circ = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
+if (times == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  exit(1);
+}
+
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
@@ -254,6 +303,18 @@ gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
       exit(1);
     }
   gsl_spline_init(spline_Omega_circ,times,Omega_circ,commondata->nsteps_fine); 
+  
+gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
+  if (acc_Hreal == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      exit(1);
+    }
+  gsl_spline *restrict spline_Hreal = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_Hreal == NULL) {
+      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      exit(1);
+    }
+  gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
 
 // Find t_ISCO:
 
@@ -280,7 +341,7 @@ else{
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 + 10;
-size_t_22 peak_idx; 
+size_t peak_idx; 
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[commondata->nsteps_fine - 2];
@@ -295,27 +356,41 @@ commondata->t_attach = t_peak_22;
 REAL dynamics_22[NUMVARS];
 REAL dynamics_55[NUMVARS];
 
-//for(i = 0; i < size_t_22; i++){
-//    dynamics_22[R] = 
+dynamics_22[TIME] = t_peak_22;
+dynamics_22[R] = gsl_spline_eval(spline_r,t_peak_22,acc_r);
+dynamics_22[PHI] = gsl_spine_eval(spline_phi,t_peak_22,acc_phi);
+dynamics_22[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_22,acc_prstar);
+dynamics_22[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_22,acc_Omega);
+dynamics_22[H] = gsl_spline_eval(spline_Hreal,t_peak_22,acc_Hreal);
+dynamics_22[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_22,acc_Omega_circ);
+
+
+dynamics_55[TIME] = t_peak_55;
+dynamics_55[R] = gsl_spline_eval(spline_r,t_peak_55,acc_r);
+dynamics_55[PHI] = gsl_spine_eval(spline_phi,t_peak_55,acc_phi);
+dynamics_55[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_55,acc_prstar);
+dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
+dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
+dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
 
 SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics, rhos, hNR);
-rho21 = rhos[RHO21 - 1];
-rho43 = rhos[RHO43 - 1];
-rho55 = rhos[RHO55 - 1];
-hNR21 = hNR[hNR21 - 1];
-hNR43 = hNR[hNR43 - 1];
-hNR55 = hNR[hNR55 - 1];
+REAL rho21 = rhos[RHO21 - 1];
+REAL rho43 = rhos[RHO43 - 1];
+REAL rho55 = rhos[RHO55 - 1];
+const REAL hNR21 = hNR[hNR21 - 1];
+const REAL hNR43 = hNR[hNR43 - 1];
+const REAL hNR55 = hNR[hNR55 - 1];
 
 SEOBNRv5_aligned_spin_waveform(commondata, dynamics, inspiral_modes);
-h21 = inspiral_modes[STRAIN21 - 1];
-h43 = inspiral_modes[STRAIN43 - 1];
-h55 = inspiral_modes[STRAIN55 - 1];
+double complex h21 = inspiral_modes[STRAIN21 - 1];
+double complex h43 = inspiral_modes[STRAIN43 - 1];
+double complex h55 = inspiral_modes[STRAIN55 - 1];
 
-v22 = cpow(dynamics_22[Omega], 1, 3);
+v22 = cpow(dynamics_22[OMEGA], 1, 3);
 K21 = h21 / rho21;
 K43 = h43 / rho43;
-v55 = cpow(dynamics_55[Omega], 1, 3);
+v55 = cpow(dynamics_55[OMEGA], 1, 3);
 K55 = h55/rho55;
 
 c21 = (hNR21/K21)/v22;
