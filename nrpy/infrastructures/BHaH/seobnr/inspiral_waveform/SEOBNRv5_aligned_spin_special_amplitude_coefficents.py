@@ -152,49 +152,49 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict phi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict pphi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict prstar = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Hreal = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Omega_circ = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
