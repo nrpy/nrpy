@@ -45,19 +45,13 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
 
     modes = [(2, 1), (4, 3), (5, 5)]
 
-    for key in rho_dict.keys():
-        mode = ast.literal_eval(key)
-        l, m = mode
-        for mode in modes:
-            rholm.append(wf.rho[f"({l} , {m})"])
-            rholm_labels.append(f"const REAL rho{l}{m}")
+    for l, m in modes:
+        rholm.append(wf.rho[f"({l} , {m})"])
+        rholm_labels.append(f"REAL rho{l}{m}")
 
-    for key in hNR_fits.keys():
-        mode = ast.literal_eval(key)
-        l, m = mode
-        for mode in modes:
-            hNR.append(hNR_fits[f"({l} , {m})"])
-            hNR_labels.append(f"const REAL hNR{l}{m}")
+    for l, m in modes:
+        hNR.append(const.hNR[f"({l} , {m})"])
+        hNR_labels.append(f"const REAL hNR{l}{m}")
 
     rholm_code = ccg.c_codegen(
         rholm,
@@ -94,7 +88,6 @@ const REAL c_21 = commondata->c_21;
 const REAL c_43 = commondata->c_43;
 const REAL c_55 = commondata->c_55;
 const REAL Omega = dynamics[OMEGA];
-
 """
 
     body += rholm_code
@@ -106,9 +99,9 @@ rhos[RHO55 - 1] = rho55;
 
     body += hNR_code
     body += """
-hNR[hNR21 - 1] = hNR21;
-hNR[hNR43 - 1] = hNR43;
-hNR[hNR55 - 1] = hNR55;
+hNR[HNR21 - 1] = hNR21;
+hNR[HNR43 - 1] = hNR43;
+hNR[HNR55 - 1] = hNR55;
 """
 
     cfc.register_CFunction(
@@ -157,66 +150,62 @@ if (times == NULL){
 }
 
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (r == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict phi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (phi == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict pphi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (pphi == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict prstar = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (prstar == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (Omega == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Hreal = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (Hreal == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
 REAL *restrict Omega_circ = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
-if (times == NULL){
+if (Omega_circ == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
   exit(1);
 }
 
-const REAL m1 = commondata->m1;
-const REAL m2 = commondata->m2;
-const REAL chi1 = commondata->chi1;
-const REAL chi2 = commondata->chi2;
-const REAL Omega = dynamics[OMEGA];
+
 REAL c_21 = c_21;
 REAL c_43 = c_43;
 REAL c_55 = c_55;
 REAL rhos[3];
 REAL hNR[3];
-REAL inspiral_modes[NUMMODES];
+double complex inspiral_modes[NUMMODES];
 
 size_t i;
 
 for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   Omega_circ[i] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
-  Hreal[i] = commondata->dynamics_fine[IDX(i,HREAL)];
-  R[i] = commondata->dynamics_fine[IDX(i,R)];
+  Hreal[i] = commondata->dynamics_fine[IDX(i,H)];
+  r[i] = commondata->dynamics_fine[IDX(i,R)];
   phi[i] = commondata->dynamics_fine[IDX(i,PHI)];
   prstar[i] = commondata->dynamics_fine[IDX(i,PRSTAR)];
   pphi[i] = commondata->dynamics_fine[IDX(i,PPHI)];
@@ -297,7 +286,7 @@ gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
       fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
-  gsl_spline *restrict spline_Omegcirc = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  gsl_spline *restrict spline_Omega_circ = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega_circ == NULL) {
       fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
@@ -334,9 +323,12 @@ else{
       fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
       exit(1);
     }
-  
+    
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+  
+  free(t_zoom);
+  free(minus_r_zoom);
 }
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
@@ -358,7 +350,7 @@ REAL dynamics_55[NUMVARS];
 
 dynamics_22[TIME] = t_peak_22;
 dynamics_22[R] = gsl_spline_eval(spline_r,t_peak_22,acc_r);
-dynamics_22[PHI] = gsl_spine_eval(spline_phi,t_peak_22,acc_phi);
+dynamics_22[PHI] = gsl_spline_eval(spline_phi,t_peak_22,acc_phi);
 dynamics_22[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_22,acc_prstar);
 dynamics_22[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_22,acc_Omega);
 dynamics_22[H] = gsl_spline_eval(spline_Hreal,t_peak_22,acc_Hreal);
@@ -367,41 +359,71 @@ dynamics_22[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_22,acc_Omega_
 
 dynamics_55[TIME] = t_peak_55;
 dynamics_55[R] = gsl_spline_eval(spline_r,t_peak_55,acc_r);
-dynamics_55[PHI] = gsl_spine_eval(spline_phi,t_peak_55,acc_phi);
+dynamics_55[PHI] = gsl_spline_eval(spline_phi,t_peak_55,acc_phi);
 dynamics_55[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_55,acc_prstar);
 dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
 dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
 dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
 
-SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics, rhos, hNR);
-REAL rho21 = rhos[RHO21 - 1];
-REAL rho43 = rhos[RHO43 - 1];
-REAL rho55 = rhos[RHO55 - 1];
-const REAL hNR21 = hNR[hNR21 - 1];
-const REAL hNR43 = hNR[hNR43 - 1];
-const REAL hNR55 = hNR[hNR55 - 1];
+SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
+REAL rho21 = rhos[0];
+REAL rho43 = rhos[1];
+const REAL hNR21 = hNR[0];
+const REAL hNR43 = hNR[1];
 
-SEOBNRv5_aligned_spin_waveform(commondata, dynamics, inspiral_modes);
+SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
+REAL rho55 = rhos[2];
+const REAL hNR55 = hNR[2];
+
+SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
 double complex h21 = inspiral_modes[STRAIN21 - 1];
 double complex h43 = inspiral_modes[STRAIN43 - 1];
+
+SEOBNRv5_aligned_spin_waveform(dynamics_55, commondata, inspiral_modes);
 double complex h55 = inspiral_modes[STRAIN55 - 1];
 
-v22 = cpow(dynamics_22[OMEGA], 1, 3);
-K21 = h21 / rho21;
-K43 = h43 / rho43;
-v55 = cpow(dynamics_55[OMEGA], 1, 3);
-K55 = h55/rho55;
+const REAL v22 = pow(dynamics_22[OMEGA], 1.0/3.0);
+const double complex K21 = h21 / rho21;
+const double complex K43 = h43 / rho43;
+const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
+const double complex K55 = h55/rho55;
 
-c21 = (hNR21/K21)/v22;
-c43 = (hNR43/K43)/v22;
-c55 = (hNR55/K55)/v55;
+const REAL c21 = cabs((hNR21/K21)/v22);
+const REAL c43 = cabs((hNR43/K43)/v22);
+const REAL c55 = cabs((hNR55/K55)/v55);
 
 //save to commondata
 
 commondata->c_21 = c21;
 commondata->c_43 = c43;
 commondata->c_55 = c55;
+
+
+free(times);
+free(r);
+free(phi);
+free(pphi);
+free(prstar);
+free(Omega);
+free(Hreal);
+free(Omega_circ);
+
+
+gsl_spline_free(spline_r);
+gsl_interp_accel_free(acc_r);
+gsl_spline_free(spline_phi);
+gsl_interp_accel_free(acc_phi);
+gsl_spline_free(spline_prstar);
+gsl_interp_accel_free(acc_prstar);
+gsl_spline_free(spline_pphi);
+gsl_interp_accel_free(acc_pphi);
+gsl_spline_free(spline_Omega);
+gsl_interp_accel_free(acc_Omega);
+gsl_spline_free(spline_Hreal);
+gsl_interp_accel_free(acc_Hreal);
+gsl_spline_free(spline_Omega_circ);
+gsl_interp_accel_free(acc_Omega_circ);
 
 """
     cfc.register_CFunction(
