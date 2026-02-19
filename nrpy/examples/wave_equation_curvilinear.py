@@ -73,6 +73,11 @@ t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
 default_checkpoint_every = 50.0
 CoordSystem = "SinhCylindrical"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 set_of_CoordSystems = {CoordSystem}
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
@@ -98,23 +103,10 @@ if num_fisheye_transitions == 1:
     fisheye_param_defaults.update(
         {
             "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
+            "fisheye_a1": 1.5,
             "fisheye_phys_L": grid_physical_size,
             "fisheye_phys_r_trans1": 4.0,
             "fisheye_phys_w_trans1": 2.0,
-        }
-    )
-if num_fisheye_transitions == 2:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_a2": 3.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 3.5,
-            "fisheye_phys_w_trans1": 1.5,
-            "fisheye_phys_r_trans2": 7.5,
-            "fisheye_phys_w_trans2": 2.0,
         }
     )
 OMP_collapse = 1
