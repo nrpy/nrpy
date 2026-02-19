@@ -5,8 +5,10 @@ This module registers the 'connections_{spacetime_name}' C function, which calcu
 the 40 unique components of the Christoffel symbols (Gamma^alpha_mu_nu)
 for a specific spacetime. It also registers the required 'connection_struct'.
 
-It generates a preamble to unpack f[8] or f[9] -> coordinates and commondata -> parameters,
-depending on the particle type.
+It generates a preamble to unpack f[0]..f[3] from the state vector into coordinate
+variables (e.g., t, x, y, z). Spacetime parameters stored in `commondata` are passed
+as a separate argument and are accessed via the infrastructure (e.g., macros in
+`BHaH_defines.h`), not by additional unpacking in this preamble.
 
 Author: Dalton J. Moone
 """

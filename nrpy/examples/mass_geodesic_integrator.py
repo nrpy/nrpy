@@ -241,8 +241,8 @@ def main_c() -> None:
     normalization_constraint_massive(&g4DD_local, y, &norm_final);
 
 
-    printf("Final norm (plus 1): \\n");
-    printf("  norm = %.4e\\n", norm_final + 1);
+    printf("Final norm deviation (norm + 1): \\n");
+    printf("  norm_plus_1 = %.4e\\n", norm_final + 1);
 
     printf("Final Conserved Quantities:\\n");
     printf("  E = %.8f, Lz = %.8f, Q = %.8f\\n", E_final, Lz_final, Q_final);

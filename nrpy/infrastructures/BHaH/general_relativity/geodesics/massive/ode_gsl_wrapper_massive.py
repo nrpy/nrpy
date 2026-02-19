@@ -3,7 +3,7 @@ Register C wrapper function to interface with the GSL ODE solver.
 
 This module registers the 'ode_gsl_wrapper_massive_{spacetime}' C function.
 It acts as a dispatcher, unpacking the generic `void *params` pointer into
-NRPy-specific structures (commondata), computing the metric and Christoffel
+NRPy-specific structures (commondata), computing the Christoffel
 symbols, and invoking the RHS calculation engine.
 
 Author: Dalton J. Moone
@@ -25,9 +25,9 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
     desc = f"""@brief GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.
-        
+
         Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, 
-        computes the local metric and connections, and calls the RHS calculation routine.
+        computes the local Christoffel symbols (connections), and calls the RHS calculation routine.
         
         Input:
             t: Current proper time (unused in autonomous systems).

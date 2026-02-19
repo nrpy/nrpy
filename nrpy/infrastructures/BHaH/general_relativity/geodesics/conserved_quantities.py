@@ -95,12 +95,13 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
         preamble_lines.append(f"const double {str(symbol)} = f[{i}];")
 
     preamble_lines.append("")
-    preamble_lines.append("// Unpack 4-momentum components from f[4]..f[7]")
-    preamble_lines.append("// If particle is massive the mass is assumed to be m=1")
+    preamble_lines.append("// Unpack 4-vector components from f[4]..f[7]")
+    preamble_lines.append("// For massive particles this is the 4-velocity u^mu (m=1),")
+    preamble_lines.append("// for photon particles this is the 4-momentum p^mu.")
 
-    # 4.b: Unpack Momentum (p0, p1, p2, p3)
-    # conserved_quantities.py explicitly uses symbols named "p0", "p1", "p2", "p3".
-    # We reconstruct them here to ensure the C string matches the symbol name.
+    # 4.b: Unpack components (p0, p1, p2, p3)
+    # The symbolic diagnostics module uses the names p0..p3 for the 4-vector;
+    # here p0..p3 represent u^mu for massive particles and p^mu for photons.
     for i in range(4):
         # SymPy symbol is "p0", maps to f[4]
         preamble_lines.append(f"const double p{i} = f[{i+4}];")

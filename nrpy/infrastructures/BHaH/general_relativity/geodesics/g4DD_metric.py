@@ -6,8 +6,10 @@ which calculates the 10 unique components of the metric tensor for a specific sp
 It also registers the required 'metric_struct' in BHaH_defines.h using
 the specific infrastructure hook "after_general".
 
-It generates a preamble to unpack f[8] or f[9] -> coordinates and commondata -> parameters,
-depending on the particle type.
+It generates a preamble to unpack f[0]..f[3] from the state vector into coordinate
+variables. Spacetime parameters stored in `commondata` are provided through the
+function arguments and accessed via the BHaH infrastructure, rather than being
+explicitly unpacked into local variables in this preamble.
 
 Author: Dalton J. Moone
 """
