@@ -107,6 +107,8 @@ SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step TBD: Run the trajectory generation.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
+// Step TBD: Calculate Special Amplitude Coefficients
+SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 // Step TBD: Compute and apply the NQC corrections
