@@ -311,8 +311,10 @@ class GeodesicEquations:
             mom_rhs[alpha] = -sum_term
 
         # Ninth Equation: Eulerian Distance Evolution
-        # dL/dlambda = p^0 / sqrt(-g^00)
-        # We use g4UU (inverse metric) to match the definition of lapse alpha.
+        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+        # Note: L_Euler is a *signed* distance. In reverse ray tracing, p^0 < 0
+        # generally causes L_Euler to decrease, except inside an ergosphere 
+        # where p^0 > 0 causes it to increase.
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
@@ -330,7 +332,7 @@ class GeodesicEquations:
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
          Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for photon particles.)
 
-         .. warning::
+        .. warning::
            This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
            It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
            Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.

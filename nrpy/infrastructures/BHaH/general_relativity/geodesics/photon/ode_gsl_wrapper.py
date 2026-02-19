@@ -51,7 +51,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     metric_struct metric;
     connection_struct conn;
 
-    // 4. Compute Metric 
+    // 3. Compute Metric 
     // Signature: (commondata, y, &metric)
     g4DD_metric_{spacetime_name}(commondata, y, &metric);
 
@@ -60,7 +60,7 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     // Signature: (commondata, y, &conn)
     connections_{spacetime_name}(commondata, y, &conn);
     
-    // 4. Compute Geodesic RHS
+    // 5. Compute Geodesic RHS
     // Signature: (y, metric, conn, rhs_out)
     calculate_ode_rhs(y, &metric, &conn, f);
     
