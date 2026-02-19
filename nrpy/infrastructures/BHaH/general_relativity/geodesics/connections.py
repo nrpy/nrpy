@@ -5,7 +5,10 @@ This module registers the 'connections_{spacetime_name}' C function, which calcu
 the 40 unique components of the Christoffel symbols (Gamma^alpha_mu_nu)
 for a specific spacetime. It also registers the required 'connection_struct'.
 
-It generates a preamble to unpack f[8] -> coordinates and commondata -> parameters.
+It generates a preamble to unpack f[0]..f[3] from the state vector into coordinate
+variables (e.g., t, x, y, z). Spacetime parameters stored in `commondata` are passed
+as a separate argument and are accessed via the infrastructure (e.g., macros in
+`BHaH_defines.h`), not by additional unpacking in this preamble.
 
 Author: Dalton J. Moone
 """
@@ -27,7 +30,7 @@ from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
 
 
 def connections(
-    Gamma4UDD_exprs: List[List[List[sp.Expr]]], spacetime_name: str
+    Gamma4UDD_exprs: List[List[List[sp.Expr]]], spacetime_name: str, PARTICLE: str
 ) -> None:
     """
     Generate and register the C function to compute Christoffel symbols.
@@ -38,8 +41,19 @@ def connections(
 
     :param Gamma4UDD_exprs: A 4x4x4 list of SymPy expressions for connections.
     :param spacetime_name: Name of the spacetime (used for documentation).
+    :param PARTICLE: The type of particle ("massive" or "photon").
+                     Determines array size for the state vector f.
+    :raises ValueError: If PARTICLE is not "massive" or "photon".
     """
-    # Step 1: Register connection_struct in BHaH_defines.h
+    # Step 1: Specific setup based on particle type
+    if PARTICLE == "massive":
+        array_size = 8
+    elif PARTICLE == "photon":
+        array_size = 9
+    else:
+        raise ValueError(f"Unsupported PARTICLE: {PARTICLE}")
+
+    # Step 2: Register connection_struct in BHaH_defines.h
     # We use list comprehension to generate components: Gamma4UDD000, Gamma4UDD001...
     connection_components = [
         f"Gamma4UDD{i}{j}{k}" for i in range(4) for j in range(4) for k in range(j, 4)
@@ -53,7 +67,7 @@ def connections(
     # Register under the "after_general" section of BHaH_defines.h
     Bdefines_h.register_BHaH_defines("after_general", connections_struct_str)
 
-    # Step 2: Prepare symbolic expressions and C variable names
+    # Step 3: Prepare symbolic expressions and C variable names
     list_of_Gamma_syms = []
     list_of_Gamma_C_vars = []
 
@@ -63,18 +77,18 @@ def connections(
                 list_of_Gamma_syms.append(Gamma4UDD_exprs[alpha][mu][nu])
                 list_of_Gamma_C_vars.append(f"conn->Gamma4UDD{alpha}{mu}{nu}")
 
-    # Step 3: Generate the Dynamic Preamble
-    # This unpacks y[] -> (t,x,y,z)
-
-    # 3.a: Analyze symbols used in the expressions first
+    # Step 4: Generate the Dynamic Preamble
+    # 4.a: Analyze symbols used in the expressions first
     used_symbol_names: Set[str] = set()
     for expr in list_of_Gamma_syms:
         for sym in expr.free_symbols:
             used_symbol_names.add(str(sym))
 
-    # 3.b: Retrieve coordinate symbols from the Analytic Spacetime registry
+    # 4.b: Retrieve coordinate symbols from the Analytic Spacetime registry
     xx_symbols = Analytic_Spacetimes[spacetime_name].xx
-    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
+    preamble_lines = [
+        f"// Unpack position coordinates from f[0]..f[3] (State vector size: {array_size})"
+    ]
 
     for i, symbol in enumerate(xx_symbols):
         sym_name = str(symbol)
@@ -83,18 +97,23 @@ def connections(
             preamble_lines.append(f"const double {sym_name} = f[{i}];")
     preamble = "\n  ".join(preamble_lines)
 
-    # Step 4: Define C function metadata
+    # Step 5: Define C function metadata
     includes = ["BHaH_defines.h"]
-    desc = f"@brief Computes the 40 unique Christoffel symbols for the {spacetime_name} metric.\n"
+    desc = (
+        f"@brief Computes the 40 unique Christoffel symbols for the {spacetime_name} metric "
+        f"for a {PARTICLE} particle.\n"
+    )
     name = f"connections_{spacetime_name}"
     params = (
         "const commondata_struct *restrict commondata, "
-        "const double f[8], "
+        f"const double f[{array_size}], "
         "connection_struct *restrict conn"
     )
 
-    # Step 5: Generate C Body
-    print(f" -> Generating C worker function: {name} (Spacetime: {spacetime_name})...")
+    # Step 6: Generate C Body
+    print(
+        f" -> Generating C worker function: {name} (Spacetime: {spacetime_name}, Particle: {PARTICLE})..."
+    )
 
     # Generate kernel without braces so we can wrap preamble + kernel together
     kernel = ccg.c_codegen(
@@ -108,7 +127,7 @@ def connections(
     # Combine Preamble + Kernel
     body = preamble + "\n\n" + kernel
 
-    # Step 6: Register the C function
+    # Step 7: Register the C function
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -141,11 +160,12 @@ if __name__ == "__main__":
     logger = logging.getLogger("TestConnectionsAnalytic")
 
     SPACETIME = "KerrSchild_Cartesian"
-    # Geodesics dictionary keys are "Spacetime_ParticleType".
-    # Connection coefficients don't depend on particle mass, so we can pick "massive".
-    GEO_KEY = f"{SPACETIME}_massive"
+    PARTICLE_test = "massive"  # Can be "massive" or "photon"
+    GEO_KEY = f"{SPACETIME}_{PARTICLE_test}"
 
-    logger.info("Test: Generating Connections C-code for %s...", SPACETIME)
+    logger.info(
+        "Test: Generating Connections C-code for %s (%s)...", SPACETIME, PARTICLE_test
+    )
 
     try:
         # 1. Acquire Symbolic Data
@@ -153,8 +173,8 @@ if __name__ == "__main__":
         geodesic_data = Geodesic_Equations[GEO_KEY]
 
         # 2. Run the Generator
-        logger.info(" -> Calling connections_analytic()...")
-        connections(geodesic_data.Gamma4UDD, SPACETIME)
+        logger.info(" -> Calling connections()...")
+        connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE_test)
 
         # 3. Validation
         cfunc_name = f"connections_{SPACETIME}"
@@ -168,7 +188,6 @@ if __name__ == "__main__":
         logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
 
         # Check Struct Registration
-        # Use par.glb_extras_dict instead of looking for BHaH_defines_h_dict
         bhah_defines_dict = par.glb_extras_dict.get("BHaH_defines", {})
         if "after_general" not in bhah_defines_dict:
             raise RuntimeError("FAIL: BHaH_defines_h 'after_general' section is empty.")
@@ -183,15 +202,7 @@ if __name__ == "__main__":
         )
 
         # 4. Output Files to Current Directory
-        logger.info(" -> Writing C files to current directory...")
-
-        # A. Generate BHaH_defines.h (contains connection_struct)
         Bdefines_h.output_BHaH_defines_h(project_dir=".")
-        logger.info(
-            "    ... Wrote BHaH_defines.h (contains connection_struct definition)"
-        )
-
-        # B. Generate the C function files manually
         for func_name, c_function in cfc.CFunction_dict.items():
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:
@@ -200,7 +211,7 @@ if __name__ == "__main__":
 
         logger.info(" -> Success! All files generated.")
 
-    except Exception as e:  # pylint: disable=broad-exception-caught
+    except (ImportError, RuntimeError, ValueError) as e:
         logger.error(" -> FAIL: connections_analytic test failed with error: %s", e)
         import traceback
 

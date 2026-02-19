@@ -4,7 +4,7 @@ Construct symbolic expressions for diagnostic quantities along geodesics.
 When the spacetime admits the relevant symmetries, this includes constants
 of motion such as Energy, L_z, and (in Kerr) the Carter constant. Other
 returned quantities may be non-conserved diagnostics.
-It supports both massive and massless (photon) particles.
+It supports both massive and photon particles.
 
 Author: Dalton J. Moone
 
@@ -22,7 +22,7 @@ Physical Assumptions:
 4.  **Mass Normalization (m=1):** In the massive particle case for the Carter
     Constant, the code uses the term (1 - E**2). This implies the code assumes
     particle mass m=1 (or affine parameter normalization p_mu p^mu = -1).
-5.  **Massless Particles:** For the massless case, the code assumes m=0.
+5.  **Photon Particles:** For the photon case, the code assumes m=0.
 6.  **Geometric Units:** The code assumes geometric units where G = c = 1 (implied
     by the usage of M_scale and a_spin without constants).
 
@@ -65,7 +65,6 @@ import nrpy.indexedexp as ixp
 import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
-    a_spin,
 )
 
 
@@ -96,7 +95,7 @@ class GeodesicDiagnostics:
         Initialize and generate all symbolic diagnostic expressions.
 
         :param spacetime: The spacetime to use (e.g., "KerrSchild_Cartesian") or "Numerical".
-        :param particle_type: The type of particle ("massive" or "massless").
+        :param particle_type: The type of particle ("massive" or "photon").
         :raises ValueError: If the particle type is not supported or spacetime is invalid.
         """
         self.spacetime = spacetime
@@ -107,7 +106,7 @@ class GeodesicDiagnostics:
         self.L_exprs = []
         self.Q_expr = None
 
-        if self.particle_type not in ["massive", "massless"]:
+        if self.particle_type not in ["massive", "photon"]:
             raise ValueError(f"Unsupported particle_type: {self.particle_type}")
 
         # Step 1: Set up coordinates and metric
@@ -115,20 +114,20 @@ class GeodesicDiagnostics:
             # Generate generic symbolic metric and coordinates
             self.xx = [sp.Symbol(f"x{i}", real=True) for i in range(4)]
             # Suppress mypy complaint about Sequence vs List
-            self.g4DD = ixp.declarerank2("g4DD", symmetry="sym01", dimension=4)
+            self.g4DD = ixp.declarerank2("g4DD", sym="sym01", dimension=4)
         else:
             # Try to load from analytic module.
             try:
                 metric_data = Analytic_Spacetimes[self.spacetime]
                 self.xx = metric_data.xx
                 self.g4DD = metric_data.g4DD
-            except ValueError:
+            except ValueError as exc:
                 # AnalyticSpacetimes raises ValueError if the key is not supported internally
                 raise ValueError(
                     f"Spacetime '{self.spacetime}' is not supported. "
                     "Please check analytic_spacetimes.py for available metrics "
                     "or use 'Numerical' for generic derivation."
-                )
+                ) from exc
 
         # Define 4-momentum vector pU = [p0, p1, p2, p3]
         pU = [sp.Symbol(f"p{i}", real=True) for i in range(4)]
@@ -206,7 +205,7 @@ class GeodesicDiagnostics:
         x, y, z = self.xx[1], self.xx[2], self.xx[3]
         p_x, p_y, p_z = pD[1], pD[2], pD[3]
 
-        # L = x x p
+       # L = x × p  (Cartesian cross product)
         L_x = y * p_z - z * p_y
         L_y = z * p_x - x * p_z
         L_z = x * p_y - y * p_x
@@ -236,6 +235,8 @@ class GeodesicDiagnostics:
         :return: Symbolic expression for Q.
         """
         L_z = L_exprs[2]
+        # Define a_spin locally (G=c=1)
+        a_spin = sp.Symbol("a_spin", real=True)
 
         # Kerr spacetime logic (Cartesian Kerr-Schild)
         # xx[0] is time, so x,y,z are indices 1,2,3
@@ -382,9 +383,10 @@ if __name__ == "__main__":
         Q_kerr_formula = Q_expr
 
     # Substitute a_spin -> 0 in the formula and L^2
-    Q_kerr_a0 = Q_kerr_formula.subs(a_spin, 0)
-    L_sq_kerr_a0 = L_sq_kerr.subs(a_spin, 0)
-    L_z_sq_kerr_a0 = L_z_sq_kerr.subs(a_spin, 0)
+    a_spin_sym = sp.Symbol("a_spin", real=True)
+    Q_kerr_a0 = Q_kerr_formula.subs(a_spin_sym, 0)
+    L_sq_kerr_a0 = L_sq_kerr.subs(a_spin_sym, 0)
+    L_z_sq_kerr_a0 = L_z_sq_kerr.subs(a_spin_sym, 0)
 
     # Check identity: Q(a=0) + L_z^2 - L^2 == 0
     kerr_diff = sp.simplify(Q_kerr_a0 + L_z_sq_kerr_a0 - L_sq_kerr_a0)
@@ -399,7 +401,7 @@ if __name__ == "__main__":
     # Step 3: Generate trusted results
     for config in [
         "KerrSchild_Cartesian_massive",
-        "KerrSchild_Cartesian_massless",
+        "KerrSchild_Cartesian_photon",
     ]:
         geo_diags = Geodesic_Diagnostics[config]
         results_dict = ve.process_dictionary_of_expressions(

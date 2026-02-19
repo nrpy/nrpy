@@ -1,15 +1,15 @@
 """
-Construct a complete C project for integrating massive geodesics in curved spacetime.
+Construct a complete C project for integrating photon geodesics in curved spacetime.
 
 This script acts as the primary driver to generate a standalone C application that
-evolves the trajectory of a massive test particle. It coordinates the generation of
+evolves the trajectory of a photon test particle. It coordinates the generation of
 spacetime-specific physics kernels (Metric, Christoffel Symbols, ODE RHS) and
 links them with the GNU Scientific Library (GSL) for high-order time integration.
 
 Physics Context:
-    The simulation solves the geodesic equation for a particle with non-zero mass:
-        d(u^mu)/d(tau) = -Gamma^mu_{alpha beta} u^alpha u^beta
-    subject to the normalization constraint u^mu u_mu = -1.
+    The simulation solves the geodesic equation for a photon:
+        d(p^mu)/d(lambda) = -Gamma^mu_{alpha beta} p^alpha p^beta
+    subject to the normalization constraint p^mu p_mu = 0.
 
     Numerical fidelity is validated by monitoring constants of motion associated
     with the spacetime's symmetries (Killing vectors and tensors):
@@ -46,23 +46,23 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.conserved_quantities
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.g4DD_metric import (
     g4DD_metric,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.calculate_ode_rhs_massive import (
-    calculate_ode_rhs_massive,
-)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.ode_gsl_wrapper_massive import (
-    ode_gsl_wrapper_massive,
-)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.u0_massive import (
-    u0_massive,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constraint import (
     normalization_constraint,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.calculate_ode_rhs import (
+    calculate_ode_rhs,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.ode_gsl_wrapper import (
+    ode_gsl_wrapper,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.p0_reverse import (
+    p0_reverse,
 )
 
 # Step 2: Set codegen and compile-time parameters
 par.set_parval_from_str("Infrastructure", "BHaH")
 
-project_name = "mass_geodesic_integrator"
+project_name = "photon_geodesic_integrator"
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
@@ -71,7 +71,7 @@ if os.path.exists(project_dir):
 
 # Spacetime configuration
 SPACETIME = "KerrSchild_Cartesian"
-PARTICLE = "massive"
+PARTICLE = "photon"
 GEO_KEY = f"{SPACETIME}_{PARTICLE}"
 
 #########################################################
@@ -93,21 +93,21 @@ g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
 connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
 
 # 3. ODE Right-Hand Side
-calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, metric_data.xx)
+calculate_ode_rhs(geodesic_data.geodesic_rhs, metric_data.xx)
 
-# 4. Hamiltonian Constraint Solver (for initial u^0)
-if geodesic_data.u0_massive is None:
-    raise ValueError(f"u0_massive is None for {GEO_KEY}")
-u0_massive(geodesic_data.u0_massive)
+# 4. Hamiltonian Constraint Solver (for initial p^0)
+if geodesic_data.p0_photon is None:
+    raise ValueError(f"p0_photon is None for {GEO_KEY}")
+p0_reverse(geodesic_data.p0_photon)
 
 # 5. Conserved Quantities (Diagnostics)
 conserved_quantities(SPACETIME, PARTICLE)
 
-# 6. Normalization_constraint
+# 6. Normalization Constraint
 normalization_constraint(geodesic_data.norm_constraint_expr, PARTICLE)
 
 # 7. GSL Wrapper
-ode_gsl_wrapper_massive(SPACETIME)
+ode_gsl_wrapper(SPACETIME)
 
 
 #########################################################
@@ -126,8 +126,8 @@ def main_c() -> None:
         "gsl/gsl_math.h",
         "string.h",
     ]
-    desc = """@brief Main driver function for the massive geodesic integrator.
-        
+    desc = """@brief Main driver function for the photon geodesic integrator.
+
         Initializes the BHaH infrastructure, sets initial particle conditions, 
         performs time integration using GSL (RKF45), and outputs trajectory data 
         and conservation checks to stdout/files."""
@@ -144,20 +144,21 @@ def main_c() -> None:
     commondata.M_scale = 1.0;
     commondata.a_spin = 0.9;
 
-    printf("Starting Mass Geodesic Integrator...\\n");
+    printf("Starting Photon Geodesic Integrator...\\n");
     printf("Spacetime: {SPACETIME}, M=%.2f, a=%.2f\\n", commondata.M_scale, commondata.a_spin);
 
     // 2. Initial Conditions
-    double y[8];
+    double y[9];
     y[0] = 0.0;
     y[1] = 10.0;
     y[2] = 1.0;
     y[3] = 1.0;
 
-    // Initial Spatial Velocity
-    y[5] = -0.1; // u^x
-    y[6] = 0.33;  // u^y
-    y[7] = 0.0;   // u^z
+    // Initial Spatial Momentum
+    y[5] = -0.1; // p^x
+    y[6] = 0.33;  // p^y
+    y[7] = 0.0;   // p^z
+    y[8] = 0.0;  // L 
 
 
     // A. Declare metric struct to hold components
@@ -167,16 +168,17 @@ def main_c() -> None:
     // Signature: (commondata, y, metric_struct_out)
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
 
-    // C. Solve for u^0 using the pre-calculated metric
-    double u0_val = 0.0;
-    // Signature: (metric, y, u0_out)
-    u0_massive(&g4DD_local, y, &u0_val);
-    y[4] = u0_val;
+    // C. Solve for p^0 using the pre-calculated metric
+    double p0_val = 0.0;
+    // Signature: (metric, y, p0_val)
+    p0_reverse(&g4DD_local, y, &p0_val);
+    y[4] = p0_val;
     // ---------------------------------------------------------
 
     printf("Initial State:\\n");
     printf("  Pos: (%.4f, %.4f, %.4f)\\n", y[1], y[2], y[3]);
-    printf("  Vel: (%.4f, %.4f, %.4f, %.4f)\\n", y[4], y[5], y[6], y[7]);
+    printf("  Mom: (%.4f, %.4f, %.4f, %.4f)\\n", y[4], y[5], y[6], y[7]);
+    printf("  Length: (%.4f)\\n", y[8]);
 
     // 3. Pre-Integration Diagnostics
     double E_init, Lx_init, Ly_init, Lz_init, Q_init;
@@ -188,15 +190,15 @@ def main_c() -> None:
 
     // 4. GSL Setup
     const gsl_odeiv2_step_type * T = gsl_odeiv2_step_rkf45;
-    gsl_odeiv2_step * s = gsl_odeiv2_step_alloc(T, 8);
+    gsl_odeiv2_step * s = gsl_odeiv2_step_alloc(T, 9);
     gsl_odeiv2_control * c = gsl_odeiv2_control_y_new(1e-9, 0.0);
-    gsl_odeiv2_evolve * e = gsl_odeiv2_evolve_alloc(8);
+    gsl_odeiv2_evolve * e = gsl_odeiv2_evolve_alloc(9);
 
-    gsl_odeiv2_system sys = {{ode_gsl_wrapper_massive_{SPACETIME}, NULL, 8, &commondata}};
+    gsl_odeiv2_system sys = {{ode_gsl_wrapper_{SPACETIME}, NULL, 9, &commondata}};
 
     // Integration variables
-    double tau = 0.0;
-    double tau_max = 20000.0;
+    double lambda = 0.0;
+    double lambda_max = 20000.0;
     double h = 1e-3;
 
     // 5. File Output Setup
@@ -205,17 +207,17 @@ def main_c() -> None:
         fprintf(stderr, "Error opening trajectory.txt\\n");
         return 1;
     }}
-    fprintf(fp, "# tau t x y z u^t u^x u^y u^z\\n");
+    fprintf(fp, "# lambda t x y z p^t p^x p^y p^z L\\n");
 
     // 6. Integration Loop
     int steps = 0;
     int max_steps = 2000000;
 
-    while (tau < tau_max && steps < max_steps) {{
-        fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\\n",
-                tau, y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7]);
+    while (lambda < lambda_max && steps < max_steps) {{
+        fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\\n",
+                lambda, y[0], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8]);
 
-        int status = gsl_odeiv2_evolve_apply(e, c, s, &sys, &tau, tau_max, &h, y);
+        int status = gsl_odeiv2_evolve_apply(e, c, s, &sys, &lambda, lambda_max, &h, y);
 
         if (status != GSL_SUCCESS) {{
             printf("GSL Error: %d\\n", status);
@@ -224,25 +226,26 @@ def main_c() -> None:
 
         double r = sqrt(y[1]*y[1] + y[2]*y[2] + y[3]*y[3]);
         if (r < 2.0 * commondata.M_scale) {{
-            printf("Termination: Particle reached r = %.4f < 2M at tau = %.4f\\n", r, tau);
+            printf("Termination: Particle reached r = %.4f < 2M at lambda = %.4f\\n", r, lambda);
             break;
         }}
         steps++;
     }}
 
     fclose(fp);
-    printf("Integration finished after %d steps. Final tau = %.4f\\n", steps, tau);
+    printf("Integration finished after %d steps. Final lambda = %.4f\\n", steps, lambda);
 
     // 7. Post-Integration Diagnostics
     double E_final, Lx_final, Ly_final, Lz_final, Q_final, norm_final;
     conserved_quantities_{SPACETIME}_{PARTICLE}(&commondata, y,
-                                                &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);
+                                                &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);   
+
     g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
-    normalization_constraint_massive(&g4DD_local, y, &norm_final);
+    normalization_constraint_photon(&g4DD_local, y, &norm_final);
 
+    printf("Final norm: \\n");
+    printf("  norm = %.4e\\n", norm_final);
 
-    printf("Final norm deviation (norm + 1): \\n");
-    printf("  norm_plus_1 = %.4e\\n", norm_final + 1);
 
     printf("Final Conserved Quantities:\\n");
     printf("  E = %.8f, Lz = %.8f, Q = %.8f\\n", E_final, Lz_final, Q_final);

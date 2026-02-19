@@ -4,7 +4,7 @@ Construct symbolic expressions for geodesic equations in various spacetime backg
 This module can provide symbolic Christoffel symbols and geodesic equations of motion for numerical spacetime data.
 It also can take a pre-defined analytic spacetime metric and compute the geometric quantities necessary for geodesic
 integration, namely the Christoffel symbols and the geodesic equations of motion.
-It supports both massive and massless (photon) particles.
+It supports both massive and photon particles.
 
 Author: Dalton J. Moone
 """
@@ -39,7 +39,8 @@ class GeodesicEquations:
     Gamma4UDD: List[List[List[sp.Expr]]]
     geodesic_rhs: List[sp.Expr]
     u0_massive: Optional[sp.Expr]
-    p0_massless: Optional[sp.Expr]
+    p0_photon: Optional[sp.Expr]
+    norm_constraint_expr: sp.Expr
     Gamma4UDD_from_generic_metric: List[List[List[sp.Expr]]]
 
     def __init__(self, spacetime: str, particle_type: str = "massive") -> None:
@@ -52,7 +53,7 @@ class GeodesicEquations:
         specified particle type.
 
         :param spacetime: The spacetime to use (e.g., "KerrSchild_Cartesian").
-        :param particle_type: The type of particle, either "massive" or "massless".
+        :param particle_type: The type of particle, either "massive" or "photon".
         :raises ValueError: If the particle type is not supported.
         """
         self.spacetime = spacetime
@@ -60,7 +61,7 @@ class GeodesicEquations:
 
         # Initialize optional attributes to None to satisfy type safety
         self.u0_massive = None
-        self.p0_massless = None
+        self.p0_photon = None
 
         # Step 1: Acquire the metric and its associated coordinates.
         metric = Analytic_Spacetimes[spacetime]
@@ -76,14 +77,17 @@ class GeodesicEquations:
         if self.particle_type == "massive":
             self.geodesic_rhs = self.geodesic_eom_rhs_massive()
             self.u0_massive = self.hamiltonian_constraint_massive()
-        elif self.particle_type == "massless":
-            self.geodesic_rhs = self.geodesic_eom_rhs_massless()
-            self.p0_massless = self.hamiltonian_constraint_massless()
+        elif self.particle_type == "photon":
+            self.geodesic_rhs = self.geodesic_eom_rhs_photon()
+            self.p0_photon = self.hamiltonian_constraint_photon()
         else:
             raise ValueError(f"Particle type '{self.particle_type}' is not supported.")
 
         # Step 4: Reuse the precomputed symbolic recipe for Christoffel symbols from a generic metric.
         self.Gamma4UDD_from_generic_metric = _GAMMA4UDD_GENERIC_RECIPE
+
+        # Step 5: Generate generic normalization constraint for validation
+        self.norm_constraint_expr = self.normalization_constraint()
 
     def derivative_g4DD(self) -> List[List[List[sp.Expr]]]:
         r"""
@@ -240,25 +244,48 @@ class GeodesicEquations:
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[1])
 
-    def geodesic_eom_rhs_massless(self) -> List[sp.Expr]:
+    def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
         r"""
-        Generate the symbolic right-hand-side for the 9 massless geodesic ODEs.
+        Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
-        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
-        This function exploits the symmetry of the Christoffel symbols and the
-        metric to optimize the summations.
+        The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu.
+        The ninth ODE provides a diagnostic for the spatial distance traveled by the photon,
+        as measured by a local Eulerian observer.
+
+        **Equation 9: Eulerian Distance**
+        The rate of change of the proper spatial distance L_Euler with respect
+        to the affine parameter \lambda is given by:
+
+            dL_Euler/d\lambda = \alpha p^0 = p^0 / sqrt(-g^00)
+
+        **Physical Interpretation:**
+        This value represents the "lab frame" distance measured by an **Eulerian Observer**
+        (also known as a Normal Observer). This observer has a 4-velocity n^\mu normal
+        to the spatial hypersurface (slice of constant coordinate time t).
+
+        * **Observer:** The Eulerian observer is "hovering" at a specific spatial coordinate,
+            moving orthogonal to the spatial slice. In the ADM formalism, their 4-velocity
+            is n_\mu = (-\alpha, 0, 0, 0).
+        * **Measurement:** It answers the question: "How much distance does the local
+            Eulerian observer see the photon cover in this instant?"
+        * **Invariance:** This scalar is spatially invariant (valid under spatial rotations)
+            but slicing dependent (depends on the definition of time t).
+
+        **Variables:**
+        * p^0: Time component of the photon 4-momentum (dt/d\lambda).
+        * g^00: Time-time component of the **inverse** metric tensor.
+        * \alpha: The Lapse function, defined as \alpha = 1/sqrt(-g^00) (assuming g^00 < 0).
+
+        .. note::
+            This formulation assumes a metric signature where g^00 < 0 (e.g., -+++).
+            It is well-behaved in horizon-penetrating coordinates (like Kerr-Schild) where
+            g^00 remains finite, but may diverge in static coordinates (like Schwarzschild)
+            at the horizon where the Eulerian observer cannot exist.
 
         Reference:
         Wikipedia: Geodesics in general relativity
         Permanent Link: https://en.wikipedia.org/w/index.php?title=Geodesics_in_general_relativity&oldid=1320086873
         (See first equation in Section: Mathematical expression)
-
-
-        Reference:
-        Wikipedia: Proper length
-        Permanent Link: https://en.wikipedia.org/w/index.php?title=Proper_length&oldid=1323993083
-        (See first equation in Section: Proper distance along a path)
-
 
         :return: A list of 9 SymPy expressions for the RHS of the ODEs.
         """
@@ -266,6 +293,9 @@ class GeodesicEquations:
         pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
         g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        # We need the inverse metric g^UU to compute g^00 for the lapse function.
+        g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
 
         Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
@@ -280,21 +310,18 @@ class GeodesicEquations:
                     sum_term += term
             mom_rhs[alpha] = -sum_term
 
-        path_len_sum = sp.sympify(0)
-        # Exploit symmetry of g_{ij} to optimize summation
-        for i in range(1, 4):
-            for j in range(i, 4):
-                term = g4DD[i][j] * pU[i] * pU[j]
-                if i != j:
-                    term *= 2
-                path_len_sum += term
-        path_len_rhs = [sp.sqrt(sp.Abs(path_len_sum))]
+        # Ninth Equation: Eulerian Distance Evolution
+        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+        # Note: L_Euler is a *signed* distance. In reverse ray tracing, p^0 < 0
+        # generally causes L_Euler to decrease, except inside an ergosphere 
+        # where p^0 > 0 causes it to increase.
+        path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
 
-    def hamiltonian_constraint_massless(self) -> sp.Expr:
+    def hamiltonian_constraint_photon(self) -> sp.Expr:
         r"""
-        Symbolically derive p^0 from the Hamiltonian constraint for a massless particle.
+        Symbolically derive p^0 from the Hamiltonian constraint for a photon particle.
 
         This function solves the null geodesic condition: g_{\mu\nu} p^\mu p^\nu = 0.
         Assuming the usual (-,+,+,+) signature with g_{00} < 0, this returns the negative p^0 root, conventional for reverse ray tracing.
@@ -303,9 +330,9 @@ class GeodesicEquations:
         Wikipedia: Line element
         Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
         (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
-         Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for massless particles.)
+         Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for photon particles.)
 
-         .. warning::
+        .. warning::
            This function assumes the particle is initialized in a region where g_{00} < 0 (e.g., outside the ergosphere).
            It cannot be used to set initial conditions inside the ergosphere where g_{00} > 0.
            Note: This limitation applies only to initialization. The time-evolution integrator handles transitions across the ergosphere correctly.
@@ -348,6 +375,50 @@ class GeodesicEquations:
         sol2 = (-B - discriminant) / (2 * A)
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[0])
+
+    def normalization_constraint(self) -> sp.Expr:
+        r"""
+        Generate the symbolic expression for the metric normalization constraint.
+
+        This computes the scalar invariant: C = g_{\mu\nu} v^\mu v^\nu.
+
+        The variable 'vU' represents the tangent vector to the geodesic curve:
+        - For massive particles, vU corresponds to 4-velocity (u^\mu).
+            Expected Result: -1 (in -+++ signature).
+        - For photon particles, vU corresponds to 4-momentum (p^\mu).
+            Expected Result: 0.
+
+        Reference:
+        Wikipedia: Line element
+        Permanent Link: https://en.wikipedia.org/w/index.php?title=Line_element&oldid=1325490955
+        (See last equation in Section: General formulation - Identification of the square of the line element with the metric tensor;
+            Note: In the referenced equation, null (lightlike) curves correspond to $g = 0$, which is the case for photon particles.
+            Note: In the referenced equation for massive particles (timelike curves) $g = -1$.)
+
+        .. warning:: This function is meant for validation purposes
+
+        :return: A SymPy expression for the contraction g_{\mu\nu} v^\mu v^\nu.
+        """
+        # Generic tangent vector v^mu (vU0, vU1, vU2, vU3)
+        vU = ixp.declarerank1("vU", dimension=4)
+
+        # Generic metric g_mu_nu
+        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+
+        constraint = sp.sympify(0)
+
+        # Loop over indices, exploiting g_{mu,nu} = g_{nu,mu} symmetry
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = g4DD[mu][nu] * vU[mu] * vU[nu]
+
+                # Double the off-diagonal terms (mu != nu)
+                if mu != nu:
+                    term *= 2
+
+                constraint += term
+
+        return constraint
 
     @staticmethod
     def symbolic_numerical_christoffel_recipe() -> List[List[List[sp.Expr]]]:
@@ -468,7 +539,7 @@ if __name__ == "__main__":
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.
-    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_massless"]:
+    for config_key in ["KerrSchild_Cartesian_massive", "KerrSchild_Cartesian_photon"]:
         print(f"Processing configuration: {config_key}...")
         geodesic_eqs = Geodesic_Equations[config_key]
         results_dict = ve.process_dictionary_of_expressions(

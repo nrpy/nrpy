@@ -1,9 +1,9 @@
 """
 Register C wrapper function to interface with the GSL ODE solver.
 
-This module registers the 'ode_gsl_wrapper_massive_{spacetime}' C function.
+This module registers the 'ode_gsl_wrapper_{spacetime}' C function.
 It acts as a dispatcher, unpacking the generic `void *params` pointer into
-NRPy-specific structures (commondata), computing the Christoffel
+NRPy-specific structures (commondata), computing the metric and Christoffel
 symbols, and invoking the RHS calculation engine.
 
 Author: Dalton J. Moone
@@ -12,7 +12,7 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 
 
-def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
+def ode_gsl_wrapper(spacetime_name: str) -> None:
     """
     Generate the C wrapper function to interface with the GSL ODE solver.
 
@@ -24,38 +24,45 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
 
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
-    desc = f"""@brief GSL-compatible wrapper for massive particle geodesics in {spacetime_name}.
-
-        Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct, 
-        computes the local Christoffel symbols (connections), and calls the RHS calculation routine.
+    desc = f"""@brief GSL-compatible wrapper for photon geodesics in {spacetime_name}.
+        
+        Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct,
+        computes the local metric and connections, and calls the RHS calculation routine.
         
         Input:
-            t: Current proper time (unused in autonomous systems).
-            y[8]: Current state vector.
+            t: Current value for affine parameter
+            y[9]: Current state vector.
             params: Pointer to commondata_struct.
         Output:
-            f[8]: Computed derivatives (RHS)."""
+            f[9]: Computed derivatives (RHS)."""
+
     cfunc_type = "int"
-    name = f"ode_gsl_wrapper_massive_{spacetime_name}"
-    params = "double t, const double y[8], double f[8], void *params"
+    name = f"ode_gsl_wrapper_{spacetime_name}"
+    params = "double t, const double y[9], double f[9], void *params"
 
     # Construct the body with specific function calls
     body = f"""
-    (void)t; // Mark proper time 't' as unused to avoid compiler warnings.
+    (void)t; // Mark affine parameter 't' as unused to avoid compiler warnings.
     
     // 1. Unpack parameters
     commondata_struct *commondata = (commondata_struct *)params;
     
     // 2. Declare geometric structs to hold intermediate results
+    metric_struct metric;
     connection_struct conn;
+
+    // 3. Compute Metric 
+    // Signature: (commondata, y, &metric)
+    g4DD_metric_{spacetime_name}(commondata, y, &metric);
+
     
     // 3. Compute Connections (Christoffel Symbols)
     // Signature: (commondata, y, &conn)
     connections_{spacetime_name}(commondata, y, &conn);
     
-    // 4. Compute Geodesic RHS
-    // Signature: (y, &conn, f)
-    calculate_ode_rhs_massive(y, &conn, f);
+    // 5. Compute Geodesic RHS
+    // Signature: (y, metric, conn, rhs_out)
+    calculate_ode_rhs(y, &metric, &conn, f);
     
     return GSL_SUCCESS;
     """
@@ -90,10 +97,10 @@ if __name__ == "__main__":
 
     try:
         # 1. Run the Generator
-        ode_gsl_wrapper_massive(SPACETIME)
+        ode_gsl_wrapper(SPACETIME)
 
         # 2. Output
-        func_name = f"ode_gsl_wrapper_massive_{SPACETIME}"
+        func_name = f"ode_gsl_wrapper_{SPACETIME}"
         if func_name in cfc.CFunction_dict:
             filename = f"{func_name}.c"
             with open(filename, "w", encoding="utf-8") as f:
