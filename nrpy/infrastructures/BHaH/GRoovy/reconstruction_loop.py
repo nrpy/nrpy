@@ -29,11 +29,11 @@ _LOOP_PREAMBLE = r"""
   const int zdir = (flux_dir == 2);
 
   const int imin = NGHOSTS;
-  const int imax = Nxx_plus_2NGHOSTS0 - (NGHOSTS - 1);
+  const int imax = Nxx_plus_2NGHOSTS0 - (NGHOSTS - xdir);
   const int jmin = NGHOSTS;
-  const int jmax = Nxx_plus_2NGHOSTS1 - (NGHOSTS - 1);
+  const int jmax = Nxx_plus_2NGHOSTS1 - (NGHOSTS - ydir);
   const int kmin = NGHOSTS;
-  const int kmax = Nxx_plus_2NGHOSTS2 - (NGHOSTS - 1);
+  const int kmax = Nxx_plus_2NGHOSTS2 - (NGHOSTS - zdir);
 """
 
 _TEMPERATURE_POSTPROCESS = r"""
@@ -325,7 +325,7 @@ def _register_reconstruction_loops(
             ("SGF",),
             ("S_RGF",),
             ("S_LGF",),
-            _ENTROPY_POSTPROCESS,
+            _ENTROPY_POSTPROCESS if evolving_temperature else "",
         )
         _register_reconstruction_cfunc(
             CoordSystem=CoordSystem,

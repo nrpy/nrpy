@@ -1,5 +1,5 @@
 """
-C function responsible for handling all calculations responsible for right hand sides of GRHD equations.
+C function responsible for computing the right-hand sides of the GRHD equations.
 
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
@@ -66,7 +66,7 @@ REAL *restrict rhs_gfs"""
 
     // Function pointer to allow for loop over fluxes
   void (*calculate_HLL_fluxes)(const commondata_struct *, const params_struct *,
-  const ghl_eos_parameters *restrict, REAL *);
+  const ghl_eos_parameters *restrict, REAL *) = NULL;
 
   calculate_all_source_terms(commondata, params, xx, eos, auxevol_gfs, evol_gfs, rhs_gfs);
 
@@ -119,9 +119,9 @@ REAL *restrict rhs_gfs"""
     //          We need this for the Riemann solver. We calculate it for both
     //          Right (R) and Left (L) states at the interface.
     #pragma omp parallel for
-    LOOP_REGION(NGHOSTS, (Nxx_plus_2NGHOSTS0-NGHOSTS)+1,
-                NGHOSTS, (Nxx_plus_2NGHOSTS1-NGHOSTS)+1,
-                NGHOSTS, (Nxx_plus_2NGHOSTS2-NGHOSTS)+1){
+    LOOP_REGION(NGHOSTS, (Nxx_plus_2NGHOSTS0-NGHOSTS) + (flux_dir == 0),
+                NGHOSTS, (Nxx_plus_2NGHOSTS1-NGHOSTS) + (flux_dir == 1),
+                NGHOSTS, (Nxx_plus_2NGHOSTS2-NGHOSTS) + (flux_dir == 2)){
 
       const int index = IDX3(i0, i1, i2);
 
