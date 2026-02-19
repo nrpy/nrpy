@@ -77,7 +77,7 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
-    name = "SEOBNRv5_aligned_spin_special_coefficients_rholm_calculation"
+    name = "SEOBNRv5_aligned_spin_special_coefficients_rholm"
     params = "commondata_struct *restrict commondata,  REAL *restrict dynamics, REAL *rhos, REAL *hNR"
     body = """
 const REAL m1 = commondata->m1;
@@ -92,16 +92,16 @@ const REAL Omega = dynamics[OMEGA];
 
     body += rholm_code
     body += """
-rhos[RHO21 - 1] = rho21;
-rhos[RHO43 - 1] = rho43;
-rhos[RHO55 - 1] = rho55;
+rhos[RHO21] = rho21;
+rhos[RHO43] = rho43;
+rhos[RHO55] = rho55;
 """
 
     body += hNR_code
     body += """
-hNR[HNR21 - 1] = hNR21;
-hNR[HNR43 - 1] = hNR43;
-hNR[HNR55 - 1] = hNR55;
+hNR[HNR21] = hNR21;
+hNR[HNR43] = hNR43;
+hNR[HNR55] = hNR55;
 """
 
     cfc.register_CFunction(
@@ -366,13 +366,13 @@ dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
 dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
 
-SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
+SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
 REAL rho21 = rhos[0];
 REAL rho43 = rhos[1];
 const REAL hNR21 = hNR[0];
 const REAL hNR43 = hNR[1];
 
-SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
+SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
 REAL rho55 = rhos[2];
 const REAL hNR55 = hNR[2];
 
