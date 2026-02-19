@@ -256,27 +256,27 @@ def _register_reconstruction_loops(
         if evolving_temperature:
             primitive_V = (
                 "RHOBGF",
-                "PGF",
                 "RESCALEDVU0GF",
                 "RESCALEDVU1GF",
                 "RESCALEDVU2GF",
                 "YEGF",
+                "TEMPERATUREGF",
             )
             primitive_VR = (
                 "RHOB_RGF",
-                "P_RGF",
                 "RESCALEDVRU0GF",
                 "RESCALEDVRU1GF",
                 "RESCALEDVRU2GF",
                 "YE_RGF",
+                "TEMPERATURE_RGF",
             )
             primitive_VL = (
                 "RHOB_LGF",
-                "P_LGF",
                 "RESCALEDVLU0GF",
                 "RESCALEDVLU1GF",
                 "RESCALEDVLU2GF",
                 "YE_LGF",
+                "TEMPERATURE_LGF",
             )
             primitive_postprocess = _TEMPERATURE_POSTPROCESS
         else:
@@ -301,7 +301,7 @@ def _register_reconstruction_loops(
                 "RESCALEDVLU1GF",
                 "RESCALEDVLU2GF",
             )
-        primitive_postprocess = ""
+            primitive_postprocess = ""
     else:
         raise ValueError(f"Unknown reconstruction scheme: {reconstruction_scheme}")
 
