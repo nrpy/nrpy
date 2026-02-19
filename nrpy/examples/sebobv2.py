@@ -301,6 +301,14 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
+#define NUMVARS_COEFFICIENTS 6
+#define RHO21 0
+#define RHO43 1
+#define RHO55 2
+#define HNR21 3
+#define HNR43 4
+#define HNR55 5
+#define IDX_COEFFICIENTS(idx, var) ((idx)*NUMVARS_COEFFICIENTS + (var))
 #define NUMMODES 8 
 #define STRAIN22 1
 #define STRAIN21 2
