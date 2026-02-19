@@ -65,7 +65,6 @@ import nrpy.indexedexp as ixp
 import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
-    a_spin,
 )
 
 
@@ -122,13 +121,13 @@ class GeodesicDiagnostics:
                 metric_data = Analytic_Spacetimes[self.spacetime]
                 self.xx = metric_data.xx
                 self.g4DD = metric_data.g4DD
-            except ValueError:
+            except ValueError as exc:
                 # AnalyticSpacetimes raises ValueError if the key is not supported internally
                 raise ValueError(
                     f"Spacetime '{self.spacetime}' is not supported. "
                     "Please check analytic_spacetimes.py for available metrics "
                     "or use 'Numerical' for generic derivation."
-                )
+                ) from exc
 
         # Define 4-momentum vector pU = [p0, p1, p2, p3]
         pU = [sp.Symbol(f"p{i}", real=True) for i in range(4)]
@@ -236,6 +235,8 @@ class GeodesicDiagnostics:
         :return: Symbolic expression for Q.
         """
         L_z = L_exprs[2]
+        # Define a_spin locally (G=c=1)
+        a_spin = sp.Symbol("a_spin", real=True)
 
         # Kerr spacetime logic (Cartesian Kerr-Schild)
         # xx[0] is time, so x,y,z are indices 1,2,3
@@ -382,9 +383,10 @@ if __name__ == "__main__":
         Q_kerr_formula = Q_expr
 
     # Substitute a_spin -> 0 in the formula and L^2
-    Q_kerr_a0 = Q_kerr_formula.subs(a_spin, 0)
-    L_sq_kerr_a0 = L_sq_kerr.subs(a_spin, 0)
-    L_z_sq_kerr_a0 = L_z_sq_kerr.subs(a_spin, 0)
+    a_spin_sym = sp.Symbol("a_spin", real=True)
+    Q_kerr_a0 = Q_kerr_formula.subs(a_spin_sym, 0)
+    L_sq_kerr_a0 = L_sq_kerr.subs(a_spin_sym, 0)
+    L_z_sq_kerr_a0 = L_z_sq_kerr.subs(a_spin_sym, 0)
 
     # Check identity: Q(a=0) + L_z^2 - L^2 == 0
     kerr_diff = sp.simplify(Q_kerr_a0 + L_z_sq_kerr_a0 - L_sq_kerr_a0)

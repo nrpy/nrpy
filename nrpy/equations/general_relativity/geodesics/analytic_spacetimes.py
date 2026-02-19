@@ -21,12 +21,6 @@ import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.validate_expressions.validate_expressions as ve
 
-# Step 0.d: Define physical parameters as SymPy symbols (G=c=1; M_scale = ADM mass).
-# These are used in equations below but are NOT registered as CodeParameters here;
-# the main orchestration script must register them to set the correct default values.
-M_scale = sp.symbols("M_scale", real=True)
-a_spin = sp.symbols("a_spin", real=True)
-
 
 class AnalyticSpacetimes:
     """
@@ -75,9 +69,17 @@ class AnalyticSpacetimes:
         :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
                  and xx is the list of symbolic coordinate variables (t, x, y, z).
         """
-        # Step 1: Define generic symbolic coordinates.
+        # Step 1.a: Define generic symbolic coordinates.
         t, x, y, z = sp.symbols("t x y z", real=True)
         xx = [t, x, y, z]
+
+        # Step 1.b: Register physical parameters (G=c=1; M_scale = ADM mass)
+        M_scale = par.register_CodeParameter(
+            "REAL", __name__, "M_scale", 1.0, commondata=True
+        )
+        a_spin = par.register_CodeParameter(
+            "REAL", __name__, "a_spin", 0.0, commondata=True
+        )
 
         # Step 2: Define intermediate geometric quantities.
         # The Kerr-Schild radius 'r' is not the Euclidean radius. It is solved

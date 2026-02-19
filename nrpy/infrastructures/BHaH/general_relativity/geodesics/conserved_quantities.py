@@ -38,7 +38,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
 
     :param spacetime_name: Name of the spacetime (e.g., "KerrSchild_Cartesian").
     :param particle_type: "massive" or "photon".
-    :raises ValueError: If PARTICLE is not "massive" or "photon".
+    :raises ValueError: If particle_type is not "massive" or "photon".
     """
     # Step 1: Specific setup based on particle type
     if particle_type == "massive":
