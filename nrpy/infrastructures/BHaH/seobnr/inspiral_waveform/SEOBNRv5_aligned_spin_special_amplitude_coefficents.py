@@ -7,7 +7,6 @@ Authors: Siddharth Mahesh
         zachetie **at** gmail **dot* com
 """
 
-import ast
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
@@ -35,11 +34,9 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
 
-    rho_dict = wf.rho
     rholm = []
     rholm_labels = []
 
-    hNR_fits = const.hNR
     hNR = []
     hNR_labels = []
 
@@ -195,8 +192,8 @@ if (Omega_circ == NULL){
 REAL c_21 = c_21;
 REAL c_43 = c_43;
 REAL c_55 = c_55;
-REAL rhos[3];
-REAL hNR[3];
+REAL rhos[NUMVARS_COEFFICIENTS];
+REAL hNR[NUMVARS_COEFFICIENTS];
 double complex inspiral_modes[NUMMODES];
 
 size_t i;
@@ -323,7 +320,10 @@ else{
       fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
       exit(1);
     }
-    
+    for (i = 0; i < N_zoom; i++){
+    t_zoom[i] = times[0] + i * dt_ISCO;
+    minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
+  }
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
@@ -351,6 +351,7 @@ REAL dynamics_55[NUMVARS];
 dynamics_22[TIME] = t_peak_22;
 dynamics_22[R] = gsl_spline_eval(spline_r,t_peak_22,acc_r);
 dynamics_22[PHI] = gsl_spline_eval(spline_phi,t_peak_22,acc_phi);
+dynamics_22[PPHI] = gsl_spline_eval(spline_pphi,t_peak_22,acc_pphi);
 dynamics_22[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_22,acc_prstar);
 dynamics_22[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_22,acc_Omega);
 dynamics_22[H] = gsl_spline_eval(spline_Hreal,t_peak_22,acc_Hreal);
@@ -360,6 +361,7 @@ dynamics_22[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_22,acc_Omega_
 dynamics_55[TIME] = t_peak_55;
 dynamics_55[R] = gsl_spline_eval(spline_r,t_peak_55,acc_r);
 dynamics_55[PHI] = gsl_spline_eval(spline_phi,t_peak_55,acc_phi);
+dynamics_55[PPHI] = gsl_spline_eval(spline_pphi,t_peak_55,acc_pphi);
 dynamics_55[PRSTAR] = gsl_spline_eval(spline_prstar,t_peak_55,acc_prstar);
 dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
 dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
@@ -367,14 +369,14 @@ dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_
 
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
-REAL rho21 = rhos[0];
-REAL rho43 = rhos[1];
-const REAL hNR21 = hNR[0];
-const REAL hNR43 = hNR[1];
+REAL rho21 = rhos[RHO21];
+REAL rho43 = rhos[RHO43];
+const REAL hNR21 = hNR[HNR21];
+const REAL hNR43 = hNR[HNR43];
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
-REAL rho55 = rhos[2];
-const REAL hNR55 = hNR[2];
+REAL rho55 = rhos[RHO55];
+const REAL hNR55 = hNR[HNR55];
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
 double complex h21 = inspiral_modes[STRAIN21 - 1];
