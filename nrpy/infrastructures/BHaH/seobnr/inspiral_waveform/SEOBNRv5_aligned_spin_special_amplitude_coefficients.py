@@ -9,7 +9,9 @@ Authors: Siddharth Mahesh
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -33,11 +35,11 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
 
-    rholm = []
-    rholm_labels = []
+    rholm: List[sp.Expr] = []
+    rholm_labels: List[str] = []
 
-    hNR = []
-    hNR_labels = []
+    hNR: List[sp.Expr] = []
+    hNR_labels: List[str] = []
 
     modes = [(2, 1), (4, 3), (5, 5)]
 
