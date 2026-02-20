@@ -13,8 +13,8 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
+import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
 
 
@@ -26,7 +26,6 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -123,7 +122,6 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
