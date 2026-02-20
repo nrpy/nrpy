@@ -14,25 +14,26 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
-import sympy as sp
-
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
-import nrpy.helpers.parallel_codegen as pcg
 
 
 def register_CFunction_generalrfm_Cart_to_xx(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register a C function to numerically invert the GeneralRFM map:
-        Cart -> xx
+    Register a C function to numerically invert the GeneralRFM map Cart -> xx.
+
+    :param CoordSystem: GeneralRFM coordinate system name.
+    :raises ValueError: If CoordSystem is not GeneralRFM or its provider is unsupported/missing.
+    :return: None during parallel-codegen registration phase, otherwise the NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
