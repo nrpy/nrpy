@@ -6,7 +6,7 @@ transition centers and widths (r_trans_i, w_trans_i) and the outer radius L,
 matching the conventions in nrpy/equations/generalrfm/fisheye.py for an
 N-transition fisheye (zoom factors a0 -> a1 -> ... -> aN).
 
-The physical parameters are registered as NRPy CodeParameters in params_struct.
+The physical parameters are registered as NRPy CodeParameters in commondata_struct.
 
 Physical parameter meanings (physical radius):
 - fisheye_phys_L: outer physical boundary radius.
@@ -23,7 +23,7 @@ from nrpy.equations.generalrfm import fisheye as fisheye_eqs
 
 def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
     """
-    Register physical fisheye CodeParameters in params_struct.
+    Register physical fisheye CodeParameters in commondata_struct.
 
     :param num_transitions: Number of fisheye transitions.
     """
@@ -32,8 +32,8 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         __name__,
         "fisheye_phys_L",
         10.0,
-        commondata=False,
-        add_to_parfile=False,
+        commondata=True,
+        add_to_parfile=True,
         description="Outer physical boundary radius.",
     )
 
@@ -51,8 +51,8 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         __name__,
         r_names,
         r_defaults,
-        commondata=False,
-        add_to_parfile=False,
+        commondata=True,
+        add_to_parfile=True,
         descriptions=[
             f"Physical center radius of transition {i + 1}."
             for i in range(num_transitions)
@@ -63,8 +63,8 @@ def _register_physical_fisheye_codeparams(num_transitions: int) -> None:
         __name__,
         w_names,
         w_defaults,
-        commondata=False,
-        add_to_parfile=False,
+        commondata=True,
+        add_to_parfile=True,
         descriptions=[
             f"Physical width of transition {i + 1}." for i in range(num_transitions)
         ],
@@ -82,7 +82,7 @@ def build_post_params_struct_set_to_default_hook(
     """
     Build C code for main() hook after params_struct_set_to_default().
 
-    This hook computes internal fisheye parameters from params->fisheye_phys_*.
+    This hook computes internal fisheye parameters from commondata->fisheye_phys_*.
 
     :param num_transitions: Number of fisheye transitions.
     :param compute_griddata: Griddata array symbol in generated main C code.
@@ -92,7 +92,7 @@ def build_post_params_struct_set_to_default_hook(
         raise ValueError("num_transitions must be >= 1")
 
     return f"""for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
-  if (fisheye_params_from_physical_N{num_transitions}(&{compute_griddata}[grid].params) != 0) {{
+  if (fisheye_params_from_physical_N{num_transitions}(&commondata, &{compute_griddata}[grid].params) != 0) {{
     fprintf(stderr, "Error: fisheye_params_from_physical_N{num_transitions} failed for grid %d. Check fisheye_a* and fisheye_phys_* values.\\n", grid);
     exit(1);
   }}
@@ -131,7 +131,7 @@ def register_CFunction_fisheye_params_from_physical_N(
     # Ensure internal fisheye CodeParameters (a_i, R_i, s_i, c) are registered.
     _ = fisheye_eqs.build_fisheye(num_transitions=num_transitions)
 
-    # Register physical parameters in params_struct.
+    # Register physical parameters in commondata_struct.
     _register_physical_fisheye_codeparams(num_transitions)
 
     includes = ["<math.h>", "<stdio.h>", "<stdlib.h>"]
@@ -146,14 +146,14 @@ Physical parameter meanings (physical radius):
 """
     cfunc_type = "int"
     name = f"fisheye_params_from_physical_N{num_transitions}"
-    params = "params_struct *restrict params"
+    params = "const commondata_struct *restrict commondata, params_struct *restrict params"
 
     a_vals = [f"params->fisheye_a{i}" for i in range(num_transitions + 1)]
     r_trans_vals = [
-        f"params->fisheye_phys_r_trans{i + 1}" for i in range(num_transitions)
+        f"commondata->fisheye_phys_r_trans{i + 1}" for i in range(num_transitions)
     ]
     w_trans_vals = [
-        f"params->fisheye_phys_w_trans{i + 1}" for i in range(num_transitions)
+        f"commondata->fisheye_phys_w_trans{i + 1}" for i in range(num_transitions)
     ]
 
     prefunc = rf"""
@@ -162,10 +162,12 @@ Physical parameter meanings (physical radius):
 #include "BHaH_function_prototypes.h"
 #else
 typedef double REAL;
-typedef struct __params_struct__ {{
+typedef struct __commondata_struct__ {{
   REAL fisheye_phys_L;
   {" ".join([f"REAL fisheye_phys_r_trans{i + 1};" for i in range(num_transitions)])}
   {" ".join([f"REAL fisheye_phys_w_trans{i + 1};" for i in range(num_transitions)])}
+}} commondata_struct;
+typedef struct __params_struct__ {{
   {" ".join([f"REAL fisheye_a{i};" for i in range(num_transitions + 1)])}
   {" ".join([f"REAL fisheye_R{i + 1};" for i in range(num_transitions)])}
   {" ".join([f"REAL fisheye_s{i + 1};" for i in range(num_transitions)])}
@@ -272,7 +274,7 @@ static inline int solve_linear_system(const int n,
   const int NTRANS = {num_transitions};
   const int NUNK = 2 * NTRANS;
 
-  const REAL L = params->fisheye_phys_L;
+  const REAL L = commondata->fisheye_phys_L;
   const REAL a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};
   const REAL r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
   const REAL w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
