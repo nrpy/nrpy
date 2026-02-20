@@ -7,6 +7,7 @@ Currently supports GeneralRFM_fisheyeN* via equations/generalrfm/fisheye.py.
 Author: Nishita Jadoo
         njadoo@uidaho.edu
 """
+
 from __future__ import annotations
 
 from inspect import currentframe as cfr
@@ -24,6 +25,7 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 import nrpy.helpers.parallel_codegen as pcg
+
 
 def register_CFunction_generalrfm_Cart_to_xx(
     CoordSystem: str,

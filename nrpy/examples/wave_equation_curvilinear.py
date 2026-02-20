@@ -286,11 +286,9 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = (
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata=compute_griddata,
-        )
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata=compute_griddata,
     )
 
 post_non_y_n_auxevol_mallocs = ""
