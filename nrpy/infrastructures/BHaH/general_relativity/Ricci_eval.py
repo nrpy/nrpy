@@ -97,7 +97,9 @@ def register_CFunction_Ricci_eval(
             enable_simd=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias=("static constexpr" if is_cuda else "static const"),
-        ).replace("SIMD", "CUDA" if is_cuda else "SIMD"),
+        )
+        .replace("auxevol_gfs", "out_gfs")
+        .replace("SIMD", "CUDA" if is_cuda else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
