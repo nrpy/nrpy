@@ -316,7 +316,7 @@ if enable_SSL:
 commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, auxevol_gfs);"
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if outer_bcs_type == "radiation":
     rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);

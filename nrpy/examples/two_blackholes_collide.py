@@ -55,7 +55,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "Spherical"
+CoordSystem = "GeneralRFM_fisheyeN1"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -264,7 +264,7 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 )
 rhs_string = ""
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, auxevol_gfs);"
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
