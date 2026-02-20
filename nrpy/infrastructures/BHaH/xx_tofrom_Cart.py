@@ -141,7 +141,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     parallelization = par.parval_from_str("parallelization")
 
     rfm = refmetric.reference_metric[CoordSystem]
-    rfm_obj = cast(refmetric.ReferenceMetric, rfm)
+    rfm_obj = rfm
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
     provider = getattr(rfm, "general_rfm_provider", None)
@@ -537,10 +537,7 @@ if(r2 <= (REAL)0.0) {{
 }}
 """
     else:
-        raw_xx_to_Cart_exprs = [
-            cast(refmetric.ReferenceMetric, rfm).xx_to_Cart[i] + gri.Cart_origin[i]
-            for i in range(3)
-        ]
+        raw_xx_to_Cart_exprs = [rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)]
         processed_exprs = _prepare_sympy_exprs_for_codegen(
             raw_xx_to_Cart_exprs, local_C_vars
         )
