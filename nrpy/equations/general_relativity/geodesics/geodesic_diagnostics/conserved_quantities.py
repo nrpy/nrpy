@@ -205,7 +205,7 @@ class GeodesicDiagnostics:
         x, y, z = self.xx[1], self.xx[2], self.xx[3]
         p_x, p_y, p_z = pD[1], pD[2], pD[3]
 
-       # L = x × p  (Cartesian cross product)
+        # L = x × p  (Cartesian cross product)
         L_x = y * p_z - z * p_y
         L_y = z * p_x - x * p_z
         L_z = x * p_y - y * p_x
