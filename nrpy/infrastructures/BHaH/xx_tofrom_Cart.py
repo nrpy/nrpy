@@ -188,7 +188,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
         # Closed-form 1D expressions for rbar(r) and drbar/dr:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        (rbar_unscaled, drbar_unscaled, _, _) = (
+        rbar_unscaled, drbar_unscaled, _, _ = (
             fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
         )
         rbar_of_r_expr = fisheye_provider.c * rbar_unscaled
@@ -503,7 +503,7 @@ def register_CFunction_xx_to_Cart(
 
         # Closed-form 1D expression for rbar(r):
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        (rbar_unscaled, _, _, _) = (
+        rbar_unscaled, _, _, _ = (
             fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
         )
         rbar_expr_local = fisheye_provider.c * rbar_unscaled
@@ -537,7 +537,9 @@ if(r2 <= (REAL)0.0) {{
 }}
 """
     else:
-        raw_xx_to_Cart_exprs = [rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)]
+        raw_xx_to_Cart_exprs = [
+            rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)
+        ]
         processed_exprs = _prepare_sympy_exprs_for_codegen(
             raw_xx_to_Cart_exprs, local_C_vars
         )
