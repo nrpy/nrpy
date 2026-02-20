@@ -333,16 +333,14 @@ else{
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 + 10;
-size_t peak_idx; 
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[commondata->nsteps_fine - 2];
   t_peak_55 = t_peak_22;
-  peak_idx = commondata->nsteps_fine - 2;
 }
-else{
-  peak_idx = gsl_interp_bsearch(times, t_peak_22, 0, commondata->nsteps_fine);
-}  
+if (t_peak_55 > times[commondata->nsteps_fine - 1]){
+  t_peak_55 = times[commondata->nsteps_fine - 2];  
+}
 commondata->t_attach = t_peak_22;
 
 REAL dynamics_22[NUMVARS];
