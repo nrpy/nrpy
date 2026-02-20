@@ -200,8 +200,8 @@ def generate_diagnostics_code(
 
     :param dimension: Dimension index
     :param direction: Direction of diagnostics (e.g. "x", "y", "z")
-    :param num_fields: Number of fields for diagnostics
-    :param tot_num_diagnostic_pts: Total number of diagnostic points
+    :param totsize_field: Name of the diagnosticstruct field storing total output size in bytes.
+    :param which_output: Constant selecting which diagnostics output to write.
     :return: Code for diagnostics
     """
     code = f"""
@@ -595,7 +595,6 @@ def generate_switch_statement_for_gf_types(
     :param set_parity_types: whether to set parity types in switch statements.
     :return: A string representing the switch statement for the grid function types.
     """
-
     gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     switch_statement = """
@@ -644,13 +643,11 @@ switch (type_gfs) {
             if set_parity_types:
                 switch_cases.append("    gf_parity_types = aux_gf_parity;")
         switch_cases.append("    break;")
-    switch_cases.append(
-        """
+    switch_cases.append("""
   default:
     break;
 }
-"""
-    )
+""")
 
     switch_body = "\n".join(switch_cases)
 
@@ -668,7 +665,6 @@ def generate_switch_statement_for_gf_types_for_entry_method(
     :param MoL_method: Method of Lines (MoL) method name.
     :return: A string representing the switch statement for the grid function types.
     """
-
     gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # Keep synching of y n gfs during initial data distinct to prevent mismatch of messages
@@ -685,13 +681,11 @@ switch (type_gfs) {
             f"    thisProxy[CkArrayIndex3D(dst_chare_index0, dst_chare_index1, dst_chare_index2)].receiv_nonlocalinnerbc_data_{gf.lower()}(idx3_this_chare, type_gfs, NUM_GFS * num_srcpts_tosend_each_chare[which_dst_chare], tmpBuffer_innerbc_send);"
         )
         switch_cases.append("    break;")
-    switch_cases.append(
-        """
+    switch_cases.append("""
   default:
     break;
 }
-"""
-    )
+""")
     switch_body = "\n".join(switch_cases)
     return switch_statement + switch_body
 
@@ -715,7 +709,6 @@ def generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
     :return: A string containing entry method declarations separated by newlines.
     :raises ValueError: If `outer_bcs_type` is not set to either 'radiation' or 'extrapolation'.
     """
-
     gf_list = generate_complete_gf_list(Butcher_dict, MoL_method=MoL_method)
 
     # need separate entry methods of y n gf during initial data set up to prevent mismatch of messages
@@ -1772,22 +1765,17 @@ def output_timestepping_ci(
           }
         """
 
-    if nrpyelliptic_project:
-        filename_format = "commondata.nn"
-    else:
-        filename_format = "commondata.convergence_factor, commondata.time"
-
-    file_output_str += rf"""
-        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {{
-          serial {{
+    file_output_str += r"""
+        if (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0) {
+          serial {
             progress_indicator(&commondata, griddata_chare);
             if (commondata.time + commondata.dt > commondata.t_final)
               printf("\n");
-          }}
-          if (write_diagnostics_this_step) {{
-            serial {{
+          }
+          if (write_diagnostics_this_step) {
+            serial {
               count_filewritten = 0;
-              {{
+              {
                 char filename[512];
                 build_outfile_name(filename, sizeof filename, "out1d-y",
                                    griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_y,
@@ -1795,8 +1783,8 @@ def output_timestepping_ci(
                 Ck::IO::Options opts;
                 CkCallback opened_1d_y(CkIndex_Timestepping::ready_1d_y(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_y, opts);
-              }}
-              {{
+              }
+              {
                 char filename[512];
                 build_outfile_name(filename, sizeof filename, "out1d-z",
                                    griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_1d_z,
@@ -1804,8 +1792,8 @@ def output_timestepping_ci(
                 Ck::IO::Options opts;
                 CkCallback opened_1d_z(CkIndex_Timestepping::ready_1d_z(NULL), thisProxy);
                 Ck::IO::open(filename, opened_1d_z, opts);
-              }}
-              {{
+              }
+              {
                 char filename[512];
                 build_outfile_name(filename, sizeof filename, "out2d-xy",
                                    griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_xy,
@@ -1813,8 +1801,8 @@ def output_timestepping_ci(
                 Ck::IO::Options opts;
                 CkCallback opened_2d_xy(CkIndex_Timestepping::ready_2d_xy(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_xy, opts);
-              }}
-              {{
+              }
+              {
                 char filename[512];
                 build_outfile_name(filename, sizeof filename, "out2d-yz",
                                    griddata_chare[which_grid_diagnostics].diagnosticstruct.filename_2d_yz,
@@ -1822,8 +1810,8 @@ def output_timestepping_ci(
                 Ck::IO::Options opts;
                 CkCallback opened_2d_yz(CkIndex_Timestepping::ready_2d_yz(NULL), thisProxy);
                 Ck::IO::open(filename, opened_2d_yz, opts);
-              }}
-            }}
+              }
+            }
 """
 
     file_output_str += generate_diagnostics_code(

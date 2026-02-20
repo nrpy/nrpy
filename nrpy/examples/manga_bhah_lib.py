@@ -214,13 +214,11 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     enable_intrinsics=enable_intrinsics,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
-    supplemental_defines_dict={
-        "BHaH Lib": """
+    supplemental_defines_dict={"BHaH Lib": """
 typedef struct BHaH_struct {
   commondata_struct *commondata;
   griddata_struct *griddata;
-} BHaH_struct;"""
-    },
+} BHaH_struct;"""},
 )
 
 if enable_intrinsics:

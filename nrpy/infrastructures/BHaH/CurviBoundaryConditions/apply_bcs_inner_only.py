@@ -17,6 +17,7 @@ Authors: Zachariah B. Etienne
          Samuel D. Tootle
          sdtootle **at** gmail **dot* com
 """
+
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par

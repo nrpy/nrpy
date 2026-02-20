@@ -62,21 +62,12 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 # Development flags (NOT command-line-tunable)
-# Flag to compute the SEOBNR waveform in the frequency domain.
-frequency_domain_flag = False
-# Flag to precompute the waveform coefficients. Only works for aligned spins.
-# Once we have precession in place, we can make this more tunable
-precompute_waveform_coefficients_flag = False
 # Flag to output the commondata struct to a file.
 # Useful for fine-grained debugging.
 output_commondata_flag = False
 # Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
 # (set to False for performance checks)
 output_waveform_flag = True
-# SEOBNRv5 uses an iterative refinement routine to find the location of the peak of the orbital frequency.
-# This is not done in a robust manner and disabling it does not impact accuracy.
-# This flag helps enable/disable the routine at the codegen level so that we can assess the impact on performance and accuracy.
-perform_iterative_refinement = True
 # Removed all command line flags since we do not have multiple usage options currently.
 
 #########################################################
@@ -87,16 +78,12 @@ perform_iterative_refinement = True
 #  Note: Removing step numbers for now.
 def register_CFunction_main_c(
     output_waveform: bool = True,
-    frequency_domain: bool = False,
-    precompute_waveform_coefficients: bool = False,
     output_commondata: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing the SEBOB waveform.
 
     :param output_waveform: Flag to enable/disable printing the waveform
-    :param frequency_domain: Flag to enable/disable FFT to get a frequency domain waveform
-    :param precompute_waveform_coefficients: Flag to enable/disable precomputing the waveform coefficients
     :param output_commondata: Flag to enable/disable outputting the commondata struct to a binary file
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -116,12 +103,7 @@ cmdline_input_and_parfile_parser(&commondata, argc, argv);
 SEOBNRv5_quasi_precessing_spin_coefficients(&commondata);
 // Step: compute the spin dynamics
 SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
-"""
-    if precompute_waveform_coefficients:
-        body += r"""// Step TBD: Set the waveform coefficients
-SEOBNRv5_aligned_spin_waveform_coefficients(&commondata);
-"""
-    body += r"""// Step TBD: Compute SEOBNRv5 conservative initial conditions.
+// Step TBD: Compute SEOBNRv5 conservative initial conditions.
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step TBD: Run the trajectory generation.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
@@ -131,26 +113,9 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 SEBOBv2_NQC_corrections(&commondata);
 // Step TBD: Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
-
-"""
-    if frequency_domain:
-        body += r"""
-// Step TBD: Compute the FFT-ed IMR waveform
-// Specify wisdom file
-const char *wisdom_file = "fftw_wisdom.dat";
-SEOBNRv5_aligned_spin_FD_waveform(wisdom_file, &commondata);
 """
     if output_waveform:
-        if frequency_domain:
-            body += r"""
-// Step TBD: Print the resulting waveform.
-for (size_t i = 0; i < commondata.nsteps_IMR_FD; i++) {
-    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR_FD[IDX_WF(i,FREQ)])
-    , creal(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR_FD[IDX_WF(i,STRAIN)]));
-}
-"""
-        else:
-            body += r"""
+        body += r"""
 // Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
@@ -169,12 +134,6 @@ free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
-"""
-    if frequency_domain:
-        body += r"""
-free(commondata.waveform_IMR_FD);
-"""
-    body += r"""
 return 0;
 """
     cfc.register_CFunction(
@@ -231,21 +190,14 @@ BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_augments.register_CFunction_SEOBNRv5_
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_interpolate_dynamics.register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_iterative_refinement.register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_right_hand_sides.register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides()
-BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SEOBNRv5_aligned_spin_ode_integration(
-    perform_iterative_refinement
-)
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_ode_integration.register_CFunction_SEOBNRv5_aligned_spin_ode_integration()
 
 # register inspiral waveform routines
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
-if precompute_waveform_coefficients_flag:
-    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_coefficients.register_CFunction_SEOBNRv5_aligned_spin_waveform_coefficients()
-    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_waveform_precomputed.register_CFunction_SEOBNRv5_aligned_spin_waveform()
-    BHaH.seobnr.inspiral_waveform_precomputed.SEOBNRv5_aligned_spin_flux_precomputed.register_CFunction_SEOBNRv5_aligned_spin_flux()
-else:
-    BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
-    BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
 par.register_CodeParameters(
@@ -266,26 +218,6 @@ if __name__ == "__main__":
     #    )
 
     # Register some functions/code parameters based on input flags
-    if frequency_domain_flag:
-        par.register_CodeParameter(
-            "double complex *restrict",
-            __name__,
-            "waveform_IMR_FD",
-            commondata=True,
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-        )
-        par.register_CodeParameter(
-            "size_t",
-            __name__,
-            "nsteps_IMR_FD",
-            commondata=True,
-            add_to_parfile=False,
-            add_to_set_CodeParameters_h=False,
-        )
-        BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_FD_waveform.register_CFunction_SEOBNRv5_aligned_spin_FD_waveform()
-        BHaH.seobnr.fft_utils.SEOBNRv5_aligned_spin_process_waveform.register_CFunction_SEOBNRv5_aligned_spin_process_waveform()
-
     BHaH.seobnr.nqc_corrections.SEBOBv2_NQC_corrections.register_CFunction_SEBOBv2_NQC_corrections()
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
 
@@ -337,14 +269,11 @@ additional_includes = [
     "complex.h",
     "spline_struct.h",
 ]
-if frequency_domain_flag:
-    additional_includes.append(str(Path("fftw3.h")))
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
     enable_rfm_precompute=False,
-    supplemental_defines_dict={
-        "SEOBNR": """
+    supplemental_defines_dict={"SEOBNR": """
 #include<complex.h>
 #define COMPLEX double complex
 #define NUMVARS_SPIN 10
@@ -361,7 +290,6 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define IDX_SPIN(idx,var) ((idx)*NUMVARS_SPIN + (var))
 #define NUMVARS 8
 #define TIME 0
-#define FREQ 0
 #define R 1
 #define PHI 2
 #define PRSTAR 3
@@ -381,19 +309,14 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
 #define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
-"""
-    },
+"""},
 )
 register_CFunction_main_c(
     output_waveform_flag,
-    frequency_domain_flag,
-    precompute_waveform_coefficients_flag,
     output_commondata_flag,
 )
 
 addl_cflags = ["$(shell gsl-config --cflags)"]
-if frequency_domain_flag:
-    addl_cflags.append("-lfftw3 -lm")
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,

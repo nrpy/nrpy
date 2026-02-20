@@ -192,8 +192,7 @@ def validate_strings(
     if outfile_path.exists():
         trusted_string = outfile_path.read_text(encoding="utf-8")
         if trusted_string != to_check:
-            raise ValueError(
-                f"""\
+            raise ValueError(f"""\
 *** FAILURE ***
 ****{string_desc}**** mismatch in {outfile_path.name}!
 Computed result differs from trusted value in file {outfile_path}
@@ -205,8 +204,7 @@ Differences:
 If you trust the new version, then delete {outfile_path} and rerun to generate a new version.
 BE SURE TO INDICATE THE REASON FOR UPDATING THE TRUSTED FILE IN THE COMMIT MESSAGE.
 ***************
-"""
-            )
+""")
     else:
         # Write the trusted string to the file
         outfile_path.write_text(to_check, encoding="utf-8")

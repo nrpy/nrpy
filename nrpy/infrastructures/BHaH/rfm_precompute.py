@@ -17,6 +17,7 @@ Design choices to match NRPy/BHaH style:
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
+
 from typing import List, Set, Tuple
 
 import sympy as sp
@@ -247,8 +248,7 @@ class ReferenceMetricPrecompute:
         host_param_copies: str,
     ) -> None:
         # CUDA kernel (1D)
-        self._kernels_parts.append(
-            f"""
+        self._kernels_parts.append(f"""
 #ifdef __CUDACC__
 __global__ static void rfm_precompute_defines__{symbol_name}(
     const size_t N,
@@ -262,14 +262,12 @@ __global__ static void rfm_precompute_defines__{symbol_name}(
   }}
 }}
 #endif // __CUDACC__
-"""
-        )
+""")
 
         launch_setup = _emit_launch_setup_1d("N")
 
         # Host loop + CUDA branch (1D)
-        self._defines_parts.append(
-            f"""
+        self._defines_parts.append(f"""
 /* {symbol_name}: 1D precompute */
 if (params->is_host) {{
   {{
@@ -289,8 +287,7 @@ if (params->is_host) {{
   }});
 }}
 
-"""
-        )
+""")
 
     def _emit_2d(
         self,
@@ -301,8 +298,7 @@ if (params->is_host) {{
         host_param_copies: str,
     ) -> None:
         # CUDA kernel (2D)
-        self._kernels_parts.append(
-            f"""
+        self._kernels_parts.append(f"""
 #ifdef __CUDACC__
 __global__ static void rfm_precompute_defines__{symbol_name}(
     const size_t N0,
@@ -325,14 +321,12 @@ __global__ static void rfm_precompute_defines__{symbol_name}(
 }}
 #endif // __CUDACC__
 
-"""
-        )
+""")
 
         launch_setup = _emit_launch_setup_2d("N0", "N1")
 
         # Host loop + CUDA branch (2D)
-        self._defines_parts.append(
-            f"""
+        self._defines_parts.append(f"""
 /* {symbol_name}: 2D (xx0,xx1) precompute */
 if (params->is_host) {{
   {{
@@ -357,8 +351,7 @@ if (params->is_host) {{
     cudaCheckErrors(cudaKernel, "rfm_precompute_defines__{symbol_name} failure");
   }});
 }}
-"""
-        )
+""")
 
     # --------------------------- readers ---------------------------
     def _emit_readers_1d(self, symbol_name: str, ax: int) -> None:

@@ -209,8 +209,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             verbose=False,
         )
 
-        core_body_list.append(
-            f"""
+        core_body_list.append(f"""
   const REAL rCart = sqrt(Cartx*Cartx + Carty*Carty + Cartz*Cartz);
   if(rCart <= (REAL)0.0) {{
     xx[0] = (REAL)0.0;
@@ -288,8 +287,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     xx[1] = scale * Carty;
     xx[2] = scale * Cartz;
   }}
-"""
-        )
+""")
 
     elif rfm_obj.requires_NewtonRaphson_for_Cart_to_xx:
         # Part 2a: Handle mixed analytical and Newton-Raphson inversions.
@@ -313,15 +311,13 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 )
             )
 
-        core_body_list.append(
-            """
+        core_body_list.append("""
   // Next perform Newton-Raphson iterations as needed:
   const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
   const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
   int iter;
-"""
-        )
+""")
         for i in range(3):
             if rfm_obj.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
                 nr_input_exprs = [
@@ -340,8 +336,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                     include_braces=True,
                     verbose=False,
                 )
-                core_body_list.append(
-                    f"""
+                core_body_list.append(f"""
   {{
   int tolerance_has_been_met = 0;
   iter = 0;
@@ -374,8 +369,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   }}
   xx[{i}] = xx{i};
   }}
-"""
-                )
+""")
     else:
         # Part 2b: Handle purely analytical inversions.
         processed_exprs = _prepare_sympy_exprs_for_codegen(
@@ -390,8 +384,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     # Part 2c: Add logic to find the nearest grid point index.
-    core_body_list.append(
-        """
+    core_body_list.append("""
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
       //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
@@ -407,31 +400,26 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
-"""
-    )
+""")
     core_body = "".join(core_body_list)
 
     # Step 3: Assemble the full C function body.
-    body_parts = [
-        """
+    body_parts = ["""
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
   REAL Cartx = xCart[0];
   REAL Carty = xCart[1];
   REAL Cartz = xCart[2];
-"""
-    ]
+"""]
     if relative_to == "local_grid_center":
-        body_parts.append(
-            """
+        body_parts.append("""
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
   Cartx -= params->Cart_originx;
   Carty -= params->Cart_originy;
   Cartz -= params->Cart_originz;
   {
-"""
-        )
+""")
         body_parts.append(core_body)
         body_parts.append("  }\n")
     else:
@@ -561,14 +549,11 @@ if(r2 <= (REAL)0.0) {{
             processed_exprs,
             ["xCart[0]", "xCart[1]", "xCart[2]"],
         )
-        body = (
-            """
+        body = """
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];
 const REAL xx2 = xx[2];
-"""
-            + codegen_results
-        )
+""" + codegen_results
 
     # Step 4: Register the C function.
     cfc.register_CFunction(

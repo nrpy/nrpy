@@ -88,7 +88,7 @@ class SEOBNR_aligned_spin_constants:
             raise ValueError(
                 "calibration_no_spin and calibration_spin cannot both be True."
             )
-        (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
+        self.m1, self.m2, self.chi1, self.chi2 = sp.symbols(
             "m1 m2 chi1 chi2", real=True
         )
         # compute calibration parameters
