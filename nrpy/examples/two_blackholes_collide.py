@@ -55,7 +55,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "GeneralRFM_fisheyeN1"
+CoordSystem = "Spherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -165,7 +165,9 @@ if enable_bhahaha:
             ],
             check=True,
         )
-    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(CoordSystem=CoordSystem, max_horizons=3)
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        CoordSystem=CoordSystem, max_horizons=3
+    )
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics, project_dir=project_dir
     )
@@ -358,9 +360,7 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=(
-        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")]
-        if enable_bhahaha
-        else []
+        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_bhahaha else []
     ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
@@ -372,11 +372,9 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = (
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata=compute_griddata,
-        )
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata=compute_griddata,
     )
 
 BHaH.main_c.register_CFunction_main_c(
@@ -412,9 +410,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
     addl_libraries=(
-        [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"]
-        if enable_bhahaha
-        else []
+        [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_bhahaha else []
     ),
 )
 

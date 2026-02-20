@@ -56,7 +56,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "blackhole_spectroscopy"
-CoordSystem = "GeneralRFM_fisheyeN2"
+CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -93,8 +93,7 @@ enable_psi4_diagnostics = True
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
-    "GeneralRFM_fisheyeN1": [100, 100, 100],
-    "GeneralRFM_fisheyeN2": [100, 100, 100],
+    "GeneralRFM_fisheyeN1": [800, 800, 800],
 }
 # Fisheye parameter defaults (all in params_struct, set here in the example).
 fisheye_param_defaults: dict[str, float] = {}
@@ -108,21 +107,8 @@ if num_fisheye_transitions == 1:
             "fisheye_a0": 1.0,
             "fisheye_a1": 2,
             "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 18.0,
-            "fisheye_phys_w_trans1": 12.0,
-        }
-    )
-if num_fisheye_transitions == 2:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_a2": 3.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 12.0,
+            "fisheye_phys_r_trans1": 50.0,
             "fisheye_phys_w_trans1": 10.0,
-            "fisheye_phys_r_trans2": 80.0,
-            "fisheye_phys_w_trans2": 40.0,
         }
     )
 default_BH1_mass = default_BH2_mass = 0.5
@@ -423,11 +409,9 @@ if enable_CAHD:
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = (
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata=compute_griddata,
-        )
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata=compute_griddata,
     )
 
 # Define post_MoL_step_forward_in_time string for main function
