@@ -397,58 +397,6 @@ class SEOBNR_aligned_spin_constants:
         )
         self.M_f = 1 - (Erad_nu_Shat + DeltaErad_nu_Shat_Deltachi)
 
-    def NR_fits_at_t_match(self) -> None:
-        """
-
-
-        :return None:
-        """
-
-        m1 = self.m1
-        m2 = self.m2
-        chi1 = self.chi1
-        chi2 = self.chi2
-        M = m1 + m2
-        nu = m1 * m2 / M**2
-        delta = (m1 - m2) / (m1 + m2)
-        chiS = (chi1 + chi2) / 2
-        chiA = (chi1 - chi2) / 2
-        chi21A = (chiS / (1 - 1.3 * nu)) * delta + chiA
-        chi33 = chiS * delta + chiA
-
-        self.hNR_21 = sp.Abs(
-            -0.033175 * chi21A**3 * delta
-            + 0.086356 * chi21A**2 * delta * nu
-            - 0.049897 * chi21A**2 * delta
-            + 0.012706 * chi21A * delta
-            + 0.168668 * chi21A * nu
-            - 0.285597 * chi21A
-            + 1.067921 * delta * nu**2
-            - 0.189346 * delta * nu
-            + 0.431426 * delta
-        )
-
-        self.hNR_43 = sp.Abs(
-            -0.071554 * chi33**2 * delta * nu
-            + 0.021932 * chi33**2 * delta
-            - 1.738079 * chi33 * nu**2
-            + 0.436576 * chi33 * nu
-            - 0.020081 * chi33
-            + 0.809615 * delta * nu**2
-            - 0.273364 * delta * nu
-            + 0.07442 * delta
-        )
-
-        self.hNR_55 = sp.Abs(
-            -7.402839 * chi33 * nu**3
-            + 3.965852 * chi33 * nu**2
-            - 0.762776 * chi33 * nu
-            + 0.062757 * chi33
-            + 1.093812 * delta * nu**2
-            - 0.462142 * delta * nu
-            + 0.125468 * delta
-        )
-
 
 if __name__ == "__main__":
     import doctest
