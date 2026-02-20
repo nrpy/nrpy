@@ -13,6 +13,8 @@ typedef struct __commondata_struct__ {
   REAL fisheye_phys_r_trans2;
   REAL fisheye_phys_w_trans1;
   REAL fisheye_phys_w_trans2;
+} commondata_struct;
+typedef struct __params_struct__ {
   REAL fisheye_a0;
   REAL fisheye_a1;
   REAL fisheye_a2;
@@ -21,7 +23,7 @@ typedef struct __commondata_struct__ {
   REAL fisheye_s1;
   REAL fisheye_s2;
   REAL fisheye_c;
-} commondata_struct;
+} params_struct;
 #endif
 
 // Numerically stable log(cosh(x)) helper for large |x|.
@@ -124,12 +126,12 @@ static inline int solve_linear_system(const int n, const REAL *A_in, const REAL 
  * - fisheye_phys_r_trans{i}: physical radius where transition i is centered.
  * - fisheye_phys_w_trans{i}: physical width of transition i.
  */
-int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
+int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata, params_struct *restrict params) {
   const int NTRANS = 2;
   const int NUNK = 2 * NTRANS;
 
   const REAL L = commondata->fisheye_phys_L;
-  const REAL a[3] = {commondata->fisheye_a0, commondata->fisheye_a1, commondata->fisheye_a2};
+  const REAL a[3] = {params->fisheye_a0, params->fisheye_a1, params->fisheye_a2};
   const REAL r_trans[2] = {commondata->fisheye_phys_r_trans1, commondata->fisheye_phys_r_trans2};
   const REAL w_trans[2] = {commondata->fisheye_phys_w_trans1, commondata->fisheye_phys_w_trans2};
 
@@ -269,24 +271,24 @@ int fisheye_params_from_physical_N2(commondata_struct *restrict commondata) {
   if (!converged)
     return 1;
 
-  // Commit results into commondata
+  // Commit results into params
   for (int i = 0; i < NTRANS; i++) {
     const REAL Ri = x[2 * i + 0];
     const REAL si = x[2 * i + 1];
     switch (i) {
 
     case 0:
-      commondata->fisheye_R1 = Ri;
-      commondata->fisheye_s1 = si;
+      params->fisheye_R1 = Ri;
+      params->fisheye_s1 = si;
       break;
 
     case 1:
-      commondata->fisheye_R2 = Ri;
-      commondata->fisheye_s2 = si;
+      params->fisheye_R2 = Ri;
+      params->fisheye_s2 = si;
       break;
     }
   }
-  commondata->fisheye_c = c;
+  params->fisheye_c = c;
   return 0;
 } // END FUNCTION fisheye_params_from_physical_N2
 

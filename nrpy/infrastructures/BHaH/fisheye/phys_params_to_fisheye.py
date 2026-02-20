@@ -86,6 +86,7 @@ def build_post_params_struct_set_to_default_hook(
 
     :param num_transitions: Number of fisheye transitions.
     :param compute_griddata: Griddata array symbol in generated main C code.
+    :raises ValueError: If num_transitions is less than 1.
     :return: C code string suitable for post_params_struct_set_to_default hook.
     """
     if num_transitions < 1:
@@ -146,7 +147,9 @@ Physical parameter meanings (physical radius):
 """
     cfunc_type = "int"
     name = f"fisheye_params_from_physical_N{num_transitions}"
-    params = "const commondata_struct *restrict commondata, params_struct *restrict params"
+    params = (
+        "const commondata_struct *restrict commondata, params_struct *restrict params"
+    )
 
     a_vals = [f"params->fisheye_a{i}" for i in range(num_transitions + 1)]
     r_trans_vals = [
