@@ -245,8 +245,11 @@ class ReferenceMetric:
             # For GeneralRFM, ghat and its first/second derivatives are provided
             # as fixed gridfunctions. Derived quantities (ghatUU, detgammahat,
             # Gammahat*) are computed algebraically from these, as in other rfms.
-            self.ghatDD = gri.register_gridfunctions_for_single_rankN(
-                "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
+            self.ghatDD = cast(
+                List[List[sp.Expr]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
+                ),
             )
             self.ghatDDdD = cast(
                 List[List[List[sp.Expr]]],
@@ -674,64 +677,112 @@ class ReferenceMetric:
 
         # Step 6.c: Finally, substitute integers for all functions & derivatives that evaluate to integers
         for varidx, freevar in enumerate(freevars_uniq):
-            self.detgammahat = self.detgammahat.subs(
-                freevar, self.freevars_uniq_xx_indep[varidx]
+            self.detgammahat = cast(
+                sp.Expr,
+                self.detgammahat.subs(freevar, self.freevars_uniq_xx_indep[varidx]),
             )
             for i in range(3):
-                self.ReU[i] = self.ReU[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.ReU[i] = cast(
+                    sp.Expr,
+                    self.ReU[i].subs(freevar, self.freevars_uniq_xx_indep[varidx]),
                 )
-                self.ReD[i] = self.ReD[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.ReD[i] = cast(
+                    sp.Expr,
+                    self.ReD[i].subs(freevar, self.freevars_uniq_xx_indep[varidx]),
                 )
-                self.detgammahatdD[i] = self.detgammahatdD[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.detgammahatdD[i] = cast(
+                    sp.Expr,
+                    self.detgammahatdD[i].subs(
+                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    ),
                 )
                 for j in range(3):
-                    self.ReDD[i][j] = self.ReDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReDD[i][j] = cast(
+                        sp.Expr,
+                        self.ReDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ReUdD[i][j] = self.ReUdD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReUdD[i][j] = cast(
+                        sp.Expr,
+                        self.ReUdD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ReDdD[i][j] = self.ReDdD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReDdD[i][j] = cast(
+                        sp.Expr,
+                        self.ReDdD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ghatDD[i][j] = self.ghatDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ghatDD[i][j] = cast(
+                        sp.Expr,
+                        self.ghatDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ghatUU[i][j] = self.ghatUU[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ghatUU[i][j] = cast(
+                        sp.Expr,
+                        self.ghatUU[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.detgammahatdDD[i][j] = self.detgammahatdDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.detgammahatdDD[i][j] = cast(
+                        sp.Expr,
+                        self.detgammahatdDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
                     for k in range(3):
-                        self.ReDDdD[i][j][k] = self.ReDDdD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReDDdD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReDDdD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ReUdDD[i][j][k] = self.ReUdDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReUdDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReUdDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ReDdDD[i][j][k] = self.ReDdDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReDdDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReDdDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ghatDDdD[i][j][k] = self.ghatDDdD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ghatDDdD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ghatDDdD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.GammahatUDD[i][j][k] = self.GammahatUDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.GammahatUDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.GammahatUDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
                         for l in range(3):
-                            self.ReDDdDD[i][j][k][l] = self.ReDDdDD[i][j][k][l].subs(
-                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            self.ReDDdDD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.ReDDdDD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
                             )
-                            self.ghatDDdDD[i][j][k][l] = self.ghatDDdDD[i][j][k][
-                                l
-                            ].subs(freevar, self.freevars_uniq_xx_indep[varidx])
-                            self.GammahatUDDdD[i][j][k][l] = self.GammahatUDDdD[i][j][
-                                k
-                            ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
+                            self.ghatDDdDD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.ghatDDdDD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
+                            )
+                            self.GammahatUDDdD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.GammahatUDDdD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
+                            )
 
     def Sinhv1(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr) -> Any:
         """
