@@ -86,6 +86,7 @@ def register_CFunction_diagnostic_gfs_set(
             dimension=4,
             group="DIAG",
         )
+        
     diag_gf_parity_types = gri.BHaHGridFunction.set_parity_types(
         sorted([v.name for v in gri.glb_gridfcs_dict.values() if v.group == "DIAG"])
     )

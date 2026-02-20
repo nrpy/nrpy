@@ -71,7 +71,7 @@ def register_CFunction_Ricci_eval(
     name = "Ricci_eval"
     if host_only_version:
         name += "_host"
-    arg_dict_cuda = {        
+    arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
         "out_gfs": "REAL *restrict",
     }
