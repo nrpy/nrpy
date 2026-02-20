@@ -45,13 +45,17 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
 
     for l, m in modes:
         rholm.append(wf.rho[f"({l} , {m})"])
-        cast(sp.Expr, rholm[l])
         rholm_labels.append(f"REAL rho{l}{m}")
+
+    for i in range(len(rholm)):
+        cast(sp.Expr, rholm[i])
 
     for l, m in modes:
         hNR.append(const.hNR[f"({l} , {m})"])
-        cast(sp.Expr, hNR[l])
         hNR_labels.append(f"const REAL hNR{l}{m}")
+
+    for i in range(len(hNR)):
+        cast(sp.Expr, hNR[i])
 
     rholm_code = ccg.c_codegen(
         rholm,
