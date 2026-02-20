@@ -6,7 +6,7 @@ Author: Terrence Pierre Jacques
 """
 
 # Step Import needed modules:
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
@@ -136,7 +136,9 @@ def HLL_solver(
     :param Ul: conserved quantity at left interface
     :return: HLL flux at an interface
     """
-    return (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    return cast(
+        sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
+    )
 
 
 def calculate_HLL_fluxes(
@@ -231,7 +233,7 @@ def calculate_HLL_fluxes(
         u4lU,
     )
 
-    (cmin, cmax) = find_cmax_cmin(
+    cmin, cmax = find_cmax_cmin(
         flux_dirn, gamma_faceDD, beta_faceU, alpha_face, u4rU, u4lU, cs2_r, cs2_l
     )
 
@@ -364,7 +366,7 @@ if __name__ == "__main__":
         u4lU_test,
     )
 
-    (cmin_test, cmax_test) = find_cmax_cmin(
+    cmin_test, cmax_test = find_cmax_cmin(
         1,
         gamma_faceDD_test,
         beta_faceU_test,

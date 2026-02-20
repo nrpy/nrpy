@@ -992,8 +992,11 @@ def register_gridfunctions_for_single_rank1(
     betU0 betU1 betU2
     """
     # This is a convenience wrapper for the more general rank-N function.
-    return register_gridfunctions_for_single_rankN(
-        basename, rank=1, dimension=dimension, **kwargs
+    return cast(
+        List[sp.Expr],
+        register_gridfunctions_for_single_rankN(
+            basename, rank=1, dimension=dimension, **kwargs
+        ),
     )
 
 
@@ -1022,8 +1025,11 @@ def register_gridfunctions_for_single_rank2(
     gDD00 gDD01 gDD02 gDD11 gDD12 gDD22
     """
     # This is a convenience wrapper for the more general rank-N function.
-    return register_gridfunctions_for_single_rankN(
-        basename, rank=2, symmetry=symmetry, dimension=dimension, **kwargs
+    return cast(
+        List[List[sp.Expr]],
+        register_gridfunctions_for_single_rankN(
+            basename, rank=2, symmetry=symmetry, dimension=dimension, **kwargs
+        ),
     )
 
 

@@ -1,6 +1,16 @@
 """
 Generating source terms of Hamiltonian constraint equation using a reference-metric formalism.
 
+This module constructs the initial data source terms for the Hamiltonian constraint
+equation for a binary black hole system (TwoPunctures) using the Bowen-York extrinsic
+curvature ansatz.
+
+It calculates:
+1. The background conformal factor, psi_background, which captures the singular
+   behavior of the punctures (1/r terms).
+2. The contraction of the conformal extrinsic curvature, Abar_{ij} Abar^{ij},
+   derived from the Bowen-York vector field.
+
 Author: Thiago Assumpção
         assumpcaothiago **at** gmail **dot* com
 
@@ -21,11 +31,19 @@ def compute_psi_background_and_ADD_times_AUU(
     CoordSystem: str,
 ) -> Tuple[sp.Expr, sp.Expr]:
     """
-    Compute conformal factor and contraction of conformal extrinsic curvature.
+    Compute the background conformal factor and the squared extrinsic curvature contraction.
 
-    :param CoordSystem: The coordinate system being used.
+    This function sets up the "Two Punctures" scenario by registering the necessary
+    NRPy parameters (masses, positions, linear momenta, and spins for two black holes).
+    It then computes the Bowen-York vector field and the resulting source terms required
+    to solve the Hamiltonian constraint.
 
-    :return: psi_background, ADD_times_AUU
+    :param CoordSystem: The coordinate system being used (e.g., "Spherical", "Cartesian").
+
+    :return: A tuple containing:
+             1. psi_background (psi_BG): The singular part of the conformal factor.
+             2. ADD_times_AUU (Abar_{ij} Abar^{ij}): The contraction of the conformal
+                extrinsic curvature tensor.
     """
     # Step 0: Define puncture parameters
 
@@ -95,13 +113,15 @@ def compute_psi_background_and_ADD_times_AUU(
 # FIXME: replace with xx_to_Cart() in C code
 def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> sp.Expr:
     """
-    Replace Cartx, Carty, and Cartz by their definitions in terms of the rfm coordinates.
+    Replace Cartesian coordinate symbols with their definitions in the chosen reference metric.
 
-    :param rfm: Computed reference metric quantities
-    :param expr: Original SymPy expression
+    This maps {x, y, z} to the curvilinear coordinates {xx_0, xx_1, xx_2}
+    defined in the rfm object (e.g., x = r sin(theta) cos(phi) for spherical).
 
-    :return: The modified SymPy expression
+    :param rfm: The ReferenceMetric object containing the coordinate mapping xx_to_Cart.
+    :param expr: The original SymPy expression containing Cartesian symbols.
 
+    :return: The modified SymPy expression in terms of reference metric coordinates.
     """
     Cart = [rfm.Cartx, rfm.Carty, rfm.Cartz]
     for k in range(3):
@@ -110,25 +130,29 @@ def replace_cart_coord_by_xx(rfm: refmetric.ReferenceMetric, expr: sp.Expr) -> s
 
 
 def VU_cart_two_punctures(
-    _x0U: List[sp.Symbol],
-    _P0U: List[sp.Symbol],
-    _S0U: List[sp.Symbol],
-    _x1U: List[sp.Symbol],
-    _P1U: List[sp.Symbol],
-    _S1U: List[sp.Symbol],
+    _x0U: List[sp.Expr],
+    _P0U: List[sp.Expr],
+    _S0U: List[sp.Expr],
+    _x1U: List[sp.Expr],
+    _P1U: List[sp.Expr],
+    _S1U: List[sp.Expr],
 ) -> List[sp.Expr]:
     """
-    Compute Bowen-York vector for two punctures in Cartesian coordinates.
+    Compute the superposition of Bowen-York vectors for two punctures in Cartesian coordinates.
 
-    :param _x0U: position of first puncture
-    :param _P0U: linear momentum of first puncture
-    :param _S0U: spin of first puncture
-    :param _x1U: position of second puncture
-    :param _P1U: linear momentum of second puncture
-    :param _S1U: spin of second puncture
+    The Bowen-York extrinsic curvature is defined via a vector potential V^i.
+    Because the momentum constraint is linear in a conformally flat background,
+    the vector potential for two punctures is simply the sum of individual potentials:
+    V^i_total = V^i_puncture1 + V^i_puncture2
 
-    :return: Bowen-York vector VU in Cartesian coordinates
+    :param _x0U: Cartesian position vector of the first puncture relative to current point.
+    :param _P0U: Linear momentum vector of the first puncture.
+    :param _S0U: Spin (angular momentum) vector of the first puncture.
+    :param _x1U: Cartesian position vector of the second puncture relative to current point.
+    :param _P1U: Linear momentum vector of the second puncture.
+    :param _S1U: Spin (angular momentum) vector of the second puncture.
 
+    :return: The total Bowen-York vector V^i in Cartesian coordinates.
     """
     # Set spatial dimension
     dimension = 3
@@ -138,12 +162,13 @@ def VU_cart_two_punctures(
         vec2: Union[List[sp.Symbol], List[sp.Expr]],
     ) -> sp.Expr:
         """
-        Compute the dot product of two vectors in 3D space, assuming Cartesian coordinates.
+        Compute the Euclidean dot product of two vectors.
 
-        :param vec1: A 3D vector represented as a list of sympy expressions or symbols.
-        :param vec2: Another 3D vector represented as a list of sympy expressions or symbols.
+        vec(v)_1 . vec(v)_2 = sum_{i=1}^3 v_1^i v_2^i
 
-        :return: The dot product of vec1 and vec2 as a sympy expression.
+        :param vec1: First 3D vector.
+        :param vec2: Second 3D vector.
+        :return: Scalar dot product as a sympy expression.
         """
         vec1_dot_vec2 = sp.sympify(0)
         for i in range(dimension):
@@ -155,12 +180,13 @@ def VU_cart_two_punctures(
         vec2: Union[List[sp.Symbol], List[sp.Expr]],
     ) -> List[sp.Expr]:
         """
-        Compute the cross product of two vectors in 3D space, assuming Cartesian coordinates.
+        Compute the Euclidean cross product of two vectors.
 
-        :param vec1: A 3D vector represented as a list of sympy expressions or symbols.
-        :param vec2: Another 3D vector represented as a list of sympy expressions or symbols.
+        (vec(v)_1 x vec(v)_2)^i = epsilon^{ijk} v_{1j} v_{2k}
 
-        :return: The cross product of vec1 and vec2 as a list of sympy expressions.
+        :param vec1: First 3D vector.
+        :param vec2: Second 3D vector.
+        :return: 3D vector cross product.
         """
         vec1_cross_vec2 = ixp.zerorank1()
         LeviCivitaSymbol = ixp.LeviCivitaSymbol_dim3_rank3()
@@ -171,16 +197,19 @@ def VU_cart_two_punctures(
         return vec1_cross_vec2
 
     def VU_cart_single_puncture(
-        xU: List[sp.Symbol], PU: List[sp.Symbol], SU: List[sp.Symbol]
+        xU: List[sp.Expr], PU: List[sp.Expr], SU: List[sp.Expr]
     ) -> List[sp.Expr]:
         """
-        Compute the Bowen-York vector for a single puncture, given the puncture's position, linear momentum, and spin.
+        Compute the Bowen-York vector term for a single puncture.
 
-        :param xU: A list of sympy symbols representing the Cartesian coordinates of the puncture's position.
-        :param PU: A list of sympy symbols representing the Cartesian components of the puncture's linear momentum.
-        :param SU: A list of sympy symbols representing the Cartesian components of the puncture's spin.
+        The formula for the vector potential V^i is:
+        V^i = -7/(4r) * P^i - 1/(4r^3) * (n_j P^j) x^i + 1/r^3 * epsilon^{ijk} x_j S_k
+        where r is the distance from the puncture and n^i = x^i/r.
 
-        :return: A list of sympy expressions representing the Cartesian components of the Bowen-York vector field at the puncture.
+        :param xU: Relative Cartesian position x^i.
+        :param PU: Linear momentum P^i.
+        :param SU: Spin S^i.
+        :return: The vector V^i components.
         """
         r = sp.sympify(0)
         for i in range(dimension):
@@ -212,12 +241,18 @@ def ADD_conf_cartesian(
     xxCart: List[sp.Expr], VU_cart: List[sp.Expr]
 ) -> List[List[sp.Expr]]:
     """
-    Compute conformal, tracefree extrinsic curvature in Cartesian coordinates.
+    Compute the conformal, tracefree extrinsic curvature Abar_{ij}.
 
-    :param xxCart: Vector of Cartesian coordinates
-    :param VU_cart: Bowen-York vector in Cartesian coordinates
+    The physical extrinsic curvature K_{ij} is related to Abar_{ij} by the conformal factor psi:
+    K_{ij} = psi^{-2} Abar_{ij}
+    In the Bowen-York formalism on a conformally flat background, Abar_{ij} is constructed
+    from the vector potential V^i via the conformal Killing operator:
+    Abar_{ij} = partial_i V_j + partial_j V_i - (2/3) delta_{ij} (partial_k V^k)
 
-    :return: Conformal extrinsic curvature with two lower indices, in Cartesian coordinates
+    :param xxCart: Vector of Cartesian coordinates used for differentiation.
+    :param VU_cart: Bowen-York vector potential V^i (which equals V_i in Cartesian).
+
+    :return: Rank-2 tensor Abar_{ij}.
     """
     # Set spatial dimension
     dimension = 3
@@ -241,12 +276,11 @@ def ADD_conf_cartesian(
     # Define Kronecker delta symbol as a function
     def kronecker_delta(i: int, j: int) -> sp.Expr:
         """
-        Compute the Kronecker delta symbol, which is 1 if the indices are equal and 0 otherwise.
+        Compute the Kronecker delta symbol delta_{ij}.
 
-        :param i: The first index of the Kronecker delta.
-        :param j: The second index of the Kronecker delta.
-
-        :return: A sympy expression representing the Kronecker delta symbol for the given indices.
+        :param i: The first index.
+        :param j: The second index.
+        :return: 1 if i == j, else 0.
         """
         delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
         return cast(sp.Expr, delta_ij)
@@ -267,11 +301,16 @@ def ADD_times_AUU_conf_cartesian(
     ADD_conf_cart: List[List[sp.Expr]],
 ) -> sp.Expr:
     """
-    Compute contraction of conformal extrinsic curvature in Cartesian coordinates.
+    Compute the scalar contraction of the conformal extrinsic curvature.
 
-    :param ADD_conf_cart: Conformal extrinsic curvature in Cartesian coordinates with two lower indices
+    This computes the term required for the Hamiltonian constraint source:
+    Abar_{ij} Abar^{ij}
+    Note that in Cartesian coordinates on a flat background, indices are raised/lowered with delta_{ij},
+    so this is equivalent to the sum of squares of components.
 
-    :return: contraction ADD_conf_cart[i][j]*ADD_conf_cart[i][j]
+    :param ADD_conf_cart: Conformal extrinsic curvature Abar_{ij}.
+
+    :return: The scalar contraction Abar_{ij} Abar^{ij}.
     """
     # Set spatial dimension
     dimension = 3
@@ -292,14 +331,19 @@ def psi_background_cartesian(
     _xU1: List[sp.Expr],
 ) -> sp.Expr:
     """
-    Compute singular piece of conformal factor for two punctures in Cartesian coordinates.
+    Compute the "background" singular conformal factor for two punctures.
 
-    :param _bare_mass_0: bare mass of first puncture
-    :param _xU0: relative position first puncture
-    :param _bare_mass_1: bare mass second puncture
-    :param _xU1: relative position second puncture
+    The conformal factor psi is decomposed as psi = psi_BG + u, where
+    u is non-singular and solved for numerically. psi_BG handles the
+    singularities at the puncture locations analytically:
+    psi_BG = 1 + sum_n (m_n / (2 |vec(r) - vec(r)_n|))
 
-    :return: background conformal factor in Cartesian coordinates
+    :param _bare_mass_0: Bare mass parameter m_0 of the first puncture.
+    :param _xU0: Relative Cartesian position vector of the first puncture.
+    :param _bare_mass_1: Bare mass parameter m_1 of the second puncture.
+    :param _xU1: Relative Cartesian position vector of the second puncture.
+
+    :return: The scalar field psi_BG.
     """
     # Set spatial dimension
     dimension = 3
@@ -308,12 +352,11 @@ def psi_background_cartesian(
         bare_mass: sp.Expr, xU: List[sp.Expr]
     ) -> sp.Expr:
         """
-        Compute the conformal factor for a single puncture in a conformally flat space.
+        Compute the m / (2r) term for a single puncture.
 
-        :param bare_mass: The bare mass of the puncture.
-        :param xU: A list of sympy expressions representing the Cartesian coordinates of the puncture's position.
-
-        :return: A sympy expression representing the conformal factor at the puncture's location.
+        :param bare_mass: The bare mass parameter.
+        :param xU: Relative position vector.
+        :return: The scalar contribution to the conformal factor.
         """
         # Compute distance of puncture from the origin
         r = sp.sympify(0)

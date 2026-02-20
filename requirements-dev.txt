@@ -1,5 +1,5 @@
 appdirs
-black==25.12.0
+black==26.1.0
 clang-format==21.1.8
 darglint
 ipython

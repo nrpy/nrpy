@@ -8,7 +8,9 @@ Author: Zachariah B. Etienne
 from inspect import currentframe as cfr
 from pathlib import Path
 from types import FrameType as FT
-from typing import Union, cast
+from typing import List, Union, cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -93,7 +95,7 @@ def register_CFunction_rhs_eval(
             rhs.vv_rhs += (
                 diss_strength * vv_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-    expr_list = [rhs.uu_rhs, rhs.vv_rhs]
+    expr_list: List[sp.Expr] = [rhs.uu_rhs, rhs.vv_rhs]
 
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(

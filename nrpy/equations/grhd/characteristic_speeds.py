@@ -97,9 +97,9 @@ def find_cmax_cmin(
     g4UU = ADM_to_g4UU(gamma_faceDD, beta_faceU, alpha_face)
 
     # Original needed for GRMHD
-    (cmr, cpr) = find_cp_cm(flux_dirn, g4UU, u4U_r, cs2_r)
+    cmr, cpr = find_cp_cm(flux_dirn, g4UU, u4U_r, cs2_r)
 
-    (cml, cpl) = find_cp_cm(flux_dirn, g4UU, u4U_l, cs2_l)
+    cml, cpl = find_cp_cm(flux_dirn, g4UU, u4U_l, cs2_l)
 
     # The following algorithms have been verified with random floats:
 
@@ -109,9 +109,9 @@ def find_cmax_cmin(
     #   CCTK_REAL cminL = -MIN(0.0,MIN(cminusl,cminusr));
 
     # Now, we need to set cmax to the larger of cpr,cpl, and 0
-    cmax = noif.max_noif(0.0, noif.max_noif(cpl, cpr))
+    cmax = noif.max_noif(sp.sympify(0.0), noif.max_noif(cpl, cpr))
     # And then, set cmin to the smaller of cmr,cml, and 0
-    cmin = -noif.min_noif(0.0, noif.min_noif(cml, cmr))
+    cmin = -noif.min_noif(sp.sympify(0.0), noif.min_noif(cml, cmr))
 
     # save the rescaled char. speeds
     return cmin, cmax

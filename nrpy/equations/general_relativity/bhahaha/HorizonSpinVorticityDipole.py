@@ -1,5 +1,4 @@
 # equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py
-
 """
 NRPy module for Owen et al's vorticity-dipole-based black hole spin diagnostics.
 

@@ -1,15 +1,14 @@
 # nrpy/infrastructures/BHaH/xx_tofrom_Cart.py
 """
-C function registration for converting between grid coordinate (xx0,xx1,xx2) (uniform grid spacing) to Cartesian coordinate (x,y,z).
+C function registration for converting between uniform-grid coordinates (xx0, xx1, xx2) and Cartesian coordinates (x, y, z).
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from functools import lru_cache
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Set, Union, cast
 
 import sympy as sp
 
@@ -19,139 +18,7 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-
-
-def _coordsystem_is_fisheye(CoordSystem: str) -> bool:
-    """
-    Return True if CoordSystem indicates a fisheye mapping.
-
-    This intentionally uses only simple string operations (no regex), and is
-    case-insensitive.
-
-    :param CoordSystem: Coordinate system name string to test.
-    :return: True if CoordSystem is interpreted as a fisheye mapping; otherwise False.
-    """
-    return "fisheye" in CoordSystem.lower()
-
-
-def _default_n_fisheye_transitions() -> int:
-    """
-    Get the default number of fisheye transitions from the parameter system.
-
-    This is *lazy* (no import-time param registration side-effects). If the
-    parameter does not exist, it is registered with default value 1 and 1 is
-    returned.
-
-    :return: Default number of fisheye transitions (>= 1).
-    """
-    try:
-        N = int(par.parval_from_str("n_fisheye_transitions"))
-        return N if N >= 1 else 1
-    except (KeyError, ValueError, TypeError):
-        # Register only if missing; swallow errors in case of benign re-registration.
-        try:
-            par.register_param(int, __name__, "n_fisheye_transitions", 1)
-        except (KeyError, ValueError, TypeError, RuntimeError):
-            pass
-        return 1
-
-
-def _parse_fisheye_num_transitions(CoordSystem: str) -> int:
-    """
-    Determine N (# of fisheye transitions) from the CoordSystem string if present.
-
-    Determine N (# of fisheye transitions) from the CoordSystem string if present,
-    else fall back to the global param n_fisheye_transitions.
-
-    Supported examples (case-insensitive, no regex):
-      - "Fisheye"               -> param fallback
-      - "Fisheye2"              -> 2
-      - "FisheyeN2"             -> 2
-      - "GeneralRFM_FisheyeN3"  -> 3
-      - "Fisheye_N4"            -> 4
-      - "Fisheye-n5"            -> 5
-
-    :param CoordSystem: Coordinate system name string.
-    :return: Parsed number of transitions N (>= 1).
-    """
-    s_lower = CoordSystem.lower()
-    key = "fisheye"
-    pos = s_lower.find(key)
-    if pos < 0:
-        return _default_n_fisheye_transitions()
-
-    tail = s_lower[pos + len(key) :]
-
-    # Skip common separators after "fisheye"
-    while tail and tail[0] in "_-":
-        tail = tail[1:]
-
-    # Optional 'n' marker: "fisheyen2" or "fisheye_n2"
-    if tail.startswith("n"):
-        tail = tail[1:]
-        while tail and tail[0] in "_-":
-            tail = tail[1:]
-
-    # Parse contiguous digits (if any)
-    digits = ""
-    for ch in tail:
-        if ch.isdigit():
-            digits += ch
-        else:
-            break
-
-    if digits:
-        N = int(digits)
-        return N if N >= 1 else 1
-
-    # As a last resort, if the string ends in digits, interpret them as N.
-    # (Only attempted because "fisheye" was found somewhere in the string.)
-    digits_end = ""
-    for ch in reversed(s_lower):
-        if ch.isdigit():
-            digits_end = ch + digits_end
-        else:
-            break
-    if digits_end:
-        N = int(digits_end)
-        return N if N >= 1 else 1
-
-    return _default_n_fisheye_transitions()
-
-
-@lru_cache(maxsize=None)
-def _cached_fisheye_rbar_and_drbar_dr(
-    num_transitions: int,
-) -> Tuple[sp.Symbol, sp.Expr, sp.Expr]:
-    """
-    Return (r_sym, rbar(r_sym), drbar_dr(r_sym)) for the N-transition fisheye map.
-
-    IMPORTANT: Instantiating the fisheye builder registers the required CodeParameters
-    (fisheye_a*, fisheye_R*, fisheye_s*, fisheye_c).
-
-    :param num_transitions: Number of fisheye transitions N (>= 1).
-    :return: Tuple (r_sym, rbar(r_sym), drbar_dr(r_sym)).
-    :raises ValueError: If num_transitions is less than 1.
-    """
-    if num_transitions < 1:
-        raise ValueError(
-            f"num_transitions must be >= 1 for fisheye; got {num_transitions}."
-        )
-
-    # Local import to avoid imposing cost on non-fisheye codegen paths.
-    from nrpy.equations.generalrfm.fisheye import (  # pylint: disable=import-outside-toplevel
-        build_fisheye_generalrfm,
-    )
-
-    fisheye = build_fisheye_generalrfm(num_transitions)
-
-    r_sym = sp.symbols("r_fisheye", real=True, positive=True)
-    rbar_unscaled = fisheye._build_unscaled_radius_map(
-        r_sym
-    )  # pylint: disable=protected-access
-    rbar = fisheye.c * rbar_unscaled
-    drbar_dr = sp.diff(rbar, r_sym)
-    return r_sym, rbar, drbar_dr
+from nrpy.equations.generalrfm import fisheye
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -195,11 +62,16 @@ def _prepare_sympy_exprs_for_codegen(
     """
     # Create a single substitution dictionary for all unique parameters.
     all_symbols = set().union(*(expr.free_symbols for expr in sympy_exprs))
-    substitutions = {
-        symbol: sp.symbols(f"params->{symbol.name}")
-        for symbol in all_symbols
-        if symbol.name not in local_vars
-    }
+    # FIX: Use Dict[Any, Any] to satisfy mypy's variance checks for .subs()
+    substitutions: Dict[Any, Any] = {}
+
+    for sym in all_symbols:
+        # We explicitly cast Basic -> Symbol to access .name safely
+        symbol = cast(sp.Symbol, sym)
+
+        if symbol.name not in local_vars:
+            # We explicitly type the replacement as a Symbol (which is an Expr)
+            substitutions[symbol] = sp.symbols(f"params->{symbol.name}")
 
     # Apply the substitution to each expression.
     return [expr.subs(substitutions) for expr in sympy_exprs]
@@ -230,21 +102,31 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> from nrpy.reference_metric import supported_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "Cart_to_xx_and_nearest_i0i1i2"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in unittest_CoordSystems:
+    ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
-    ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    Setting up reference_metric[SinhSymTP]...
-    Setting up reference_metric[HoleySinhSpherical]...
+    ...       _ = validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    Setting up reference_metric[Spherical]...
+    Setting up reference_metric[SinhSpherical]...
+    Setting up reference_metric[SinhSphericalv2n2]...
     Setting up reference_metric[Cartesian]...
+    Setting up reference_metric[SinhCartesian]...
+    Setting up reference_metric[Cylindrical]...
+    Setting up reference_metric[SinhCylindrical]...
     Setting up reference_metric[SinhCylindricalv2n2]...
+    Setting up reference_metric[SymTP]...
+    Setting up reference_metric[SinhSymTP]...
+    Setting up reference_metric[LWedgeHSinhSph]...
+    Setting up reference_metric[UWedgeHSinhSph]...
+    Setting up reference_metric[RingHoleySinhSpherical]...
+    Setting up reference_metric[HoleySinhSpherical]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -257,7 +139,21 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+
+    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
+    num_transitions = -1
+    if is_fisheye:
+        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
+        if not suffix.isdigit():
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
+            )
+        num_transitions = int(suffix)
+        if num_transitions < 1:
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
+            )
+
     rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
         {"r", "rCart"} if is_fisheye else set()
@@ -270,7 +166,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     desc = "Given Cartesian point (x,y,z), this function "
     if gridding_approach == "multipatch":
-        desc += "does stuff needed for multipatch, and then "
+        desc += "assumes any required multipatch preprocessing has already been applied, then "
     desc += """unshifts the grid back to the origin to output the corresponding
             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid"""
 
@@ -289,16 +185,23 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         # then recover:
         #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
         # ---------------------------------------------------------------------
-        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        r_sym, rbar_of_r, drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
-            num_transitions
-        )
+        # Register fisheye CodeParameters (and reuse their symbols):
+        fe = fisheye.build_fisheye(num_transitions=num_transitions)
 
-        # Build Newton-Raphson expressions in terms of local C vars r and rCart:
+        # Closed-form 1D expressions for rbar(r) and drbar/dr:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
+        rbar_unscaled, drbar_unscaled, _, _ = (
+            fisheye._radius_map_unscaled_and_derivs_closed_form(
+                r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
+            )
+        )
+        rbar_of_r_expr = fe.c * rbar_unscaled
+        drbar_dr_expr = fe.c * drbar_unscaled
+
+        # Newton solve: f(r) = rbar(r) - rCart = 0, so f'(r) = drbar/dr
         rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
-        f_of_r_expr = (rbar_of_r - rCart_sym).subs(r_sym, r_local)
-        fprime_of_r_expr = drbar_dr_of_r.subs(r_sym, r_local)
+        f_of_r_expr = rbar_of_r_expr - rCart_sym
+        fprime_of_r_expr = drbar_dr_expr
 
         nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
             [f_of_r_expr, fprime_of_r_expr],
@@ -311,8 +214,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             verbose=False,
         )
 
-        core_body_list.append(
-            f"""
+        core_body_list.append(f"""
   const REAL rCart = sqrt(Cartx*Cartx + Carty*Carty + Cartz*Cartz);
   if(rCart <= (REAL)0.0) {{
     xx[0] = (REAL)0.0;
@@ -351,14 +253,14 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     r = (f0 < fN) ? r_guess0 : r_guessN;
 
     while(iter < ITER_MAX && !tolerance_has_been_met) {{
-      REAL f_of_r, fprime_of_r;
 
 {nr_codegen_output}
 
-      // Guard against division by zero in Newton step:
-      if(fprime_of_r == (REAL)0.0) {{
-        break;
-      }}
+      // Unnecessary guard against division by zero in Newton step;
+      //   valid coordinate systems must have f'(r) > 0
+      // if(fprime_of_r == (REAL)0.0) {{
+      //  break;
+      // }}
 
       const REAL r_np1_unclamped = r - f_of_r / fprime_of_r;
 
@@ -374,9 +276,15 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     }}
 
     if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+#ifdef __CUDA_ARCH__
+      printf("ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
+             (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
+      asm("trap;");
+#else
       fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
-              rCart, Cartx, Carty, Cartz);
+              (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
       exit(1);
+#endif
     }}
 
     const REAL scale = r / rCart;
@@ -384,8 +292,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     xx[1] = scale * Carty;
     xx[2] = scale * Cartz;
   }}
-"""
-        )
+""")
 
     elif cast(refmetric.ReferenceMetric, rfm).requires_NewtonRaphson_for_Cart_to_xx:
         # Part 2a: Handle mixed analytical and Newton-Raphson inversions.
@@ -413,15 +320,13 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 )
             )
 
-        core_body_list.append(
-            """
+        core_body_list.append("""
   // Next perform Newton-Raphson iterations as needed:
   const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
   const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
-  int iter, tolerance_has_been_met=0;
-"""
-        )
+  int iter;
+""")
         for i in range(3):
             if cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[
                 i
@@ -442,14 +347,18 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                     include_braces=True,
                     verbose=False,
                 )
-                core_body_list.append(
-                    f"""
-  iter=0;
-  REAL xx{i}  = 0.5 * (params->xxmin{i} + params->xxmax{i});
+                core_body_list.append(f"""
+  {{
+  int tolerance_has_been_met = 0;
+  iter = 0;
+  REAL xx{i} = (REAL)0.5 * (params->xxmin{i} + params->xxmax{i});
   while(iter < ITER_MAX && !tolerance_has_been_met) {{
     REAL f_of_xx{i}, fprime_of_xx{i};
 
 {nr_codegen_output}
+    if(fprime_of_xx{i} == (REAL)0.0) {{
+      break;
+    }}
     const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
 
     if( fabs(xx{i} - xx{i}_np1) <= XX_TOLERANCE * params->dxx{i} && fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE ) {{
@@ -458,13 +367,20 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     xx{i} = xx{i}_np1;
     iter++;
   }} // END Newton-Raphson iterations to compute xx{i}
-  if(iter >= ITER_MAX) {{
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}, x,y,z = %.15e %.15e %.15e\\n", Cartx,Carty,Cartz);
+  if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+#ifdef __CUDA_ARCH__
+    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+           (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
+    asm("trap;");
+#else
+    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+            (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     exit(1);
+#endif
   }}
   xx[{i}] = xx{i};
-"""
-                )
+  }}
+""")
     else:
         # Part 2b: Handle purely analytical inversions.
         processed_exprs = _prepare_sympy_exprs_for_codegen(
@@ -479,8 +395,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     # Part 2c: Add logic to find the nearest grid point index.
-    core_body_list.append(
-        """
+    core_body_list.append("""
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
       //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
@@ -488,38 +403,34 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
       // Now, including typecasts:
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
-      // The (int) typecast always rounds down, so we add 0.5 inside the outer parenthesis:
+      // C float-to-int conversion truncates toward zero; for nonnegative inputs this matches floor().
+      // Assuming (xx - xxmin)/dxx + NGHOSTS is nonnegative (typical for valid interior points), this is safe.
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
       // The 0.5 values cancel out:
       //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
       Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
-"""
-    )
+""")
     core_body = "".join(core_body_list)
 
     # Step 3: Assemble the full C function body.
-    body_parts = [
-        """
+    body_parts = ["""
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
   REAL Cartx = xCart[0];
   REAL Carty = xCart[1];
   REAL Cartz = xCart[2];
-"""
-    ]
+"""]
     if relative_to == "local_grid_center":
-        body_parts.append(
-            """
+        body_parts.append("""
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
   Cartx -= params->Cart_originx;
   Carty -= params->Cart_originy;
   Cartz -= params->Cart_originz;
   {
-"""
-        )
+""")
         body_parts.append(core_body)
         body_parts.append("  }\n")
     else:
@@ -556,12 +467,12 @@ def register_CFunction_xx_to_Cart(
     >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
-    >>> from nrpy.reference_metric import unittest_CoordSystems
+    >>> from nrpy.reference_metric import supported_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name = "xx_to_Cart"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    for CoordSystem in unittest_CoordSystems:
+    ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction_xx_to_Cart(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
@@ -579,26 +490,41 @@ def register_CFunction_xx_to_Cart(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    is_fisheye = _coordsystem_is_fisheye(CoordSystem)
+
+    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
+    num_transitions = -1
+    if is_fisheye:
+        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
+        if not suffix.isdigit():
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
+            )
+        num_transitions = int(suffix)
+        if num_transitions < 1:
+            raise ValueError(
+                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
+            )
+
     rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
     local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye else set())
 
     # Step 2: Prepare SymPy expressions for C code generation.
     if is_fisheye:
-        num_transitions = _parse_fisheye_num_transitions(CoordSystem)
-        r_sym, rbar_of_r, _drbar_dr_of_r = _cached_fisheye_rbar_and_drbar_dr(
-            num_transitions
-        )
+        # Register fisheye CodeParameters (and reuse their symbols):
+        fe = fisheye.build_fisheye(num_transitions=num_transitions)
 
-        # Codegen for rbar(r) in terms of local C var r:
+        # Closed-form 1D expression for rbar(r):
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_expr_local = rbar_of_r.subs(r_sym, r_local)
+        rbar_unscaled, _, _, _ = fisheye._radius_map_unscaled_and_derivs_closed_form(
+            r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
+        )
+        rbar_expr_local = fe.c * rbar_unscaled
+
         rbar_processed = _prepare_sympy_exprs_for_codegen(
             [rbar_expr_local], local_C_vars
         )
         rbar_codegen = ccg.c_codegen(rbar_processed, ["rbar"], include_braces=False)
 
-        # Safe r->0 limit: lam(0) = c*a0. (Even though xx=0 at r=0, this is the correct limit.)
         body = f"""
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];
@@ -636,20 +562,17 @@ if(r2 <= (REAL)0.0) {{
             processed_exprs,
             ["xCart[0]", "xCart[1]", "xCart[2]"],
         )
-        body = (
-            """
+        body = """
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];
 const REAL xx2 = xx[2];
-"""
-            + codegen_results
-        )
+""" + codegen_results
 
     # Step 4: Register the C function.
     cfc.register_CFunction(
         includes=["BHaH_defines.h"],
-        desc="""Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} in terms of
-local grid coordinates {xx[0][i0], xx[1][i1], xx[2][i2]} = {xx0, xx1, xx2},
+        desc="""Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} from the
+local coordinate vector {xx[0], xx[1], xx[2]} = {xx0, xx1, xx2},
 taking into account the possibility that the origin of this grid is off-center.""",
         cfunc_type="void",
         CoordSystem_for_wrapper_func=CoordSystem,

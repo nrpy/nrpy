@@ -7,7 +7,10 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
+
 from typing import Dict, List, Tuple, Union
+
+import sympy as sp
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -15,7 +18,7 @@ from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_MoL_free_intermediate_levels(
-    Butcher_dict: Dict[str, Tuple[List[List[Union[int, str]]], int]],
+    Butcher_dict: Dict[str, Tuple[List[List[Union[sp.Basic, int, str]]], int]],
     MoL_method: str,
 ) -> None:
     """

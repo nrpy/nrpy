@@ -1,3 +1,4 @@
+# nrpy/helpers/expression_utils.py
 """
 Utilities for Parsing or manipulating symbolic expressions.
 
@@ -6,7 +7,7 @@ Email:  sdtootle *at* gmail *dot* com
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, cast
 
 import sympy as sp
 
@@ -33,7 +34,7 @@ def get_unique_expression_symbols_as_strings(
     """
     exclude = [] if not exclude else exclude
 
-    symbols = {sym.name for sym in expr.free_symbols}
+    symbols = {cast(sp.Symbol, sym).name for sym in expr.free_symbols}
     return sorted(symbols - set(exclude))
 
 

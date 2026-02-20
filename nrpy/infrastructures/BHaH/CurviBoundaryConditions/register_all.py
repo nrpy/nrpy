@@ -19,6 +19,7 @@ Authors: Zachariah B. Etienne
          Samuel D. Tootle
          sdtootle **at** gmail **dot* com
 """
+
 from typing import Set
 
 import nrpy.params as par

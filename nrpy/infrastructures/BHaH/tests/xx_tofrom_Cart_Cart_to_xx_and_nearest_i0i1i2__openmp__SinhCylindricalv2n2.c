@@ -29,69 +29,95 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
     const REAL XX_TOLERANCE = 1e-12;      // that's 1 part in 1e12 dxxi.
     const REAL F_OF_XX_TOLERANCE = 1e-12; // tolerance of function for which we're finding the root.
     const int ITER_MAX = 100;
-    int iter, tolerance_has_been_met = 0;
+    int iter;
 
-    iter = 0;
-    REAL xx0 = 0.5 * (params->xxmin0 + params->xxmax0);
-    while (iter < ITER_MAX && !tolerance_has_been_met) {
-      REAL f_of_xx0, fprime_of_xx0;
+    {
+      int tolerance_has_been_met = 0;
+      iter = 0;
+      REAL xx0 = (REAL)0.5 * (params->xxmin0 + params->xxmax0);
+      while (iter < ITER_MAX && !tolerance_has_been_met) {
+        REAL f_of_xx0, fprime_of_xx0;
 
-      {
-        const REAL tmp0 = (1.0 / (params->SINHWRHO));
-        const REAL tmp6 = params->AMPLRHO - params->rho_slope;
-        const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
-        const REAL tmp2 = exp(tmp0 * xx0);
-        const REAL tmp3 = exp(-tmp0 * xx0);
-        const REAL tmp7 = tmp5 * tmp6 * ((xx0) * (xx0));
-        const REAL tmp4 = tmp2 - tmp3;
-        f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
-        fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
+        {
+          const REAL tmp0 = (1.0 / (params->SINHWRHO));
+          const REAL tmp6 = params->AMPLRHO - params->rho_slope;
+          const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
+          const REAL tmp2 = exp(tmp0 * xx0);
+          const REAL tmp3 = exp(-tmp0 * xx0);
+          const REAL tmp7 = tmp5 * tmp6 * ((xx0) * (xx0));
+          const REAL tmp4 = tmp2 - tmp3;
+          f_of_xx0 = params->rho_slope * xx0 + tmp4 * tmp7 - sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)));
+          fprime_of_xx0 = params->rho_slope + 2 * tmp4 * tmp5 * tmp6 * xx0 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
+        }
+
+        if (fprime_of_xx0 == (REAL)0.0) {
+          break;
+        }
+        const REAL xx0_np1 = xx0 - f_of_xx0 / fprime_of_xx0;
+
+        if (fabs(xx0 - xx0_np1) <= XX_TOLERANCE * params->dxx0 && fabs(f_of_xx0) <= F_OF_XX_TOLERANCE) {
+          tolerance_has_been_met = 1;
+        }
+        xx0 = xx0_np1;
+        iter++;
+      } // END Newton-Raphson iterations to compute xx0
+      if (iter >= ITER_MAX || !tolerance_has_been_met) {
+#ifdef __CUDA_ARCH__
+        printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
+               (double)Carty, (double)Cartz);
+        asm("trap;");
+#else
+        fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx0, (double)Cartx,
+                (double)Carty, (double)Cartz);
+        exit(1);
+#endif
       }
-
-      const REAL xx0_np1 = xx0 - f_of_xx0 / fprime_of_xx0;
-
-      if (fabs(xx0 - xx0_np1) <= XX_TOLERANCE * params->dxx0 && fabs(f_of_xx0) <= F_OF_XX_TOLERANCE) {
-        tolerance_has_been_met = 1;
-      }
-      xx0 = xx0_np1;
-      iter++;
-    } // END Newton-Raphson iterations to compute xx0
-    if (iter >= ITER_MAX) {
-      fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx0, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
-      exit(1);
+      xx[0] = xx0;
     }
-    xx[0] = xx0;
 
-    iter = 0;
-    REAL xx2 = 0.5 * (params->xxmin2 + params->xxmax2);
-    while (iter < ITER_MAX && !tolerance_has_been_met) {
-      REAL f_of_xx2, fprime_of_xx2;
+    {
+      int tolerance_has_been_met = 0;
+      iter = 0;
+      REAL xx2 = (REAL)0.5 * (params->xxmin2 + params->xxmax2);
+      while (iter < ITER_MAX && !tolerance_has_been_met) {
+        REAL f_of_xx2, fprime_of_xx2;
 
-      {
-        const REAL tmp0 = (1.0 / (params->SINHWZ));
-        const REAL tmp6 = params->AMPLZ - params->z_slope;
-        const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
-        const REAL tmp2 = exp(tmp0 * xx2);
-        const REAL tmp3 = exp(-tmp0 * xx2);
-        const REAL tmp7 = tmp5 * tmp6 * ((xx2) * (xx2));
-        const REAL tmp4 = tmp2 - tmp3;
-        f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
-        fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
+        {
+          const REAL tmp0 = (1.0 / (params->SINHWZ));
+          const REAL tmp6 = params->AMPLZ - params->z_slope;
+          const REAL tmp5 = (1.0 / (exp(tmp0) - exp(-tmp0)));
+          const REAL tmp2 = exp(tmp0 * xx2);
+          const REAL tmp3 = exp(-tmp0 * xx2);
+          const REAL tmp7 = tmp5 * tmp6 * ((xx2) * (xx2));
+          const REAL tmp4 = tmp2 - tmp3;
+          f_of_xx2 = -Cartz + params->z_slope * xx2 + tmp4 * tmp7;
+          fprime_of_xx2 = params->z_slope + 2 * tmp4 * tmp5 * tmp6 * xx2 + tmp7 * (tmp0 * tmp2 + tmp0 * tmp3);
+        }
+
+        if (fprime_of_xx2 == (REAL)0.0) {
+          break;
+        }
+        const REAL xx2_np1 = xx2 - f_of_xx2 / fprime_of_xx2;
+
+        if (fabs(xx2 - xx2_np1) <= XX_TOLERANCE * params->dxx2 && fabs(f_of_xx2) <= F_OF_XX_TOLERANCE) {
+          tolerance_has_been_met = 1;
+        }
+        xx2 = xx2_np1;
+        iter++;
+      } // END Newton-Raphson iterations to compute xx2
+      if (iter >= ITER_MAX || !tolerance_has_been_met) {
+#ifdef __CUDA_ARCH__
+        printf("ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx2, (double)Cartx,
+               (double)Carty, (double)Cartz);
+        asm("trap;");
+#else
+        fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2=%.15e, x,y,z = %.15e %.15e %.15e\n", (double)xx2, (double)Cartx,
+                (double)Carty, (double)Cartz);
+        exit(1);
+#endif
       }
-
-      const REAL xx2_np1 = xx2 - f_of_xx2 / fprime_of_xx2;
-
-      if (fabs(xx2 - xx2_np1) <= XX_TOLERANCE * params->dxx2 && fabs(f_of_xx2) <= F_OF_XX_TOLERANCE) {
-        tolerance_has_been_met = 1;
-      }
-      xx2 = xx2_np1;
-      iter++;
-    } // END Newton-Raphson iterations to compute xx2
-    if (iter >= ITER_MAX) {
-      fprintf(stderr, "ERROR: Newton-Raphson failed for SinhCylindricalv2n2: xx2, x,y,z = %.15e %.15e %.15e\n", Cartx, Carty, Cartz);
-      exit(1);
+      xx[2] = xx2;
     }
-    xx[2] = xx2;
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:
@@ -100,7 +126,8 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(const params_struct
     //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
     // Now, including typecasts:
     //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
-    // The (int) typecast always rounds down, so we add 0.5 inside the outer parenthesis:
+    // C float-to-int conversion truncates toward zero; for nonnegative inputs this matches floor().
+    // Assuming (xx - xxmin)/dxx + NGHOSTS is nonnegative (typical for valid interior points), this is safe.
     //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
     // The 0.5 values cancel out:
     //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )

@@ -169,11 +169,7 @@ def Cfunction_ADM_SphorCart_to_Cart(
             rfm.Cart_to_xx,
             ["xx0", "xx1", "xx2"],
             include_braces=True,
-        ).replace(
-            "Cartx", "xCart[0]"
-        ).replace(
-            "Carty", "xCart[1]"
-        ).replace(
+        ).replace("Cartx", "xCart[0]").replace("Carty", "xCart[1]").replace(
             "Cartz", "xCart[2]"
         )
 
@@ -283,7 +279,7 @@ def Cfunction_ADM_Cart_to_BSSN_Cart(
   BSSN_Cart_basis->BU1 = ADM_Cart_basis->BU1;
   BSSN_Cart_basis->BU2 = ADM_Cart_basis->BU2;
 """
-    list_of_output_exprs = [adm2bssn.cf, adm2bssn.trK]
+    list_of_output_exprs: List[sp.Expr] = [adm2bssn.cf, adm2bssn.trK]
     list_of_output_varnames = ["BSSN_Cart_basis->cf", "BSSN_Cart_basis->trK"]
     for i in range(3):
         for j in range(i, 3):

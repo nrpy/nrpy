@@ -36,7 +36,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2__rfm__HoleySinhSpherical(
     //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
     // Now, including typecasts:
     //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
-    // The (int) typecast always rounds down, so we add 0.5 inside the outer parenthesis:
+    // C float-to-int conversion truncates toward zero; for nonnegative inputs this matches floor().
+    // Assuming (xx - xxmin)/dxx + NGHOSTS is nonnegative (typical for valid interior points), this is safe.
     //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
     // The 0.5 values cancel out:
     //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )

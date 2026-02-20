@@ -536,7 +536,8 @@ const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     else:
         BHaH_defines_h.register_BHaH_defines(
             __name__,
-            "\n#define BHAHAHA_NUM_INTERP_GFS 14\n" + bhahaha_gf_interp_indices_string,
+            "\n#define INTERP_REQUEST_BHAHAHA 0\n#define INTERP_REQUEST_PSI4 1\n\n#define BHAHAHA_NUM_INTERP_GFS 14\n"
+            + bhahaha_gf_interp_indices_string,
         )
 
     return outstring

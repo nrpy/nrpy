@@ -59,6 +59,7 @@ find . -type f -name '*.py' \
   ! -path './project/*' \
   ! -path './build/*' \
   ! -path '*/tests/*' \
+  ! -path '*manga*' \
   ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
 
 # Count total number of Python files

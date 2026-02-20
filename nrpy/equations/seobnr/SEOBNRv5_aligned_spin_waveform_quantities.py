@@ -21,7 +21,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Dict
+from typing import Dict, cast
 
 import sympy as sp
 
@@ -1270,7 +1270,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 self.Tlm[j, m] = tlmprefac * sp.sqrt(tlmprod_fac) / z2
         self.effective_source = [Heff, self.vomega * self.pphi]
 
-    def flux(self) -> sp.Mul:
+    def flux(self) -> sp.Expr:
         """
         Compute the SEOBNRv5 aligned-spin flux.
 
@@ -1326,7 +1326,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 factorized_flux += m * m * strain_amplitude**2
         factorized_flux *= -(sp.Rational(1, 8) * self.Omega**2 / sp.pi)
-        return factorized_flux / self.nu
+        return cast(sp.Expr, factorized_flux / self.nu)
 
     def strain(self) -> Dict[str, sp.core.Mul]:
         """

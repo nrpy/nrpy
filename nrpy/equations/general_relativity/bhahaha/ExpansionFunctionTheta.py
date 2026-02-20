@@ -26,7 +26,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict
+from typing import Dict, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -295,7 +295,9 @@ class ExpansionFunctionThetaClass:
             for j in range(3):
                 Theta += self.sU[i] * self.sU[j] * self.KDD[i][j]
 
-        return Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
+        return cast(
+            sp.Expr, Theta.subs(self.rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h)
+        )
 
 
 # Class to manage different configurations of ExpansionFunctionThetaClass

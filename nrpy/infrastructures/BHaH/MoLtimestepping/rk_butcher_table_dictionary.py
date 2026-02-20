@@ -21,6 +21,7 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
          Gabriel M Steward
 """
+
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, Python's computer algebra system
@@ -446,7 +447,7 @@ def generate_Butcher_tables(
                 expr = x * sp.prod(x + i for i in range(n) if i != j) / x
 
                 # Integrate the expression over [0, 1]. This helps in evaluating coefficients for Adams-Bashforth.
-                expr2 = sp.integrate(expr, (x, 0, 1))
+                expr2 = sp.integrate(expr, (x, sp.sympify(0), sp.sympify(1)))
 
                 # Apply the combinatorial factor to the integral. This is part of the Adams-Bashforth formula.
                 expr2 *= sp.Rational(

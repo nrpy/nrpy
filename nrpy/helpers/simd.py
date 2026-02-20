@@ -1,3 +1,4 @@
+# nrpy/helpers/simd.py
 """
 Convert Expression to SIMD Intrinsics.
 
@@ -8,7 +9,7 @@ Emails: ksible *at* outlook *dot** com
 """
 
 import sys
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, cast
 
 from sympy import (
     Abs,
@@ -30,7 +31,6 @@ from sympy import (
     sign,
     simplify,
     sin,
-    sqrt,
     srepr,
     sympify,
     var,
@@ -174,6 +174,7 @@ def expr_convert_to_simd_intrins(
 
     Doctests:
     >>> from sympy.abc import a, b, c, d
+    >>> from sympy import sqrt
     >>> convert = expr_convert_to_simd_intrins
 
     >>> convert(-2*a)
@@ -371,9 +372,9 @@ def expr_convert_to_simd_intrins(
                 # Find the first occurrence of a negative product inside the addition
                 i = next(
                     i
-                    for i, arg in enumerate(args_list)
-                    if arg.func == Mul
-                    and any(lookup_rational(arg) == -1 for arg in args_list[i].args)
+                    for i, term in enumerate(args_list)
+                    if term.func == Mul
+                    and any(lookup_rational(factor) == -1 for factor in term.args)
                 )
                 # Find the first occurrence of a negative symbol inside the product
                 j = next(
@@ -387,12 +388,14 @@ def expr_convert_to_simd_intrins(
                 subargs = list(args_list[i].args)
                 subargs.pop(j)
                 # Build the subtraction expression for replacement
-                subexpr = SubSIMD(args_list[k], Mul(*subargs))
+                # FIX: Cast subargs to List[Expr] to satisfy stricter SymPy type hints
+                subexpr = SubSIMD(args_list[k], Mul(*[cast(Expr, a) for a in subargs]))
                 args_list = [
                     arg for arg in args_list if arg not in (args_list[i], args_list[k])
                 ]
                 if len(args_list) > 0:
-                    subexpr = Add(subexpr, *args_list)
+                    # FIX: Cast args_list to List[Expr]
+                    subexpr = Add(subexpr, *[cast(Expr, a) for a in args_list])
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
@@ -741,7 +744,7 @@ def expr_convert_to_simd_intrins(
         for subtree in tree_diff.preorder():
             subexpr = subtree.expr
             if subexpr.func == Float:
-                if abs(subexpr - Integer(subexpr)) < 1.0e-14 * subexpr:
+                if abs(subexpr - Integer(subexpr)) < 1.0e-14 * cast(Expr, subexpr):
                     subtree.expr = Integer(subexpr)
         expr_diff = tree_diff.reconstruct()
 

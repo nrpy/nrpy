@@ -21,16 +21,6 @@ from nrpy.equations.general_relativity.g4munu_conversions import (
     ADM_to_g4UU,
 )
 
-# def together(expr: sp.Expr) -> sp.Expr:
-#     """
-#     Massage sympy expressions, cancelling out any obvious factors. SymTP coordinates need more work however.
-#     """
-#     CoordSystem = par.parval_from_str("reference_metric::CoordSystem")
-#     if "SymTP" not in CoordSystem:
-#         return sp.together(expr)
-#     else:
-#         return sp.simplify(expr)
-
 
 class GRHD_Equations:
     """Construct and store expressions for the GRHD equations."""
@@ -68,8 +58,8 @@ class GRHD_Equations:
 
         # First define hydrodynamical quantities
         self.rescaledvU = ixp.declarerank1("rescaledvU", dimension=3)
-        self.u4Ut, self.rho_b, self.P, self.h, self.Ye = sp.symbols(
-            "u4Ut rhob P h Ye", real=True
+        self.u4Ut, self.rho_b, self.P, self.h, self.Ye, self.S = sp.symbols(
+            "u4Ut rhob P h Ye S", real=True
         )
 
         self.VU = ixp.zerorank1()
@@ -106,6 +96,7 @@ class GRHD_Equations:
 
         self.rho_star: sp.Expr
         self.Ye_star: sp.Expr
+        self.S_star: sp.Expr
         self.tau_tilde: sp.Expr
         self.S_tildeD: List[sp.Expr]
         self.rescaledS_tildeD: List[sp.Expr]
@@ -118,6 +109,9 @@ class GRHD_Equations:
         self.Ye_star_fluxU: List[sp.Expr]
         self.rescaled_Ye_star_fluxU: List[sp.Expr]
 
+        self.S_star_fluxU: List[sp.Expr]
+        self.rescaled_S_star_fluxU: List[sp.Expr]
+
         self.tau_tilde_fluxU: List[sp.Expr]
         self.rescaled_tau_tilde_fluxU: List[sp.Expr]
 
@@ -127,6 +121,7 @@ class GRHD_Equations:
         self.tau_source_term: sp.Expr
         self.rho_star_connection_term: sp.Expr
         self.Ye_star_connection_term: sp.Expr
+        self.S_star_connection_term: sp.Expr
         self.tau_connection_term: sp.Expr
 
         self.S_tilde_connection_termsD: List[sp.Expr]
@@ -212,11 +207,6 @@ class GRHD_Equations:
                     self.T4UD[mu + 1][nu + 1] * (self.ReU[nu] / self.ReU[mu])
                 )
 
-    # def compute_sqrtgammaDET(gammaDD):
-    #     global sqrtgammaDET
-    #     _gammaUU, gammaDET = ixp.symm_matrix_inverter3x3(gammaDD) # _gammaUU unused.
-    #     sqrtgammaDET = sp.sqrt(gammaDET)
-
     def compute_rho_star(self) -> None:
         """Compute densitized conserved density."""
         alpha = self.alpha
@@ -237,6 +227,16 @@ class GRHD_Equations:
 
         # Compute Ye_star:
         self.Ye_star = Ye * alpha * e6phi * rho_b * u4U[0]
+
+    def compute_S_star(self) -> None:
+        """Compute densitized conserved entropy."""
+        alpha = self.alpha
+        e6phi = self.e6phi
+        S = self.S
+        u4U = self.u4U
+
+        # Compute S_star:
+        self.S_star = alpha * e6phi * S * u4U[0]
 
     def compute_tau_tilde(self) -> None:
         """Compute densitized conserved energy."""
@@ -295,6 +295,19 @@ class GRHD_Equations:
             self.Ye_star_fluxU[j] = Ye_star * VU[j]
             self.rescaled_Ye_star_fluxU[j] = sp.together(
                 self.Ye_star_fluxU[j] / self.ReU[j]
+            )
+
+    def compute_S_star_fluxU(self) -> None:
+        """Entropy flux term."""
+        VU = self.VU
+        S_star = self.S_star
+
+        self.S_star_fluxU = ixp.zerorank1(dimension=3)
+        self.rescaled_S_star_fluxU = ixp.zerorank1(dimension=3)
+        for j in range(3):
+            self.S_star_fluxU[j] = S_star * VU[j]
+            self.rescaled_S_star_fluxU[j] = sp.together(
+                self.S_star_fluxU[j] / self.ReU[j]
             )
 
     def compute_tau_tilde_fluxU(self) -> None:
@@ -357,10 +370,11 @@ class GRHD_Equations:
         # Term 3:
         self.tau_source_term *= alpha * e6phi
 
-    def compute_rho_star__Ye_star__and_tau_connection_terms(self) -> None:
-        """Source terms from connection coefficients, for density, electron fraction, and energy equations."""
+    def compute_all_connection_terms(self) -> None:
+        """Source terms from connection coefficients for density, electron fraction, entropy, and energy equations."""
         self.rho_star_connection_term = sp.sympify(0)
         self.Ye_star_connection_term = sp.sympify(0)
+        self.S_star_connection_term = sp.sympify(0)
         self.tau_connection_term = sp.sympify(0)
         for i in range(3):
             for j in range(3):
@@ -369,6 +383,9 @@ class GRHD_Equations:
                 )
                 self.Ye_star_connection_term += (
                     self.GammahatUDD[i][i][j] * self.Ye_star_fluxU[j]
+                )
+                self.S_star_connection_term += (
+                    self.GammahatUDD[i][i][j] * self.S_star_fluxU[j]
                 )
                 self.tau_connection_term += (
                     self.GammahatUDD[i][i][j] * self.tau_tilde_fluxU[j]
@@ -448,6 +465,9 @@ class GRHD_Equations:
         self.compute_Ye_star()
         self.compute_Ye_star_fluxU()
 
+        self.compute_S_star()
+        self.compute_S_star_fluxU()
+
         self.compute_tau_tilde()
         self.compute_tau_tilde_fluxU()
 
@@ -456,7 +476,7 @@ class GRHD_Equations:
 
         self.compute_tau_source_term()
 
-        self.compute_rho_star__Ye_star__and_tau_connection_terms()
+        self.compute_all_connection_terms()
 
         self.compute_S_tilde_source_termD()
         self.compute_S_tilde_connection_termsD()

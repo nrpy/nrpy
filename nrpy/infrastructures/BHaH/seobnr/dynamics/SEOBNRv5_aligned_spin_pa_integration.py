@@ -122,8 +122,8 @@ for (size_t i = 0; i < nsteps; i++) {
   prstar[i] = 0.;
   dprstar_dr[i] = 0.;
   commondata->r = r[i];
-  x_lo = sqrt(r[i]) * 0.8;
-  x_hi = sqrt(r[i]) * 1.2;
+  x_lo = sqrt(r[i]) * 0.6;
+  x_hi = sqrt(r[i]) * 1.4;
   F_pphi0.params = commondata;
   pphi[i] = root_finding_1d(x_lo, x_hi, &F_pphi0);
 }

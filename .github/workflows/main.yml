@@ -38,9 +38,11 @@ jobs:
           pip install -U -r requirements.txt
           if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" && "${{ matrix.python-version }}" != "3.9.19" ]]; then
             pip install -U -r requirements-dev.txt
+            pip install git+https://github.com/sympy/sympy.git
           else
             # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
             sed 's/==.*//' requirements-dev.txt | xargs pip install -U
+            pip install sympy
           fi
           if [[ "${{ matrix.python-version }}" == "3.8.12" ]]; then
             pip install pylint==3.2.0  # pylint 3.2.4+ is broken in 3.8.12.
@@ -48,42 +50,26 @@ jobs:
           # FIXME: until NRPyLaTeX is updated in pypi.
           pip install -U nrpylatex
           pip install -U ipython setuptools
-          sudo apt-get -y install libgsl-dev
-
-      - name: Install sympy or DEVELOPMENT sympy based on Python version. sympy-dev requires Python 3.9 or higher.
-        run: |
-          pip install sympy
-          # TODO: restore this after NRPy has been updated to sync with SymPy's type hinting.
-          # if [[ "${{ matrix.python-version }}" != "3.7.13" && "${{ matrix.python-version }}" != "3.8.12" ]]; then
-          #   pip install git+https://github.com/sympy/sympy.git
-          # else
-          #   pip install sympy
-          # fi
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       - name: Display sympy and clang-format versions
         run: |
           echo "Running CI tests with SymPy version = $(isympy --version)"
           echo "Running CI tests with clang-format version = $(clang-format --version)"
 
-      - name: Check mypy and black versions when Python != 3.7.13 chosen (they are too broken in those Python versions).
-        if: matrix.python-version != '3.7.13'
-        run: |
-          mypy --version
-          black --version
-
       - name: Run static analysis on each file.
         run: |
           #!/bin/bash
-          
+
           # Exit immediately if a command exits with a non-zero status, except in specific cases
           set -e
-          
+
           # Function to handle each test step
           run_test_step() {
             local step_name="$1"
             local command="$2"
             local failure_message="$3"
-          
+
             echo "-={ Step $step_counter: $step_name }=-"
             eval "$command"
             if [ $? -ne 0 ]; then
@@ -91,19 +77,23 @@ jobs:
             fi
             ((step_counter++))
           }
-          
+
           # Clear cache
           echo "Clearing cache..."
           rm -rf ~/.cache/nrpy
           echo "Cache cleared."
-          
+
           # Get Python version
           python_version=$(python --version 2>&1)
           echo "Python version: $python_version"
-          
+          python_minor=$(python -c 'import sys; print(sys.version_info.minor)')
+          echo "Python minor version: $python_minor"
+          run_black=false
+          if (( python_minor >= 10 )); then run_black=true; fi
+
           # Initialize array to store failed tests
           failed_tests=()
-          
+
           # Find all relevant Python files recursively and store them in a temporary file
           echo "Locating Python files..."
           find . -type f -name '*.py' \
@@ -111,44 +101,45 @@ jobs:
             ! -path './project/*' \
             ! -path './build/*' \
             ! -path '*/tests/*' \
-            ! -path '*superB*' \
             ! -path '*manga*' \
             ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
-          
+
           # Count total number of Python files
           total_files=$(wc -l < python_files.txt)
           echo "Found $total_files Python file(s) to analyze."
-          
+
           # Initialize file counter
           file_counter=1
-          
+
           # Loop through each Python file
           while IFS= read -r python_file; do
             echo ""
-          
+
             # Initialize step counter for each file
             step_counter=1
-          
+
             echo "-={ $python_file : file $file_counter of $total_files for static analysis }=-"
-          
+
             # Run Doctests if not in nrpy/examples/ and not in root directory
             if [[ ! $python_file =~ nrpy/examples/.* && ! $python_file =~ ^\./[^/]+\.py$ ]]; then
               run_test_step "Doctests" "PYTHONPATH=.:$PYTHONPATH python \"$python_file\"" "doctests"
             fi
-          
-            # Turns out that black in Python 3.7 has a heart attack when parsing equations/general_relativity/BSSN_quantities.py:
-            # INTERNAL ERROR: Black produced code that is not equivalent to the source. Please report a bug on ....
-            if [[ "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.12"* ]]; then
+
+            # Run black only on Python >= 3.10.
+            if [[ "$run_black" == "true" ]]; then
               # Step: black
               run_test_step "black" "black --check \"$python_file\"" "black"
-          
+            fi
+
+            # Skip isort & mypy for Python < 3.9
+            if [[ "$python_version" != *"3.7.13"* && "$python_version" != *"3.8.12"* ]]; then
               # Step: isort
               run_test_step "isort" "isort --check-only \"$python_file\"" "isort"
-          
+
               # Step: mypy
               run_test_step "mypy" "PYTHONPATH=.:$PYTHONPATH mypy --strict --pretty --allow-untyped-calls \"$python_file\"" "mypy"
             fi
-          
+
             # Step: pylint
             echo "-={ Step $step_counter: pylint }=-"
             if [[ "$python_version" == *"3.7.13"* || "$python_version" == *"3.8.12"* ]]; then
@@ -156,43 +147,43 @@ jobs:
             else
               pylint_rcfile=".pylintrc"
             fi
-          
+
             # Run pylint and capture the output, prevent 'set -e' from exiting on failure
             pylint_output=$(PYTHONPATH=.:$PYTHONPATH pylint --rcfile="$pylint_rcfile" "$python_file" 2>&1 || true)
-          
+
             # Extract the Pylint score by searching for "rated at" and extracting the number before "/10"
             pylint_score=$(echo "$pylint_output" | grep "rated at" | grep -Eo '[0-9]+\.[0-9]+' | head -1 || echo "0")
-          
+
             echo "Pylint score is $pylint_score"
-          
+
             if (( $(echo "$pylint_score < 9.5" | bc -l) )); then
               echo "$pylint_output"
               echo "Pylint score is below 9.5, failing..."
               failed_tests+=("pylint in $python_file")
             fi
             ((step_counter++))
-          
+
             # Step: pydocstyle
             run_test_step "pydocstyle" "pydocstyle \"$python_file\"" "pydocstyle"
-          
+
             # Step: darglint
             run_test_step "darglint" "darglint -v 2 \"$python_file\"" "darglint"
-          
+
             # Increment file counter
             ((file_counter++))
-          
+
           done < python_files.txt
-          
+
           # Remove temporary file
           rm python_files.txt
-          
+
           # Exit with failure if any tests failed
           if [ ${#failed_tests[@]} -ne 0 ]; then
             echo ""
             echo "The following tests failed: ${failed_tests[*]}"
             exit 1
           fi
-          
+
           echo ""
           echo "All static analysis tests passed successfully."
 
@@ -283,20 +274,20 @@ jobs:
           python3 --version && isympy --version
           cd /home/runner/work/nrpy/nrpy
           git log | head
+
+          python3 -u nrpy/examples/superB_nrpyelliptic_conformally_flat.py
+          cd project/superB_nrpyelliptic_conformally_flat/
+          make -j2
+          cd /home/runner/work/nrpy/nrpy
+          python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
+          cd project/superB_blackhole_spectroscopy/
+          make -j2
+          cd /home/runner/work/nrpy/nrpy
+          python3 -u nrpy/examples/superB_two_blackholes_collide.py
+          cd project/superB_two_blackholes_collide/
+          make -j2
+          ./charmrun +p2 ./superB_two_blackholes_collide
           "
-          #          python3 -u nrpy/examples/superB_nrpyelliptic_conformally_flat.py
-          #          cd project/superB_nrpyelliptic_conformally_flat/
-          #          make -j2
-          #          cd /home/runner/work/nrpy/nrpy
-          #          python3 -u nrpy/examples/superB_blackhole_spectroscopy.py
-          #          cd project/superB_blackhole_spectroscopy/
-          #          make -j2
-          #          cd /home/runner/work/nrpy/nrpy
-          #          python3 -u nrpy/examples/superB_two_blackholes_collide.py
-          #          cd project/superB_two_blackholes_collide/
-          #          make -j2
-          #          ./charmrun +p2 ./superB_two_blackholes_collide
-          #          "
 
   codegen-ubuntu:
     runs-on: ${{ matrix.os }}
@@ -304,10 +295,10 @@ jobs:
     strategy:
       matrix:
         os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
-        python-version: [ '3.7.13', '3.x' ]
+        python-version: [ '3.9.19', '3.x' ]
         exclude:
           - os: 'ubuntu-24.04'
-            python-version: '3.7.13'
+            python-version: '3.9.19'
 
     steps:
       - uses: actions/checkout@v4
@@ -326,7 +317,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
                pip install -U pylint clang-format ipython setuptools
-               sudo apt-get -y install libgsl-dev
+               sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       #    - name: Setup tmate session
       #      uses: mxschmitt/action-tmate@v3
@@ -346,12 +337,21 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy && (cd project/seobnrv5_nrpy && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob && (cd project/seobnrv5_nrnqc_bob && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_no_spin && (cd project/seobnrv5_bob_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_no_spin && (cd project/seobnrv5_nrpy_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_no_spin && (cd project/seobnrv5_nrnqc_bob_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
-          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) 
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
+          python -m nrpy.examples.sebobv1_jax
 
   codegen-mac:
     # updated to macos-14 as requested
@@ -397,12 +397,21 @@ jobs:
           python -m nrpy.examples.spinning_blackhole        && (cd project/spinning_blackhole && make && make clean) &&
           python -m nrpy.examples.nrpypn_quasicircular_momenta && (cd project/nrpypn_quasicircular_momenta && make && make clean) &&
           python -m nrpy.examples.wave_equation_multicoordinates && (cd project/wave_equation_multicoordinates && make && make clean) &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy && (cd project/seobnrv5_nrpy && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob && (cd project/seobnrv5_nrnqc_bob && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_no_spin && (cd project/seobnrv5_bob_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_no_spin && (cd project/seobnrv5_nrpy_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_no_spin && (cd project/seobnrv5_nrnqc_bob_calibration_no_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make && make clean) &&
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make && make clean) &&
           python -m nrpy.examples.tovola_neutron_star && (cd project/tovola_neutron_star && make && make clean) &&
           python -m nrpy.examples.hydro_without_hydro && (cd project/hydro_without_hydro && make && make clean) &&
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
-          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean)
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
+          python -m nrpy.examples.sebobv1_jax
 
   sebob-consistency-test:
     runs-on: ${{ matrix.os }}
@@ -433,32 +442,132 @@ jobs:
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
           pip install -U pylint clang-format ipython setuptools
           pip install numpy
-          sudo apt-get -y install libgsl-dev
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
 
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: 'd96fdd6190f5c7273ebd93db3bb17f933b66d480'
+          ref: '6fd5472a2f5f5fdf372231ca22a11b64daf08b17'
           path: trusted_code
 
       - name: Build trusted sebob executable
         run: |
           cd trusted_code &&
           pip install . &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy && (cd project/seobnrv5_nrpy && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob && (cd project/seobnrv5_nrnqc_bob && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_no_spin && (cd project/seobnrv5_bob_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_no_spin && (cd project/seobnrv5_nrpy_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_no_spin && (cd project/seobnrv5_nrnqc_bob_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make)
           cd ..
 
       - name: Build current sebob executable
         run: |
           pwd &&
           pip install . &&
-          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral && (cd project/seobnrv5_aligned_spin_inspiral && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob && (cd project/seobnrv5_bob && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy && (cd project/seobnrv5_nrpy && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob && (cd project/seobnrv5_nrnqc_bob && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_no_spin && (cd project/seobnrv5_bob_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_no_spin && (cd project/seobnrv5_nrpy_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_no_spin && (cd project/seobnrv5_nrnqc_bob_calibration_no_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob -calibration_spin && (cd project/seobnrv5_bob_calibration_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy -calibration_spin && (cd project/seobnrv5_nrpy_calibration_spin && make)
+          python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrnqc_bob -calibration_spin && (cd project/seobnrv5_nrnqc_bob_calibration_spin && make)
 
       - name: Run on-the-fly comparison
         run: |
-          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_aligned_spin_inspiral --current-exec ./project/seobnrv5_aligned_spin_inspiral
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_bob --current-exec ./project/seobnrv5_bob
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_bob_calibration_no_spin --current-exec ./project/seobnrv5_bob_calibration_no_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_bob_calibration_spin --current-exec ./project/seobnrv5_bob_calibration_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrpy --current-exec ./project/seobnrv5_nrpy
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrpy_calibration_no_spin --current-exec ./project/seobnrv5_nrpy_calibration_no_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrpy_calibration_spin --current-exec ./project/seobnrv5_nrpy_calibration_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob --current-exec ./project/seobnrv5_nrnqc_bob
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob_calibration_no_spin --current-exec ./project/seobnrv5_nrnqc_bob_calibration_no_spin
+          python nrpy/examples/tests/sebob_consistency_check.py --trusted-exec ./trusted_code/project/seobnrv5_nrnqc_bob_calibration_spin --current-exec ./project/seobnrv5_nrnqc_bob_calibration_spin
 
       - name: Clean up
         run: |
-          (cd trusted_code/project/seobnrv5_aligned_spin_inspiral && make clean) &&
-          (cd project/seobnrv5_aligned_spin_inspiral && make clean)
+          (cd trusted_code/project/seobnrv5_bob && make clean) &&
+          (cd trusted_code/project/seobnrv5_bob_calibration_no_spin && make clean) &&
+          (cd trusted_code/project/seobnrv5_bob_calibration_spin && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrpy && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrpy_calibration_no_spin && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrpy_calibration_spin && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrnqc_bob && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrnqc_bob_calibration_no_spin && make clean) &&
+          (cd trusted_code/project/seobnrv5_nrnqc_bob_calibration_spin && make clean) &&
+          (cd project/seobnrv5_bob && make clean) &&
+          (cd project/seobnrv5_bob_calibration_no_spin && make clean) &&
+          (cd project/seobnrv5_bob_calibration_spin && make clean) &&
+          (cd project/seobnrv5_nrpy && make clean) &&
+          (cd project/seobnrv5_nrpy_calibration_no_spin && make clean) &&
+          (cd project/seobnrv5_nrpy_calibration_spin && make clean) &&
+          (cd project/seobnrv5_nrnqc_bob && make clean) &&
+          (cd project/seobnrv5_nrnqc_bob_calibration_no_spin && make clean) &&
+          (cd project/seobnrv5_nrnqc_bob_calibration_spin && make clean)
+
+  sebobv2-consistency-test:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ 'ubuntu-22.04', 'ubuntu-24.04' ]
+        python-version: [ '3.7.13', '3.x' ]
+        exclude:
+          - os: 'ubuntu-24.04'
+            python-version: '3.7.13'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Display Python version
+        run: python --version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
+          pip install -U pylint clang-format ipython setuptools
+          pip install numpy
+          sudo apt-get update && sudo apt-get -y install libgsl-dev
+
+      - name: Checkout trusted commit code
+        uses: actions/checkout@v4
+        with:
+          ref: '6fd5472a2f5f5fdf372231ca22a11b64daf08b17'
+          path: trusted_code
+
+      - name: Build trusted sebob executable
+        run: |
+          cd trusted_code &&
+          pip install . &&
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make)
+          cd ..
+
+      - name: Build current sebob executable
+        run: |
+          pwd &&
+          pip install . &&
+          python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make)
+
+      - name: Run on-the-fly comparison
+        run: |
+          python nrpy/examples/tests/sebobv2_consistency_check.py --trusted-exec ./trusted_code/project/sebobv2 --current-exec ./project/sebobv2
+
+      - name: Clean up
+        run: |
+          (cd trusted_code/project/sebobv2 && make clean) &&
+          (cd project/sebobv2 && make clean)
+

@@ -16,6 +16,8 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
+from typing import cast
+
 import sympy as sp
 
 from nrpy.equations.grhd.Min_Max_and_Piecewise_Expressions import (
@@ -86,7 +88,7 @@ class SEOBNR_aligned_spin_constants:
             raise ValueError(
                 "calibration_no_spin and calibration_spin cannot both be True."
             )
-        (self.m1, self.m2, self.chi1, self.chi2) = sp.symbols(
+        self.m1, self.m2, self.chi1, self.chi2 = sp.symbols(
             "m1 m2 chi1 chi2", real=True
         )
         # compute calibration parameters
@@ -111,13 +113,15 @@ class SEOBNR_aligned_spin_constants:
         self.final_spin_non_precessing_HBR2016()
         self.final_mass_non_precessing_UIB2016()
         self.rISCO = self.Kerr_ISCO_radius(self.a_f)
-        self.rstop = -1 * coord_less_bound(self.Delta_t, 0).subs(
+        self.rstop = -1 * coord_less_bound(self.Delta_t, sp.sympify(0)).subs(
             sp.Function("nrpyAbs"), sp.Abs
-        ) + f2r(0.98) * self.rISCO * coord_greater_bound(self.Delta_t, 0).subs(
+        ) + f2r(0.98) * self.rISCO * coord_greater_bound(
+            self.Delta_t, sp.sympify(0)
+        ).subs(
             sp.Function("nrpyAbs"), sp.Abs
         )
 
-    def Kerr_ISCO_radius(self, a: sp.core.mul.Mul) -> sp.core.mul.Mul:
+    def Kerr_ISCO_radius(self, a: sp.Expr) -> sp.Expr:
         """
         Compute the radius of the innermost stable circular orbit (ISCO) of a Kerr black hole.
 
@@ -132,7 +136,7 @@ class SEOBNR_aligned_spin_constants:
         )
         z2 = sp.sqrt(3 * a_ceil_one**2 + z1**2)
         a_sign = sp.sign(a_ceil_one)
-        return 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign
+        return cast(sp.Expr, 3 + z2 - sp.sqrt((3 - z1) * (3 + z1 + 2 * z2)) * a_sign)
 
     def compute_calibration_params(
         self,

@@ -1,5 +1,4 @@
 # equations/general_relativity/bhahaha/approx_killing_vector_spin.py
-
 """
 Single-pass integrands for AKV-based spin diagnostics on apparent horizons.
 
