@@ -10,13 +10,13 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
-from typing import Any, Dict, List, Tuple, cast
 import re
+from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
-import nrpy.indexedexp as ixp
 import nrpy.grid as gri
+import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
@@ -248,11 +248,17 @@ class ReferenceMetric:
             self.ghatDD = gri.register_gridfunctions_for_single_rankN(
                 "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
             )
-            self.ghatDDdD = gri.register_gridfunctions_for_single_rankN(
-                "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
+            self.ghatDDdD = cast(
+                List[List[List[sp.Expr]]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
+                ),
             )
-            self.ghatDDdDD = gri.register_gridfunctions_for_single_rankN(
-                "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+            self.ghatDDdDD = cast(
+                List[List[List[List[sp.Expr]]]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+                ),
             )
         elif not enable_rfm_precompute:
             for i in range(3):
@@ -1639,6 +1645,8 @@ class ReferenceMetric:
         for the forward map xx->Cart. GeneralRFM providers define metric
         tensors and potentially nonlinear forward maps; inverse maps are
         handled numerically in infrastructure code.
+
+        :raises ValueError: If the GeneralRFM coordinate-system suffix is malformed.
         """
         # Neutral default domain; users are free to override these bounds.
         par.register_CodeParameters(
