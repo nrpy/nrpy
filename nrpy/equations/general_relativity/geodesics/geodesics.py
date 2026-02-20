@@ -313,7 +313,7 @@ class GeodesicEquations:
         # Ninth Equation: Eulerian Distance Evolution
         # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
         # Note: L_Euler is a *signed* distance. In reverse ray tracing, p^0 < 0
-        # generally causes L_Euler to decrease, except inside an ergosphere 
+        # generally causes L_Euler to decrease, except inside an ergosphere
         # where p^0 > 0 causes it to increase.
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
