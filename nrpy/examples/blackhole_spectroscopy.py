@@ -59,6 +59,11 @@ project_name = "blackhole_spectroscopy"
 CoordSystem = "SinhCylindrical"
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 
 initial_sep = 0.5
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
@@ -84,10 +89,28 @@ default_checkpoint_every = 2.0
 t_final = 1.5 * grid_physical_size
 swm2sh_maximum_l_mode_generated = 8
 swm2sh_maximum_l_mode_to_compute = 2  # for consistency with NRPy 1.0 version.
+enable_psi4_diagnostics = True
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
+    "GeneralRFM_fisheyeN1": [800, 800, 800],
 }
+# Fisheye parameter defaults (all in params_struct, set here in the example).
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 50.0,
+            "fisheye_phys_w_trans1": 10.0,
+        }
+    )
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
@@ -172,10 +195,10 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
-    enable_psi4_diagnostics=True,
+    enable_psi4_diagnostics=enable_psi4_diagnostics,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics=False, enable_psi4=True
+    enable_interp_diagnostics=False, enable_psi4=enable_psi4_diagnostics
 )
 BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
 BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
@@ -233,19 +256,26 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     OMP_collapse=OMP_collapse,
 )
 
-BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
-    CoordSystem=CoordSystem,
-    OMP_collapse=OMP_collapse,
-    enable_fd_functions=enable_fd_functions,
-)
-BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
-    swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
-)
+if enable_psi4_diagnostics:
+    BHaH.general_relativity.psi4.psi4.register_CFunction_psi4(
+        CoordSystem=CoordSystem,
+        OMP_collapse=OMP_collapse,
+        enable_fd_functions=enable_fd_functions,
+    )
+    BHaH.special_functions.spin_weight_minus2_spherical_harmonics.register_CFunction_spin_weight_minus2_sph_harmonics(
+        swm2sh_maximum_l_mode_generated=swm2sh_maximum_l_mode_generated
+    )
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
+if enable_psi4_diagnostics:
+    BHaH.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
+
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
@@ -268,7 +298,7 @@ if enable_SSL:
 commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
 if separate_Ricci_and_BSSN_RHS:
-    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, &auxevol_gfs[IDX4Ppt(params, RBARDD00GF, 0)]);"
+    rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
@@ -283,7 +313,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
@@ -324,9 +354,13 @@ par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
 par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
-par.adjust_CodeParam_default(
-    "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
-)
+if enable_psi4_diagnostics:
+    par.adjust_CodeParam_default(
+        "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
+    )
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -373,6 +407,12 @@ if enable_CAHD:
 
 # Set griddata struct used for calculations to griddata_device for certain parallelizations
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
+post_params_struct_set_to_default = ""
+if num_fisheye_transitions is not None:
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata=compute_griddata,
+    )
 
 # Define post_MoL_step_forward_in_time string for main function
 BHaH.main_c.register_CFunction_main_c(
@@ -380,6 +420,7 @@ BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
     boundary_conditions_desc=boundary_conditions_desc,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
     pre_MoL_step_forward_in_time=(
         f"write_checkpoint(&commondata, "
         f"{'griddata_host, griddata_device' if parallelization == 'cuda' else 'griddata'});\n"
@@ -411,7 +452,6 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
 )
-
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
 )

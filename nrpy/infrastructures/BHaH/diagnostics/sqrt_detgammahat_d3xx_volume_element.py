@@ -99,12 +99,21 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     rfm = refmetric.reference_metric[CoordSystem]
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    expr_list = [sp.sqrt(sp.simplify(rfm.detgammahat)) * sp.Abs(dxx0 * dxx1 * dxx2)]
-    body = ccg.c_codegen(
-        expr_list,
-        ["*dV"],
-        include_braces=False,
-    )
+    if CoordSystem.startswith("GeneralRFM"):
+        # For GeneralRFM, diagnostics_volume_integration_helpers.h computes dV
+        # directly from the detgammahat gridfunction. Keep this helper inert.
+        expr_list = []
+        body = "*dV = 0.0;"
+    else:
+        detgammahat_expr = rfm.detgammahat
+        expr_list = [
+            sp.sqrt(sp.simplify(detgammahat_expr)) * sp.Abs(dxx0 * dxx1 * dxx2)
+        ]
+        body = ccg.c_codegen(
+            expr_list,
+            ["*dV"],
+            include_braces=False,
+        )
 
     parallelization = par.parval_from_str("parallelization")
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)
