@@ -267,7 +267,9 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
         # For fisheye GeneralRFM (generally non-orthogonal), this function still
         # follows its contract: examine the three coordinate directions at a point.
         for dirn in rfm.radial_like_dirns:
-            ds_expr_list += [sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])]
+            ds_expr_list += [
+                sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])
+            ]
             ds_str_list += [f"ds{dirn}"]
     elif CoordSystem.startswith("GeneralRFM"):
         body += (

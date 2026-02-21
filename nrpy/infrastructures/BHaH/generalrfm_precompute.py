@@ -16,6 +16,7 @@ Note: CUDA is not yet supported for this precompute path.
 Author: Nishita Jadoo
         njadoo@uidaho.edu
 """
+
 from __future__ import annotations
 
 from inspect import currentframe as cfr
@@ -27,23 +28,27 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
+from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.helpers.expression_utils import (
-    generate_definition_header,
-    get_params_commondata_symbols_from_expr_list,
-)
-import nrpy.helpers.parallel_codegen as pcg
 
 
-def _access_auxevol_gf(name: str, i0: str = "i0", i1: str = "i1", i2: str = "i2") -> str:
-    return gri.BHaHGridFunction.access_gf(name, 0, 0, 0, gf_array_name="auxevol_gfs").replace(
-        "i0", i0
-    ).replace("i1", i1).replace("i2", i2)
+def _access_auxevol_gf(
+    name: str, i0: str = "i0", i1: str = "i1", i2: str = "i2"
+) -> str:
+    return (
+        gri.BHaHGridFunction.access_gf(name, 0, 0, 0, gf_array_name="auxevol_gfs")
+        .replace("i0", i0)
+        .replace("i1", i1)
+        .replace("i2", i2)
+    )
 
 
-def _unique_assignments(assignments: List[Tuple[str, sp.Expr]]) -> List[Tuple[str, sp.Expr]]:
+def _unique_assignments(
+    assignments: List[Tuple[str, sp.Expr]],
+) -> List[Tuple[str, sp.Expr]]:
     seen: Dict[str, bool] = {}
     uniq: List[Tuple[str, sp.Expr]] = []
     for varname, expr in assignments:
@@ -57,9 +62,7 @@ def _unique_assignments(assignments: List[Tuple[str, sp.Expr]]) -> List[Tuple[st
 def register_CFunction_generalrfm_precompute(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions.
-    """
+    """Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions."""
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -180,10 +183,10 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
     return pcg.NRPyEnv()
 
 
-def register_CFunctions_generalrfm_support(CoordSystem: str) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register all GeneralRFM support C functions (precompute and Cart_to_xx).
-    """
+def register_CFunctions_generalrfm_support(
+    CoordSystem: str,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """Register all GeneralRFM support C functions (precompute and Cart_to_xx)."""
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -192,8 +195,6 @@ def register_CFunctions_generalrfm_support(CoordSystem: str) -> Union[None, pcg.
     register_CFunction_generalrfm_precompute(CoordSystem)
 
     # Cart_to_xx numeric inverse.
-    from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
-
     generalrfm_cart_to_xx.register_CFunction_generalrfm_Cart_to_xx(CoordSystem)
 
     return pcg.NRPyEnv()
