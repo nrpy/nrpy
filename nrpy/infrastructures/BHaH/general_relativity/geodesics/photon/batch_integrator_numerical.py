@@ -3,6 +3,7 @@
 Generates the main C orchestrator for the numerical integration pipeline.
 Corrected to prevent Window Plane termination and improve debug logging.
 Updated to restore conservation checks using the clean SoA architecture.
+Includes final blueprint data extraction fix.
 
 Author: Dalton J. Moone
 """
@@ -119,7 +120,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     long int active_photons = num_rays;
 
     TimeSlotManager tsm;
-    slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t);
+    slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
 
     double window_center[3], n_x[3], n_y[3], n_z[3];
     {initial_conditions_func}(commondata, num_rays, &all_photons, window_center, n_x, n_y, n_z);
@@ -139,12 +140,21 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons.affine_param_p[i] = all_photons.affine_param[i];
         all_photons.affine_param_p_p[i] = all_photons.affine_param[i];
 
-        plane_event_params window_params = {{ {{n_z[0], n_z[1], n_z[2]}}, n_z[0]*window_center[0] + n_z[1]*window_center[1] + n_z[2]*window_center[2] }};
-        all_photons.on_positive_side_of_window_prev[i] = (plane_event_func(all_photons.f, num_rays, i, &window_params) > 0);
+        // Inline window plane check
+        double w_d = n_z[0]*window_center[0] + n_z[1]*window_center[1] + n_z[2]*window_center[2];
+        double w_val = all_photons.f[IDX_GLOBAL(1, i, num_rays)] * n_z[0] +
+                       all_photons.f[IDX_GLOBAL(2, i, num_rays)] * n_z[1] +
+                       all_photons.f[IDX_GLOBAL(3, i, num_rays)] * n_z[2] - w_d;
+        all_photons.on_positive_side_of_window_prev[i] = (w_val > 0.0);
 
-        plane_event_params source_params = {{ {{commondata->source_plane_normal_x, commondata->source_plane_normal_y, commondata->source_plane_normal_z}}, 
-            commondata->source_plane_center_x*commondata->source_plane_normal_x + commondata->source_plane_center_y*commondata->source_plane_normal_y + commondata->source_plane_center_z*commondata->source_plane_normal_z }};
-        all_photons.on_positive_side_of_source_prev[i] = (plane_event_func(all_photons.f, num_rays, i, &source_params) > 0);
+        // Inline source plane check
+        double s_d = commondata->source_plane_center_x*commondata->source_plane_normal_x + 
+                     commondata->source_plane_center_y*commondata->source_plane_normal_y + 
+                     commondata->source_plane_center_z*commondata->source_plane_normal_z;
+        double s_val = all_photons.f[IDX_GLOBAL(1, i, num_rays)] * commondata->source_plane_normal_x +
+                       all_photons.f[IDX_GLOBAL(2, i, num_rays)] * commondata->source_plane_normal_y +
+                       all_photons.f[IDX_GLOBAL(3, i, num_rays)] * commondata->source_plane_normal_z - s_d;
+        all_photons.on_positive_side_of_source_prev[i] = (s_val > 0.0);
 
         all_photons.source_event_found[i] = false;
         all_photons.window_event_found[i] = false;
@@ -183,7 +193,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
     if(initial_slot_idx != -1) {{
-        for(long int i=0; i<num_rays; ++i) {{ slot_add_photon(&tsm.slots[initial_slot_idx], i); }}
+        for(long int i=0; i<num_rays; ++i) {{ slot_add_photon(&tsm, initial_slot_idx, i); }}
     }}
 
     int *req_photon_ids = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
@@ -205,10 +215,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     // === MAIN EPOCH LOOP ===
     for (int i = initial_slot_idx; i >= 0 && active_photons > 0; i--) {{
-        while (tsm.slots[i].count > 0) {{
-            long int bundle_size = MIN(tsm.slots[i].count, BUNDLE_CAPACITY);
+        while (tsm.slot_counts[i] > 0) {{
+            long int bundle_size = MIN(tsm.slot_counts[i], BUNDLE_CAPACITY);
             long int bundle_photons[bundle_size];
-            slot_remove_chunk(&tsm.slots[i], bundle_photons, bundle_size);
+            slot_remove_chunk(&tsm, i, bundle_photons, bundle_size);
 
             long int needs_retry_indices[bundle_size];
             long int next_retry_indices[bundle_size]; 
@@ -301,7 +311,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     }} else if (fabs(all_photons.f[IDX_GLOBAL(0, photon_idx, num_rays)]) > commondata->t_integration_max) {{
                         all_photons.status[photon_idx] = FAILURE_T_MAX_EXCEEDED;
                     }} else if (r_sq > (commondata->r_escape * commondata->r_escape)) {{
-                        // ---> FIX APPLIED HERE <---
                         all_photons.status[photon_idx] = TERMINATION_TYPE_CELESTIAL_SPHERE;
                         if (r_sq > 1e-9) {{
                             results_buffer[photon_idx].final_theta = acos(z / sqrt(r_sq));
@@ -333,15 +342,18 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             for (long int j = 0; j < active_in_bundle; ++j) {{
                 long int p_idx = compacted_active[j];
                 int s_idx = slot_get_index(&tsm, all_photons.f[IDX_GLOBAL(0, p_idx, num_rays)]);
-                if (s_idx != -1) slot_add_photon(&tsm.slots[s_idx], p_idx);
+                if (s_idx != -1) slot_add_photon(&tsm, s_idx, p_idx);
                 else {{ all_photons.status[p_idx] = FAILURE_SLOT_MANAGER_ERROR; active_photons--; }}
             }}
         }} 
     }} 
 
+    // --- POPULATE BLUEPRINT BUFFER ---
     #pragma omp parallel for
     for (long int i = 0; i < num_rays; i++) {{
-        results_buffer[i].termination_type = all_photons.status[i];
+        calculate_and_fill_blueprint_data_universal(
+            commondata, &all_photons, num_rays, i, &results_buffer[i]
+        );
     }}
 
     // --- FINAL CONSERVATION CHECK ---

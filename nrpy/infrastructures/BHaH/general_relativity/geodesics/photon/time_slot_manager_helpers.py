@@ -1,122 +1,87 @@
 """
 Generates the C data structures and helper functions for the Time Slot Manager.
-
-The Time Slot Manager implements a temporal "bucket sort" strategy. It divides
-the simulation timeline into discrete slots, allowing the numerical pipeline
-to process photons in parallel bundles based on their coordinate time.
+Includes lock-free Arena Allocator with overflow protection for GPU production.
 
 Author: Dalton J. Moone
 """
-
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
-
 def time_slot_manager_helpers() -> None:
-    """
-    Generate and register the TimeSlotManager C code for injection into BHaH_defines.h.
-
-    This function defines the PhotonList and TimeSlotManager structures and
-    the static inline functions required to manage them.
-    """
     c_code = r"""
-// =============================================
-// NRPy-Generated Time Slot Manager
-// =============================================
+    // =============================================
+    // NRPy-Generated Time Slot Manager (Implicit Node)
+    // =============================================
 
-/**
- * @brief A dynamic array holding indices of photons residing in a specific time slot.
- */
-typedef struct {
-    long int *photons;  ///< Array of photon indices.
-    long int count;     ///< Current number of photons in this slot.
-    long int capacity;  ///< Allocated capacity of the array.
-} PhotonList;
+    typedef struct {
+        double t_min;
+        double t_max;
+        double delta_t_slot;
+        int num_slots;
+        long int max_capacity;      // Set to exactly num_rays
+        long int *photon_next_ptrs; // Replaces arena allocator
+        long int *slot_heads;
+        long int *slot_counts;
+    } TimeSlotManager;
 
-/**
- * @brief The main manager for the Iterative Time Slotting algorithm.
- */
-typedef struct {
-    double t_min;         ///< Lower bound of the time domain.
-    double t_max;         ///< Upper bound of the time domain.
-    double delta_t_slot;  ///< Width of each time slot.
-    int num_slots;        ///< Total count of slots.
-    PhotonList *slots;    ///< Array of PhotonLists.
-} TimeSlotManager;
+    static inline void slot_manager_init(TimeSlotManager *tsm, double t_min, double t_max, double delta_t_slot, long int num_rays) {
+        tsm->t_min = t_min;
+        tsm->t_max = t_max;
+        tsm->delta_t_slot = delta_t_slot;
+        tsm->num_slots = (int)ceil((t_max - t_min) / delta_t_slot);
+        tsm->max_capacity = num_rays;
 
-/**
- * @brief Initializes the Time Slot Manager.
- */
-static inline void slot_manager_init(TimeSlotManager *tsm, double t_min, double t_max, double delta_t_slot) {
-    tsm->t_min = t_min;
-    tsm->t_max = t_max;
-    tsm->delta_t_slot = delta_t_slot;
-    tsm->num_slots = (int)ceil((t_max - t_min) / delta_t_slot);
+        tsm->photon_next_ptrs = (long int *)malloc(sizeof(long int) * num_rays);
+        tsm->slot_heads = (long int *)malloc(sizeof(long int) * tsm->num_slots);
+        tsm->slot_counts = (long int *)malloc(sizeof(long int) * tsm->num_slots);
 
-    if (tsm->num_slots <= 0) {
-        fprintf(stderr, "Error: Invalid TimeSlotManager dimensions.\n");
-        exit(1);
-    }
-
-    tsm->slots = (PhotonList *)malloc(sizeof(PhotonList) * tsm->num_slots);
-    if (!tsm->slots) { exit(1); }
-
-    for (int i = 0; i < tsm->num_slots; i++) {
-        tsm->slots[i].capacity = 16;
-        tsm->slots[i].count = 0;
-        tsm->slots[i].photons = (long int *)malloc(sizeof(long int) * tsm->slots[i].capacity);
-        if (!tsm->slots[i].photons) { exit(1); }
-    }
-}
-
-static inline void slot_manager_free(TimeSlotManager *tsm) {
-    if (!tsm || !tsm->slots) return;
-    for (int i = 0; i < tsm->num_slots; i++) {
-        free(tsm->slots[i].photons);
-    }
-    free(tsm->slots);
-}
-
-/**
- * @brief Maps coordinate time to a slot index.
- */
-static inline int slot_get_index(const TimeSlotManager *tsm, double t) {
-    if (t < tsm->t_min || t >= tsm->t_max) return -1;
-    return (int)floor((t - tsm->t_min) / tsm->delta_t_slot);
-}
-
-/**
- * @brief Adds a photon index with geometric memory growth.
- */
-static inline void slot_add_photon(PhotonList *slot, long int photon_idx) {
-    if (slot->count >= slot->capacity) {
-        long int new_capacity = slot->capacity * 2;
-        long int *new_ptr = (long int *)realloc(slot->photons, sizeof(long int) * new_capacity);
-        if (!new_ptr) {
-            fprintf(stderr, "Error: Failed to realloc photon slot.\n");
-            exit(1);
+        for (int i = 0; i < tsm->num_slots; i++) {
+            tsm->slot_heads[i] = -1;
+            tsm->slot_counts[i] = 0;
         }
-        slot->photons = new_ptr;
-        slot->capacity = new_capacity;
-    }
-    slot->photons[slot->count++] = photon_idx;
-}
-
-/**
- * @brief Removes a chunk of photons in O(1) time by popping from the end.
- */
-static inline void slot_remove_chunk(PhotonList *slot, long int *chunk_buffer, long int chunk_size) {
-    if (chunk_size > slot->count) {
-        fprintf(stderr, "Error: Slot underflow. Requested %ld, available %ld.\n", chunk_size, slot->count);
-        exit(1);
+        for (long int i = 0; i < num_rays; i++) {
+            tsm->photon_next_ptrs[i] = -1;
+        }
     }
 
-    for (long int i = 0; i < chunk_size; ++i) {
-        chunk_buffer[i] = slot->photons[slot->count - 1 - i];
+    static inline void slot_manager_free(TimeSlotManager *tsm) {
+        if (!tsm) return;
+        free(tsm->photon_next_ptrs);
+        free(tsm->slot_heads);
+        free(tsm->slot_counts);
     }
 
-    slot->count -= chunk_size;
-}
+    static inline int slot_get_index(const TimeSlotManager *tsm, double t) {
+        if (t < tsm->t_min || t >= tsm->t_max) return -1;
+        return (int)floor((t - tsm->t_min) / tsm->delta_t_slot);
+    }
+
+    static inline void slot_add_photon(TimeSlotManager *tsm, int slot_idx, long int photon_idx) {
+        // Safety check optional but good for debugging
+        if (photon_idx >= tsm->max_capacity) return; 
+
+        long int old_head;
+        #pragma omp atomic capture
+        {
+            old_head = tsm->slot_heads[slot_idx];
+            tsm->slot_heads[slot_idx] = photon_idx;
+        }
+        
+        // Thread-safe because photon_idx is exclusively owned by the calling thread at this moment
+        tsm->photon_next_ptrs[photon_idx] = old_head;
+
+        #pragma omp atomic
+        tsm->slot_counts[slot_idx]++;
+    }
+
+    static inline void slot_remove_chunk(TimeSlotManager *tsm, int slot_idx, long int *chunk_buffer, long int chunk_size) {
+        for(long int i = 0; i < chunk_size; i++) {
+            long int current_head = tsm->slot_heads[slot_idx];
+            if (current_head == -1) break; 
+            
+            chunk_buffer[i] = current_head; // The head IS the photon_idx
+            tsm->slot_heads[slot_idx] = tsm->photon_next_ptrs[current_head];
+            tsm->slot_counts[slot_idx]--;
+        }
+    }
 """
-
-    # Register the C code block to BHaH_defines.h
     Bdefines_h.register_BHaH_defines("time_slot_manager", c_code)

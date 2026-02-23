@@ -5,7 +5,6 @@ from typing import Union
 import config_and_types as cfg
 
 def _load_texture(image_input: Union[str, np.ndarray]) -> np.ndarray:
-    """Loads an image or validates a NumPy array, returning normalized float64 [0.0, 1.0]."""
     if isinstance(image_input, str):
         if not os.path.exists(image_input):
             raise FileNotFoundError(f"Texture file not found: {image_input}")
@@ -27,12 +26,14 @@ def generate_source_disk_array(
     disk_temp_power_law: float = -0.75,
     colormap: str = 'hot'
 ) -> np.ndarray:
-    """Generates an anti-aliased NumPy array of a power-law accretion disk."""
     import matplotlib.pyplot as plt
     
     half_width = disk_physical_width / 2.0
     y_coords = np.linspace(-half_width, half_width, pixel_width)
-    z_coords = np.linspace(-half_width, half_width, pixel_width)
+    # Mapping z_coords such that the top of the array is the max value
+    z_coords = np.linspace(half_width, -half_width, pixel_width)
+    
+    # 'xy' indexing: first dimension is y (columns), second is z (rows)
     yy, zz = np.meshgrid(y_coords, z_coords)
     radii = np.sqrt(yy**2 + zz**2)
 
@@ -62,18 +63,13 @@ def generate_static_lensed_image(
     blueprint_filename: str,
     window_width: float,
     chunk_size: int = cfg.CHUNK_SIZE,
-    display_image: bool = True  # <--- Added this flag (Defaults to True)
+    display_image: bool = True 
 ) -> None:
-    """
-    Chunk-based renderer. Processes a massive binary blueprint in safe RAM chunks,
-    accumulating the results into the final image buffer.
-    """
     print(f"--- Generating Static Lensed Image: '{output_filename}' ---")
     
     if not os.path.exists(blueprint_filename):
         raise FileNotFoundError(f"Blueprint file not found: {blueprint_filename}")
 
-    # Initialization
     half_w = window_width / 2.0
     y_w_min, y_w_max = -half_w, half_w
     z_w_min, z_w_max = -half_w, half_w
@@ -88,89 +84,66 @@ def generate_static_lensed_image(
     source_h, source_w, _ = source_texture.shape
     sphere_h, sphere_w, _ = sphere_texture.shape
 
-    # Output Buffers (Small memory footprint)
     pixel_accumulator = np.zeros((output_pixel_height, output_pixel_width, 3), dtype=np.float64)
     count_accumulator = np.zeros((output_pixel_height, output_pixel_width), dtype=np.int32)
 
-    # --- CHUNKED PROCESSING LOOP ---
     file_size_bytes = os.path.getsize(blueprint_filename)
     record_size_bytes = cfg.BLUEPRINT_DTYPE.itemsize
     total_records = file_size_bytes // record_size_bytes
-    
-    print(f"Total rays to process: {total_records:,}")
 
     with open(blueprint_filename, 'rb') as f:
         records_processed = 0
         while records_processed < total_records:
-            # Read chunk
             chunk_data = np.fromfile(f, dtype=cfg.BLUEPRINT_DTYPE, count=chunk_size)
-            if chunk_data.size == 0:
-                break
+            if chunk_data.size == 0: break
                 
             records_processed += chunk_data.size
-            print(f"Processing chunk... ({records_processed:,}/{total_records:,})")
 
-            # Filter valid rays in view
             mask_in_view = (
                 (chunk_data['y_w'] >= y_w_min) & (chunk_data['y_w'] < y_w_max) &
                 (chunk_data['z_w'] >= z_w_min) & (chunk_data['z_w'] < z_w_max)
             )
             rays = chunk_data[mask_in_view]
-            
-            if rays.size == 0:
-                continue
+            if rays.size == 0: continue
 
-            # Map camera window coordinates to pixel indices
-            # y_w_min (left) -> px=0. z_w_max (top) -> py=0.
-            px_float = (rays['y_w'] - y_w_min) / window_y_range * output_pixel_width
-            py_float = (z_w_max - rays['z_w']) / window_z_range * output_pixel_height
-            px = np.clip(px_float, 0, output_pixel_width - 1).astype(np.int32)
-            py = np.clip(py_float, 0, output_pixel_height - 1).astype(np.int32)
+            # y_w_min -> px=0 (Left). z_w_max -> py=0 (Top, so z_min is Bottom).
+            px = ((rays['y_w'] - y_w_min) / window_y_range * (output_pixel_width - 1)).astype(np.int32)
+            py = ((z_w_max - rays['z_w']) / window_z_range * (output_pixel_height - 1)).astype(np.int32)
 
-            # 1. Source Plane Hits 
+            # 1. Source Plane Hits
             is_source = (rays['termination_type'] == cfg.TERM_SOURCE_PLANE)
             if np.any(is_source):
-                source_hits = rays[is_source]
-                norm_y = (source_hits['y_s'] + (source_image_width / 2.0)) / source_image_width
-                norm_z = (source_hits['z_s'] + (source_image_width / 2.0)) / source_image_width
+                s_hits = rays[is_source]
+                # y_s_min -> left. z_s_min -> bottom.
+                norm_y = (s_hits['y_s'] + (source_image_width / 2.0)) / source_image_width
+                norm_z = (s_hits['z_s'] + (source_image_width / 2.0)) / source_image_width
                 
                 px_s = np.clip(norm_y * (source_w - 1), 0, source_w - 1).astype(np.int32)
                 py_s = np.clip((1.0 - norm_z) * (source_h - 1), 0, source_h - 1).astype(np.int32)
                 
-                source_colors = source_texture[py_s, px_s]
-                np.add.at(pixel_accumulator, (py[is_source], px[is_source]), source_colors)
+                np.add.at(pixel_accumulator, (py[is_source], px[is_source]), source_texture[py_s, px_s])
 
-            # 2. Celestial Sphere Hits (with phi=pi centering)
+            # 2. Celestial Sphere Hits
             is_sphere = rays['termination_type'] == cfg.TERM_SPHERE
             if np.any(is_sphere):
-                sphere_hits = rays[is_sphere]
-                
-                # Modulo arithmetic places phi=pi at norm_phi=0.5 (center)
-                norm_phi = (sphere_hits['final_phi'] / (2 * np.pi)) % 1.0 
-                norm_theta = sphere_hits['final_theta'] / np.pi
+                sph_hits = rays[is_sphere]
+                norm_phi = (sph_hits['final_phi'] / (2 * np.pi)) % 1.0 
+                norm_theta = sph_hits['final_theta'] / np.pi
                 
                 px_sph = np.clip(norm_phi * (sphere_w - 1), 0, sphere_w - 1).astype(np.int32)
                 py_sph = np.clip(norm_theta * (sphere_h - 1), 0, sphere_h - 1).astype(np.int32)
                 
-                sphere_colors = sphere_texture[py_sph, px_sph]
-                np.add.at(pixel_accumulator, (py[is_sphere], px[is_sphere]), sphere_colors)
+                np.add.at(pixel_accumulator, (py[is_sphere], px[is_sphere]), sphere_texture[py_sph, px_sph])
 
-            # Increment hit counts for averaging
             np.add.at(count_accumulator, (py, px), 1)
 
-    # --- Assembling Final Image ---
     hit_mask = count_accumulator > 0
     final_image_float = np.zeros_like(pixel_accumulator)
     final_image_float[hit_mask] = pixel_accumulator[hit_mask] / count_accumulator[hit_mask, np.newaxis]
     
-    final_image_uint8 = (np.clip(final_image_float, 0, 1) * 255).astype(np.uint8)
-    img = Image.fromarray(final_image_uint8, 'RGB')
-    
+    img = Image.fromarray((np.clip(final_image_float, 0, 1) * 255).astype(np.uint8), 'RGB')
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
     img.save(output_filename)
-    print(f"--- Static image successfully saved to '{output_filename}' ---")
-
-    # <--- NEW: Pull up the image immediately --->
+    
     if display_image:
-        print("Opening image in default viewer...")
         img.show()

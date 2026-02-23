@@ -199,7 +199,7 @@ if __name__ == "__main__":
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -Wno-stringop-truncation"],
+        addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -Wno-stringop-truncation", "-Wno-unknown-pragmas"],
         addl_libraries=["-lm -fopenmp"], 
     )
 
