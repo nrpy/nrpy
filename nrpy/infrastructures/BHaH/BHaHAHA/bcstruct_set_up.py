@@ -40,9 +40,11 @@ NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
 Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 */
 """
-        return outstr + "\n".join(
-            [f"REAL_parity_array[{i}] = 1.0;" for i in range(28)]
-        ) + "\n"
+        return (
+            outstr
+            + "\n".join([f"REAL_parity_array[{i}] = 1.0;" for i in range(28)])
+            + "\n"
+        )
     parity = ixp.zerorank1(dimension=28)
     UnitVectors_inner = ixp.zerorank2()
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
@@ -290,6 +292,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
         include_braces=False,
     )
+    cart_to_xx_eigen = ""
     if not rfm.CoordSystem.startswith("GeneralRFM"):
         cart_to_xx_eigen = ccg.c_codegen(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
@@ -297,8 +300,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         )
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
-    body += (
-        f"""
+    body += f"""
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
 REAL xCart[3];  // where (x,y,z) is output
 {{
@@ -306,10 +308,7 @@ REAL xCart[3];  // where (x,y,z) is output
     REAL xx0 = xx[0][i0];
     REAL xx1 = xx[1][i1];
     REAL xx2 = xx[2][i2];
-"""
-        + xx_to_Cart_eigen
-        + "}\n"
-    )
+""" + xx_to_Cart_eigen + "}\n"
     body += r"""
 REAL Cartx = xCart[0];
 REAL Carty = xCart[1];
