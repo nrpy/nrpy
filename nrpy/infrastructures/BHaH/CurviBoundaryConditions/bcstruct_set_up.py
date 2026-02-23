@@ -53,9 +53,11 @@ NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
 Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 */
 """
-        return outstr + "\n".join(
-            [f"REAL_parity_array[{i}] = 1.0;" for i in range(10)]
-        ) + "\n"
+        return (
+            outstr
+            + "\n".join([f"REAL_parity_array[{i}] = 1.0;" for i in range(10)])
+            + "\n"
+        )
     parity = indexedexp.zerorank1(dimension=10)
     UnitVectors_inner = indexedexp.zerorank2()
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
@@ -286,6 +288,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
         include_braces=False,
         fp_type_alias=fp_type_alias,
     )
+    cart_to_xx_eigen = ""
     if not rfm.CoordSystem.startswith("GeneralRFM"):
         cart_to_xx_eigen = c_codegen.c_codegen(
             [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
@@ -358,8 +361,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
   // Next compute xxmin[i]. By definition,
 """
     eps_rel = "1e-6" if fp_type == "float" else "1e-8"
-    body += f"""
-  //    xx[i][j] = xxmin[i] + ((DOUBLE)(j-NGHOSTS) + (1.0/2.0))*dxxi;
+    body += f"""  //    xx[i][j] = xxmin[i] + ((DOUBLE)(j-NGHOSTS) + (1.0/2.0))*dxxi;
   // -> xxmin[i] = xx[i][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxxi
   const DOUBLE xxmin[3] = {{
     xx[0][0] - ((DOUBLE)(0-NGHOSTS) + (1.0/2.0))*dxx0,
@@ -711,8 +713,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
     outer_boundary_mask_check = ""
     if enable_masks:
         outer_boundary_mask_check = "&& mask[IDX3(i0, i1, i2)] == OUTER_BOUNDARY"
-    body += """
-          REAL x0x1x2_inbounds[3];
+    body += """          REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
 """
@@ -738,8 +739,7 @@ Step 2: Set up outer boundary structs bcstruct->outer_bc_array[which_gz][face][i
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][2], bcstruct->bc_info.bc_loop_bounds[which_gz][face][3], i2,
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
 """
-    body += """
-          REAL x0x1x2_inbounds[3];
+    body += """          REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
           EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds);
 """
