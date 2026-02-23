@@ -160,26 +160,45 @@ example_scripts=(
   "nrpy/examples/carpet_wavetoy_thorns.py project/carpet_wavetoy_thorns"
   "nrpy/examples/carpetx_baikal_thorns.py project/carpetx_baikal_thorns"
   "nrpy/examples/carpetx_wavetoy_thorns.py project/carpetx_wavetoy_thorns"
-  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py project/seobnrv5_bob"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_bob project/seobnrv5_bob"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrpy project/seobnrv5_nrpy"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrnqc_bob project/seobnrv5_nrnqc_bob"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_bob -calibration_no_spin project/seobnrv5_bob_calibration_no_spin"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrpy -calibration_no_spin project/seobnrv5_nrpy_calibration_no_spin"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrnqc_bob -calibration_no_spin project/seobnrv5_nrnqc_bob_calibration_no_spin"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_bob -calibration_spin project/seobnrv5_bob_calibration_spin"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrpy -calibration_spin project/seobnrv5_nrpy_calibration_spin"
+  "nrpy/examples/seobnrv5_aligned_spin_inspiral.py -seobnrv5_nrnqc_bob -calibration_spin project/seobnrv5_nrnqc_bob_calibration_spin"
   "nrpy/examples/superB_two_blackholes_collide.py project/superB_two_blackholes_collide"
   "nrpy/examples/superB_blackhole_spectroscopy.py project/superB_blackhole_spectroscopy"
   "nrpy/examples/tovola_neutron_star.py project/tovola_neutron_star"
   "nrpy/examples/hydro_without_hydro.py project/hydro_without_hydro"
   "nrpy/examples/manga_bhah_lib.py project/bhah_lib"
   "nrpy/examples/bhahaha.py project/BHaHAHA"
+  "nrpy/examples/sebobv2.py project/sebobv2"
+  "nrpy/examples/sebobv1_jax.py None"
 )
 
-for script in "${example_scripts[@]}"; do
-  IFS=' ' read -r script_path project_path <<< "$script"
+for script_entry in "${example_scripts[@]}"; do
+  # Safely read all tokens into an array to handle scripts with arguments
+  read -ra tokens <<< "$script_entry"
+  length=${#tokens[@]}
+
+  # The last token is always the project directory (or 'None')
+  project_path="${tokens[$((length-1))]}"
+
+  # The remaining tokens safely form the script path and its arguments
+  script_cmd=("${tokens[@]:0:$((length-1))}")
+
   echo ""
-  echo "Running Python script: $script_path"
-  PYTHONPATH=.:$PYTHONPATH python "$script_path"
+  echo "Running Python script: ${script_cmd[*]}"
+  PYTHONPATH=.:$PYTHONPATH python "${script_cmd[@]}"
   if [[ $? -ne 0 ]]; then
-    echo "Error: Python script $script_path failed."
+    echo "Error: Python script ${script_cmd[0]} failed."
     exit 1
   fi
 
-  if [[ $script_path != *"superB"* && $script_path != *"carpet"* ]]; then
+  if [[ "$project_path" != "None" && "${script_cmd[0]}" != *"superB"* && "${script_cmd[0]}" != *"carpet"* ]]; then
     echo "Compiling project in $project_path..."
     (cd "$project_path" && make && make clean)
     if [[ $? -ne 0 ]]; then
