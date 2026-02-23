@@ -324,24 +324,25 @@ if enable_bhahaha:
         [
             0.6 * default_BH1_mass,
             0.6 * default_BH2_mass,
-            1.1 * (default_BH1_mass + default_BH2_mass),
+            1.9 * (default_BH1_mass + default_BH2_mass),
         ],
     )
-    par.adjust_CodeParam_default("bah_verbosity_level", 0)
-
-    # Previous custom settings (kept commented for reference):
-    # par.adjust_CodeParam_default(
-    #     "bah_Theta_L2_times_M_tolerance",
-    #     [2e-4, 2e-4, 2e-4],
-    # )
-    # par.adjust_CodeParam_default(
-    #     "bah_Nphi_array_multigrid",
-    #     [2, 2, 2],
-    # )
-    # par.adjust_CodeParam_default(
-    #     "bah_enable_BBH_mode",
-    #     1,
-    # )
+    par.adjust_CodeParam_default(
+        "bah_Theta_L2_times_M_tolerance",
+        [2e-4, 2e-4, 2e-4],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nphi_array_multigrid",
+        [2, 2, 2],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Nr_interp_max",
+        40,
+    )
+    par.adjust_CodeParam_default(
+        "bah_enable_BBH_mode",
+        1,
+    )
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
