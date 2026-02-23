@@ -30,9 +30,9 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH import generalrfm_cart_to_xx
 
 
 def _access_auxevol_gf(
@@ -62,7 +62,17 @@ def _unique_assignments(
 def register_CFunction_generalrfm_precompute(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    """Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions."""
+    """
+    Register a C function that precomputes GeneralRFM quantities into AUXEVOL gridfunctions.
+
+    :param CoordSystem: Coordinate system name. Must be a supported GeneralRFM
+        system.
+    :returns: `None` during the parallel-codegen registration phase; otherwise
+        the current NRPy environment.
+    :raises ValueError: If CUDA parallelization is requested, if CoordSystem is
+        not a GeneralRFM coordinate system, or if the associated GeneralRFM
+        provider is unsupported or missing.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -186,7 +196,14 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
 def register_CFunctions_generalrfm_support(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    """Register all GeneralRFM support C functions (precompute and Cart_to_xx)."""
+    """
+    Register all GeneralRFM support C functions (precompute and Cart_to_xx).
+
+    :param CoordSystem: Coordinate system name for which GeneralRFM support
+        functions should be registered.
+    :returns: `None` during the parallel-codegen registration phase; otherwise
+        the current NRPy environment.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
