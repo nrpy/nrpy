@@ -182,16 +182,15 @@ def Cfunction_ADM_SphorCart_to_Cart(
       }}
 """
         else:
-            body += ccg.c_codegen(
-                rfm.Cart_to_xx,
-                ["xx0", "xx1", "xx2"],
-                include_braces=True,
-            ).replace(
-                "Cartx", "xCart[0]"
-            ).replace(
-                "Carty", "xCart[1]"
-            ).replace(
-                "Cartz", "xCart[2]"
+            body += (
+                ccg.c_codegen(
+                    rfm.Cart_to_xx,
+                    ["xx0", "xx1", "xx2"],
+                    include_braces=True,
+                )
+                .replace("Cartx", "xCart[0]")
+                .replace("Carty", "xCart[1]")
+                .replace("Cartz", "xCart[2]")
             )
 
     # Define the input variables:
