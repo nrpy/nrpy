@@ -35,6 +35,9 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
 
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
+
     rholm: List[sp.Expr] = []
     rholm_labels: List[str] = []
 
@@ -44,11 +47,11 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     modes = [(2, 1), (4, 3), (5, 5)]
 
     for l, m in modes:
-        rholm.append(wf.rho[f"({l} , {m})"])
+        rholm.append(cast(sp.Expr, wf.rho[f"({l} , {m})"]))
         rholm_labels.append(f"REAL rho{l}{m}")
 
     for l, m in modes:
-        hNR.append(const.hNR[f"({l} , {m})"])
+        hNR.append(cast(sp.Expr, const.hNR[f"({l} , {m})"]))
         hNR_labels.append(f"const REAL hNR{l}{m}")
 
     rholm_code = ccg.c_codegen(
