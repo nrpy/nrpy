@@ -35,9 +35,6 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
     const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
 
-    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
-    const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
-
     rholm: List[sp.Expr] = []
     rholm_labels: List[str] = []
 
