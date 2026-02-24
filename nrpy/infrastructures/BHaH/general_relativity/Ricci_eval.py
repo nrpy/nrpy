@@ -41,6 +41,9 @@ def register_CFunction_Ricci_eval(
     :param host_only_version: (default: False) Whether to emit a host-only version, for
                               performing (host-only) diagnostics with CUDA enabled.
 
+    :raises ValueError: If CUDA kernel generation is requested for a GeneralRFM coordinate
+                        system, which is unsupported.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
