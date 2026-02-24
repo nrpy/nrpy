@@ -189,9 +189,7 @@ if (Omega_circ == NULL){
 }
 
 
-REAL c_21 = c_21;
-REAL c_43 = c_43;
-REAL c_55 = c_55;
+
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_COEFFICIENTS];
 double complex inspiral_modes[NUMMODES];
@@ -214,12 +212,12 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 
 gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
   if (acc_r == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_r == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
@@ -227,12 +225,12 @@ gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
   if (acc_phi == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_phi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_phi == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_phi,times,phi,commondata->nsteps_fine);
@@ -240,12 +238,12 @@ gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
   if (acc_prstar == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_prstar = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_prstar == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_prstar,times,prstar,commondata->nsteps_fine);
@@ -254,12 +252,12 @@ gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
   if (acc_pphi == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_pphi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_pphi == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_pphi,times,pphi,commondata->nsteps_fine);
@@ -267,12 +265,12 @@ gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
   if (acc_Omega == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_Omega = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_Omega,times,Omega,commondata->nsteps_fine);
@@ -280,24 +278,24 @@ gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
   if (acc_Omega_circ == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_Omega_circ = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega_circ == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_Omega_circ,times,Omega_circ,commondata->nsteps_fine); 
   
 gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
   if (acc_Hreal == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline *restrict spline_Hreal = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Hreal == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
     }
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
@@ -317,14 +315,14 @@ else{
     }
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (minus_r_zoom == NULL) {
-      fprintf(stderr, "Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
       exit(1);
     }
     for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
   }
-  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
+  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
   free(t_zoom);

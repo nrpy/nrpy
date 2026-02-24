@@ -125,7 +125,7 @@ class SEOBNR_aligned_spin_constants:
         modes = [(2, 1), (4, 3), (5, 5)]
         for mode in modes:
             l, m = mode
-            self.hNR.update({f"({l}, {m})": 0})
+            self.hNR.update({f"({l} , {m})": 0})
         m1 = self.m1
         m2 = self.m2
         chi1 = self.chi1
