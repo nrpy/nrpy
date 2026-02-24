@@ -328,15 +328,9 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
     # Step 2.a/2.b: Cartesian->xx map
     if rfm.CoordSystem.startswith("GeneralRFM"):
         body += f"""
-  // Cart_to_xx for GeneralRFM (numerical inverse):
-  const REAL Cart_inbounds[3] = {{Cartx, Carty, Cartz}};
-  REAL xx_inbounds[3];
-  if (generalrfm_Cart_to_xx__{rfm.CoordSystem}(params, Cart_inbounds, xx_inbounds) != 0) {{
-    return BCSTRUCT_EIGENCOORD_FAILURE;
-  }}
-  Cart_to_xx0_inbounds = xx_inbounds[0];
-  Cart_to_xx1_inbounds = xx_inbounds[1];
-  Cart_to_xx2_inbounds = xx_inbounds[2];
+  // BHaHAHA bcstruct_set_up() currently supports spherical eigencoordinates only.
+  // Fail explicitly for GeneralRFM* instead of emitting code paths that require params.
+  return BCSTRUCT_EIGENCOORD_FAILURE;
 """
     else:
         # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
