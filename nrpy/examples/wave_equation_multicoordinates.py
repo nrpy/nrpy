@@ -181,13 +181,18 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
-rhs_string = """rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if enable_rfm_precompute:
+    rhs_string = """rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+else:
+    rhs_string = """rhs_eval(commondata, params, xx, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
