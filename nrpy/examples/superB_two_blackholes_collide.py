@@ -83,7 +83,7 @@ enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
-enable_BHaHAHA = False
+enable_BHaHAHA = True
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
@@ -98,9 +98,9 @@ if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
 if ("Cartesian" in CoordSystem) or CoordSystem.startswith("GeneralRFM"):
-    par.adjust_CodeParam_default("Nchare0", 16)
-    par.adjust_CodeParam_default("Nchare1", 16)
-    par.adjust_CodeParam_default("Nchare2", 16)
+    par.adjust_CodeParam_default("Nchare0", 4)
+    par.adjust_CodeParam_default("Nchare1", 4)
+    par.adjust_CodeParam_default("Nchare2", 4)
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
