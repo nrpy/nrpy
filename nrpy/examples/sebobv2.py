@@ -107,6 +107,8 @@ SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step TBD: Run the trajectory generation.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
+// Step TBD: Calculate Special Amplitude Coefficients
+SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 // Step TBD: Compute and apply the NQC corrections
@@ -197,6 +199,8 @@ BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunc
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -298,6 +302,14 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
+#define NUMVARS_COEFFICIENTS 6
+#define RHO21 0
+#define RHO43 1
+#define RHO55 2
+#define HNR21 3
+#define HNR43 4
+#define HNR55 5
+#define IDX_COEFFICIENTS(idx, var) ((idx)*NUMVARS_COEFFICIENTS + (var))
 #define NUMMODES 8 
 #define STRAIN22 1
 #define STRAIN21 2

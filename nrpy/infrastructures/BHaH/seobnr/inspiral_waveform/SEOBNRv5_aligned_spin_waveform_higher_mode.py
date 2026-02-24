@@ -22,7 +22,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for calculating the (2,2) mode of SEOBNRv5 inspiral waveform.
+    Register CFunction for calculating multiple SEOBNRv5 aligned-spin.
+    inspiral waveform modes: (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5).
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -68,7 +69,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timestep.
+Calculates SEOBNRv5 aligned-spin inspiral waveform modes 
+(2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5) for a single timestep
+and stores them in the inspiral_modes array.
 
 @param dynamics - Array of dynamical variables.
 @param commondata - Common data structure containing the model parameters.
@@ -90,6 +93,9 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
+const REAL c_21 = commondata->c_21;
+const REAL c_43 = commondata->c_43;
+const REAL c_55 = commondata->c_55;
 const REAL phi = dynamics[PHI];
 const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];
