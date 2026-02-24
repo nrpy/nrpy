@@ -80,9 +80,25 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
             outstr += f"static const int8_t aux_gf_parity[{len(auxiliary_variables_list)}] = {{ {', '.join(map(str, aux_parity_type))} }};\n"
     if set_parity_on_auxevol:
         if len(auxevol_variables_list) > 0:
-            auxevol_parity_type = gri.BHaHGridFunction.set_parity_types(
-                auxevol_variables_list
-            )
+            auxevol_parity_type = []
+            for gf_name in auxevol_variables_list:
+                gf = gri.glb_gridfcs_dict[gf_name]
+                parity_val = gri.BHaHGridFunction.get_parity_type(
+                    gf.name, gf.rank, gf.dimension
+                )
+                if parity_val is None:
+                    # GeneralRFM AUXEVOL metric tensors (e.g., ghatDDdD*, ghatDDdDD*)
+                    # are non-singular and do not require inner-BC parity application.
+                    # Assign placeholder 0 only to preserve auxevol parity-table indexing.
+                    if gf.rank > 2 and not getattr(gf, "sync_gf_in_superB", False):
+                        parity_val = 0
+                    else:
+                        raise ValueError(
+                            f"Error: Could not figure out parity type for {gf.group} gridfunction: {gf.name}, {gf.name[-2]}, {gf.name[-1]}, {gf.rank}, {gf.dimension}"
+                        )
+                auxevol_parity_type.append(parity_val)
+            outstr += "/* GeneralRFM AUXEVOL metric fields are non-singular, so inner-BC parity is not applied.\n"
+            outstr += " * Unsupported high-rank entries use placeholder 0 only to preserve auxevol_gf_parity indexing. */\n"
             outstr += f"static const int8_t auxevol_gf_parity[{len(auxevol_variables_list)}] = {{ {', '.join(map(str, auxevol_parity_type))} }};\n"
 
     if verbose:

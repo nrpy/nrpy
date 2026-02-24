@@ -55,7 +55,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "Spherical"
+CoordSystem = "GeneralRFM_fisheyeN1"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -78,7 +78,6 @@ Nxx_dict = {
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
-initial_sep = abs(default_BH1_z_posn - default_BH2_z_posn)
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions is not None:
@@ -111,7 +110,8 @@ set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-enable_bhahaha = parallelization == "openmp"
+#enable_bhahaha = parallelization == "openmp"
+enable_bhahaha = False
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
