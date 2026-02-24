@@ -121,7 +121,7 @@ SEBOBv2_IMR_waveform(&commondata);
 // Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
-    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
+    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN21)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN21)]));
 }
 """
     if output_commondata:
@@ -321,7 +321,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define STRAIN55 7
 #define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
-#define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
+#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
 """
     },
 )

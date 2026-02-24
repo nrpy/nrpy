@@ -99,7 +99,7 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  h22 = commondata->waveform_fine[IDX_WF(i,STRAIN)];
+  h22 = commondata->waveform_fine[IDX_WF(i,STRAIN22)];
   hamp[i] = cabs(h22);
   phase[i] = carg(h22);
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
@@ -355,7 +355,7 @@ for (i = 0; i < commondata->nsteps_low; i++){
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
-  commondata->waveform_inspiral[IDX_WF(i,STRAIN)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN)] *cexp(I * nqc_phase);
+  commondata->waveform_inspiral[IDX_WF(i,STRAIN22)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN)] *cexp(I * nqc_phase);
 }
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
@@ -369,7 +369,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   nqc_amp = 1 + commondata->a_1_NQC*q1 + commondata->a_2_NQC*q2 + commondata->a_3_NQC*q3;
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
-  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN)] * cexp(I * nqc_phase);
+  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN22)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN22)] * cexp(I * nqc_phase);
 }
 """
     cfc.register_CFunction(
