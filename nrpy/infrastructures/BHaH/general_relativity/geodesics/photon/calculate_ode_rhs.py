@@ -1,5 +1,6 @@
 """
 Register C function for computing photon geodesic ODE right-hand sides.
+Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 Optimized with a Preamble to minimize register pressure for GPU architectures.
 """
 from typing import List
@@ -11,7 +12,7 @@ def calculate_ode_rhs(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
     includes = ["BHaH_defines.h"]
-    desc = """@brief Computes the 9 derivatives required for the geodesic ODE system."""
+    desc = """@brief Portable GPU-ready derivatives for the geodesic ODE system."""
     name = "calculate_ode_rhs"
 
     c_params_str = """
@@ -21,10 +22,9 @@ def calculate_ode_rhs(
                   double *restrict k_array,
                   const int bundle_capacity,
                   const int stage,
-                  const long int j"""
+                  const int j"""
 
     # --- Step 1: Identify used symbols ---
-    # This prevents the preamble from being bloated with unused memory reads.
     used_symbol_names = {str(sym) for expr in geodesic_rhs_expressions for sym in expr.free_symbols}
 
     preamble_lines = [
@@ -35,8 +35,6 @@ def calculate_ode_rhs(
     ]
 
     # --- Step 2: Build the Preamble ---
-    
-    # 2.a. Unpack State Vector (Coordinates and Momenta)
     for i, sym in enumerate(coordinate_symbols):
         if str(sym) in used_symbol_names:
             preamble_lines.append(f"const double {str(sym)} = f_temp[IDX_LOCAL({i}, j, bundle_capacity)];")
@@ -45,7 +43,7 @@ def calculate_ode_rhs(
         if f"pU{i}" in used_symbol_names:
             preamble_lines.append(f"const double pU{i} = f_temp[IDX_LOCAL({i+4}, j, bundle_capacity)];")
 
-    # 2.b. Unpack Metric Components
+    # Unpack Metric Components
     preamble_lines.append("\n  // Unpack metric components")
     curr_idx = 0
     for m in range(4):
@@ -55,7 +53,7 @@ def calculate_ode_rhs(
                 preamble_lines.append(f"const double {comp_name} = metric_g4DD[IDX_LOCAL({curr_idx}, j, bundle_capacity)];")
             curr_idx += 1
 
-    # 2.c. Unpack Christoffel Symbols
+    # Unpack Christoffel symbols
     preamble_lines.append("\n  // Unpack Christoffel symbols")
     curr_idx = 0
     for a in range(4):
@@ -66,7 +64,6 @@ def calculate_ode_rhs(
                     preamble_lines.append(f"const double {comp_name} = conn_GammaUDD[IDX_LOCAL({curr_idx}, j, bundle_capacity)];")
                 curr_idx += 1
 
-    # Combine preamble into a single string block
     body = "\n  ".join(preamble_lines) + "\n\n"
 
     # --- Step 3: Define Output Mapping ---
@@ -75,8 +72,6 @@ def calculate_ode_rhs(
     ]
 
     # --- Step 4: Generate the Kernel ---
-    # Note: 'read_symbol_replacement_dict' is removed to avoid the TypeError.
-    # The generator will now look for the local variables defined in the preamble.
     body += ccg.c_codegen(
         geodesic_rhs_expressions,
         k_array_outputs,
@@ -85,6 +80,17 @@ def calculate_ode_rhs(
         verbose=False,
     )
 
+    # Project Singularity-Axiom: Portable Body Wrapper
+    portable_body = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """ + body + """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+
     # --- Step 5: Register ---
     cfc.register_CFunction(
         includes=includes,
@@ -92,5 +98,5 @@ def calculate_ode_rhs(
         name=name,
         params=c_params_str,
         include_CodeParameters_h=False,
-        body=body,
+        body=portable_body,
     )

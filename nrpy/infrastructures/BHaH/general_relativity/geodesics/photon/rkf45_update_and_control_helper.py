@@ -114,4 +114,6 @@ static inline bool update_photon_state_and_stepsize(
     return step_accepted;
 }
 """
-    Bdefines_h.register_BHaH_defines("rkf45_update_control", c_code_for_header)
+    gpu_c_code_for_header = "#pragma omp declare target\n" + c_code_for_header + "\n#pragma omp end declare target"
+
+    Bdefines_h.register_BHaH_defines("rkf45_update_control", gpu_c_code_for_header)

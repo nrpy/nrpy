@@ -1,20 +1,15 @@
 """
 Register C function for event finding.
-Refactored for INL GPU Clusters: Uses LDG (Read-Only Data Cache) for geometry 
-and direct SoA indexing to minimize register pressure.
-
-Author: Dalton J. Moone
+Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
+Uses LDG (Read-Only Data Cache) for geometry and direct SoA indexing.
 """
-
 import nrpy.c_function as cfc
 
 def find_event_time_and_state() -> None:
     includes = ["BHaH_defines.h", "<math.h>"]
-    desc = "@brief High-performance second-order root-finding optimized for NVIDIA A100/H100."
+    desc = "@brief Portable high-performance second-order root-finding."
     name = "find_event_time_and_state"
     
-    # FINAL POLISH: Using const double *restrict for 'normal' allows the compiler 
-    # to use the LDG (Read-Only Data Cache) for plane geometry.
     params = """PhotonStateSoA *restrict all_photons, 
                 const long int num_rays, 
                 const long int photon_idx, 
@@ -23,11 +18,9 @@ def find_event_time_and_state() -> None:
                 const event_type_t event_type"""
 
     body = r"""
-    // Helper macros for localized component access to save registers.
     #define GET_COMP(soa_ptr, comp) (soa_ptr[IDX_GLOBAL(comp, photon_idx, num_rays)])
     #define PLANE_EVAL(soa_ptr) (GET_COMP(soa_ptr, 1)*normal[0] + GET_COMP(soa_ptr, 2)*normal[1] + GET_COMP(soa_ptr, 3)*normal[2] - dist)
 
-    // Calculate plane values directly from SoA to keep register usage minimal.
     const double f0 = PLANE_EVAL(all_photons->f_p_p);
     const double f1 = PLANE_EVAL(all_photons->f_p);
     const double f2 = PLANE_EVAL(all_photons->f);
@@ -36,7 +29,6 @@ def find_event_time_and_state() -> None:
     const double t1 = all_photons->affine_param_p[photon_idx];
     const double t2 = all_photons->affine_param[photon_idx];
 
-    // --- Step 1: Linear Interpolation Fallback ---
     double t_linear;
     if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) { 
         t_linear = (f2 * t1 - f1 * t2) / (f2 - f1);
@@ -46,7 +38,6 @@ def find_event_time_and_state() -> None:
         t_linear = t1;
     }
 
-    // --- Step 2: Quadratic Interpolation (Muller variant) ---
     const double h0 = t1 - t0;
     const double h1 = t2 - t1;
     double lambda_event = t_linear;
@@ -69,13 +60,10 @@ def find_event_time_and_state() -> None:
         }
     }
 
-    // --- Step 3: Component-wise Streaming Interpolation ---
     const double t = lambda_event;
     double L0, L1, L2;
     if (fabs(h0) < 1e-15 || fabs(h1) < 1e-15) {
-        L0 = 0.0;
-        L1 = (t2 - t) / (t2 - t1);
-        L2 = (t - t1) / (t2 - t1);
+        L0 = 0.0; L1 = (t2 - t) / (t2 - t1); L2 = (t - t1) / (t2 - t1);
     } else {
         L0 = ((t - t1) * (t - t2)) / ((t0 - t1) * (t0 - t2));
         L1 = ((t - t0) * (t - t2)) / ((t1 - t0) * (t1 - t2));
@@ -84,7 +72,6 @@ def find_event_time_and_state() -> None:
 
     double *intersect_ptr = (event_type == SOURCE_EVENT) ? all_photons->source_event_f_intersect : all_photons->window_event_f_intersect;
     
-    // Write metadata metadata directly to VRAM
     if (event_type == SOURCE_EVENT) {
         all_photons->source_event_lambda[photon_idx] = lambda_event;
         all_photons->source_event_found[photon_idx] = true;
@@ -93,8 +80,6 @@ def find_event_time_and_state() -> None:
         all_photons->window_event_found[photon_idx] = true;
     }
 
-    // Direct write-through to SoA: Components are computed and written on-the-fly 
-    // to keep registers free for the next ODE step.
     for (int i = 0; i < 9; i++) {
         intersect_ptr[IDX_GLOBAL(i, photon_idx, num_rays)] = GET_COMP(all_photons->f_p_p, i) * L0 + 
                                                             GET_COMP(all_photons->f_p,   i) * L1 + 
@@ -105,4 +90,15 @@ def find_event_time_and_state() -> None:
     #undef PLANE_EVAL
     """
 
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=body)
+    # Project Singularity-Axiom: Portable Body Wrapper
+    portable_body = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """ + body + """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+
+    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=portable_body)
