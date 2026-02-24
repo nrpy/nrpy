@@ -52,6 +52,10 @@ def register_CFunction_Ricci_eval(
         # Must reset parallelization parameter, as simple_loop reads the parallelization NRPyParameter.
         par.set_parval_from_str("parallelization", "openmp")
     is_cuda = orig_parallelization == "cuda" and not host_only_version
+    if is_cuda and CoordSystem.startswith("GeneralRFM"):
+        raise ValueError(
+            f"Unsupported configuration: Ricci_eval CUDA kernel generation is not supported for {CoordSystem}."
+        )
 
     Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
 
