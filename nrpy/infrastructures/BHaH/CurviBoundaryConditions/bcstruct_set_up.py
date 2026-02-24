@@ -352,7 +352,7 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
             raise RuntimeError(
                 f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
                 f"reference_metric::CoordSystem = {CoordSystem}. "
-                "Boundary conditions in curvilinear coordinates REQUiRE this be set."
+                "Boundary conditions in curvilinear coordinates REQUIRE this be set."
             )
         # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
         body += rf"""
