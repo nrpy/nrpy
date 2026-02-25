@@ -185,9 +185,12 @@ for CoordSystem in set_of_CoordSystems:
         BHaH.generalrfm_cart_to_xx.register_CFunction_generalrfm_Cart_to_xx(
             CoordSystem=CoordSystem
         )
-        BHaH.generalrfm_precompute.register_CFunction_generalrfm_precompute(
-            CoordSystem=CoordSystem
-        )
+        if enable_rfm_precompute:
+            if parallelization == "cuda":
+                raise ValueError("GeneralRFM precompute is not yet supported for CUDA.")
+            BHaH.generalrfm_precompute.register_CFunction_generalrfm_precompute(
+                CoordSystem=CoordSystem
+            )
     BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 # Diagnostics C code registration
@@ -297,7 +300,7 @@ if num_fisheye_transitions is not None:
     )
 
 post_non_y_n_auxevol_mallocs = ""
-if CoordSystem.startswith("GeneralRFM"):
+if CoordSystem.startswith("GeneralRFM") and enable_rfm_precompute:
     post_non_y_n_auxevol_mallocs = """for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
   generalrfm_precompute(&commondata, &griddata[grid].params, griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
 }\n"""
