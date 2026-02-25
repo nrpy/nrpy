@@ -149,12 +149,12 @@ if __name__ == "__main__":
     par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
 
     # Window Plane Intersection
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 50.2
+    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
     par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.0
     par.glb_code_params_dict["window_center_x"].defaultvalue = 50.0
     par.glb_code_params_dict["window_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_center_z"].defaultvalue = 9.803
+    par.glb_code_params_dict["window_center_z"].defaultvalue = 9.8039
     par.glb_code_params_dict["window_height"].defaultvalue = 1.0
     par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
@@ -162,9 +162,9 @@ if __name__ == "__main__":
     par.glb_code_params_dict["window_width"].defaultvalue = 1.0
 
     # RKF45 Update and Control Helper
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 1.0
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-09
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-09
+    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-11
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-11
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10

@@ -255,7 +255,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         needs_step_bundle = (bool *)omp_target_alloc(sizeof(bool) * BUNDLE_CAPACITY, omp_get_default_device());
         
         if (!f_start_bundle || !f_temp_bundle || !compacted_ids || !needs_step_bundle) {{
-            fprintf(stderr, "FATAL: GPU Memory Allocation failed for bundle buffers!\n");
+            fprintf(stderr, "FATAL: GPU Memory Allocation failed for bundle buffers!\\n");
             exit(1);
         }}
     #else
