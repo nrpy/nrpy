@@ -48,6 +48,11 @@ CoordSystem = "SinhCylindrical"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 
 initial_sep = 0.5 if not paper else 10.0
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
@@ -84,10 +89,27 @@ if paper and enable_psi4:
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
+    "GeneralRFM_fisheyeN1": [200, 200, 200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
 default_BH2_z_posn = -0.25 if not paper else -5.0
+# Fisheye parameters
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 50.0,
+            "fisheye_phys_w_trans1": 10.0,
+        }
+    )
 enable_rfm_precompute = True
 MoL_method = "RK4" if not paper else "SSPRK33"
 fd_order = 8
@@ -108,6 +130,10 @@ if "Spherical" in CoordSystem:
 if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 4)
     par.adjust_CodeParam_default("Nchare1", 1)
+    par.adjust_CodeParam_default("Nchare2", 4)
+if ("Cartesian" in CoordSystem) or CoordSystem.startswith("GeneralRFM"):
+    par.adjust_CodeParam_default("Nchare0", 4)
+    par.adjust_CodeParam_default("Nchare1", 4)
     par.adjust_CodeParam_default("Nchare2", 4)
 
 BHaHAHA_subdir = "BHaHAHA"
@@ -285,6 +311,10 @@ if enable_psi4:
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
 if enable_psi4:
     superB.general_relativity.psi4_spinweightm2_decomposition.register_CFunction_psi4_spinweightm2_decomposition()
 
@@ -361,6 +391,9 @@ if CoordSystem == "SinhCylindrical":
     par.adjust_CodeParam_default("AMPLZ", grid_physical_size)
     par.adjust_CodeParam_default("SINHWRHO", sinh_width)
     par.adjust_CodeParam_default("SINHWZ", sinh_width)
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
 
 par.adjust_CodeParam_default("t_final", t_final)
 # Initial data parameters
@@ -448,6 +481,18 @@ if enable_CAHD:
 }\n"""
 
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
+    post_params_struct_set_to_default=(
+        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+            num_transitions=num_fisheye_transitions,
+            compute_griddata="griddata",
+        )
+        + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+            num_transitions=num_fisheye_transitions,
+            compute_griddata="griddata_chare",
+        )
+        if num_fisheye_transitions is not None
+        else ""
+    ),
     project_dir=project_dir,
     MoL_method=MoL_method,
     post_non_y_n_auxevol_mallocs=post_non_y_n_auxevol_mallocs,

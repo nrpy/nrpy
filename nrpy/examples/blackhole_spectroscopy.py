@@ -93,7 +93,7 @@ enable_psi4_diagnostics = True
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
-    "GeneralRFM_fisheyeN1": [800, 800, 800],
+    "GeneralRFM_fisheyeN1": [200, 200, 200],
 }
 # Fisheye parameter defaults (all in params_struct, set here in the example).
 fisheye_param_defaults: dict[str, float] = {}
@@ -105,7 +105,7 @@ if num_fisheye_transitions == 1:
     fisheye_param_defaults.update(
         {
             "fisheye_a0": 1.0,
-            "fisheye_a1": 2,
+            "fisheye_a1": 2.0,
             "fisheye_phys_L": grid_physical_size,
             "fisheye_phys_r_trans1": 50.0,
             "fisheye_phys_w_trans1": 10.0,
