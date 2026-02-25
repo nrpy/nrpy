@@ -313,11 +313,13 @@ Bdefines_h.output_BHaH_defines_h(
     enable_rfm_precompute=False,
 )
 
-# D. Makefile
+# D. Generate the Makefile FIRST
 # We need to link against GSL. Using gsl-config is standard.
+# Note: On Windows/GitBash, you might need specific paths if gsl-config isn't in PATH.
 addl_cflags = ["$(shell gsl-config --cflags)"]
 addl_libs = ["$(shell gsl-config --libs)"]
 
+print(" -> Generating Makefile...")
 Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
@@ -325,6 +327,28 @@ Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
     addl_CFLAGS=addl_cflags,
     addl_libraries=addl_libs,
 )
+
+# E. Patch the Makefile (Fix for Windows/Git Bash permission issues)
+# This block MUST come after the function above.
+print(" -> Patching Makefile for Windows compatibility...")
+local_tmp_path = "tmp"
+os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
+
+makefile_path = os.path.join(project_dir, "Makefile")
+
+# Read the Makefile that was just generated
+with open(makefile_path, "r") as f:
+    content = f.read()
+
+# Overwrite it, prepending the temporary directory exports
+with open(makefile_path, "w") as f:
+    # Using $(CURDIR) ensures these paths are absolute and valid during the build
+    f.write(f"export TMPDIR := $(CURDIR)/{local_tmp_path}\n")
+    f.write(f"export TMP := $(CURDIR)/{local_tmp_path}\n")
+    f.write(f"export TEMP := $(CURDIR)/{local_tmp_path}\n")
+    f.write("\n") # Add a newline for safety
+    f.write(content)
+
 
 print("-" * 50)
 print(f"Project generated successfully in: {project_dir}")

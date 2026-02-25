@@ -186,7 +186,9 @@ if __name__ == "__main__":
         project_name=project_name, cmdline_inputs=cmdline_inputs_list
     )
 
-    # Step 7: Assemble Final C Project
+    # ##########################################################################
+    # Step 7: Assemble Final C Project (Windows Compatible)
+    # ##########################################################################
     print(" -> Assembling C project on disk...")
     BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir, enable_rfm_precompute=False)
     gh.copy_files(
@@ -195,6 +197,8 @@ if __name__ == "__main__":
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
+    
+    print(" -> Generating Makefile...")
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
@@ -202,6 +206,26 @@ if __name__ == "__main__":
         addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -march=native -ffast-math -Wno-stringop-truncation", "-Wno-unknown-pragmas"],
         addl_libraries=["-lm -fopenmp"], 
     )
+
+    # Patch Makefile for Windows/Git Bash
+    # (Fixes "pipe" errors or permission denied on temp files during compilation)
+    print(" -> Patching Makefile for Windows compatibility...")
+    local_tmp_path = "tmp"
+    os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
+
+    makefile_path = os.path.join(project_dir, "Makefile")
+
+    # Read the generated Makefile
+    with open(makefile_path, "r") as f:
+        content = f.read()
+
+    # Prepend the directory exports
+    with open(makefile_path, "w") as f:
+        f.write(f"export TMPDIR := $(CURDIR)/{local_tmp_path}\n")
+        f.write(f"export TMP := $(CURDIR)/{local_tmp_path}\n")
+        f.write(f"export TEMP := $(CURDIR)/{local_tmp_path}\n")
+        f.write("\n")
+        f.write(content)
 
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
@@ -215,8 +239,14 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("\n--- PHASE 2: Running Ray-Tracer ---")
+    
+    # Conditionally add .exe for Windows/Git Bash compatibility
+    exe_extension = ".exe" if os.name == "nt" or sys.platform in ["win32", "cygwin", "msys"] else ""
+    # Use the absolute path to ensure Windows can find the executable
+    exec_path = os.path.join(project_dir, f"{exec_name}{exe_extension}")
+    
     try:
-        subprocess.run([f"./{exec_name}"], cwd=project_dir, check=True)
+        subprocess.run([exec_path], cwd=project_dir, check=True)
         print("Ray-tracing complete. Blueprint generated.")
     except subprocess.CalledProcessError:
         print("C executable failed. Exiting pipeline.")

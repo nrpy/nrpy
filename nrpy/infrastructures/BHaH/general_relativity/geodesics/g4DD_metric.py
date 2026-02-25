@@ -113,7 +113,17 @@ def g4DD_metric(
         include_braces=False,
     )
 
-    body = preamble + "\n\n" + kernel
+    # Combine Preamble + Kernel with GPU portability wrappers
+    body = f"""
+        #ifdef USE_GPU
+        #pragma omp declare target
+        #endif
+        {preamble}
+
+        {kernel}
+        #ifdef USE_GPU
+        #pragma omp end declare target
+        #endif """
 
     # Step 6: Register the C function
     cfc.register_CFunction(

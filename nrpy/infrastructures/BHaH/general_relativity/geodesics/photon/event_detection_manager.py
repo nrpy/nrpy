@@ -1,8 +1,6 @@
 """
 Generates the C orchestrator for geometric event detection.
 Optimized for GPU: Uses direct indexing and handles sparse branching logic.
-
-Author: Dalton J. Moone
 """
 
 import nrpy.c_function as cfc
@@ -79,4 +77,14 @@ def event_detection_manager() -> None:
     #undef PLANE_VAL
     """
 
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=body)
+    portable_body = f"""
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    {body}
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+
+    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=portable_body)

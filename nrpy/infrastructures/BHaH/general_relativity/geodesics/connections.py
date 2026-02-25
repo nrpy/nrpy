@@ -115,8 +115,18 @@ def connections(
         include_braces=False,
     )
 
-    # Combine Preamble + Kernel
-    body = preamble + "\n\n" + kernel
+    # Wrap the entire body so the GPU can call it from the ODE RHS kernel
+    body = f"""
+        #ifdef USE_GPU
+        #pragma omp declare target
+        #endif
+        {preamble}
+
+        {kernel}
+        #ifdef USE_GPU
+        #pragma omp end declare target
+        #endif
+        """
 
     # Step 6: Register the C function
     cfc.register_CFunction(

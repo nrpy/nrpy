@@ -58,7 +58,18 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     # Final assignment to the global state at index 4 (p^t)
     postamble = f"\n  all_photons_f[IDX_GLOBAL(4, photon_idx, num_rays)] = *p0_out;"
 
-    full_body = preamble + body_math + postamble
+    # Project Singularity-Axiom: Portable Body Wrapper
+    portable_body = f"""
+        #ifdef USE_GPU
+        #pragma omp declare target
+        #endif
+        {preamble}
+        {body_math}
+        {postamble}
+        #ifdef USE_GPU
+        #pragma omp end declare target
+        #endif
+        """
 
     cfc.register_CFunction(
         includes=includes,
@@ -66,5 +77,5 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
         name=name,
         params=params,
         include_CodeParameters_h=False,
-        body=full_body,
+        body=portable_body,
     )

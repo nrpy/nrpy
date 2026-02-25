@@ -84,4 +84,5 @@ static inline void rkf45_kernel(
     }}
 }}
 """
-    Bdefines_h.register_BHaH_defines("rkf45_helpers", c_code_for_header)
+    gpu_c_code_for_header = "#pragma omp declare target\n" + c_code_for_header + "\n#pragma omp end declare target"
+    Bdefines_h.register_BHaH_defines("rkf45_helpers", gpu_c_code_for_header)

@@ -62,7 +62,7 @@ def _validate_inputs(
         raise TypeError("addl_CFLAGS must be a list!")
     if include_dirs and not isinstance(include_dirs, list):
         raise TypeError("include_dirs must be a list!")
-    if platform.system() not in ["Linux", "Darwin"] and not create_lib:
+    if platform.system() not in ["Linux", "Darwin","Windows"] and not create_lib:
         raise ValueError(
             f"Unsupported operating system for executables: {platform.system()}"
         )

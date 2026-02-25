@@ -7,18 +7,11 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 
 def placeholder_interpolation_engine(spacetime_name: str, PARTICLE: str) -> None:
-    if PARTICLE == "massive":
-        array_size = 8
-    elif PARTICLE == "photon":
-        array_size = 9
-    else:
-        raise ValueError(f"Unsupported PARTICLE: {PARTICLE}")
-
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
     desc = f"""@brief Placeholder for the external batch-processing interpolation engine.
     Adapted for flattened SoA arrays. Passes the global batch capacity stride
-    to underlying analytic workers.
+    to underlying analytic workers with dual-architecture offloading.
     """
 
     name = f"placeholder_interpolation_engine_{spacetime_name}"
@@ -32,38 +25,22 @@ def placeholder_interpolation_engine(spacetime_name: str, PARTICLE: str) -> None
     metric_worker_func = f"g4DD_metric_{spacetime_name}"
     conn_worker_func = f"connections_{spacetime_name}"
 
-    # Added (void)req_photon_ids; to suppress the unused parameter warning
     body = f"""
     (void)req_photon_ids;
-    #pragma omp parallel for
+    
+    #ifdef USE_GPU
+        #pragma omp target teams distribute parallel for \
+                    map(to: commondata[0:1]) \
+                    is_device_ptr(req_photon_ids, req_pos, metric_g4DD, conn_GammaUDD)
+    #else
+        #pragma omp parallel for
+    #endif
     for (int batch_id = 0; batch_id < num_photons; ++batch_id) {{
-        double f_local[{array_size}];
-        double local_metric[10];
-        double local_conn[40];
-        
-        // Populate local state
-        for (int m = 0; m < 4; m++) {{
-            f_local[m] = req_pos[IDX_LOCAL(m, batch_id, BUNDLE_CAPACITY)];
-        }}
-        for (int j = 4; j < {array_size}; j++) {{
-            f_local[j] = 0.0;
-        }}
-
-        // Analytic engines now output to local 1D arrays
-        {metric_worker_func}(commondata, f_local, local_metric, 1, 0);
-
-        // Explicitly write the metric components to the batch array using IDX_LOCAL
-        for (int i = 0; i < 10; i++) {{
-            metric_g4DD[IDX_LOCAL(i, batch_id, BUNDLE_CAPACITY)] = local_metric[i];
-        }}
+    
+        {metric_worker_func}(commondata, req_pos, metric_g4DD, BUNDLE_CAPACITY, batch_id);
 
         if (conn_GammaUDD != NULL) {{
-            {conn_worker_func}(commondata, f_local, local_conn, 1 ,0);
-            
-            // Explicitly write connection components to the batch array using IDX_LOCAL
-            for (int i = 0; i < 40; i++) {{
-                conn_GammaUDD[IDX_LOCAL(i, batch_id, BUNDLE_CAPACITY)] = local_conn[i];
-            }}
+            {conn_worker_func}(commondata, req_pos, conn_GammaUDD, BUNDLE_CAPACITY, batch_id);
         }}
     }}
     """

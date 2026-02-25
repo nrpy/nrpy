@@ -77,7 +77,18 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
         include_braces=False,
     )
 
-    body = preamble + "\n\n" + kernel
+   # Wrap for GPU-side diagnostic checks
+    body = f"""
+        #ifdef USE_GPU
+        #pragma omp declare target
+        #endif
+        {preamble}
+
+        {kernel}
+        #ifdef USE_GPU
+        #pragma omp end declare target
+        #endif
+        """
 
     cfc.register_CFunction(
         includes=includes,
