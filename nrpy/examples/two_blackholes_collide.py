@@ -55,7 +55,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "GeneralRFM_fisheyeN1"
+CoordSystem = "Spherical"
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
