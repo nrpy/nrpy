@@ -485,13 +485,11 @@ def register_CFunction_xx_to_Cart(
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
     provider = getattr(rfm, "general_rfm_provider", None)
-    provider_meta = getattr(rfm, "general_rfm_provider_meta", {})
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
     if is_generalrfm and not is_fisheye_provider:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in xx_to_Cart."
         )
-    num_transitions = int(provider_meta.get("num_transitions", -1))
 
     local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye_provider else set())
 
