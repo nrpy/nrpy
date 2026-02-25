@@ -32,6 +32,19 @@ def parity_conditions_symbolic_dot_products(
     :return: C code string representing the unit vector dot products for the 28 parity conditions.
     """
     rfm = refmetric.reference_metric[CoordSystem]
+    if rfm.CoordSystem.startswith("GeneralRFM"):
+        outstr = """/*
+NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
+     twenty-eight parity conditions, in given coordinate system.
+     Needed for automatically determining sign of tensor across coordinate boundary.
+Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
+*/
+"""
+        return (
+            outstr
+            + "\n".join([f"REAL_parity_array[{i}] = 1.0;" for i in range(28)])
+            + "\n"
+        )
     parity = ixp.zerorank1(dimension=28)
     UnitVectors_inner = ixp.zerorank2()
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
@@ -260,11 +273,34 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
 """
     # Load up the EigenCoordinate corresponding to reference_metric::CoordSystem
     rfm_orig = refmetric.reference_metric[CoordSystem]
-    rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
+    if rfm_orig.CoordSystem.startswith("GeneralRFM"):
+        rfm = rfm_orig
+    else:
+        rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
+
+    xx_to_Cart_eigen = ccg.c_codegen(
+        [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
+        ["xCart[0]", "xCart[1]", "xCart[2]"],
+    )
+    xx_to_Cart_orig = ccg.c_codegen(
+        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
+        ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
+        include_braces=False,
+    )
+    xx_to_Cart_inbounds = ccg.c_codegen(
+        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
+        ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
+        include_braces=False,
+    )
+    cart_to_xx_eigen = ""
+    if not rfm.CoordSystem.startswith("GeneralRFM"):
+        cart_to_xx_eigen = ccg.c_codegen(
+            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
+            ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+        )
 
     # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
-    body += (
-        f"""
+    body += f"""
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
 REAL xCart[3];  // where (x,y,z) is output
 {{
@@ -272,13 +308,7 @@ REAL xCart[3];  // where (x,y,z) is output
     REAL xx0 = xx[0][i0];
     REAL xx1 = xx[1][i1];
     REAL xx2 = xx[2][i2];
-"""
-        + ccg.c_codegen(
-            [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
-            ["xCart[0]", "xCart[1]", "xCart[2]"],
-        )
-        + "}\n"
-    )
+""" + xx_to_Cart_eigen + "}\n"
     body += r"""
 REAL Cartx = xCart[0];
 REAL Carty = xCart[1];
@@ -295,19 +325,24 @@ REAL Cartz = xCart[2];
   //      appropriate parity condition (+/- 1).
 REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
 """
-    # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
-    if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
-        raise RuntimeError(
-            f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
-            f"reference_metric::CoordSystem = {CoordSystem}. "
-            "Boundary conditions in curvilinear coordinates REQUIRE this to be set."
-        )
-    # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-    body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
-    body += ccg.c_codegen(
-        [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-        ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
-    )
+    # Step 2.a/2.b: Cartesian->xx map
+    if rfm.CoordSystem.startswith("GeneralRFM"):
+        body += f"""
+  // BHaHAHA bcstruct_set_up() currently supports spherical eigencoordinates only.
+  // Fail explicitly for GeneralRFM* instead of emitting code paths that require params.
+  return BCSTRUCT_EIGENCOORD_FAILURE;
+"""
+    else:
+        # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
+        if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
+            raise RuntimeError(
+                f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
+                f"reference_metric::CoordSystem = {CoordSystem}. "
+                "Boundary conditions in curvilinear coordinates REQUIRE this to be set."
+            )
+        # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
+        body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
+        body += cart_to_xx_eigen
     body += r"""
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + ((REAL)(j-NGHOSTS) + (1.0/2.0))*dxxi;
@@ -341,11 +376,7 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
     REAL xx1 = xx[1][i1];
     REAL xx2 = xx[2][i2];
 """
-    body += ccg.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
-        include_braces=False,
-    )
+    body += xx_to_Cart_orig
 
     body += f"""  }}
 
@@ -358,11 +389,7 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
     REAL xx1 = xx[1][i1_inbounds];
     REAL xx2 = xx[2][i2_inbounds];
 """
-    body += ccg.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
-        include_braces=False,
-    )
+    body += xx_to_Cart_inbounds
 
     body += r"""  }
 
@@ -661,7 +688,8 @@ typedef struct {
 
     // Store num_inner to bc_info:
     bcstruct->bc_info.num_inner_boundary_points = num_inner;
-
+"""
+    body += r"""
     // Next allocate memory for inner_boundary_points:
     bcstruct->inner_bc_array = (innerpt_bc_struct *restrict)malloc(sizeof(innerpt_bc_struct) * num_inner);
   }

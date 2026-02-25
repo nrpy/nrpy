@@ -10,10 +10,12 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Thiago Assumpção; assumpcaothiago **at** gmail **dot** com
 """
 
+import re
 from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
 
+import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.helpers.cached_functions import cached_simplify
@@ -129,6 +131,8 @@ class ReferenceMetric:
         self.f2_of_xx0_funcform = sp.Function("f2_of_xx0_funcform")(self.xx[0])
         self.f3_of_xx2_funcform = sp.Function("f3_of_xx2_funcform")(self.xx[2])
         self.f4_of_xx1_funcform = sp.Function("f4_of_xx1_funcform")(self.xx[1])
+        self.freevars_uniq_xx_indep: List[sp.Basic] = []
+        self.freevars_uniq_vals: List[sp.Basic] = []
 
         # Annotate these as Expr because they are initialized as Symbols but later assigned full Expressions
         (
@@ -238,9 +242,27 @@ class ReferenceMetric:
                 for j in range(3):
                     self.ReDD[i][j] = sp.sympify(1)
 
-            # Treat the six independent components of ghatDD[i][j] as primitive
-            # symmetric symbols.
-            self.ghatDD = ixp.declarerank2("ghatDD", dimension=3, symmetry="sym01")
+            # For GeneralRFM, ghat and its first/second derivatives are provided
+            # as fixed gridfunctions. Derived quantities (ghatUU, detgammahat,
+            # Gammahat*) are computed algebraically from these, as in other rfms.
+            self.ghatDD = cast(
+                List[List[sp.Expr]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDD", rank=2, symmetry="sym01", group="AUXEVOL"
+                ),
+            )
+            self.ghatDDdD = cast(
+                List[List[List[sp.Expr]]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDDdD", rank=3, symmetry="sym01", group="AUXEVOL"
+                ),
+            )
+            self.ghatDDdDD = cast(
+                List[List[List[List[sp.Expr]]]],
+                gri.register_gridfunctions_for_single_rankN(
+                    "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+                ),
+            )
         elif not enable_rfm_precompute:
             for i in range(3):
                 self.scalefactor_orthog[i] = sp.sympify(self.scalefactor_orthog[i])
@@ -301,19 +323,9 @@ class ReferenceMetric:
         self.ReDDdDD = ixp.zerorank4(3)
 
         # Step 3c: Compute 1st & 2nd derivatives of reference metric.
-        self.ghatDDdD = ixp.zerorank3(3)
-        self.ghatDDdDD = ixp.zerorank4(3)
-
-        if self.CoordSystem.startswith("GeneralRFM"):
-            # In GeneralRFM, the first and second derivatives of the reference
-            # metric are treated as *primitive* tensors, never obtained by
-            # differentiating ghatDD inside ReferenceMetric.
-            # First derivatives: symmetric in (i,j).
-            self.ghatDDdD = ixp.declarerank3("ghatDDdD", dimension=3, symmetry="sym01")
-            self.ghatDDdDD = ixp.declarerank4(
-                "ghatDDdDD", dimension=3, symmetry="sym01sym23"
-            )
-        else:
+        if not self.CoordSystem.startswith("GeneralRFM"):
+            self.ghatDDdD = ixp.zerorank3(3)
+            self.ghatDDdDD = ixp.zerorank4(3)
             for i in range(3):
                 for j in range(3):
                     for k in range(3):
@@ -665,64 +677,112 @@ class ReferenceMetric:
 
         # Step 6.c: Finally, substitute integers for all functions & derivatives that evaluate to integers
         for varidx, freevar in enumerate(freevars_uniq):
-            self.detgammahat = self.detgammahat.subs(
-                freevar, self.freevars_uniq_xx_indep[varidx]
+            self.detgammahat = cast(
+                sp.Expr,
+                self.detgammahat.subs(freevar, self.freevars_uniq_xx_indep[varidx]),
             )
             for i in range(3):
-                self.ReU[i] = self.ReU[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.ReU[i] = cast(
+                    sp.Expr,
+                    self.ReU[i].subs(freevar, self.freevars_uniq_xx_indep[varidx]),
                 )
-                self.ReD[i] = self.ReD[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.ReD[i] = cast(
+                    sp.Expr,
+                    self.ReD[i].subs(freevar, self.freevars_uniq_xx_indep[varidx]),
                 )
-                self.detgammahatdD[i] = self.detgammahatdD[i].subs(
-                    freevar, self.freevars_uniq_xx_indep[varidx]
+                self.detgammahatdD[i] = cast(
+                    sp.Expr,
+                    self.detgammahatdD[i].subs(
+                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    ),
                 )
                 for j in range(3):
-                    self.ReDD[i][j] = self.ReDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReDD[i][j] = cast(
+                        sp.Expr,
+                        self.ReDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ReUdD[i][j] = self.ReUdD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReUdD[i][j] = cast(
+                        sp.Expr,
+                        self.ReUdD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ReDdD[i][j] = self.ReDdD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ReDdD[i][j] = cast(
+                        sp.Expr,
+                        self.ReDdD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ghatDD[i][j] = self.ghatDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ghatDD[i][j] = cast(
+                        sp.Expr,
+                        self.ghatDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.ghatUU[i][j] = self.ghatUU[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.ghatUU[i][j] = cast(
+                        sp.Expr,
+                        self.ghatUU[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
-                    self.detgammahatdDD[i][j] = self.detgammahatdDD[i][j].subs(
-                        freevar, self.freevars_uniq_xx_indep[varidx]
+                    self.detgammahatdDD[i][j] = cast(
+                        sp.Expr,
+                        self.detgammahatdDD[i][j].subs(
+                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        ),
                     )
                     for k in range(3):
-                        self.ReDDdD[i][j][k] = self.ReDDdD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReDDdD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReDDdD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ReUdDD[i][j][k] = self.ReUdDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReUdDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReUdDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ReDdDD[i][j][k] = self.ReDdDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ReDdDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ReDdDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.ghatDDdD[i][j][k] = self.ghatDDdD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.ghatDDdD[i][j][k] = cast(
+                            sp.Expr,
+                            self.ghatDDdD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
-                        self.GammahatUDD[i][j][k] = self.GammahatUDD[i][j][k].subs(
-                            freevar, self.freevars_uniq_xx_indep[varidx]
+                        self.GammahatUDD[i][j][k] = cast(
+                            sp.Expr,
+                            self.GammahatUDD[i][j][k].subs(
+                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            ),
                         )
                         for l in range(3):
-                            self.ReDDdDD[i][j][k][l] = self.ReDDdDD[i][j][k][l].subs(
-                                freevar, self.freevars_uniq_xx_indep[varidx]
+                            self.ReDDdDD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.ReDDdDD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
                             )
-                            self.ghatDDdDD[i][j][k][l] = self.ghatDDdDD[i][j][k][
-                                l
-                            ].subs(freevar, self.freevars_uniq_xx_indep[varidx])
-                            self.GammahatUDDdD[i][j][k][l] = self.GammahatUDDdD[i][j][
-                                k
-                            ][l].subs(freevar, self.freevars_uniq_xx_indep[varidx])
+                            self.ghatDDdDD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.ghatDDdDD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
+                            )
+                            self.GammahatUDDdD[i][j][k][l] = cast(
+                                sp.Expr,
+                                self.GammahatUDDdD[i][j][k][l].subs(
+                                    freevar, self.freevars_uniq_xx_indep[varidx]
+                                ),
+                            )
 
     def Sinhv1(self, x: sp.Expr, AMPL: sp.Expr, SINHW: sp.Expr) -> Any:
         """
@@ -1633,9 +1693,11 @@ class ReferenceMetric:
         Initialize class attributes for the GeneralRFM coordinate system.
 
         The coordinates xx^i are treated as Cartesian-labeled coordinates
-        with identity maps to and from the Cartesian variables (Cartx,
-        Carty, Cartz). The reference metric itself is specified separately
-        and may be fully general and non-orthogonal.
+        for the forward map xx->Cart. GeneralRFM providers define metric
+        tensors and potentially nonlinear forward maps; inverse maps are
+        handled numerically in infrastructure code.
+
+        :raises ValueError: If the GeneralRFM coordinate-system suffix is malformed.
         """
         # Neutral default domain; users are free to override these bounds.
         par.register_CodeParameters(
@@ -1657,27 +1719,54 @@ class ReferenceMetric:
             "zmax": "grid_physical_size",
         }
 
-        # Identity map between reference-metric coordinates and Cartesian.
+        # Default identity map between reference-metric coordinates and Cartesian.
         self.xx_to_Cart[0] = self.xx[0]
         self.xx_to_Cart[1] = self.xx[1]
         self.xx_to_Cart[2] = self.xx[2]
 
-        self.Cart_to_xx[0] = self.Cartx
-        self.Cart_to_xx[1] = self.Carty
-        self.Cart_to_xx[2] = self.Cartz
+        # GeneralRFM has no analytic Cart->xx inverse by default.
+        # Use explicit sentinels to prevent accidental misuse.
+        self.Cart_to_xx[0] = sp.nan
+        self.Cart_to_xx[1] = sp.nan
+        self.Cart_to_xx[2] = sp.nan
 
-        # Define spherical coordinates from these Cartesian-like coordinates
+        # Provider metadata for downstream infrastructure.
+        self.general_rfm_provider_name = "identity_placeholder"
+        self.general_rfm_provider = None
+        self.general_rfm_provider_meta: Dict[str, Any] = {}
+
+        # If this is a known GeneralRFM provider, override the default map.
+        if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
+            from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+
+            match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
+            if not match:
+                raise ValueError(
+                    f"GeneralRFM CoordSystem {self.CoordSystem} not supported (expected GeneralRFM_fisheyeN*)."
+                )
+            num_transitions = int(match.group(1))
+            provider = generalrfm_fisheye.build_fisheye(num_transitions)
+            for i in range(3):
+                self.xx_to_Cart[i] = provider.xx_to_CartU[i]
+            self.general_rfm_provider_name = "fisheye"
+            self.general_rfm_provider = provider
+            self.general_rfm_provider_meta = {"num_transitions": num_transitions}
+
+        # Define spherical coordinates from the Cartesian map
         # (for ancillary purposes only; not used for metric construction).
-        self.xxSph[0] = sp.sqrt(self.xx[0] ** 2 + self.xx[1] ** 2 + self.xx[2] ** 2)
-        self.xxSph[1] = sp.acos(self.xx[2] / self.xxSph[0])
-        self.xxSph[2] = sp.atan2(self.xx[1], self.xx[0])
+        xCart = self.xx_to_Cart[0]
+        yCart = self.xx_to_Cart[1]
+        zCart = self.xx_to_Cart[2]
+        self.xxSph[0] = sp.sqrt(xCart**2 + yCart**2 + zCart**2)
+        self.xxSph[1] = sp.acos(zCart / self.xxSph[0])
+        self.xxSph[2] = sp.atan2(yCart, xCart)
 
-        # Trivial scale factors (placeholders; not used to build metric in GeneralRFM).
+        # Trivial placeholders (not used to construct ghat in GeneralRFM).
         self.scalefactor_orthog[0] = sp.sympify(1)
         self.scalefactor_orthog[1] = sp.sympify(1)
         self.scalefactor_orthog[2] = sp.sympify(1)
 
-        # Unit vectors: identity; all directions are "radial-like".
+        # Placeholder unit vectors.
         self.UnitVectors = [
             [sp.sympify(1), sp.sympify(0), sp.sympify(0)],
             [sp.sympify(0), sp.sympify(1), sp.sympify(0)],

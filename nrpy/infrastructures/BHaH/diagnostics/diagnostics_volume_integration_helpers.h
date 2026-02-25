@@ -35,6 +35,8 @@
 
 #include "BHaH_defines.h"
 #include "diagnostic_gfs.h" // diagnostic_gf_names[] and enum
+#include <math.h>
+#include <string.h>
 
 // ======================== Limits (stack-only) ========================
 // Upper bounds for small, fixed-size containers used in this module.
@@ -431,7 +433,18 @@ static void diagnostics_integration_apply_rules(const commondata_struct *restric
 
           // Volume element; skip if zero
           REAL dV;
-          sqrt_detgammahat_d3xx_volume_element(params, xx0, xx1, xx2, &dV);
+          if (strncmp(params->CoordSystemName, "GeneralRFM", 10) == 0) {
+#ifdef DETGAMMAHATGF
+            const REAL detgammahat = griddata[grid].gridfuncs.auxevol_gfs[IDX4(DETGAMMAHATGF, i0, i1, i2)];
+            dV = sqrt(fabs(detgammahat)) * fabs(params->dxx0 * params->dxx1 * params->dxx2);
+#else
+            fprintf(stderr,
+                    "Error: GeneralRFM volume integration requires DETGAMMAHATGF, but it is not defined.\n");
+            exit(1);
+#endif
+          } else {
+            sqrt_detgammahat_d3xx_volume_element(params, xx0, xx1, xx2, &dV);
+          }
           if (dV == (REAL)0.0)
             continue;
 
