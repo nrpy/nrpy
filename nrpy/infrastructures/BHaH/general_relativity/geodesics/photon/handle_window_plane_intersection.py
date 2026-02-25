@@ -100,7 +100,7 @@ def handle_window_plane_intersection() -> None:
         final_blueprint_data->z_w = z_w;
         final_blueprint_data->t_w = all_photons->window_event_f_intersect[IDX_GLOBAL(0, photon_idx, num_rays)];
         final_blueprint_data->L_w = all_photons->window_event_f_intersect[IDX_GLOBAL(8, photon_idx, num_rays)]; 
-        return true;j
+        return true;
     }
 
     return false;
