@@ -80,7 +80,12 @@ static inline int evaluate_constraints(const REAL L, const REAL r_trans[], const
 
 static inline int solve_linear_system(const int n, const REAL *A_in, const REAL *b_in, REAL *x_out) {
   // Gaussian elimination with partial pivoting; A_in is row-major n x n.
-  REAL A[n][n + 1];
+  enum { MAX_LINEAR_N = 64 };
+  if (n <= 0 || n > MAX_LINEAR_N) {
+    fprintf(stderr, "ERROR: fisheye solve_linear_system requires 0 < n <= %d (got n=%d)\\n", MAX_LINEAR_N, n);
+    return 1;
+  }
+  REAL A[MAX_LINEAR_N][MAX_LINEAR_N + 1];
   for (int i = 0; i < n; i++) {
     for (int j = 0; j < n; j++)
       A[i][j] = A_in[i * n + j];
