@@ -44,6 +44,10 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     __host__ __device__; for OpenMP builds it is a plain C function. The result is returned by
     reference through the dV pointer in C.
 
+    For GeneralRFM coordinate systems, this helper is intentionally inert (`*dV = 0.0`) because
+    the active integration path computes dV from `DETGAMMAHATGF` in
+    diagnostics_volume_integration_helpers.h.
+
     :param CoordSystem: Name of the coordinate system used to select the reference metric data
                         embedded in the generated C function.
 
@@ -81,6 +85,9 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
  * The expression implemented is:
  *   dV = sqrt(detgammahat(xx0, xx1, xx2)) * abs(dxx0 * dxx1 * dxx2)
  * The absolute value ensures a positive volume element regardless of coordinate orientation.
+ *
+ * Note for GeneralRFM: this helper is intentionally inert (*dV = 0.0). GeneralRFM volume
+ * integration uses the DETGAMMAHATGF-backed path in diagnostics_volume_integration_helpers.h.
  *
  * @param[in]  params  Pointer to parameter struct (reference-metric data, grid spacings, and sizes).
  * @param[in]  xx0     Local coordinate 0 at which to evaluate the volume element.
