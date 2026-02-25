@@ -149,7 +149,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
 
     # Window Plane Intersection
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
+    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 50.2
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
     par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.0
     par.glb_code_params_dict["window_center_x"].defaultvalue = 50.0

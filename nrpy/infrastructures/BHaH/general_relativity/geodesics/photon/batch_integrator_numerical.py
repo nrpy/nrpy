@@ -61,8 +61,8 @@ Bdefines_h.register_BHaH_defines("photon_02_batch_structs", batch_structs_c_code
 
 par.register_CodeParameters(
     "REAL", __name__,
-    ["t_integration_max", "r_escape", "p_t_max", "slot_manager_t_min", "slot_manager_delta_t"],
-    [10000.0, 150.0, 1e3, -1000.0, 10.0], commondata=True, add_to_parfile=True,
+    ["t_integration_max", "r_escape", "p_t_max", "slot_manager_t_min", "slot_manager_delta_t", "numerical_initial_h"],
+    [10000.0, 150.0, 1e3, -1000.0, 10.0, 0.1], commondata=True, add_to_parfile=True,
 )
 par.register_CodeParameters(
     "bool", __name__, ["perform_conservation_check", "debug_mode"], [True, True], commondata=True, add_to_parfile=True,
@@ -137,6 +137,27 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.on_positive_side_of_source_prev[i] = (s_val > 0.0);
         all_photons_host.source_event_found[i] = false;
         all_photons_host.window_event_found[i] = false;
+    }}
+
+
+    printf("[DIAGNOSTIC] Stage 3.5: Initializing Blueprint Buffer...\\n"); fflush(stdout);
+    #ifdef USE_GPU
+        #pragma omp target teams distribute parallel for map(tofrom: results_buffer[0:num_rays])
+    #else
+        #pragma omp parallel for
+    #endif
+    for (long int i = 0; i < num_rays; i++) {{
+        results_buffer[i].termination_type = ACTIVE;
+        results_buffer[i].y_w = NAN;
+        results_buffer[i].z_w = NAN;
+        results_buffer[i].y_s = NAN;
+        results_buffer[i].z_s = NAN;
+        results_buffer[i].final_theta = NAN;
+        results_buffer[i].final_phi = NAN;
+        results_buffer[i].L_w = NAN;
+        results_buffer[i].t_w = NAN;
+        results_buffer[i].L_s = NAN;
+        results_buffer[i].t_s = NAN;
     }}
 
     PhotonStateSoA all_photons;
@@ -219,7 +240,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     double *bundle_time_host = (double *)malloc(sizeof(double) * BUNDLE_CAPACITY);
 
     double *f_start_bundle, *f_temp_bundle, *f_out_bundle, *f_err_bundle, *metric_bundle, *conn_bundle, *k_array_bundle;
-    int *req_photon_ids;
+    int *req_photon_ids, *compacted_ids;
+    bool *needs_step_bundle;
     #ifdef USE_GPU
         f_start_bundle = (double *)omp_target_alloc(sizeof(double) * 9 * BUNDLE_CAPACITY, omp_get_default_device());
         f_temp_bundle  = (double *)omp_target_alloc(sizeof(double) * 9 * BUNDLE_CAPACITY, omp_get_default_device());
@@ -229,9 +251,11 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         conn_bundle    = (double *)omp_target_alloc(sizeof(double) * 40 * BUNDLE_CAPACITY, omp_get_default_device());
         k_array_bundle = (double *)omp_target_alloc(sizeof(double) * 6 * 9 * BUNDLE_CAPACITY, omp_get_default_device());
         req_photon_ids = (int *)omp_target_alloc(sizeof(int) * BUNDLE_CAPACITY, omp_get_default_device());
+        compacted_ids  = (int *)omp_target_alloc(sizeof(int) * BUNDLE_CAPACITY, omp_get_default_device());
+        needs_step_bundle = (bool *)omp_target_alloc(sizeof(bool) * BUNDLE_CAPACITY, omp_get_default_device());
         
-        if (!f_start_bundle || !f_temp_bundle || !f_out_bundle || !f_err_bundle || !metric_bundle || !k_array_bundle) {{
-            fprintf(stderr, "FATAL: GPU Memory Allocation failed for bundle buffers!\\n");
+        if (!f_start_bundle || !f_temp_bundle || !compacted_ids || !needs_step_bundle) {{
+            fprintf(stderr, "FATAL: GPU Memory Allocation failed for bundle buffers!\n");
             exit(1);
         }}
     #else
@@ -243,6 +267,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         conn_bundle    = (double *)malloc(sizeof(double) * 40 * BUNDLE_CAPACITY);
         k_array_bundle = (double *)malloc(sizeof(double) * 6 * 9 * BUNDLE_CAPACITY);
         req_photon_ids = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
+        compacted_ids  = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
+        needs_step_bundle = (bool *)malloc(sizeof(bool) * BUNDLE_CAPACITY);
     #endif
     
     printf("[DIAGNOSTIC] Stage 9: Entering Main Staged Integrator Loop...\\n"); fflush(stdout);
@@ -254,22 +280,49 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             long int bundle_photons[bundle_size];
             slot_remove_chunk(&tsm, i, bundle_photons, bundle_size);
 
-            // --- STAGED INTEGRATOR (Batched Execution) ---
+            #ifdef USE_GPU
+                #pragma omp target teams distribute parallel for is_device_ptr(needs_step_bundle)
+            #else
+                #pragma omp parallel for
+            #endif
+            for (long int j = 0; j < bundle_size; j++) {{ needs_step_bundle[j] = true; }}
+
+            // --- STAGED INTEGRATOR (Synchronized Stream Compaction) ---
             bool bundle_has_active = true;
             while (bundle_has_active) {{
-                // Snapshot start state into bundle buffer
+                int active_count = 0;
+
+                // 1. Stream Compaction: Build dense list of work for the GPU
+                #ifdef USE_GPU
+                    #pragma omp target teams distribute parallel for map(tofrom: active_count) \
+                                is_device_ptr(needs_step_bundle, compacted_ids)
+                #else
+                    #pragma omp parallel for
+                #endif
+                for (long int j = 0; j < bundle_size; j++) {{
+                    long int p_idx = bundle_photons[j];
+                    if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
+                        int pos;
+                        #pragma omp atomic capture
+                        pos = active_count++;
+                        compacted_ids[pos] = (int)p_idx;
+                    }}
+                }}
+
+                if (active_count == 0) break;
+
+                // 2. Snapshot start state
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for \
                                 map(to: all_photons, bundle_photons[0:bundle_size]) \
-                                is_device_ptr(f_start_bundle, f_temp_bundle, req_photon_ids) \
+                                is_device_ptr(f_start_bundle, f_temp_bundle, needs_step_bundle) \
                                 has_device_addr(SOA_DEVICE_PTRS)
                 #else
                     #pragma omp parallel for
                 #endif
                 for (long int j = 0; j < bundle_size; j++) {{
                     long int p_idx = bundle_photons[j];
-                    req_photon_ids[j] = (int)p_idx;
-                    if (all_photons.status[p_idx] == ACTIVE) {{
+                    if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
                         for (int k = 0; k < 9; k++) {{
                             double val = all_photons.f[IDX_GLOBAL(k, p_idx, num_rays)];
                             f_start_bundle[IDX_LOCAL(k, j, BUNDLE_CAPACITY)] = val;
@@ -278,72 +331,54 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     }}
                 }}
 
+                // 3. RKF45 Stages
                 for (int stage = 1; stage <= 6; stage++) {{
-                    // A. BIG CALL: Interpolation Engine (Entire Bundle processable safely)
-                    {interpolation_func}(commondata, (int)bundle_size, req_photon_ids, f_temp_bundle, metric_bundle, conn_bundle);
+                    {interpolation_func}(commondata, active_count, compacted_ids, f_temp_bundle, metric_bundle, conn_bundle);
 
-                    // B. BIG CALL: ODE RHS
                     #ifdef USE_GPU
                         #pragma omp target teams distribute parallel for \
                                     map(to: all_photons, bundle_photons[0:bundle_size]) \
-                                    is_device_ptr(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle) \
+                                    is_device_ptr(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, needs_step_bundle) \
                                     has_device_addr(SOA_DEVICE_PTRS)
                     #else
                         #pragma omp parallel for
                     #endif
                     for (long int j = 0; j < bundle_size; j++) {{
                         long int p_idx = bundle_photons[j];
-                        if (all_photons.status[p_idx] == ACTIVE) {{
+                        if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
                             calculate_ode_rhs(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, BUNDLE_CAPACITY, stage, (int)j);
-                        }}
-                    }}
-
-                    // C. BIG CALL: Update f_temp
-                    if (stage < 6) {{
-                        #ifdef USE_GPU
-                            #pragma omp target teams distribute parallel for \
-                                        map(to: all_photons, bundle_photons[0:bundle_size]) \
-                                        is_device_ptr(f_start_bundle, f_temp_bundle, k_array_bundle) \
-                                        has_device_addr(SOA_DEVICE_PTRS)
-                        #else
-                            #pragma omp parallel for
-                        #endif
-                        for (long int j = 0; j < bundle_size; j++) {{
-                            long int p_idx = bundle_photons[j];
-                            if (all_photons.status[p_idx] == ACTIVE) {{
+                            if (stage < 6) {{
                                 calculate_rkf45_stage_f_temp(stage + 1, f_start_bundle, k_array_bundle, all_photons.h[p_idx], f_temp_bundle, BUNDLE_CAPACITY, (int)j);
                             }}
                         }}
                     }}
                 }}
 
+                // 4. Masked Acceptance Logic
                 bundle_has_active = false;
                 #ifdef USE_GPU
-                    #pragma omp target teams distribute parallel for \
-                                map(to: all_photons, bundle_photons[0:bundle_size], commondata[0:1]) \
-                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle) \
-                                has_device_addr(SOA_DEVICE_PTRS) \
-                                reduction(|:bundle_has_active)
+                    #pragma omp target teams distribute parallel for reduction(|:bundle_has_active) \
+                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle, needs_step_bundle) \
+                                has_device_addr(SOA_DEVICE_PTRS)
                 #else
                     #pragma omp parallel for reduction(|:bundle_has_active)
                 #endif
                 for (long int j = 0; j < bundle_size; j++) {{
                     long int p_idx = bundle_photons[j];
-                    if (all_photons.status[p_idx] == ACTIVE) {{
+                    if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
                         double h_step = all_photons.h[p_idx];
-                        
-                        // Pass the global batched arrays safely
                         rkf45_kernel(f_start_bundle, k_array_bundle, h_step, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, (int)j);
                         bool accepted = update_photon_state_and_stepsize(&all_photons, num_rays, p_idx, f_start_bundle, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, (int)j, commondata);
-                        
+
                         if (!accepted) {{
                             if (all_photons.rejection_retries[p_idx] > commondata->rkf45_max_retries) {{
                                 all_photons.status[p_idx] = FAILURE_RKF45_REJECTION_LIMIT;
+                                needs_step_bundle[j] = false;
                             }} else {{
                                 bundle_has_active = true; 
                             }}
                         }} else {{
-                            // Safe SoA history update directly from the batch array
+                            needs_step_bundle[j] = false; // Step accepted!
                             for (int k = 0; k < 9; ++k) {{
                                 all_photons.f_p_p[IDX_GLOBAL(k, p_idx, num_rays)] = all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)];
                                 all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)] = f_start_bundle[IDX_LOCAL(k, j, BUNDLE_CAPACITY)];
@@ -353,7 +388,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                         }}
                     }}
                 }}
-            }}
+            }} // end while (bundle_has_active)
             // --- END STAGED INTEGRATOR ---
 
             // --- EVENT DETECTION & TERMINATION CHECKS ---
@@ -389,9 +424,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                             }}
                         }} 
                         if (all_photons.window_event_found[p_idx]) {{ 
-                            handle_window_plane_intersection(&all_photons, num_rays, p_idx, commondata, &results_buffer[p_idx]); 
+                            // LOCK: Only write to the blueprint if t_w hasn't been set yet (first crossing wins)
+                            if (isnan(results_buffer[p_idx].t_w)) {{
+                                handle_window_plane_intersection(&all_photons, num_rays, p_idx, commondata, &results_buffer[p_idx]); 
+                            }}
+                            // Always reset the flag so we don't keep triggering the handler
                             all_photons.window_event_found[p_idx] = false; 
-                        }} 
+                        }}
                     }}
                 }}
             }}
@@ -443,7 +482,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     #else
         #pragma omp parallel for
     #endif
-    for (long int i = 0; i < num_rays; i++) {{ calculate_and_fill_blueprint_data_universal(commondata, &all_photons, num_rays, i, &results_buffer[i]); }}
+    for (long int i = 0; i < num_rays; i++) {{ calculate_and_fill_blueprint_data_universal(&all_photons, num_rays, i, &results_buffer[i]); }}
 
     #ifdef USE_GPU
         double *f_host = (double*)malloc(sizeof(double) * 9 * num_rays);
@@ -524,6 +563,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         omp_target_free(conn_bundle, omp_get_default_device());
         omp_target_free(k_array_bundle, omp_get_default_device());
         omp_target_free(req_photon_ids, omp_get_default_device());
+        omp_target_free(compacted_ids, omp_get_default_device());
+        omp_target_free(needs_step_bundle, omp_get_default_device());
 
         omp_target_free(all_photons.f, omp_get_default_device()); 
         omp_target_free(all_photons.f_p, omp_get_default_device()); 
@@ -543,6 +584,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         omp_target_free(all_photons.window_event_lambda, omp_get_default_device()); 
         omp_target_free(all_photons.window_event_f_intersect, omp_get_default_device());
     #else
+        free(compacted_ids); free(needs_step_bundle);
         free(f_start_bundle); free(f_temp_bundle); free(f_out_bundle); free(f_err_bundle);
         free(metric_bundle); free(conn_bundle); free(k_array_bundle); free(req_photon_ids);
     #endif

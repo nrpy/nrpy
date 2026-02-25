@@ -6,21 +6,19 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "@brief Updates a photon's final state in the buffer without overwriting initial crossing data."
 
-    params = """const commondata_struct *restrict commondata, 
-                const PhotonStateSoA *restrict all_photons, 
+    params = """const PhotonStateSoA *restrict all_photons, 
                 const long int num_rays, 
                 const long int photon_idx,
                 blueprint_data_t *restrict result""" 
-
     body = r"""
-    // result->y_w and result->z_w already contain the crossing points from the integrator.
+    // result->y_w, z_w, y_s, and z_s already contain the crossing points from the integrator!
     result->termination_type = all_photons->status[photon_idx];
 
     // --- Termination Dispatch ---
-    if (all_photons->status[photon_idx] == TERMINATION_TYPE_SOURCE_PLANE) {
-        handle_source_plane_intersection(all_photons, num_rays, photon_idx, commondata, result);
+    // NOTE: We intentionally DO NOT re-call handle_source_plane_intersection here 
+    // to prevent overwriting the valid data stored during the active integration loop.
 
-    } else if (all_photons->status[photon_idx] == TERMINATION_TYPE_CELESTIAL_SPHERE) {
+    if (all_photons->status[photon_idx] == TERMINATION_TYPE_CELESTIAL_SPHERE) {
         const double x = all_photons->f[IDX_GLOBAL(1, photon_idx, num_rays)];
         const double y = all_photons->f[IDX_GLOBAL(2, photon_idx, num_rays)];
         const double z = all_photons->f[IDX_GLOBAL(3, photon_idx, num_rays)];

@@ -96,12 +96,11 @@ def handle_window_plane_intersection() -> None:
 
     // Validate Bounds and Fill Data
     if (fabs(y_w) <= commondata->window_width / 2.0 && fabs(z_w) <= commondata->window_height / 2.0) {
-        // FIXED: Removed terminal status assignment. Photon remains ACTIVE.
         final_blueprint_data->y_w = y_w;
         final_blueprint_data->z_w = z_w;
         final_blueprint_data->t_w = all_photons->window_event_f_intersect[IDX_GLOBAL(0, photon_idx, num_rays)];
         final_blueprint_data->L_w = all_photons->window_event_f_intersect[IDX_GLOBAL(8, photon_idx, num_rays)]; 
-        return true;
+        return true;j
     }
 
     return false;
