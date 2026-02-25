@@ -26,7 +26,7 @@ def register_CFunction_bhahaha_find_horizons(
     max_horizons: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the C function for general-purpose 3D Lagrange interpolation.
+    Register the C function for finding horizons with BHaHAHA.
 
     :param CoordSystem: CoordSystem of project, where horizon finding will take place.
     :param max_horizons: Maximum number of horizons to search for.
