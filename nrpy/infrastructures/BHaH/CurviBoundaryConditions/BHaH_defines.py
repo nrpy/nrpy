@@ -50,6 +50,7 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
     :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
     :param verbose: Flag to control printing of details. Default is True.
     :return: A string containing the definitions for all grid functions with their parity types.
+    :raises ValueError: If a required parity type cannot be inferred for an auxevol grid function.
     """
     # First add human-readable gridfunction aliases (grid.py) to BHaH_defines dictionary.
     (

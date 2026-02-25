@@ -110,8 +110,7 @@ set_of_CoordSystems = {CoordSystem}
 NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
-#enable_bhahaha = parallelization == "openmp"
-enable_bhahaha = False
+enable_bhahaha = parallelization == "openmp"
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:

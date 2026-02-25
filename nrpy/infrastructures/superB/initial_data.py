@@ -214,9 +214,9 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     }}
     break;
   }}"""
-    body += f"""
-  case INITIALDATA_BIN_TWO: {{
-    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
+    body += """
+  case INITIALDATA_BIN_TWO: {
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
 """

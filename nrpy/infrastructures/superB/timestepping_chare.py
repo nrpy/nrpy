@@ -414,7 +414,6 @@ def output_timestepping_h(
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
-    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default, default is an empty string.
     """
     project_Path = Path(project_dir)
     project_Path.mkdir(parents=True, exist_ok=True)
@@ -791,6 +790,7 @@ def output_timestepping_cpp(
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default, default is an empty string.
     """
     initial_data_desc += " "
 

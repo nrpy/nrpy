@@ -366,15 +366,12 @@ superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
 )
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
-    post_params_struct_set_to_default = (
-        BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata="griddata",
-        )
-        + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
-            num_transitions=num_fisheye_transitions,
-            compute_griddata="griddata_chare",
-        )
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata",
+    ) + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata_chare",
     )
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
