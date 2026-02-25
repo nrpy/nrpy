@@ -73,6 +73,9 @@ t_final = 0.8 * grid_physical_size
 default_diagnostics_output_every = 0.5
 default_checkpoint_every = 50.0
 CoordSystem = "SinhCylindrical"
+if CoordSystem.startswith("GeneralRFM") and not enable_rfm_precompute:
+    raise ValueError("GeneralRFM requires enable_rfm_precompute=True.")
+
 num_fisheye_transitions = (
     int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
     if CoordSystem.startswith("GeneralRFM_fisheyeN")
