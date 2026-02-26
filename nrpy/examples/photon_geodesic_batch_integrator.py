@@ -56,7 +56,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import rkf45_
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import time_slot_manager_helpers
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import placeholder_interpolation_engine
 
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import batch_integrator_numerical_Copy
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import batch_integrator_numerical
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import main
 
 # ##############################################################################
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     rkf45_helpers_for_header.rkf45_helpers_for_header(SPACETIME)
     rkf45_update_and_control_helper.rkf45_update_and_control_helper()
     time_slot_manager_helpers.time_slot_manager_helpers()
-    placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME, PARTICLE)
-    batch_integrator_numerical_Copy.batch_integrator_numerical(SPACETIME)
+    placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME)
+    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
     main.main(SPACETIME)
 
     # ##########################################################################
@@ -151,10 +151,10 @@ if __name__ == "__main__":
     # Window Plane Intersection
     par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 5.1
+    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.2
     par.glb_code_params_dict["window_center_x"].defaultvalue = 50.0
     par.glb_code_params_dict["window_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_center_z"].defaultvalue = 5.0
+    par.glb_code_params_dict["window_center_z"].defaultvalue = 10.0
     par.glb_code_params_dict["window_height"].defaultvalue = 1.0
     par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
@@ -163,8 +163,8 @@ if __name__ == "__main__":
 
     # RKF45 Update and Control Helper
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-13
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-13
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-12
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-12
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     # Set Initial Conditions Cartesian
     par.glb_code_params_dict["scan_density"].defaultvalue = 500
-    par.glb_code_params_dict["t_start"].defaultvalue = 300.0
+    par.glb_code_params_dict["t_start"].defaultvalue = 500.0
 
     # Step 6: Generate C Code for Parameters
     print(" -> Generating parameter handling code...")

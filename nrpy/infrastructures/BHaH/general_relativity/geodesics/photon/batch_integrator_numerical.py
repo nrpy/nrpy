@@ -1,11 +1,23 @@
-# batch_integrator_numerical.py
 """
-Generates the main C orchestrator for the numerical integration pipeline.
-Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
+Orchestration module for the Project Singularity-Axiom numerical integration pipeline.
 
-This module provides the core batch integration loop, utilizing a lock-free 
-TimeSlotManager and a flattened Structure of Arrays (SoA) to manage photon 
-trajectories across heterogeneous architectures.
+This module generates the high-level C orchestrator responsible for managing the 
+life cycle of photon trajectories in curved spacetimes. It implements a 
+dual-architecture (CPU/GPU) compatible integration loop that strictly adheres 
+to the following architectural constraints:
+
+1.  **Memory Architecture**: Utilizes a flattened Structure of Arrays (SoA) via 
+    the `PhotonStateSoA` and `blueprint_data_t` structures. Access is governed 
+    by the `IDX_GLOBAL` and `IDX_LOCAL` macros to ensure cache-efficient 
+    strided access and prevent pointer arithmetic errors.
+2.  **The 9-Component Mapping**: The state vector `f` is strictly immutable: 
+    f[0]:t; f[1,2,3]:x,y,z; f[4]:p_t; f[5,6,7]:p_x,p_y,p_z; f[8]:lambda.
+3.  **Temporal Binning**: Employs a lock-free `TimeSlotManager` to bin active 
+    rays by physical coordinate time (t), enabling synchronized batch 
+    processing across heterogeneous hardware.
+4.  **Stream Compaction**: Implements a staged integration pattern where 
+    photons are processed in bundles (capped at `BUNDLE_CAPACITY = 32768`) 
+    using masked acceptance logic to maintain high GPU occupancy.
 """
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -91,19 +103,42 @@ par.register_CodeParameters(
 
 def batch_integrator_numerical(spacetime_name: str) -> None:
     """
-    Generates the C function responsible for orchestrating the staged batched integration.
-    
-    Args:
-        spacetime_name (str): The specific metric/spacetime identifier (e.g., 'Kerr').
+    Generate the C orchestrator for the staged batched integration pipeline.
 
-    >>> # Typical invocation during metaprogramming pipeline:
+    This function metaprograms a hardware-agnostic C orchestrator that manages 
+    the lifecycle of photon batches. It handles device memory allocation (using 
+    OpenMP target memory APIs), initializes trajectories based on the specified 
+    metric, and executes a synchronized stream-compaction loop for the RKF45 
+    integrator stages.
+
+    :param spacetime_name: The identifier for the spacetime metric (e.g., 'Kerr'), 
+                           used for linkage with generated physics kernels.
+    :return: None. The generated function is registered via `cfc.register_CFunction`.
+    :raises ValueError: If the spacetime_name is not supported by the BHaH environment.
+
+    >>> # Typical invocation for a Kerr black hole simulation:
     >>> batch_integrator_numerical("Kerr")
     """
     # 1. Define C-Function metadata in order of appearance
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "omp.h", "math.h"]
-    desc = r"""@brief Finalized Project Kerr-Singularity-Axiom Orchestrator (Staged Architecture).
-    Allocates device-agnostic Structure of Arrays (SoA) memory, initializes photon 
-    trajectories, and prepares the staged stream-compaction integration loop."""
+    
+    desc = r"""@brief Finalized Project Singularity-Axiom Orchestrator (Staged Architecture).
+    
+    This function serves as the master entry point for the ray-tracing pipeline. 
+    It performs the following high-level operations:
+    1. Memory Management: Allocates host and device-side SoA memory for 
+       num_rays trajectories, strictly following the 9-component f-vector 
+       mapping (t, x, y, z, p_t, p_x, p_y, p_z, lambda).
+    2. Initialization: Calls the spacetime-specific cartesian initial 
+       conditions and initializes event detection flags.
+    3. Staged Integration: Executes a dual-while loop structure that 
+       processes temporal bins via the TimeSlotManager and utilizes 
+       stream compaction to execute RKF45 stages on dense GPU bundles.
+    4. Event Processing: Manages intersections with the observer window 
+       and source plane, filling the blueprint_data_t results buffer.
+    5. Integrity Validation: Computes relative errors in conserved 
+       quantities (E, L, Q) to quantify numerical drift."""
+    
     name = "batch_integrator_numerical"
     params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
 
