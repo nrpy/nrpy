@@ -31,7 +31,7 @@ from nrpy.helpers.expression_utils import (
 
 
 def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
-        CoordSystem: str,
+    CoordSystem: str,
 ) -> None:
     """
     Construct and register a C function that computes the local 3D volume element at a point.
