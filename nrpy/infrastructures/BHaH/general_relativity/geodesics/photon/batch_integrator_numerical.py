@@ -6,23 +6,25 @@ life cycle of photon trajectories in curved spacetimes. It implements a
 dual-architecture (CPU/GPU) compatible integration loop that strictly adheres 
 to the following architectural constraints:
 
-1.  **Memory Architecture**: Utilizes a flattened Structure of Arrays (SoA) via 
-    the `PhotonStateSoA` and `blueprint_data_t` structures. Access is governed 
-    by the `IDX_GLOBAL` and `IDX_LOCAL` macros to ensure cache-efficient 
-    strided access and prevent pointer arithmetic errors.
-2.  **The 9-Component Mapping**: The state vector `f` is strictly immutable: 
-    f[0]:t; f[1,2,3]:x,y,z; f[4]:p_t; f[5,6,7]:p_x,p_y,p_z; f[8]:lambda.
-3.  **Temporal Binning**: Employs a lock-free `TimeSlotManager` to bin active 
-    rays by physical coordinate time (t), enabling synchronized batch 
-    processing across heterogeneous hardware.
-4.  **Stream Compaction**: Implements a staged integration pattern where 
-    photons are processed in bundles (capped at `BUNDLE_CAPACITY = 32768`) 
-    using masked acceptance logic to maintain high GPU occupancy.
+1. Memory Architecture: Utilizes a flattened Structure of Arrays (SoA) via 
+   the `PhotonStateSoA` and `blueprint_data_t` structures. Access is governed 
+   by the `IDX_GLOBAL` and `IDX_LOCAL` macros to ensure cache-efficient 
+   strided access and prevent pointer arithmetic errors.
+2. The 9-Component Mapping: The state vector `f` is strictly immutable: 
+   f[0]:t; f[1,2,3]:x,y,z; f[4]:p_t; f[5,6,7]:p_x,p_y,p_z; f[8]:lambda.
+3. Temporal Binning: Employs a lock-free `TimeSlotManager` to bin active 
+   rays by physical coordinate time (t), enabling synchronized batch processing.
+4. Stream Compaction: Implements a staged integration pattern where photons 
+   are processed in dense bundles (BUNDLE_CAPACITY = 32768) to maintain high GPU 
+   occupancy, utilizing a local reverse-map to circumvent OpenMP race conditions.
 """
+
+### STEP 1: MODULE IMPORTS & SETUP ###
 import nrpy.c_function as cfc
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
 
+### STEP 2: C-STRUCT & PARAMETER REGISTRATION ###
 batch_structs_c_code = r"""
     #define BUNDLE_CAPACITY 32768 // Maximum number of photons processed per batch to fit within L1/L2 cache.
 
@@ -101,6 +103,8 @@ par.register_CodeParameters(
     "bool", __name__, ["perform_conservation_check", "debug_mode"], [True, True], commondata=True, add_to_parfile=True,
 )
 
+
+### STEP 3: C-CODE GENERATION ###
 def batch_integrator_numerical(spacetime_name: str) -> None:
     """
     Generate the C orchestrator for the staged batched integration pipeline.
@@ -109,15 +113,21 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     the lifecycle of photon batches. It handles device memory allocation (using 
     OpenMP target memory APIs), initializes trajectories based on the specified 
     metric, and executes a synchronized stream-compaction loop for the RKF45 
-    integrator stages.
+    integrator stages to maximize hardware occupancy.
 
-    :param spacetime_name: The identifier for the spacetime metric (e.g., 'Kerr'), 
-                           used for linkage with generated physics kernels.
-    :return: None. The generated function is registered via `cfc.register_CFunction`.
-    :raises ValueError: If the spacetime_name is not supported by the BHaH environment.
+    Args:
+        spacetime_name (str): The identifier for the spacetime metric (e.g., 'Kerr'), 
+                              used for linkage with generated physics kernels.
 
-    >>> # Typical invocation for a Kerr black hole simulation:
-    >>> batch_integrator_numerical("Kerr")
+    Returns:
+        None. The generated function is registered via `cfc.register_CFunction`.
+
+    Raises:
+        ValueError: If the spacetime_name is not supported by the BHaH environment.
+
+    Example:
+        >>> # Typical invocation for a Kerr black hole simulation:
+        >>> batch_integrator_numerical("Kerr")
     """
     # 1. Define C-Function metadata in order of appearance
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "omp.h", "math.h"]
@@ -127,18 +137,15 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     This function serves as the master entry point for the ray-tracing pipeline. 
     It performs the following high-level operations:
     1. Memory Management: Allocates host and device-side SoA memory for 
-       num_rays trajectories, strictly following the 9-component f-vector 
-       mapping (t, x, y, z, p_t, p_x, p_y, p_z, lambda).
-    2. Initialization: Calls the spacetime-specific cartesian initial 
-       conditions and initializes event detection flags.
-    3. Staged Integration: Executes a dual-while loop structure that 
-       processes temporal bins via the TimeSlotManager and utilizes 
-       stream compaction to execute RKF45 stages on dense GPU bundles.
-    4. Event Processing: Manages intersections with the observer window 
-       and source plane, filling the blueprint_data_t results buffer.
-    5. Integrity Validation: Computes relative errors in conserved 
-       quantities (E, L, Q) to quantify numerical drift."""
+       num_rays trajectories, strictly following the 9-component f-vector mapping.
+    2. Initialization: Calls the spacetime-specific initial conditions.
+    3. Staged Integration: Executes a temporal binning loop via the TimeSlotManager 
+       and utilizes stream compaction (with a dense-to-sparse reverse map) to safely 
+       execute RKF45 stages on dense GPU bundles without OpenMP race conditions.
+    4. Event Processing: Computes intersections with bounding geometries.
+    5. Integrity Validation: Computes relative errors in conserved quantities."""
     
+    cfunc_type = "void"
     name = "batch_integrator_numerical"
     params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
 
@@ -147,18 +154,19 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     interpolation_func = f"placeholder_interpolation_engine_{spacetime_name}"
     conserved_quantities_func = f"conserved_quantities_{spacetime_name}_photon"
 
-    # 2. Build the C body with internal descriptive comments
+
+    # 2. Build the C body with internal descriptive comments and the Preamble pattern
     body = f"""
     // Comprehensive Device Pointer Mapping Macro for OpenMP Offloading
     #define SOA_DEVICE_PTRS all_photons.f, all_photons.f_p, all_photons.f_p_p, all_photons.affine_param, all_photons.affine_param_p, all_photons.affine_param_p_p, all_photons.h, all_photons.status, all_photons.rejection_retries, all_photons.on_positive_side_of_window_prev, all_photons.on_positive_side_of_source_prev, all_photons.source_event_found, all_photons.source_event_lambda, all_photons.source_event_f_intersect, all_photons.window_event_found, all_photons.window_event_lambda, all_photons.window_event_f_intersect
 
-    FILE *fp_debug = NULL; // File pointer for outputting sequential trajectory data.
+    FILE *fp_debug = NULL; // File pointer for outputting sequential trajectory data for post-run analysis.
     if (commondata->debug_mode) {{
         fp_debug = fopen("photon_path_numerical.txt", "w");
         if (fp_debug) fprintf(fp_debug, "# affine_param\\tt\\tx\\ty\\tz\\tp_t\\tp_x\\tp_y\\tp_z\\tL\\n");
     }}
 
-    PhotonStateSoA all_photons_host; // Host-side replica of the flattened master storage.
+    PhotonStateSoA all_photons_host; // Host-side replica of the flattened master storage representing the 9-component map.
     all_photons_host.f = (double *)malloc(sizeof(double) * 9 * num_rays);
     all_photons_host.f_p = (double *)malloc(sizeof(double) * 9 * num_rays);
     all_photons_host.f_p_p = (double *)malloc(sizeof(double) * 9 * num_rays);
@@ -177,7 +185,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     all_photons_host.window_event_lambda = (double *)malloc(sizeof(double) * num_rays); 
     all_photons_host.window_event_f_intersect = (double *)malloc(sizeof(double) * 9 * num_rays);
     
-    TimeSlotManager tsm; // Lock-free temporal arena for binning active rays by physical time.
+    TimeSlotManager tsm; // Lock-free temporal arena for binning active rays by physical coordinate time (t).
     slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
 
     double window_center[3]; // Cartesian coordinates mapping the geometric center of the camera window.
@@ -192,12 +200,14 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                                   commondata->source_plane_center_y*commondata->source_plane_normal_y + 
                                   commondata->source_plane_center_z*commondata->source_plane_normal_z; // Scalar distance to the physical source plane.
 
+    // TARGET: CPU INITIALIZATION
+    // Preparing initial values for all trajectory permutations on host before offloading.
     #pragma omp parallel for
     for (long int i = 0; i < num_rays; i++) {{
         // Preamble: Unpack initial Cartesian coordinates for this ray
-        const double initial_x = all_photons_host.f[IDX_GLOBAL(1, i, num_rays)]; // x-coordinate
-        const double initial_y = all_photons_host.f[IDX_GLOBAL(2, i, num_rays)]; // y-coordinate
-        const double initial_z = all_photons_host.f[IDX_GLOBAL(3, i, num_rays)]; // z-coordinate
+        const double initial_x = all_photons_host.f[IDX_GLOBAL(1, i, num_rays)]; // Cartesian x-coordinate
+        const double initial_y = all_photons_host.f[IDX_GLOBAL(2, i, num_rays)]; // Cartesian y-coordinate
+        const double initial_z = all_photons_host.f[IDX_GLOBAL(3, i, num_rays)]; // Cartesian z-coordinate
 
         all_photons_host.affine_param[i] = 0.0;
         all_photons_host.h[i] = commondata->numerical_initial_h;
@@ -205,7 +215,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.rejection_retries[i] = 0;
         
         for(int k=0; k<9; ++k) {{
-            const double f_val = all_photons_host.f[IDX_GLOBAL(k, i, num_rays)]; // Base component value
+            const double f_val = all_photons_host.f[IDX_GLOBAL(k, i, num_rays)]; // Base component value representing the unperturbed state.
             all_photons_host.f_p[IDX_GLOBAL(k, i, num_rays)] = f_val;
             all_photons_host.f_p_p[IDX_GLOBAL(k, i, num_rays)] = f_val;
         }}
@@ -213,7 +223,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.affine_param_p[i] = 0.0;
         all_photons_host.affine_param_p_p[i] = 0.0;
 
-        // Evaluate initial plane orientations
+        // Evaluate initial plane orientations (Event crossing detection flags)
         const double window_eval = initial_x*n_z[0] + initial_y*n_z[1] + initial_z*n_z[2] - window_plane_distance; // Geometric evaluation against the window normal.
         all_photons_host.on_positive_side_of_window_prev[i] = (window_eval > 0.0);
         
@@ -224,6 +234,12 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.window_event_found[i] = false;
     }}
 
+    /*
+     * TARGET: HYBRID EXECUTION DIRECTIVE
+     * What: Initializing the results buffer for all individual photons.
+     * Why: Ensures clean baseline structs before the device offloading map process begins.
+     * How: GPU leverages teams distribute parallel for; CPU falls back to standard OpenMP thread distribution.
+     */
     #ifdef USE_GPU
         #pragma omp target teams distribute parallel for map(tofrom: results_buffer[0:num_rays])
     #else
@@ -244,6 +260,12 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     }}
 
     PhotonStateSoA all_photons; // Device-mapped master structure for OpenMP offloading.
+    /*
+     * TARGET: GPU DEVICE ALLOCATION
+     * What: Mapping the unified memory layout from Host CPU to the GPU Device.
+     * Why: Crucial for the Structure of Arrays (SoA) layout to fit contiguously inside VRAM for maximum global memory bandwidth.
+     * How: Uses omp_target_alloc to create explicit allocations, followed by memcpy commands.
+     */
     #ifdef USE_GPU
         all_photons.f = (double *)omp_target_alloc(sizeof(double) * 9 * num_rays, omp_get_default_device());
         all_photons.f_p = (double *)omp_target_alloc(sizeof(double) * 9 * num_rays, omp_get_default_device());
@@ -289,7 +311,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons = all_photons_host;
     #endif
 
-    double *initial_cq = NULL; // Pointer array for storing baseline conserved quantities (E, L, Q).
+    double *initial_cq = NULL; // Pointer array for storing baseline conserved quantities (E, L, Q) for tracking drift.
     if (commondata->perform_conservation_check) {{
         initial_cq = (double *)malloc(sizeof(double) * 5 * num_rays);
         if (initial_cq == NULL) {{
@@ -306,14 +328,14 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         }}
     }}
 
-    int initial_slot_idx = slot_get_index(&tsm, commondata->t_start); // Calculates the starting temporal bin.
+    int initial_slot_idx = slot_get_index(&tsm, commondata->t_start); // Calculates the starting temporal bin index.
     if(initial_slot_idx != -1) {{ 
         for(long int i=0; i<num_rays; ++i) slot_add_photon(&tsm, initial_slot_idx, i); 
     }}
 
     // Management Arrays and Device-Side Bundle Buffers
-    termination_type_t *bundle_status_host = (termination_type_t *)malloc(sizeof(termination_type_t) * BUNDLE_CAPACITY); // Host-side buffer to copy active photon states from the device.
-    double *bundle_time_host = (double *)malloc(sizeof(double) * BUNDLE_CAPACITY); // Host-side buffer mapping physical times for slot manager updates.
+    termination_type_t *bundle_status_host = (termination_type_t *)malloc(sizeof(termination_type_t) * BUNDLE_CAPACITY); // Host buffer replicating status array chunk.
+    double *bundle_time_host = (double *)malloc(sizeof(double) * BUNDLE_CAPACITY); // Host buffer mapping physical times for binning updates.
 
     double *f_start_bundle; // Snapshot of the state vector prior to the RKF45 step attempt.
     double *f_temp_bundle;  // Intermediate state vector modified during RKF45 intermediate stages.
@@ -323,9 +345,15 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     double *conn_bundle;    // Local batch storage for the Christoffel symbols (connection coefficients).
     double *k_array_bundle; // 6-stage Runge-Kutta evaluation constants.
     int *req_photon_ids;    // Compacted list of photon indices mapping back to global memory.
-    int *compacted_ids;     // Dense list of active threads currently requiring an integration step.
-    bool *needs_step_bundle; // Boolean mask indicating which rays in the bundle still need processing.
+    int *compacted_ids;     // Dense list of active threads globally requiring an integration step.
+    int *compacted_local_ids; // Reverse map linking dense array indices back to the sparse bundle index.
+    bool *needs_step_bundle; // Boolean mask indicating which rays in the local bundle still require processing.
     
+    /*
+     * TARGET: GPU CACHE-ALIGNED BUNDLE BUFFERS
+     * What: Allocating dense execution arrays limited to BUNDLE_CAPACITY.
+     * Why: Prevents L1/L2 cache spillage on the GPU, guaranteeing optimal thread execution without divergence.
+     */
     #ifdef USE_GPU
         f_start_bundle = (double *)omp_target_alloc(sizeof(double) * 9 * BUNDLE_CAPACITY, omp_get_default_device());
         f_temp_bundle  = (double *)omp_target_alloc(sizeof(double) * 9 * BUNDLE_CAPACITY, omp_get_default_device());
@@ -336,9 +364,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         k_array_bundle = (double *)omp_target_alloc(sizeof(double) * 6 * 9 * BUNDLE_CAPACITY, omp_get_default_device());
         req_photon_ids = (int *)omp_target_alloc(sizeof(int) * BUNDLE_CAPACITY, omp_get_default_device());
         compacted_ids  = (int *)omp_target_alloc(sizeof(int) * BUNDLE_CAPACITY, omp_get_default_device());
+        compacted_local_ids = (int *)omp_target_alloc(sizeof(int) * BUNDLE_CAPACITY, omp_get_default_device());
         needs_step_bundle = (bool *)omp_target_alloc(sizeof(bool) * BUNDLE_CAPACITY, omp_get_default_device());
         
-        if (!f_start_bundle || !f_temp_bundle || !compacted_ids || !needs_step_bundle) {{
+        if (!f_start_bundle || !f_temp_bundle || !compacted_ids || !compacted_local_ids || !needs_step_bundle) {{
             fprintf(stderr, "FATAL: GPU Memory Allocation failed for bundle buffers!\\n");
             exit(1);
         }}
@@ -352,6 +381,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         k_array_bundle = (double *)malloc(sizeof(double) * 6 * 9 * BUNDLE_CAPACITY);
         req_photon_ids = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
         compacted_ids  = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
+        compacted_local_ids = (int *)malloc(sizeof(int) * BUNDLE_CAPACITY);
         needs_step_bundle = (bool *)malloc(sizeof(bool) * BUNDLE_CAPACITY);
     #endif
 
@@ -359,10 +389,15 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     
     for (int i = initial_slot_idx; i >= 0 && active_photons > 0; i--) {{
         while (tsm.slot_counts[i] > 0) {{
-            long int bundle_size = MIN(tsm.slot_counts[i], BUNDLE_CAPACITY); // The dynamic size of the current photon batch, capped at L1/L2 cache limits.
-            long int bundle_photons[bundle_size]; // Local array storing the global indices of the photons in the current batch.
+            long int bundle_size = MIN(tsm.slot_counts[i], BUNDLE_CAPACITY); // The dynamic size of the current photon batch, capped at hardware capacity limits.
+            long int bundle_photons[bundle_size]; // Local array storing the global indices of the sparse photons in the current batch.
             slot_remove_chunk(&tsm, i, bundle_photons, bundle_size);
 
+            /*
+             * TARGET: HYBRID EXECUTION DIRECTIVE
+             * What: Initializing the local needs_step mask.
+             * Why: We assume all photons in a newly pulled bundle require an initial RKF45 step.
+             */
             #ifdef USE_GPU
                 #pragma omp target teams distribute parallel for is_device_ptr(needs_step_bundle)
             #else
@@ -371,25 +406,33 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             for (long int j = 0; j < bundle_size; j++) {{ needs_step_bundle[j] = true; }}
 
             // --- STAGED INTEGRATOR (Synchronized Stream Compaction) ---
-            bool bundle_has_active = true; // Boolean flag governing the continuous integration of the current batch until all photons require sorting.
+            bool bundle_has_active = true; // Boolean flag governing continuous iteration until all threads resolve numerical steps.
             
             while (bundle_has_active) {{
-                int active_count = 0; // Local counter tracking the dense list of photons requiring an RKF45 integration step.
+                int active_count = 0; // Local counter tracking the dense list of active threads currently requiring an RKF45 integration step.
 
                 // 1. Stream Compaction: Build dense list of work for the GPU
+                /*
+                 * TARGET: HYBRID EXECUTION DIRECTIVE
+                 * What: Stream compaction using OpenMP atomic captures.
+                 * Why: Thread divergence heavily penalizes GPU execution. Compacting active threads onto a dense map ensures Warp saturation.
+                 */
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for map(tofrom: active_count) \\
-                                is_device_ptr(needs_step_bundle, compacted_ids)
+                                map(to: all_photons, bundle_photons[0:bundle_size]) \\
+                                is_device_ptr(needs_step_bundle, compacted_ids, compacted_local_ids) \\
+                                has_device_addr(SOA_DEVICE_PTRS)
                 #else
                     #pragma omp parallel for
                 #endif
                 for (long int j = 0; j < bundle_size; j++) {{
-                    long int p_idx = bundle_photons[j]; // The global index of the photon currently being evaluated.
+                    long int p_idx = bundle_photons[j]; // Global identifier for the evaluated photon.
                     if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
-                        int pos; // The compacted array index assigned via an atomic operation.
+                        int pos; // Compacted dense array index assigned via hardware atomic increment.
                         #pragma omp atomic capture
                         pos = active_count++;
                         compacted_ids[pos] = (int)p_idx;
+                        compacted_local_ids[pos] = (int)j;
                     }}
                 }}
 
@@ -398,20 +441,18 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 // 2. Snapshot start state
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for \\
-                                map(to: all_photons, bundle_photons[0:bundle_size]) \\
-                                is_device_ptr(f_start_bundle, f_temp_bundle, needs_step_bundle) \\
+                                map(to: all_photons) \\
+                                is_device_ptr(f_start_bundle, f_temp_bundle, compacted_ids) \\
                                 has_device_addr(SOA_DEVICE_PTRS)
                 #else
                     #pragma omp parallel for
                 #endif
-                for (long int j = 0; j < bundle_size; j++) {{
-                    long int p_idx = bundle_photons[j]; // The global index of the photon.
-                    if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
-                        for (int k = 0; k < 9; k++) {{
-                            double val = all_photons.f[IDX_GLOBAL(k, p_idx, num_rays)]; // The individual state vector component (t, x, y, z, p_t, p_x, p_y, p_z, aux).
-                            f_start_bundle[IDX_LOCAL(k, j, BUNDLE_CAPACITY)] = val;
-                            f_temp_bundle[IDX_LOCAL(k, j, BUNDLE_CAPACITY)] = val;
-                        }}
+                for (int i = 0; i < active_count; i++) {{
+                    long int p_idx = compacted_ids[i]; // Unpack the mapped global photon index.
+                    for (int k = 0; k < 9; k++) {{
+                        double val = all_photons.f[IDX_GLOBAL(k, p_idx, num_rays)]; // Base coordinate extraction following the 9-Component Map.
+                        f_start_bundle[IDX_LOCAL(k, i, BUNDLE_CAPACITY)] = val;
+                        f_temp_bundle[IDX_LOCAL(k, i, BUNDLE_CAPACITY)] = val;
                     }}
                 }}
 
@@ -419,63 +460,77 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 for (int stage = 1; stage <= 6; stage++) {{ // Loop over the 6 intermediate stages of the Runge-Kutta-Fehlberg 4(5) method.
                     {interpolation_func}(commondata, active_count, compacted_ids, f_temp_bundle, metric_bundle, conn_bundle);
 
+                    /*
+                     * TARGET: HYBRID EXECUTION DIRECTIVE
+                     * What: Invoking the physics core RHS kernels over dense arrays.
+                     * Why: We ensure the math ops run over tightly packed IDs so that unmasked threads don't execute useless FLOPS.
+                     */
                     #ifdef USE_GPU
                         #pragma omp target teams distribute parallel for \\
-                                    map(to: all_photons, bundle_photons[0:bundle_size]) \\
-                                    is_device_ptr(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, needs_step_bundle) \\
+                                    map(to: all_photons) \\
+                                    is_device_ptr(f_start_bundle, f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, compacted_ids) \\
                                     has_device_addr(SOA_DEVICE_PTRS)
                     #else
                         #pragma omp parallel for
                     #endif
-                    for (long int j = 0; j < bundle_size; j++) {{
-                        long int p_idx = bundle_photons[j]; // The global index of the photon.
-                        if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
-                            calculate_ode_rhs(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, BUNDLE_CAPACITY, stage, (int)j);
-                            if (stage < 6) {{
-                                calculate_rkf45_stage_f_temp(stage + 1, f_start_bundle, k_array_bundle, all_photons.h[p_idx], f_temp_bundle, BUNDLE_CAPACITY, (int)j);
-                            }}
+                    for (int i = 0; i < active_count; i++) {{
+                        long int p_idx = compacted_ids[i]; // Unpack mapped ID.
+                        calculate_ode_rhs(f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, BUNDLE_CAPACITY, stage, i);
+                        if (stage < 6) {{
+                            calculate_rkf45_stage_f_temp(stage + 1, f_start_bundle, k_array_bundle, all_photons.h[p_idx], f_temp_bundle, BUNDLE_CAPACITY, i);
                         }}
                     }}
                 }}
 
                 // 4. Masked Acceptance Logic
                 bundle_has_active = false;
+                /*
+                 * TARGET: HYBRID EXECUTION DIRECTIVE
+                 * What: Computing acceptance of intermediate RKF45 steps using a logical OR reduction.
+                 * Why: Allows adaptive step sizing to bound relative numerical errors, rejecting steps across threads seamlessly.
+                 */
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for reduction(|:bundle_has_active) \\
-                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle, needs_step_bundle) \\
+                                map(to: all_photons, commondata[0:1]) \\
+                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle, needs_step_bundle, compacted_ids, compacted_local_ids) \\
                                 has_device_addr(SOA_DEVICE_PTRS)
                 #else
                     #pragma omp parallel for reduction(|:bundle_has_active)
                 #endif
-                for (long int j = 0; j < bundle_size; j++) {{
-                    long int p_idx = bundle_photons[j]; // The global index of the photon.
-                    if (needs_step_bundle[j] && all_photons.status[p_idx] == ACTIVE) {{
-                        double h_step = all_photons.h[p_idx]; // The current adaptive step size $h$ proposed for the RKF45 integration step.
-                        rkf45_kernel(f_start_bundle, k_array_bundle, h_step, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, (int)j);
-                        bool accepted = update_photon_state_and_stepsize(&all_photons, num_rays, p_idx, f_start_bundle, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, (int)j, commondata); // Evaluates L-infinity norm for step acceptance.
+                for (int i = 0; i < active_count; i++) {{
+                    long int p_idx = compacted_ids[i]; // Unpack global ID.
+                    int j = compacted_local_ids[i]; // Reverse map referencing the sparse bundle index.
+                    
+                    double h_step = all_photons.h[p_idx]; // Adaptive step size assigned per-trajectory.
+                    rkf45_kernel(f_start_bundle, k_array_bundle, h_step, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, i);
+                    bool accepted = update_photon_state_and_stepsize(&all_photons, num_rays, p_idx, f_start_bundle, f_out_bundle, f_err_bundle, BUNDLE_CAPACITY, i, commondata); // Validates L-infinity limits.
 
-                        if (!accepted) {{
-                            if (all_photons.rejection_retries[p_idx] > commondata->rkf45_max_retries) {{
-                                all_photons.status[p_idx] = FAILURE_RKF45_REJECTION_LIMIT;
-                                needs_step_bundle[j] = false;
-                            }} else {{
-                                bundle_has_active = true; 
-                            }}
+                    if (!accepted) {{
+                        if (all_photons.rejection_retries[p_idx] > commondata->rkf45_max_retries) {{
+                            all_photons.status[p_idx] = FAILURE_RKF45_REJECTION_LIMIT;
+                            needs_step_bundle[j] = false;
                         }} else {{
-                            needs_step_bundle[j] = false; // Step successfully bound within absolute and relative error tolerances.
-                            for (int k = 0; k < 9; ++k) {{
-                                all_photons.f_p_p[IDX_GLOBAL(k, p_idx, num_rays)] = all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)];
-                                all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)] = f_start_bundle[IDX_LOCAL(k, j, BUNDLE_CAPACITY)];
-                            }}
-                            all_photons.affine_param_p_p[p_idx] = all_photons.affine_param_p[p_idx];
-                            all_photons.affine_param_p[p_idx] = all_photons.affine_param[p_idx] - h_step;
+                            bundle_has_active = true; 
                         }}
+                    }} else {{
+                        needs_step_bundle[j] = false; // Step bounded correctly within structural limits.
+                        for (int k = 0; k < 9; ++k) {{
+                            all_photons.f_p_p[IDX_GLOBAL(k, p_idx, num_rays)] = all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)];
+                            all_photons.f_p[IDX_GLOBAL(k, p_idx, num_rays)] = f_start_bundle[IDX_LOCAL(k, i, BUNDLE_CAPACITY)];
+                        }}
+                        all_photons.affine_param_p_p[p_idx] = all_photons.affine_param_p[p_idx];
+                        all_photons.affine_param_p[p_idx] = all_photons.affine_param[p_idx] - h_step;
                     }}
                 }}
             }} // end while (bundle_has_active)
             // --- END STAGED INTEGRATOR ---
             
             // --- EVENT DETECTION & TERMINATION CHECKS ---
+            /*
+             * TARGET: HYBRID EXECUTION DIRECTIVE
+             * What: Event evaluation based on the final updated geometry properties.
+             * Why: We decouple root-finding events from stream-compaction physics to prevent divergent branching.
+             */
             #ifdef USE_GPU
                 #pragma omp target teams distribute parallel for \\
                             map(to: all_photons, commondata[0:1], bundle_photons[0:bundle_size]) \\
@@ -485,17 +540,17 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 #pragma omp parallel for
             #endif
             for (long int j = 0; j < bundle_size; ++j) {{
-                long int p_idx = bundle_photons[j]; // The global index of the photon.
+                long int p_idx = bundle_photons[j]; // The global index of the evaluated photon.
                 if (all_photons.status[p_idx] == ACTIVE) {{
                     
                     // Preamble: Unpack structural arrays to highly descriptive local variables.
-                    const double x = all_photons.f[IDX_GLOBAL(1, p_idx, num_rays)]; // The current Cartesian x-coordinate of the photon.
-                    const double y = all_photons.f[IDX_GLOBAL(2, p_idx, num_rays)]; // The current Cartesian y-coordinate of the photon.
-                    const double z = all_photons.f[IDX_GLOBAL(3, p_idx, num_rays)]; // The current Cartesian z-coordinate of the photon.
-                    const double p_t_val = all_photons.f[IDX_GLOBAL(4, p_idx, num_rays)]; // The temporal momentum component $p_t$, representing relativistic energy.
-                    const double t_val = all_photons.f[IDX_GLOBAL(0, p_idx, num_rays)]; // The physical coordinate time $t$ of the photon.
+                    const double pos_x = all_photons.f[IDX_GLOBAL(1, p_idx, num_rays)]; // The current Cartesian x-coordinate of the photon.
+                    const double pos_y = all_photons.f[IDX_GLOBAL(2, p_idx, num_rays)]; // The current Cartesian y-coordinate of the photon.
+                    const double pos_z = all_photons.f[IDX_GLOBAL(3, p_idx, num_rays)]; // The current Cartesian z-coordinate of the photon.
+                    const double p_t_val = all_photons.f[IDX_GLOBAL(4, p_idx, num_rays)]; // Temporal momentum component $p_t$, dictating conserved energy metric.
+                    const double t_val = all_photons.f[IDX_GLOBAL(0, p_idx, num_rays)]; // The physical coordinate time $t$ of the trajectory.
                     
-                    const double r_sq = x*x + y*y + z*z; // The squared radial distance $r^2$ from the origin, used to evaluate the celestial sphere escape condition.
+                    const double r_sq = pos_x*pos_x + pos_y*pos_y + pos_z*pos_z; // Squared radial distance defining celestial escape bounds.
                     
                     if (fabs(p_t_val) > commondata->p_t_max) {{
                         all_photons.status[p_idx] = FAILURE_PT_TOO_BIG;
@@ -525,7 +580,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             // --- SYNC STATUS TO HOST ---
             #ifdef USE_GPU
                 for (long int j = 0; j < bundle_size; j++) {{
-                    long int p_idx = bundle_photons[j]; // The global index of the photon.
+                    long int p_idx = bundle_photons[j]; // Extracting mapping index.
                     omp_target_memcpy(&bundle_status_host[j], &all_photons.status[p_idx], sizeof(termination_type_t), 0, 0, omp_get_initial_device(), omp_get_default_device());
                     omp_target_memcpy(&bundle_time_host[j], &all_photons.f[IDX_GLOBAL(0, p_idx, num_rays)], sizeof(double), 0, 0, omp_get_initial_device(), omp_get_default_device());
                 }}
@@ -536,19 +591,19 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 }}
             #endif
 
-            long int active_photons_decrement = 0; // Local accumulator tracking the number of photons successfully exiting integration during this sub-batch.
-            long int active_in_bundle = 0; // Local accumulator tracking photons requiring further processing.
+            long int active_photons_decrement = 0; // Cumulative reduction counter.
+            long int active_in_bundle = 0; // Retracking photons looping in current slot.
             
             for (long int j = 0; j < bundle_size; j++) {{
-                long int p_idx = bundle_photons[j]; // The global index of the photon.
+                long int p_idx = bundle_photons[j]; // Map check ID.
                 if (bundle_status_host[j] == ACTIVE) {{
-                    int s_idx = slot_get_index(&tsm, bundle_time_host[j]); // The calculated temporal bin index dictating where the advanced photon is rescheduled.
+                    int s_idx = slot_get_index(&tsm, bundle_time_host[j]); // Calculated index logic binding coordinate time.
                     if (s_idx != -1) {{
                         slot_add_photon(&tsm, s_idx, p_idx);
                         active_in_bundle++;
                    }} else {{
                         #ifdef USE_GPU
-                            termination_type_t fail_stat = FAILURE_SLOT_MANAGER_ERROR; // Error code triggered if coordinate time exceeds the strict manager boundaries.
+                            termination_type_t fail_stat = FAILURE_SLOT_MANAGER_ERROR; // Explicit bounds break fault logic.
                             omp_target_memcpy(&all_photons.status[p_idx], &fail_stat, sizeof(termination_type_t), 0, 0, omp_get_default_device(), omp_get_initial_device());
                         #else
                             all_photons.status[p_idx] = FAILURE_SLOT_MANAGER_ERROR;
@@ -561,6 +616,11 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         }} 
     }} 
 
+    /*
+     * TARGET: HYBRID EXECUTION DIRECTIVE
+     * What: Finalization routing where raw components are evaluated into abstract representations.
+     * Why: Pushes blueprint derivations (final polar angles, intercepts) on device arrays right before concluding.
+     */
     #ifdef USE_GPU
         #pragma omp target teams distribute parallel for \\
                     map(to: all_photons, commondata[0:1]) \\
@@ -663,6 +723,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         omp_target_free(k_array_bundle, omp_get_default_device());
         omp_target_free(req_photon_ids, omp_get_default_device());
         omp_target_free(compacted_ids, omp_get_default_device());
+        omp_target_free(compacted_local_ids, omp_get_default_device()); // Prompt 2 Patch Application
         omp_target_free(needs_step_bundle, omp_get_default_device());
 
         omp_target_free(all_photons.f, omp_get_default_device()); 
@@ -683,7 +744,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         omp_target_free(all_photons.window_event_lambda, omp_get_default_device()); 
         omp_target_free(all_photons.window_event_f_intersect, omp_get_default_device());
     #else
-        free(compacted_ids); free(needs_step_bundle);
+        free(compacted_ids); free(compacted_local_ids); free(needs_step_bundle); // Prompt 2 Patch Application
         free(f_start_bundle); free(f_temp_bundle); free(f_out_bundle); free(f_err_bundle);
         free(metric_bundle); free(conn_bundle); free(k_array_bundle); free(req_photon_ids);
     #endif
@@ -704,10 +765,11 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     slot_manager_free(&tsm);
     """
     
-    # Register the generated C function using the standardized template
+    # 3. Register the function with the NRPy environment following strict formatting template
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
+        cfunc_type=cfunc_type, 
         name=name,
         params=params,
         body=body
