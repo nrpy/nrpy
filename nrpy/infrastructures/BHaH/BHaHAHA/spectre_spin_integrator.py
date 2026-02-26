@@ -1,6 +1,4 @@
-"""
-Register a C function to perform numerical integrations over the apparent horizon surface for spin and mass diagnostics.
-"""
+""" Register a C function to perform numerical integrations over the apparent horizon surface for spin and mass diagnostics. """
 
 from typing import Union
 
@@ -20,12 +18,10 @@ def register_CFunction_diagnostics_spectre_spin(
     enable_rfm_precompute: bool = False,
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register a C function that integrates SpECTRE-style spin integrands over the apparent-horizon 2-surface and stores RunSums in the diagnostics struct.
-    
-    """
+    """ Register a C function that integrates SpECTRE-style spin integrands over the apparent-horizon 2-surface and stores RunSums in the diagnostics struct. """
+
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{register_CFunction_SpECTRE_diagnostics_integration.__name__}", locals())
+        pcg.register_func_call(f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}", locals())
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -55,14 +51,14 @@ def register_CFunction_diagnostics_spectre_spin(
     # - x^i * Omega (for XOU)
     # - z_alpha * Omega (for ZOU)
     # - |Omega| (for Oabs, used in the near-zero policy)
-    
+
     # Note: The 'integrand' is the quantity 'f' in ∮ f dA.
     # The differential area element is dA = sqrt(q) * weights * dθ * dφ.
     # We will pass sqrt(q) to c_codegen as 'area_density' and handle the
     # weights and coordinate steps in the C code loop.
-    
+
     area_density = integrands_dict["area_density"]
-    
+
     # List of all symbolic quantities to be evaluated inside the loop
     integrand_c_vars = [
         "const REAL area_density",
@@ -75,7 +71,7 @@ def register_CFunction_diagnostics_spectre_spin(
         "const REAL ZOU0_integrand", "const REAL ZOU1_integrand", "const REAL ZOU2_integrand",
         "const REAL Oabs_integrand",
     ]
-  
+
     sympy_expressions = [
         area_density,
         integrands_dict["area_integrand"],  # This is just 1.
