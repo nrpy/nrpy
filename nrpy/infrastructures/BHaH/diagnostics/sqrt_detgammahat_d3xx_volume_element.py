@@ -31,7 +31,7 @@ from nrpy.helpers.expression_utils import (
 
 
 def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
-    CoordSystem: str,
+        CoordSystem: str,
 ) -> None:
     """
     Construct and register a C function that computes the local 3D volume element at a point.
@@ -74,7 +74,15 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     # fmt: on
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """
+    generalrfm_note = ""
+    if CoordSystem.startswith("GeneralRFM"):
+        generalrfm_note = """
+ *
+ * Note for GeneralRFM: this helper is intentionally inert (*dV = 0.0). GeneralRFM volume
+ * integration uses the DETGAMMAHATGF-backed path in diagnostics_volume_integration_helpers.h.
+"""
+
+    desc = f"""
  * @file sqrt_detgammahat_d3xx_volume_element.c
  * @brief Compute the local 3D volume element sqrt(detgammahat) * d3xx at a point.
  *
@@ -85,10 +93,7 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
  * The expression implemented is:
  *   dV = sqrt(detgammahat(xx0, xx1, xx2)) * abs(dxx0 * dxx1 * dxx2)
  * The absolute value ensures a positive volume element regardless of coordinate orientation.
- *
- * Note for GeneralRFM: this helper is intentionally inert (*dV = 0.0). GeneralRFM volume
- * integration uses the DETGAMMAHATGF-backed path in diagnostics_volume_integration_helpers.h.
- *
+{generalrfm_note}
  * @param[in]  params  Pointer to parameter struct (reference-metric data, grid spacings, and sizes).
  * @param[in]  xx0     Local coordinate 0 at which to evaluate the volume element.
  * @param[in]  xx1     Local coordinate 1 at which to evaluate the volume element.
@@ -99,7 +104,7 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
  *
  * Note: If a user-editable block is provided in the implementation, users may add custom logic,
  * such as scaling or additional diagnostics, prior to writing the result.
- """
+"""
     cfunc_type = "void"
     name = "sqrt_detgammahat_d3xx_volume_element"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict dV"
