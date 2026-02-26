@@ -127,6 +127,7 @@ def _generate_main_body(
     set_initial_data_after_auxevol_malloc: bool,
     boundary_conditions_desc: str,
     post_non_y_n_auxevol_mallocs: str,
+    post_params_struct_set_to_default: str,
     pre_diagnostics: str,
     pre_MoL_step_forward_in_time: str,
     post_MoL_step_forward_in_time: str,
@@ -143,6 +144,7 @@ def _generate_main_body(
     :param set_initial_data_after_auxevol_malloc: Flag to set initial data after auxevol malloc.
     :param boundary_conditions_desc: Description of the boundary conditions.
     :param post_non_y_n_auxevol_mallocs: String of post-malloc function calls.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default and before numerical_grids_and_timestep.
     :param pre_diagnostics: String of pre-diagnostics function calls.
     :param pre_MoL_step_forward_in_time: String of pre-MoL step function calls.
     :param post_MoL_step_forward_in_time: String of post-MoL step function calls.
@@ -189,6 +191,14 @@ cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
 // Step 1.d: Initialize each CodeParameter in {compute_griddata}.params to its default value.
 params_struct_set_to_default(&commondata, {compute_griddata});
+"""
+    if post_params_struct_set_to_default:
+        step1_c_code += f"""
+
+// Step 1.d.1: Functions called after params_struct_set_to_default.
+{post_params_struct_set_to_default}
+"""
+    step1_c_code += f"""
 
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
 //           bcstruct, rfm_precompute, timestep, and others.
@@ -317,6 +327,7 @@ def register_CFunction_main_c(
     boundary_conditions_desc: str = "",
     prefunc: str = "",
     post_non_y_n_auxevol_mallocs: str = "",
+    post_params_struct_set_to_default: str = "",
     pre_diagnostics: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
@@ -330,6 +341,7 @@ def register_CFunction_main_c(
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, EXCEPT when debugging, default is an empty string.
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default and before numerical_grids_and_timestep, default is an empty string.
     :param pre_diagnostics: Function calls prior to diagnostics; e.g., regridding. Default is an empty string.
     :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
@@ -381,6 +393,7 @@ def register_CFunction_main_c(
         set_initial_data_after_auxevol_malloc,
         boundary_conditions_desc,
         post_non_y_n_auxevol_mallocs,
+        post_params_struct_set_to_default,
         pre_diagnostics,
         pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time,

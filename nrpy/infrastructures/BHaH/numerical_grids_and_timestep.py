@@ -259,9 +259,38 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     body = "MAYBE_UNUSED REAL ds0=1e38, ds1=1e38, ds2=1e38;\n"
     ds_expr_list: List[sp.Expr] = []
     ds_str_list: List[str] = []
-    for dirn in rfm.radial_like_dirns:
-        ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
-        ds_str_list += [f"ds{dirn}"]
+    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+
+        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
+        # For fisheye GeneralRFM (generally non-orthogonal), this function still
+        # follows its contract: examine the three coordinate directions at a point.
+        for dirn in rfm.radial_like_dirns:
+            ds_expr_list += [
+                sp.sqrt(sp.Abs(fisheye.ghatDD[dirn][dirn])) * sp.Abs(dxx[dirn])
+            ]
+            ds_str_list += [f"ds{dirn}"]
+    elif CoordSystem.startswith("GeneralRFM"):
+        body += (
+            f'fprintf(stderr, "ERROR in {name}__rfm__{CoordSystem}: ds_min for non-fisheye GeneralRFM is not yet supported.\\n");\n'
+            "exit(1);\n"
+        )
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=body,
+        )
+        return
+    else:
+        for dirn in rfm.radial_like_dirns:
+            ds_expr_list += [sp.Abs(rfm.scalefactor_orthog[dirn] * dxx[dirn])]
+            ds_str_list += [f"ds{dirn}"]
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(ds_expr_list)
     params_definitions = (
         generate_definition_header(
@@ -333,11 +362,40 @@ def register_CFunction_ds_min_single_pt(
     rfm = refmetric.reference_metric[CoordSystem]
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    expr_list = [
-        sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
-        sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
-        sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
-    ]
+    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+
+        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
+        # For fisheye GeneralRFM (generally non-orthogonal), this function still
+        # follows its contract: examine the three coordinate directions at a point.
+        expr_list = [
+            sp.sqrt(sp.Abs(fisheye.ghatDD[0][0])) * sp.Abs(dxx0),
+            sp.sqrt(sp.Abs(fisheye.ghatDD[1][1])) * sp.Abs(dxx1),
+            sp.sqrt(sp.Abs(fisheye.ghatDD[2][2])) * sp.Abs(dxx2),
+        ]
+    elif CoordSystem.startswith("GeneralRFM"):
+        body = (
+            f'fprintf(stderr, "ERROR in {name}__rfm__{CoordSystem}: ds_min for non-fisheye GeneralRFM is not yet supported.\\n");\n'
+            "exit(1);\n"
+        )
+        cfc.register_CFunction(
+            includes=includes,
+            desc=desc,
+            cfunc_type=cfunc_type,
+            CoordSystem_for_wrapper_func=CoordSystem,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=body,
+        )
+        return
+    else:
+        expr_list = [
+            sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
+            sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
+            sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
+        ]
     body = ccg.c_codegen(
         expr_list,
         ["const REAL ds0", "const REAL ds1", "const REAL ds2"],

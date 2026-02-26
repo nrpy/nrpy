@@ -41,6 +41,9 @@ def register_CFunction_Ricci_eval(
     :param host_only_version: (default: False) Whether to emit a host-only version, for
                               performing (host-only) diagnostics with CUDA enabled.
 
+    :raises ValueError: If CUDA kernel generation is requested for a GeneralRFM coordinate
+                        system, which is unsupported.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -52,6 +55,10 @@ def register_CFunction_Ricci_eval(
         # Must reset parallelization parameter, as simple_loop reads the parallelization NRPyParameter.
         par.set_parval_from_str("parallelization", "openmp")
     is_cuda = orig_parallelization == "cuda" and not host_only_version
+    if is_cuda and CoordSystem.startswith("GeneralRFM"):
+        raise ValueError(
+            f"Unsupported configuration: Ricci_eval CUDA kernel generation is not supported for {CoordSystem}."
+        )
 
     Bq = BSSN_quantities[CoordSystem + "_rfm_precompute"]
 
@@ -97,7 +104,9 @@ def register_CFunction_Ricci_eval(
             enable_simd=enable_intrinsics,
             enable_fd_functions=enable_fd_functions,
             rational_const_alias=("static constexpr" if is_cuda else "static const"),
-        ).replace("SIMD", "CUDA" if is_cuda else "SIMD"),
+        )
+        .replace("auxevol_gfs", "out_gfs")
+        .replace("SIMD", "CUDA" if is_cuda else "SIMD"),
         loop_region="interior",
         enable_intrinsics=enable_intrinsics,
         CoordSystem=CoordSystem,
