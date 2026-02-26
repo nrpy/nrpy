@@ -23,6 +23,9 @@ from nrpy.helpers.expression_utils import (
     get_params_commondata_symbols_from_expr_list,
 )
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.general_relativity.psi4.param_symbol_utils import (
+    fast_generalrfm_fisheye_param_symbols_from_c_code,
+)
 
 
 def register_CFunction_psi4(
@@ -65,6 +68,7 @@ def register_CFunction_psi4(
         "x1": "const REAL *restrict",
         "x2": "const REAL *restrict",
         "in_gfs": "const REAL *restrict",
+        "auxevol_gfs": "const REAL *restrict",
         "diagnostic_gfs": "REAL *restrict",
     }
 
@@ -73,7 +77,7 @@ def register_CFunction_psi4(
         **arg_dict_cuda,
     }
 
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"
 
     psi4_class = psi4.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
     body = r"""if(! (params->Cart_originx == 0 && params->Cart_originy == 0 && params->Cart_originz == 0) ) {
@@ -87,10 +91,31 @@ def register_CFunction_psi4(
 
     expr_list: List[sp.Expr] = [psi4_class.psi4_re, psi4_class.psi4_im]
 
-    # Find symbols stored in params
-    param_symbols, _ = get_params_commondata_symbols_from_expr_list(
-        expr_list, exclude=[f"xx{j}" for j in range(3)]
+    expr_codegen = ccg.c_codegen(
+        expr_list,
+        [
+            gri.BHaHGridFunction.access_gf(
+                "diag_psi4_re",
+                gf_array_name="diagnostic_gfs",
+            ),
+            gri.BHaHGridFunction.access_gf(
+                "diag_psi4_im",
+                gf_array_name="diagnostic_gfs",
+            ),
+        ],
+        enable_fd_codegen=True,
     )
+
+    # Fast path for GeneralRFM fisheye: infer parameter usage from generated C,
+    # avoiding expensive SymPy free-symbol traversal on very large expressions.
+    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        param_symbols = fast_generalrfm_fisheye_param_symbols_from_c_code(
+            CoordSystem, expr_codegen
+        )
+    else:
+        param_symbols, _ = get_params_commondata_symbols_from_expr_list(
+            expr_list, exclude=[f"xx{j}" for j in range(3)]
+        )
     loop_params = parallel_utils.get_loop_parameters("openmp")
 
     params_definitions = generate_definition_header(
@@ -148,21 +173,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
 {psi4_class.metric_deriv_unpack_arrays}
 """
     kernel_body += BHaH.simple_loop.simple_loop(
-        loop_body=loop_prefix
-        + ccg.c_codegen(
-            expr_list,
-            [
-                gri.BHaHGridFunction.access_gf(
-                    "diag_psi4_re",
-                    gf_array_name="diagnostic_gfs",
-                ),
-                gri.BHaHGridFunction.access_gf(
-                    "diag_psi4_im",
-                    gf_array_name="diagnostic_gfs",
-                ),
-            ],
-            enable_fd_codegen=True,
-        ),
+        loop_body=loop_prefix + expr_codegen,
         loop_region="interior",
         enable_intrinsics=False,
         CoordSystem=CoordSystem,
