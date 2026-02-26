@@ -1041,7 +1041,8 @@ def register_CFunction_bhahaha_find_horizons(
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
 
-    >>> env = register_CFunction_bhahaha_find_horizons()
+    >>> env = register_CFunction_bhahaha_find_horizons("GeneralRFM_fisheyeN1", max_horizons=3)  # doctest: +ELLIPSIS
+    Setting up reference_metric[GeneralRFM_fisheyeN1]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
