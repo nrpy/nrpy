@@ -587,11 +587,17 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     rfm = refmetric.reference_metric[CoordSystem]
     rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
     rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
+    ghatDD = rfm.ghatDD
+    if CoordSystem.startswith("GeneralRFM"):
+        provider = getattr(rfm, "general_rfm_provider", None)
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        ghatDD = provider.ghatDD
     rfm_gammabarDD = ixp.zerorank2()
     rfm_AbarDD = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
-            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
+            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + ghatDD[i][j]
             rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
     Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
         CoordSystem, rfm_gammabarDD
@@ -1035,7 +1041,8 @@ def register_CFunction_bhahaha_find_horizons(
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
 
-    >>> env = register_CFunction_bhahaha_find_horizons()
+    >>> env = register_CFunction_bhahaha_find_horizons("GeneralRFM_fisheyeN1", max_horizons=3)  # doctest: +ELLIPSIS
+    Setting up reference_metric[GeneralRFM_fisheyeN1]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

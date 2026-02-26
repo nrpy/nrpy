@@ -78,7 +78,6 @@ Nxx_dict = {
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
-initial_sep = abs(default_BH1_z_posn - default_BH2_z_posn)
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions is not None:

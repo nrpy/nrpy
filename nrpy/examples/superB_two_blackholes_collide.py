@@ -33,10 +33,15 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_two_blackholes_collide"
-CoordSystem = "Spherical"
+CoordSystem = "GeneralRFM_fisheyeN1"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
+num_fisheye_transitions = (
+    int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+    if CoordSystem.startswith("GeneralRFM_fisheyeN")
+    else None
+)
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -47,21 +52,38 @@ Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
+    "GeneralRFM_fisheyeN1": [128, 128, 128],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
-enable_rfm_precompute = True
+# Fisheye parameters
+fisheye_param_defaults: dict[str, float] = {}
+if num_fisheye_transitions is not None:
+    for i in range(num_fisheye_transitions + 1):
+        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
+    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
+if num_fisheye_transitions == 1:
+    fisheye_param_defaults.update(
+        {
+            "fisheye_a0": 1.0,
+            "fisheye_a1": 2.0,
+            "fisheye_phys_L": grid_physical_size,
+            "fisheye_phys_r_trans1": 8.0,
+            "fisheye_phys_w_trans1": 2.0,
+        }
+    )
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
+enable_rfm_precompute = True
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
-enable_BHaHAHA = False
+enable_BHaHAHA = True
 outer_bcs_type = "radiation"
 boundary_conditions_desc = "outgoing radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
@@ -75,10 +97,10 @@ if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare0", 18)
     par.adjust_CodeParam_default("Nchare1", 2)
     par.adjust_CodeParam_default("Nchare2", 1)
-if "Cartesian" in CoordSystem:
-    par.adjust_CodeParam_default("Nchare0", 16)
-    par.adjust_CodeParam_default("Nchare1", 16)
-    par.adjust_CodeParam_default("Nchare2", 16)
+if ("Cartesian" in CoordSystem) or CoordSystem.startswith("GeneralRFM"):
+    par.adjust_CodeParam_default("Nchare0", 4)
+    par.adjust_CodeParam_default("Nchare1", 4)
+    par.adjust_CodeParam_default("Nchare2", 4)
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
@@ -233,6 +255,11 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 
+if num_fisheye_transitions is not None:
+    BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+        num_transitions=num_fisheye_transitions
+    )
+
 superB.chare_communication_maps.chare_comm_register_C_functions(
     set_of_CoordSystems={CoordSystem}
 )
@@ -288,6 +315,9 @@ par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
 par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
 par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+if num_fisheye_transitions is not None:
+    for parname, value in fisheye_param_defaults.items():
+        par.adjust_CodeParam_default(parname, value)
 if enable_BHaHAHA:
     # Set BHaHAHA defaults to reasonable values.
     par.adjust_CodeParam_default(
@@ -334,12 +364,22 @@ superB.main_chare.output_commondata_object_h_and_main_h_cpp_ci(
     project_dir=project_dir,
     enable_BHaHAHA=enable_BHaHAHA,
 )
+post_params_struct_set_to_default = ""
+if num_fisheye_transitions is not None:
+    post_params_struct_set_to_default = BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata",
+    ) + BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
+        num_transitions=num_fisheye_transitions,
+        compute_griddata="griddata_chare",
+    )
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     project_dir=project_dir,
     MoL_method=MoL_method,
     outer_bcs_type=outer_bcs_type,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_BHaHAHA=enable_BHaHAHA,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute,

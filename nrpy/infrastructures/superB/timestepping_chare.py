@@ -773,6 +773,7 @@ def output_timestepping_cpp(
     enable_psi4: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
+    post_params_struct_set_to_default: str = "",
 ) -> None:
     """
     Generate timestepping.cpp.
@@ -789,6 +790,7 @@ def output_timestepping_cpp(
     :param enable_psi4: Whether or not to enable psi4 diagnostics.
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default, default is an empty string.
     """
     initial_data_desc += " "
 
@@ -854,6 +856,13 @@ Timestepping::Timestepping(CommondataObject &&inData) {
   // Step 1.d: Set each CodeParameter in griddata.params to default.
   params_struct_set_to_default(&commondata, griddata);
   params_struct_set_to_default(&commondata, griddata_chare);
+"""
+    if post_params_struct_set_to_default:
+        file_output_str += f"""
+  // Step 1.d.1: Functions called after params_struct_set_to_default.
+  {post_params_struct_set_to_default}
+"""
+    file_output_str += r"""
 
   // Step 1.e: Set up numerical grids: xx[3], masks, Nxx, dxx, invdxx, bcstruct, rfm_precompute, timestep, etc.
   {
@@ -2111,6 +2120,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
     nrpyelliptic_project: bool = False,
     enable_charm_checkpointing: bool = False,
     enable_BHaHAHA: bool = False,
+    post_params_struct_set_to_default: str = "",
 ) -> None:
     """
     Output timestepping h, cpp, and ci files and register C functions.
@@ -2127,6 +2137,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
                     diagnostics and NRPyElliptic-specific behavior).
     :param enable_charm_checkpointing: Enable checkpointing using Charm++.
     :param enable_BHaHAHA: If True, add creation of horizon_finder and interpolator3d chares and communication with them.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default, default is an empty string.
     """
     # For NRPy elliptic: register parameter wavespeed at outer boundary
     if nrpyelliptic_project:
@@ -2156,6 +2167,7 @@ def output_timestepping_h_cpp_ci_register_CFunctions(
         enable_psi4=enable_psi4,
         enable_charm_checkpointing=enable_charm_checkpointing,
         enable_BHaHAHA=enable_BHaHAHA,
+        post_params_struct_set_to_default=post_params_struct_set_to_default,
     )
 
     output_timestepping_ci(
