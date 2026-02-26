@@ -59,23 +59,31 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     postamble = f"\n  all_photons_f[IDX_GLOBAL(4, photon_idx, num_rays)] = *p0_out;"
 
     # Project Singularity-Axiom: Portable Body Wrapper
-    portable_body = f"""
-        #ifdef USE_GPU
-        #pragma omp declare target
-        #endif
+    body = f"""
         {preamble}
         {body_math}
         {postamble}
-        #ifdef USE_GPU
-        #pragma omp end declare target
-        #endif
         """
-
+    prefunc = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """
+    
+    postfunc = """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+    
+    # Step 6: Register the C function
     cfc.register_CFunction(
+        prefunc=prefunc,      
         includes=includes,
         desc=desc,
         name=name,
         params=params,
+        body=body,
         include_CodeParameters_h=False,
-        body=portable_body,
+        postfunc=postfunc  
     )

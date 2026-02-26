@@ -106,4 +106,26 @@ def handle_window_plane_intersection() -> None:
     return false;
     """
 
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, cfunc_type=cfunc_type, params=params, body=body)
+    # Add OpenMP pragmas outside the function scope to ensure dual-architecture compilation
+    prefunc = """
+#ifdef USE_GPU
+#pragma omp declare target
+#endif
+"""
+    
+    postfunc = """
+#ifdef USE_GPU
+#pragma omp end declare target
+#endif
+"""
+
+    cfc.register_CFunction(
+        includes=includes, 
+        desc=desc, 
+        name=name, 
+        cfunc_type=cfunc_type, 
+        params=params, 
+        body=body,
+        prefunc=prefunc,
+        postfunc=postfunc
+    )

@@ -51,6 +51,19 @@ def ode_wrapper(spacetime_name: str) -> None:
     calculate_ode_rhs(f_in, metric_g4DD, conn_GammaUDD, k_array, batch_size, batch_id);
     """
 
+# Add OpenMP pragmas outside the function scope to ensure dual-architecture compilation
+    prefunc = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """
+    
+    postfunc = """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -58,6 +71,8 @@ def ode_wrapper(spacetime_name: str) -> None:
         name=name,
         params=params,
         body=body,
+        prefunc=prefunc,
+        postfunc=postfunc
     )
 
 if __name__ == "__main__":

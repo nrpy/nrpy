@@ -58,52 +58,57 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         exit(1); 
     }}
 
-    for (long int start_idx = 0; start_idx < num_rays; start_idx += BUNDLE_CAPACITY) {{
-        long int current_chunk_size = (num_rays - start_idx < BUNDLE_CAPACITY) ? (num_rays - start_idx) : BUNDLE_CAPACITY;
+    #ifdef USE_GPU
+    #pragma omp target data map(to: commondata[0:1], camera_pos[0:3], window_center[0:3], n_x[0:3], n_y[0:3], n_z[0:3])
+    #endif
+    {{
+        for (long int start_idx = 0; start_idx < num_rays; start_idx += BUNDLE_CAPACITY) {{
+            long int current_chunk_size = (num_rays - start_idx < BUNDLE_CAPACITY) ? (num_rays - start_idx) : BUNDLE_CAPACITY;
 
-        #ifdef USE_GPU
-            #pragma omp target teams distribute parallel for \
-                        map(to: all_photons, commondata[0:1]) \
-                        map(to: camera_pos[0:3], window_center[0:3], n_x[0:3], n_y[0:3], n_z[0:3]) \
-                        has_device_addr(all_photons.f) is_device_ptr(req_photon_ids, req_pos)
-        #else
-            #pragma omp parallel for
-        #endif
-        for (long int c = 0; c < current_chunk_size; c++) {{
-            long int i = start_idx + c;
-            const int row = i / commondata->scan_density;
-            const int col = i % commondata->scan_density;
-            const double x_pix = -commondata->window_width/2.0 + (col + 0.5) * (commondata->window_width / commondata->scan_density);
-            const double y_pix = -commondata->window_height/2.0 + (row + 0.5) * (commondata->window_height / commondata->scan_density);
-            const double target_pos[3] = {{
-                window_center[0] + x_pix*n_x[0] + y_pix*n_y[0],
-                window_center[1] + x_pix*n_x[1] + y_pix*n_y[1],
-                window_center[2] + x_pix*n_x[2] + y_pix*n_y[2]
-            }};
-            all_photons->f[IDX_GLOBAL(0, i, num_rays)] = commondata->t_start;       
-            all_photons->f[IDX_GLOBAL(1, i, num_rays)] = camera_pos[0]; 
-            all_photons->f[IDX_GLOBAL(2, i, num_rays)] = camera_pos[1]; 
-            all_photons->f[IDX_GLOBAL(3, i, num_rays)] = camera_pos[2]; 
-            const double V_x = target_pos[0] - camera_pos[0], V_y = target_pos[1] - camera_pos[1], V_z = target_pos[2] - camera_pos[2];
-            const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y+ V_z*V_z);
-            all_photons->f[IDX_GLOBAL(5, i, num_rays)] = V_x * inv_mag_V; 
-            all_photons->f[IDX_GLOBAL(6, i, num_rays)] = V_y * inv_mag_V; 
-            all_photons->f[IDX_GLOBAL(7, i, num_rays)] = V_z * inv_mag_V; 
-            all_photons->f[IDX_GLOBAL(8, i, num_rays)] = 0.0;
-            req_photon_ids[c] = (int)i;
-            for(int m=0; m<4; m++) req_pos[IDX_LOCAL(m, c, BUNDLE_CAPACITY)] = all_photons->f[IDX_GLOBAL(m, i, num_rays)];
-        }}
+            #ifdef USE_GPU
+                // No need to map vectors here anymore, they are already on the device from the target data block
+                #pragma omp target teams distribute parallel for \
+                            map(to: all_photons) \
+                            has_device_addr(all_photons.f) is_device_ptr(req_photon_ids, req_pos)
+            #else
+                #pragma omp parallel for
+            #endif
+            for (long int c = 0; c < current_chunk_size; c++) {{
+                long int i = start_idx + c;
+                const int row = i / commondata->scan_density;
+                const int col = i % commondata->scan_density;
+                const double x_pix = -commondata->window_width/2.0 + (col + 0.5) * (commondata->window_width / commondata->scan_density);
+                const double y_pix = -commondata->window_height/2.0 + (row + 0.5) * (commondata->window_height / commondata->scan_density);
+                const double target_pos[3] = {{
+                    window_center[0] + x_pix*n_x[0] + y_pix*n_y[0],
+                    window_center[1] + x_pix*n_x[1] + y_pix*n_y[1],
+                    window_center[2] + x_pix*n_x[2] + y_pix*n_y[2]
+                }};
+                all_photons->f[IDX_GLOBAL(0, i, num_rays)] = commondata->t_start;       
+                all_photons->f[IDX_GLOBAL(1, i, num_rays)] = camera_pos[0]; 
+                all_photons->f[IDX_GLOBAL(2, i, num_rays)] = camera_pos[1]; 
+                all_photons->f[IDX_GLOBAL(3, i, num_rays)] = camera_pos[2]; 
+                const double V_x = target_pos[0] - camera_pos[0], V_y = target_pos[1] - camera_pos[1], V_z = target_pos[2] - camera_pos[2];
+                const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y+ V_z*V_z);
+                all_photons->f[IDX_GLOBAL(5, i, num_rays)] = V_x * inv_mag_V; 
+                all_photons->f[IDX_GLOBAL(6, i, num_rays)] = V_y * inv_mag_V; 
+                all_photons->f[IDX_GLOBAL(7, i, num_rays)] = V_z * inv_mag_V; 
+                all_photons->f[IDX_GLOBAL(8, i, num_rays)] = 0.0;
+                req_photon_ids[c] = (int)i;
+                for(int m=0; m<4; m++) req_pos[IDX_LOCAL(m, c, BUNDLE_CAPACITY)] = all_photons->f[IDX_GLOBAL(m, i, num_rays)];
+            }}
 
-        placeholder_interpolation_engine_{spacetime_name}(commondata, (int)current_chunk_size, req_photon_ids, req_pos, metric_g4DD, NULL);
+            placeholder_interpolation_engine_{spacetime_name}(commondata, (int)current_chunk_size, req_photon_ids, req_pos, metric_g4DD, NULL);
 
-        #ifdef USE_GPU
-            #pragma omp target teams distribute parallel for map(to: all_photons) has_device_addr(all_photons.f) is_device_ptr(metric_g4DD)
-        #else
-            #pragma omp parallel for
-        #endif
-        for (long int c = 0; c < current_chunk_size; c++) {{
-            long int i = start_idx + c;
-            p0_reverse(metric_g4DD, all_photons->f, num_rays, BUNDLE_CAPACITY, (int)i, (int)c, &all_photons->f[IDX_GLOBAL(4, i, num_rays)]);
+            #ifdef USE_GPU
+                #pragma omp target teams distribute parallel for map(to: all_photons) has_device_addr(all_photons.f) is_device_ptr(metric_g4DD)
+            #else
+                #pragma omp parallel for
+            #endif
+            for (long int c = 0; c < current_chunk_size; c++) {{
+                long int i = start_idx + c;
+                p0_reverse(metric_g4DD, all_photons->f, num_rays, BUNDLE_CAPACITY, (int)i, (int)c, &all_photons->f[IDX_GLOBAL(4, i, num_rays)]);
+            }}
         }}
     }}
 

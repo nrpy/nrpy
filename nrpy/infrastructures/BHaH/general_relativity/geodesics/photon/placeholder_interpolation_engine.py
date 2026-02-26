@@ -28,19 +28,24 @@ def placeholder_interpolation_engine(spacetime_name: str, PARTICLE: str) -> None
     body = f"""
     (void)req_photon_ids;
     
+    // OPTIMIZATION: Dereference the pointer to pass the struct by value.
+    // This bypasses the OpenMP mapping table lookups and passes the data 
+    // natively into the GPU's fast constant memory.
+    commondata_struct commondata_val = *commondata;
+    
     #ifdef USE_GPU
         #pragma omp target teams distribute parallel for \
-                    map(to: commondata[0:1]) \
+                    firstprivate(commondata_val) \
                     is_device_ptr(req_photon_ids, req_pos, metric_g4DD, conn_GammaUDD)
     #else
         #pragma omp parallel for
     #endif
     for (int batch_id = 0; batch_id < num_photons; ++batch_id) {{
     
-        {metric_worker_func}(commondata, req_pos, metric_g4DD, BUNDLE_CAPACITY, batch_id);
+        {metric_worker_func}(&commondata_val, req_pos, metric_g4DD, BUNDLE_CAPACITY, batch_id);
 
         if (conn_GammaUDD != NULL) {{
-            {conn_worker_func}(commondata, req_pos, conn_GammaUDD, BUNDLE_CAPACITY, batch_id);
+            {conn_worker_func}(&commondata_val, req_pos, conn_GammaUDD, BUNDLE_CAPACITY, batch_id);
         }}
     }}
     """

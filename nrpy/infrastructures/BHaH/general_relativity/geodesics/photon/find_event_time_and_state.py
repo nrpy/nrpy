@@ -90,15 +90,25 @@ def find_event_time_and_state() -> None:
     #undef PLANE_EVAL
     """
 
-    # Project Singularity-Axiom: Portable Body Wrapper
-    portable_body = """
+    prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
-    """ + body + """
+    """
+    
+    postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=portable_body)
+    
+    # Step 6: Register the C function
+    cfc.register_CFunction(
+        prefunc=prefunc,      
+        includes=includes,
+        desc=desc,
+        name=name,
+        params=params,
+        body=body,
+        postfunc=postfunc  
+    )

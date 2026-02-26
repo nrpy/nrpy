@@ -29,14 +29,26 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         }
     }
     """
-    # Ensure the final state packing is device-accessible
-    portable_body = f"""
-        #ifdef USE_GPU
-        #pragma omp declare target
-        #endif
-        {body}
-        #ifdef USE_GPU
-        #pragma omp end declare target
-        #endif
-        """
-    cfc.register_CFunction(includes=includes, desc=desc, cfunc_type=cfunc_type, name=name, params=params, body=portable_body)
+    prefunc = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """
+    
+    postfunc = """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+    
+    # Step 6: Register the C function
+    cfc.register_CFunction(
+        prefunc=prefunc,      
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        body=body,
+        postfunc=postfunc  
+    )

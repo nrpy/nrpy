@@ -56,7 +56,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import rkf45_
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import time_slot_manager_helpers
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import placeholder_interpolation_engine
 
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import batch_integrator_numerical
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import batch_integrator_numerical_Copy
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import main
 
 # ##############################################################################
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     rkf45_update_and_control_helper.rkf45_update_and_control_helper()
     time_slot_manager_helpers.time_slot_manager_helpers()
     placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME, PARTICLE)
-    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
+    batch_integrator_numerical_Copy.batch_integrator_numerical(SPACETIME)
     main.main(SPACETIME)
 
     # ##########################################################################
@@ -163,16 +163,16 @@ if __name__ == "__main__":
 
     # RKF45 Update and Control Helper
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 5e-9
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 5e-9
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-13
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-13
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10
     par.glb_code_params_dict["rkf45_safety_factor"].defaultvalue = 0.9
 
     # Set Initial Conditions Cartesian
-    par.glb_code_params_dict["scan_density"].defaultvalue = 700
-    par.glb_code_params_dict["t_start"].defaultvalue = 500.0
+    par.glb_code_params_dict["scan_density"].defaultvalue = 500
+    par.glb_code_params_dict["t_start"].defaultvalue = 300.0
 
     # Step 6: Generate C Code for Parameters
     print(" -> Generating parameter handling code...")

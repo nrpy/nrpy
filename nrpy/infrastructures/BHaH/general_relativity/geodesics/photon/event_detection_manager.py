@@ -77,14 +77,25 @@ def event_detection_manager() -> None:
     #undef PLANE_VAL
     """
 
-    portable_body = f"""
+    prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
-    {body}
+    """
+    
+    postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, params=params, body=portable_body)
+    
+    # Step 6: Register the C function
+    cfc.register_CFunction(
+        prefunc=prefunc,      
+        includes=includes,
+        desc=desc,
+        name=name,
+        params=params,
+        body=body,
+        postfunc=postfunc  
+    )

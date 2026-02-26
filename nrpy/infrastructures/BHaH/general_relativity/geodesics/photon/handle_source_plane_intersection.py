@@ -35,10 +35,6 @@ def handle_source_plane_intersection() -> None:
 
 
     body = r"""
-    #ifndef IDX_GLOBAL
-    #define IDX_GLOBAL(component, ray_id, num_rays) ((component) * (num_rays) + (ray_id))
-    #endif
-
     const double intersection_pos[3] = {
         all_photons->source_event_f_intersect[IDX_GLOBAL(1, photon_idx, num_rays)], 
         all_photons->source_event_f_intersect[IDX_GLOBAL(2, photon_idx, num_rays)], 
@@ -100,4 +96,25 @@ def handle_source_plane_intersection() -> None:
     return false;
     """
 
-    cfc.register_CFunction(includes=includes, desc=desc, name=name, cfunc_type=cfunc_type, params=params, body=body)
+    prefunc = """
+    #ifdef USE_GPU
+    #pragma omp declare target
+    #endif
+    """
+        
+    postfunc = """
+    #ifdef USE_GPU
+    #pragma omp end declare target
+    #endif
+    """
+
+    cfc.register_CFunction(
+        includes=includes, 
+        desc=desc, 
+        name=name, 
+        cfunc_type=cfunc_type, 
+        params=params, 
+        body=body,
+        prefunc=prefunc,  
+        postfunc=postfunc  
+    )

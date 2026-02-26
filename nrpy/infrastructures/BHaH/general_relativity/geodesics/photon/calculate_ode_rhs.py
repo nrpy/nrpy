@@ -15,7 +15,7 @@ def calculate_ode_rhs(
     desc = """@brief Portable GPU-ready derivatives for the geodesic ODE system."""
     name = "calculate_ode_rhs"
 
-    c_params_str = """
+    params = """
                   const double *restrict f_temp,
                   const double *restrict metric_g4DD,
                   const double *restrict conn_GammaUDD,
@@ -80,23 +80,26 @@ def calculate_ode_rhs(
         verbose=False,
     )
 
-    # Project Singularity-Axiom: Portable Body Wrapper
-    portable_body = """
+    prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
-    """ + body + """
+    """
+    
+    postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-
-    # --- Step 5: Register ---
+    
+    # Step 6: Register the C function
     cfc.register_CFunction(
+        prefunc=prefunc,      
         includes=includes,
         desc=desc,
         name=name,
-        params=c_params_str,
+        params=params,
+        body=body,
         include_CodeParameters_h=False,
-        body=portable_body,
+        postfunc=postfunc  
     )
