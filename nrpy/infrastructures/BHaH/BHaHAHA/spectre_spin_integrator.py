@@ -15,7 +15,7 @@ from nrpy.equations.general_relativity.bhahaha.SpECTRESpinEstimate import (
 )
 
 
-def register_CFunction_SpECTRE_diagnostics_integration(
+def register_CFunction_diagnostics_spectre_spin(
     CoordSystem: str = "Spherical",
     enable_rfm_precompute: bool = False,
     enable_fd_functions: bool = False,
