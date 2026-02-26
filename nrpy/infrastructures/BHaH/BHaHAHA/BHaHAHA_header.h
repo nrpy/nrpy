@@ -219,9 +219,9 @@ typedef struct {
   long Theta_eval_points_counter;
   //==========================
   // Dimensionless spin vector chi, based on a spin function Omega calculated based on a rotational one-form according to the same method as SpECTRE
-  REAL spin_chi_x
-  REAL spin_chi_y
-  REAL spin_chi_z
+  REAL spin_chi_x;
+  REAL spin_chi_y;
+  REAL spin_chi_z;
   
 } bhahaha_diagnostics_struct;
 
