@@ -163,15 +163,15 @@ if __name__ == "__main__":
 
     # RKF45 Update and Control Helper
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-12
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-12
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-9
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-9
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10
     par.glb_code_params_dict["rkf45_safety_factor"].defaultvalue = 0.9
 
     # Set Initial Conditions Cartesian
-    par.glb_code_params_dict["scan_density"].defaultvalue = 500
+    par.glb_code_params_dict["scan_density"].defaultvalue = 700
     par.glb_code_params_dict["t_start"].defaultvalue = 500.0
 
     # Step 6: Generate C Code for Parameters
@@ -186,11 +186,18 @@ if __name__ == "__main__":
         project_name=project_name, cmdline_inputs=cmdline_inputs_list
     )
 
-    # ##########################################################################
-    # Step 7: Assemble Final C Project (Windows Compatible)
-    # ##########################################################################
+    ##########################################################################
+    # Step 7: Assemble Final C Project (Linux Optimized)
+    # ########################################################################
     print(" -> Assembling C project on disk...")
-    BHaH_defines_h.output_BHaH_defines_h(project_dir=project_dir, enable_rfm_precompute=False)
+
+    # Output BHaH_defines.h using the standard infrastructure
+    BHaH_defines_h.output_BHaH_defines_h(
+        project_dir=project_dir, 
+        enable_rfm_precompute=False
+    )
+
+    # Copy SIMD headers required for high-performance physics
     gh.copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
@@ -198,63 +205,42 @@ if __name__ == "__main__":
         subdirectory="intrinsics",
     )
     
-    print(" -> Generating Makefile...")
+    print(" -> Generating Makefile and Function Prototypes...")
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -march=native -ffast-math -Wno-stringop-truncation", "-Wno-unknown-pragmas"],
-        addl_libraries=["-lm -fopenmp"], 
+        addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -march=native -Wno-stringop-truncation -Wno-unknown-pragmas"],
+        addl_libraries=["-lm", "-fopenmp"], 
     )
-
-    # Patch Makefile for Windows/Git Bash
-    # (Fixes "pipe" errors or permission denied on temp files during compilation)
-    print(" -> Patching Makefile for Windows compatibility...")
-    local_tmp_path = "tmp"
-    os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
-
-    makefile_path = os.path.join(project_dir, "Makefile")
-
-    # Read the generated Makefile
-    with open(makefile_path, "r") as f:
-        content = f.read()
-
-    # Prepend the directory exports
-    with open(makefile_path, "w") as f:
-        f.write(f"export TMPDIR := $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TMP := $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TEMP := $(CURDIR)/{local_tmp_path}\n")
-        f.write("\n")
-        f.write(content)
 
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
     print("\n--- PHASE 1: Compiling C Code ---")
     try:
+        # Standard Linux multi-threaded build
         subprocess.run(["make", "-j"], cwd=project_dir, check=True)
         print("Compilation successful.")
     except subprocess.CalledProcessError:
-        print("Compilation failed. Exiting pipeline.")
+        print("Compilation failed. Ensure 'gcc' and 'make' are installed. Exiting.")
         sys.exit(1)
 
     print("\n--- PHASE 2: Running Ray-Tracer ---")
     
-    # Conditionally add .exe for Windows/Git Bash compatibility
-    exe_extension = ".exe" if os.name == "nt" or sys.platform in ["win32", "cygwin", "msys"] else ""
-    # Use the absolute path to ensure Windows can find the executable
-    exec_path = os.path.join(project_dir, f"{exec_name}{exe_extension}")
+    # Construct the standard Linux execution path for the local binary
+    exec_path = os.path.join(".", exec_name)
     
     try:
         subprocess.run([exec_path], cwd=project_dir, check=True)
         print("Ray-tracing complete. Blueprint generated.")
-    except subprocess.CalledProcessError:
-        print("C executable failed. Exiting pipeline.")
+    except subprocess.CalledProcessError as e:
+        print(f"C executable failed with error: {e}. Exiting pipeline.")
         sys.exit(1)
 
     print("\n--- PHASE 3: Generating Visualizations ---")
     
-    # Dynamically find the visualization directory relative to this script in `nrpy/examples`
+    # Dynamically find the visualization directory relative to this script
     vis_dir = os.path.abspath(os.path.join(script_dir, "..", "helpers", "geodesic_visualizations"))
     
     if not os.path.exists(vis_dir):
@@ -268,7 +254,7 @@ if __name__ == "__main__":
         import render_lensed_image as rli
         import config_and_types as cfg
         
-        # Define paths for the renderer
+        # Define Linux-style paths for the renderer
         blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
         output_image_path = os.path.join(project_dir, "lensed_output.png")
