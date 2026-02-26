@@ -160,6 +160,8 @@ def register_CFunction_initial_data(
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
     )
+    if CoordSystem.startswith("GeneralRFM"):
+        BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(CoordSystem)
 
     desc = "Set initial data."
     cfunc_type = "void"
@@ -183,6 +185,9 @@ switch (initial_data_part) {
     for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
+"""
+    if CoordSystem.startswith("GeneralRFM"):
+        body += """      generalrfm_precompute(commondata, params, (const REAL *restrict *)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
 """
     body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
 griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype}, initial_data_part);
@@ -209,12 +214,13 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     }}
     break;
   }}"""
-    body += f"""
-  case INITIALDATA_BIN_TWO: {{
-    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
+    body += """
+  case INITIALDATA_BIN_TWO: {
+    for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
-      initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
+"""
+    body += f"""      initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
                                                          NULL, {IDtype}, initial_data_part);
     }}
     break;
