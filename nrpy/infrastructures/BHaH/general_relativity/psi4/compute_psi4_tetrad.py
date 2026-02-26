@@ -15,6 +15,9 @@ from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.infrastructures.BHaH.general_relativity.psi4.param_symbol_utils import (
+    fast_generalrfm_fisheye_param_symbols_from_c_code,
+)
 
 
 def generate_CFunction_psi4_tetrad(
@@ -60,6 +63,8 @@ def generate_CFunction_psi4_tetrad(
     list_of_metricvarnames = ["cf"] + [
         f"hDD{i}{j}" for i in range(3) for j in range(i, 3)
     ]
+    if CoordSystem.startswith("GeneralRFM"):
+        list_of_metricvarnames += [f"ghatDD{i}{j}" for i in range(3) for j in range(i, 3)]
 
     arg_dict_cuda = {
         **{var: "const REAL" for var in list_of_metricvarnames},
@@ -80,10 +85,23 @@ def generate_CFunction_psi4_tetrad(
         )
     ]
 
-    # Find symbols stored in params
-    param_symbols, _ = get_params_commondata_symbols_from_expr_list(
-        rhss, exclude=[f"xx{j}" for j in range(3)]
+    expr_codegen = ccg.c_codegen(
+        rhss,
+        lhss,
+        verbose=False,
+        enable_cse=True,
+        include_braces=False,
     )
+    # Fast path for GeneralRFM fisheye: infer parameter usage from generated C,
+    # avoiding expensive SymPy free-symbol traversal on very large expressions.
+    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        param_symbols = fast_generalrfm_fisheye_param_symbols_from_c_code(
+            CoordSystem, expr_codegen
+        )
+    else:
+        param_symbols, _ = get_params_commondata_symbols_from_expr_list(
+            rhss, exclude=[f"xx{j}" for j in range(3)]
+        )
     loop_params = ""
 
     params_definitions = generate_definition_header(
@@ -92,14 +110,7 @@ def generate_CFunction_psi4_tetrad(
     )
     kernel_body = f"{loop_params}\n{params_definitions}\n"
     kernel_body += "  // Compute tetrads:\n"
-
-    kernel_body += ccg.c_codegen(
-        rhss,
-        lhss,
-        verbose=False,
-        enable_cse=True,
-        include_braces=False,
-    )
+    kernel_body += expr_codegen
 
     prefunc, prefunc_launch = parallel_utils.generate_kernel_and_launch_code(
         name,
@@ -114,8 +125,9 @@ def generate_CFunction_psi4_tetrad(
     )
 
     for var in list_of_metricvarnames:
+        gf_array_name = "auxevol_gfs" if var.startswith("ghatDD") else "in_gfs"
         prefunc_launch = prefunc_launch.replace(
-            var, f"in_gfs[IDX4pt({var.upper()}GF, idx3)]"
+            var, f"{gf_array_name}[IDX4pt({var.upper()}GF, idx3)]"
         )
     for pvar in list_of_vrnms:
         var = pvar.replace("*", "")
