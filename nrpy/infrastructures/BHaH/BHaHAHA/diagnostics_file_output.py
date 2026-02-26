@@ -117,13 +117,16 @@ Operations performed:
   // Calculate irreducible mass from horizon area.
   REAL M_irr = sqrt(diags->area / (16.0 * M_PI));
 
-  // Assign spin magnitudes, using NaN to indicate undefined values.
+  // Assign spin magnitudes for both circumference ratio and vorticity dipole methods, using NaN to indicate undefined values.  
   const REAL a_x_xy_over_yz_spin = (diags->spin_a_x_from_xy_over_yz_prop_circumfs != -10.0) ? diags->spin_a_x_from_xy_over_yz_prop_circumfs : NAN;
   const REAL a_x_xz_over_yz_spin = (diags->spin_a_x_from_xz_over_yz_prop_circumfs != -10.0) ? diags->spin_a_x_from_xz_over_yz_prop_circumfs : NAN;
   const REAL a_y_yz_over_xz_spin = (diags->spin_a_y_from_yz_over_xz_prop_circumfs != -10.0) ? diags->spin_a_y_from_yz_over_xz_prop_circumfs : NAN;
   const REAL a_y_xy_over_xz_spin = (diags->spin_a_y_from_xy_over_xz_prop_circumfs != -10.0) ? diags->spin_a_y_from_xy_over_xz_prop_circumfs : NAN;
   const REAL a_z_xz_over_xy_spin = (diags->spin_a_z_from_xz_over_xy_prop_circumfs != -10.0) ? diags->spin_a_z_from_xz_over_xy_prop_circumfs : NAN;
   const REAL a_z_yz_over_xy_spin = (diags->spin_a_z_from_yz_over_xy_prop_circumfs != -10.0) ? diags->spin_a_z_from_yz_over_xy_prop_circumfs : NAN;
+  const REAL spin_chi_x_spectre = (diags->spin_chi_x_spectre != -10.0) ? diags->spin_chi_x_spectre : NAN;
+  const REAL spin_chi_y_spectre = (diags->spin_chi_y_spectre != -10.0) ? diags->spin_chi_y_spectre : NAN;
+  const REAL spin_chi_z_spectre = (diags->spin_chi_z_spectre != -10.0) ? diags->spin_chi_z_spectre : NAN;
 
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
