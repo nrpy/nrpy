@@ -6,16 +6,17 @@ global simulation parameters, memory allocation for trajectory results, and
 the final serialization of the light blueprint to disk.
 
 Author: Dalton J. Moone
-License: BSD 3-Clause
 """
+
 import logging
-import os
 import sys
+
 import nrpy.c_function as cfc
 
 # Configure logging to adhere to static analysis and project standards
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 def main(spacetime_name: str) -> None:
     """
@@ -26,7 +27,6 @@ def main(spacetime_name: str) -> None:
     final data preservation.
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'Kerr').
-    :return: None
     """
     # 1. Define C-Function metadata in order of appearance
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "stdio.h", "stdlib.h"]
@@ -63,13 +63,13 @@ def main(spacetime_name: str) -> None:
 
     // --- Step 4: Resource Allocation ---
     const long int num_rays = (long int)commondata.scan_density * commondata.scan_density; // Total global photon count.
-    
+
     // Performance Optimization: Use 'restrict' to qualify the results buffer to aid compiler optimization.
     blueprint_data_t *restrict results_buffer = (blueprint_data_t *)malloc(sizeof(blueprint_data_t) * num_rays); // Contiguous memory for the light blueprint.
-    
-    if (results_buffer == NULL) {{ 
+
+    if (results_buffer == NULL) {{
         fprintf(stderr, "FATAL: Failed to allocate %ld bytes for results_buffer. Check system RAM.\\n", (long int)(sizeof(blueprint_data_t) * num_rays));
-        exit(1); 
+        exit(1);
     }}
 
     // --- Step 5: Execute Numerical Integration Pipeline ---
@@ -79,10 +79,10 @@ def main(spacetime_name: str) -> None:
     // --- Step 6: Data Serialization ---
     printf("Integration complete. Serializing %ld rays to light_blueprint.bin...\\n", num_rays);
     FILE *fp_blueprint = fopen("light_blueprint.bin", "wb");
-    if (fp_blueprint == NULL) {{ 
-        perror("FATAL: Error opening light_blueprint.bin for writing"); 
+    if (fp_blueprint == NULL) {{
+        perror("FATAL: Error opening light_blueprint.bin for writing");
         free(results_buffer);
-        exit(1); 
+        exit(1);
     }}
     fwrite(results_buffer, sizeof(blueprint_data_t), num_rays, fp_blueprint);
     fclose(fp_blueprint);
@@ -102,6 +102,7 @@ def main(spacetime_name: str) -> None:
         params=params,
         body=body,
     )
+
 
 if __name__ == "__main__":
     # Standard testing routine for the generator

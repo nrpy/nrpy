@@ -2,8 +2,8 @@
 Generates the C adaptive step-size controller, updated for BHaH integration.
 
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
-Features a high-performance L_infinity norm and L1 momentum floor for 
-relativistic ray tracing. Adapted for batched SoA global arrays to ensure 
+Features a high-performance L_infinity norm and L1 momentum floor for
+relativistic ray tracing. Adapted for batched SoA global arrays to ensure
 optimal memory throughput.
 """
 
@@ -13,10 +13,10 @@ from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
 def rkf45_update_and_control_helper() -> None:
     """
-    Registers the high-performance adaptive step-size controller for RKF45.
+    Register the high-performance adaptive step-size controller for RKF45.
 
     Generates the C function `update_photon_state_and_stepsize`, handling
-    local truncation error calculation, step acceptance logic, and time 
+    local truncation error calculation, step acceptance logic, and time
     step adaptation based on L-infinity and L1 bounds.
 
     >>> rkf45_update_and_control_helper()
@@ -42,19 +42,19 @@ def rkf45_update_and_control_helper() -> None:
 
     c_code_for_header = r"""
 static inline bool update_photon_state_and_stepsize(
-    PhotonStateSoA *restrict all_photons, 
-    const long int num_rays, 
-    const long int photon_idx, 
-    const double *restrict f_start, 
-    const double *restrict f_out, 
-    const double *restrict f_err, 
-    const int batch_size, 
-    const int batch_id, 
+    PhotonStateSoA *restrict all_photons,
+    const long int num_rays,
+    const long int photon_idx,
+    const double *restrict f_start,
+    const double *restrict f_out,
+    const double *restrict f_err,
+    const int batch_size,
+    const int batch_id,
     const commondata_struct *restrict commondata
 ) {
     const double rtol = commondata->rkf45_error_tolerance; // The relative error tolerance threshold.
     const double atol = commondata->rkf45_absolute_error_tolerance; // The absolute error tolerance floor, preventing division by zero.
-    
+
     double err_norm = 0.0; // The L_infinity (maximum) error norm acting as the strict acceptance threshold.
     double ratio; // The local ratio of truncation error to allowed tolerance for a specific component.
 
@@ -76,10 +76,10 @@ static inline bool update_photon_state_and_stepsize(
     err_norm = fmax(err_norm, ratio);
 
     // 4. Spatial Momenta p^x, p^y, p^z (f[5], f[6], f[7]): L1 floored mixed norm
-    const double p_L1 = fabs(f_start[IDX_LOCAL(5, batch_id, batch_size)]) + 
-                        fabs(f_start[IDX_LOCAL(6, batch_id, batch_size)]) + 
+    const double p_L1 = fabs(f_start[IDX_LOCAL(5, batch_id, batch_size)]) +
+                        fabs(f_start[IDX_LOCAL(6, batch_id, batch_size)]) +
                         fabs(f_start[IDX_LOCAL(7, batch_id, batch_size)]); // The L1 Manhattan distance, serving as a robust physical floor for momentum scaling.
-    
+
     for (int i = 5; i <= 7; ++i) {
         const double scale = atol + rtol * p_L1; // The composite scaling factor bounded by the L1 momentum floor.
         ratio = fabs(f_err[IDX_LOCAL(i, batch_id, batch_size)]) / scale;

@@ -25,10 +25,10 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "gsl/gsl_errno.h"]
     desc = f"""@brief GSL-compatible wrapper for photon geodesics in {spacetime_name}.
-        
+
         Unpacks the GSL 'params' void pointer into the BHaH 'commondata' struct,
         computes the local metric and connections, and calls the RHS calculation routine.
-        
+
         Input:
             t: Current value for affine parameter
             y[9]: Current state vector.
@@ -43,27 +43,27 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     # Construct the body with specific function calls
     body = f"""
     (void)t; // Mark affine parameter 't' as unused to avoid compiler warnings.
-    
+
     // 1. Unpack parameters
     commondata_struct *commondata = (commondata_struct *)params;
-    
+
     // 2. Declare geometric structs to hold intermediate results
     metric_struct metric;
     connection_struct conn;
 
-    // 3. Compute Metric 
+    // 3. Compute Metric
     // Signature: (commondata, y, &metric)
     g4DD_metric_{spacetime_name}(commondata, y, &metric);
 
-    
+
     // 3. Compute Connections (Christoffel Symbols)
     // Signature: (commondata, y, &conn)
     connections_{spacetime_name}(commondata, y, &conn);
-    
+
     // 5. Compute Geodesic RHS
     // Signature: (y, metric, conn, rhs_out)
     calculate_ode_rhs(y, &metric, &conn, f);
-    
+
     return GSL_SUCCESS;
     """
 

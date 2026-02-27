@@ -2,7 +2,7 @@
 Registers C function for computing photon geodesic ODE right-hand sides.
 
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
-Optimized with a Preamble pattern to minimize register pressure and ensure 
+Optimized with a Preamble pattern to minimize register pressure and ensure
 safe hardware-agnostic compilation for global GPU architectures.
 """
 
@@ -18,14 +18,13 @@ def calculate_ode_rhs(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
     """
-    Registers the portable GPU-ready derivatives for the geodesic ODE system.
+    Register the portable GPU-ready derivatives for the geodesic ODE system.
 
-    Implements the preamble pattern to map local registers efficiently before 
+    Implements the preamble pattern to map local registers efficiently before
     computing the right-hand-side evaluations of the integration step.
 
-    Args:
-        geodesic_rhs_expressions (List[sp.Expr]): The mathematical right-hand side evaluations.
-        coordinate_symbols (List[sp.Symbol]): The spatial/temporal coordinate variables in order.
+    :param geodesic_rhs_expressions: The mathematical right-hand side evaluations.
+    :param coordinate_symbols: The spatial/temporal coordinate variables in order.
 
     >>> import sympy as sp
     >>> calculate_ode_rhs([], [])
@@ -33,7 +32,7 @@ def calculate_ode_rhs(
     # 1. Define C-Function metadata in order of appearance
     includes = ["BHaH_defines.h"]
     desc = """@brief Portable GPU-ready derivatives for the geodesic ODE system.
-    Evaluates the Christoffel connections and spacetime metric mappings to formulate 
+    Evaluates the Christoffel connections and spacetime metric mappings to formulate
     the right-hand side of the geodesic integration step."""
     cfunc_type = "void"
     name = "calculate_ode_rhs"
@@ -88,9 +87,7 @@ def calculate_ode_rhs(
                 )
             curr_idx += 1
 
-    preamble_lines.append(
-        "\n  // Step 4: Unpack Christoffel connection coefficients"
-    )
+    preamble_lines.append("\n  // Step 4: Unpack Christoffel connection coefficients")
     curr_idx = 0
     for a in range(4):
         for m in range(4):

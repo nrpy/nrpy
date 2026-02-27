@@ -1,33 +1,34 @@
 """
 Module for generating the C code that computes the temporal momentum component (p^0).
 
-This constraint solver forces the four-momentum vector to remain null 
+This constraint solver forces the four-momentum vector to remain null
 by solving the quadratic Hamiltonian constraint for the negative root.
 """
+
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
+
 def p0_reverse(p0_expr: sp.Expr) -> None:
     """
-    Generates and registers the C function to compute p^0 for a photon.
-    
+    Generate and registers the C function to compute p^0 for a photon.
+
     Utilizes the flattened SoA architecture via local and global batch indexing.
 
-    Args:
-        p0_expr (sp.Expr): The SymPy expression representing the negative root 
-                           of the Hamiltonian constraint for p^0.
-                           
+    :param p0_expr: The SymPy expression representing the negative root of the Hamiltonian constraint for p^0.
+
     >>> import sympy as sp
     >>> p0_reverse(sp.sympify("0.0"))
     """
     includes = ["BHaH_defines.h"]
-    
+
     desc = """@brief Computes the initial temporal component of the 4-momentum (p^0).
-    Detailed algorithm: Solves the quadratic Hamiltonian constraint p_mu p^mu = 0 
-    specifically for the negative root to enforce physical null photon trajectories 
+    Detailed algorithm: Solves the quadratic Hamiltonian constraint p_mu p^mu = 0
+    specifically for the negative root to enforce physical null photon trajectories
     within the SoA architecture."""
-    
+
     name = "p0_reverse"
 
     params = (
@@ -52,11 +53,11 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     body_math = ccg.c_codegen(
         [p0_expr], ["*p0_out"], enable_cse=True, verbose=False, include_braces=False
     )
-    
+
     for old, new in metric_map.items():
         body_math = body_math.replace(old, new)
 
-    preamble = f"""
+    preamble = """
     // Contravariant spatial momentum component p^x extracted from global state vector.
     const double pU1 = all_photons_f[IDX_GLOBAL(5, photon_idx, num_rays)];
     // Contravariant spatial momentum component p^y extracted from global state vector.
@@ -65,33 +66,33 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     const double pU3 = all_photons_f[IDX_GLOBAL(7, photon_idx, num_rays)];
     """
 
-    postamble = f"\n    all_photons_f[IDX_GLOBAL(4, photon_idx, num_rays)] = *p0_out;"
+    postamble = "\n    all_photons_f[IDX_GLOBAL(4, photon_idx, num_rays)] = *p0_out;"
 
     body = f"""
     {preamble}
     {body_math}
     {postamble}
     """
-    
+
     prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
     """
-    
+
     postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-    
+
     cfc.register_CFunction(
-        prefunc=prefunc,      
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         name=name,
         params=params,
         body=body,
         include_CodeParameters_h=False,
-        postfunc=postfunc  
+        postfunc=postfunc,
     )

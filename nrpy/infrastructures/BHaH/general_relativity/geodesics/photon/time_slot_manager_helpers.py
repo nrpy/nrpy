@@ -1,16 +1,17 @@
 """
 Module generating the C data structures and helpers for the Time Slot Manager.
 
-Provides a lock-free Arena Allocator designed for Host-side orchestration 
+Provides a lock-free Arena Allocator designed for Host-side orchestration
 of batched photon trajectories based on their physical coordinate time.
 """
+
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
+
 
 def time_slot_manager_helpers() -> None:
     """
-    Registers the TimeSlotManager struct and associated inline helper functions 
-    within the BHaH macro definitions file.
-    
+    Register the TimeSlotManager struct and associated inline helper functions within the BHaH macro definitions file.
+
     >>> time_slot_manager_helpers()
     """
     portable_tsm = r"""
@@ -64,7 +65,7 @@ def time_slot_manager_helpers() -> None:
 
     // @brief Atomically pushes a photon's global index into the appropriate temporal bin.
     static inline void slot_add_photon(TimeSlotManager *tsm, int slot_idx, long int photon_idx) {
-        if (photon_idx >= tsm->max_capacity) return; 
+        if (photon_idx >= tsm->max_capacity) return;
 
         // Variable tracking the previous head of the linked list during the atomic swap.
         long int old_head;
@@ -83,7 +84,7 @@ def time_slot_manager_helpers() -> None:
         for(long int i = 0; i < chunk_size; i++) {
             // The current lead photon index residing in the requested temporal slot.
             long int current_head = tsm->slot_heads[slot_idx];
-            if (current_head == -1) break; 
+            if (current_head == -1) break;
             chunk_buffer[i] = current_head;
             tsm->slot_heads[slot_idx] = tsm->photon_next_ptrs[current_head];
             tsm->slot_counts[slot_idx]--;

@@ -2,34 +2,36 @@
 Registers the high-precision event-finding C kernel.
 
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
-Utilizes second-order quadratic interpolation for root-finding and 
+Utilizes second-order quadratic interpolation for root-finding and
 Lagrange interpolation for state reconstruction at plane intersections.
 """
+
 import nrpy.c_function as cfc
+
 
 def find_event_time_and_state() -> None:
     """
-    Registers the find_event_time_and_state C function.
-    
-    This function resolves the exact coordinate intersection when a plane 
+    Register the find_event_time_and_state C function.
+
+    This function resolves the exact coordinate intersection when a plane
     crossing is detected. It ensures sub-step accuracy for photon mapping.
-    
+
     >>> find_event_time_and_state()
     """
     # 1. Define C-Function metadata
     includes = ["BHaH_defines.h", "math.h"]
     desc = """@brief Portable high-performance second-order root-finding.
-    Detailed algorithm: Uses position data from the current and two previous 
-    integration steps to construct a quadratic model of the trajectory relative 
-    to the target plane. The intersection is solved via the quadratic formula 
+    Detailed algorithm: Uses position data from the current and two previous
+    integration steps to construct a quadratic model of the trajectory relative
+    to the target plane. The intersection is solved via the quadratic formula
     and the full state is reconstructed via Lagrange polynomials."""
     name = "find_event_time_and_state"
-    
-    params = """PhotonStateSoA *restrict all_photons, 
-                const long int num_rays, 
-                const long int photon_idx, 
-                const double *restrict normal, 
-                const double dist, 
+
+    params = """PhotonStateSoA *restrict all_photons,
+                const long int num_rays,
+                const long int photon_idx,
+                const double *restrict normal,
+                const double dist,
                 const event_type_t event_type"""
 
     # 2. Build the C body with internal descriptive comments
@@ -51,9 +53,9 @@ def find_event_time_and_state() -> None:
     // --- Step 1: Linear Seed Calculation ---
     // Provides a fallback value if the quadratic interpolation fails or is unnecessary.
     double t_linear;
-    if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) { 
+    if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) {
         t_linear = (f2 * t1 - f1 * t2) / (f2 - f1);
-    } else if ( (f0 * f1 <= 0.0 || fabs(f0) < 1e-12) && fabs(f1 - f0) > 1e-15 ) { 
+    } else if ( (f0 * f1 <= 0.0 || fabs(f0) < 1e-12) && fabs(f1 - f0) > 1e-15 ) {
         t_linear = (f1 * t0 - f0 * t1) / (f1 - f0);
     } else {
         t_linear = t1;
@@ -100,7 +102,7 @@ def find_event_time_and_state() -> None:
 
     // Assign results to the appropriate intersection buffer (Source vs Window).
     double *intersect_ptr = (event_type == SOURCE_EVENT) ? all_photons->source_event_f_intersect : all_photons->window_event_f_intersect;
-    
+
     if (event_type == SOURCE_EVENT) {
         all_photons->source_event_lambda[photon_idx] = lambda_event;
         all_photons->source_event_found[photon_idx] = true;
@@ -111,8 +113,8 @@ def find_event_time_and_state() -> None:
 
     // Interpolate all 9 components: {t, x, y, z, p_t, p_x, p_y, p_z, lambda}
     for (int i = 0; i < 9; i++) {
-        intersect_ptr[IDX_GLOBAL(i, photon_idx, num_rays)] = GET_COMP(all_photons->f_p_p, i) * L0 + 
-                                                            GET_COMP(all_photons->f_p,   i) * L1 + 
+        intersect_ptr[IDX_GLOBAL(i, photon_idx, num_rays)] = GET_COMP(all_photons->f_p_p, i) * L0 +
+                                                            GET_COMP(all_photons->f_p,   i) * L1 +
                                                             GET_COMP(all_photons->f,     i) * L2;
     }
 
@@ -122,14 +124,14 @@ def find_event_time_and_state() -> None:
 
     prefunc = "#ifdef USE_GPU\n#pragma omp declare target\n#endif"
     postfunc = "#ifdef USE_GPU\n#pragma omp end declare target\n#endif"
-    
+
     # 3. Register the C function
     cfc.register_CFunction(
-        prefunc=prefunc,      
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         name=name,
         params=params,
         body=body,
-        postfunc=postfunc  
+        postfunc=postfunc,
     )

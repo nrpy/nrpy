@@ -6,13 +6,24 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 
+
 def ode_wrapper(spacetime_name: str) -> None:
+    """
+    Register a C function to dispatch ODE RHS evaluations for a specific spacetime.
+
+    This function uses the NRPy+ infrastructure to generate and register a C
+    wrapper. The wrapper handles the local computation of the 4-metric and
+    Christoffel symbols for a given spacetime, populates Structure-of-Array
+    (SoA) buffers, and triggers the core ODE RHS calculation.
+
+    :param spacetime_name: The name of the spacetime (e.g., 'KerrSchild_Cartesian'). This string is used to suffix the C function names for the metric and connection lookups.
+    """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = f"""@brief Internal dispatcher for photon geodesics in {spacetime_name}.
-        
-        Computes the local metric and connections directly into local flat arrays, 
+
+        Computes the local metric and connections directly into local flat arrays,
         writes them to the SoA batch buffers, then calls the RHS calculation routine.
-        
+
         Input:
             f_in[9]: Current state vector.
             commondata: Pointer to the simulation's common data parameters.
@@ -51,13 +62,13 @@ def ode_wrapper(spacetime_name: str) -> None:
     calculate_ode_rhs(f_in, metric_g4DD, conn_GammaUDD, k_array, batch_size, batch_id);
     """
 
-# Add OpenMP pragmas outside the function scope to ensure dual-architecture compilation
+    # Add OpenMP pragmas outside the function scope to ensure dual-architecture compilation
     prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
     """
-    
+
     postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
@@ -72,13 +83,15 @@ def ode_wrapper(spacetime_name: str) -> None:
         params=params,
         body=body,
         prefunc=prefunc,
-        postfunc=postfunc
+        postfunc=postfunc,
     )
+
 
 if __name__ == "__main__":
     import logging
     import os
     import sys
+
     import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 
     sys.path.append(os.getcwd())

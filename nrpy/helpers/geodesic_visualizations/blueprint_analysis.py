@@ -115,7 +115,7 @@ def diagnose_blueprint(blueprint_path: str = None) -> None:
         # Display source plane coords or sphere angles depending on termination
         val_1 = rec['y_s'] if tt == cfg.TERM_SOURCE_PLANE else rec['final_theta']
         val_2 = rec['z_s'] if tt == cfg.TERM_SOURCE_PLANE else rec['final_phi']
-        print(f"{i:<6} | {tt:<9} | {rec['y_w']:>8.2f} | {rec['z_w']:>8.2f} | {val_1:>11.3f} | {val_2:>11.3f}")
+        print(f"{i:<6} | {tt:<9} | {rec['y_w']:>8.5} | {rec['z_w']:>8.5f} | {val_1:>11.5f} | {val_2:>11.5f}")
     
     # --- 4. Launch Visualization ---
     print("\n[i] Generating heatmaps...")
