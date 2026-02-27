@@ -384,18 +384,18 @@ SEOBNRv5_aligned_spin_waveform(dynamics_55, commondata, inspiral_modes);
 double complex h55 = inspiral_modes[STRAIN55 - 1];
 
 const REAL v22 = pow(dynamics_22[OMEGA], 1.0/3.0);
-const double complex K21 = h21 / rho21;
-const double complex K43 = h43 / rho43;
+const REAL K21 = cabs(h21) / rho21;
+const REAL K43 = cabs(h43) / rho43;
 const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
-const double complex K55 = h55/rho55;
+const REAL K55 = cabs(h55) / rho55;
 
 const REAL vpow21 = pow(v22, 11.0);
 const REAL vpow43 = pow(v22, 9.0);
 const REAL vpow55 = pow(v55, 11.0);
 
-const REAL c21 = cabs((hNR21/K21 - rho21)/vpow21);
-const REAL c43 = cabs((hNR43/K43 - rho43)/vpow43);
-const REAL c55 = cabs((hNR55/K55 - rho55)/vpow55);
+const REAL c21 = (hNR21/K21 - rho21)/vpow21;
+const REAL c43 = (hNR43/K43 - rho43)/vpow43;
+const REAL c55 = (hNR55/K55 - rho55)/vpow55;
 
 //save to commondata
 
