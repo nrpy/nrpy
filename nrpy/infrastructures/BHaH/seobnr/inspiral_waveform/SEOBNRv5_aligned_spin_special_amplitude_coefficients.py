@@ -189,7 +189,9 @@ if (Omega_circ == NULL){
 }
 
 
-
+const REAL m1 = commondata->m1;
+const REAL m2 = commondata->m2;
+const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_COEFFICIENTS];
 double complex inspiral_modes[NUMMODES];
@@ -367,12 +369,12 @@ dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
-const REAL hNR21 = hNR[HNR21];
-const REAL hNR43 = hNR[HNR43];
+const REAL hNR21 = hNR[HNR21] * nu;
+const REAL hNR43 = hNR[HNR43] * nu;
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
 REAL rho55 = rhos[RHO55];
-const REAL hNR55 = hNR[HNR55];
+const REAL hNR55 = hNR[HNR55] * nu;
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
 double complex h21 = inspiral_modes[STRAIN21 - 1];
@@ -387,9 +389,13 @@ const double complex K43 = h43 / rho43;
 const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
 const double complex K55 = h55/rho55;
 
-const REAL c21 = cabs((hNR21/K21)/v22);
-const REAL c43 = cabs((hNR43/K43)/v22);
-const REAL c55 = cabs((hNR55/K55)/v55);
+const REAL vpow21 = pow(v22, 11.0);
+const REAL vpow43 = pow(v22, 9.0);
+const REAL vpow55 = pow(v55, 11.0);
+
+const REAL c21 = cabs((hNR21/K21 - rho21)/vpow21);
+const REAL c43 = cabs((hNR43/K43 - rho43)/vpow43);
+const REAL c55 = cabs((hNR55/K55 - rho55)/vpow55);
 
 //save to commondata
 
