@@ -241,36 +241,18 @@ if __name__ == "__main__":
         project_name=project_name,
         exec_or_library_name=exec_name,
         addl_CFLAGS=[
-            "-Wall -Wextra -g -fopenmp -O3 -march=native -ffast-math -Wno-stringop-truncation",
+            "-Wall -Wextra -g -fopenmp -O3 -march=native  -Wno-stringop-truncation",
             "-Wno-unknown-pragmas",
         ],
         addl_libraries=["-lm -fopenmp"],
     )
 
-    # Ensure robust temporary directory allocation for cross-platform Makefile execution
-    # This prevents pipe execution errors encountered in Windows/Git Bash environments.
-    print(" -> Patching Makefile for explicit cross-platform TMPDIR handling...")
-    local_tmp_path = "tmp"
-    os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
-
-    makefile_path = os.path.join(project_dir, "Makefile")
-
-    with open(makefile_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    with open(makefile_path, "w", encoding="utf-8") as f:
-        f.write(f"export TMPDIR := $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TMP := $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TEMP := $(CURDIR)/{local_tmp_path}\n")
-        f.write("\n")
-        f.write(content)
-
-    # ##########################################################################
+# ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
     print("\n--- PHASE 1: Compiling C Code ---")
     try:
-        subprocess.run(["make", "-j"], cwd=project_dir, check=True)
+        subprocess.run(["make"], cwd=project_dir, check=True)
         print("Compilation successful.")
     except subprocess.CalledProcessError:
         print("Compilation failed. Exiting pipeline.")
@@ -278,11 +260,8 @@ if __name__ == "__main__":
 
     print("\n--- PHASE 2: Running Ray-Tracer ---")
 
-    # Resolve cross-platform binary execution target mapping
-    exe_extension = (
-        ".exe" if os.name == "nt" or sys.platform in ["win32", "cygwin", "msys"] else ""
-    )
-    exec_path = os.path.join(project_dir, f"{exec_name}{exe_extension}")
+    # Direct execution path for Linux (no .exe mapping needed)
+    exec_path = os.path.join(project_dir, exec_name)
 
     try:
         subprocess.run([exec_path], cwd=project_dir, check=True)
