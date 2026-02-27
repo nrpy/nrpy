@@ -5,8 +5,8 @@ This module registers the 'connections_{spacetime_name}' C function, which calcu
 the 40 unique components of the Christoffel symbols (Gamma^alpha_mu_nu)
 for a specific spacetime using a flattened SoA architecture.
 
-It generates a preamble to unpack coordinate variables directly from the flattened 
-state vector using macro indexing. 
+It generates a preamble to unpack coordinate variables directly from the flattened
+state vector using macro indexing.
 
 Author: Dalton J. Moone
 """
@@ -91,7 +91,7 @@ def connections(
         f"for a {PARTICLE} particle.\n"
     )
     name = f"connections_{spacetime_name}"
-    
+
     # Updated SoA compatible signature
     params = (
         "const commondata_struct *restrict commondata, "
@@ -119,31 +119,31 @@ def connections(
     body = f"""
         {preamble}
         {kernel}
-        
+
         """
-    
+
     prefunc = """
     #ifdef USE_GPU
     #pragma omp declare target
     #endif
     """
-    
+
     postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-    
+
     # Step 6: Register the C function
     cfc.register_CFunction(
-        prefunc=prefunc,      
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         name=name,
         params=params,
         body=body,
         include_CodeParameters_h=True,
-        postfunc=postfunc  
+        postfunc=postfunc
     )
     print(f"    ... {name}() registration complete.")
 

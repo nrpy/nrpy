@@ -50,13 +50,13 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
         c_params += ", double *restrict Q"
 
     preamble_lines = ["// Unpack position and momentum using strict SoA macros"]
-    
+
     # Added (void) casts to each unpacked variable to suppress unused variable warnings
     for i, symbol in enumerate(diagnostics.xx):
         var_name = str(symbol)
         preamble_lines.append(f"const double {var_name} = all_photons_f[IDX_GLOBAL({i}, photon_idx, num_rays)];")
         preamble_lines.append(f"(void){var_name};")
-        
+
     for i in range(4):
         preamble_lines.append(f"const double p{i} = all_photons_f[IDX_GLOBAL({i+4}, photon_idx, num_rays)];")
         preamble_lines.append(f"(void)p{i};")
@@ -89,23 +89,23 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
     #pragma omp declare target
     #endif
     """
-    
+
     postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-    
+
     # Step 6: Register the C function
     cfc.register_CFunction(
-        prefunc=prefunc,      
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         name=name,
         params=params,
         body=body,
         include_CodeParameters_h=True,
-        postfunc=postfunc  
+        postfunc=postfunc
     )
     print(f"    ... {name}() registration complete.")
 

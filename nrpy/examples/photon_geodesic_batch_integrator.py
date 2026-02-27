@@ -1,8 +1,8 @@
 """
 Generates the complete C project for simulating photon geodesics (ray-tracing).
 
-This script serves as the top-level orchestrator for the updated photon geodesic 
-integrator project. It generates a standalone C application that evolves photon 
+This script serves as the top-level orchestrator for the updated photon geodesic
+integrator project. It generates a standalone C application that evolves photon
 trajectories in the Kerr-Schild spacetime.
 
 Author: Dalton J. Moone (Updated)
@@ -12,52 +12,51 @@ Author: Dalton J. Moone (Updated)
 # PART 0: IMPORTS AND PATH SETUP
 # ##############################################################################
 
-import os
-import sys
-import shutil
 import argparse
+import os
+import shutil
 import subprocess
+import sys
 
-# Step 0.a: Add the nrpy root directory to the Python path.
-script_dir = os.path.dirname(os.path.abspath(__file__))
-
-# Import nrpy core modules
-import nrpy.params as par
+# NRPY core and helper modules
 import nrpy.helpers.generic as gh
+import nrpy.params as par
 
-# Import nrpy BHaH infrastructure modules
-from nrpy.infrastructures.BHaH import (
-    BHaH_defines_h,
-    cmdline_input_and_parfiles,
-    Makefile_helpers as Makefile,
-    CodeParameters as CPs,
-)
-
-# Import Physics/Math Generators (Symbolic)
+# Physics/Math Generators (Symbolic)
 from nrpy.equations.general_relativity.geodesics import analytic_spacetimes as anasp
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
 
-# Import C-Code Builder Functions
-from nrpy.infrastructures.BHaH.general_relativity.geodesics import g4DD_metric
-from nrpy.infrastructures.BHaH.general_relativity.geodesics import connections
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import calculate_ode_rhs
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import p0_reverse
-from nrpy.infrastructures.BHaH.general_relativity.geodesics import conserved_quantities
+# NRPY BHaH infrastructure modules
+from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH import CodeParameters as CPs
+from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
+from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
 
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import set_initial_conditions_cartesian
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import handle_source_plane_intersection
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import handle_window_plane_intersection
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import event_detection_manager
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import find_event_time_and_state
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import calculate_and_fill_blueprint_data_universal
+# C-Code Builder Functions
+from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
+    connections,
+    conserved_quantities,
+    g4DD_metric,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
+    batch_integrator_numerical,
+    calculate_and_fill_blueprint_data_universal,
+    calculate_ode_rhs,
+    event_detection_manager,
+    find_event_time_and_state,
+    handle_source_plane_intersection,
+    handle_window_plane_intersection,
+    main,
+    p0_reverse,
+    placeholder_interpolation_engine,
+    rkf45_helpers_for_header,
+    rkf45_update_and_control_helper,
+    set_initial_conditions_cartesian,
+    time_slot_manager_helpers,
+)
 
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import rkf45_helpers_for_header
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import rkf45_update_and_control_helper
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import time_slot_manager_helpers
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import placeholder_interpolation_engine
-
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import batch_integrator_numerical
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import main
+# Set the script directory for relative path resolution
+script_dir = os.path.dirname(os.path.abspath(__file__))
 
 # ##############################################################################
 # PART 1: MAIN CONFIGURATION
@@ -80,7 +79,7 @@ if __name__ == "__main__":
     project_name = "photon_geodesic_integrator"
     exec_name = "photon_geodesic_integrator"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
-    
+
     # Configuration
     SPACETIME = "KerrSchild_Cartesian"
     PARTICLE = "photon"
@@ -90,7 +89,7 @@ if __name__ == "__main__":
     print(f"Initializing project: {project_name}")
     shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
-    
+
     par.set_parval_from_str("Infrastructure", "BHaH")
 
     # Step 4: Acquire Symbolic Physics Expressions
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     handle_source_plane_intersection.handle_source_plane_intersection()
     handle_window_plane_intersection.handle_window_plane_intersection()
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
-    rkf45_helpers_for_header.rkf45_helpers_for_header(SPACETIME)
+    rkf45_helpers_for_header.rkf45_helpers_for_header()
     rkf45_update_and_control_helper.rkf45_update_and_control_helper()
     time_slot_manager_helpers.time_slot_manager_helpers()
     placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME)
@@ -119,7 +118,7 @@ if __name__ == "__main__":
     main.main(SPACETIME)
 
     # ##########################################################################
-    # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS 
+    # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
     print(" -> Overriding desired CodeParameters before .par generation...")
     # Analytic Spacetimes
@@ -163,8 +162,8 @@ if __name__ == "__main__":
 
     # RKF45 Update and Control Helper
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-9
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-9
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 5e-11
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 5e-11
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10
@@ -186,74 +185,98 @@ if __name__ == "__main__":
         project_name=project_name, cmdline_inputs=cmdline_inputs_list
     )
 
-    ##########################################################################
-    # Step 7: Assemble Final C Project (Linux Optimized)
-    # ########################################################################
+    # ##########################################################################
+    # Step 7: Assemble Final C Project (Windows Compatible)
+    # ##########################################################################
     print(" -> Assembling C project on disk...")
-
-    # Output BHaH_defines.h using the standard infrastructure
     BHaH_defines_h.output_BHaH_defines_h(
-        project_dir=project_dir, 
-        enable_rfm_precompute=False
+        project_dir=project_dir, enable_rfm_precompute=False
     )
-
-    # Copy SIMD headers required for high-performance physics
     gh.copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
         project_dir=project_dir,
         subdirectory="intrinsics",
     )
-    
-    print(" -> Generating Makefile and Function Prototypes...")
+
+    print(" -> Generating Makefile...")
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        addl_CFLAGS=["-Wall -Wextra -g -fopenmp -O3 -march=native -Wno-stringop-truncation -Wno-unknown-pragmas"],
-        addl_libraries=["-lm", "-fopenmp"], 
+        addl_CFLAGS=[
+            "-Wall -Wextra -g -fopenmp -O3 -march=native -ffast-math -Wno-stringop-truncation",
+            "-Wno-unknown-pragmas",
+        ],
+        addl_libraries=["-lm -fopenmp"],
     )
+
+    # Patch Makefile for Windows/Git Bash
+    # (Fixes "pipe" errors or permission denied on temp files during compilation)
+    print(" -> Patching Makefile for Windows compatibility...")
+    local_tmp_path = "tmp"
+    os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
+
+    makefile_path = os.path.join(project_dir, "Makefile")
+
+    # Read the generated Makefile
+    with open(makefile_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Prepend the directory exports
+    with open(makefile_path, "w", encoding="utf-8") as f:
+        f.write(f"export TMPDIR := $(CURDIR)/{local_tmp_path}\n")
+        f.write(f"export TMP := $(CURDIR)/{local_tmp_path}\n")
+        f.write(f"export TEMP := $(CURDIR)/{local_tmp_path}\n")
+        f.write("\n")
+        f.write(content)
 
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
     print("\n--- PHASE 1: Compiling C Code ---")
     try:
-        # Standard Linux multi-threaded build
         subprocess.run(["make", "-j"], cwd=project_dir, check=True)
         print("Compilation successful.")
     except subprocess.CalledProcessError:
-        print("Compilation failed. Ensure 'gcc' and 'make' are installed. Exiting.")
+        print("Compilation failed. Exiting pipeline.")
         sys.exit(1)
 
     print("\n--- PHASE 2: Running Ray-Tracer ---")
-    
-    # Construct the standard Linux execution path for the local binary
-    exec_path = os.path.join(".", exec_name)
-    
+
+    # Conditionally add .exe for Windows/Git Bash compatibility
+    exe_extension = (
+        ".exe" if os.name == "nt" or sys.platform in ["win32", "cygwin", "msys"] else ""
+    )
+    # Use the absolute path to ensure Windows can find the executable
+    exec_path = os.path.join(project_dir, f"{exec_name}{exe_extension}")
+
     try:
         subprocess.run([exec_path], cwd=project_dir, check=True)
         print("Ray-tracing complete. Blueprint generated.")
-    except subprocess.CalledProcessError as e:
-        print(f"C executable failed with error: {e}. Exiting pipeline.")
+    except subprocess.CalledProcessError:
+        print("C executable failed. Exiting pipeline.")
         sys.exit(1)
 
     print("\n--- PHASE 3: Generating Visualizations ---")
-    
+
     # Dynamically find the visualization directory relative to this script
-    vis_dir = os.path.abspath(os.path.join(script_dir, "..", "helpers", "geodesic_visualizations"))
-    
+    vis_dir = os.path.abspath(
+        os.path.join(script_dir, "..", "helpers", "geodesic_visualizations")
+    )
+
     if not os.path.exists(vis_dir):
         print(f"ERROR: Visualization directory not found at {vis_dir}")
         sys.exit(1)
 
     # Add the visualization directory to the Python path
     sys.path.append(vis_dir)
-    
+
     try:
-        import render_lensed_image as rli
-        import config_and_types as cfg
-        
+        # Static analysis tools cannot resolve these paths; ignore import errors
+        import config_and_types as cfg  # type: ignore
+        import render_lensed_image as rli  # type: ignore
+
         # Define Linux-style paths for the renderer
         blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
@@ -265,7 +288,7 @@ if __name__ == "__main__":
         c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
         c_window_width = float(par.glb_code_params_dict["window_width"].defaultvalue)
         c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
-        
+
         # Calculate derived physics for rendering
         actual_window_width = max(c_window_width, c_window_height)
         source_physical_width = 2.0 * c_r_max
@@ -279,7 +302,7 @@ if __name__ == "__main__":
             disk_physical_width=source_physical_width,
             disk_inner_radius=c_r_min,
             disk_outer_radius=c_r_max,
-            colormap=cfg.COLORMAP
+            colormap=cfg.COLORMAP,
         )
 
         # Execute chunked rendering process
@@ -290,9 +313,9 @@ if __name__ == "__main__":
             sphere_image=starmap_path,
             source_image=disk_texture,
             blueprint_filename=blueprint_path,
-            window_width=actual_window_width
+            window_width=actual_window_width,
         )
         print(f"\nPipeline Complete! Output image saved at: {output_image_path}")
-        
+
     except ImportError as e:
         print(f"Failed to import visualization scripts: {e}")

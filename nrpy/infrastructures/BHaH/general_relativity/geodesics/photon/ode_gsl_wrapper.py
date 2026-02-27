@@ -40,29 +40,26 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
     name = f"ode_gsl_wrapper_{spacetime_name}"
     params = "double t, const double y[9], double f[9], void *params"
 
-    # Construct the body with specific function calls
+    # Construct the body with specific function calls utilizing the flat array SoA architecture
     body = f"""
     (void)t; // Mark affine parameter 't' as unused to avoid compiler warnings.
 
     // 1. Unpack parameters
     commondata_struct *commondata = (commondata_struct *)params;
 
-    // 2. Declare geometric structs to hold intermediate results
-    metric_struct metric;
-    connection_struct conn;
+    // 2. Declare flat geometric arrays to hold intermediate results
+    double metric_g4DD[10];
+    double conn_GammaUDD[40];
 
-    // 3. Compute Metric
-    // Signature: (commondata, y, &metric)
-    g4DD_metric_{spacetime_name}(commondata, y, &metric);
+    // 3. Compute Metric for a single particle (batch_size=1, batch_id=0)
+    g4DD_metric_{spacetime_name}(commondata, y, metric_g4DD, 1, 0);
 
+    // 4. Compute Connections for a single particle
+    connections_{spacetime_name}(commondata, y, conn_GammaUDD, 1, 0);
 
-    // 3. Compute Connections (Christoffel Symbols)
-    // Signature: (commondata, y, &conn)
-    connections_{spacetime_name}(commondata, y, &conn);
-
-    // 5. Compute Geodesic RHS
-    // Signature: (y, metric, conn, rhs_out)
-    calculate_ode_rhs(y, &metric, &conn, f);
+    // 5. Compute Geodesic RHS directly into the GSL f-vector
+    // f serves as k_array. By setting stage=1, (stage-1)*9 evaluates to 0, matching the f index.
+    calculate_ode_rhs(y, metric_g4DD, conn_GammaUDD, f, 1, 1, 0);
 
     return GSL_SUCCESS;
     """

@@ -5,8 +5,8 @@ This module registers the 'g4DD_metric_{spacetime_name}' C function,
 which calculates the 10 unique components of the metric tensor for a specific spacetime.
 It utilizes a flattened SoA architecture for SIMT-compatible batch processing on GPUs.
 
-It generates a preamble to unpack coordinate variables directly from the flattened 
-state vector using macro indexing. Spacetime parameters stored in `commondata` are 
+It generates a preamble to unpack coordinate variables directly from the flattened
+state vector using macro indexing. Spacetime parameters stored in `commondata` are
 provided through the function arguments.
 
 Author: Dalton J. Moone
@@ -57,7 +57,7 @@ def g4DD_metric(
         f"for a {PARTICLE} particle.\n"
     )
     name = f"g4DD_metric_{spacetime_name}"
-    
+
     # Updated SoA compatible signature
     params = (
         "const commondata_struct *restrict commondata, "
@@ -124,23 +124,23 @@ def g4DD_metric(
     #pragma omp declare target
     #endif
     """
-    
+
     postfunc = """
     #ifdef USE_GPU
     #pragma omp end declare target
     #endif
     """
-    
+
     # Step 6: Register the C function
     cfc.register_CFunction(
-        prefunc=prefunc,      
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
         name=name,
         params=params,
         body=body,
         include_CodeParameters_h=True,
-        postfunc=postfunc  
+        postfunc=postfunc
     )
     print(f"    ... {name}() registration complete.")
 
