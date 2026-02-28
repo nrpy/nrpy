@@ -221,13 +221,27 @@ if __name__ == "__main__":
         project_name=project_name, cmdline_inputs=cmdline_inputs_list
     )
 
-    # ##########################################################################
+# ##########################################################################
     # Step 7: Assemble Final C Project Infrastructure
     # ##########################################################################
     print(" -> Assembling C project on disk...")
     BHaH_defines_h.output_BHaH_defines_h(
         project_dir=project_dir, enable_rfm_precompute=False
     )
+    
+    # --- Inject Cross-Compilation Macros ---
+    cuda_macros = """
+    #ifdef __CUDACC__
+        #define BHAH_HD_INLINE __device__ __inline__
+        #define BHAH_HD_FUNC __device__
+    #else
+        #define BHAH_HD_INLINE static inline
+        #define BHAH_HD_FUNC static
+    #endif
+    """
+    with open(os.path.join(project_dir, "BHaH_defines.h"), "a") as f:
+        f.write(cuda_macros)
+
     gh.copy_files(
         package="nrpy.helpers",
         filenames_list=["simd_intrinsics.h"],
@@ -243,10 +257,13 @@ if __name__ == "__main__":
         addl_CFLAGS=[
             "-Wall -Wextra -g -fopenmp -O3 -march=native",
             "-Wno-unknown-pragmas",
+            "-DUSE_GPU",                     
+            "-foffload=nvptx-none",                       
+            "-foffload-options=nvptx-none=-march=sm_86",
+            "-rdc=true" # <--- Added for Relocatable Device Code
         ],
         addl_libraries=["-lm -fopenmp"],
     )
-
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
