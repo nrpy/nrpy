@@ -15,7 +15,6 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
 
@@ -33,23 +32,15 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
         return None
 
     wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
-    const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
 
     rholm: List[sp.Expr] = []
     rholm_labels: List[str] = []
 
-    hNR: List[sp.Expr] = []
-    hNR_labels: List[str] = []
-
     modes = [(2, 1), (4, 3), (5, 5)]
 
     for l, m in modes:
-        rholm.append(cast(sp.Expr, wf.rho[f"({l} , {m})"]))
+        rholm.append(cast(sp.Expr, wf.pn_contribution_f[f"({l} , {m})"]))
         rholm_labels.append(f"REAL rho{l}{m}")
-
-    for l, m in modes:
-        hNR.append(cast(sp.Expr, const.hNR[f"({l} , {m})"]))
-        hNR_labels.append(f"const REAL hNR{l}{m}")
 
     rholm_code = ccg.c_codegen(
         rholm,
@@ -57,14 +48,6 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
         verbose=False,
         include_braces=False,
         cse_varprefix="rho",
-    )
-
-    hNR_code = ccg.c_codegen(
-        hNR,
-        hNR_labels,
-        verbose=False,
-        include_braces=False,
-        cse_varprefix="hNR",
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -76,7 +59,9 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_special_coefficients_rholm"
-    params = "commondata_struct *restrict commondata,  REAL *restrict dynamics, REAL *rhos, REAL *hNR"
+    params = (
+        "commondata_struct *restrict commondata,  REAL *restrict dynamics, REAL *rhos"
+    )
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
@@ -93,13 +78,6 @@ const REAL Omega = dynamics[OMEGA];
 rhos[RHO21] = rho21;
 rhos[RHO43] = rho43;
 rhos[RHO55] = rho55;
-"""
-
-    body += hNR_code
-    body += """
-hNR[HNR21] = hNR21;
-hNR[HNR43] = hNR43;
-hNR[HNR55] = hNR55;
 """
 
     cfc.register_CFunction(
@@ -191,7 +169,10 @@ if (Omega_circ == NULL){
 
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
+const REAL chi1 = commondata->chi1;
+const REAL chi2 = commondata->chi2;
 const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
+const REAL chiA = (chi1 - chi2) / 2
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_COEFFICIENTS];
 double complex inspiral_modes[NUMMODES];
@@ -332,7 +313,7 @@ else{
 }
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
-REAL t_peak_55 = t_peak_22 + 10;
+REAL t_peak_55 = t_peak_22 - 10;
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[commondata->nsteps_fine - 2];
@@ -365,16 +346,35 @@ dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
 dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
 dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
+const REAL hNR21_threshold = 300
+const REAL hNR43_threshold = 200 * nu * (1 - 0.8 * chiA)
+const REAL hNR55_threshold = 2000
 
-SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos, hNR);
+SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
+
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics22, hNR);
 const REAL hNR21 = hNR[HNR21] * nu;
+const REAL hNR22 = hNR[HNR22] * nu;
+
+if fabs(hNR21) < hNR22 / hNR21_threshold{
+    hNR21 = signbit(hNR21) * hNR22/hNR21_threshold
+}
+
 const REAL hNR43 = hNR[HNR43] * nu;
+if fabs(hNR43) < hNR22 / hNR43_threshold{
+    hNR43 = signbit(hNR43) * hNR22/hNR43_threshold
+}
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
 REAL rho55 = rhos[RHO55];
+
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics55, hNR);
 const REAL hNR55 = hNR[HNR55] * nu;
+if fabs(hNR55) < hNR22 / hNR55_threshold{
+    hNR55 = signbit(hNR55) * hNR22/hNR55_threshold
+}
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
 double complex h21 = inspiral_modes[STRAIN21 - 1];
@@ -384,14 +384,14 @@ SEOBNRv5_aligned_spin_waveform(dynamics_55, commondata, inspiral_modes);
 double complex h55 = inspiral_modes[STRAIN55 - 1];
 
 const REAL v22 = pow(dynamics_22[OMEGA], 1.0/3.0);
-const REAL K21 = cabs(h21) / rho21;
-const REAL K43 = cabs(h43) / rho43;
+const REAL K21 = cabs(h21) / fabs(rho21);
+const REAL K43 = cabs(h43) / fabs(rho43);
 const REAL v55 = pow(dynamics_55[OMEGA], 1.0/3.0);
-const REAL K55 = cabs(h55) / rho55;
+const REAL K55 = cabs(h55) / fabs(rho55);
 
-const REAL vpow21 = pow(v22, 11.0);
-const REAL vpow43 = pow(v22, 9.0);
-const REAL vpow55 = pow(v55, 11.0);
+const REAL vpow21 = pow(v22, 7.0);
+const REAL vpow43 = pow(v22, 7.0);
+const REAL vpow55 = pow(v55, 5.0);
 
 const REAL c21 = (hNR21/K21 - rho21)/vpow21;
 const REAL c43 = (hNR43/K43 - rho43)/vpow43;

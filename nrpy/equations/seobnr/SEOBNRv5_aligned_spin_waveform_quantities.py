@@ -81,6 +81,11 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         for l in range(2, 9):
             for m in range(1, l + 1):
                 self.rho.update({f"({l} , {m})": 0})
+        self.pn_contribution_f = {}
+        modes = [(2, 1), (4, 3), (5, 5)]
+        for mode in modes:
+            l, m = mode
+            self.pn_contribution_f.update({f"({l} , {m})": 0})
         self.deltalm = {}
         self.fspin = {}
         self.fspin_limit = {}
@@ -170,34 +175,40 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
         )
         self.fspin["(5 , 5)"] = (
             (
-                -70 * self.nu / (3 * (-1 + 2 * self.nu))
-                + 110 * self.nu**2 / (3 * (-1 + 2 * self.nu))
-                + 10 / (3 * (-1 + 2 * self.nu))
+                (
+                    -70 * self.nu / (3 * (-1 + 2 * self.nu))
+                    + 110 * self.nu**2 / (3 * (-1 + 2 * self.nu))
+                    + 10 / (3 * (-1 + 2 * self.nu))
+                )
+                * (self.chi_A * self.deltainv)
+                + (
+                    10 / (3 * (-1 + 2 * self.nu))
+                    - 10 * self.nu / (-1 + 2 * self.nu)
+                    + 10 * self.nu**2 / (-1 + 2 * self.nu)
+                )
+                * self.chi_S
             )
-            * (self.chi_A * self.deltainv)
+            * self.vomega**3
             + (
-                10 / (3 * (-1 + 2 * self.nu))
-                - 10 * self.nu / (-1 + 2 * self.nu)
-                + 10 * self.nu**2 / (-1 + 2 * self.nu)
+                sp.Rational(5, 2) * self.chi_S**2
+                + (
+                    -5 / (-1 + 2 * self.nu)
+                    + 30 * self.nu / (-1 + 2 * self.nu)
+                    - 40 * self.nu**2 / (-1 + 2 * self.nu)
+                )
+                * self.chi_A
+                * self.chi_S
+                * self.deltainv
+                + (
+                    -5 / (2 * (-1 + 2 * self.nu))
+                    + 15 * self.nu / (-1 + 2 * self.nu)
+                    - 20 * self.nu**2 / (-1 + 2 * self.nu)
+                )
+                * self.chi_A**2
             )
-            * self.chi_S
-        ) * self.vomega**3 + (
-            sp.Rational(5, 2) * self.chi_S**2
-            + (
-                -5 / (-1 + 2 * self.nu)
-                + 30 * self.nu / (-1 + 2 * self.nu)
-                - 40 * self.nu**2 / (-1 + 2 * self.nu)
-            )
-            * self.chi_A
-            * self.chi_S
-            * self.deltainv
-            + (
-                -5 / (2 * (-1 + 2 * self.nu))
-                + 15 * self.nu / (-1 + 2 * self.nu)
-                - 20 * self.nu**2 / (-1 + 2 * self.nu)
-            )
-            * self.chi_A**2
-        ) * self.vomega**4
+            * self.vomega**4
+            + (self.c_55 * self.vomega**5)
+        )
         self.fspin_limit["(5 , 5)"] = (
             (
                 sp.Rational(-70, 3) * self.nu / ((-1 + 2 * self.nu))
@@ -260,6 +271,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 * self.chi_S**2
             )
+            + (self.c_43 * self.vomega**7)
         )
         self.fspin_limit["(4 , 3)"] = (
             self.vomega
@@ -414,6 +426,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 )
                 * (self.chi_A * self.chi_S * self.deltainv)
             )
+            + (self.c_21 * self.vomega**7)
         )
         self.fspin_limit["(2 , 1)"] = (
             -sp.Rational(3, 2) * self.vomega * (self.chi_A)
@@ -709,7 +722,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + f2r(1.25) * self.vomega**6
                 + -f2r(35.7) * self.vomega**8
             )
-            + (self.c_55 * self.vomega**11)
         )
         self.rho["(5 , 4)"] = (
             1
@@ -804,7 +816,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + -f2r(3.69) * self.vomega**6
                 + f2r(18.5) * self.vomega**8
             )
-            + (self.c_43 * self.vomega**9)
         )
         self.rho["(4 , 4)"] = (
             1
@@ -1160,7 +1171,18 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                 + f2r(26.5) * self.vomega**8
                 + 80 * self.vomega**10
             )
-            + (self.c_21 * self.vomega**11)
+        )
+        self.pn_contribution_f["(5 , 5)"] = (
+            self.noneqcond * (self.rho["(5 , 5)"] ** 5 + self.fspin["(5 , 5)"])
+            + self.eqcond * self.fspin_limit["(5 , 5)"]
+        )
+        self.pn_contribution_f["(4 , 3)"] = (
+            self.noneqcond * (self.rho["(4 , 3)"] ** 4 + self.fspin["(4 , 3)"])
+            + self.eqcond * self.fspin_limit["(4 , 3)"]
+        )
+        self.pn_contribution_f["(2 , 1)"] = (
+            self.noneqcond * (self.rho["(2 , 1)"] ** 2 + self.fspin["(2 , 1)"])
+            + self.eqcond * self.fspin_limit["(2 , 1)"]
         )
         self.Y = [
             [f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0), f2r(0)],

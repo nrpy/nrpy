@@ -119,9 +119,9 @@ SEBOBv2_IMR_waveform(&commondata);
     if output_waveform:
         body += r"""
 // Step TBD: Print the resulting waveform.
-for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
-    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
-    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN21)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN21)]));
+for (size_t i = 0; i < commondata.nsteps_fine; i++) {
+    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_fine[IDX_WF(i,TIME)] - commondata.t_attach)
+    , creal(commondata.waveform_fine[IDX_WF(i,STRAIN21)]), cimag(commondata.waveform_fine[IDX_WF(i,STRAIN21)]));
 }
 """
     if output_commondata:
@@ -303,14 +303,20 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
-#define NUMVARS_COEFFICIENTS 6
+#define NUMVARS_COEFFICIENTS 3
 #define RHO21 0
 #define RHO43 1
 #define RHO55 2
-#define HNR21 3
-#define HNR43 4
-#define HNR55 5
 #define IDX_COEFFICIENTS(idx, var) ((idx)*NUMVARS_COEFFICIENTS + (var))
+#define NUMVARS_HNRFITS 7
+#define HNR22 0
+#define HNR21 1
+#define HNR33 2
+#define HNR32 3
+#define HNR43 4
+#define HNR44 5
+#define HNR55 6
+#define IDX_HNRFITS(idx, var) ((idx)*NUMVARS_HNRFITS + (var))
 #define NUMMODES 8 
 #define STRAIN22 1
 #define STRAIN21 2
