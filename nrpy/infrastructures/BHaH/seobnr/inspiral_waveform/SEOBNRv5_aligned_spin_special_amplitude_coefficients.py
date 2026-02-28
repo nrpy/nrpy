@@ -174,7 +174,7 @@ const REAL chi2 = commondata->chi2;
 const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
 const REAL chiA = (chi1 - chi2) / 2
 REAL rhos[NUMVARS_COEFFICIENTS];
-REAL hNR[NUMVARS_COEFFICIENTS];
+REAL hNR[NUMVARS_HNRFITS];
 double complex inspiral_modes[NUMMODES];
 
 size_t i;
