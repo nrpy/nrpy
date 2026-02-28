@@ -160,8 +160,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     # 2. Build the C body with internal descriptive comments and the Preamble pattern
     body = f"""
-    // Comprehensive Device Pointer Mapping Macro for OpenMP Offloading
-    #define SOA_DEVICE_PTRS all_photons.f, all_photons.f_p, all_photons.f_p_p, all_photons.affine_param, all_photons.affine_param_p, all_photons.affine_param_p_p, all_photons.h, all_photons.status, all_photons.rejection_retries, all_photons.on_positive_side_of_window_prev, all_photons.on_positive_side_of_source_prev, all_photons.source_event_found, all_photons.source_event_lambda, all_photons.source_event_f_intersect, all_photons.window_event_found, all_photons.window_event_lambda, all_photons.window_event_f_intersect
 
     FILE *fp_debug = NULL; // File pointer for outputting sequential trajectory data for post-run analysis.
     if (commondata->debug_mode) {{
@@ -423,8 +421,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for map(tofrom: active_count) \\
                                 map(to: all_photons, bundle_photons[0:bundle_size]) \\
-                                is_device_ptr(needs_step_bundle, compacted_ids, compacted_local_ids) \\
-                                has_device_addr(SOA_DEVICE_PTRS)
+                                is_device_ptr(needs_step_bundle, compacted_ids, compacted_local_ids)
                 #else
                     #pragma omp parallel for
                 #endif
@@ -445,8 +442,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for \\
                                 map(to: all_photons) \\
-                                is_device_ptr(f_start_bundle, f_temp_bundle, compacted_ids) \\
-                                has_device_addr(SOA_DEVICE_PTRS)
+                                is_device_ptr(f_start_bundle, f_temp_bundle, compacted_ids)
                 #else
                     #pragma omp parallel for
                 #endif
@@ -471,8 +467,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     #ifdef USE_GPU
                         #pragma omp target teams distribute parallel for \\
                                     map(to: all_photons) \\
-                                    is_device_ptr(f_start_bundle, f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, compacted_ids) \\
-                                    has_device_addr(SOA_DEVICE_PTRS)
+                                    is_device_ptr(f_start_bundle, f_temp_bundle, metric_bundle, conn_bundle, k_array_bundle, compacted_ids)
                     #else
                         #pragma omp parallel for
                     #endif
@@ -495,8 +490,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 #ifdef USE_GPU
                     #pragma omp target teams distribute parallel for reduction(|:bundle_has_active) \\
                                 map(to: all_photons, commondata[0:1]) \\
-                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle, needs_step_bundle, compacted_ids, compacted_local_ids) \\
-                                has_device_addr(SOA_DEVICE_PTRS)
+                                is_device_ptr(f_start_bundle, f_out_bundle, f_err_bundle, k_array_bundle, needs_step_bundle, compacted_ids, compacted_local_ids)
                 #else
                     #pragma omp parallel for reduction(|:bundle_has_active)
                 #endif
@@ -537,7 +531,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             #ifdef USE_GPU
                 #pragma omp target teams distribute parallel for \\
                             map(to: all_photons, commondata[0:1], bundle_photons[0:bundle_size]) \\
-                            has_device_addr(SOA_DEVICE_PTRS) \\
                             map(tofrom: results_buffer[0:num_rays])
             #else
                 #pragma omp parallel for
@@ -627,8 +620,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     #ifdef USE_GPU
         #pragma omp target teams distribute parallel for \\
                     map(to: all_photons, commondata[0:1]) \\
-                    map(tofrom: results_buffer[0:num_rays]) \\
-                    has_device_addr(SOA_DEVICE_PTRS)
+                    map(tofrom: results_buffer[0:num_rays])
     #else
         #pragma omp parallel for
     #endif
@@ -764,7 +756,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     free(all_photons_host.source_event_f_intersect); free(all_photons_host.window_event_found);
     free(all_photons_host.window_event_lambda); free(all_photons_host.window_event_f_intersect);
 
-    #undef SOA_DEVICE_PTRS
     slot_manager_free(&tsm);
     """
 

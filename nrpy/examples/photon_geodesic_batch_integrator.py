@@ -195,8 +195,8 @@ if __name__ == "__main__":
 
     # --- RKF45 Adaptive Control Tolerances (Governs step sizing and local error) ---
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 5e-11
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 5e-11
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-11
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-11
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 10
@@ -241,13 +241,13 @@ if __name__ == "__main__":
         project_name=project_name,
         exec_or_library_name=exec_name,
         addl_CFLAGS=[
-            "-Wall -Wextra -g -fopenmp -O3 -march=native  -Wno-stringop-truncation",
+            "-Wall -Wextra -g -fopenmp -O3 -march=native",
             "-Wno-unknown-pragmas",
         ],
         addl_libraries=["-lm -fopenmp"],
     )
 
-# ##########################################################################
+    # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
     print("\n--- PHASE 1: Compiling C Code ---")

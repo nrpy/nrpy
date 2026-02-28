@@ -123,10 +123,14 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
             long int current_chunk_size = (num_rays - start_idx < BUNDLE_CAPACITY) ? (num_rays - start_idx) : BUNDLE_CAPACITY;
 
             #ifdef USE_GPU
-                #pragma omp target teams distribute parallel for map(to: all_photons) has_device_addr(all_photons->f) is_device_ptr(req_photon_ids, req_pos)
+                // Extract pointer to a local variable to satisfy GCC's OpenMP parser
+                double *f_ptr = all_photons->f;
+            #pragma omp target teams distribute parallel for map(to : all_photons[0 : 1]) map(tofrom : f_ptr[0 : num_rays * 9]) \
+                is_device_ptr(req_photon_ids, req_pos)
             #else
-                #pragma omp parallel for
+            #pragma omp parallel for
             #endif
+
             for (long int c = 0; c < current_chunk_size; c++) {{
                 // The global index of the photon currently being initialized.
                 long int i = start_idx + c;
@@ -175,10 +179,11 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
             placeholder_interpolation_engine_{spacetime_name}(commondata, (int)current_chunk_size, req_photon_ids, req_pos, metric_g4DD, NULL);
 
             #ifdef USE_GPU
-                #pragma omp target teams distribute parallel for map(to: all_photons) has_device_addr(all_photons->f) is_device_ptr(metric_g4DD)
+                #pragma omp target teams distribute parallel for map(to: all_photons[0:1]) map(tofrom: f_ptr[0:num_rays*9]) is_device_ptr(metric_g4DD)
             #else
                 #pragma omp parallel for
             #endif
+            
             for (long int c = 0; c < current_chunk_size; c++) {{
                 // The global index of the photon for p0 constraint solving.
                 long int i = start_idx + c;
