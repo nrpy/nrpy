@@ -1,9 +1,11 @@
 """
 Generates the C engine to handle a source plane intersection.
 
-Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module computes the impact parameters $(y_s, z_s)$ on the physical
-emission plane for use in ray-tracing visualizations.
+emission plane for use in ray-tracing visualizations. It unpacks coordinates
+strictly from thread-local memory to avoid slow global memory accesses,
+satisfying the 255-register limitation of the NVIDIA Ampere sm_86 architecture.
+Author: Dalton J. Moone.
 """
 
 import nrpy.c_function as cfc
@@ -14,9 +16,10 @@ def handle_source_plane_intersection() -> None:
     """
     Generate and register the C engine for source plane intersection handling.
 
-    This function defines the local coordinate system of the source plane
-    and checks if the photon hit the active region (r_min to r_max).
+    :param: None
+    :raises SystemError: If C function registration fails within the NRPy+ pipeline.
     """
+    # Register physical CodeParameters necessary for emission plane coordinates
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -38,37 +41,46 @@ def handle_source_plane_intersection() -> None:
         add_to_parfile=True,
     )
 
-    # 1. Define C-Function metadata
     includes = [
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
         "<math.h>",
         "<stdbool.h>",
     ]
-    desc = r"""@brief Processes a terminal intersection with the source emission plane.
+    desc = """@brief Processes a terminal intersection with the source emission plane entirely in thread-local memory.
+
+    @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
+    @param commondata Pointer to the globally constant parameters struct.
+    @param final_blueprint_data Pointer to the local blueprint structure $b_i$ to store impact geometries.
 
     Algorithm:
-    1. Reconstructs the source plane orthonormal basis (s_x, s_y, s_z).
-    2. Projects the intersection into local 2D coordinates.
-    3. Filters based on radial bounds [source_r_min, source_r_max]."""
-
+    1. Reconstructs the source plane orthonormal basis $(s_x, s_y, s_z)$.
+    2. Projects the intersection state $x^\mu$ into local 2D coordinates.
+    3. Filters based on physical radial bounds $[r_{min}, r_{max}]$.
+    
+    By consuming `source_event_f_intersect` as a local 9-element array instead of reading from 
+    `PhotonStateSoA` via `IDX_GLOBAL`, this kernel bypasses VRAM stalls and guarantees compliance 
+    with the 255-register limits on Ampere sm_86 hardware."""
+    cfunc_type = "BHAH_HD_FUNC bool"
     name = "handle_source_plane_intersection"
-    cfunc_type = "bool"
-    params = """const PhotonStateSoA *restrict all_photons, long int num_rays,
-                long int photon_idx, const commondata_struct *restrict commondata,
-                blueprint_data_t *restrict final_blueprint_data"""
-
-    # 2. Build the C body
+    params = (
+        "const double *restrict source_event_f_intersect, "
+        "const commondata_struct *restrict commondata, "
+        "blueprint_data_t *restrict final_blueprint_data"
+    )
+    include_CodeParameters_h = False
     body = r"""
-    // === Preamble: Unpack Intersection State ===
-    const double t_intersect = all_photons->source_event_f_intersect[IDX_GLOBAL(0, photon_idx, num_rays)]; // Coordinate time $t$ at intersection.
-    const double x_intersect = all_photons->source_event_f_intersect[IDX_GLOBAL(1, photon_idx, num_rays)]; // Cartesian $x$ at intersection.
-    const double y_intersect = all_photons->source_event_f_intersect[IDX_GLOBAL(2, photon_idx, num_rays)]; // Cartesian $y$ at intersection.
-    const double z_intersect = all_photons->source_event_f_intersect[IDX_GLOBAL(3, photon_idx, num_rays)]; // Cartesian $z$ at intersection.
-    const double L_intersect = all_photons->source_event_f_intersect[IDX_GLOBAL(8, photon_idx, num_rays)]; // Affine parameter $\lambda$ at intersection.
+    // --- PREAMBLE: UNPACK INTERSECTION STATE ---
+    // Reads intersection data from thread-local registers, circumventing IDX_GLOBAL global reads.
 
-    // === Step 1: Reconstruct Source Plane Basis ===
-    const double s_z[3] = { commondata->source_plane_normal_x, commondata->source_plane_normal_y, commondata->source_plane_normal_z }; // Plane normal vector.
+    const double t_intersect = source_event_f_intersect[0]; // Coordinate time $t$ at intersection.
+    const double x_intersect = source_event_f_intersect[1]; // Cartesian $x^1$ at intersection.
+    const double y_intersect = source_event_f_intersect[2]; // Cartesian $x^2$ at intersection.
+    const double z_intersect = source_event_f_intersect[3]; // Cartesian $x^3$ at intersection.
+    const double L_intersect = source_event_f_intersect[8]; // Affine parameter $\lambda$ at intersection.
+
+    // --- STEP 1: RECONSTRUCT SOURCE PLANE BASIS ---
+    const double s_z[3] = { commondata->source_plane_normal_x, commondata->source_plane_normal_y, commondata->source_plane_normal_z }; // Plane normal vector $n_i$.
     const double source_up[3] = { commondata->source_up_vec_x, commondata->source_up_vec_y, commondata->source_up_vec_z }; // Reference orientation vector.
 
     double s_x[3]; // Horizontal basis vector $s_x$ for the source plane.
@@ -87,27 +99,28 @@ def handle_source_plane_intersection() -> None:
         mag_s_x = sqrt(s_x[0]*s_x[0] + s_x[1]*s_x[1] + s_x[2]*s_x[2]);
     }
 
+    // Normalize the horizontal basis vector $s_x \cdot s_x = 1$.
     double inv_mag_s_x = 1.0 / mag_s_x;
     s_x[0] *= inv_mag_s_x; s_x[1] *= inv_mag_s_x; s_x[2] *= inv_mag_s_x;
 
-    double s_y[3]; // Vertical basis vector $s_y$ completing the plane coordinate system.
+    double s_y[3]; // Vertical basis vector $s_y$ completing the local orthogonal system.
     s_y[0] = s_z[1]*s_x[2] - s_z[2]*s_x[1];
     s_y[1] = s_z[2]*s_x[0] - s_z[0]*s_x[2];
     s_y[2] = s_z[0]*s_x[1] - s_z[1]*s_x[0];
 
-    // === Step 2: Project into Local Source Coordinates ===
+    // --- STEP 2: PROJECT INTO LOCAL SOURCE COORDINATES ---
     const double relative_pos[3] = {
         x_intersect - commondata->source_plane_center_x,
         y_intersect - commondata->source_plane_center_y,
         z_intersect - commondata->source_plane_center_z
-    }; // Vector from plane center to intersection point.
+    }; // Separation vector $\Delta x^i$ from plane center to intersection point.
 
-    const double local_y_s = relative_pos[0]*s_x[0] + relative_pos[1]*s_x[1] + relative_pos[2]*s_x[2]; // Impact parameter along $s_x$.
-    const double local_z_s = relative_pos[0]*s_y[0] + relative_pos[1]*s_y[1] + relative_pos[2]*s_y[2]; // Impact parameter along $s_y$.
+    const double local_y_s = relative_pos[0]*s_x[0] + relative_pos[1]*s_x[1] + relative_pos[2]*s_x[2]; // Impact parameter along the $s_x$ axis.
+    const double local_z_s = relative_pos[0]*s_y[0] + relative_pos[1]*s_y[1] + relative_pos[2]*s_y[2]; // Impact parameter along the $s_y$ axis.
 
-    // === Step 3: Radial Filtering and Termination ===
-    const double r_sq = local_y_s*local_y_s + local_z_s*local_z_s; // Squared radial distance from the source center.
-    const double r_min_sq = commondata->source_r_min * commondata->source_r_min; // Lower radial cutoff (e.g., ISCO).
+    // --- STEP 3: RADIAL FILTERING AND TERMINATION ---
+    const double r_sq = local_y_s*local_y_s + local_z_s*local_z_s; // Squared radial distance $r^2$ from the source center.
+    const double r_min_sq = commondata->source_r_min * commondata->source_r_min; // Lower radial cutoff to simulate physical bounding.
     const double r_max_sq = commondata->source_r_max * commondata->source_r_max; // Upper radial cutoff.
 
     if (r_sq >= r_min_sq && r_sq <= r_max_sq) {
@@ -121,16 +134,12 @@ def handle_source_plane_intersection() -> None:
     return false;
     """
 
-    prefunc = "#ifdef USE_GPU\n#pragma omp declare target\n#endif"
-    postfunc = "#ifdef USE_GPU\n#pragma omp end declare target\n#endif"
-
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
-        name=name,
         cfunc_type=cfunc_type,
+        name=name,
         params=params,
-        body=body,
-        prefunc=prefunc,
-        postfunc=postfunc,
+        include_CodeParameters_h=include_CodeParameters_h,
+        body=body
     )

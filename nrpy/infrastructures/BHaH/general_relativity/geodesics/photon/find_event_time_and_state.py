@@ -1,9 +1,11 @@
 """
 Registers the high-precision event-finding C kernel.
 
-Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
-Utilizes second-order quadratic interpolation for root-finding and
-Lagrange interpolation for state reconstruction at plane intersections.
+This module resolves exact coordinate intersections when a plane
+crossing is detected. It utilizes second-order quadratic interpolation
+for root-finding and Lagrange interpolation for state reconstruction at
+the intersection boundaries, executing strictly within thread-local registers.
+Author: Dalton J. Moone.
 """
 
 import nrpy.c_function as cfc
@@ -13,45 +15,55 @@ def find_event_time_and_state() -> None:
     """
     Register the find_event_time_and_state C function.
 
-    This function resolves the exact coordinate intersection when a plane
-    crossing is detected. It ensures sub-step accuracy for photon mapping.
-
-    >>> find_event_time_and_state()
+    :raises SystemError: If C function registration fails within the NRPy+ pipeline.
     """
-    # 1. Define C-Function metadata
-    includes = ["BHaH_defines.h", "math.h"]
+    includes = ["BHaH_defines.h", "<math.h>"]
     desc = """@brief Portable high-performance second-order root-finding.
-    Detailed algorithm: Uses position data from the current and two previous
-    integration steps to construct a quadratic model of the trajectory relative
-    to the target plane. The intersection is solved via the quadratic formula
-    and the full state is reconstructed via Lagrange polynomials."""
+
+    @param f_local The thread-local state array for step $f^\mu_{n}$.
+    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
+    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param normal The geometric unit normal vector $n_i$ of the target plane.
+    @param dist The scalar distance $d$ from the origin to the target plane.
+    @param event_lambda Pointer to the local affine parameter $\lambda$ to be updated.
+    @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
+
+    Detailed algorithm: Uses position data $x^i$ from the current and two previous
+    integration steps (passed as thread-local arrays) to construct a quadratic model
+    of the trajectory relative to the target plane. The intersection $\lambda$ is solved via the
+    quadratic formula and the full state $f^\mu$ is reconstructed via Lagrange polynomials.
+    Mapping logic directly to `f_local` preserves the strict sm_86 architecture limits by
+    bypassing global memory fetches and keeping all intermediates within the 255
+    registers per thread."""
+    cfunc_type = "BHAH_HD_FUNC void"
     name = "find_event_time_and_state"
-
-    params = """PhotonStateSoA *restrict all_photons,
-                const long int num_rays,
-                const long int photon_idx,
-                const double *restrict normal,
-                const double dist,
-                const event_type_t event_type"""
-
-    # 2. Build the C body with internal descriptive comments
+    params = (
+        "const double *restrict f_local, "
+        "const double *restrict f_p_local, "
+        "const double *restrict f_p_p_local, "
+        "const double *restrict normal, "
+        "const double dist, "
+        "double *restrict event_lambda, "
+        "double *restrict event_f_intersect"
+    )
+    include_CodeParameters_h = False
     body = r"""
-    // --- Helper Macros for SoA Access ---
-    #define GET_COMP(soa_ptr, comp) (soa_ptr[IDX_GLOBAL(comp, photon_idx, num_rays)])
-    #define PLANE_EVAL(soa_ptr) (GET_COMP(soa_ptr, 1)*normal[0] + GET_COMP(soa_ptr, 2)*normal[1] + GET_COMP(soa_ptr, 3)*normal[2] - dist)
+    // --- TEMPORAL AND GEOMETRIC STATE UNPACKING ---
+    // Evaluates the geometric plane equation $n_i x^i - d$ at the historical steps.
+    // Executing this via thread-local registers minimizes instruction latency.
 
-    // --- Preamble: Unpack Temporal and Geometric State History ---
-    // f2: current state, f1: previous state, f0: two steps prior.
-    const double f0 = PLANE_EVAL(all_photons->f_p_p); // Plane evaluation at step n-2.
-    const double f1 = PLANE_EVAL(all_photons->f_p);   // Plane evaluation at step n-1.
-    const double f2 = PLANE_EVAL(all_photons->f);     // Plane evaluation at step n.
+    const double f0 = f_p_p_local[1]*normal[0] + f_p_p_local[2]*normal[1] + f_p_p_local[3]*normal[2] - dist; // Plane evaluation at step $n-2$.
+    const double f1 = f_p_local[1]*normal[0] + f_p_local[2]*normal[1] + f_p_local[3]*normal[2] - dist;     // Plane evaluation at step $n-1$.
+    const double f2 = f_local[1]*normal[0] + f_local[2]*normal[1] + f_local[3]*normal[2] - dist;           // Plane evaluation at step $n$.
 
-    const double t0 = all_photons->affine_param_p_p[photon_idx]; // Affine parameter lambda at step n-2.
-    const double t1 = all_photons->affine_param_p[photon_idx];   // Affine parameter lambda at step n-1.
-    const double t2 = all_photons->affine_param[photon_idx];     // Affine parameter lambda at step n.
+    const double t0 = f_p_p_local[8]; // Affine parameter $\lambda$ at step $n-2$.
+    const double t1 = f_p_local[8];   // Affine parameter $\lambda$ at step $n-1$.
+    const double t2 = f_local[8];     // Affine parameter $\lambda$ at step $n$.
 
-    // --- Step 1: Linear Seed Calculation ---
+    // --- STEP 1: LINEAR SEED CALCULATION ---
     // Provides a fallback value if the quadratic interpolation fails or is unnecessary.
+    // Uses linear interpolation $\frac{y_2 x_1 - y_1 x_2}{y_2 - y_1}$ for numerical stability.
+
     double t_linear;
     if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) {
         t_linear = (f2 * t1 - f1 * t2) / (f2 - f1);
@@ -61,38 +73,38 @@ def find_event_time_and_state() -> None:
         t_linear = t1;
     }
 
-    // --- Step 2: Quadratic Interpolation (Second-Order Accuracy) ---
-    const double h0 = t1 - t0; // Interval size between step n-2 and n-1.
-    const double h1 = t2 - t1; // Interval size between step n-1 and n.
-    double lambda_event = t_linear; // The resulting affine parameter for the crossing.
+    // --- STEP 2: QUADRATIC INTERPOLATION (SECOND-ORDER ACCURACY) ---
+    const double h0 = t1 - t0; // Interval size $\Delta\lambda$ between step $n-2$ and $n-1$.
+    const double h1 = t2 - t1; // Interval size $\Delta\lambda$ between step $n-1$ and $n$.
+    double lambda_event = t_linear; // The resulting affine parameter $\lambda$ for the crossing.
 
     if (fabs(h0) > 1e-15 && fabs(h1) > 1e-15) {
-        // Newton form divided differences for the quadratic model: f(t) = a*(t-t2)^2 + b*(t-t2) + f2
+        // Newton form divided differences for the quadratic model: $f(t) = a(t-t_2)^2 + b(t-t_2) + f_2$.
         const double delta0 = (f1 - f0) / h0;
         const double delta1 = (f2 - f1) / h1;
-        const double a = (delta1 - delta0) / (h1 + h0); // The second-order coefficient (acceleration relative to plane).
-        const double b = a * h1 + delta1;               // The first-order coefficient (velocity relative to plane).
-        const double discriminant = b*b - 4.0 * a * f2; // Discriminant for the quadratic intersection.
+        const double a = (delta1 - delta0) / (h1 + h0); // The second-order coefficient representing relative acceleration.
+        const double b = a * h1 + delta1;               // The first-order coefficient representing relative velocity.
+        const double discriminant = b*b - 4.0 * a * f2; // Discriminant $b^2 - 4ac$ for the quadratic intersection.
 
         if (discriminant >= 0.0 && fabs(a) > 1e-16) {
-            // Use the stable form of the quadratic formula to find the root closest to the current step.
+            // Use the stable form of the quadratic formula $t = t_2 - \frac{2c}{-b \pm \sqrt{b^2 - 4ac}}$ to minimize truncation error.
             double denom = (b >= 0.0) ? (b + sqrt(discriminant)) : (b - sqrt(discriminant));
             if (fabs(denom) > 1e-16) {
                 double t_quad = t2 - (2.0 * f2 / denom);
                 double t_min = (t0 < t2) ? t0 : t2;
                 double t_max = (t0 < t2) ? t2 : t0;
-                // Bound check: ensure the quadratic root lies within the historical integration window.
+                // Bound check: ensure the quadratic root $\lambda_{root}$ lies within the historical integration window.
                 if (t_quad >= t_min && t_quad <= t_max) lambda_event = t_quad;
             }
         }
     }
 
-    // --- Step 3: Lagrange State Reconstruction ---
-    // Reconstruct the full 9-component state vector at the exact lambda_event.
+    // --- STEP 3: LAGRANGE STATE RECONSTRUCTION ---
+    // Reconstruct the full 9-component state vector $f^\mu$ at the exact $\lambda_{event}$.
     const double t = lambda_event;
-    double L0, L1, L2; // Lagrange basis polynomials.
+    double L0, L1, L2; // Lagrange basis polynomials $L_i(t)$.
     if (fabs(h0) < 1e-15 || fabs(h1) < 1e-15) {
-        // Fallback to linear weights if the steps are degenerate.
+        // Fallback to linear weights $L_i$ if the intervals are degenerate.
         L0 = 0.0; L1 = (t2 - t) / (t2 - t1); L2 = (t - t1) / (t2 - t1);
     } else {
         L0 = ((t - t1) * (t - t2)) / ((t0 - t1) * (t0 - t2));
@@ -100,38 +112,23 @@ def find_event_time_and_state() -> None:
         L2 = ((t - t0) * (t - t1)) / ((t2 - t0) * (t2 - t1));
     }
 
-    // Assign results to the appropriate intersection buffer (Source vs Window).
-    double *intersect_ptr = (event_type == SOURCE_EVENT) ? all_photons->source_event_f_intersect : all_photons->window_event_f_intersect;
+    // Assign the final computed event parameter $\lambda$.
+    *event_lambda = lambda_event;
 
-    if (event_type == SOURCE_EVENT) {
-        all_photons->source_event_lambda[photon_idx] = lambda_event;
-        all_photons->source_event_found[photon_idx] = true;
-    } else {
-        all_photons->window_event_lambda[photon_idx] = lambda_event;
-        all_photons->window_event_found[photon_idx] = true;
-    }
-
-    // Interpolate all 9 components: {t, x, y, z, p_t, p_x, p_y, p_z, lambda}
+    // Interpolate all 9 components $f^\mu$: $\{t, x, y, z, p_t, p_x, p_y, p_z, \lambda\}$.
     for (int i = 0; i < 9; i++) {
-        intersect_ptr[IDX_GLOBAL(i, photon_idx, num_rays)] = GET_COMP(all_photons->f_p_p, i) * L0 +
-                                                            GET_COMP(all_photons->f_p,   i) * L1 +
-                                                            GET_COMP(all_photons->f,     i) * L2;
+        event_f_intersect[i] = f_p_p_local[i] * L0 +
+                               f_p_local[i]   * L1 +
+                               f_local[i]     * L2;
     }
-
-    #undef GET_COMP
-    #undef PLANE_EVAL
     """
 
-    prefunc = "#ifdef USE_GPU\n#pragma omp declare target\n#endif"
-    postfunc = "#ifdef USE_GPU\n#pragma omp end declare target\n#endif"
-
-    # 3. Register the C function
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
         desc=desc,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
-        body=body,
-        postfunc=postfunc,
+        include_CodeParameters_h=include_CodeParameters_h,
+        body=body
     )
