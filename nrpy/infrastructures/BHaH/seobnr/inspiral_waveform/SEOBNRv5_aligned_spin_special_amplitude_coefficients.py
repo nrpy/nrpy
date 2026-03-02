@@ -172,7 +172,7 @@ const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
-const REAL chiA = (chi1 - chi2) / 2
+const REAL chiA = (chi1 - chi2) / 2;
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_HNRFITS];
 double complex inspiral_modes[NUMMODES];
@@ -346,15 +346,15 @@ dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
 dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
 dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
-const REAL hNR21_threshold = 300
-const REAL hNR43_threshold = 200 * nu * (1 - 0.8 * chiA)
-const REAL hNR55_threshold = 2000
+const REAL hNR21_threshold = 300;
+const REAL hNR43_threshold = 200 * nu * (1 - 0.8 * chiA);
+const REAL hNR55_threshold = 2000;
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
 
-SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics22, hNR);
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics_22, hNR);
 const REAL hNR21 = hNR[HNR21] * nu;
 const REAL hNR22 = hNR[HNR22] * nu;
 
@@ -370,7 +370,7 @@ if fabs(hNR43) < hNR22 / hNR43_threshold{
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
 REAL rho55 = rhos[RHO55];
 
-SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics55, hNR);
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics_55, hNR);
 const REAL hNR55 = hNR[HNR55] * nu;
 if fabs(hNR55) < hNR22 / hNR55_threshold{
     hNR55 = signbit(hNR55) * hNR22/hNR55_threshold

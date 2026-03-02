@@ -59,16 +59,12 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_hNR_fits_at_t_attach"
-    params = "commondata_struct *restrict commondata,  REAL *restrict dynamics, REAL *hNR"
+    params = "commondata_struct *restrict commondata, REAL *hNR"
     body = """
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-const REAL c_21 = commondata->c_21;
-const REAL c_43 = commondata->c_43;
-const REAL c_55 = commondata->c_55;
-const REAL Omega = dynamics[OMEGA];
 """
 
     body += hNR_code
@@ -83,7 +79,6 @@ hNR[HNR55] = hNR55;
 """
 
     cfc.register_CFunction(
-        subdirectory="inspiral_waveform",
         includes=includes,
         desc=desc,
         prefunc=prefunc,
