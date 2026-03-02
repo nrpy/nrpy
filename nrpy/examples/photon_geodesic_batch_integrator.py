@@ -128,20 +128,25 @@ if __name__ == "__main__":
     handle_window_plane_intersection.handle_window_plane_intersection()
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
 
+
+    # Fundamental tensor operations
+    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
+    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
+    calculate_ode_rhs.calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
+    p0_reverse.p0_reverse(geodesic_data.p0_photon)
+    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+
+
+
     # Numerical routines: Adaptive ODE integration and temporal management
     rkf45_helpers_for_header.rkf45_helpers_for_header()
     rkf45_update_and_control_helper.rkf45_update_and_control_helper()
     time_slot_manager_helpers.time_slot_manager_helpers()
     placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME)
 
-
-    # Fundamental tensor operations and initial data
-    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
-    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-    calculate_ode_rhs.calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
-    p0_reverse.p0_reverse(geodesic_data.p0_photon)
-    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+    # Initial Data
     set_initial_conditions_cartesian.set_initial_conditions_cartesian(SPACETIME)
+
 
     # Top-level integration orchestrators
     batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
@@ -274,7 +279,8 @@ if __name__ == "__main__":
         addl_CFLAGS=[
             "-lcudart",
             "-DUSE_GPU",
-            "-rdc=true" 
+            "-rdc=true" ,
+            "-DDEBUG"
         ],
         addl_libraries=["-lm", "-lcudart"],
         CC="nvcc",

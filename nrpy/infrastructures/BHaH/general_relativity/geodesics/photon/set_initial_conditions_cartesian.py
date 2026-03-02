@@ -1,10 +1,12 @@
 """
-Module for generating Cartesian initial conditions for the photon integration pipeline.
+This module generates the native CUDA kernel and host-side orchestrator for initializing photon trajectories.
 
-This module defines the C function responsible for initializing the spatial coordinates
-and spatial momentum of photons on a camera window. It utilizes a dedicated GPU kernel
-to execute the initialization directly in VRAM, enforcing thread-local memory access
-for the metric tensor to comply with hardware register limits.
+The high-level architecture utilizes a chunked VRAM staging buffer to populate the initial state vector
+$f^\mu$ directly within the device context. This design ensures that all initial geometric mappings and 
+Hamiltonian constraint solutions occur within the hardware registers of the sm_86 architecture, 
+protecting the 10GB VRAM limit by processing rays in controlled bundles. Data is bridged back to 
+pinned host memory via a 9-strided asynchronous memory copy to maintain the Streaming Bundle pipeline.
+
 Author: Dalton J. Moone.
 """
 
@@ -14,20 +16,20 @@ from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_co
 
 def set_initial_conditions_cartesian(spacetime_name: str) -> None:
     """
-    Register the C function and device kernel to set up Cartesian initial conditions for photons.
+    Registers the C function and device kernel for Cartesian photon initialization.
 
-    :param spacetime_name: The specific metric or spacetime identifier.
-    :raises Exception: Propagates nrpy core exceptions on generation failure.
+    :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
+    :raises Exception: Propagates NRPy+ core exceptions during AST generation.
     """
     # Python: Register necessary global parameters for the grid setup.
     par.register_CodeParameter("int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "t_start", 100, commondata=True, add_to_parfile=True)
 
-    # Python: Dictionary mapping for GPU kernel arguments.
+    # Python: Dictionary mapping for GPU kernel arguments using the VRAM staging pointer.
     arg_dict_cuda = {
         "commondata": "const commondata_struct *restrict",
         "num_rays": "const long int",
-        "all_photons": "PhotonStateSoA *restrict",
+        "d_f_chunk": "double *restrict",
         "cam_x": "const double", "cam_y": "const double", "cam_z": "const double",
         "wc_x": "const double", "wc_y": "const double", "wc_z": "const double",
         "nx_0": "const double", "nx_1": "const double", "nx_2": "const double",
@@ -36,48 +38,36 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         "current_chunk_size": "const long int"
     }
 
-    # Python: Define the GPU kernel body utilizing raw strings to protect LaTeX comments.
+    # Python: Define the GPU kernel body utilizing raw strings for LaTeX and strict variable documentation.
     kernel_body = rf"""
-    // --- THREAD IDENTIFICATION ---
-    /*
-     * Algorithmic Step: Calculate the local thread index within the current bundle batch.
-     * Architectural Justification: Maps execution tightly to the 1D streaming bundle grid,
-     * ensuring each thread uniquely handles a single independent photon trajectory.
-     */
-    const long int c = blockIdx.x * blockDim.x + threadIdx.x; // Local thread index within batch block.
+    // --- THREAD IDENTIFICATION & BOUNDARY CHECKS ---
+    // The identifier $c$ represents the local thread index within the current bundle batch.
+    const long int c = blockIdx.x * blockDim.x + threadIdx.x; 
 
-    // --- BOUNDARY CHECK ---
-    /*
-     * Algorithmic Step: Ensure out-of-bounds threads do not access invalid memory addresses.
-     * Architectural Justification: Truncates execution for boundary blocks to prevent warp divergence
-     * and segmentation faults when the batch size is not perfectly divisible by the block size.
-     */
+    // Architectural Justification: Truncation prevents out-of-bounds VRAM access for non-uniform batches.
     if (c >= current_chunk_size) return;
 
-    const long int i = start_idx + c; // Global index of the photon being initialized.
+    // The identifier $i$ represents the global ray index within the master $num\_rays$ SoA.
+    const long int i = start_idx + c; 
 
     // --- THREAD-LOCAL TENSOR ALLOCATION ---
-    /*
-     * Algorithmic Step: Allocate purely thread-local arrays for physical state and metric data.
-     * Architectural Justification: Restricting allocations to local arrays keeps intermediate math
-     * strictly within the 255 register limit per thread for the sm_86 architecture, preventing VRAM spillage.
-     */
-    double f_local[9]; // Thread-local array for the 9-element state vector $f^\mu$ and momentum $p^\mu$.
-    double metric_local[10]; // Thread-local array for the 10 independent metric components $g_{{\mu\nu}}$.
+    // Thread-local array for the 9-element state vector $f^\mu$ and 4-momentum $p^\mu$.
+    double f_local[9]; 
+    // Thread-local array for the 10 independent metric components $g_{{\mu\nu}}$.
+    double metric_local[10]; 
 
-    // --- PIXEL MAPPING ---
-    /*
-     * Algorithmic Step: Map the 1D global ray identifier to a 2D camera pixel coordinate.
-     * Architectural Justification: Integer arithmetic mapping provides deterministic sub-pixel
-     * sampling without relying on floating-point accumulation drift.
-     */
-    const int row = i / commondata->scan_density; // Vertical pixel coordinate index.
-    const int col = i % commondata->scan_density; // Horizontal pixel coordinate index.
+    // --- PIXEL MAPPING & GEOMETRY ---
+    // Vertical pixel coordinate index within the virtual observer's projection frame.
+    const int row = i / commondata->scan_density; 
+    // Horizontal pixel coordinate index within the virtual observer's projection frame.
+    const int col = i % commondata->scan_density; 
 
-    const double x_pix = -commondata->window_width/2.0 + (col + 0.5) * (commondata->window_width / commondata->scan_density); // Local physical distance $x$.
-    const double y_pix = -commondata->window_height/2.0 + (row + 0.5) * (commondata->window_height / commondata->scan_density); // Local physical distance $y$.
+    // The variable $x_{{pix}}$ is the local physical distance along the horizontal camera axis.
+    const double x_pix = -commondata->window_width/2.0 + (col + 0.5) * (commondata->window_width / commondata->scan_density); 
+    // The variable $y_{{pix}}$ is the local physical distance along the vertical camera axis.
+    const double y_pix = -commondata->window_height/2.0 + (row + 0.5) * (commondata->window_height / commondata->scan_density); 
 
-    // Global Cartesian intersection point on the projection window $x^\mu$.
+    // The array $target\_pos$ stores the global Cartesian intersection point on the projection window $x^\mu$.
     const double target_pos[3] = {{
         wc_x + x_pix*nx_0 + y_pix*ny_0,
         wc_y + x_pix*nx_1 + y_pix*ny_1,
@@ -85,60 +75,48 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
     }};
 
     // --- INITIAL STATE POPULATION ---
-    /*
-     * Algorithmic Step: Populate the thread-local state vector $f^\mu_{{local}}$ with starting coordinates.
-     * Architectural Justification: Immediate sequential assignment into registers avoids temporary VRAM reads.
-     */
-    f_local[0] = commondata->t_start;
-    f_local[1] = cam_x;
-    f_local[2] = cam_y;
-    f_local[3] = cam_z;
+    f_local[0] = commondata->t_start; // Coordinate time $t$
+    f_local[1] = cam_x; // Spatial position $x$
+    f_local[2] = cam_y; // Spatial position $y$
+    f_local[3] = cam_z; // Spatial position $z$
 
-    const double V_x = target_pos[0] - cam_x; // Unnormalized geometric trajectory vector $V^x$.
-    const double V_y = target_pos[1] - cam_y; // Unnormalized geometric trajectory vector $V^y$.
-    const double V_z = target_pos[2] - cam_z; // Unnormalized geometric trajectory vector $V^z$.
+    // Vector component $V^x$ for the unnormalized geometric trajectory.
+    const double V_x = target_pos[0] - cam_x; 
+    // Vector component $V^y$ for the unnormalized geometric trajectory.
+    const double V_y = target_pos[1] - cam_y; 
+    // Vector component $V^z$ for the unnormalized geometric trajectory.
+    const double V_z = target_pos[2] - cam_z; 
 
-    const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y + V_z*V_z); // Normalization scalar.
+    // Functional Justification: Normalization ensures initial 4-momentum $p^\mu$ satisfies null trajectory constraints.
+    const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y + V_z*V_z); 
 
-    f_local[5] = V_x * inv_mag_V;
-    f_local[6] = V_y * inv_mag_V;
-    f_local[7] = V_z * inv_mag_V;
-    f_local[8] = 0.0; // Initial Affine parameter $\lambda$.
+    f_local[5] = V_x * inv_mag_V; // Initial momentum component $p^x$
+    f_local[6] = V_y * inv_mag_V; // Initial momentum component $p^y$
+    f_local[7] = V_z * inv_mag_V; // Initial momentum component $p^z$
+    f_local[8] = 0.0; // Initial affine parameter $\lambda$
 
     // --- INTERPOLATION & METRIC EVALUATION ---
-    /*
-     * Algorithmic Step: Evaluate the metric tensor at the photon's starting coordinate.
-     * Architectural Justification: Utilizing the inline physics helper forces the metric calculations
-     * directly into the calling kernel's thread-local registers, preventing external function call overhead.
-     */
+    // Thread-local temporary array for the 4-position $x^\mu$.
     double pos_local[4] = {{f_local[0], f_local[1], f_local[2], f_local[3]}};
     placeholder_interpolation_engine_{spacetime_name}(commondata, pos_local, metric_local, NULL);
 
     // --- HAMILTONIAN CONSTRAINT ---
-    /*
-     * Algorithmic Step: Solve the negative root of the Hamiltonian constraint $p_\mu p^\mu = 0$ for initial $p^0$.
-     * Architectural Justification: The inline device call executes strictly within the SM core.
-     */
+    // Algorithmic Step: Solve the quadratic Hamiltonian constraint $p_\mu p^\mu = 0$ specifically for $p^0$.
     p0_reverse(metric_local, f_local, &f_local[4]);
 
-    // --- GLOBAL MEMORY WRITE ---
-    /*
-     * Algorithmic Step: Write the completed local state vector to the global SoA $f^\mu$.
-     * Architectural Justification: Executing a single coalesced 9-strided write to global memory at the conclusion
-     * of the kernel minimizes VRAM transactions and prevents warp serialization.
-     */
+    // --- GLOBAL VRAM CHUNK WRITE ---
+    // Algorithmic Step: Populate the device staging buffer $d\_f\_chunk$ with the validated state vector.
+    // Hardware Justification: Single coalesced writes prevent warp serialization on the sm_86 memory controller.
     for(int m=0; m<9; m++) {{
-        all_photons->f[IDX_GLOBAL(m, i, num_rays)] = f_local[m];
+        d_f_chunk[IDX_LOCAL(m, c, BUNDLE_CAPACITY)] = f_local[m];
     }}
     """
 
-    # Python: Hardware threading configuration for the RTX 3080.
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(current_chunk_size + 256 - 1) / 256", "1", "1"],
     }
 
-    # Python: Generate the standalone CUDA kernel utilizing the BHaH infrastructure.
     kernel_prefunc, launch_code = generate_kernel_and_launch_code(
         kernel_name=f"set_initial_conditions_kernel_{spacetime_name}",
         kernel_body=kernel_body,
@@ -149,42 +127,27 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         cfunc_decorators="__global__",
     )
 
-    # Python: Extract physics helpers to force them into a single translation unit.
+    # Python: Extract bodies from the registration dictionary to satisfy the Translation Unit Inlining Mandate.
     metric_func = cfc.CFunction_dict[f"g4DD_metric_{spacetime_name}"].full_function
     conn_func = cfc.CFunction_dict[f"connections_{spacetime_name}"].full_function
     interp_func = cfc.CFunction_dict[f"placeholder_interpolation_engine_{spacetime_name}"].full_function
     p0_func = cfc.CFunction_dict["p0_reverse"].full_function
 
-    # Python: Define the ordered variables for CFunction registration.
     prefunc = f"{metric_func}\n{conn_func}\n{interp_func}\n{p0_func}\n{kernel_prefunc}"
 
-    includes = [
-        "BHaH_defines.h",
-        "BHaH_function_prototypes.h",
-        "<math.h>",
-        "<stdio.h>",
-        "<stdlib.h>",
-    ]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "<math.h>", "<stdio.h>", "<stdlib.h>"]
 
     desc = rf"""@brief Initializes Cartesian starting conditions for photons in {spacetime_name}.
-    
-    Detailed algorithm: Computes the geometric basis vectors of the camera window
-    on the host, then launches a standalone device kernel in controlled batches to map 
-    individual photon rays to pixel coordinates and populate the initial flattened Structure of Arrays
-    (SoA) state vector. Enforces local register boundaries to prevent VRAM overflow.
-
-    @param commondata The master configuration struct containing global spacetime parameters.
-    @param num_rays Total photons in the simulation batch.
-    @param all_photons Pointer to the master SoA state vector mapped to VRAM.
-    @param window_center_out Output buffer for geometric center mapped to CPU.
-    @param n_x_out Output buffer for the $x$-axis geometric basis vector mapped to CPU.
-    @param n_y_out Output buffer for the $y$-axis geometric basis vector mapped to CPU.
-    @param n_z_out Output buffer for the $z$-axis geometric basis vector mapped to CPU."""
+    @param commondata Master configuration struct containing global parameters.
+    @param num_rays Total number of photon trajectories in the simulation, $num\_rays$.
+    @param all_photons Pointer to the master SoA state vector $f^\mu$ in host memory.
+    @param window_center_out Output buffer for the geometric window center.
+    @param n_x_out Output buffer for the $x$-axis basis vector $n_x^i$.
+    @param n_y_out Output buffer for the $y$-axis basis vector $n_y^i$.
+    @param n_z_out Output buffer for the $z$-axis basis vector $n_z^i$."""
 
     cfunc_type = "void"
-    
     name = f"set_initial_conditions_cartesian_{spacetime_name}"
-    
     params = (
         "const commondata_struct *restrict commondata, "
         "long int num_rays, "
@@ -195,35 +158,31 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         "double n_z_out[3]"
     )
 
-    include_CodeParameters_h = False
-
     body = rf"""
     // --- HOST-SIDE GEOMETRY SETUP ---
-    /*
-     * Algorithmic Step: Construct orthonormal basis vectors for the virtual observer camera.
-     * Architectural Justification: Evaluating static camera geometry exclusively within the host CPU 
-     * context prevents redundant calculations inside the massively parallel VRAM kernel.
-     */
-    const double cam_x = commondata->camera_pos_x; // Spatial coordinate $x$ of observer's camera $x^\mu_{{cam}}$.
-    const double cam_y = commondata->camera_pos_y; // Spatial coordinate $y$ of observer's camera $x^\mu_{{cam}}$.
-    const double cam_z = commondata->camera_pos_z; // Spatial coordinate $z$ of observer's camera $x^\mu_{{cam}}$.
+    const double cam_x = commondata->camera_pos_x; 
+    const double cam_y = commondata->camera_pos_y; 
+    const double cam_z = commondata->camera_pos_z; 
 
-    const double wc_x = commondata->window_center_x; // Geometric center coordinate $x$ of projection window.
-    const double wc_y = commondata->window_center_y; // Geometric center coordinate $y$ of projection window.
-    const double wc_z = commondata->window_center_z; // Geometric center coordinate $z$ of projection window.
+    const double wc_x = commondata->window_center_x; 
+    const double wc_y = commondata->window_center_y; 
+    const double wc_z = commondata->window_center_z; 
 
-    double n_z[3] = {{wc_x - cam_x, wc_y - cam_y, wc_z - cam_z}}; // Vector normal to the camera window.
-    double mag_n_z = sqrt(n_z[0]*n_z[0] + n_z[1]*n_z[1] + n_z[2]*n_z[2]); // Normalization factor for $z$-axis vector.
+    // Vector $n_z$ normal to the camera window representing the line of sight.
+    double n_z[3] = {{wc_x - cam_x, wc_y - cam_y, wc_z - cam_z}}; 
+    double mag_n_z = sqrt(n_z[0]*n_z[0] + n_z[1]*n_z[1] + n_z[2]*n_z[2]); 
     for(int j=0; j<3; j++) n_z[j] /= mag_n_z;
 
-    const double guide_up[3] = {{commondata->window_up_vec_x, commondata->window_up_vec_y, commondata->window_up_vec_z}}; // Geometric reference vector defining "up".
+    // Geometric reference vector defining the upward orientation.
+    const double guide_up[3] = {{commondata->window_up_vec_x, commondata->window_up_vec_y, commondata->window_up_vec_z}}; 
     
-    double n_x[3] = {{n_z[1]*guide_up[2] - n_z[2]*guide_up[1], n_z[2]*guide_up[0] - n_z[0]*guide_up[2], n_z[0]*guide_up[1] - n_z[1]*guide_up[0]}}; // Orthonormal basis vector $n_x^i$.
-    double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]); // Normalization factor for $x$-axis vector.
+    // Basis vector $n_x$ describing the horizontal camera axis.
+    double n_x[3] = {{n_z[1]*guide_up[2] - n_z[2]*guide_up[1], n_z[2]*guide_up[0] - n_z[0]*guide_up[2], n_z[0]*guide_up[1] - n_z[1]*guide_up[0]}}; 
+    double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]); 
 
-    // Fallback mechanism to prevent cross-product singularities at the geometric poles.
+    // Fallback logic prevents cross-product singularities at geometric poles for numerical stability.
     if (mag_n_x < 1e-9) {{
-        double alternative_up[3] = {{0.0, 1.0, 0.0}}; // Alternative "up" direction mapped to the $y$-axis.
+        double alternative_up[3] = {{0.0, 1.0, 0.0}}; 
         if (fabs(n_z[1]) > 0.999) {{ alternative_up[1] = 0.0; alternative_up[2] = 1.0; }}
         n_x[0] = alternative_up[1]*n_z[2] - alternative_up[2]*n_z[1];
         n_x[1] = alternative_up[2]*n_z[0] - alternative_up[0]*n_z[2];
@@ -233,7 +192,8 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
 
     for(int j=0; j<3; j++) n_x[j] /= mag_n_x;
 
-    double n_y[3] = {{n_z[1]*n_x[2] - n_z[2]*n_x[1], n_z[2]*n_x[0] - n_z[0]*n_x[2], n_z[0]*n_x[1] - n_z[1]*n_x[0]}}; // Orthonormal basis vector $n_y^i$.
+    // Basis vector $n_y$ describing the vertical camera axis.
+    double n_y[3] = {{n_z[1]*n_x[2] - n_z[2]*n_x[1], n_z[2]*n_x[0] - n_z[0]*n_x[2], n_z[0]*n_x[1] - n_z[1]*n_x[0]}}; 
 
     window_center_out[0] = wc_x;
     window_center_out[1] = wc_y;
@@ -242,25 +202,45 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         n_x_out[j] = n_x[j]; n_y_out[j] = n_y[j]; n_z_out[j] = n_z[j];
     }}
 
-    const double nx_0 = n_x[0]; // Local basis variable mapped for $x$-axis vector $0$.
-    const double nx_1 = n_x[1]; // Local basis variable mapped for $x$-axis vector $1$.
-    const double nx_2 = n_x[2]; // Local basis variable mapped for $x$-axis vector $2$.
-    const double ny_0 = n_y[0]; // Local basis variable mapped for $y$-axis vector $0$.
-    const double ny_1 = n_y[1]; // Local basis variable mapped for $y$-axis vector $1$.
-    const double ny_2 = n_y[2]; // Local basis variable mapped for $y$-axis vector $2$.
+    const double nx_0 = n_x[0]; 
+    const double nx_1 = n_x[1]; 
+    const double nx_2 = n_x[2]; 
+    const double ny_0 = n_y[0]; 
+    const double ny_1 = n_y[1]; 
+    const double ny_2 = n_y[2]; 
 
-    // --- BATCH PROCESSING & KERNEL LAUNCH ---
-    /*
-     * Algorithmic Step: Launch the CUDA kernel to populate the initial state vector directly in VRAM.
-     * Architectural Justification: The host-side loop orchestrates execution within strict BUNDLE_CAPACITY limits
-     * to prevent PCIe bottlenecks and avoid exceeding the 10GB VRAM ceiling of the target hardware.
-     */
+    // --- VRAM STAGING ALLOCATION ---
+    // Device pointer for the chunked VRAM staging buffer $d\_f\_chunk$.
+    double *d_f_chunk;
+    // Hardware Justification: Memory is processed in bundles to protect the 10GB hardware limit.
+    BHAH_MALLOC_DEVICE(d_f_chunk, sizeof(double) * 9 * BUNDLE_CAPACITY);
+
     for (long int start_idx = 0; start_idx < num_rays; start_idx += BUNDLE_CAPACITY) {{
-        // Computes the strict size of the active processing block.
+        // Variable current_chunk_size defines the active range for the current streaming bundle.
         const long int current_chunk_size = (num_rays - start_idx < BUNDLE_CAPACITY) ? (num_rays - start_idx) : BUNDLE_CAPACITY;
         
         {launch_code}
+
+        // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
+        #ifdef DEBUG
+        cudaDeviceSynchronize();
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {{
+            printf("Init Kernel Failed: %s\\n", cudaGetErrorString(err));
+            exit(1);
+        }}
+        #endif
+
+        // --- 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
+        // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
+        for(int m=0; m<9; m++) {{
+            cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
+                       d_f_chunk + (m * BUNDLE_CAPACITY), 
+                       sizeof(double) * current_chunk_size, 
+                       cudaMemcpyDeviceToHost);
+        }}
     }}
+    BHAH_FREE_DEVICE(d_f_chunk);
     """
 
     cfc.register_CFunction(
@@ -270,6 +250,6 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=include_CodeParameters_h,
+        include_CodeParameters_h=False,
         body=body,
     )
