@@ -121,13 +121,6 @@ if __name__ == "__main__":
     # This phase populates the internal C-function registry with generated ASTs (Abstract Syntax Trees)
     print(" -> Registering C functions and local CodeParameters...")
 
-    # Fundamental tensor operations and initial data
-    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
-    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-    calculate_ode_rhs.calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
-    p0_reverse.p0_reverse(geodesic_data.p0_photon)
-    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
-    set_initial_conditions_cartesian.set_initial_conditions_cartesian(SPACETIME)
 
     # Event detection mechanisms (root-finding for geometric boundaries)
     event_detection_manager.event_detection_manager()
@@ -142,6 +135,14 @@ if __name__ == "__main__":
     time_slot_manager_helpers.time_slot_manager_helpers()
     placeholder_interpolation_engine.placeholder_interpolation_engine(SPACETIME)
 
+    # Fundamental tensor operations and initial data
+    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
+    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
+    calculate_ode_rhs.calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
+    p0_reverse.p0_reverse(geodesic_data.p0_photon)
+    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+    set_initial_conditions_cartesian.set_initial_conditions_cartesian(SPACETIME)
+    
     # Top-level integration orchestrators
     batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
     main.main(SPACETIME)
@@ -234,10 +235,10 @@ if __name__ == "__main__":
     )
     
     
-    # --- Inject Native CUDA Cross-Compilation & Warp-Aggregated Macros ---
+# --- Inject Native CUDA Cross-Compilation & Warp-Aggregated Macros ---
     cuda_macros = r"""
     #ifdef __CUDACC__
-        #define BHAH_HD_INLINE __device__ __inline__
+        #define BHAH_HD_INLINE __device__
         #define BHAH_HD_FUNC __device__
         #define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)
     #else
