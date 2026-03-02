@@ -29,7 +29,7 @@ def connections(
     Generate and register the C function to compute Christoffel symbols.
 
     The C function computes the unique components of the Christoffel symbols
-    ($\Gamma^\alpha_{\mu \nu}$) and writes them to a thread-local 1D array.
+    (Gamma^alpha_{mu nu}$) and writes them to a thread-local 1D array.
 
     :param Gamma4UDD_exprs: A 4x4x4 list of SymPy expressions for connections.
     :param spacetime_name: Name of the spacetime.
@@ -86,7 +86,7 @@ def connections(
 
     # Python: Define C-Function metadata in strict chronological order
     includes = ["BHaH_defines.h"]
-    desc = f"""@brief Computes the 40 unique Christoffel symbols $\Gamma^\alpha_{{\mu \nu}}$ for the {spacetime_name} metric.
+    desc = rf"""@brief Computes the 40 unique Christoffel symbols $Gamma^alpha_{{mu nu}}$ for the {spacetime_name} metric.
     @param commondata Struct containing global spacetime parameters.
     @param f_local Thread-local array containing the 1D flattened state vector.
     @param Gamma_local Thread-local array where the connection components are stored."""
@@ -98,9 +98,9 @@ def connections(
         "double *restrict Gamma_local"
     )
     include_CodeParameters_h = True
-    body = f"""
+    body = rf"""
     // --- CONNECTION EVALUATION & THREAD-LOCAL UNPACKING ---
-    // Algorithmic Step: Extract spatial coordinates $x^i$ and compute $\Gamma^\alpha_{{\mu \nu}}$.
+    // Algorithmic Step: Extract spatial coordinates $x^i$ and compute $Gamma^alpha_{{mu nu}}$.
     // Hardware Justification: Thread-local execution prevents latency-heavy reads from VRAM 
     // and guarantees mathematical intermediates stay in hardware registers.
     {preamble}

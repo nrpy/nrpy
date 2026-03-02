@@ -9,7 +9,7 @@ Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
 import nrpy.params as par
-from utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 def set_initial_conditions_cartesian(spacetime_name: str) -> None:
     """

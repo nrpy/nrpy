@@ -38,19 +38,17 @@ def calculate_ode_rhs(
     if not geodesic_rhs_expressions:
         raise ValueError("geodesic_rhs_expressions must contain at least one mathematical expression.")
 
-    # 1. Define pre-function and includes
-    prefunc = ""
     # Include headers for hardware-agnostic definitions and optimized CUDA intrinsics.
     includes = ["BHaH_defines.h", "cuda_intrinsics.h"]
 
-    # 2. Define function description with Doxygen and LaTeX
+    # 1. Define function description with Doxygen and LaTeX
     desc = """@brief Computes the right-hand side of the photon geodesic ODE system.
     @param f_local Thread-local state vector containing coordinates $x^{\\mu}$ and momenta $p^{\\mu}$.
     @param metric_local Thread-local array containing the 10 upper-triangular components of $g_{\\mu\\nu}$.
     @param Gamma_local Thread-local array containing the 40 Christoffel symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$.
     @param k_local Thread-local output array storing the evaluated derivatives $dk / d\\lambda$ for the current stage."""
 
-    # 3. Define function type and signature
+    # 2. Define function type and signature
     # BHAH_HD_INLINE maps to __device__ __inline__ on GPU, forcing logic into registers.
     cfunc_type = "BHAH_HD_INLINE void"
     name = "calculate_ode_rhs"
@@ -61,7 +59,7 @@ def calculate_ode_rhs(
 
     include_CodeParameters_h = False
 
-    # 4. Generate the Body
+    # 3. Generate the Body
     used_symbol_names = {
         str(sym) for expr in geodesic_rhs_expressions for sym in expr.free_symbols
     }
@@ -131,26 +129,26 @@ def calculate_ode_rhs(
     # Map the output directly to the local derivative array indices (0-8)
     k_array_outputs = [f"k_local[{i}]" for i in range(9)]
 
-    body += ccg.c_codegen(
+    # Python: Generate the C code using the SIMD backend for vectorized mathematical operations
+    raw_c_code = ccg.c_codegen(
         geodesic_rhs_expressions,
         k_array_outputs,
         enable_cse=True,
-        enable_intrinsics=True,
+        enable_simd=True,
         include_braces=False,
         verbose=False,
     )
 
-    postfunc = ""
+    # Python: Translate SIMD macro signatures to native CUDA hardware intrinsics
+    body += raw_c_code.replace("SIMD", "CUDA")
 
     # 5. Register the function adhering to the canonical Master Order
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body,
-        postfunc=postfunc,
+        body=body
     )

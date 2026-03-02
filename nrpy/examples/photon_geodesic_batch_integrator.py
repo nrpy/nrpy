@@ -43,6 +43,7 @@ from nrpy.equations.general_relativity.geodesics import geodesics as geo
 
 # NRPy BlackHoles@Home (BHaH) infrastructure modules for C project management
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH import BHaH_device_defines_h
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
@@ -107,6 +108,8 @@ if __name__ == "__main__":
 
     # Instruct NRPy+ to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
+    # Explicitly set parallelization to CUDA to enable device-specific header generation
+    par.set_parval_from_str("parallelization", "cuda")
 
     # Step 4: Acquire Symbolic Physics Expressions
     # Translates abstract GR tensor mathematics into evaluable SymPy expressions
@@ -220,50 +223,63 @@ if __name__ == "__main__":
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
         project_name=project_name, cmdline_inputs=cmdline_inputs_list
     )
-
 # ##########################################################################
-    # Step 7: Assemble Final C Project Infrastructure
+    # Step 7: Assemble Final C Project Infrastructure (CUDA Native Version)
     # ##########################################################################
     print(" -> Assembling C project on disk...")
+    
+    # Python: Generate the core BHaH defines header
     BHaH_defines_h.output_BHaH_defines_h(
         project_dir=project_dir, enable_rfm_precompute=False
     )
     
-    # --- Inject Cross-Compilation Macros ---
-    cuda_macros = """
+    
+    # --- Inject Native CUDA Cross-Compilation & Warp-Aggregated Macros ---
+    cuda_macros = r"""
     #ifdef __CUDACC__
         #define BHAH_HD_INLINE __device__ __inline__
         #define BHAH_HD_FUNC __device__
+        #define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)
     #else
         #define BHAH_HD_INLINE static inline
         #define BHAH_HD_FUNC static
+        #define BHAH_WARP_ATOMIC_ADD(ptr, val) (*(ptr) += (val))
     #endif
     """
     with open(os.path.join(project_dir, "BHaH_defines.h"), "a") as f:
         f.write(cuda_macros)
 
+    # Generate device-specific headers ONLY after all physics modules are registered
+    BHaH_device_defines_h.output_device_headers(project_dir=project_dir)
+
+    print(" -> Copying hardware intrinsics to project directory...")
+    # Python: Copy cuda_intrinsics.h from nrpy/helpers/ to the project root.
+    # Python: This resolves the fatal error: cuda_intrinsics.h: No such file or directory.
     gh.copy_files(
         package="nrpy.helpers",
-        filenames_list=["simd_intrinsics.h"],
+        filenames_list=["cuda_intrinsics.h"],
         project_dir=project_dir,
-        subdirectory="intrinsics",
+        subdirectory="."  # Placing in root so #include "cuda_intrinsics.h" works
     )
 
-    print(" -> Generating Makefile...")
+
+    print(" -> Generating Makefile for RTX 3080 (sm_86)...")
+    # Python: Orchestrate Makefile generation using the dedicated nvcc compiler profile.
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
+        compiler_opt_option="nvcc",
         addl_CFLAGS=[
-            "-Wall -Wextra -g -fopenmp -O3 -march=native",
-            "-Wno-unknown-pragmas",
-            "-DUSE_GPU",                     
-            "-foffload=nvptx-none",                       
-            "-foffload-options=nvptx-none=-march=sm_86",
-            "-rdc=true" # <--- Added for Relocatable Device Code
+            "-lcudart",
+            "-DUSE_GPU",
+            "-rdc=true" 
         ],
-        addl_libraries=["-lm -fopenmp"],
+        addl_libraries=["-lm", "-lcudart"],
+        CC="nvcc",
+        src_code_file_ext="cu"
     )
+
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################

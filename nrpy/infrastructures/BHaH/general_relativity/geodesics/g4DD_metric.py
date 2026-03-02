@@ -30,7 +30,7 @@ def g4DD_metric(
     Generate and register the C function to compute metric components.
 
     The C function computes the upper-triangular components of the metric
-    tensor ($g_{\mu\nu}$) and writes them to a thread-local 1D array.
+    tensor ($g_{mu nu}$) and writes them to a thread-local 1D array.
 
     :param g4DD_exprs: A 4x4 list of SymPy expressions representing the metric.
     :param spacetime_name: Name of the spacetime.
@@ -86,7 +86,7 @@ def g4DD_metric(
 
     # Python: Define C-Function metadata in strict chronological order
     includes = ["BHaH_defines.h"]
-    desc = f"""@brief Computes the 10 unique components of the {spacetime_name} metric $g_{{\\mu\\nu}}$ for a {PARTICLE} particle.
+    desc = rf"""@brief Computes the 10 unique components of the {spacetime_name} metric $g_{{mu nu}}$ for a {PARTICLE} particle.
     @param commondata Struct containing global spacetime parameters.
     @param f_local Thread-local array containing the 1D flattened state vector.
     @param metric_local Thread-local array where the symmetric metric components are stored."""
@@ -98,9 +98,9 @@ def g4DD_metric(
         "double *restrict metric_local"
     )
     include_CodeParameters_h = True
-    body = f"""
+    body = rf"""
     // --- METRIC EVALUATION & THREAD-LOCAL UNPACKING ---
-    // Algorithmic Step: Extract spatial coordinates $x^i$ and compute $g_{{\\mu\\nu}}$.
+    // Algorithmic Step: Extract spatial coordinates $x^i$ and compute $g_{{mu nu}}$.
     // Hardware Justification: By keeping f_local and metric_local in the calling thread's register space,
     // we bypass global VRAM lookups entirely, ensuring rapid execution inside the fused kernel.
     {preamble}

@@ -8,7 +8,7 @@ with the final data extraction, ensuring all termination conditions are correctl
 Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
-from utilities import generate_kernel_and_launch_code
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 def calculate_and_fill_blueprint_data_universal() -> None:
     """

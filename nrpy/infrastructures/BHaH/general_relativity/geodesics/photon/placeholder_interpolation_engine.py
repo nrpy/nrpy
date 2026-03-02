@@ -55,7 +55,6 @@ def placeholder_interpolation_engine(spacetime_name: str) -> None:
 
     # Python: Register the function with the NRPy environment
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
