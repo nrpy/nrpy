@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 # Initialize core Python/NRPy modules
 # Step 1: Initialize core Python/NRPy modules
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -621,8 +621,11 @@ def register_BHaH_defines_h(
     BHd_str += ID_persist_struct_str + "\n"
     BHd_str += "} ID_persist_struct;\n"
 
-    # register into BHaH_defines.h
-    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
+    # register into BHaH_defines.h (idempotent for identical definitions)
+    bhah_defines_dict = par.glb_extras_dict.setdefault("BHaH_defines", {})
+    existing = bhah_defines_dict.get(__name__, "")
+    if BHd_str not in existing:
+        BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
@@ -967,6 +970,38 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         include_CodeParameters_h=False,
         body=body,
     )
+
+
+def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+    set_of_CoordSystems: Set[str],
+    addl_includes: Optional[List[str]] = None,
+    IDCoordSystem: str = "Spherical",
+    enable_T4munu: bool = False,
+    enable_fd_functions: bool = False,
+    ID_persist_struct_str: str = "",
+) -> None:
+    """
+    Register ADM->BSSN converters for multiple coordinate systems.
+
+    One-time typedef registration is handled in setup_ADM_initial_data_reader(),
+    while CoordSystem-specific CFunction registration is run once per CoordSystem.
+
+    :param set_of_CoordSystems: Set of coordinate systems for output BSSN variables.
+    :param addl_includes: Additional header files to include.
+    :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
+    :param enable_T4munu: Whether to include stress-energy tensor components.
+    :param enable_fd_functions: Whether to enable finite-difference functions.
+    :param ID_persist_struct_str: String for persistent ID structure.
+    """
+    for CoordSystem in sorted(set_of_CoordSystems):
+        register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+            CoordSystem=CoordSystem,
+            addl_includes=addl_includes,
+            IDCoordSystem=IDCoordSystem,
+            enable_T4munu=enable_T4munu,
+            enable_fd_functions=enable_fd_functions,
+            ID_persist_struct_str=ID_persist_struct_str,
+        )
 
 
 if __name__ == "__main__":
