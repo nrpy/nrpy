@@ -222,14 +222,10 @@ def set_initial_conditions_cartesian(spacetime_name: str) -> None:
     # Python: Extract bodies from the registration dictionary to satisfy the Translation Unit Inlining Mandate.
     metric_func = cfc.CFunction_dict[f"g4DD_metric_{spacetime_name}"].full_function
     conn_func = cfc.CFunction_dict[f"connections_{spacetime_name}"].full_function
-    interp_func = cfc.CFunction_dict[
-        f"placeholder_interpolation_engine_{spacetime_name}"
-    ].full_function
+    interp_func = cfc.CFunction_dict[f"placeholder_interpolation_engine_{spacetime_name}"].full_function
     p0_func = cfc.CFunction_dict["p0_reverse"].full_function
 
-    prefunc = (
-        f"{metric_func}\n{conn_func}\n{interp_func}\n{p0_func}\n{kernel_prefunc}"
-    )
+    prefunc = (f"{metric_func}\n{conn_func}\n{interp_func}\n{p0_func}\n{kernel_prefunc}")
 
     includes = [
         "BHaH_defines.h",

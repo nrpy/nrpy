@@ -67,7 +67,9 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         needs_step_bundle[tid] = true;
         status_bundle[tid] = ACTIVE;
         retries_bundle[tid] = 0;
-        h_bundle[tid] = commondata->numerical_initial_h;
+        
+        // Optimization: Access parameters from Constant Memory Cache (64KB).
+        h_bundle[tid] = d_commondata.numerical_initial_h;
         
         // Initialize history arrays for event detection to current state.
         for(int k=0; k<9; k++) {
@@ -88,7 +90,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             "needs_step_bundle": "bool *restrict",
             "status_bundle": "termination_type_t *restrict",
             "retries_bundle": "int *restrict",
-            "commondata": "const commondata_struct *restrict",
             "bundle_size": "const long int"
         },
         arg_dict_host={},
@@ -192,7 +193,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     // --- RKF45 Integration Loop (6 Stages) ---
     for(int stage = 1; stage <= 6; stage++) {
         // Fused metric/connection evaluation.
-        placeholder_interpolation_engine_KerrSchild_Cartesian(commondata, f_temp_local, metric_local, conn_local);
+        placeholder_interpolation_engine_KerrSchild_Cartesian(&d_commondata, f_temp_local, metric_local, conn_local);
 
         double k_local[9];
         // Calculate derivatives (Geodesic Equation).
@@ -215,10 +216,11 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     rkf45_kernel(f_start_local, &k_shared[0][0][threadIdx.x], h_bundle[local_idx], f_out_local, f_err_local);
 
     // Update step size and checking acceptance in registers.
-    bool accepted = update_photon_state_and_stepsize(f_start_local, f_start_local, f_out_local, f_err_local, &h_bundle[local_idx], &affine_param_bundle[local_idx], &retries_bundle[local_idx], commondata);
+    // Optimization: Pass address of d_commondata to access Constant Memory.
+    bool accepted = update_photon_state_and_stepsize(f_start_local, f_start_local, f_out_local, f_err_local, &h_bundle[local_idx], &affine_param_bundle[local_idx], &retries_bundle[local_idx], &d_commondata);
 
     if (!accepted) {
-        if (retries_bundle[local_idx] > commondata->rkf45_max_retries) {
+        if (retries_bundle[local_idx] > d_commondata.rkf45_max_retries) {
             status_bundle[local_idx] = FAILURE_RKF45_REJECTION_LIMIT;
             needs_step_bundle[local_idx] = false;
         } else {
@@ -251,7 +253,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             "retries_bundle": "int *restrict",
             "compacted_local_ids": "const int *restrict",
             "d_active_count": "const int *restrict",
-            "commondata": "const commondata_struct *restrict",
             "d_bundle_has_active": "bool *restrict"
         },
         arg_dict_host={},
@@ -280,7 +281,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         }
 
         // Call the event detection manager (inlined logic).
-        event_detection_manager(f_local, f_p_local, f_p_p_local, commondata, 
+        // Optimization: Manager implicitly uses d_commondata global.
+        event_detection_manager(f_local, f_p_local, f_p_p_local, 
                                 &status_bundle[tid], 
                                 &results_buffer[start_idx + tid],
                                 &on_pos_window_prev_bundle[tid], 
@@ -298,7 +300,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             "results_buffer": "blueprint_data_t *restrict",
             "on_pos_window_prev_bundle": "bool *restrict",   
             "on_pos_source_prev_bundle": "bool *restrict",   
-            "commondata": "const commondata_struct *restrict",
             "start_idx": "const long int",
             "bundle_size": "const long int"
         },
@@ -314,7 +315,14 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     )
 
     # --- MAIN C-FUNCTION GENERATION ---
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_runtime.h", "math.h"]
+    includes = [
+        "BHaH_defines.h", 
+        "BHaH_device_defines.h", 
+        "BHaH_function_prototypes.h", 
+        "cuda_runtime.h", 
+        "math.h", 
+        "cuda_intrinsics.h"
+    ]
     desc = r"""@brief Finalized Project Singularity-Axiom Orchestrator (Native CUDA Architecture).
 
     This function serves as the master entry point for the ray-tracing pipeline.
