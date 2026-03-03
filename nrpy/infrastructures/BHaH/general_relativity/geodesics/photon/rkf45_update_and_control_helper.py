@@ -11,7 +11,6 @@ Author: Dalton J. Moone.
 import nrpy.params as par
 import nrpy.c_function as cfc
 
-
 def rkf45_update_and_control_helper() -> None:
     """
     Register the high-performance adaptive step-size controller for RKF45.
@@ -23,6 +22,7 @@ def rkf45_update_and_control_helper() -> None:
 
     :raises TypeError: If incorrect parameters are passed to the code generation functions.
     """
+    # Python: Registers RKF45 control parameters to CodeParameters (defines global structs).
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -41,6 +41,7 @@ def rkf45_update_and_control_helper() -> None:
     par.register_CodeParameter(
         "int", __name__, "rkf45_max_retries", 10, commondata=True, add_to_parfile=True
     )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "<math.h>", "<stdbool.h>"]
     desc = r"""@brief Evaluates step validity and computes the adaptive time step $h$.
     
@@ -55,7 +56,7 @@ def rkf45_update_and_control_helper() -> None:
 
     Algorithm:
     1. Constructs composite scaling bounds utilizing an absolute tolerance floor and mixed norms.
-    2. Identifies the maximum truncation error across all physical components.
+    2. Identifies the maximum truncation error across all physical components (L-infinity).
     3. Updates local register states or increments retry counters without touching global VRAM."""
     cfunc_type = "BHAH_HD_FUNC bool"
     name = "update_photon_state_and_stepsize"
@@ -112,11 +113,13 @@ def rkf45_update_and_control_helper() -> None:
     // --- STEP ADAPTATION ---
     double h_new; // The newly calculated adaptive step size proposed for the subsequent integration step.
     if (err_norm > 1e-15) {
+        // Safety factor adaptation based on the worst-case component error.
         h_new = commondata->rkf45_safety_factor * (*h_local) * pow(1.0 / err_norm, 0.2);
     } else {
         h_new = 2.0 * (*h_local);
     }
 
+    // Hard clamps to prevent underflow or runaway integration speeds.
     h_new = fmax(h_new, commondata->rkf45_h_min);
     h_new = fmin(h_new, commondata->rkf45_h_max);
 

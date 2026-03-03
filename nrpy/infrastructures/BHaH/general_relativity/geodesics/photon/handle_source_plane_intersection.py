@@ -5,6 +5,7 @@ This module computes the impact parameters $(y_s, z_s)$ on the physical
 emission plane for use in ray-tracing visualizations. It unpacks coordinates
 strictly from thread-local memory to avoid slow global memory accesses,
 satisfying the 255-register limitation of the NVIDIA Ampere sm_86 architecture.
+
 Author: Dalton J. Moone.
 """
 
@@ -49,13 +50,13 @@ def handle_source_plane_intersection() -> None:
     ]
     desc = """@brief Processes a terminal intersection with the source emission plane entirely in thread-local memory.
 
-    @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
+    @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\\mu$.
     @param commondata Pointer to the globally constant parameters struct.
     @param final_blueprint_data Pointer to the local blueprint structure $b_i$ to store impact geometries.
 
     Algorithm:
     1. Reconstructs the source plane orthonormal basis $(s_x, s_y, s_z)$.
-    2. Projects the intersection state $x^\mu$ into local 2D coordinates.
+    2. Projects the intersection state $x^\\mu$ into local 2D coordinates.
     3. Filters based on physical radial bounds $[r_{min}, r_{max}]$.
     
     By consuming `source_event_f_intersect` as a local 9-element array instead of reading from 

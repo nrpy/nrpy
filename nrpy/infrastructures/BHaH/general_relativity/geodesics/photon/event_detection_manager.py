@@ -12,6 +12,7 @@ Author: Dalton J. Moone.
 
 import nrpy.c_function as cfc
 
+
 def event_detection_manager() -> None:
     """
     Register the event_detection_manager C function with the Batch 4 API.
@@ -21,9 +22,9 @@ def event_detection_manager() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "<math.h>", "<stdbool.h>"]
     desc = """@brief GPU-optimized detection of plane crossings using consolidated blueprints.
 
-    @param f_local The thread-local 9-component array for the current state $f^\mu_{n}$.
-    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
-    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param f_local The thread-local 9-component array for the current state $f^\\mu_{n}$.
+    @param f_p_local The thread-local state array for step $f^\\mu_{n-1}$.
+    @param f_p_p_local The thread-local state array for step $f^\\mu_{n-2}$.
     @param commondata Pointer to the globally constant parameters struct.
     @param status Pointer to the photon's termination status in the bundle buffer.
     @param blueprint Pointer to the physical blueprint data structure for result persistence.
@@ -42,6 +43,7 @@ def event_detection_manager() -> None:
         "bool *restrict on_pos_window_prev, "
         "bool *restrict on_pos_source_prev"
     )
+    include_CodeParameters_h = False
     
     body = r"""
     const double x = f_local[1]; 

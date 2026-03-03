@@ -3,13 +3,14 @@ Generates the C helper functions for the RKF45 computational kernels.
 
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module provides the core mathematical stages and error estimation logic
-for the Runge-Kutta-Fehlberg 4(5) embedded integration scheme.
+for the Runge-Kutta-Fehlberg 4(5) embedded integration scheme. It is designed
+to operate on thread-local registers and Shared Memory buffers to minimize
+VRAM bandwidth and register pressure on the RTX 3080.
 
 Author: Dalton J. Moone.
 """
 
 import nrpy.c_function as cfc
-
 
 def rkf45_helpers_for_header() -> None:
     """
@@ -22,12 +23,14 @@ def rkf45_helpers_for_header() -> None:
     :raises TypeError: If incorrect parameters are passed to the code generation functions.
     """
     # --- Function 1: calculate_rkf45_stage_f_temp ---
+    # Python: Defines the function to compute intermediate K-stages.
+    # Note: k_array_local points to __shared__ memory in the CUDA context.
     includes_stage = ["BHaH_defines.h"]
     desc_stage = r"""@brief Calculates the intermediate state for a specific RKF45 stage.
     
     @param stage The integer RKF45 stage identifier (1 through 6).
     @param f_in_local Thread-local array containing the initial 9-component physical state $f^\mu$.
-    @param k_array_local Thread-local array holding intermediate $k$ evaluation derivatives. Maps directly to registers to avoid sm_86 limits.
+    @param k_array_local Pointer to the derivative array. Maps to Shared Memory ($k\_shared$) on GPU.
     @param h The local integration step size $h$.
     @param f_temp_out_local Thread-local array to store the computed intermediate stage state.
 
@@ -108,11 +111,12 @@ def rkf45_helpers_for_header() -> None:
     )
 
     # --- Function 2: rkf45_kernel ---
+    # Python: Defines the function to combine stages into the final 5th order result.
     includes_kernel = ["BHaH_defines.h"]
     desc_kernel = r"""@brief Finalizes the RKF45 candidate states and computes the local truncation error.
     
     @param f_in_local Thread-local array containing the initial physical state $f^\mu$.
-    @param k_array_local Thread-local array holding intermediate $k$ evaluation derivatives.
+    @param k_array_local Pointer to derivative array. Maps to Shared Memory on GPU.
     @param h The local integration step size $h$.
     @param f_out_local Thread-local array to store the newly proposed 5th-order physical state.
     @param f_err_local Thread-local array computing the calculated local truncation error.

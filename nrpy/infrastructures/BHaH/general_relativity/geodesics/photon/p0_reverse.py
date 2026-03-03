@@ -50,8 +50,10 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
     @param f_local Thread-local array containing the 9-component state vector $f^\mu$.
     @param p0_out Pointer to the thread-local scalar storing the resulting temporal momentum $p^0$."""
 
+    # Functional Justification: 'BHAH_HD_INLINE' forces this function to be inlined into the
+    # initialization kernel, preventing register spilling and function call overhead on the GPU.
     cfunc_type = "BHAH_HD_INLINE void"
-    
+
     name = "p0_reverse"
 
     params = (
@@ -74,7 +76,7 @@ def p0_reverse(p0_expr: sp.Expr) -> None:
 
     // --- HAMILTONIAN CONSTRAINT ROOT FINDING ---
     /* * Algorithmic Step: Evaluate the generated algebraic solution for $p^0$.
-     * Architectural Justification: The symbolic generation maps algebraic operations directly to hardware 
+     * Architectural Justification: The symbolic generation maps algebraic operations directly to hardware
      * Fused Multiply-Add (FMA) instructions, maximizing floating-point execution throughput.
      */
     {body_math}

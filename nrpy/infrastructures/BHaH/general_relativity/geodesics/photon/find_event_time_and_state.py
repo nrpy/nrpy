@@ -5,6 +5,7 @@ This module resolves exact coordinate intersections when a plane
 crossing is detected. It utilizes second-order quadratic interpolation
 for root-finding and Lagrange interpolation for state reconstruction at
 the intersection boundaries, executing strictly within thread-local registers.
+
 Author: Dalton J. Moone.
 """
 
@@ -20,18 +21,18 @@ def find_event_time_and_state() -> None:
     includes = ["BHaH_defines.h", "<math.h>"]
     desc = """@brief Portable high-performance second-order root-finding.
 
-    @param f_local The thread-local state array for step $f^\mu_{n}$.
-    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
-    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param f_local The thread-local state array for step $f^\\mu_{n}$.
+    @param f_p_local The thread-local state array for step $f^\\mu_{n-1}$.
+    @param f_p_p_local The thread-local state array for step $f^\\mu_{n-2}$.
     @param normal The geometric unit normal vector $n_i$ of the target plane.
     @param dist The scalar distance $d$ from the origin to the target plane.
-    @param event_lambda Pointer to the local affine parameter $\lambda$ to be updated.
-    @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
+    @param event_lambda Pointer to the local affine parameter $\\lambda$ to be updated.
+    @param event_f_intersect The thread-local array where the reconstructed state $f^\\mu$ is stored.
 
     Detailed algorithm: Uses position data $x^i$ from the current and two previous
     integration steps (passed as thread-local arrays) to construct a quadratic model
-    of the trajectory relative to the target plane. The intersection $\lambda$ is solved via the
-    quadratic formula and the full state $f^\mu$ is reconstructed via Lagrange polynomials.
+    of the trajectory relative to the target plane. The intersection $\\lambda$ is solved via the
+    quadratic formula and the full state $f^\\mu$ is reconstructed via Lagrange polynomials.
     Mapping logic directly to `f_local` preserves the strict sm_86 architecture limits by
     bypassing global memory fetches and keeping all intermediates within the 255
     registers per thread."""
