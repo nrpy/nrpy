@@ -186,6 +186,12 @@ class ReferenceMetric:
         def compute_Jacobian_and_inverseJacobian_tofrom_Cartesian(
             self: ReferenceMetric,
         ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]]]:
+            if self.CoordSystem.startswith("GeneralRFM"):
+                provider_name = getattr(self, "general_rfm_provider_name", "")
+                provider = getattr(self, "general_rfm_provider", None)
+                if provider_name == "fisheye" and provider is not None:
+                    return provider.dCart_dxxUD, provider.dxx_dCartUD
+
             # Step 2.a: First construct Jacobian matrix:
 
             Jac_dUCart_dDrfmUD: List[List[sp.Expr]] = [

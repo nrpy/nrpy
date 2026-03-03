@@ -302,6 +302,20 @@ class GeneralRFMFisheye:
             for mu in range(3)
         ]
 
+        # Inverse Jacobian:
+        # dxx[i]/dCart[j] = (1/lam) * delta[i][j]
+        #                   - (dlam_over_r / (lam * (lam + dlam_over_r * r^2)))
+        #                     * xx[i] * xx[j]
+        #
+        # For radial maps, lam + dlam_over_r * r^2 = drbar/dr.
+        p_local = p.xreplace(sub)
+        inv_lam = sp.Integer(1) / lam
+        inv_corr = -dlam_over_r / (lam * p_local)
+        self.dxx_dCartUD = [
+            [inv_lam * delta[i][j] + inv_corr * xx_prod[i][j] for j in range(3)]
+            for i in range(3)
+        ]
+
         # Metric decomposition:
         # ghat_ij = A(r) * delta_ij + B(r) * xx[i] * xx[j]
         self.ghatDD = ixp.zerorank2(dimension=3)

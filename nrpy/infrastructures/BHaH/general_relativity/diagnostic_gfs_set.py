@@ -157,7 +157,7 @@ def register_CFunction_diagnostic_gfs_set(
         body += """
     // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
     // Set psi4 gridfunctions
-    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, auxevol_gfs, diagnostic_gfs[grid]);
     const int inner_bc_apply_gfs[] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
     const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
     apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
