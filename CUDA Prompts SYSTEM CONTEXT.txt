@@ -1,0 +1,532 @@
+GPU Info:
+""""
+ # 1. Hardware Model & PCI ID
+lspci -vnn | grep -i vga -A 12
+
+# 2. Driver and Runtime CUDA version
+nvidia-smi
+
+# 3. Compiler Version (Toolkit version)
+nvcc --version
+
+# 4. Location of the Compiler
+which nvcc
+
+# 5. Host Compiler Version (Crucial for CUDA compatibility)
+gcc --version
+05:00.0 VGA compatible controller [0300]: NVIDIA Corporation GA102 [GeForce RTX 3080 Lite Hash Rate] [10de:2216] (rev a1) (prog-if 00 [VGA controller])
+        Subsystem: Lenovo GA102 [GeForce RTX 3080 Lite Hash Rate] [17aa:c891]
+        Flags: bus master, fast devsel, latency 0, IRQ 97, IOMMU group 16
+        Memory at fb000000 (32-bit, non-prefetchable) [size=16M]
+        Memory at 7fe0000000 (64-bit, prefetchable) [size=256M]
+        Memory at 7ff0000000 (64-bit, prefetchable) [size=32M]
+        I/O ports at e000 [size=128]
+        Expansion ROM at fc000000 [virtual] [disabled] [size=512K]
+        Capabilities: <access denied>
+        Kernel driver in use: nvidia
+        Kernel modules: nvidiafb, nouveau, nvidia_drm, nvidia
+
+05:00.1 Audio device [0403]: NVIDIA Corporation GA102 High Definition Audio Controller [10de:1aef] (rev a1)
+Fri Feb 27 00:12:08 2026       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.288.01             Driver Version: 535.288.01   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA GeForce RTX 3080        Off | 00000000:05:00.0  On |                  N/A |
+| 30%   29C    P8              10W / 320W |    415MiB / 10240MiB |      0%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|    0   N/A  N/A      1722      G   /usr/lib/xorg/Xorg                          160MiB |
+|    0   N/A  N/A     24952      G   /usr/bin/gnome-shell                         38MiB |
+|    0   N/A  N/A     28194      G   /usr/bin/nautilus                            15MiB |
+|    0   N/A  N/A     37699      G   ...cess-track-uuid=3190708988185955192       65MiB |
+|    0   N/A  N/A     38272      G   /usr/share/code/code                        120MiB |
++---------------------------------------------------------------------------------------+
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2023 NVIDIA Corporation
+Built on Fri_Jan__6_16:45:21_PST_2023
+Cuda compilation tools, release 12.0, V12.0.140
+Build cuda_12.0.r12.0/compiler.32267302_0
+/usr/bin/nvcc
+gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+Copyright (C) 2023 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+""""
+
+""""
+
+SYSTEM CONTEXT: NRPy+ Native CUDA Migration (RTX 3080)
+
+MISSION:
+Migrate a General Relativity photon ray-tracer to a Native CUDA "Streaming Bundle" architecture using the NRPy+ BHaH infrastructure components (gpu_kernel.py, utilities.py, loop.py).
+
+HARDWARE CONSTRAINTS (NVIDIA RTX 3080 / sm_86):
+1. Registers: < 255 per thread (Strict Limit).
+   - Solution: Metric/Connection tensors ($g_{\mu\nu}$, $\Gamma$) must be strictly thread-local (registers).
+   - Solution: RKF45 intermediate states ($k_1...k_6$) must use __shared__ memory.
+2. VRAM: 10 GB Limit.
+   - Solution: "Streaming Bundle" architecture. Photons remain in Host RAM and are processed in VRAM batches of `BUNDLE_CAPACITY` (32,768).
+3. Shared Memory: 48 KB per SM.
+   - Solution: `k_shared[6][9][64]` consumes ~27KB. We must explicitly set this size in the kernel launch.
+
+INFRASTRUCTURE UTILIZATION RULES:
+1. Kernel Generation: Use `utilities.generate_kernel_and_launch_code`.
+   - Use `launch_dict={'sm': 27648}` to explicitly reserve shared memory.
+   - Use `cfunc_decorators="__global__"` to auto-generate `cudaCheckErrors`.
+2. Parameter Access: Use `utilities.get_params_access("cuda")`.
+   - Ensures physics kernels read from `d_params[streamid]` (Constant Memory) instead of global memory.
+3. Host Loops: Use `loop.py` with `tile_size="BUNDLE_CAPACITY"`.
+   - Automates the "Streaming Bundle" pagination logic on the host.
+4. Math Optimization: Use `simd.py` pipeline + `cuda_intrinsics.h`.
+   - Generate code with `enable_simd=True`.
+   - Apply `.replace("SIMD", "CUDA")` to map math to `FusedMulAddCUDA` (hardware intrinsics).
+
+CORE ARCHITECTURE (Batch Integrator):
+1. Host: Allocates Pinned Memory for `all_photons`.
+2. Pipeline: Dual-stream (`cudaStream_t`) loop overlapping Data Transfer (H2D/D2H) with Computation.
+3. Computation:
+   - `init_batch`: Loads bundle from global VRAM to registers/status flags.
+   - `stream_compaction`: Uses warp-aggregated atomics (`__ballot_sync`, `__popc`) to pack active rays.
+   - `fused_rkf45`: Solves ODEs using `k_shared` for intermediate storage.
+   - `event_detection`: Checks termination conditions (Source/Window/Infinity).
+"""
+
+"""Here is the comprehensive, highly detailed "Master Prompt" you requested. It integrates all your original context, the hardware constraints of the RTX 3080, and the specific architectural roles of the four required kernels.
+
+I have also provided a final "Upload Manifest" at the bottom, detailing exactly which files to provide to the next LLM and why.
+
+The Master Prompt for the Next LLM
+Copy and paste the text between the lines below.
+
+SYSTEM CONTEXT & MISSION:
+I am migrating a high-performance General Relativity photon ray-tracing simulation from OpenMP Target Offloading to Native CUDA on an NVIDIA RTX 3080. The code is generated using the NRPy+ infrastructure.
+
+Your Goal: Refactor batch_integrator_numerical.py and set_initial_conditions_cartesian.py to replace manual C-string generation with the robust NRPy+ infrastructure tools (gpu_kernel.py, utilities.py, loop.py).
+
+HARDWARE SPECIFICATIONS (RTX 3080 / sm_86):
+
+Architecture: Ampere (sm_86).
+
+VRAM: 10 GB (Strict Limit).
+
+Constraint: We cannot load all photons at once. We must use a "Streaming Bundle" architecture, processing rays in batches of BUNDLE_CAPACITY (32,768).
+
+Registers: 255 per thread (Strict Limit).
+
+Constraint: The Fused RKF45 kernel uses >130 double-precision variables. To prevent register spilling, we must force intermediate tensor math into thread-local registers and use Shared Memory for the RKF45 state arrays.
+
+Shared Memory: 48 KB per SM.
+
+Constraint: We use ~27KB for the RKF45 state (k_shared). We must explicitly request this size in the kernel launch to avoid launch failures.
+
+THE 4 REQUIRED GPU KERNELS (AND THEIR ROLES):
+You must generate these 4 distinct kernels in the batch_integrator_numerical.py pipeline:
+
+init_batch Kernel
+
+Role: Hydrates the thread-local state for a fresh bundle of 32,768 photons.
+
+Logic: Reads raw position/momentum from Global VRAM, sets the initial step size h, resets retries=0, and sets status=ACTIVE.
+
+Critical Output: Sets needs_step = true so the subsequent compaction kernel picks up these rays.
+
+stream_compaction Kernel
+
+Role: filters out "dead" rays (absorbed/escaped) to maximize GPU warp occupancy.
+
+Logic: Uses warp-aggregated atomics (via __ballot_sync, __popc, and __shfl_sync) to generate a dense index list (compacted_local_ids).
+
+Why: Running the heavy math kernel on sparse data wastes 98% of GPU cycles. This packs the work efficiently.
+
+fused_rkf45 Kernel (The Physics Core)
+
+Role: Advances active photons one step forward in time.
+
+Optimization 1 (Registers): Must use __shared__ double k_shared[6][9][64] to store the 6 intermediate Runge-Kutta stages. This saves ~54 registers per thread.
+
+Optimization 2 (Intrinsics): Must use the .replace("SIMD", "CUDA") pattern to map NRPy+ math to cuda_intrinsics.h macros (e.g., FusedMulAddCUDA).
+
+Why: "Fused" means it calculates Metric + Connections + RKF45 Steps in one go to keep data hot in L1 cache/registers.
+
+event_detection Kernel
+
+Role: Checks if the photon has hit the Source Disk, Camera Window, or Event Horizon.
+
+Logic: Solves cubic/quartic roots for intersection points.
+
+Why: Separated from the RKF45 kernel to reduce instruction cache pressure and register usage.
+
+REQUIRED INFRASTRUCTURE UPDATES:
+You must implement these specific changes using the uploaded scripts:
+
+Use utilities.generate_kernel_and_launch_code:
+
+Replace manual kernel<<<...>>> strings.
+
+Pass launch_dict={'sm': 27648} to reserved shared memory for the RKF45 kernel.
+
+Pass cfunc_decorators="__global__" to auto-inject cudaCheckErrors.
+
+Use utilities.get_params_access("cuda"):
+
+Replace direct parameter access.
+
+This ensures all physics kernels read from d_params[streamid] (Constant Memory), which is cached and faster than global memory.
+
+Use loop.py:
+
+Use loop(..., tile_size="BUNDLE_CAPACITY") to generate the host-side loops that chunk the 10GB dataset into 32k batches.
+
+Use BHaH_MALLOC Macros:
+
+Replace cudaMalloc with BHAH_MALLOC_DEVICE (VRAM).
+
+Replace malloc (pinned) with BHAH_MALLOC_PINNED (Host RAM) for faster PCIe transfer.
+"""
+
+
+"""
+1. The "Core Base Set" (Upload to ALL LLMs)
+These 4 files define the "language" of your simulation. Without these, no LLM can write a single line of working code.
+
+BHaH_defines_h.py & BHaH_device_defines_h.py: These define the PhotonStateSoA struct, the blueprint_data_t struct, and the memory macros.
+
+utilities.py: This is the tool the LLM must use to actually build the kernels.
+
+cuda_intrinsics.h: This contains the hardware math macros (FusedMulAddCUDA).
+
+2. Specialized Task Batches
+You should divide the work into these three logical groups. Each group should be handled by a separate LLM session.
+"""
+
+(Complete)
+"""
+Batch A: The Initialization & Cleanup Group
+Goal: Get photons into the GPU and get the final results out.
+
+Upload these specific scripts:
+
+set_initial_conditions_cartesian.py
+
+calculate_and_fill_blueprint_data_universal.py
+
+Mission: Ensure set_initial_conditions uses the VRAM bundle correctly and calculate_and_fill projects the final positions onto the celestial sphere.
+
+
+"""
+Batch B: The Fused Physics & Integration Group
+Goal: The math-heavy core.
+
+Upload these specific scripts:
+
+batch_integrator_numerical.py (The Master Orchestrator)
+
+rkf45_helpers_for_header.py
+
+rkf45_update_and_control_helper.py
+
+Mission: Implement the k_shared memory logic and the fused_rkf45 kernel call.
+"""
+
+
+"""
+
+Batch C: The Logic & Event Detection Group
+Goal: Decisions and boundaries.
+
+Upload these specific scripts:
+
+event_detection_manager.py
+
+Why: event_detection_manager is just a "boss" function; it calls these three scripts to do the actual work. If the LLM doesn't have these, it cannot inline the logic into the GPU.
+"""
+
+DETAILED BATCH A IMPLEMENTED FIX:
+"""
+================================================================================
+MASTER EXECUTION PROMPT: BATCH A (Initialization & Cleanup)
+================================================================================
+
+SYSTEM CONTEXT & MISSION:
+You are the Lead Engineer for "Batch A" of the NRPy+ CUDA Migration.
+Your goal is to generate the Python metaprogramming scripts that handle the *Start* (Initialization) and *End* (Blueprint Extraction) of the photon lifecycle.
+
+You must strictly adhere to the "Streaming Bundle" architecture.
+The RTX 3080 has a strict 10GB VRAM limit. You CANNOT load all photons at once.
+You must process them in chunks of `BUNDLE_CAPACITY` (32,768).
+
+--------------------------------------------------------------------------------
+CRITICAL ARCHITECTURAL CONSTRAINTS
+--------------------------------------------------------------------------------
+
+1. NO HEADER EDITING:
+   Do NOT edit `BHaH_defines_h.py`.
+   To ensure `PhotonStateSoA` and `blueprint_data_t` are available to the compiler, you must register their C-definitions using `Bdefines_h.register_BHaH_defines()` inside your `set_initial_conditions_cartesian.py` script.
+
+2. CONSTANT MEMORY:
+   The kernel must NOT read parameters from Global Memory.
+   You must use `utilities.get_commondata_access("cuda")` to resolve reads to `d_commondata` (the 64KB Constant Memory cache).
+
+3. MEMORY DIRECTION SAFETY:
+   * Initialization: Generates data on GPU -> Copies DEVICE-TO-HOST.
+   * Finalization: Reads data from Host -> Copies HOST-TO-DEVICE -> Computes -> Copies DEVICE-TO-HOST.
+
+--------------------------------------------------------------------------------
+INFRASTRUCTURE USAGE EXAMPLES (Mini-Manual)
+--------------------------------------------------------------------------------
+
+Use these patterns to interact with the NRPy+ infrastructure files:
+
+A. REGISTERING C-STRUCTS (The "Gamma Fix")
+   Use this in `set_initial_conditions_cartesian.py` to inject the structs:
+   ```python
+   import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+   
+   batch_structs_c_code = r"""
+   typedef struct { ... } PhotonStateSoA;
+   typedef struct { ... } blueprint_data_t;
+   """
+   # Registers code into BHaH_defines.h automatically
+   Bdefines_h.register_BHaH_defines("photon_structs", batch_structs_c_code)
+B. PAGINATION LOOPS (loop.py)
+Use this to generate the Host-side "Streaming Bundle" loop:
+
+Python
+from nrpy.helpers.loop import loop
+
+loop_body = """
+// Your cudaMemcpy and Kernel Launch C-code here
+"""
+# Generates: for(int start_idx=0; start_idx<num_rays; start_idx+=32768) { ... }
+host_loop_code = loop(
+    idx_var="start_idx",
+    lower_bound="0",
+    upper_bound="num_rays",
+    increment="BUNDLE_CAPACITY",
+    loop_body=loop_body
+)
+C. KERNEL GENERATION (utilities.py + gpu_kernel.py)
+Use this to wrap your C logic into a CUDA kernel:
+
+Python
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+
+prefunc, launch_code = generate_kernel_and_launch_code(
+    kernel_name="my_kernel",
+    kernel_body=my_c_code,
+    arg_dict_cuda={...},
+    parallelization="cuda",
+    launch_dict={
+        "threads_per_block": ["256", "1", "1"],
+        "blocks_per_grid": ["(chunk_size + 255) / 256", "1", "1"]
+    },
+    cfunc_decorators="__global__" # Auto-injects cudaCheckErrors
+)
+TASK LIST (Generate these 3 files)
+TASK 1: set_initial_conditions_cartesian.py (The Initializer)
+
+Dependency Action: Include the batch_structs_c_code string (defining PhotonStateSoA and blueprint_data_t) and register it using Bdefines_h.register_BHaH_defines.
+
+Host Logic:
+
+Allocate a VRAM buffer d_f_chunk (use BHAH_MALLOC_DEVICE).
+
+Use loop.py to iterate through num_rays with stride BUNDLE_CAPACITY.
+
+Launch Kernel.
+
+CRITICAL: Perform cudaMemcpy DEVICE_TO_HOST to save the initialized d_f_chunk back to all_photons->f in RAM.
+
+Kernel Logic:
+
+Do not pass commondata struct pointer.
+
+Use get_commondata_access("cuda") to write C-code accessing d_commondata.variable.
+
+TASK 2: calculate_and_fill_blueprint_data_universal.py (The Finalizer)
+
+Architecture Change: Rewrite this completely to use "Streaming Bundles".
+
+Host Logic:
+
+Allocate small VRAM buffers: d_f_bundle, d_status_bundle, d_result_bundle.
+
+Use loop.py to iterate through num_rays.
+
+Step A: cudaMemcpy HOST_TO_DEVICE (Copy f and status from RAM to VRAM).
+
+Step B: Launch Kernel (Compute on VRAM data).
+
+Step C: cudaMemcpy DEVICE_TO_HOST (Copy d_result_bundle back to RAM).
+
+Kernel Logic:
+
+Index based on local threadIdx.x (0 to 32768), not global ID.
+
+TASK 3: p0_reverse.py (The Constraint Solver)
+
+Constraint: Set cfunc_type = "BHAH_HD_INLINE void".
+
+Why: This function is called inside the initialization kernel. It must be inlined to avoid register spilling.
+"""
+
+Batch B Logs:
+Log 1:
+"""
+Batch B Completion Log: Fused Physics & IntegrationProject: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (sm_86)Status: COMPLETE1. Executive SummaryThe core numerical integration pipeline has been successfully refactored from OpenMP to a Native CUDA Dual-Stream "Streaming Bundle" architecture. The orchestration layer now manages memory in 32,768-photon chunks to respect the 10GB VRAM limit, while the physics kernels use __shared__ memory and thread-local registers to respect the sm_86 register limit.Critical Handover Note for Batch C: The event_detection kernel is currently a placeholder. Batch C must implement the logic to populate results_buffer using the now-established PhotonStateSoA data layout.2. Generated ArtifactsThe following Python metaprogramming scripts have been finalized and are ready for compilation:Script NameRole & Responsibilityrkf45_helpers_for_header.pyGenerates the thread-local C functions for the 6-stage RKF45 integrator. Implements the k_shared[6][9][64] pointer logic.rkf45_update_and_control_helper.pyGenerates the adaptive step-size controller. Implements L-Infinity norm error checking and updates $h$ and retries in registers.batch_integrator_numerical.pyThe Master Orchestrator. Generates the Dual-Stream Host loop, manages Pinned/Device memory, and launches the 4 kernels (init, compact, rkf45, event).3. Architectural Implementation Details (Crucial for Batch C)A. Memory ArchitectureStruct Prohibition: PhotonStateSoA and blueprint_data_t were NOT redefined in Batch B. They rely on the definitions registered by Batch A.Dual-Stream Isolation:Host: all_photons_host (Pinned Memory) holds the full dataset.Device: Double-buffered arrays (e.g., f_bundle[2], f_p_bundle[2]) allow Stream 1 to upload Batch N+1 while Stream 0 computes Batch N.Batch C Implication: When writing event logic, you do not need to manage streams. The kernel is already launched inside the correct stream context (streams[s_compute]).B. The 4 Kernelsinit_batch:Hydrates needs_step=true and status=ACTIVE.Loads initial data from global VRAM to thread-local registers.stream_compaction:Uses Warp-Aggregated Atomics (__ballot_sync, __popc, atomicAdd) to pack active rays into a dense index array compacted_local_ids.Note: This ensures the heavy RKF45 kernel only runs on active photons, boosting SIMD efficiency.fused_rkf45:Shared Memory: Explicitly reserves 27KB (sm: 27648) for k_shared to store intermediate Runge-Kutta stages, bypassing register spilling.Register Rotation: Performs state rotation (f_p_p <- f_p <- f) entirely in VRAM/Registers without Host synchronization.event_detection (The Interface for Batch C):Currently implemented as a "Black Box" kernel call.Input: f_bundle, f_p_bundle, f_p_p_bundle (History).Output: results_buffer (Device Global Memory).Constraint: The kernel signature assumes the existence of event_detection_manager. Batch C must provide this inline function.4. Integration Guide for Batch C LLMsYour Mission: Implement the logic inside event_detection_manager.py.1. Data Availability:Inside the event_detection kernel, you have access to:f_local[9]: Current State ($t, x, y, z, p_t, p_x, p_y, p_z, \lambda$).f_p_local[9]: Previous State.f_p_p_local[9]: State 2 steps ago.commondata: Global parameters (in Constant Memory d_commondata).2. Writing to Results:You must write the final intersection data to results_buffer.Struct Definition: Refer to blueprint_data_t in BHaH_defines.h (registered in Batch A).Fields to Populate: termination_type, t_w, t_s, final_theta, final_phi, etc.3. Termination Logic:If an event is found (Window, Source, or Horizon), you MUST set *status = TERMINATION_TYPE_....The Orchestrator will automatically detect this status change via cudaMemcpy of the bundle_status_host array and remove the ray from the compacted_local_ids list in the next step.4. Performance Constraint:The event_detection kernel runs after every RKF45 step.Keep your logic branch-free where possible. Heavy branching here will stall the compute stream.5. Known Issues / ConstraintsAtomic Add: The stream_compaction kernel uses standard atomicAdd. Ensure the target GPU supports atomic operations on 32-bit integers (standard on RTX 3080/sm_86).Stack Size: The fused_rkf45 kernel is register-heavy. If you add significant logic to event_detection, verify that maxregcount does not exceed 255.
+"""
+Log 2:
+"""
+Batch B Completion Log: Fused Physics & Integration (RTX 3080)Project: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86)Status: COMPLETE1. Executive SummaryThe core numerical integration pipeline has been successfully refactored from OpenMP Target Offloading to a Native CUDA "Streaming Bundle" architecture. The system is now optimized for the RTX 3080's 10GB VRAM limit and 255-register-per-thread constraint. All physics kernels have been transitioned to access parameters via Constant Memory (d_commondata) to reduce global memory bandwidth and register pressure.2. Architectural Implementation DetailsDual-Stream Pipeline: Implemented a cudaStream_t dual-buffer system. While Stream 0 (s_compute) executes physics kernels, Stream 1 (s_transfer) asynchronously bridges the next batch of 32,768 photons from Pinned Host RAM to VRAM.Warp-Aggregated Stream Compaction: Integrated a specialized compaction kernel using __ballot_sync and __popc to filter inactive rays. This ensures that the heavy fused_rkf45 kernel maintains maximum warp occupancy by operating only on dense active indices.Fused RKF45 Physics Core:Shared Memory Allocation: Explicitly reserved 27,648 bytes (launch_dict={'sm': 27648}) for k_shared[6][9][64] to store intermediate Runge-Kutta stages.Register Hot-Swapping: Metric and Connection tensors are kept strictly in registers to avoid VRAM spilling.Math Optimization: Leveraged cuda_intrinsics.h to map symbolic expressions to hardware-native FusedMulAddCUDA instructions.3. Critical Handover for Batch CThe event_detection kernel call is established within the compute stream following the RKF45 update.Batch C must provide the event_detection_manager device function logic
+"""
+
+
+Log for Batch C:
+Log 1"
+"""
+Batch C Completion Log: Event Detection Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration) Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86) 
+Status: COMPLETE1. Executive SummaryThe Event Detection Micro-System has been successfully refactored from a global-memory reliant CPU/OpenMP model to a native CUDA "Streaming Bundle" architecture. The system now executes high-precision root-finding and geometric projections entirely within thread-local registers ($f_{local}[9]$) to satisfy the strict 255-register limit of the sm_86 architecture. All physical constants have been migrated to Constant Memory (d_commondata) to maximize cache hits during the integration loop.2. Detailed Fixes and Architectural ChangesComponentLogic Fix / ImplementationHardware OptimizationMathematical Core (find_event)Replaced linear step-estimation with Quadratic Interpolation (Newton form) for affine parameter $\lambda$ and Lagrange Interpolation for state reconstruction.Executes strictly on registers; prevents VRAM stalls by eliminating global memory fetches during root-finding.Source Physics (handle_source)Implemented 2D orthonormal basis projection ($y_s, z_s$) and radial filtering ($r_{min} < r < r_{max}$).Registered via par.register_CodeParameters to utilize the 64KB Constant Memory cache.Camera Window (handle_window)Implemented pixel-grid mapping and persistence of crossing coordinates ($t_w, L_w$) without terminating the ray.Uses BHAH_HD_FUNC for zero-overhead inlining into the compute kernel.Orchestration (event_manager)Integrated sign-change detection logic ($val > 10^{-10}$) against persistent "previous side" flags.Uses bool *restrict pointers to minimize memory footprint while tracking crossing events across integration steps.3. Required Updates for batch_integrator_numerical.pyWhile the Batch Integrator does not need to know the internal logic of the four scripts, it must be updated to manage the persistence layer that the event_detection_manager requires.Key Changes Required:Boolean Flag Persistence: You must allocate two new boolean arrays in both Pinned (Host) and Device memory: on_pos_window_prev and on_pos_source_prev. These track which side of a plane the photon was on during the previous step.Struct Alignment: Ensure that the blueprint_data_t results are being written to the correct global offset. In your provided kernel, this is handled by &results_buffer[start_idx + tid].Kernel Launch Tuning: The event_detection kernel should be launched in the s_compute stream immediately following the fused_rkf45 kernel to ensure data remains "hot" in the L1 cache.Constant Memory Access: The commondata argument must be passed to the kernel to allow the manager to access camera and source geometries without global memory overhead.4. Final Compliance Checklist (sm_86)[x] Register Limit: All event logic operates on f_local register copies.[x] Constant Memory: Geometries registered via par.register_CodeParameters.[x] Inlining: All functions decorated with BHAH_HD_FUNC to prevent call-stack overhead.[x] Memory Layout: No typedef struct redefinitions; strictly uses BHaH_defines.h.
+"""
+Log 2:
+"""
+Batch C Completion Log: Event Detection Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration) Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86) Status: COMPLETE 1. Executive SummaryThe Event Detection Micro-System has been successfully refactored from an OpenMP model to a native CUDA "Streaming Bundle" architecture. The system now executes high-precision root-finding and geometric projections entirely within thread-local registers to satisfy the strict 255-register limit of the sm_86 architecture. All physical constants have been migrated to Constant Memory (d_commondata) to maximize cache hits during the integration loop. 2. Detailed Fixes and Architectural ChangesComponentLogic Fix / ImplementationHardware OptimizationMathematical Core (find_event)Replaced linear step-estimation with Quadratic Interpolation (Newton form) for affine parameter $\lambda$ and Lagrange Interpolation for state reconstruction. Executes strictly on registers; prevents VRAM stalls by eliminating global memory fetches during root-finding. Source Physics (handle_source)Implemented 2D orthonormal basis projection ($y_s, z_s$) and radial filtering ($r_{min} < r < r_{max}$). Registered via par.register_CodeParameters to utilize the 64KB Constant Memory cache. Camera Window (handle_window)Implemented pixel-grid mapping and persistence of crossing coordinates ($t_w, L_w$) without terminating the ray. Uses BHAH_HD_FUNC for zero-overhead inlining into the compute kernel. Orchestration (event_manager)Integrated sign-change detection logic ($val > 10^{-10}$) against persistent "previous side" flags. Uses bool *restrict pointers to minimize memory footprint while tracking crossing events across integration steps. 3. Batch Integrator Memory Allocation BlocksTo support the event_detection_manager, you must allocate persistent boolean flags in the batch_integrator_numerical.py script. These track the photon's position relative to the target planes across integration steps. Host-Side Pinned Memory AllocationInsert this into your host-side setup where all_photons is initialized: C// Allocate persistence flags in Pinned Memory for fast H2D/D2H transfers
+bool *all_photons_on_pos_window;
+bool *all_photons_on_pos_source;
+BHAH_MALLOC_PINNED(all_photons_on_pos_window, num_rays * sizeof(bool));
+BHAH_MALLOC_PINNED(all_photons_on_pos_source, num_rays * sizeof(bool));
+
+// Initialize all rays as being on one side of the planes (logic dependent)
+for(long int i=0; i<num_rays; i++) {
+    all_photons_on_pos_window[i] = true;
+    all_photons_on_pos_source[i] = true;
+}
+Device-Side Bundle AllocationInsert this into the "Streaming Bundle" allocation section (where f_bundle is defined): C// Persistence flags for the active bundle (Double-Buffered)
+bool *on_pos_window_prev_bundle[2];
+bool *on_pos_source_prev_bundle[2];
+
+for(int i=0; i<2; i++) {
+    BHAH_MALLOC_DEVICE(on_pos_window_prev_bundle[i], BUNDLE_CAPACITY * sizeof(bool));
+    BHAH_MALLOC_DEVICE(on_pos_source_prev_bundle[i], BUNDLE_CAPACITY * sizeof(bool));
+}
+
+"""
+
+Log 3:
+"
+Batch C Completion Log: Event Detection & Logic Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86)Status: COMPLETE1. Executive SummaryThe Event Detection Micro-System has been refactored into a fully inlined, register-resident logic suite. The system utilizes a persistence layer to track photon positions relative to geometric planes across discrete integration steps. High-precision root-finding and geometric projections now execute entirely on the GPU with zero host synchronization during the integration loop.2. Detailed Implementation FixesConstant Memory Integration: All geometric constants (camera positions, source normals) are accessed via the 64KB Constant Memory cache (d_commondata).Orchestration Logic (event_manager):Persistence Flags: Allocated on_pos_window_prev and on_pos_source_prev boolean buffers in Pinned and Device memory to track plane-side transitions.Sign-Change Detection: Implemented crossing detection logic ($val > 10^{-10}$) to trigger high-precision root-finding.Mathematical Core:Precision Root-Finding: Integrated find_event_time_and_state using Newton-form quadratic interpolation for affine parameter $\lambda$ reconstruction.Source Physics: Implemented 2D orthonormal basis projections for the accretion disk with radial filtering ($r_{min} < r < r_{max}$).BHaH Infrastructure Compliance:Functions are decorated with BHAH_HD_FUNC to ensure zero-overhead inlining into the event_detection kernel.Registry Injection: Helper function bodies are extracted from the cfc.CFunction_dict and injected into the manager's prefunc to prevent linker errors in device code.3. Hardware Optimization & ConstraintsRegister Limit: The entire logic suite, including interpolation, operates within the thread-local $f_{local}[9]$ registers to respect the 255-register limit of the sm_86 architecture.Memory Layout: Strictly adheres to the blueprint_data_t structure defined in the BHaH_defines.h header for direct VRAM-to-Pinned extraction.
+"""
+
+
+Scripts for big compare:
+"""
+1. BHaH_defines_h.py
+2. BHaH_device_defines_h.py
+
+3. cuda_intrinsics.h
+4. utilities.py
+5. loop.py
+6. gpu_kernel.py
+
+7. batch_integrator_numerical.py
+8. event_detection_manager.py
+
+9. rkf45_helpers_for_header.py
+10. rkf45_update_and_control_helper.py
+11. time_slot_manager_helpers.py
+
+12. set_initial_conditions_cartesian.py
+13. calculate_and_fill_blueprint_data_universal.py
+14.p0_reverse.py
+
+15. CUDA_Propmts_SYSTEM_CONTEXT.txt
+"""
+
+
+
+COMMENTING STANDARDS FOR SCRIPT GENERATION. (ONLY NEED TO WORRY ABOUT IT ASKED TO GENERATE SCRIPT)
+""""
+Role and Objective: You are an expert computational physicist and High-Performance Computing (HPC) software engineer.Your task is to refactor, format, and exhaustively comment the provided Python metaprogramming scripts that generate C code for a physics engine.Do not change the underlying mathematical or algorithmic logic. You must apply the following rigorous commenting and structural standards without exception.
+
+Professional, Ahistorical Commenting (NO REFACTORING REFERENCES)All comments and descriptions must be highly professional and describe the code exactly as it currently exists. You must be strictly ahistorical. Do not reference the fact that the code was refactored, updated, fixed, or changed.
+	BAD: "This module strips the previous OpenMP loop dispatcher in favor of a single-thread inline helper function."
+	GOOD: "This module uses a single-thread inline helper function."Just state what the code is and what it does.
+
+Metaprogramming Distinction (Python vs. C)You must strictly delineate between documenting the Python generator script and the resulting C code.
+	Python Comments (#): Use exclusively to explain metaprogramming logic, string manipulation, and Python-side orchestration.
+	C Comments (// or / /): Use within the generated C strings to explain physics, runtime execution, memory layout, and hardware architecture.
+
+Python-Side Documentation 
+	StandardsModule-Level Docstrings: The top-level Python script must begin with a comprehensive, multi-sentence docstring explaining the high-level architecture, purpose, and physics of the module. Cut the fluff.
+	Mandatory Sign-off: The module docstring MUST conclude with this exact string on the absolute final line: Author: Dalton J. Moone. Do not add trailing whitespace, dates, or license fluff after this name.
+	Function-Level Docstrings: Directly below every Python function definition, you must include a docstring.
+		Input parameters must be documented using the :param name: description format.
+		All errors or exceptions raised in the function must be defined using the :raises ErrorType: description format.
+
+C-Side Variable, Struct, and Math Documentation
+	Structs & Variables: Every new instance of a variable or struct member must have a comment detailing its physical meaning or structural purpose. No "naked" variables.
+	Comment Sizing: Use inline C-comments (//) for concise explanations (< 100 characters). Use a preceding block comment for dense, multi-sentence explanations.Strict LaTeX 		 Enforcement: All physical variables, tensor indices, and mathematical equations within C comments and the desc string MUST be wrapped in standard LaTeX delimiters (e.g., $p_t$, $\Gamma^a_{bc}$).
+Numerical Justification: When documenting an equation, limit the explanation to a brief, single-sentence functional justification of why the numerical method was chosen (e.g., for speed or stability), avoiding dense theoretical derivations or lengthy physics lectures.
+
+C-Side GPU Memory, Data Transfers, and OpenMP 
+	PragmasMemory/Transfers: Every target allocation (omp_target_alloc), memory copy (omp_target_memcpy), or map clause (#pragma omp target map) must include a detailed comment. Explicitly state the direction of the transfer (e.g., Host-to-Device) and the hardware justification (e.g., "Mapped to device to prevent warp divergence").
+	Parallelization & Errors: Document OpenMP parallel regions by explicitly stating why the loop is safe from race conditions (e.g., "independent photon trajectories"). For error blocks, state if an exit is a fatal unrecoverable error or a soft warning.
+
+C-Side Logical Sectioning & Block Comments
+	Visually separate long, complex C strings into logical blocks using clear dividers (e.g., // --- EVENT DETECTION & TERMINATION CHECKS ---). Precede each section with a fluff-free description of the algorithmic steps and explicitly justify why this architectural step occurs at this specific point in the pipeline.Strict Ordering and Formatting for cfc.register_CFunctionAll string variables representing the inputs must be defined sequentially immediately above the function call.
+	The Master Order: The arguments defined and passed into register_CFunction MUST follow this canonical top-to-bottom sequence: prefunc, includes, desc, cfunc_type, name, params, include_CodeParameters_h, body, postfunc. However if prefunc or postfunc doesn't exist in the script do not add it or put it in. That will cause bloat. 
+	Example of Strict Ordering:Notice how all variables passed to register_CFunction are defined immediately above the call, in the exact order they appear in the final generated C script:Python    # ... [Docstrings, Python logic, and SymPy setup] ...
+prefunc = """
+#ifdef USE_GPU
+#pragma omp declare target
+#endif
+"""
+includes = ["BHaH_defines.h"]
+desc = """@brief Computes the initial temporal component of the 4-momentum (p^0).
+Detailed algorithm: Solves the quadratic Hamiltonian constraint p_mu p^mu = 0
+specifically for the negative root to enforce physical null photon trajectories
+within the SoA architecture."""
+name = "p0_reverse"
+params = (
+    "const double *restrict metric_g4DD, "
+    "double *restrict all_photons_f, "
+    "const long int num_rays, "
+    "const int batch_size, "
+    "const long int photon_idx, "
+    "const int batch_id, "
+    "double *restrict p0_out"
+)
+# ... [Body string generation logic] ...
+body = f"""
+{preamble}
+{body_math}
+{postamble}
+"""
+postfunc = """
+#ifdef USE_GPU
+#pragma omp end declare target
+#endif
+"""
+cfc.register_CFunction(
+    prefunc=prefunc,
+    includes=includes,
+    desc=desc,
+    name=name,
+    params=params,
+    body=body,
+    include_CodeParameters_h=False,
+    postfunc=postfunc,
+)
+The desc String Formatting: The description string MUST be a multi-line, triple-quoted block string. It must utilize the Doxygen @brief tag and include @param tags explaining the C-function arguments.
+Execution:Review the provided code. Refactor and comment it strictly adhering to every rule above. Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
+""""
