@@ -48,6 +48,7 @@ def register_CFunction_initial_data(
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
 
+    :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
