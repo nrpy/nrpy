@@ -15,6 +15,7 @@ from typing import List
 import sympy as sp
 
 import nrpy.c_codegen as ccg
+
 # Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
@@ -50,7 +51,9 @@ def assert_SO3_convention_in_text(text: str, context: str) -> None:
         )
 
 
-def _rank1_exprs_lhses(rank1: List[sp.Expr], varname: str) -> tuple[List[sp.Expr], List[str]]:
+def _rank1_exprs_lhses(
+    rank1: List[sp.Expr], varname: str
+) -> tuple[List[sp.Expr], List[str]]:
     """
     Flatten a rank-1 vector into expression and LHS-name lists.
 
@@ -198,8 +201,12 @@ Convention:
     xhat_sym = ixp.declarerank1("xhatU")
     yhat_sym = ixp.declarerank1("yhatU")
     zhat_sym = ixp.declarerank1("zhatU")
-    hat_invariants = SO3Expressions.hat_validation_invariants(xhat_sym, yhat_sym, zhat_sym)
-    R_from_hats = SO3Expressions.build_rotation_matrix_from_hats(xhat_sym, yhat_sym, zhat_sym)
+    hat_invariants = SO3Expressions.hat_validation_invariants(
+        xhat_sym, yhat_sym, zhat_sym
+    )
+    R_from_hats = SO3Expressions.build_rotation_matrix_from_hats(
+        xhat_sym, yhat_sym, zhat_sym
+    )
 
     R_sym = ixp.declarerank2("R", symmetry="nosym")
     x_in_sym = ixp.declarerank1("x_in")

@@ -75,7 +75,9 @@ def _rank2_exprs_lhses(
     return exprs, lhses
 
 
-def _rank1_exprs_lhses(rank1: List[sp.Expr], varname: str) -> tuple[List[sp.Expr], List[str]]:
+def _rank1_exprs_lhses(
+    rank1: List[sp.Expr], varname: str
+) -> tuple[List[sp.Expr], List[str]]:
     """
     Flatten a rank-1 vector into expression and LHS-name lists.
 

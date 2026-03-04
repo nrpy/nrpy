@@ -12,6 +12,7 @@ from typing import List
 import sympy as sp
 
 import nrpy.c_codegen as ccg
+
 # Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
@@ -157,8 +158,12 @@ Convention:
     xhat_sym = ixp.declarerank1("xhatU")
     yhat_sym = ixp.declarerank1("yhatU")
     zhat_sym = ixp.declarerank1("zhatU")
-    hat_invariants = SO3Expressions.hat_validation_invariants(xhat_sym, yhat_sym, zhat_sym)
-    R_from_hats = SO3Expressions.build_rotation_matrix_from_hats(xhat_sym, yhat_sym, zhat_sym)
+    hat_invariants = SO3Expressions.hat_validation_invariants(
+        xhat_sym, yhat_sym, zhat_sym
+    )
+    R_from_hats = SO3Expressions.build_rotation_matrix_from_hats(
+        xhat_sym, yhat_sym, zhat_sym
+    )
 
     R_sym = ixp.declarerank2("R", symmetry="nosym")
     trace_expr = SO3Expressions.matrix_trace3(R_sym)
@@ -220,7 +225,10 @@ Convention:
     )
 
     axis_general_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat).subs(denom_sym, sp.Symbol("denom")) for expr in axis_general_expr],
+        [
+            expr.subs(sub_hat).subs(denom_sym, sp.Symbol("denom"))
+            for expr in axis_general_expr
+        ],
         ["nU_part1[0]", "nU_part1[1]", "nU_part1[2]"],
         include_braces=False,
         verbose=False,
@@ -235,7 +243,10 @@ Convention:
 
     Rcheck_exprs, Rcheck_lhses = _rank2_exprs_lhses(Rcheck_expr, "Rcheck")
     Rcheck_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat).subs(dphi_local_sym, sp.Symbol("dphi_local")) for expr in Rcheck_exprs],
+        [
+            expr.subs(sub_hat).subs(dphi_local_sym, sp.Symbol("dphi_local"))
+            for expr in Rcheck_exprs
+        ],
         Rcheck_lhses,
         include_braces=False,
         verbose=False,
