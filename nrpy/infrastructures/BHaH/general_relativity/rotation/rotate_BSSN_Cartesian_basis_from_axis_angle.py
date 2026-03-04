@@ -61,15 +61,7 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle() -> None:
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_from_axis_angle_openmp", file_ext="c")
     """
-    # Step 1: Ensure matrix-based helper is registered first.
-    from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src import (
-        register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src,
-    )
-
-    if "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src" not in cfc.CFunction_dict:
-        register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src()
-
-    # Step 2: Set C function metadata and interface.
+    # Step 1: Set C function metadata and interface.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""
 @brief Rotate BSSN Cartesian-basis fields from axis-angle input.
@@ -106,7 +98,7 @@ Convention:
         "REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3], const REAL dphi"
     )
 
-    # Step 3: Build symbolic Rodrigues assignments from equations module.
+    # Step 2: Build symbolic Rodrigues assignments from equations module.
     nU_unit_sym: List[sp.Expr] = [sp.Symbol("nx"), sp.Symbol("ny"), sp.Symbol("nz")]
     R_expr = SO3Expressions.rodrigues_matrix_from_unit_axis(
         nU_unit_sym, sp.Symbol("dphi")
@@ -114,32 +106,32 @@ Convention:
     R_exprs, R_lhses = _rank2_exprs_lhses(R_expr, "R")
     R_codegen = ccg.c_codegen(R_exprs, R_lhses, include_braces=False, verbose=False)
 
-    # Step 4: Build Rodrigues matrix from (nU,dphi), then delegate to
+    # Step 3: Build Rodrigues matrix from (nU,dphi), then delegate to
     #         rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src().
     body = (
         r"""
-  const REAL n0 = nU[0];
-  const REAL n1 = nU[1];
-  const REAL n2 = nU[2];
-  const REAL nnorm = sqrt(n0 * n0 + n1 * n1 + n2 * n2);
-
-  REAL R[3][3];
-  if (nnorm < 1e-300) {
-    // Deterministic fallback for degenerate axis input.
-    R[0][0] = 1.0;
-    R[0][1] = 0.0;
-    R[0][2] = 0.0;
-    R[1][0] = 0.0;
-    R[1][1] = 1.0;
-    R[1][2] = 0.0;
-    R[2][0] = 0.0;
-    R[2][1] = 0.0;
-    R[2][2] = 1.0;
-  } else {
-    const REAL nx = n0 / nnorm;
-    const REAL ny = n1 / nnorm;
-    const REAL nz = n2 / nnorm;
-"""
+      const REAL n0 = nU[0];
+      const REAL n1 = nU[1];
+      const REAL n2 = nU[2];
+      const REAL nnorm = sqrt(n0 * n0 + n1 * n1 + n2 * n2);
+    
+      REAL R[3][3];
+      if (nnorm < 1e-300) {
+        // Deterministic fallback for degenerate axis input.
+        R[0][0] = 1.0;
+        R[0][1] = 0.0;
+        R[0][2] = 0.0;
+        R[1][0] = 0.0;
+        R[1][1] = 1.0;
+        R[1][2] = 0.0;
+        R[2][0] = 0.0;
+        R[2][1] = 0.0;
+        R[2][2] = 1.0;
+      } else {
+        const REAL nx = n0 / nnorm;
+        const REAL ny = n1 / nnorm;
+        const REAL nz = n2 / nnorm;
+    """
         + R_codegen
         + r"""
   }
