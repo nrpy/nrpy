@@ -27,22 +27,33 @@ import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
-# Step 2: Import SO(3) infrastructure helper registrations consumed by this module.
-from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
-    register_CFunction_SO3_apply_R_to_tensorDD,
-    register_CFunction_SO3_apply_R_to_vector,
+SO3_CONVENTION_REQUIRED_SNIPPETS = (
+    "R maps rotating-frame components -> fixed-frame components.",
+    "R[:,0]=xhat, R[:,1]=yhat, R[:,2]=zhat",
+    "v_fixed = R v_rot, v_rot = R^T v_fixed.",
+    "T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.",
+    "DeltaR_dst_from_src = R_dst^T R_src.",
+    "R[i][j]",
+    "row i, column j.",
 )
 
 
-def _codegen_no_braces(exprs: list[sp.Expr], lhses: list[str]) -> str:
+def assert_SO3_convention_in_text(text: str, context: str) -> None:
     """
-    Generate C code from expressions without wrapping braces.
+    Assert that a text block includes all locked SO(3) convention snippets.
 
-    :param exprs: Expression list.
-    :param lhses: Output variable-name list.
-    :return: C code assignment string.
+    :param text: Text block that must contain the locked convention snippets.
+    :param context: Context label used in the assertion message.
+    :raises AssertionError: If one or more required snippets are missing.
     """
-    return ccg.c_codegen(exprs, lhses, include_braces=False, verbose=False)
+    missing = [
+        snippet for snippet in SO3_CONVENTION_REQUIRED_SNIPPETS if snippet not in text
+    ]
+    if missing:
+        raise AssertionError(
+            f"{context} is missing locked SO(3) convention snippets:\n- "
+            + "\n- ".join(missing)
+        )
 
 
 def _rank2_exprs_lhses(
@@ -61,6 +72,22 @@ def _rank2_exprs_lhses(
         for j in range(3):
             exprs.append(rank2[i][j])
             lhses.append(f"{varname}[{i}][{j}]")
+    return exprs, lhses
+
+
+def _rank1_exprs_lhses(rank1: List[sp.Expr], varname: str) -> tuple[List[sp.Expr], List[str]]:
+    """
+    Flatten a rank-1 vector into expression and LHS-name lists.
+
+    :param rank1: Rank-1 vector.
+    :param varname: Output C variable name.
+    :return: Tuple of flattened expression and LHS-name lists.
+    """
+    exprs: List[sp.Expr] = []
+    lhses: List[str] = []
+    for i in range(3):
+        exprs.append(rank1[i])
+        lhses.append(f"{varname}[{i}]")
     return exprs, lhses
 
 
@@ -249,7 +276,7 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
@@ -258,11 +285,6 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_by_R_openmp", file_ext="c")
     """
-    if "SO3_apply_R_to_vector" not in cfc.CFunction_dict:
-        register_CFunction_SO3_apply_R_to_vector()
-    if "SO3_apply_R_to_tensorDD" not in cfc.CFunction_dict:
-        register_CFunction_SO3_apply_R_to_tensorDD()
-
     # Step 1: Basic C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""
@@ -285,7 +307,7 @@ Convention:
   only upper-triangular components (i <= j) are authoritative on input
   and are overwritten on output; lower-triangular entries are untouched.
 - Internally, full symmetric local tensors are reconstructed from upper
-  components before calling SO3_apply_R_to_tensorDD().
+  components before applying equation-derived SO(3) tensor-rotation expressions.
 
 @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
 @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -300,7 +322,58 @@ Convention:
         "REAL vetU[3], REAL betU[3], REAL lambdaU[3], "
         "REAL hDD[3][3], REAL aDD[3][3], const REAL DeltaR_dst_from_src[3][3]"
     )
-    body = r"""
+    # Step 2: Build equation-driven vector/tensor rotation assignments.
+    DeltaR_sym = ixp.declarerank2("DeltaR", symmetry="nosym")
+    v_sym = ixp.declarerank1("v")
+    t_sym = ixp.declarerank2("t", symmetry="nosym")
+    v_rot_expr = SO3Expressions.apply_R_to_vector(DeltaR_sym, v_sym)
+    t_rot_expr = SO3Expressions.apply_R_to_tensorDD(DeltaR_sym, t_sym)
+
+    def _vector_exprs_lhses(
+        input_name: str, output_name: str
+    ) -> tuple[List[sp.Expr], List[str]]:
+        substitutions: Dict[sp.Symbol, sp.Expr] = {}
+        for i in range(3):
+            substitutions[v_sym[i]] = sp.Symbol(f"{input_name}[{i}]")
+            for j in range(3):
+                substitutions[DeltaR_sym[i][j]] = sp.Symbol(
+                    f"DeltaR_dst_from_src[{i}][{j}]"
+                )
+        exprs_sub = [v_rot_expr[i].subs(substitutions) for i in range(3)]
+        return _rank1_exprs_lhses(exprs_sub, output_name)
+
+    def _tensor_exprs_lhses(
+        input_name: str, output_name: str
+    ) -> tuple[List[sp.Expr], List[str]]:
+        substitutions: Dict[sp.Symbol, sp.Expr] = {}
+        for i in range(3):
+            for j in range(3):
+                substitutions[DeltaR_sym[i][j]] = sp.Symbol(
+                    f"DeltaR_dst_from_src[{i}][{j}]"
+                )
+                substitutions[t_sym[i][j]] = sp.Symbol(f"{input_name}[{i}][{j}]")
+        exprs_sub, lhses = _rank2_exprs_lhses(t_rot_expr, output_name)
+        exprs_sub = [expr.subs(substitutions) for expr in exprs_sub]
+        return exprs_sub, lhses
+
+    all_exprs: List[sp.Expr] = []
+    all_lhses: List[str] = []
+    for exprs, lhses in (
+        _vector_exprs_lhses("vetU_in", "vetU_out"),
+        _vector_exprs_lhses("betU_in", "betU_out"),
+        _vector_exprs_lhses("lambdaU_in", "lambdaU_out"),
+        _tensor_exprs_lhses("hDD_sym", "hDD_out"),
+        _tensor_exprs_lhses("aDD_sym", "aDD_out"),
+    ):
+        all_exprs.extend(exprs)
+        all_lhses.extend(lhses)
+    rotation_codegen = ccg.c_codegen(
+        all_exprs, all_lhses, include_braces=False, verbose=False
+    )
+
+    # Step 3: Construct the generated C body.
+    body = (
+        r"""
   REAL vetU_out[3], betU_out[3], lambdaU_out[3];
   REAL hDD_sym[3][3], aDD_sym[3][3];
   REAL hDD_out[3][3], aDD_out[3][3];
@@ -326,12 +399,13 @@ Convention:
   aDD_sym[2][1] = aDD[1][2];
   aDD_sym[2][2] = aDD[2][2];
 
-  SO3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
-  SO3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
-  SO3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
-  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
-  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
-
+  // Alias-safe vector rotations: v_dst = DeltaR * v_src.
+  const REAL vetU_in[3] = {vetU[0], vetU[1], vetU[2]};
+  const REAL betU_in[3] = {betU[0], betU[1], betU[2]};
+  const REAL lambdaU_in[3] = {lambdaU[0], lambdaU[1], lambdaU[2]};
+"""
+        + rotation_codegen
+        + r"""
   // Write back vectors completely.
   vetU[0] = vetU_out[0];
   vetU[1] = vetU_out[1];
@@ -358,6 +432,7 @@ Convention:
   aDD[1][2] = aDD_out[1][2];
   aDD[2][2] = aDD_out[2][2];
 """
+    )
     cfc.register_CFunction(
         subdirectory="general_relativity/rotation",
         includes=includes,
@@ -380,7 +455,7 @@ def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_rotate_BSSN_Cartesian_basis()
@@ -436,7 +511,7 @@ Convention:
         nU_unit_sym, sp.Symbol("dphi")
     )
     R_exprs, R_lhses = _rank2_exprs_lhses(R_expr, "R")
-    R_codegen = _codegen_no_braces(R_exprs, R_lhses)
+    R_codegen = ccg.c_codegen(R_exprs, R_lhses, include_braces=False, verbose=False)
 
     # Step 4: Build Rodrigues matrix from (nU,dphi), then delegate to
     #         rotate_BSSN_Cartesian_basis_by_R().

@@ -5,13 +5,11 @@ from __future__ import annotations
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import (
+    assert_SO3_convention_in_text,
     register_CFunction_rotate_BSSN_Cartesian_basis,
     register_CFunction_rotate_BSSN_Cartesian_basis_by_R,
     verify_quaternion_interface_parity,
     verify_quaternion_interface_parity_randomized,
-)
-from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
-    assert_SO3_convention_in_text,
 )
 
 
