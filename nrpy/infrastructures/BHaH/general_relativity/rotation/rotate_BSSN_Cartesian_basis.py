@@ -14,6 +14,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from __future__ import annotations
+
 import math
 
 import nrpy.c_function as cfc
