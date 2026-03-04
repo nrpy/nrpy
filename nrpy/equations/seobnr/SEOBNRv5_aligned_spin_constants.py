@@ -200,7 +200,7 @@ class SEOBNR_aligned_spin_constants:
             + 0.07442 * delta
         )
 
-        self.hNR["(3 , 2"] = sp.Abs(
+        self.hNR["(3 , 2)"] = sp.Abs(
             0.02259 * chi**2
             + 0.307803 * chi * nu
             - 0.020771 * chi

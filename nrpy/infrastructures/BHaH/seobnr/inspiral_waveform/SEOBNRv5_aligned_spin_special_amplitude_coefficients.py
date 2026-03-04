@@ -354,26 +354,25 @@ SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
 
-SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics_22, hNR);
-const REAL hNR21 = hNR[HNR21] * nu;
-const REAL hNR22 = hNR[HNR22] * nu;
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, hNR);
+REAL hNR21 = hNR[HNR21] * nu;
+REAL hNR43 = hNR[HNR43] * nu;
+REAL hNR55 = hNR[HNR55] * nu;
+REAL hNR22 = hNR[HNR22] * nu;
 
-if fabs(hNR21) < hNR22 / hNR21_threshold{
-    hNR21 = signbit(hNR21) * hNR22/hNR21_threshold
+if (fabs(hNR21) < hNR22 / hNR21_threshold) {
+    hNR21 = signbit(hNR21) * hNR22/hNR21_threshold;
 }
 
-const REAL hNR43 = hNR[HNR43] * nu;
-if fabs(hNR43) < hNR22 / hNR43_threshold{
-    hNR43 = signbit(hNR43) * hNR22/hNR43_threshold
+if (fabs(hNR43) < hNR22 / hNR43_threshold) {
+    hNR43 = signbit(hNR43) * hNR22/hNR43_threshold;
 }
 
-SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos, hNR);
+SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos);
 REAL rho55 = rhos[RHO55];
 
-SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, dynamics_55, hNR);
-const REAL hNR55 = hNR[HNR55] * nu;
-if fabs(hNR55) < hNR22 / hNR55_threshold{
-    hNR55 = signbit(hNR55) * hNR22/hNR55_threshold
+if (fabs(hNR55) < hNR22 / hNR55_threshold) {
+    hNR55 = signbit(hNR55) * hNR22/hNR55_threshold;
 }
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
