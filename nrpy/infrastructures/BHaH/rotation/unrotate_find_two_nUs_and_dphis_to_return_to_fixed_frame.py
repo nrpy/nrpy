@@ -12,10 +12,10 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 # Step 2: Import SO(3) helper registrations used by this module.
-from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
+from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
     register_CFunction_build_R_from_cumulative_hats,
-    register_CFunction_so3_matrix_to_axis_angle,
-    register_CFunction_so3_validate_and_optionally_fix_hats,
+    register_CFunction_SO3_matrix_to_axis_angle,
+    register_CFunction_SO3_validate_and_optionally_fix_hats,
 )
 
 
@@ -34,12 +34,12 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import assert_so3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame()
     >>> generated_str = cfc.CFunction_dict["unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame"].full_function
-    >>> assert_so3_convention_in_text(generated_str, "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame")
+    >>> assert_SO3_convention_in_text(generated_str, "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "openmp", file_ext="c")
     """
@@ -73,12 +73,12 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     )
 
     # Step 2: Register required SO(3) helper C functions.
-    if "so3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:
-        register_CFunction_so3_validate_and_optionally_fix_hats()
+    if "SO3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:
+        register_CFunction_SO3_validate_and_optionally_fix_hats()
     if "build_R_from_cumulative_hats" not in cfc.CFunction_dict:
         register_CFunction_build_R_from_cumulative_hats()
-    if "so3_matrix_to_axis_angle" not in cfc.CFunction_dict:
-        register_CFunction_so3_matrix_to_axis_angle()
+    if "SO3_matrix_to_axis_angle" not in cfc.CFunction_dict:
+        register_CFunction_SO3_matrix_to_axis_angle()
 
     # Step 3: Set C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -96,7 +96,7 @@ Convention:
 - T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.
 - DeltaR_dst_from_src = R_dst^T R_src.
 - C layout statement for helper calls: R[i][j] is row i, column j.
-- Axis-angle bridge is produced from this R using so3_matrix_to_axis_angle().
+- Axis-angle bridge is produced from this R using SO3_matrix_to_axis_angle().
 - Einstein notation for the matrix map represented by part 1:
   v^i_fixed = R^i{}_j v^j_rot.
 
@@ -117,7 +117,7 @@ Convention:
   REAL xhatU[3] = {commondata.cumulative_regrid_xhatU[0], commondata.cumulative_regrid_xhatU[1], commondata.cumulative_regrid_xhatU[2]};
   REAL yhatU[3] = {commondata.cumulative_regrid_yhatU[0], commondata.cumulative_regrid_yhatU[1], commondata.cumulative_regrid_yhatU[2]};
   REAL zhatU[3] = {commondata.cumulative_regrid_zhatU[0], commondata.cumulative_regrid_zhatU[1], commondata.cumulative_regrid_zhatU[2]};
-  if (so3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
+  if (SO3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
     fprintf(stderr,
             "ERROR in %s: cumulative hats are invalid at the consuming boundary. "
             "Repair must be applied at the producing/update boundary.\n",
@@ -128,7 +128,7 @@ Convention:
   REAL R[3][3];
   build_R_from_cumulative_hats(xhatU, yhatU, zhatU, R);
 
-  so3_matrix_to_axis_angle(R, nU_part1, dphi_part1);
+  SO3_matrix_to_axis_angle(R, nU_part1, dphi_part1);
 
   // Second output slot is deterministic identity.
   nU_part2[0] = 1.0;

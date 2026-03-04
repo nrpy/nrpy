@@ -16,99 +16,161 @@ Author: Zachariah B. Etienne
 
 from __future__ import annotations
 
-import math
-from typing import Any
+from typing import Dict, List
 
-# Step 1: Import core NRPy modules needed for C code generation.
+import sympy as sp
+
+# Step 1: Import core NRPy modules needed for symbolic expression construction
+#         and C code generation.
+import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp
-from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
-    register_CFunction_so3_apply_R_to_tensorDD,
-    register_CFunction_so3_apply_R_to_vector,
+from nrpy.equations.rotation.SO3_rotations import SO3Expressions
+
+# Step 2: Import SO(3) infrastructure helper registrations consumed by this module.
+from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
+    register_CFunction_SO3_apply_R_to_tensorDD,
+    register_CFunction_SO3_apply_R_to_vector,
 )
 
 
-def _rodrigues_matrix_from_axis_angle(nU: list[Any], dphi: Any) -> list[list[Any]]:
+def _codegen_no_braces(exprs: list[sp.Expr], lhses: list[str]) -> str:
     """
-    Build a 3x3 Rodrigues rotation matrix from axis-angle input.
+    Generate C code from expressions without wrapping braces.
 
-    :param nU: Rotation axis components.
-    :param dphi: Rotation angle in radians.
-    :return: Rodrigues rotation matrix.
+    :param exprs: Expression list.
+    :param lhses: Output variable-name list.
+    :return: C code assignment string.
     """
-    # Step 1: Read axis components and compute axis norm.
-    nx, ny, nz = nU
-    nnorm = math.sqrt(nx * nx + ny * ny + nz * nz)
-
-    # Step 2: Degenerate-axis fallback => identity matrix.
-    if nnorm < 1e-300:
-        return [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-
-    # Step 3: Normalize axis and evaluate Rodrigues coefficients.
-    nx /= nnorm
-    ny /= nnorm
-    nz /= nnorm
-    c = math.cos(dphi)
-    s = math.sin(dphi)
-    one_minus_c = 1.0 - c
-    # Step 4: Fill the 3x3 matrix from Rodrigues formula:
-    #         R = c I + (1-c) n n^T + s [n]_x.
-    return [
-        [
-            c + one_minus_c * nx * nx,
-            one_minus_c * nx * ny - s * nz,
-            one_minus_c * nx * nz + s * ny,
-        ],
-        [
-            one_minus_c * ny * nx + s * nz,
-            c + one_minus_c * ny * ny,
-            one_minus_c * ny * nz - s * nx,
-        ],
-        [
-            one_minus_c * nz * nx - s * ny,
-            one_minus_c * nz * ny + s * nx,
-            c + one_minus_c * nz * nz,
-        ],
-    ]
+    return ccg.c_codegen(exprs, lhses, include_braces=False, verbose=False)
 
 
-def _apply_R_to_vector(R: list[list[Any]], vU: list[Any]) -> list[Any]:
+def _rank2_exprs_lhses(
+    rank2: List[List[sp.Expr]], varname: str
+) -> tuple[List[sp.Expr], List[str]]:
     """
-    Apply v_dst = R v_src.
+    Flatten a rank-2 tensor into expression and LHS-name lists.
 
-    :param R: Rotation matrix.
-    :param vU: Input vector components.
-    :return: Output vector components after applying ``R``.
+    :param rank2: Rank-2 tensor.
+    :param varname: Output C variable name.
+    :return: Tuple of flattened expression and LHS-name lists.
     """
-    # Step 1: Declare output vector.
-    v_dstU = ixp.zerorank1()
-
-    # Step 2: Compute v^i_dst = R^i{}_j v^j_src.
+    exprs: List[sp.Expr] = []
+    lhses: List[str] = []
     for i in range(3):
         for j in range(3):
-            v_dstU[i] += R[i][j] * vU[j]
-    return v_dstU
+            exprs.append(rank2[i][j])
+            lhses.append(f"{varname}[{i}][{j}]")
+    return exprs, lhses
 
 
-def _apply_R_to_tensorDD(R: list[list[Any]], tDD: list[list[Any]]) -> list[list[Any]]:
+def _evaluate_rank1_expression(
+    rank1_expr: List[sp.Expr], substitutions: Dict[sp.Symbol, sp.Expr]
+) -> List[sp.Expr]:
     """
-    Apply T_dst = R T_src R^T.
+    Evaluate a rank-1 symbolic expression under substitutions.
 
-    :param R: Rotation matrix.
-    :param tDD: Input rank-2 tensor.
-    :return: Output tensor after applying ``R`` and ``R^T``.
+    :param rank1_expr: Symbolic rank-1 expression.
+    :param substitutions: Mapping from symbols to numeric values.
+    :return: Numeric rank-1 value list.
     """
-    # Step 1: Declare output rank-2 tensor.
-    t_dstDD = ixp.zerorank2()
+    out = ixp.zerorank1()
+    for i in range(3):
+        out[i] = sp.N(rank1_expr[i].subs(substitutions), 50)
+    return out
 
-    # Step 2: Compute T^dst_{ij} = R_i{}^k R_j{}^l T^src_{kl}.
+
+def _evaluate_rank2_expression(
+    rank2_expr: List[List[sp.Expr]], substitutions: Dict[sp.Symbol, sp.Expr]
+) -> List[List[sp.Expr]]:
+    """
+    Evaluate a rank-2 symbolic expression under substitutions.
+
+    :param rank2_expr: Symbolic rank-2 expression.
+    :param substitutions: Mapping from symbols to numeric values.
+    :return: Numeric rank-2 value list.
+    """
+    out = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
-            for k in range(3):
-                for l in range(3):
-                    # T^dst_{ij} = R_i{}^k T^src_{kl} (R^T)^l{}_j = R_i{}^k T^src_{kl} R_j{}^l.
-                    t_dstDD[i][j] += R[i][k] * tDD[k][l] * R[j][l]
-    return t_dstDD
+            out[i][j] = sp.N(rank2_expr[i][j].subs(substitutions), 50)
+    return out
+
+
+def _rodrigues_matrix_eval(
+    nU_input: List[sp.Expr], dphi_input: sp.Expr
+) -> List[List[sp.Expr]]:
+    """
+    Evaluate Rodrigues matrix expression numerically from axis-angle input.
+
+    :param nU_input: Rotation-axis components.
+    :param dphi_input: Rotation angle in radians.
+    :return: Numeric 3x3 rotation matrix.
+    """
+    axis_sq = (
+        nU_input[0] * nU_input[0]
+        + nU_input[1] * nU_input[1]
+        + nU_input[2] * nU_input[2]
+    )
+    if axis_sq < sp.sympify("1e-600"):
+        return [
+            [sp.Integer(1), sp.Integer(0), sp.Integer(0)],
+            [sp.Integer(0), sp.Integer(1), sp.Integer(0)],
+            [sp.Integer(0), sp.Integer(0), sp.Integer(1)],
+        ]
+
+    nU_sym = ixp.declarerank1("nU")
+    dphi_sym = sp.Symbol("dphi")
+    R_expr = SO3Expressions.rodrigues_matrix_from_axis_angle(nU_sym, dphi_sym)
+
+    substitutions: Dict[sp.Symbol, sp.Expr] = {dphi_sym: sp.sympify(dphi_input)}
+    for i in range(3):
+        substitutions[nU_sym[i]] = sp.sympify(nU_input[i])
+    return _evaluate_rank2_expression(R_expr, substitutions)
+
+
+def _apply_rotation_to_vector_eval(
+    R_input: List[List[sp.Expr]], v_input: List[sp.Expr]
+) -> List[sp.Expr]:
+    """
+    Evaluate v_dst = R v_src from symbolic expressions.
+
+    :param R_input: Numeric rotation matrix.
+    :param v_input: Numeric input vector.
+    :return: Numeric rotated vector.
+    """
+    R_sym = ixp.declarerank2("R", symmetry="nosym")
+    v_sym = ixp.declarerank1("v")
+    v_expr = SO3Expressions.apply_R_to_vector(R_sym, v_sym)
+
+    substitutions: Dict[sp.Symbol, sp.Expr] = {}
+    for i in range(3):
+        substitutions[v_sym[i]] = sp.sympify(v_input[i])
+        for j in range(3):
+            substitutions[R_sym[i][j]] = sp.sympify(R_input[i][j])
+    return _evaluate_rank1_expression(v_expr, substitutions)
+
+
+def _apply_rotation_to_tensor_eval(
+    R_input: List[List[sp.Expr]], t_input: List[List[sp.Expr]]
+) -> List[List[sp.Expr]]:
+    """
+    Evaluate T_dst = R T_src R^T from symbolic expressions.
+
+    :param R_input: Numeric rotation matrix.
+    :param t_input: Numeric covariant rank-2 tensor.
+    :return: Numeric rotated tensor.
+    """
+    R_sym = ixp.declarerank2("R", symmetry="nosym")
+    t_sym = ixp.declarerank2("t", symmetry="nosym")
+    t_expr = SO3Expressions.apply_R_to_tensorDD(R_sym, t_sym)
+
+    substitutions: Dict[sp.Symbol, sp.Expr] = {}
+    for i in range(3):
+        for j in range(3):
+            substitutions[R_sym[i][j]] = sp.sympify(R_input[i][j])
+            substitutions[t_sym[i][j]] = sp.sympify(t_input[i][j])
+    return _evaluate_rank2_expression(t_expr, substitutions)
 
 
 def verify_quaternion_interface_parity() -> None:
@@ -117,23 +179,23 @@ def verify_quaternion_interface_parity() -> None:
 
     Doctests:
     >>> from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
-    >>> axis = [0.3, -0.4, 0.5]
-    >>> dphi = 1.2
-    >>> vec = [1.0, -2.0, 0.5]
-    >>> ten = [[2.0, 0.1, -0.3], [0.1, 1.5, 0.7], [-0.3, 0.7, 0.8]]
-    >>> R = _rodrigues_matrix_from_axis_angle(axis, dphi)
-    >>> vec_by_R = _apply_R_to_vector(R, vec)
+    >>> axis = [sp.Rational(3, 10), -sp.Rational(2, 5), sp.Rational(1, 2)]
+    >>> dphi = sp.Rational(6, 5)
+    >>> vec = [1, -2, sp.Rational(1, 2)]
+    >>> ten = [[2, sp.Rational(1, 10), -sp.Rational(3, 10)], [sp.Rational(1, 10), sp.Rational(3, 2), sp.Rational(7, 10)], [-sp.Rational(3, 10), sp.Rational(7, 10), sp.Rational(4, 5)]]
+    >>> R = _rodrigues_matrix_eval(axis, dphi)
+    >>> vec_by_R = _apply_rotation_to_vector_eval(R, vec)
     >>> vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
     >>> max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)) < 1e-13
     True
-    >>> ten_by_R = _apply_R_to_tensorDD(R, ten)
+    >>> ten_by_R = _apply_rotation_to_tensor_eval(R, ten)
     >>> ten_by_q = [[complex(v).real for v in row] for row in rotate(ten, axis, dphi)]
     >>> max(abs(ten_by_R[i][j] - ten_by_q[i][j]) for i in range(3) for j in range(3)) < 1e-13
     True
     >>> # Near-pi case
-    >>> dphi = math.pi - 1e-10
-    >>> R = _rodrigues_matrix_from_axis_angle(axis, dphi)
-    >>> vec_by_R = _apply_R_to_vector(R, vec)
+    >>> dphi = sp.pi - sp.sympify("1e-10")
+    >>> R = _rodrigues_matrix_eval(axis, dphi)
+    >>> vec_by_R = _apply_rotation_to_vector_eval(R, vec)
     >>> vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
     >>> max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)) < 1e-11
     True
@@ -151,22 +213,22 @@ def verify_quaternion_interface_parity_randomized() -> None:
     >>> def rand_axis():
     ...     while True:
     ...         axis = [rng.uniform(-1.0, 1.0) for _ in range(3)]
-    ...         if math.sqrt(sum(a * a for a in axis)) > 1e-12:
+    ...         if axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2] > 1e-24:
     ...             return axis
-    >>> angles = [0.0, 1e-14, -1e-14, math.pi - 1e-12, -math.pi + 1e-12, 0.7, -1.1]
+    >>> angles = [0.0, 1e-14, -1e-14, sp.pi - sp.sympify("1e-12"), -sp.pi + sp.sympify("1e-12"), 0.7, -1.1]
     >>> max_vec_err = 0.0
     >>> max_ten_err = 0.0
     >>> for idx in range(64):
     ...     axis = rand_axis()
-    ...     dphi = angles[idx % len(angles)] if idx < len(angles) else rng.uniform(-math.pi, math.pi)
+    ...     dphi = angles[idx % len(angles)] if idx < len(angles) else rng.uniform(-3.141592653589793, 3.141592653589793)
     ...     vec = [rng.uniform(-2.0, 2.0) for _ in range(3)]
     ...     ten = [[rng.uniform(-2.0, 2.0) for _ in range(3)] for _ in range(3)]
     ...     # Symmetrize to match BSSN tensor usage.
     ...     ten = [[0.5 * (ten[i][j] + ten[j][i]) for j in range(3)] for i in range(3)]
-    ...     R = _rodrigues_matrix_from_axis_angle(axis, dphi)
-    ...     vec_by_R = _apply_R_to_vector(R, vec)
+    ...     R = _rodrigues_matrix_eval(axis, dphi)
+    ...     vec_by_R = _apply_rotation_to_vector_eval(R, vec)
     ...     vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
-    ...     ten_by_R = _apply_R_to_tensorDD(R, ten)
+    ...     ten_by_R = _apply_rotation_to_tensor_eval(R, ten)
     ...     ten_by_q = [[complex(v).real for v in row] for row in rotate(ten, axis, dphi)]
     ...     max_vec_err = max(max_vec_err, max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)))
     ...     max_ten_err = max(max_ten_err, max(abs(ten_by_R[i][j] - ten_by_q[i][j]) for i in range(3) for j in range(3)))
@@ -187,19 +249,19 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import assert_so3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
     >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis_by_R"].full_function
-    >>> assert_so3_convention_in_text(generated_str, "rotate_BSSN_Cartesian_basis_by_R")
+    >>> assert_SO3_convention_in_text(generated_str, "rotate_BSSN_Cartesian_basis_by_R")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_by_R_openmp", file_ext="c")
     """
-    if "so3_apply_R_to_vector" not in cfc.CFunction_dict:
-        register_CFunction_so3_apply_R_to_vector()
-    if "so3_apply_R_to_tensorDD" not in cfc.CFunction_dict:
-        register_CFunction_so3_apply_R_to_tensorDD()
+    if "SO3_apply_R_to_vector" not in cfc.CFunction_dict:
+        register_CFunction_SO3_apply_R_to_vector()
+    if "SO3_apply_R_to_tensorDD" not in cfc.CFunction_dict:
+        register_CFunction_SO3_apply_R_to_tensorDD()
 
     # Step 1: Basic C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -215,18 +277,15 @@ Convention:
 - C layout statement for helper calls: R[i][j] is row i, column j.
 - DeltaR_dst_from_src maps source rotating-basis components to destination
   rotating-basis components.
-- Vectors: v_dst = DeltaR_dst_from_src * v_src.
-- Rank-2 tensors: T_dst = DeltaR_dst_from_src * T_src *
-  DeltaR_dst_from_src^T.
-- Einstein notation for vectors:
-  v^i_dst = (\Delta R)^i{}_j v^j_src.
-- Einstein notation for covariant rank-2 tensors:
-  T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+- Vector update in Einstein notation:
+  v^i_dst = (DeltaR)^i{}_j v^j_src.
+- Covariant rank-2 update in Einstein notation:
+  T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
 - Symmetric tensor storage contract:
   only upper-triangular components (i <= j) are authoritative on input
   and are overwritten on output; lower-triangular entries are untouched.
 - Internally, full symmetric local tensors are reconstructed from upper
-  components before calling so3_apply_R_to_tensorDD().
+  components before calling SO3_apply_R_to_tensorDD().
 
 @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
 @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -267,11 +326,11 @@ Convention:
   aDD_sym[2][1] = aDD[1][2];
   aDD_sym[2][2] = aDD[2][2];
 
-  so3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
-  so3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
-  so3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
+  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
+  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
 
   // Write back vectors completely.
   vetU[0] = vetU_out[0];
@@ -321,12 +380,12 @@ def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import assert_so3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_rotate_BSSN_Cartesian_basis()
     >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis"].full_function
-    >>> assert_so3_convention_in_text(generated_str, "rotate_BSSN_Cartesian_basis")
+    >>> assert_SO3_convention_in_text(generated_str, "rotate_BSSN_Cartesian_basis")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_openmp", file_ext="c")
     """
@@ -350,8 +409,8 @@ Convention:
 - DeltaR_dst_from_src = R_dst^T R_src.
 - C layout statement for helper calls: R[i][j] is row i, column j.
 - Einstein notation for the callee update:
-  v^i_dst = (\Delta R)^i{}_j v^j_src,
-  T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+  v^i_dst = (DeltaR)^i{}_j v^j_src,
+  T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
 - Symmetric tensor storage contract inherited from
   rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
   (i <= j) are updated.
@@ -370,9 +429,19 @@ Convention:
         "REAL vetU[3], REAL betU[3], REAL lambdaU[3], "
         "REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3], const REAL dphi"
     )
-    # Step 3: Build Rodrigues matrix from (nU, dphi), then delegate to
+
+    # Step 3: Build symbolic Rodrigues assignments from equations module.
+    nU_unit_sym = [sp.Symbol("nx"), sp.Symbol("ny"), sp.Symbol("nz")]
+    R_expr = SO3Expressions.rodrigues_matrix_from_unit_axis(
+        nU_unit_sym, sp.Symbol("dphi")
+    )
+    R_exprs, R_lhses = _rank2_exprs_lhses(R_expr, "R")
+    R_codegen = _codegen_no_braces(R_exprs, R_lhses)
+
+    # Step 4: Build Rodrigues matrix from (nU,dphi), then delegate to
     #         rotate_BSSN_Cartesian_basis_by_R().
-    body = r"""
+    body = (
+        r"""
   const REAL n0 = nU[0];
   const REAL n1 = nU[1];
   const REAL n2 = nU[2];
@@ -381,31 +450,27 @@ Convention:
   REAL R[3][3];
   if (nnorm < 1e-300) {
     // Deterministic fallback for degenerate axis input.
-    R[0][0] = 1.0; R[0][1] = 0.0; R[0][2] = 0.0;
-    R[1][0] = 0.0; R[1][1] = 1.0; R[1][2] = 0.0;
-    R[2][0] = 0.0; R[2][1] = 0.0; R[2][2] = 1.0;
+    R[0][0] = 1.0;
+    R[0][1] = 0.0;
+    R[0][2] = 0.0;
+    R[1][0] = 0.0;
+    R[1][1] = 1.0;
+    R[1][2] = 0.0;
+    R[2][0] = 0.0;
+    R[2][1] = 0.0;
+    R[2][2] = 1.0;
   } else {
     const REAL nx = n0 / nnorm;
     const REAL ny = n1 / nnorm;
     const REAL nz = n2 / nnorm;
-    const REAL c = cos(dphi);
-    const REAL s = sin(dphi);
-    const REAL one_minus_c = 1.0 - c;
-
-    // Rodrigues formula: R = c I + (1-c) n n^T + s [n]_x.
-    R[0][0] = c + one_minus_c * nx * nx;
-    R[0][1] = one_minus_c * nx * ny - s * nz;
-    R[0][2] = one_minus_c * nx * nz + s * ny;
-    R[1][0] = one_minus_c * ny * nx + s * nz;
-    R[1][1] = c + one_minus_c * ny * ny;
-    R[1][2] = one_minus_c * ny * nz - s * nx;
-    R[2][0] = one_minus_c * nz * nx - s * ny;
-    R[2][1] = one_minus_c * nz * ny + s * nx;
-    R[2][2] = c + one_minus_c * nz * nz;
+"""
+        + R_codegen
+        + r"""
   }
 
   rotate_BSSN_Cartesian_basis_by_R(vetU, betU, lambdaU, hDD, aDD, R);
 """
+    )
     cfc.register_CFunction(
         subdirectory="general_relativity/rotation",
         includes=includes,

@@ -15,10 +15,10 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 # Step 2: Import SO(3) rotation helper registrations used by this module.
-from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
+from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
     register_CFunction_build_R_from_cumulative_hats,
-    register_CFunction_so3_apply_R_to_vector,
-    register_CFunction_so3_validate_and_optionally_fix_hats,
+    register_CFunction_SO3_apply_R_to_vector,
+    register_CFunction_SO3_validate_and_optionally_fix_hats,
 )
 
 
@@ -61,15 +61,15 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import assert_so3_convention_in_text
+    >>> from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunction_unrotate_xCart_to_fixed_frame()
     >>> generated_str = cfc.CFunction_dict["unrotate_xCart_to_fixed_frame"].full_function
-    >>> assert_so3_convention_in_text(generated_str, "unrotate_xCart_to_fixed_frame")
+    >>> assert_SO3_convention_in_text(generated_str, "unrotate_xCart_to_fixed_frame")
     >>> "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(" in generated_str
     False
-    >>> "build_R_from_cumulative_hats(" in generated_str and "so3_apply_R_to_vector(" in generated_str
+    >>> "build_R_from_cumulative_hats(" in generated_str and "SO3_apply_R_to_vector(" in generated_str
     True
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "openmp", file_ext="c")
@@ -106,10 +106,10 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     # Step 2: Register required SO(3) helper C functions.
     if "build_R_from_cumulative_hats" not in cfc.CFunction_dict:
         register_CFunction_build_R_from_cumulative_hats()
-    if "so3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:
-        register_CFunction_so3_validate_and_optionally_fix_hats()
-    if "so3_apply_R_to_vector" not in cfc.CFunction_dict:
-        register_CFunction_so3_apply_R_to_vector()
+    if "SO3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:
+        register_CFunction_SO3_validate_and_optionally_fix_hats()
+    if "SO3_apply_R_to_vector" not in cfc.CFunction_dict:
+        register_CFunction_SO3_apply_R_to_vector()
 
     # Step 3: Set C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -140,7 +140,7 @@ Convention:
   REAL xhatU[3] = {commondata.cumulative_regrid_xhatU[0], commondata.cumulative_regrid_xhatU[1], commondata.cumulative_regrid_xhatU[2]};
   REAL yhatU[3] = {commondata.cumulative_regrid_yhatU[0], commondata.cumulative_regrid_yhatU[1], commondata.cumulative_regrid_yhatU[2]};
   REAL zhatU[3] = {commondata.cumulative_regrid_zhatU[0], commondata.cumulative_regrid_zhatU[1], commondata.cumulative_regrid_zhatU[2]};
-  if (so3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
+  if (SO3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
     fprintf(stderr,
             "ERROR in %s: cumulative hats are invalid at the consuming boundary. "
             "Repair must be applied at the producing/update boundary.\n",
@@ -150,7 +150,7 @@ Convention:
 
   REAL R[3][3];
   build_R_from_cumulative_hats(xhatU, yhatU, zhatU, R);
-  so3_apply_R_to_vector(R, xCart, xCart);
+  SO3_apply_R_to_vector(R, xCart, xCart);
 """
     # Step 5: Register the C function.
     cfc.register_CFunction(

@@ -10,8 +10,8 @@ from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian
     verify_quaternion_interface_parity,
     verify_quaternion_interface_parity_randomized,
 )
-from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
-    assert_so3_convention_in_text,
+from nrpy.infrastructures.BHaH.rotation.SO3_matrix_ops import (
+    assert_SO3_convention_in_text,
 )
 
 
@@ -31,11 +31,11 @@ def run_quaternion_parity_and_convention_gates() -> bool:
     register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
     register_CFunction_rotate_BSSN_Cartesian_basis()
 
-    assert_so3_convention_in_text(
+    assert_SO3_convention_in_text(
         cfc.CFunction_dict["rotate_BSSN_Cartesian_basis_by_R"].full_function,
         "rotate_BSSN_Cartesian_basis_by_R",
     )
-    assert_so3_convention_in_text(
+    assert_SO3_convention_in_text(
         cfc.CFunction_dict["rotate_BSSN_Cartesian_basis"].full_function,
         "rotate_BSSN_Cartesian_basis",
     )

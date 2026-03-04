@@ -15,8 +15,8 @@
  * - DeltaR_dst_from_src = R_dst^T R_src.
  * - C layout statement for helper calls: R[i][j] is row i, column j.
  * - Einstein notation for the callee update:
- *   v^i_dst = (\Delta R)^i{}_j v^j_src,
- *   T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+ *   v^i_dst = (DeltaR)^i{}_j v^j_src,
+ *   T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
  * - Symmetric tensor storage contract inherited from
  *   rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
  *   (i <= j) are updated.
@@ -51,20 +51,20 @@ void rotate_BSSN_Cartesian_basis(REAL vetU[3], REAL betU[3], REAL lambdaU[3], RE
     const REAL nx = n0 / nnorm;
     const REAL ny = n1 / nnorm;
     const REAL nz = n2 / nnorm;
-    const REAL c = cos(dphi);
-    const REAL s = sin(dphi);
-    const REAL one_minus_c = 1.0 - c;
-
-    // Rodrigues formula: R = c I + (1-c) n n^T + s [n]_x.
-    R[0][0] = c + one_minus_c * nx * nx;
-    R[0][1] = one_minus_c * nx * ny - s * nz;
-    R[0][2] = one_minus_c * nx * nz + s * ny;
-    R[1][0] = one_minus_c * ny * nx + s * nz;
-    R[1][1] = c + one_minus_c * ny * ny;
-    R[1][2] = one_minus_c * ny * nz - s * nx;
-    R[2][0] = one_minus_c * nz * nx - s * ny;
-    R[2][1] = one_minus_c * nz * ny + s * nx;
-    R[2][2] = c + one_minus_c * nz * nz;
+    const REAL tmp0 = cos(dphi);
+    const REAL tmp2 = sin(dphi);
+    const REAL tmp1 = 1 - tmp0;
+    const REAL tmp5 = nx * ny * tmp1;
+    const REAL tmp7 = nx * nz * tmp1;
+    R[0][0] = ((nx) * (nx)) * tmp1 + tmp0;
+    R[0][1] = -nz * tmp2 + tmp5;
+    R[0][2] = ny * tmp2 + tmp7;
+    R[1][0] = nz * tmp2 + tmp5;
+    R[1][1] = ((ny) * (ny)) * tmp1 + tmp0;
+    R[1][2] = -nx * tmp2 + ny * nz * tmp1;
+    R[2][0] = -ny * tmp2 + tmp7;
+    R[2][1] = nx * tmp2 + ny * nz * tmp1;
+    R[2][2] = ((nz) * (nz)) * tmp1 + tmp0;
   }
 
   rotate_BSSN_Cartesian_basis_by_R(vetU, betU, lambdaU, hDD, aDD, R);

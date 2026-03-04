@@ -24,7 +24,7 @@ void unrotate_xCart_to_fixed_frame(const commondata_struct commondata, REAL xCar
   REAL xhatU[3] = {commondata.cumulative_regrid_xhatU[0], commondata.cumulative_regrid_xhatU[1], commondata.cumulative_regrid_xhatU[2]};
   REAL yhatU[3] = {commondata.cumulative_regrid_yhatU[0], commondata.cumulative_regrid_yhatU[1], commondata.cumulative_regrid_yhatU[2]};
   REAL zhatU[3] = {commondata.cumulative_regrid_zhatU[0], commondata.cumulative_regrid_zhatU[1], commondata.cumulative_regrid_zhatU[2]};
-  if (so3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
+  if (SO3_validate_and_optionally_fix_hats(xhatU, yhatU, zhatU, 0) != 0) {
     fprintf(stderr,
             "ERROR in %s: cumulative hats are invalid at the consuming boundary. "
             "Repair must be applied at the producing/update boundary.\n",
@@ -34,5 +34,5 @@ void unrotate_xCart_to_fixed_frame(const commondata_struct commondata, REAL xCar
 
   REAL R[3][3];
   build_R_from_cumulative_hats(xhatU, yhatU, zhatU, R);
-  so3_apply_R_to_vector(R, xCart, xCart);
+  SO3_apply_R_to_vector(R, xCart, xCart);
 } // END FUNCTION unrotate_xCart_to_fixed_frame

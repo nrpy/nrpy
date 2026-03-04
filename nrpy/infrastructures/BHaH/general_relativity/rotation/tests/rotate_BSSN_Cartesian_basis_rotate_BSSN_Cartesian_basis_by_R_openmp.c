@@ -13,18 +13,15 @@
  * - C layout statement for helper calls: R[i][j] is row i, column j.
  * - DeltaR_dst_from_src maps source rotating-basis components to destination
  *   rotating-basis components.
- * - Vectors: v_dst = DeltaR_dst_from_src * v_src.
- * - Rank-2 tensors: T_dst = DeltaR_dst_from_src * T_src *
- *   DeltaR_dst_from_src^T.
- * - Einstein notation for vectors:
- *   v^i_dst = (\Delta R)^i{}_j v^j_src.
- * - Einstein notation for covariant rank-2 tensors:
- *   T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+ * - Vector update in Einstein notation:
+ *   v^i_dst = (DeltaR)^i{}_j v^j_src.
+ * - Covariant rank-2 update in Einstein notation:
+ *   T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
  * - Symmetric tensor storage contract:
  *   only upper-triangular components (i <= j) are authoritative on input
  *   and are overwritten on output; lower-triangular entries are untouched.
  * - Internally, full symmetric local tensors are reconstructed from upper
- *   components before calling so3_apply_R_to_tensorDD().
+ *   components before calling SO3_apply_R_to_tensorDD().
  *
  * @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
  * @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -60,11 +57,11 @@ void rotate_BSSN_Cartesian_basis_by_R(REAL vetU[3], REAL betU[3], REAL lambdaU[3
   aDD_sym[2][1] = aDD[1][2];
   aDD_sym[2][2] = aDD[2][2];
 
-  so3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
-  so3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
-  so3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
+  SO3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
+  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
+  SO3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
 
   // Write back vectors completely.
   vetU[0] = vetU_out[0];
