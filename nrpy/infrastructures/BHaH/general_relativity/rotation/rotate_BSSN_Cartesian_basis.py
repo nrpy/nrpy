@@ -17,17 +17,18 @@ Author: Zachariah B. Etienne
 from __future__ import annotations
 
 import math
+from typing import Any
 
+# Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
+import nrpy.indexedexp as ixp
 from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
     register_CFunction_so3_apply_R_to_tensorDD,
     register_CFunction_so3_apply_R_to_vector,
 )
 
 
-def _rodrigues_matrix_from_axis_angle(
-    nU: list[float], dphi: float
-) -> list[list[float]]:
+def _rodrigues_matrix_from_axis_angle(nU: list[Any], dphi: Any) -> list[list[Any]]:
     """
     Build a 3x3 Rodrigues rotation matrix from axis-angle input.
 
@@ -35,16 +36,23 @@ def _rodrigues_matrix_from_axis_angle(
     :param dphi: Rotation angle in radians.
     :return: Rodrigues rotation matrix.
     """
+    # Step 1: Read axis components and compute axis norm.
     nx, ny, nz = nU
     nnorm = math.sqrt(nx * nx + ny * ny + nz * nz)
+
+    # Step 2: Degenerate-axis fallback => identity matrix.
     if nnorm < 1e-300:
         return [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+
+    # Step 3: Normalize axis and evaluate Rodrigues coefficients.
     nx /= nnorm
     ny /= nnorm
     nz /= nnorm
     c = math.cos(dphi)
     s = math.sin(dphi)
     one_minus_c = 1.0 - c
+    # Step 4: Fill the 3x3 matrix from Rodrigues formula:
+    #         R = c I + (1-c) n n^T + s [n]_x.
     return [
         [
             c + one_minus_c * nx * nx,
@@ -64,7 +72,7 @@ def _rodrigues_matrix_from_axis_angle(
     ]
 
 
-def _apply_R_to_vector(R: list[list[float]], vU: list[float]) -> list[float]:
+def _apply_R_to_vector(R: list[list[Any]], vU: list[Any]) -> list[Any]:
     """
     Apply v_dst = R v_src.
 
@@ -72,12 +80,17 @@ def _apply_R_to_vector(R: list[list[float]], vU: list[float]) -> list[float]:
     :param vU: Input vector components.
     :return: Output vector components after applying ``R``.
     """
-    return [sum(R[i][j] * vU[j] for j in range(3)) for i in range(3)]
+    # Step 1: Declare output vector.
+    v_dstU = ixp.zerorank1()
+
+    # Step 2: Compute v^i_dst = R^i{}_j v^j_src.
+    for i in range(3):
+        for j in range(3):
+            v_dstU[i] += R[i][j] * vU[j]
+    return v_dstU
 
 
-def _apply_R_to_tensorDD(
-    R: list[list[float]], tDD: list[list[float]]
-) -> list[list[float]]:
+def _apply_R_to_tensorDD(R: list[list[Any]], tDD: list[list[Any]]) -> list[list[Any]]:
     """
     Apply T_dst = R T_src R^T.
 
@@ -85,12 +98,17 @@ def _apply_R_to_tensorDD(
     :param tDD: Input rank-2 tensor.
     :return: Output tensor after applying ``R`` and ``R^T``.
     """
-    tmp = [
-        [sum(R[i][k] * tDD[k][j] for k in range(3)) for j in range(3)] for i in range(3)
-    ]
-    return [
-        [sum(tmp[i][k] * R[j][k] for k in range(3)) for j in range(3)] for i in range(3)
-    ]
+    # Step 1: Declare output rank-2 tensor.
+    t_dstDD = ixp.zerorank2()
+
+    # Step 2: Compute T^dst_{ij} = R_i{}^k R_j{}^l T^src_{kl}.
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                for l in range(3):
+                    # T^dst_{ij} = R_i{}^k T^src_{kl} (R^T)^l{}_j = R_i{}^k T^src_{kl} R_j{}^l.
+                    t_dstDD[i][j] += R[i][k] * tDD[k][l] * R[j][l]
+    return t_dstDD
 
 
 def verify_quaternion_interface_parity() -> None:
@@ -105,18 +123,18 @@ def verify_quaternion_interface_parity() -> None:
     >>> ten = [[2.0, 0.1, -0.3], [0.1, 1.5, 0.7], [-0.3, 0.7, 0.8]]
     >>> R = _rodrigues_matrix_from_axis_angle(axis, dphi)
     >>> vec_by_R = _apply_R_to_vector(R, vec)
-    >>> vec_by_q = [float(v) for v in rotate(vec, axis, dphi)]
+    >>> vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
     >>> max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)) < 1e-13
     True
     >>> ten_by_R = _apply_R_to_tensorDD(R, ten)
-    >>> ten_by_q = [[float(v) for v in row] for row in rotate(ten, axis, dphi)]
+    >>> ten_by_q = [[complex(v).real for v in row] for row in rotate(ten, axis, dphi)]
     >>> max(abs(ten_by_R[i][j] - ten_by_q[i][j]) for i in range(3) for j in range(3)) < 1e-13
     True
     >>> # Near-pi case
     >>> dphi = math.pi - 1e-10
     >>> R = _rodrigues_matrix_from_axis_angle(axis, dphi)
     >>> vec_by_R = _apply_R_to_vector(R, vec)
-    >>> vec_by_q = [float(v) for v in rotate(vec, axis, dphi)]
+    >>> vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
     >>> max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)) < 1e-11
     True
     """
@@ -130,7 +148,7 @@ def verify_quaternion_interface_parity_randomized() -> None:
     >>> from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
     >>> import random
     >>> rng = random.Random(20260303)
-    >>> def rand_axis() -> list[float]:
+    >>> def rand_axis():
     ...     while True:
     ...         axis = [rng.uniform(-1.0, 1.0) for _ in range(3)]
     ...         if math.sqrt(sum(a * a for a in axis)) > 1e-12:
@@ -147,9 +165,9 @@ def verify_quaternion_interface_parity_randomized() -> None:
     ...     ten = [[0.5 * (ten[i][j] + ten[j][i]) for j in range(3)] for i in range(3)]
     ...     R = _rodrigues_matrix_from_axis_angle(axis, dphi)
     ...     vec_by_R = _apply_R_to_vector(R, vec)
-    ...     vec_by_q = [float(v) for v in rotate(vec, axis, dphi)]
+    ...     vec_by_q = [complex(v).real for v in rotate(vec, axis, dphi)]
     ...     ten_by_R = _apply_R_to_tensorDD(R, ten)
-    ...     ten_by_q = [[float(v) for v in row] for row in rotate(ten, axis, dphi)]
+    ...     ten_by_q = [[complex(v).real for v in row] for row in rotate(ten, axis, dphi)]
     ...     max_vec_err = max(max_vec_err, max(abs(a - b) for a, b in zip(vec_by_R, vec_by_q)))
     ...     max_ten_err = max(max_ten_err, max(abs(ten_by_R[i][j] - ten_by_q[i][j]) for i in range(3) for j in range(3)))
     >>> max_vec_err < 2e-11
@@ -183,6 +201,7 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
     if "so3_apply_R_to_tensorDD" not in cfc.CFunction_dict:
         register_CFunction_so3_apply_R_to_tensorDD()
 
+    # Step 1: Basic C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""
 @brief Rotate Cartesian-basis BSSN vectors and symmetric tensors using a matrix.
@@ -199,6 +218,15 @@ Convention:
 - Vectors: v_dst = DeltaR_dst_from_src * v_src.
 - Rank-2 tensors: T_dst = DeltaR_dst_from_src * T_src *
   DeltaR_dst_from_src^T.
+- Einstein notation for vectors:
+  v^i_dst = (\Delta R)^i{}_j v^j_src.
+- Einstein notation for covariant rank-2 tensors:
+  T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+- Symmetric tensor storage contract:
+  only upper-triangular components (i <= j) are authoritative on input
+  and are overwritten on output; lower-triangular entries are untouched.
+- Internally, full symmetric local tensors are reconstructed from upper
+  components before calling so3_apply_R_to_tensorDD().
 
 @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
 @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -214,43 +242,62 @@ Convention:
         "REAL hDD[3][3], REAL aDD[3][3], const REAL DeltaR_dst_from_src[3][3]"
     )
     body = r"""
-  // Enforce symmetry by mirroring upper-triangular entries to lower-triangular.
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < i; j++) {
-      hDD[i][j] = hDD[j][i];
-      aDD[i][j] = aDD[j][i];
-    } // END LOOP over strictly-lower-triangular entries.
-  } // END LOOP over tensor rows.
-
   REAL vetU_out[3], betU_out[3], lambdaU_out[3];
+  REAL hDD_sym[3][3], aDD_sym[3][3];
   REAL hDD_out[3][3], aDD_out[3][3];
+
+  // Reconstruct full symmetric tensors from authoritative upper-triangular input.
+  hDD_sym[0][0] = hDD[0][0];
+  hDD_sym[0][1] = hDD[0][1];
+  hDD_sym[0][2] = hDD[0][2];
+  hDD_sym[1][0] = hDD[0][1];
+  hDD_sym[1][1] = hDD[1][1];
+  hDD_sym[1][2] = hDD[1][2];
+  hDD_sym[2][0] = hDD[0][2];
+  hDD_sym[2][1] = hDD[1][2];
+  hDD_sym[2][2] = hDD[2][2];
+
+  aDD_sym[0][0] = aDD[0][0];
+  aDD_sym[0][1] = aDD[0][1];
+  aDD_sym[0][2] = aDD[0][2];
+  aDD_sym[1][0] = aDD[0][1];
+  aDD_sym[1][1] = aDD[1][1];
+  aDD_sym[1][2] = aDD[1][2];
+  aDD_sym[2][0] = aDD[0][2];
+  aDD_sym[2][1] = aDD[1][2];
+  aDD_sym[2][2] = aDD[2][2];
+
   so3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
   so3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
   so3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD, hDD_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD, aDD_out);
+  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
+  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
 
-  for (int i = 0; i < 3; i++) {
-    vetU[i] = vetU_out[i];
-    betU[i] = betU_out[i];
-    lambdaU[i] = lambdaU_out[i];
-    for (int j = 0; j < 3; j++) {
-      hDD[i][j] = hDD_out[i][j];
-      aDD[i][j] = aDD_out[i][j];
-    }
-  }
+  // Write back vectors completely.
+  vetU[0] = vetU_out[0];
+  vetU[1] = vetU_out[1];
+  vetU[2] = vetU_out[2];
+  betU[0] = betU_out[0];
+  betU[1] = betU_out[1];
+  betU[2] = betU_out[2];
+  lambdaU[0] = lambdaU_out[0];
+  lambdaU[1] = lambdaU_out[1];
+  lambdaU[2] = lambdaU_out[2];
 
-  // Re-enforce symmetry by averaging mirrored tensor entries.
-  for (int i = 0; i < 3; i++) {
-    for (int j = i + 1; j < 3; j++) {
-      const REAL hsym = 0.5 * (hDD[i][j] + hDD[j][i]);
-      const REAL asym = 0.5 * (aDD[i][j] + aDD[j][i]);
-      hDD[i][j] = hsym;
-      hDD[j][i] = hsym;
-      aDD[i][j] = asym;
-      aDD[j][i] = asym;
-    } // END LOOP over strictly-upper-triangular entries.
-  } // END LOOP over tensor rows.
+  // Write back only upper-triangular tensor components.
+  hDD[0][0] = hDD_out[0][0];
+  hDD[0][1] = hDD_out[0][1];
+  hDD[0][2] = hDD_out[0][2];
+  hDD[1][1] = hDD_out[1][1];
+  hDD[1][2] = hDD_out[1][2];
+  hDD[2][2] = hDD_out[2][2];
+
+  aDD[0][0] = aDD_out[0][0];
+  aDD[0][1] = aDD_out[0][1];
+  aDD[0][2] = aDD_out[0][2];
+  aDD[1][1] = aDD_out[1][1];
+  aDD[1][2] = aDD_out[1][2];
+  aDD[2][2] = aDD_out[2][2];
 """
     cfc.register_CFunction(
         subdirectory="general_relativity/rotation",
@@ -283,9 +330,11 @@ def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_openmp", file_ext="c")
     """
+    # Step 1: Ensure matrix-based helper is registered first.
     if "rotate_BSSN_Cartesian_basis_by_R" not in cfc.CFunction_dict:
         register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
 
+    # Step 2: Set C function metadata and interface.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""
 @brief Rotate BSSN Cartesian-basis fields from axis-angle input.
@@ -300,6 +349,12 @@ Convention:
 - T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.
 - DeltaR_dst_from_src = R_dst^T R_src.
 - C layout statement for helper calls: R[i][j] is row i, column j.
+- Einstein notation for the callee update:
+  v^i_dst = (\Delta R)^i{}_j v^j_src,
+  T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+- Symmetric tensor storage contract inherited from
+  rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
+  (i <= j) are updated.
 
 @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
 @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -315,6 +370,8 @@ Convention:
         "REAL vetU[3], REAL betU[3], REAL lambdaU[3], "
         "REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3], const REAL dphi"
     )
+    # Step 3: Build Rodrigues matrix from (nU, dphi), then delegate to
+    #         rotate_BSSN_Cartesian_basis_by_R().
     body = r"""
   const REAL n0 = nU[0];
   const REAL n1 = nU[1];

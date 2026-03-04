@@ -16,6 +16,15 @@
  * - Vectors: v_dst = DeltaR_dst_from_src * v_src.
  * - Rank-2 tensors: T_dst = DeltaR_dst_from_src * T_src *
  *   DeltaR_dst_from_src^T.
+ * - Einstein notation for vectors:
+ *   v^i_dst = (\Delta R)^i{}_j v^j_src.
+ * - Einstein notation for covariant rank-2 tensors:
+ *   T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+ * - Symmetric tensor storage contract:
+ *   only upper-triangular components (i <= j) are authoritative on input
+ *   and are overwritten on output; lower-triangular entries are untouched.
+ * - Internally, full symmetric local tensors are reconstructed from upper
+ *   components before calling so3_apply_R_to_tensorDD().
  *
  * @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
  * @param[in,out] betU BSSN rescaled driver vector, rotated in place.
@@ -26,41 +35,60 @@
  */
 void rotate_BSSN_Cartesian_basis_by_R(REAL vetU[3], REAL betU[3], REAL lambdaU[3], REAL hDD[3][3], REAL aDD[3][3],
                                       const REAL DeltaR_dst_from_src[3][3]) {
-  // Enforce symmetry by mirroring upper-triangular entries to lower-triangular.
-  for (int i = 0; i < 3; i++) {
-    for (int j = 0; j < i; j++) {
-      hDD[i][j] = hDD[j][i];
-      aDD[i][j] = aDD[j][i];
-    } // END LOOP over strictly-lower-triangular entries.
-  } // END LOOP over tensor rows.
-
   REAL vetU_out[3], betU_out[3], lambdaU_out[3];
+  REAL hDD_sym[3][3], aDD_sym[3][3];
   REAL hDD_out[3][3], aDD_out[3][3];
+
+  // Reconstruct full symmetric tensors from authoritative upper-triangular input.
+  hDD_sym[0][0] = hDD[0][0];
+  hDD_sym[0][1] = hDD[0][1];
+  hDD_sym[0][2] = hDD[0][2];
+  hDD_sym[1][0] = hDD[0][1];
+  hDD_sym[1][1] = hDD[1][1];
+  hDD_sym[1][2] = hDD[1][2];
+  hDD_sym[2][0] = hDD[0][2];
+  hDD_sym[2][1] = hDD[1][2];
+  hDD_sym[2][2] = hDD[2][2];
+
+  aDD_sym[0][0] = aDD[0][0];
+  aDD_sym[0][1] = aDD[0][1];
+  aDD_sym[0][2] = aDD[0][2];
+  aDD_sym[1][0] = aDD[0][1];
+  aDD_sym[1][1] = aDD[1][1];
+  aDD_sym[1][2] = aDD[1][2];
+  aDD_sym[2][0] = aDD[0][2];
+  aDD_sym[2][1] = aDD[1][2];
+  aDD_sym[2][2] = aDD[2][2];
+
   so3_apply_R_to_vector(DeltaR_dst_from_src, vetU, vetU_out);
   so3_apply_R_to_vector(DeltaR_dst_from_src, betU, betU_out);
   so3_apply_R_to_vector(DeltaR_dst_from_src, lambdaU, lambdaU_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD, hDD_out);
-  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD, aDD_out);
+  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, hDD_sym, hDD_out);
+  so3_apply_R_to_tensorDD(DeltaR_dst_from_src, aDD_sym, aDD_out);
 
-  for (int i = 0; i < 3; i++) {
-    vetU[i] = vetU_out[i];
-    betU[i] = betU_out[i];
-    lambdaU[i] = lambdaU_out[i];
-    for (int j = 0; j < 3; j++) {
-      hDD[i][j] = hDD_out[i][j];
-      aDD[i][j] = aDD_out[i][j];
-    }
-  }
+  // Write back vectors completely.
+  vetU[0] = vetU_out[0];
+  vetU[1] = vetU_out[1];
+  vetU[2] = vetU_out[2];
+  betU[0] = betU_out[0];
+  betU[1] = betU_out[1];
+  betU[2] = betU_out[2];
+  lambdaU[0] = lambdaU_out[0];
+  lambdaU[1] = lambdaU_out[1];
+  lambdaU[2] = lambdaU_out[2];
 
-  // Re-enforce symmetry by averaging mirrored tensor entries.
-  for (int i = 0; i < 3; i++) {
-    for (int j = i + 1; j < 3; j++) {
-      const REAL hsym = 0.5 * (hDD[i][j] + hDD[j][i]);
-      const REAL asym = 0.5 * (aDD[i][j] + aDD[j][i]);
-      hDD[i][j] = hsym;
-      hDD[j][i] = hsym;
-      aDD[i][j] = asym;
-      aDD[j][i] = asym;
-    } // END LOOP over strictly-upper-triangular entries.
-  } // END LOOP over tensor rows.
+  // Write back only upper-triangular tensor components.
+  hDD[0][0] = hDD_out[0][0];
+  hDD[0][1] = hDD_out[0][1];
+  hDD[0][2] = hDD_out[0][2];
+  hDD[1][1] = hDD_out[1][1];
+  hDD[1][2] = hDD_out[1][2];
+  hDD[2][2] = hDD_out[2][2];
+
+  aDD[0][0] = aDD_out[0][0];
+  aDD[0][1] = aDD_out[0][1];
+  aDD[0][2] = aDD_out[0][2];
+  aDD[1][1] = aDD_out[1][1];
+  aDD[1][2] = aDD_out[1][2];
+  aDD[2][2] = aDD_out[2][2];
 } // END FUNCTION rotate_BSSN_Cartesian_basis_by_R

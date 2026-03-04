@@ -14,6 +14,12 @@
  * - T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.
  * - DeltaR_dst_from_src = R_dst^T R_src.
  * - C layout statement for helper calls: R[i][j] is row i, column j.
+ * - Einstein notation for the callee update:
+ *   v^i_dst = (\Delta R)^i{}_j v^j_src,
+ *   T^dst_{ij} = (\Delta R)_i{}^k (\Delta R)_j{}^l T^src_{kl}.
+ * - Symmetric tensor storage contract inherited from
+ *   rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
+ *   (i <= j) are updated.
  *
  * @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
  * @param[in,out] betU BSSN rescaled driver vector, rotated in place.
