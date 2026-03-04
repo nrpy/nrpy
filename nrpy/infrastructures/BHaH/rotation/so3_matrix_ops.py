@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+# Step 1: Import core NRPy modules needed for C code generation and parameters.
 import nrpy.c_function as cfc
 import nrpy.params as par
 
@@ -110,44 +111,6 @@ def verify_so3_convention_lockstep_in_registered_helpers() -> None:
     """
 
 
-def register_rotation_commondata_CodeParameters() -> None:
-    """
-    Register rotation-related commondata CodeParameters.
-
-    Integration contract for future cumulative-hat update sites:
-    - Immediately after each authoritative update, call
-      ``so3_validate_and_optionally_fix_hats(..., do_fix=1)``.
-    - Active read-side consumers use ``do_fix=0`` and hard-fail on invalid hats.
-    """
-    _ = par.register_CodeParameter(
-        "REAL[3]",
-        __name__,
-        "cumulative_regrid_xhatU",
-        1e300,
-        commondata=True,
-        add_to_set_CodeParameters_h=False,
-        description="Cumulative rotating-frame xhat expressed in fixed frame.",
-    )
-    _ = par.register_CodeParameter(
-        "REAL[3]",
-        __name__,
-        "cumulative_regrid_yhatU",
-        1e300,
-        commondata=True,
-        add_to_set_CodeParameters_h=False,
-        description="Cumulative rotating-frame yhat expressed in fixed frame.",
-    )
-    _ = par.register_CodeParameter(
-        "REAL[3]",
-        __name__,
-        "cumulative_regrid_zhatU",
-        1e300,
-        commondata=True,
-        add_to_set_CodeParameters_h=False,
-        description="Cumulative rotating-frame zhat expressed in fixed frame.",
-    )
-
-
 def register_CFunction_build_R_from_cumulative_hats() -> None:
     r"""
     Register C function ``build_R_from_cumulative_hats``.
@@ -237,16 +200,16 @@ Convention:
 - C layout statement for helper calls: R[i][j] is row i, column j.
 
 Validation triggers if any of:
-- |x·y|, |x·z|, |y·z| > 1e-12
+- |x dot y|, |x dot z|, |y dot z| > 1e-12
 - |||x||-1|, |||y||-1|, |||z||-1| > 1e-12
 - det(R) < 0.999999999999, where columns of R are (xhat,yhat,zhat)
 
 Deterministic repair policy when @p do_fix != 0:
 1) x <- normalize(x)
-2) y <- y - (x·y)x; y <- normalize(y)
-3) z <- x × y; z <- normalize(z)
-4) y <- z × x; y <- normalize(y)
-5) if det(R) < 0 then z <- -z and y <- z × x; y <- normalize(y)
+2) y <- y - (x dot y)x; y <- normalize(y)
+3) z <- x cross y; z <- normalize(z)
+4) y <- z cross x; y <- normalize(y)
+5) if det(R) < 0 then z <- -z and y <- z cross x; y <- normalize(y)
 
 If post-fix invariants still fail, this routine aborts with diagnostics.
 
@@ -910,7 +873,40 @@ Algorithm:
 
 def register_CFunctions_so3_matrix_ops() -> None:
     """Register all SO(3) matrix helper C functions."""
-    register_rotation_commondata_CodeParameters()
+    # Step 1: Register cumulative-hat commondata CodeParameters.
+    # Integration contract for future cumulative-hat update sites:
+    # - Immediately after each authoritative update, call
+    #   ``so3_validate_and_optionally_fix_hats(..., do_fix=1)``.
+    # - Active read-side consumers use ``do_fix=0`` and hard-fail on invalid hats.
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_xhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame xhat expressed in fixed frame.",
+    )
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_yhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame yhat expressed in fixed frame.",
+    )
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_zhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame zhat expressed in fixed frame.",
+    )
+
+    # Step 2: Register each SO(3) helper in dependency-safe order.
     if "build_R_from_cumulative_hats" not in cfc.CFunction_dict:
         register_CFunction_build_R_from_cumulative_hats()
     if "so3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:

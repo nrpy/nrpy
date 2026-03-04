@@ -16,6 +16,8 @@
  * - DeltaR_dst_from_src = R_dst^T R_src.
  * - C layout statement for helper calls: R[i][j] is row i, column j.
  * - Axis-angle bridge is produced from this R using so3_matrix_to_axis_angle().
+ * - Einstein notation for the matrix map represented by part 1:
+ *   v^i_fixed = R^i{}_j v^j_rot.
  *
  * @param[in] commondata Commondata structure containing cumulative regrid basis vectors.
  * @param[out] nU_part1 Rotation axis for first rotation.

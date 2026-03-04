@@ -11,10 +11,14 @@
  * - T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.
  * - DeltaR_dst_from_src = R_dst^T R_src.
  * - C layout statement for helper calls: R[i][j] is row i, column j.
- * - This routine applies x_fixed = R * x_rot directly.
+ * - Einstein notation for this routine:
+ *   x^i_fixed = R^i{}_j x^j_rot.
+ * - This routine applies x_fixed = R * x_rot directly, i.e. it does not
+ *   pass through an axis-angle decomposition.
  *
  * @param[in] commondata Commondata structure with cumulative regrid basis vectors.
- * @param[in,out] xCart Cartesian point/vector to be unrotated in place.
+ * @param[in,out] xCart Cartesian point/vector in rotating basis on input,
+ *                     overwritten with fixed-basis components on output.
  */
 void unrotate_xCart_to_fixed_frame(const commondata_struct commondata, REAL xCart[3]) {
   REAL xhatU[3] = {commondata.cumulative_regrid_xhatU[0], commondata.cumulative_regrid_xhatU[1], commondata.cumulative_regrid_xhatU[2]};

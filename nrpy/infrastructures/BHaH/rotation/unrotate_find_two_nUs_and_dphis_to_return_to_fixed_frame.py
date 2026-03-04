@@ -5,12 +5,17 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from __future__ import annotations
+
+# Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
+import nrpy.params as par
+
+# Step 2: Import SO(3) helper registrations used by this module.
 from nrpy.infrastructures.BHaH.rotation.so3_matrix_ops import (
     register_CFunction_build_R_from_cumulative_hats,
     register_CFunction_so3_matrix_to_axis_angle,
     register_CFunction_so3_validate_and_optionally_fix_hats,
-    register_rotation_commondata_CodeParameters,
 )
 
 
@@ -19,6 +24,9 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
 ):
     r"""
     Register helper for two axis-angle output slots.
+
+    The primary slot encodes the cumulative unrotation matrix ``R`` as
+    ``R = R(nU_part1, dphi_part1)``. The second slot is set to identity.
 
     Doctests:
     >>> import contextlib
@@ -35,7 +43,36 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "openmp", file_ext="c")
     """
-    register_rotation_commondata_CodeParameters()
+    # Step 1: Register cumulative-hat commondata CodeParameters.
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_xhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame xhat expressed in fixed frame.",
+    )
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_yhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame yhat expressed in fixed frame.",
+    )
+    _ = par.register_CodeParameter(
+        "REAL[3]",
+        __name__,
+        "cumulative_regrid_zhatU",
+        1e300,
+        commondata=True,
+        add_to_set_CodeParameters_h=False,
+        description="Cumulative rotating-frame zhat expressed in fixed frame.",
+    )
+
+    # Step 2: Register required SO(3) helper C functions.
     if "so3_validate_and_optionally_fix_hats" not in cfc.CFunction_dict:
         register_CFunction_so3_validate_and_optionally_fix_hats()
     if "build_R_from_cumulative_hats" not in cfc.CFunction_dict:
@@ -43,6 +80,7 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     if "so3_matrix_to_axis_angle" not in cfc.CFunction_dict:
         register_CFunction_so3_matrix_to_axis_angle()
 
+    # Step 3: Set C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = r"""
 @brief Compute axis-angle outputs from cumulative hats.
@@ -59,6 +97,8 @@ Convention:
 - DeltaR_dst_from_src = R_dst^T R_src.
 - C layout statement for helper calls: R[i][j] is row i, column j.
 - Axis-angle bridge is produced from this R using so3_matrix_to_axis_angle().
+- Einstein notation for the matrix map represented by part 1:
+  v^i_fixed = R^i{}_j v^j_rot.
 
 @param[in] commondata Commondata structure containing cumulative regrid basis vectors.
 @param[out] nU_part1 Rotation axis for first rotation.
@@ -72,6 +112,7 @@ Convention:
         "const commondata_struct commondata, REAL nU_part1[3], "
         "REAL *restrict dphi_part1, REAL nU_part2[3], REAL *restrict dphi_part2"
     )
+    # Step 4: Validate hats, build R, convert to axis-angle, then set identity slot.
     body = r"""
   REAL xhatU[3] = {commondata.cumulative_regrid_xhatU[0], commondata.cumulative_regrid_xhatU[1], commondata.cumulative_regrid_xhatU[2]};
   REAL yhatU[3] = {commondata.cumulative_regrid_yhatU[0], commondata.cumulative_regrid_yhatU[1], commondata.cumulative_regrid_yhatU[2]};
@@ -95,6 +136,7 @@ Convention:
   nU_part2[2] = 0.0;
   *dphi_part2 = 0.0;
 """
+    # Step 5: Register the C function.
     cfc.register_CFunction(
         subdirectory="rotation",
         includes=includes,

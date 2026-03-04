@@ -12,16 +12,16 @@
  * - C layout statement for helper calls: R[i][j] is row i, column j.
  *
  * Validation triggers if any of:
- * - |x·y|, |x·z|, |y·z| > 1e-12
+ * - |x dot y|, |x dot z|, |y dot z| > 1e-12
  * - |||x||-1|, |||y||-1|, |||z||-1| > 1e-12
  * - det(R) < 0.999999999999, where columns of R are (xhat,yhat,zhat)
  *
  * Deterministic repair policy when @p do_fix != 0:
  * 1) x <- normalize(x)
- * 2) y <- y - (x·y)x; y <- normalize(y)
- * 3) z <- x × y; z <- normalize(z)
- * 4) y <- z × x; y <- normalize(y)
- * 5) if det(R) < 0 then z <- -z and y <- z × x; y <- normalize(y)
+ * 2) y <- y - (x dot y)x; y <- normalize(y)
+ * 3) z <- x cross y; z <- normalize(z)
+ * 4) y <- z cross x; y <- normalize(y)
+ * 5) if det(R) < 0 then z <- -z and y <- z cross x; y <- normalize(y)
  *
  * If post-fix invariants still fail, this routine aborts with diagnostics.
  *
