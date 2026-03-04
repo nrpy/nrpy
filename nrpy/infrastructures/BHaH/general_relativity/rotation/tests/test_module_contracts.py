@@ -6,8 +6,8 @@ import ast
 from pathlib import Path
 
 MODULE_CONTRACTS = {
-    "rotate_BSSN_Cartesian_basis.py": "register_CFunction_rotate_BSSN_Cartesian_basis",
-    "rotate_BSSN_Cartesian_basis_by_R.py": "register_CFunction_rotate_BSSN_Cartesian_basis_by_R",
+    "rotate_BSSN_Cartesian_basis_from_axis_angle.py": "register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle",
+    "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src.py": "register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src",
 }
 
 

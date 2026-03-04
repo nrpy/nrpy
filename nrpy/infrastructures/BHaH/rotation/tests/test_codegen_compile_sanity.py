@@ -8,11 +8,11 @@ from pathlib import Path
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import (
-    register_CFunction_rotate_BSSN_Cartesian_basis,
+from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_axis_angle import (
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle,
 )
-from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_by_R import (
-    register_CFunction_rotate_BSSN_Cartesian_basis_by_R,
+from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src import (
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src,
 )
 from nrpy.infrastructures.BHaH.Makefile_helpers import (
     output_CFunctions_function_prototypes_and_construct_Makefile,
@@ -41,8 +41,8 @@ def run_codegen_compile_sanity() -> bool:
     par.set_parval_from_str("parallelization", "openmp")
 
     register_CFunctions()
-    register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
-    register_CFunction_rotate_BSSN_Cartesian_basis()
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src()
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle()
 
     output_CFunctions_function_prototypes_and_construct_Makefile(
         str(outdir),
@@ -78,8 +78,8 @@ def run_codegen_compile_sanity() -> bool:
     required_prototypes = (
         "unrotate_xCart_to_fixed_frame",
         "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame",
-        "rotate_BSSN_Cartesian_basis_by_R",
-        "rotate_BSSN_Cartesian_basis",
+        "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src",
+        "rotate_BSSN_Cartesian_basis_from_axis_angle",
     )
     for symbol in required_prototypes:
         if symbol not in prototypes:

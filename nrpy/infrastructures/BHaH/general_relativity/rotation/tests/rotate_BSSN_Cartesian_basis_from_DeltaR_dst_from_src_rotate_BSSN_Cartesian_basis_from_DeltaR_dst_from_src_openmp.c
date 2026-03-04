@@ -30,8 +30,8 @@
  * @param[in,out] aDD BSSN trace-free extrinsic curvature tensor, rotated in place.
  * @param[in] DeltaR_dst_from_src Relative basis rotation matrix.
  */
-void rotate_BSSN_Cartesian_basis_by_R(REAL vetU[3], REAL betU[3], REAL lambdaU[3], REAL hDD[3][3], REAL aDD[3][3],
-                                      const REAL DeltaR_dst_from_src[3][3]) {
+void rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src(REAL vetU[3], REAL betU[3], REAL lambdaU[3], REAL hDD[3][3], REAL aDD[3][3],
+                                                          const REAL DeltaR_dst_from_src[3][3]) {
   REAL vetU_out[3], betU_out[3], lambdaU_out[3];
   REAL hDD_sym[3][3], aDD_sym[3][3];
   REAL hDD_out[3][3], aDD_out[3][3];
@@ -205,4 +205,4 @@ void rotate_BSSN_Cartesian_basis_by_R(REAL vetU[3], REAL betU[3], REAL lambdaU[3
   aDD[1][1] = aDD_out[1][1];
   aDD[1][2] = aDD_out[1][2];
   aDD[2][2] = aDD_out[2][2];
-} // END FUNCTION rotate_BSSN_Cartesian_basis_by_R
+} // END FUNCTION rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src

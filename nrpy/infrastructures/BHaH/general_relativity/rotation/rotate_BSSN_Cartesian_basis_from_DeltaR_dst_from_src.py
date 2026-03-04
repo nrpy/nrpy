@@ -63,9 +63,9 @@ def _rank1_exprs_lhses(
     return exprs, lhses
 
 
-def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
+def register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src() -> None:
     """
-    Register C function ``rotate_BSSN_Cartesian_basis_by_R``.
+    Register C function ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
 
     Doctests:
     >>> import contextlib
@@ -75,10 +75,10 @@ def register_CFunction_rotate_BSSN_Cartesian_basis_by_R() -> None:
     >>> from nrpy.helpers.generic import validate_strings
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
-    >>> register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
-    >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis_by_R"].full_function
+    >>> register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src()
+    >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src"].full_function
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_by_R_openmp", file_ext="c")
+    ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src_openmp", file_ext="c")
     """
     # Step 1: Basic C function metadata.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -112,7 +112,7 @@ Convention:
 @param[in] DeltaR_dst_from_src Relative basis rotation matrix.
 """
     cfunc_type = "void"
-    name = "rotate_BSSN_Cartesian_basis_by_R"
+    name = "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src"
     params = (
         "REAL vetU[3], REAL betU[3], REAL lambdaU[3], "
         "REAL hDD[3][3], REAL aDD[3][3], const REAL DeltaR_dst_from_src[3][3]"

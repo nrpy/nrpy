@@ -10,11 +10,11 @@ import sympy as sp
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
-from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import (
-    register_CFunction_rotate_BSSN_Cartesian_basis,
+from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_axis_angle import (
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle,
 )
-from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_by_R import (
-    register_CFunction_rotate_BSSN_Cartesian_basis_by_R,
+from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src import (
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src,
 )
 
 
@@ -203,8 +203,8 @@ def run_quaternion_parity_and_convention_gates() -> bool:
 
     par.set_parval_from_str("parallelization", "openmp")
     cfc.CFunction_dict.clear()
-    register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
-    register_CFunction_rotate_BSSN_Cartesian_basis()
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src()
+    register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle()
 
     return True
 

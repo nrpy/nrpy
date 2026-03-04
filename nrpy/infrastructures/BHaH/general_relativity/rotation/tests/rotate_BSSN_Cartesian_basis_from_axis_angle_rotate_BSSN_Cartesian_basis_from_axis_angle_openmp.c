@@ -5,7 +5,7 @@
  * @brief Rotate BSSN Cartesian-basis fields from axis-angle input.
  *
  * This routine converts (nU,dphi) to DeltaR_dst_from_src and then calls
- * rotate_BSSN_Cartesian_basis_by_R().
+ * rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src().
  *
  * Convention:
  * - R maps rotating-frame components -> fixed-frame components.
@@ -18,7 +18,7 @@
  *   v^i_dst = (DeltaR)^i{}_j v^j_src,
  *   T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
  * - Symmetric tensor storage contract inherited from
- *   rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
+ *   rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src(): only upper-triangular components
  *   (i <= j) are updated.
  *
  * @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
@@ -29,7 +29,8 @@
  * @param[in] nU Rotation axis (need not be normalized).
  * @param[in] dphi Rotation angle in radians.
  */
-void rotate_BSSN_Cartesian_basis(REAL vetU[3], REAL betU[3], REAL lambdaU[3], REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3], const REAL dphi) {
+void rotate_BSSN_Cartesian_basis_from_axis_angle(REAL vetU[3], REAL betU[3], REAL lambdaU[3], REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3],
+                                                 const REAL dphi) {
   const REAL n0 = nU[0];
   const REAL n1 = nU[1];
   const REAL n2 = nU[2];
@@ -67,5 +68,5 @@ void rotate_BSSN_Cartesian_basis(REAL vetU[3], REAL betU[3], REAL lambdaU[3], RE
     R[2][2] = ((nz) * (nz)) * tmp1 + tmp0;
   }
 
-  rotate_BSSN_Cartesian_basis_by_R(vetU, betU, lambdaU, hDD, aDD, R);
-} // END FUNCTION rotate_BSSN_Cartesian_basis
+  rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src(vetU, betU, lambdaU, hDD, aDD, R);
+} // END FUNCTION rotate_BSSN_Cartesian_basis_from_axis_angle

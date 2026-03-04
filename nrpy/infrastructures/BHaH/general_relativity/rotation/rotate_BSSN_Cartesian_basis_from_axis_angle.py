@@ -44,9 +44,9 @@ def _rank2_exprs_lhses(
     return exprs, lhses
 
 
-def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
+def register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle() -> None:
     """
-    Register C function ``rotate_BSSN_Cartesian_basis``.
+    Register C function ``rotate_BSSN_Cartesian_basis_from_axis_angle``.
 
     Doctests:
     >>> import contextlib
@@ -56,18 +56,18 @@ def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
     >>> from nrpy.helpers.generic import validate_strings
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
-    >>> register_CFunction_rotate_BSSN_Cartesian_basis()
-    >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis"].full_function
+    >>> register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle()
+    >>> generated_str = cfc.CFunction_dict["rotate_BSSN_Cartesian_basis_from_axis_angle"].full_function
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_openmp", file_ext="c")
+    ...     validate_strings(generated_str, "rotate_BSSN_Cartesian_basis_from_axis_angle_openmp", file_ext="c")
     """
     # Step 1: Ensure matrix-based helper is registered first.
-    from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_by_R import (
-        register_CFunction_rotate_BSSN_Cartesian_basis_by_R,
+    from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src import (
+        register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src,
     )
 
-    if "rotate_BSSN_Cartesian_basis_by_R" not in cfc.CFunction_dict:
-        register_CFunction_rotate_BSSN_Cartesian_basis_by_R()
+    if "rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src" not in cfc.CFunction_dict:
+        register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src()
 
     # Step 2: Set C function metadata and interface.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -75,7 +75,7 @@ def register_CFunction_rotate_BSSN_Cartesian_basis() -> None:
 @brief Rotate BSSN Cartesian-basis fields from axis-angle input.
 
 This routine converts (nU,dphi) to DeltaR_dst_from_src and then calls
-rotate_BSSN_Cartesian_basis_by_R().
+rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src().
 
 Convention:
 - R maps rotating-frame components -> fixed-frame components.
@@ -88,7 +88,7 @@ Convention:
   v^i_dst = (DeltaR)^i{}_j v^j_src,
   T^dst_{ij} = (DeltaR)_i{}^k (DeltaR)_j{}^l T^src_{kl}.
 - Symmetric tensor storage contract inherited from
-  rotate_BSSN_Cartesian_basis_by_R(): only upper-triangular components
+  rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src(): only upper-triangular components
   (i <= j) are updated.
 
 @param[in,out] vetU BSSN rescaled shift vector, rotated in place.
@@ -100,7 +100,7 @@ Convention:
 @param[in] dphi Rotation angle in radians.
 """
     cfunc_type = "void"
-    name = "rotate_BSSN_Cartesian_basis"
+    name = "rotate_BSSN_Cartesian_basis_from_axis_angle"
     params = (
         "REAL vetU[3], REAL betU[3], REAL lambdaU[3], "
         "REAL hDD[3][3], REAL aDD[3][3], const REAL nU[3], const REAL dphi"
@@ -115,7 +115,7 @@ Convention:
     R_codegen = ccg.c_codegen(R_exprs, R_lhses, include_braces=False, verbose=False)
 
     # Step 4: Build Rodrigues matrix from (nU,dphi), then delegate to
-    #         rotate_BSSN_Cartesian_basis_by_R().
+    #         rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src().
     body = (
         r"""
   const REAL n0 = nU[0];
@@ -144,7 +144,7 @@ Convention:
         + r"""
   }
 
-  rotate_BSSN_Cartesian_basis_by_R(vetU, betU, lambdaU, hDD, aDD, R);
+  rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src(vetU, betU, lambdaU, hDD, aDD, R);
 """
     )
     cfc.register_CFunction(
