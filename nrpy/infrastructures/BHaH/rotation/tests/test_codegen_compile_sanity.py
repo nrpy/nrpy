@@ -10,6 +10,8 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis import (
     register_CFunction_rotate_BSSN_Cartesian_basis,
+)
+from nrpy.infrastructures.BHaH.general_relativity.rotation.rotate_BSSN_Cartesian_basis_by_R import (
     register_CFunction_rotate_BSSN_Cartesian_basis_by_R,
 )
 from nrpy.infrastructures.BHaH.Makefile_helpers import (
