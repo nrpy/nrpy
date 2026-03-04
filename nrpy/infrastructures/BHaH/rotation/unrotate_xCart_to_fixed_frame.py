@@ -18,7 +18,6 @@ import nrpy.c_codegen as ccg
 
 # Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
-import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
@@ -198,9 +197,9 @@ Convention:
     params = "const commondata_struct commondata, REAL xCart[3]"
 
     # Step 3: Build equation-driven snippets for invariants, R construction, and vector map.
-    xhat_sym = ixp.declarerank1("xhatU")
-    yhat_sym = ixp.declarerank1("yhatU")
-    zhat_sym = ixp.declarerank1("zhatU")
+    xhat_sym: List[sp.Expr] = [sp.Symbol(f"xhatU[{i}]") for i in range(3)]
+    yhat_sym: List[sp.Expr] = [sp.Symbol(f"yhatU[{i}]") for i in range(3)]
+    zhat_sym: List[sp.Expr] = [sp.Symbol(f"zhatU[{i}]") for i in range(3)]
     hat_invariants = SO3Expressions.hat_validation_invariants(
         xhat_sym, yhat_sym, zhat_sym
     )
@@ -208,18 +207,11 @@ Convention:
         xhat_sym, yhat_sym, zhat_sym
     )
 
-    R_sym = ixp.declarerank2("R", symmetry="nosym")
-    x_in_sym = ixp.declarerank1("x_in")
+    R_sym: List[List[sp.Expr]] = [
+        [sp.Symbol(f"R[{i}][{j}]") for j in range(3)] for i in range(3)
+    ]
+    x_in_sym: List[sp.Expr] = [sp.Symbol(f"x_in[{i}]") for i in range(3)]
     x_fixed_expr = SO3Expressions.apply_R_to_vector(R_sym, x_in_sym)
-
-    sub_hat: dict[sp.Symbol, sp.Expr] = {}
-    for i in range(3):
-        sub_hat[xhat_sym[i]] = sp.Symbol(f"xhatU[{i}]")
-        sub_hat[yhat_sym[i]] = sp.Symbol(f"yhatU[{i}]")
-        sub_hat[zhat_sym[i]] = sp.Symbol(f"zhatU[{i}]")
-        sub_hat[x_in_sym[i]] = sp.Symbol(f"x_in[{i}]")
-        for j in range(3):
-            sub_hat[R_sym[i][j]] = sp.Symbol(f"R[{i}][{j}]")
 
     invariant_exprs = [
         hat_invariants["x_dot_y"],
@@ -240,7 +232,7 @@ Convention:
         "detR",
     ]
     invariant_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in invariant_exprs],
+        invariant_exprs,
         invariant_lhses,
         include_braces=False,
         verbose=False,
@@ -248,7 +240,7 @@ Convention:
 
     R_exprs, R_lhses = _rank2_exprs_lhses(R_from_hats, "R")
     R_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in R_exprs],
+        R_exprs,
         R_lhses,
         include_braces=False,
         verbose=False,
@@ -256,7 +248,7 @@ Convention:
 
     x_exprs, x_lhses = _rank1_exprs_lhses(x_fixed_expr, "xCart")
     x_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in x_exprs],
+        x_exprs,
         x_lhses,
         include_braces=False,
         verbose=False,

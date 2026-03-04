@@ -15,7 +15,6 @@ import nrpy.c_codegen as ccg
 
 # Step 1: Import core NRPy modules needed for C code generation.
 import nrpy.c_function as cfc
-import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
@@ -155,9 +154,9 @@ Convention:
     )
 
     # Step 3: Build equation-driven snippets.
-    xhat_sym = ixp.declarerank1("xhatU")
-    yhat_sym = ixp.declarerank1("yhatU")
-    zhat_sym = ixp.declarerank1("zhatU")
+    xhat_sym: List[sp.Expr] = [sp.Symbol(f"xhatU[{i}]") for i in range(3)]
+    yhat_sym: List[sp.Expr] = [sp.Symbol(f"yhatU[{i}]") for i in range(3)]
+    zhat_sym: List[sp.Expr] = [sp.Symbol(f"zhatU[{i}]") for i in range(3)]
     hat_invariants = SO3Expressions.hat_validation_invariants(
         xhat_sym, yhat_sym, zhat_sym
     )
@@ -165,24 +164,17 @@ Convention:
         xhat_sym, yhat_sym, zhat_sym
     )
 
-    R_sym = ixp.declarerank2("R", symmetry="nosym")
+    R_sym: List[List[sp.Expr]] = [
+        [sp.Symbol(f"R[{i}][{j}]") for j in range(3)] for i in range(3)
+    ]
     trace_expr = SO3Expressions.matrix_trace3(R_sym)
     denom_sym = sp.Symbol("denom")
     axis_general_expr = SO3Expressions.axis_angle_general_branch_axis(R_sym, denom_sym)
     pi_terms_expr = SO3Expressions.axis_angle_pi_branch_diagonal_terms(R_sym)
 
-    n_sym = ixp.declarerank1("nU")
+    n_sym: List[sp.Expr] = [sp.Symbol(f"nU_part1[{i}]") for i in range(3)]
     dphi_local_sym = sp.Symbol("dphi_local")
     Rcheck_expr = SO3Expressions.rodrigues_matrix_from_unit_axis(n_sym, dphi_local_sym)
-
-    sub_hat: dict[sp.Symbol, sp.Expr] = {}
-    for i in range(3):
-        sub_hat[xhat_sym[i]] = sp.Symbol(f"xhatU[{i}]")
-        sub_hat[yhat_sym[i]] = sp.Symbol(f"yhatU[{i}]")
-        sub_hat[zhat_sym[i]] = sp.Symbol(f"zhatU[{i}]")
-        sub_hat[n_sym[i]] = sp.Symbol(f"nU_part1[{i}]")
-        for j in range(3):
-            sub_hat[R_sym[i][j]] = sp.Symbol(f"R[{i}][{j}]")
 
     invariant_exprs = [
         hat_invariants["x_dot_y"],
@@ -203,7 +195,7 @@ Convention:
         "detR_hats",
     ]
     invariant_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in invariant_exprs],
+        invariant_exprs,
         invariant_lhses,
         include_braces=False,
         verbose=False,
@@ -211,31 +203,28 @@ Convention:
 
     R_exprs, R_lhses = _rank2_exprs_lhses(R_from_hats, "R")
     R_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in R_exprs],
+        R_exprs,
         R_lhses,
         include_braces=False,
         verbose=False,
     )
 
     trace_codegen = ccg.c_codegen(
-        [trace_expr.subs(sub_hat)],
+        [trace_expr],
         ["traceR"],
         include_braces=False,
         verbose=False,
     )
 
     axis_general_codegen = ccg.c_codegen(
-        [
-            expr.subs(sub_hat).subs(denom_sym, sp.Symbol("denom"))
-            for expr in axis_general_expr
-        ],
+        axis_general_expr,
         ["nU_part1[0]", "nU_part1[1]", "nU_part1[2]"],
         include_braces=False,
         verbose=False,
     )
 
     pi_terms_codegen = ccg.c_codegen(
-        [expr.subs(sub_hat) for expr in pi_terms_expr],
+        pi_terms_expr,
         ["n0", "n1", "n2"],
         include_braces=False,
         verbose=False,
@@ -243,10 +232,7 @@ Convention:
 
     Rcheck_exprs, Rcheck_lhses = _rank2_exprs_lhses(Rcheck_expr, "Rcheck")
     Rcheck_codegen = ccg.c_codegen(
-        [
-            expr.subs(sub_hat).subs(dphi_local_sym, sp.Symbol("dphi_local"))
-            for expr in Rcheck_exprs
-        ],
+        Rcheck_exprs,
         Rcheck_lhses,
         include_braces=False,
         verbose=False,
