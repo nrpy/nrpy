@@ -21,6 +21,7 @@ from . import (
     parallelization,
     rfm_precompute,
     rfm_wrapper_functions,
+    rotation,
     seobnr,
     simple_loop,
     special_functions,
