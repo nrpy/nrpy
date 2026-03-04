@@ -373,6 +373,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     BHAH_MALLOC_PINNED(all_photons_host.status, sizeof(termination_type_t) * num_rays);
     BHAH_MALLOC_PINNED(all_photons_host.rejection_retries, sizeof(int) * num_rays);
 
+    // Allocate Pinned Memory for Persistence Flags required by Batch C logic.
+    BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
+    BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
+
     TimeSlotManager tsm; // Lock-free temporal arena bounded exclusively to the Host CPU context.
     slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
 
@@ -380,6 +384,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
     if(initial_slot_idx != -1) {{
         for(long int i=0; i<num_rays; ++i) slot_add_photon(&tsm, initial_slot_idx, i);
+    }}
+
+    // Initialize Persistence Flags to TRUE for all rays.
+    // This provides a valid 'previous state' for the first time step, preventing false-positive event detections.
+    for(long int i=0; i<num_rays; ++i) {{
+        all_photons_host.on_positive_side_of_window_prev[i] = true;
+        all_photons_host.on_positive_side_of_source_prev[i] = true;
     }}
 
     // --- CUDA DUAL-STREAM BUFFER ALLOCATION ---
@@ -397,6 +408,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     bool *needs_step_bundle[2];
     int *retries_bundle[2];
     double *affine_param_bundle[2];
+    
+    // Double-buffered Device Pointers for Persistence Flags
     bool *on_pos_window_prev_bundle[2];
     bool *on_pos_source_prev_bundle[2];
 
@@ -422,6 +435,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         // Host-to-Device transfer: VRAM allocation tracking total affine progression $\lambda$.
         BHAH_MALLOC_DEVICE(affine_param_bundle[i], sizeof(double) * BUNDLE_CAPACITY);
 
+        // Allocate VRAM buffers for persistence flags in the dual-stream pipeline.
         BHAH_MALLOC_DEVICE(on_pos_window_prev_bundle[i], sizeof(bool) * BUNDLE_CAPACITY);
         BHAH_MALLOC_DEVICE(on_pos_source_prev_bundle[i], sizeof(bool) * BUNDLE_CAPACITY);
     }}
@@ -457,6 +471,9 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                                 all_photons_host.f + (k * num_rays) + start_idx,
                                 bundle_size * sizeof(double), cudaMemcpyHostToDevice, streams[s_compute]);
             }}
+            // Transfer Persistence Flags for Batch 0 (Host -> Device).
+            cudaMemcpyAsync(on_pos_window_prev_bundle[s_compute], all_photons_host.on_positive_side_of_window_prev + start_idx, bundle_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_compute]);
+            cudaMemcpyAsync(on_pos_source_prev_bundle[s_compute], all_photons_host.on_positive_side_of_source_prev + start_idx, bundle_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_compute]);
         }}
 
         // 2. Compute stream synchronization blocks CPU solely to confirm prior kernels have flushed their buffer footprint.
@@ -486,6 +503,9 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                                 all_photons_host.f + (k * num_rays) + next_start,
                                 next_size * sizeof(double), cudaMemcpyHostToDevice, streams[s_transfer]);
             }}
+            // [CRITICAL FIX]: Transfer Persistence Flags for Batch N+1 (Host -> Device).
+            cudaMemcpyAsync(on_pos_window_prev_bundle[s_transfer], all_photons_host.on_positive_side_of_window_prev + next_start, next_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_transfer]);
+            cudaMemcpyAsync(on_pos_source_prev_bundle[s_transfer], all_photons_host.on_positive_side_of_source_prev + next_start, next_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_transfer]);
         }}
 
         // 5. Initialize VRAM-local status masks directly inside the compute stream context.
@@ -517,6 +537,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         cudaMemcpyAsync(bundle_status_host[s_compute], status_bundle[s_compute], bundle_size * sizeof(termination_type_t), cudaMemcpyDeviceToHost, streams[s_compute]);
         // Device-to-Host transfer: Asynchronously pulls the physical coordinate time $t$ back to pinned memory for re-binning.
         cudaMemcpyAsync(bundle_time_host[s_compute], f_bundle[s_compute], bundle_size * sizeof(double), cudaMemcpyDeviceToHost, streams[s_compute]);
+        
+        // Retrieve Updated Persistence Flags for Batch N (Device -> Host).
+        cudaMemcpyAsync(all_photons_host.on_positive_side_of_window_prev + start_idx, on_pos_window_prev_bundle[s_compute], bundle_size * sizeof(bool), cudaMemcpyDeviceToHost, streams[s_compute]);
+        cudaMemcpyAsync(all_photons_host.on_positive_side_of_source_prev + start_idx, on_pos_source_prev_bundle[s_compute], bundle_size * sizeof(bool), cudaMemcpyDeviceToHost, streams[s_compute]);
     }}
 
     // Resolve final pipeline batch outputs remaining in the transit buffer post-orchestration loop.
@@ -554,6 +578,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     BHAH_FREE_PINNED(all_photons_host.h);
     BHAH_FREE_PINNED(all_photons_host.status);
     BHAH_FREE_PINNED(all_photons_host.rejection_retries);
+    BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_window_prev);
+    BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_source_prev);
 
     slot_manager_free(&tsm);
 

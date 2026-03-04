@@ -64,367 +64,415 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 """"
 
-""""
 
-SYSTEM CONTEXT: NRPy+ Native CUDA Migration (RTX 3080)
+Defusing the fused_rkf45 kernel:
+"""
+Singularity-Axiom: Modular Physics Pipeline
 
 MISSION:
-Migrate a General Relativity photon ray-tracer to a Native CUDA "Streaming Bundle" architecture using the NRPy+ BHaH infrastructure components (gpu_kernel.py, utilities.py, loop.py).
+Decompose the fused RKF45 integration into a "Single-Instruction Multiple-Data" (SIMD) batch pipeline. This prevents register pressure from exceeding the 255-register limit of the RTX 3080 (sm_86) during complex numerical spacetime evaluations.
 
-HARDWARE CONSTRAINTS (NVIDIA RTX 3080 / sm_86):
-1. Registers: < 255 per thread (Strict Limit).
-   - Solution: Metric/Connection tensors ($g_{\mu\nu}$, $\Gamma$) must be strictly thread-local (registers).
-   - Solution: RKF45 intermediate states ($k_1...k_6$) must use __shared__ memory.
-2. VRAM: 10 GB Limit.
-   - Solution: "Streaming Bundle" architecture. Photons remain in Host RAM and are processed in VRAM batches of `BUNDLE_CAPACITY` (32,768).
-3. Shared Memory: 48 KB per SM.
-   - Solution: `k_shared[6][9][64]` consumes ~27KB. We must explicitly set this size in the kernel launch.
+ARCHITECTURAL FLOW:
+The orchestrator must launch the following three kernels sequentially for each of the 6 RKF45 stages:
 
-INFRASTRUCTURE UTILIZATION RULES:
-1. Kernel Generation: Use `utilities.generate_kernel_and_launch_code`.
-   - Use `launch_dict={'sm': 27648}` to explicitly reserve shared memory.
-   - Use `cfunc_decorators="__global__"` to auto-generate `cudaCheckErrors`.
-2. Parameter Access: Use `utilities.get_params_access("cuda")`.
-   - Ensures physics kernels read from `d_params[streamid]` (Constant Memory) instead of global memory.
-3. Host Loops: Use `loop.py` with `tile_size="BUNDLE_CAPACITY"`.
-   - Automates the "Streaming Bundle" pagination logic on the host.
-4. Math Optimization: Use `simd.py` pipeline + `cuda_intrinsics.h`.
-   - Generate code with `enable_simd=True`.
-   - Apply `.replace("SIMD", "CUDA")` to map math to `FusedMulAddCUDA` (hardware intrinsics).
+    Batch Interpolation Kernel (placeholder_interpolation):
+    Input: Current state bundle $f^\mu$ (VRAM).
+    Output: Symmetric metric $g_{\mu\nu}$ and Christoffel symbols $\Gamma^\alpha_{\beta\gamma}$ stored in VRAM-resident bundle arrays.
+    Optimization: Utilize BHAH_HD_FUNC for zero-overhead tensor evaluation.
+    Goal: Minimize VRAM stalls by ensuring coalesced memory access across the bundle.
 
-CORE ARCHITECTURE (Batch Integrator):
-1. Host: Allocates Pinned Memory for `all_photons`.
-2. Pipeline: Dual-stream (`cudaStream_t`) loop overlapping Data Transfer (H2D/D2H) with Computation.
-3. Computation:
-   - `init_batch`: Loads bundle from global VRAM to registers/status flags.
-   - `stream_compaction`: Uses warp-aggregated atomics (`__ballot_sync`, `__popc`) to pack active rays.
-   - `fused_rkf45`: Solves ODEs using `k_shared` for intermediate storage.
-   - `event_detection`: Checks termination conditions (Source/Window/Infinity).
+    Batch RHS Kernel (calculate_ode_rhs):
+    Input: State bundle $f^\mu$ + Interpolated tensor bundle (VRAM).
+    Output: Derivative bundle $\dot{f}$ (the $k$-array).
+    Constraint: Output MUST be written to Global VRAM. Do NOT use Shared Memory, as this data must persist for the subsequent Update kernel.
+    Logic: Solve the Geodesic Equation: $\frac{d^2x^\mu}{d\lambda^2} + \Gamma^\mu_{\alpha\beta}\frac{dx^\alpha}{d\lambda}\frac{dx^\beta}{d\lambda} = 0$.
+
+    Adaptive Stage-Update Kernel (rkf45_stage_update):
+    Input: int stage, current $f_{start}$, $\dot{f}$ bundle, and step size $h$.
+    Logic: Use a switch(stage) block to apply specific RKF45 coefficients (e.g., Stage 3 uses $3/32 \cdot k_1 + 9/32 \cdot k_2$).
+    Memory: Update the f_temp bundle in VRAM for the next interpolation cycle.
+
+CONSTRAINTS:
+
+Persistence: 
+All intermediate data (metrics, connections, and RHS derivatives) must be stored in strided Structure of Arrays (SoA) bundles to protect the 10GB VRAM limit.
+
+No Synchronization: 
+Do not synchronize the GPU between the Interpolation, RHS, and Update kernels unless the hardware requires it; allow the Compute Command Processor to schedule them as a continuous stream.
+
+Metadata: 
+All kernels must access global tolerances and physics constants via Constant Memory (d_commondata).
 """
 
-"""Here is the comprehensive, highly detailed "Master Prompt" you requested. It integrates all your original context, the hardware constraints of the RTX 3080, and the specific architectural roles of the four required kernels.
+Context Prompt:
+"""
+Singularity-Axiom: Architectural Manifesto & System Context
 
-I have also provided a final "Upload Manifest" at the bottom, detailing exactly which files to provide to the next LLM and why.
+PROJECT GOAL:
+The ultimate objective of Project Singularity-Axiom is to perform relativistic ray tracing on **Numerical Spacetimes** (e.g., discrete BSSN/ADM data slices), not just analytic metrics (like Kerr-Schild).
+This requirement dictates the entire software architecture.
 
-The Master Prompt for the Next LLM
-Copy and paste the text between the lines below.
+THE "REGISTER BLEEDING" CONSTRAINT:
+* Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86).
+* Hard Limit: 255 Registers per thread.
+* The Problem: High-order numerical interpolation of 4D spacetime metrics requires massive register pressure.
+* The Failure Mode: A "Fused Kernel" approach (combining Interpolation + ODE RHS + RKF45 Stepper) forces the compiler to spill registers to Local Memory (L1/L2 cache thrashing), causing performance to collapse by orders of magnitude.
 
-SYSTEM CONTEXT & MISSION:
-I am migrating a high-performance General Relativity photon ray-tracing simulation from OpenMP Target Offloading to Native CUDA on an NVIDIA RTX 3080. The code is generated using the NRPy+ infrastructure.
+THE "SPLIT-PIPELINE" MANDATE:
+To solve Register Bleeding, we strictly enforce a **Split-Pipeline Architecture**.
+We trade VRAM Bandwidth for Register Stability.
+The integration step is decomposed into discrete, specialized kernels that communicate via VRAM "Scratchpad Bundles" ($d\_metric$, $d\_connection$, $d\_k$, $d\_f\_temp$):
 
-Your Goal: Refactor batch_integrator_numerical.py and set_initial_conditions_cartesian.py to replace manual C-string generation with the robust NRPy+ infrastructure tools (gpu_kernel.py, utilities.py, loop.py).
+1. Batch Interpolation Kernel: Calculates Geometry ($g_{\mu\nu}, \Gamma$) $\to$ Saves to VRAM.
+2. Batch RHS Kernel: Reads Geometry $\to$ Calculates Derivatives ($k$) $\to$ Saves to VRAM.
+3. Stage Update Kernel: Reads Derivatives $\to$ Updates State ($f_{temp}$).
 
-HARDWARE SPECIFICATIONS (RTX 3080 / sm_86):
+ANTI-PATTERN WARNING (DO NOT VIOLATE):
+* DO NOT suggest merging or "fusing" these kernels for "optimization."
+* DO NOT attempt to use `__shared__` memory or Registers to persist data between these stages (the context is flushed between kernel launches).
+* DO NOT inline the Metric Interpolation logic into the RKF45 stepper.
 
-Architecture: Ampere (sm_86).
-
-VRAM: 10 GB (Strict Limit).
-
-Constraint: We cannot load all photons at once. We must use a "Streaming Bundle" architecture, processing rays in batches of BUNDLE_CAPACITY (32,768).
-
-Registers: 255 per thread (Strict Limit).
-
-Constraint: The Fused RKF45 kernel uses >130 double-precision variables. To prevent register spilling, we must force intermediate tensor math into thread-local registers and use Shared Memory for the RKF45 state arrays.
-
-Shared Memory: 48 KB per SM.
-
-Constraint: We use ~27KB for the RKF45 state (k_shared). We must explicitly request this size in the kernel launch to avoid launch failures.
-
-THE 4 REQUIRED GPU KERNELS (AND THEIR ROLES):
-You must generate these 4 distinct kernels in the batch_integrator_numerical.py pipeline:
-
-init_batch Kernel
-
-Role: Hydrates the thread-local state for a fresh bundle of 32,768 photons.
-
-Logic: Reads raw position/momentum from Global VRAM, sets the initial step size h, resets retries=0, and sets status=ACTIVE.
-
-Critical Output: Sets needs_step = true so the subsequent compaction kernel picks up these rays.
-
-stream_compaction Kernel
-
-Role: filters out "dead" rays (absorbed/escaped) to maximize GPU warp occupancy.
-
-Logic: Uses warp-aggregated atomics (via __ballot_sync, __popc, and __shfl_sync) to generate a dense index list (compacted_local_ids).
-
-Why: Running the heavy math kernel on sparse data wastes 98% of GPU cycles. This packs the work efficiently.
-
-fused_rkf45 Kernel (The Physics Core)
-
-Role: Advances active photons one step forward in time.
-
-Optimization 1 (Registers): Must use __shared__ double k_shared[6][9][64] to store the 6 intermediate Runge-Kutta stages. This saves ~54 registers per thread.
-
-Optimization 2 (Intrinsics): Must use the .replace("SIMD", "CUDA") pattern to map NRPy+ math to cuda_intrinsics.h macros (e.g., FusedMulAddCUDA).
-
-Why: "Fused" means it calculates Metric + Connections + RKF45 Steps in one go to keep data hot in L1 cache/registers.
-
-event_detection Kernel
-
-Role: Checks if the photon has hit the Source Disk, Camera Window, or Event Horizon.
-
-Logic: Solves cubic/quartic roots for intersection points.
-
-Why: Separated from the RKF45 kernel to reduce instruction cache pressure and register usage.
-
-REQUIRED INFRASTRUCTURE UPDATES:
-You must implement these specific changes using the uploaded scripts:
-
-Use utilities.generate_kernel_and_launch_code:
-
-Replace manual kernel<<<...>>> strings.
-
-Pass launch_dict={'sm': 27648} to reserved shared memory for the RKF45 kernel.
-
-Pass cfunc_decorators="__global__" to auto-inject cudaCheckErrors.
-
-Use utilities.get_params_access("cuda"):
-
-Replace direct parameter access.
-
-This ensures all physics kernels read from d_params[streamid] (Constant Memory), which is cached and faster than global memory.
-
-Use loop.py:
-
-Use loop(..., tile_size="BUNDLE_CAPACITY") to generate the host-side loops that chunk the 10GB dataset into 32k batches.
-
-Use BHaH_MALLOC Macros:
-
-Replace cudaMalloc with BHAH_MALLOC_DEVICE (VRAM).
-
-Replace malloc (pinned) with BHAH_MALLOC_PINNED (Host RAM) for faster PCIe transfer.
+Future LLMs reading this context must understand that the **separation of concerns via VRAM Scratchpads is intentional and mandatory** to support the future ingestion of large-scale Numerical Relativity datasets.
 """
 
 
+Kernel Info:
 """
-1. The "Core Base Set" (Upload to ALL LLMs)
-These 4 files define the "language" of your simulation. Without these, no LLM can write a single line of working code.
+Singularity-Axiom: Split-Pipeline Kernel Architecture
 
-BHaH_defines_h.py & BHaH_device_defines_h.py: These define the PhotonStateSoA struct, the blueprint_data_t struct, and the memory macros.
+MISSION:
+Implement a granular "Split-Pipeline" kernel architecture to solve the Register Bleeding problem inherent to numerical spacetimes.
+Instead of a single fused kernel, the physics integration is decomposed into discrete, specialized kernels that communicate via VRAM "Scratchpad Bundles" ($d\_metric$, $d\_connection$, $d\_k\_vectors$, $d\_f\_temp$).
+This architecture ensures no single kernel exceeds the 255-register limit of the RTX 3080 while maximizing VRAM bandwidth utilization.
 
-utilities.py: This is the tool the LLM must use to actually build the kernels.
+--- PHASE 1: INITIALIZATION PIPELINE ---
 
-cuda_intrinsics.h: This contains the hardware math macros (FusedMulAddCUDA).
+KERNEL 1: set_initial_conditions_kernel
+    * Generator Script: set_initial_conditions_cartesian.py
+    * Input: Camera parameters (Constant Memory), Window coordinates.
+    * Output: d_f_bundle (VRAM), d_h_bundle (Initialize step sizes).
+    * Job:
+        1. Map global thread ID to pixel coordinates (row, col).
+        2. Set spatial coordinates $x, y, z$ and time $t$ based on camera position.
+        3. Set initial spatial momenta $p^x, p^y, p^z$ based on the window ray direction.
+        4. Initialize $p^t = 0$ and affine parameter $\lambda = 0$.
+        5. Write the initial state to VRAM.
 
-2. Specialized Task Batches
-You should divide the work into these three logical groups. Each group should be handled by a separate LLM session.
-"""
+KERNEL 2: batch_interpolation_kernel (Shared with Phase 2)
+    * Generator Script: placeholder_interpolation_engine.py
+    * Input: d_f_bundle (State vectors).
+    * Output: d_metric_bundle ($g_{\mu\nu}$), d_connection_bundle ($\Gamma^\alpha_{\beta\gamma}$).
+    * Job:
+        1. Load photon position $x^\mu$.
+        2. Call the spacetime-specific metric evaluator.
+        3. Write $g_{\mu\nu}$ to VRAM.
+        4. CONDITIONAL: Check if d_connection_bundle pointer is NULL.
+           - If NULL (Initialization): Skip $\Gamma$ calculation.
+           - If Valid (Integration): Compute and write $\Gamma^\alpha_{\beta\gamma}$ to VRAM.
 
-(Complete)
-"""
-Batch A: The Initialization & Cleanup Group
-Goal: Get photons into the GPU and get the final results out.
+KERNEL 3: p0_reverse_kernel
+    * Generator Script: p0_reverse.py
+    * Input: d_f_bundle, d_metric_bundle.
+    * Output: d_f_bundle (Updated $f[4]$).
+    * Job:
+        1. Load spatial momenta and the pre-calculated metric from VRAM.
+        2. Solve the Hamiltonian Constraint $g_{\mu\nu}p^\mu p^\nu = 0$ for the negative root of $p^t$.
+        3. Update $f[4]$ in the global state bundle.
 
-Upload these specific scripts:
+--- PHASE 2: RKF45 INTEGRATION LOOP (The "Bleed" Fix) ---
+*Note: The Orchestrator loop runs 6 times per step. Stage index $s \in [1..6]$.*
 
-set_initial_conditions_cartesian.py
+KERNEL 2 (Reuse): batch_interpolation_kernel
+    * Input: d_f_temp_bundle (The intermediate state for this stage).
+    * Output: d_metric_bundle, d_connection_bundle.
+    * Note: Pass valid pointers for BOTH metric and connection bundles.
 
-calculate_and_fill_blueprint_data_universal.py
+KERNEL 4: calculate_ode_rhs_kernel
+    * Generator Script: calculate_ode_rhs.py
+    * Input: d_f_temp_bundle, d_metric_bundle, d_connection_bundle.
+    * Output: d_k_bundle (The specific $k_{stage}$ vector).
+    * Job:
+        1. Load geometry tensors from VRAM (bypassing re-calculation).
+        2. Compute the geodesic derivatives $\dot{f} = \{ \frac{dx^\mu}{d\lambda}, \frac{dp^\mu}{d\lambda} \}$.
+        3. Write the result to the specific slot in the 54-component `d_k_bundle` (Offset: $stage \times 9 \times Capacity$).
 
-Mission: Ensure set_initial_conditions uses the VRAM bundle correctly and calculate_and_fill projects the final positions onto the celestial sphere.
+KERNEL 5: rkf45_stage_update_kernel
+    * Generator Script: batch_integrator_numerical.py (Orchestrator Logic).
+    * Input: d_f_start_bundle (Base), d_k_bundle (Accumulated), d_h_bundle (Per-ray step size), int stage.
+    * Output: d_f_temp_bundle (Updated intermediate state).
+    * Job:
+        1. Read base state $f_{start}$ and all currently computed $k$ vectors from VRAM.
+        2. Use `stage` index to apply the correct Butcher Tableau coefficients via switch-case.
+        3. Compute and write new $f_{temp}$ to VRAM.
 
+--- PHASE 3: FINALIZATION & CONTROL ---
 
-"""
-Batch B: The Fused Physics & Integration Group
-Goal: The math-heavy core.
+KERNEL 6: batch_rkf45_finalize_and_control
+    * Generator Script: rkf45_update_and_control_helper.py.
+    * Input: d_f_start_bundle, d_k_bundle (All 6 stages), d_h_bundle, bool check_energy_stability.
+    * Output: d_f_bundle (Updated if accepted), d_h_bundle (New $h$), d_status_bundle.
+    * Job:
+        1. Compute 4th-order (error) and 5th-order (candidate) states.
+        2. Calculate LTE using L-infinity norms.
+        3. Execute Adaptive Controller:
+           - If Rejected: Increment retries, Shrink $h$.
+           - If Accepted:
+             a. OPTIONAL OPTIMIZATION: If `check_energy_stability == true`, check `abs(p^t)`.
+                If unbounded, mark status `FAILURE_PT_TOO_BIG`.
+             b. Update $f_{start} \to f_{new}$, Reset retries, Compute next $h$.
 
-Upload these specific scripts:
+--- PHASE 4: GEOMETRY & EVENTS ---
 
-batch_integrator_numerical.py (The Master Orchestrator)
-
-rkf45_helpers_for_header.py
-
-rkf45_update_and_control_helper.py
-
-Mission: Implement the k_shared memory logic and the fused_rkf45 kernel call.
-"""
-
-
-"""
-
-Batch C: The Logic & Event Detection Group
-Goal: Decisions and boundaries.
-
-Upload these specific scripts:
-
-event_detection_manager.py
-
-Why: event_detection_manager is just a "boss" function; it calls these three scripts to do the actual work. If the LLM doesn't have these, it cannot inline the logic into the GPU.
-"""
-
-DETAILED BATCH A IMPLEMENTED FIX:
-"""
-================================================================================
-MASTER EXECUTION PROMPT: BATCH A (Initialization & Cleanup)
-================================================================================
-
-SYSTEM CONTEXT & MISSION:
-You are the Lead Engineer for "Batch A" of the NRPy+ CUDA Migration.
-Your goal is to generate the Python metaprogramming scripts that handle the *Start* (Initialization) and *End* (Blueprint Extraction) of the photon lifecycle.
-
-You must strictly adhere to the "Streaming Bundle" architecture.
-The RTX 3080 has a strict 10GB VRAM limit. You CANNOT load all photons at once.
-You must process them in chunks of `BUNDLE_CAPACITY` (32,768).
-
---------------------------------------------------------------------------------
-CRITICAL ARCHITECTURAL CONSTRAINTS
---------------------------------------------------------------------------------
-
-1. NO HEADER EDITING:
-   Do NOT edit `BHaH_defines_h.py`.
-   To ensure `PhotonStateSoA` and `blueprint_data_t` are available to the compiler, you must register their C-definitions using `Bdefines_h.register_BHaH_defines()` inside your `set_initial_conditions_cartesian.py` script.
-
-2. CONSTANT MEMORY:
-   The kernel must NOT read parameters from Global Memory.
-   You must use `utilities.get_commondata_access("cuda")` to resolve reads to `d_commondata` (the 64KB Constant Memory cache).
-
-3. MEMORY DIRECTION SAFETY:
-   * Initialization: Generates data on GPU -> Copies DEVICE-TO-HOST.
-   * Finalization: Reads data from Host -> Copies HOST-TO-DEVICE -> Computes -> Copies DEVICE-TO-HOST.
-
---------------------------------------------------------------------------------
-INFRASTRUCTURE USAGE EXAMPLES (Mini-Manual)
---------------------------------------------------------------------------------
-
-Use these patterns to interact with the NRPy+ infrastructure files:
-
-A. REGISTERING C-STRUCTS (The "Gamma Fix")
-   Use this in `set_initial_conditions_cartesian.py` to inject the structs:
-   ```python
-   import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-   
-   batch_structs_c_code = r"""
-   typedef struct { ... } PhotonStateSoA;
-   typedef struct { ... } blueprint_data_t;
-   """
-   # Registers code into BHaH_defines.h automatically
-   Bdefines_h.register_BHaH_defines("photon_structs", batch_structs_c_code)
-B. PAGINATION LOOPS (loop.py)
-Use this to generate the Host-side "Streaming Bundle" loop:
-
-Python
-from nrpy.helpers.loop import loop
-
-loop_body = """
-// Your cudaMemcpy and Kernel Launch C-code here
-"""
-# Generates: for(int start_idx=0; start_idx<num_rays; start_idx+=32768) { ... }
-host_loop_code = loop(
-    idx_var="start_idx",
-    lower_bound="0",
-    upper_bound="num_rays",
-    increment="BUNDLE_CAPACITY",
-    loop_body=loop_body
-)
-C. KERNEL GENERATION (utilities.py + gpu_kernel.py)
-Use this to wrap your C logic into a CUDA kernel:
-
-Python
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
-
-prefunc, launch_code = generate_kernel_and_launch_code(
-    kernel_name="my_kernel",
-    kernel_body=my_c_code,
-    arg_dict_cuda={...},
-    parallelization="cuda",
-    launch_dict={
-        "threads_per_block": ["256", "1", "1"],
-        "blocks_per_grid": ["(chunk_size + 255) / 256", "1", "1"]
-    },
-    cfunc_decorators="__global__" # Auto-injects cudaCheckErrors
-)
-TASK LIST (Generate these 3 files)
-TASK 1: set_initial_conditions_cartesian.py (The Initializer)
-
-Dependency Action: Include the batch_structs_c_code string (defining PhotonStateSoA and blueprint_data_t) and register it using Bdefines_h.register_BHaH_defines.
-
-Host Logic:
-
-Allocate a VRAM buffer d_f_chunk (use BHAH_MALLOC_DEVICE).
-
-Use loop.py to iterate through num_rays with stride BUNDLE_CAPACITY.
-
-Launch Kernel.
-
-CRITICAL: Perform cudaMemcpy DEVICE_TO_HOST to save the initialized d_f_chunk back to all_photons->f in RAM.
-
-Kernel Logic:
-
-Do not pass commondata struct pointer.
-
-Use get_commondata_access("cuda") to write C-code accessing d_commondata.variable.
-
-TASK 2: calculate_and_fill_blueprint_data_universal.py (The Finalizer)
-
-Architecture Change: Rewrite this completely to use "Streaming Bundles".
-
-Host Logic:
-
-Allocate small VRAM buffers: d_f_bundle, d_status_bundle, d_result_bundle.
-
-Use loop.py to iterate through num_rays.
-
-Step A: cudaMemcpy HOST_TO_DEVICE (Copy f and status from RAM to VRAM).
-
-Step B: Launch Kernel (Compute on VRAM data).
-
-Step C: cudaMemcpy DEVICE_TO_HOST (Copy d_result_bundle back to RAM).
-
-Kernel Logic:
-
-Index based on local threadIdx.x (0 to 32768), not global ID.
-
-TASK 3: p0_reverse.py (The Constraint Solver)
-
-Constraint: Set cfunc_type = "BHAH_HD_INLINE void".
-
-Why: This function is called inside the initialization kernel. It must be inlined to avoid register spilling.
-"""
-
-Batch B Logs:
-Log 1:
-"""
-Batch B Completion Log: Fused Physics & IntegrationProject: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (sm_86)Status: COMPLETE1. Executive SummaryThe core numerical integration pipeline has been successfully refactored from OpenMP to a Native CUDA Dual-Stream "Streaming Bundle" architecture. The orchestration layer now manages memory in 32,768-photon chunks to respect the 10GB VRAM limit, while the physics kernels use __shared__ memory and thread-local registers to respect the sm_86 register limit.Critical Handover Note for Batch C: The event_detection kernel is currently a placeholder. Batch C must implement the logic to populate results_buffer using the now-established PhotonStateSoA data layout.2. Generated ArtifactsThe following Python metaprogramming scripts have been finalized and are ready for compilation:Script NameRole & Responsibilityrkf45_helpers_for_header.pyGenerates the thread-local C functions for the 6-stage RKF45 integrator. Implements the k_shared[6][9][64] pointer logic.rkf45_update_and_control_helper.pyGenerates the adaptive step-size controller. Implements L-Infinity norm error checking and updates $h$ and retries in registers.batch_integrator_numerical.pyThe Master Orchestrator. Generates the Dual-Stream Host loop, manages Pinned/Device memory, and launches the 4 kernels (init, compact, rkf45, event).3. Architectural Implementation Details (Crucial for Batch C)A. Memory ArchitectureStruct Prohibition: PhotonStateSoA and blueprint_data_t were NOT redefined in Batch B. They rely on the definitions registered by Batch A.Dual-Stream Isolation:Host: all_photons_host (Pinned Memory) holds the full dataset.Device: Double-buffered arrays (e.g., f_bundle[2], f_p_bundle[2]) allow Stream 1 to upload Batch N+1 while Stream 0 computes Batch N.Batch C Implication: When writing event logic, you do not need to manage streams. The kernel is already launched inside the correct stream context (streams[s_compute]).B. The 4 Kernelsinit_batch:Hydrates needs_step=true and status=ACTIVE.Loads initial data from global VRAM to thread-local registers.stream_compaction:Uses Warp-Aggregated Atomics (__ballot_sync, __popc, atomicAdd) to pack active rays into a dense index array compacted_local_ids.Note: This ensures the heavy RKF45 kernel only runs on active photons, boosting SIMD efficiency.fused_rkf45:Shared Memory: Explicitly reserves 27KB (sm: 27648) for k_shared to store intermediate Runge-Kutta stages, bypassing register spilling.Register Rotation: Performs state rotation (f_p_p <- f_p <- f) entirely in VRAM/Registers without Host synchronization.event_detection (The Interface for Batch C):Currently implemented as a "Black Box" kernel call.Input: f_bundle, f_p_bundle, f_p_p_bundle (History).Output: results_buffer (Device Global Memory).Constraint: The kernel signature assumes the existence of event_detection_manager. Batch C must provide this inline function.4. Integration Guide for Batch C LLMsYour Mission: Implement the logic inside event_detection_manager.py.1. Data Availability:Inside the event_detection kernel, you have access to:f_local[9]: Current State ($t, x, y, z, p_t, p_x, p_y, p_z, \lambda$).f_p_local[9]: Previous State.f_p_p_local[9]: State 2 steps ago.commondata: Global parameters (in Constant Memory d_commondata).2. Writing to Results:You must write the final intersection data to results_buffer.Struct Definition: Refer to blueprint_data_t in BHaH_defines.h (registered in Batch A).Fields to Populate: termination_type, t_w, t_s, final_theta, final_phi, etc.3. Termination Logic:If an event is found (Window, Source, or Horizon), you MUST set *status = TERMINATION_TYPE_....The Orchestrator will automatically detect this status change via cudaMemcpy of the bundle_status_host array and remove the ray from the compacted_local_ids list in the next step.4. Performance Constraint:The event_detection kernel runs after every RKF45 step.Keep your logic branch-free where possible. Heavy branching here will stall the compute stream.5. Known Issues / ConstraintsAtomic Add: The stream_compaction kernel uses standard atomicAdd. Ensure the target GPU supports atomic operations on 32-bit integers (standard on RTX 3080/sm_86).Stack Size: The fused_rkf45 kernel is register-heavy. If you add significant logic to event_detection, verify that maxregcount does not exceed 255.
-"""
-Log 2:
-"""
-Batch B Completion Log: Fused Physics & Integration (RTX 3080)Project: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86)Status: COMPLETE1. Executive SummaryThe core numerical integration pipeline has been successfully refactored from OpenMP Target Offloading to a Native CUDA "Streaming Bundle" architecture. The system is now optimized for the RTX 3080's 10GB VRAM limit and 255-register-per-thread constraint. All physics kernels have been transitioned to access parameters via Constant Memory (d_commondata) to reduce global memory bandwidth and register pressure.2. Architectural Implementation DetailsDual-Stream Pipeline: Implemented a cudaStream_t dual-buffer system. While Stream 0 (s_compute) executes physics kernels, Stream 1 (s_transfer) asynchronously bridges the next batch of 32,768 photons from Pinned Host RAM to VRAM.Warp-Aggregated Stream Compaction: Integrated a specialized compaction kernel using __ballot_sync and __popc to filter inactive rays. This ensures that the heavy fused_rkf45 kernel maintains maximum warp occupancy by operating only on dense active indices.Fused RKF45 Physics Core:Shared Memory Allocation: Explicitly reserved 27,648 bytes (launch_dict={'sm': 27648}) for k_shared[6][9][64] to store intermediate Runge-Kutta stages.Register Hot-Swapping: Metric and Connection tensors are kept strictly in registers to avoid VRAM spilling.Math Optimization: Leveraged cuda_intrinsics.h to map symbolic expressions to hardware-native FusedMulAddCUDA instructions.3. Critical Handover for Batch CThe event_detection kernel call is established within the compute stream following the RKF45 update.Batch C must provide the event_detection_manager device function logic
+KERNEL 7: event_detection_manager
+    * Generator Script: event_detection_manager.py
+    * Input: d_f_bundle (Current), d_f_prev (History), Persistence Flags.
+    * Output: d_results_buffer (Blueprint), d_status_bundle.
+    * Job:
+        1. Compare current position against previous geometric side flags.
+        2. If plane crossing detected: Root-find intersection $t_{event}$, Interpolate state.
+        3. Update Blueprint buffer and mark TERMINATED if applicable.
+        4. Update history buffers ($f_{pp} \leftarrow f_p$, $f_p \leftarrow f$).
 """
 
 
-Log for Batch C:
-Log 1"
-"""
-Batch C Completion Log: Event Detection Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration) Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86) 
-Status: COMPLETE1. Executive SummaryThe Event Detection Micro-System has been successfully refactored from a global-memory reliant CPU/OpenMP model to a native CUDA "Streaming Bundle" architecture. The system now executes high-precision root-finding and geometric projections entirely within thread-local registers ($f_{local}[9]$) to satisfy the strict 255-register limit of the sm_86 architecture. All physical constants have been migrated to Constant Memory (d_commondata) to maximize cache hits during the integration loop.2. Detailed Fixes and Architectural ChangesComponentLogic Fix / ImplementationHardware OptimizationMathematical Core (find_event)Replaced linear step-estimation with Quadratic Interpolation (Newton form) for affine parameter $\lambda$ and Lagrange Interpolation for state reconstruction.Executes strictly on registers; prevents VRAM stalls by eliminating global memory fetches during root-finding.Source Physics (handle_source)Implemented 2D orthonormal basis projection ($y_s, z_s$) and radial filtering ($r_{min} < r < r_{max}$).Registered via par.register_CodeParameters to utilize the 64KB Constant Memory cache.Camera Window (handle_window)Implemented pixel-grid mapping and persistence of crossing coordinates ($t_w, L_w$) without terminating the ray.Uses BHAH_HD_FUNC for zero-overhead inlining into the compute kernel.Orchestration (event_manager)Integrated sign-change detection logic ($val > 10^{-10}$) against persistent "previous side" flags.Uses bool *restrict pointers to minimize memory footprint while tracking crossing events across integration steps.3. Required Updates for batch_integrator_numerical.pyWhile the Batch Integrator does not need to know the internal logic of the four scripts, it must be updated to manage the persistence layer that the event_detection_manager requires.Key Changes Required:Boolean Flag Persistence: You must allocate two new boolean arrays in both Pinned (Host) and Device memory: on_pos_window_prev and on_pos_source_prev. These track which side of a plane the photon was on during the previous step.Struct Alignment: Ensure that the blueprint_data_t results are being written to the correct global offset. In your provided kernel, this is handled by &results_buffer[start_idx + tid].Kernel Launch Tuning: The event_detection kernel should be launched in the s_compute stream immediately following the fused_rkf45 kernel to ensure data remains "hot" in the L1 cache.Constant Memory Access: The commondata argument must be passed to the kernel to allow the manager to access camera and source geometries without global memory overhead.4. Final Compliance Checklist (sm_86)[x] Register Limit: All event logic operates on f_local register copies.[x] Constant Memory: Geometries registered via par.register_CodeParameters.[x] Inlining: All functions decorated with BHAH_HD_FUNC to prevent call-stack overhead.[x] Memory Layout: No typedef struct redefinitions; strictly uses BHaH_defines.h.
-"""
-Log 2:
-"""
-Batch C Completion Log: Event Detection Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration) Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86) Status: COMPLETE 1. Executive SummaryThe Event Detection Micro-System has been successfully refactored from an OpenMP model to a native CUDA "Streaming Bundle" architecture. The system now executes high-precision root-finding and geometric projections entirely within thread-local registers to satisfy the strict 255-register limit of the sm_86 architecture. All physical constants have been migrated to Constant Memory (d_commondata) to maximize cache hits during the integration loop. 2. Detailed Fixes and Architectural ChangesComponentLogic Fix / ImplementationHardware OptimizationMathematical Core (find_event)Replaced linear step-estimation with Quadratic Interpolation (Newton form) for affine parameter $\lambda$ and Lagrange Interpolation for state reconstruction. Executes strictly on registers; prevents VRAM stalls by eliminating global memory fetches during root-finding. Source Physics (handle_source)Implemented 2D orthonormal basis projection ($y_s, z_s$) and radial filtering ($r_{min} < r < r_{max}$). Registered via par.register_CodeParameters to utilize the 64KB Constant Memory cache. Camera Window (handle_window)Implemented pixel-grid mapping and persistence of crossing coordinates ($t_w, L_w$) without terminating the ray. Uses BHAH_HD_FUNC for zero-overhead inlining into the compute kernel. Orchestration (event_manager)Integrated sign-change detection logic ($val > 10^{-10}$) against persistent "previous side" flags. Uses bool *restrict pointers to minimize memory footprint while tracking crossing events across integration steps. 3. Batch Integrator Memory Allocation BlocksTo support the event_detection_manager, you must allocate persistent boolean flags in the batch_integrator_numerical.py script. These track the photon's position relative to the target planes across integration steps. Host-Side Pinned Memory AllocationInsert this into your host-side setup where all_photons is initialized: C// Allocate persistence flags in Pinned Memory for fast H2D/D2H transfers
-bool *all_photons_on_pos_window;
-bool *all_photons_on_pos_source;
-BHAH_MALLOC_PINNED(all_photons_on_pos_window, num_rays * sizeof(bool));
-BHAH_MALLOC_PINNED(all_photons_on_pos_source, num_rays * sizeof(bool));
 
-// Initialize all rays as being on one side of the planes (logic dependent)
-for(long int i=0; i<num_rays; i++) {
-    all_photons_on_pos_window[i] = true;
-    all_photons_on_pos_source[i] = true;
-}
-Device-Side Bundle AllocationInsert this into the "Streaming Bundle" allocation section (where f_bundle is defined): C// Persistence flags for the active bundle (Double-Buffered)
-bool *on_pos_window_prev_bundle[2];
-bool *on_pos_source_prev_bundle[2];
 
-for(int i=0; i<2; i++) {
-    BHAH_MALLOC_DEVICE(on_pos_window_prev_bundle[i], BUNDLE_CAPACITY * sizeof(bool));
-    BHAH_MALLOC_DEVICE(on_pos_source_prev_bundle[i], BUNDLE_CAPACITY * sizeof(bool));
-}
+Workflow & Implementation Guide:
+"""
+Singularity-Axiom: Batch Integrator Workflow & Implementation Guide
 
+MISSION:
+Generate the Host-side C orchestrator (`batch_integrator_numerical.c`) that manages the entire lifecycle of the relativistic ray tracing simulation.
+The orchestrator must implement the "Split-Pipeline" architecture by coordinating memory transfers and kernel launches in the specific sequence detailed below.
+
+--- PHASE 1: INFRASTRUCTURE & MEMORY SETUP ---
+1. Host Allocation:
+   - Initialize the `PhotonStateSoA` (Master Storage) in Pinned Memory to hold the state of all $N$ rays.
+   - Initialize the `TimeSlotManager` (TSM) structure.
+   - Allocate Pinned Memory buffers for `f_bundle`, `h_bundle`, `status_bundle`, etc., to serve as the "Bridge" between Host and Device.
+
+2. VRAM Scratchpad Allocation (The "Split-Pipeline" Enablers):
+   - Allocate Global VRAM buffers to persist data between discrete kernel launches:
+     * `d_f_bundle`: The primary state vector bundle.
+     * `d_f_temp_bundle`: Intermediate state for RKF45 stages.
+     * `d_k_bundle`: Huge buffer to store derivatives for all 6 RKF45 stages ($54 \times Capacity$).
+     * `d_metric_bundle`: Storage for $g_{\mu\nu}$.
+     * `d_connection_bundle`: Storage for $\Gamma^\alpha_{\beta\gamma}$.
+     * `d_h_bundle`: Storage for adaptive step sizes.
+
+--- PHASE 2: INITIALIZATION SEQUENCE ---
+*Goal: Populate the Master Storage with valid $t=0$ initial conditions.*
+
+1. Kernel Setup:
+   - Calculate camera basis vectors and window coordinates on the Host.
+   - Configure launch parameters (grid/block dims).
+
+2. Kernel Launch A (Geometry):
+   - Call `set_initial_conditions_kernel`.
+   - Input: Camera params.
+   - Output: `d_f_bundle` (Spatial $x, p$ set; $p^t=0$), `d_h_bundle` (Initialized to default).
+
+3. Kernel Launch B (Metric Pre-Calc):
+   - Call `batch_interpolation_kernel`.
+   - Input: `d_f_bundle`.
+   - Output: `d_metric_bundle`.
+   - CRITICAL: Pass `NULL` for the connection bundle pointer to skip expensive Christoffel calculations here.
+
+4. Kernel Launch C (Constraint Solving):
+   - Call `p0_reverse_kernel`.
+   - Input: `d_f_bundle`, `d_metric_bundle`.
+   - Output: `d_f_bundle` (Updates $f[4]$ to satisfy $H=0$).
+
+5. Host Sync:
+   - Copy the fully initialized `d_f_bundle` back to the Host `PhotonStateSoA`.
+   - Seed the TSM: Bin all photons into the first time slot.
+
+--- PHASE 3: THE TEMPORAL LOOP (THE ENGINE) ---
+*Goal: Process photons in time-ordered batches to ensure synchronization.*
+
+1. Loop through Time Slots (`slot_idx`):
+   - While the current slot has active photons:
+     a. TSM Extraction: Use `slot_remove_chunk` to fill the Pinned Memory "Bridge" buffers with a batch of ray indices.
+     b. H2D Transfer: Upload `f`, `h`, and persistence flags to VRAM (`d_f_bundle`, etc.).
+
+2. The Split-Pipeline Integration Loop (GPU):
+   - Iterate `stage` from 1 to 6:
+     * Step A (Interp):
+       - Call `batch_interpolation_kernel`.
+       - Input: `d_f_temp_bundle` (or `d_f_bundle` if stage==1).
+       - Output: `d_metric_bundle`, `d_connection_bundle` (Pass VALID pointers for both).
+
+     * Step B (Derivatives):
+       - Call `calculate_ode_rhs_kernel`.
+       - Input: `d_f_temp`, `d_metric`, `d_connection`.
+       - Output: `d_k_bundle` (Write to offset based on `stage`).
+
+     * Step C (Step):
+       - Call `rkf45_stage_update_kernel`.
+       - Input: `d_f_bundle` (Base), `d_k_bundle`, `d_h_bundle`, `stage`.
+       - Output: `d_f_temp_bundle` (Ready for next loop).
+
+3. Finalization & Events (GPU):
+   - Call `batch_rkf45_finalize_and_control`.
+     * Input: All `d_k` stages, `d_h`, `check_energy_stability=true`.
+     * Output: Updated `d_f_bundle` (if accepted), `d_status_bundle` (Accepted/Rejected/Failed).
+   - Call `event_detection_manager`.
+     * Logic: Check geometry intersections, write to Blueprint buffer if event found.
+
+4. Feedback Cycle (Host):
+   - D2H Transfer: Download `d_f`, `d_h`, `d_status`, `d_time` to Pinned Memory.
+   - TSM Re-binning:
+     * If `ACCEPTED`: Add to future slot (calculated from new time $t$).
+     * If `REJECTED`: Add back to *current* slot for immediate retry.
+     * If `TERMINATED`: Do not re-add; ray is retired.
+
+--- PHASE 4: CLEANUP ---
+1. Final Output:
+   - Copy the Blueprint `results_buffer` from Device to Host.
+2. Deallocation:
+   - Free all VRAM Bundles, Pinned Bridges, and TSM structures.
 """
 
-Log 3:
-"
-Batch C Completion Log: Event Detection & Logic Micro-SystemProject: Singularity-Axiom (NRPy+ Native CUDA Migration)Target Hardware: NVIDIA RTX 3080 (Ampere / sm_86)Status: COMPLETE1. Executive SummaryThe Event Detection Micro-System has been refactored into a fully inlined, register-resident logic suite. The system utilizes a persistence layer to track photon positions relative to geometric planes across discrete integration steps. High-precision root-finding and geometric projections now execute entirely on the GPU with zero host synchronization during the integration loop.2. Detailed Implementation FixesConstant Memory Integration: All geometric constants (camera positions, source normals) are accessed via the 64KB Constant Memory cache (d_commondata).Orchestration Logic (event_manager):Persistence Flags: Allocated on_pos_window_prev and on_pos_source_prev boolean buffers in Pinned and Device memory to track plane-side transitions.Sign-Change Detection: Implemented crossing detection logic ($val > 10^{-10}$) to trigger high-precision root-finding.Mathematical Core:Precision Root-Finding: Integrated find_event_time_and_state using Newton-form quadratic interpolation for affine parameter $\lambda$ reconstruction.Source Physics: Implemented 2D orthonormal basis projections for the accretion disk with radial filtering ($r_{min} < r < r_{max}$).BHaH Infrastructure Compliance:Functions are decorated with BHAH_HD_FUNC to ensure zero-overhead inlining into the event_detection kernel.Registry Injection: Helper function bodies are extracted from the cfc.CFunction_dict and injected into the manager's prefunc to prevent linker errors in device code.3. Hardware Optimization & ConstraintsRegister Limit: The entire logic suite, including interpolation, operates within the thread-local $f_{local}[9]$ registers to respect the 255-register limit of the sm_86 architecture.Memory Layout: Strictly adheres to the blueprint_data_t structure defined in the BHaH_defines.h header for direct VRAM-to-Pinned extraction.
+
+
+
+Time Slot Manger (TSM) Prompt:
+"""
+MISSION:
+Migrate the Project Singularity-Axiom orchestrator to a Temporal Scheduler architecture 
+driven by the Host-side TimeSlotManager (TSM).
+
+This architecture must enforce a "Temporal Wall"—no photon in time slot N+1 is processed 
+until time slot N is completely empty—to ensure coordinate time synchronization 
+across the wavefront.
+
+Crucially, this pipeline must now support the "Split-Pipeline" kernel architecture 
+to solve register pressure issues in numerical spacetimes.
+
+HARDWARE TARGET:
+NVIDIA RTX 3080 (Ampere / sm_86).
+
+VRAM:
+10GB limit. Use a BUNDLE_CAPACITY of 32,768 photons.
+
+Registers:
+255/thread limit.
+
+CRITICAL UPDATE: 
+Do NOT rely on __shared__ memory for RKF45 intermediate storage (k vectors).
+Instead, allocate Global VRAM "Scratchpad Bundles" (d_metric, d_connection, d_k, d_f_temp, d_h_bundle) 
+to persist data between the discrete kernel launches required for the split pipeline.
+
+ORCHESTRATION PIPELINE (The "Temporal Wall"):
+
+Host Initialization:
+- Allocate Pinned Memory for the master all_photons array, the TSM, and persistence 
+  flags (on_pos_window_prev, etc.).
+- Initialize the TSM and bin all photons into their starting coordinate time slot t_min.
+
+Global Slot Loop (CPU-Side):
+- Iterate through time bins sequentially: for(int slot_idx=0; ...)
+- The Dispatch While-Loop: Inside each bin, execute while(tsm.slot_counts[slot_idx] > 0).
+- The loop only advances to the next bin once the current slot count is zero.
+
+GPU Bundle Cycle (Split-Pipeline Execution):
+
+  Step 1 (H2D - Bridge):
+  - Call slot_remove_chunk to fill a bundle and upload f_bundle, h_bundle, and 
+    persistence flags to VRAM.
+
+  Step 2 (Kernels - The Stage Loop):
+  - Execute a host-side loop for int stage = 1; stage <= 6; stage++.
+  - Within this loop, launch the following sequence to compute the derivatives 
+    for the current stage:
+
+    A. batch_interpolation_kernel:
+       Input: d_f_temp_bundle (or d_f_bundle for Stage 1).
+       Output: d_metric_bundle, d_connection_bundle.
+       Logic: Compute and store full tensor arrays in VRAM.
+
+    B. calculate_ode_rhs_kernel:
+       Input: d_f_temp_bundle, d_metric_bundle, d_connection_bundle.
+       Output: d_k_bundle (Write to offset stage * 9 * bundle_capacity).
+       Logic: Compute \dot{f} using pre-calculated tensors from VRAM.
+
+    C. rkf45_stage_update_kernel:
+       Input: d_f_bundle (Base), d_k_bundle (Accumulated), d_h_bundle, stage index.
+       Output: d_f_temp_bundle.
+       Logic: Compute the next intermediate state f_temp for the interpolation engine.
+
+  Step 3 (The Finalize & Verify Kernels):
+  - A. batch_rkf45_finalize_and_control:
+       Input: d_f_bundle, d_k_bundle, d_h_bundle, check_energy_stability=true.
+       Output: Updated d_f_bundle, d_h_bundle, d_status_bundle.
+       Logic:
+         1. Compute 4th/5th order candidates and LTE.
+         2. Adapt step size h.
+         3. Optimization: If accepted, immediately check abs(p^t). 
+            If unstable, set status to FAILURE_PT_TOO_BIG.
+
+  - B. event_detection_manager:
+       Check for Source/Window/Horizon intersections for all active rays 
+       using d_f_bundle vs d_f_prev.
+
+  Step 4 (D2H - Feedback):
+  - Retrieve updated states, coordinate times t, and statuses to Host Pinned Memory.
+
+Host-Side Feedback:
+- The CPU iterates through the returned bundle to update the TSM:
+  - TERMINATED: Retire ray and finalize results in the results_buffer.
+  - REJECTED: Re-insert into the current slot_idx for immediate retry in the next bundle.
+  - ACCEPTED: Re-insert into a future slot_idx + K based on the new coordinate time t.
+
+INFRASTRUCTURE CONSTRAINTS:
+- Use utilities.generate_kernel_and_launch_code with cfunc_decorators="__global__".
+- Access all physical parameters via Constant Memory (d_commondata).
+- Synchronize all streams (cudaStreamSynchronize) strictly at the end of each 
+  time bin to prevent "lagging" photons.
+"""
+
+
+Event detection Pipeline:
+"""
+MISSION: Implement a register-resident Event Detection Micro-System that executes entirely on the GPU within a "Streaming Bundle" architecture. The system must detect transitions across geometric planes (Observer Window and Source Plane) by evaluating sign changes in the scalar product of the photon's trajectory relative to the target plane normal.
+
+HARDWARE TARGET: NVIDIA RTX 3080 (Ampere / sm_86).
+
+VRAM & MEMORY ARCHITECTURE:
+* Persistent Tracking: Use Pinned (Host) and Device (VRAM) boolean buffers (on_pos_window_prev, on_pos_source_prev) to track the "previous side" of each plane across discrete integration steps.
+
+* Register Residence: All logic, interpolation, and basis reconstructions must occur within the thread-local f_local[9] registers to respect the 255-register hardware limit.
+
+* Constant Memory: Access all geometric parameters (camera positions, source normals, and radial bounds) via the 64KB d_commondata cache.
+
+THE EVENT DETECTION PIPELINE (Thread-Level Execution):
+
+1. Coordinate Hydration:
+   * Load current state $f^\mu_{n}$ and history $f^\mu_{n-1}$, $f^\mu_{n-2}$ from the VRAM bundle.
+   * Retrieve persistent side-flags from the bundle buffer.
+
+2. Sign-Change Detection:
+   * Evaluate the plane equation $V = n_i x^i - d$ for the current step.
+   * Compare current side against prev flag using a stability threshold of $val > 10^{-10}$.
+
+3. High-Precision Reconstruction (On Detection):
+   * Root-Finding: If a sign change is detected, invoke find_event_time_and_state.
+   * Interpolation: Utilize Quadratic Interpolation (Newton form) for the affine parameter $\lambda$ and Lagrange Interpolation for the 9-component state reconstruction at the exact intersection boundary.
+
+4. Geometric Filtering & Termination:
+   * Observer Window: Project the 3D intersection into the local orthonormal basis $(y_w, z_w)$. If within bounds, update the results_buffer (blueprint) without terminating the ray.
+   * Source Emission Plane: Project into local coordinates $(y_s, z_s)$. Apply radial filtering ($r_{min} < r < r_{max}$). If valid, update the blueprint and set status to TERMINATION_TYPE_SOURCE_PLANE.
+
+5. State Persistence:
+   * Update the prev side-flags in VRAM to the current state for the next integration cycle.
+
+INFRASTRUCTURE CONSTRAINTS:
+
+* Metaprogramming: Use utilities.generate_kernel_and_launch_code with cfunc_decorators="__global__".
+
+* Inlining: All helper functions must be decorated with BHAH_HD_FUNC for zero-overhead inlining into the master kernel.
+
+* Data Integrity: Ensure the results_buffer is copied Host-to-Device before the kernel launch to prevent overwriting previous successful detections.
 """
 
 
@@ -456,39 +504,59 @@ Scripts for big compare:
 
 COMMENTING STANDARDS FOR SCRIPT GENERATION. (ONLY NEED TO WORRY ABOUT IT ASKED TO GENERATE SCRIPT)
 """"
-Role and Objective: You are an expert computational physicist and High-Performance Computing (HPC) software engineer.Your task is to refactor, format, and exhaustively comment the provided Python metaprogramming scripts that generate C code for a physics engine.Do not change the underlying mathematical or algorithmic logic. You must apply the following rigorous commenting and structural standards without exception.
+Role and Objective: You are an expert computational physicist and High-Performance Computing (HPC) software engineer. Your task is to refactor, format, and exhaustively comment the provided Python metaprogramming scripts that generate C code for a physics engine. Do not change the underlying mathematical or algorithmic logic. You must apply the following rigorous commenting and structural standards without exception.
 
-Professional, Ahistorical Commenting (NO REFACTORING REFERENCES)All comments and descriptions must be highly professional and describe the code exactly as it currently exists. You must be strictly ahistorical. Do not reference the fact that the code was refactored, updated, fixed, or changed.
-	BAD: "This module strips the previous OpenMP loop dispatcher in favor of a single-thread inline helper function."
-	GOOD: "This module uses a single-thread inline helper function."Just state what the code is and what it does.
+Professional, Ahistorical Commenting (NO REFACTORING REFERENCES)
+All comments and descriptions must be highly professional and describe the code exactly as it currently exists.
+You must be strictly ahistorical. Do not reference the fact that the code was refactored, updated, fixed, or changed.
+BAD: "This module strips the previous OpenMP loop dispatcher in favor of a single-thread inline helper function."
+GOOD: "This module uses a single-thread inline helper function." Just state what the code is and what it does.
 
-Metaprogramming Distinction (Python vs. C)You must strictly delineate between documenting the Python generator script and the resulting C code.
-	Python Comments (#): Use exclusively to explain metaprogramming logic, string manipulation, and Python-side orchestration.
-	C Comments (// or / /): Use within the generated C strings to explain physics, runtime execution, memory layout, and hardware architecture.
+Metaprogramming Distinction (Python vs. C)
+You must strictly delineate between documenting the Python generator script and the resulting C code.
+Python Comments (#): Use exclusively to explain metaprogramming logic, string manipulation, and Python-side orchestration.
+C Comments (// or / /): Use within the generated C strings to explain physics, runtime execution, memory layout, and hardware architecture.
 
-Python-Side Documentation 
-	StandardsModule-Level Docstrings: The top-level Python script must begin with a comprehensive, multi-sentence docstring explaining the high-level architecture, purpose, and physics of the module. Cut the fluff.
-	Mandatory Sign-off: The module docstring MUST conclude with this exact string on the absolute final line: Author: Dalton J. Moone. Do not add trailing whitespace, dates, or license fluff after this name.
-	Function-Level Docstrings: Directly below every Python function definition, you must include a docstring.
-		Input parameters must be documented using the :param name: description format.
-		All errors or exceptions raised in the function must be defined using the :raises ErrorType: description format.
+Python-Side Documentation Standards
+Module-Level Docstrings: The top-level Python script must begin with a comprehensive, multi-sentence docstring explaining the high-level architecture, purpose, and physics of the module.
+Cut the fluff.
+Mandatory Sign-off: The module docstring MUST conclude with this exact string on the absolute final line: Author: Dalton J. Moone.
+Do not add trailing whitespace, dates, or license fluff after this name.
+Function-Level Docstrings: Directly below every Python function definition, you must include a docstring.
+Input parameters must be documented using the :param name: description format.
+All errors or exceptions raised in the function must be defined using the :raises ErrorType: description format.
 
 C-Side Variable, Struct, and Math Documentation
-	Structs & Variables: Every new instance of a variable or struct member must have a comment detailing its physical meaning or structural purpose. No "naked" variables.
-	Comment Sizing: Use inline C-comments (//) for concise explanations (< 100 characters). Use a preceding block comment for dense, multi-sentence explanations.Strict LaTeX 		 Enforcement: All physical variables, tensor indices, and mathematical equations within C comments and the desc string MUST be wrapped in standard LaTeX delimiters (e.g., $p_t$, $\Gamma^a_{bc}$).
+Structs & Variables: Every new instance of a variable or struct member must have a comment detailing its physical meaning or structural purpose.
+No "naked" variables.
+Comment Sizing: Use inline C-comments (//) for concise explanations (< 100 characters).
+Use a preceding block comment for dense, multi-sentence explanations.
+
+Strict LaTeX Enforcement: All physical variables, tensor indices, and mathematical equations within C comments and the desc string MUST be wrapped in standard LaTeX delimiters (e.g., $p_t$, $\Gamma^a_{bc}$).
 Numerical Justification: When documenting an equation, limit the explanation to a brief, single-sentence functional justification of why the numerical method was chosen (e.g., for speed or stability), avoiding dense theoretical derivations or lengthy physics lectures.
 
-C-Side GPU Memory, Data Transfers, and OpenMP 
-	PragmasMemory/Transfers: Every target allocation (omp_target_alloc), memory copy (omp_target_memcpy), or map clause (#pragma omp target map) must include a detailed comment. Explicitly state the direction of the transfer (e.g., Host-to-Device) and the hardware justification (e.g., "Mapped to device to prevent warp divergence").
-	Parallelization & Errors: Document OpenMP parallel regions by explicitly stating why the loop is safe from race conditions (e.g., "independent photon trajectories"). For error blocks, state if an exit is a fatal unrecoverable error or a soft warning.
+C-Side GPU Memory, Data Transfers, and CUDA Kernels
+Memory/Transfers: Every device allocation (cudaMalloc), memory copy (cudaMemcpy), or kernel launch (<<<...>>>) must include a detailed comment.
+Explicitly state the direction of the transfer (e.g., Host-to-Device) and the hardware justification (e.g., "Pinned memory used to maximize PCIe bandwidth").
+Parallelization & Errors: Document CUDA kernels by explicitly stating thread hierarchy logic (e.g., "Thread ID maps to unique photon index").
+For error blocks, state if an exit is a fatal unrecoverable error or a soft warning.
 
 C-Side Logical Sectioning & Block Comments
-	Visually separate long, complex C strings into logical blocks using clear dividers (e.g., // --- EVENT DETECTION & TERMINATION CHECKS ---). Precede each section with a fluff-free description of the algorithmic steps and explicitly justify why this architectural step occurs at this specific point in the pipeline.Strict Ordering and Formatting for cfc.register_CFunctionAll string variables representing the inputs must be defined sequentially immediately above the function call.
-	The Master Order: The arguments defined and passed into register_CFunction MUST follow this canonical top-to-bottom sequence: prefunc, includes, desc, cfunc_type, name, params, include_CodeParameters_h, body, postfunc. However if prefunc or postfunc doesn't exist in the script do not add it or put it in. That will cause bloat. 
-	Example of Strict Ordering:Notice how all variables passed to register_CFunction are defined immediately above the call, in the exact order they appear in the final generated C script:Python    # ... [Docstrings, Python logic, and SymPy setup] ...
+Visually separate long, complex C strings into logical blocks using clear dividers (e.g., // --- EVENT DETECTION & TERMINATION CHECKS ---).
+Precede each section with a fluff-free description of the algorithmic steps and explicitly justify why this architectural step occurs at this specific point in the pipeline.
+
+Strict Ordering and Formatting for cfc.register_CFunction
+All string variables representing the inputs must be defined sequentially immediately above the function call.
+The Master Order: The arguments defined and passed into register_CFunction MUST follow this canonical top-to-bottom sequence: prefunc, includes, desc, cfunc_type, name, params, include_CodeParameters_h, body, postfunc.
+However if prefunc or postfunc doesn't exist in the script do not add it or put it in. That will cause bloat.
+
+Example of Strict Ordering:
+Notice how all variables passed to register_CFunction are defined immediately above the call, in the exact order they appear in the final generated C script:
+
+Python    # ... [Docstrings, Python logic, and SymPy setup] ...
 prefunc = """
 #ifdef USE_GPU
-#pragma omp declare target
+__device__ __forceinline__
 #endif
 """
 includes = ["BHaH_defines.h"]
@@ -512,11 +580,7 @@ body = f"""
 {body_math}
 {postamble}
 """
-postfunc = """
-#ifdef USE_GPU
-#pragma omp end declare target
-#endif
-"""
+# Note: postfunc is omitted if not needed for CUDA specific cleanup
 cfc.register_CFunction(
     prefunc=prefunc,
     includes=includes,
@@ -525,8 +589,14 @@ cfc.register_CFunction(
     params=params,
     body=body,
     include_CodeParameters_h=False,
-    postfunc=postfunc,
+    postfunc="",
 )
-The desc String Formatting: The description string MUST be a multi-line, triple-quoted block string. It must utilize the Doxygen @brief tag and include @param tags explaining the C-function arguments.
-Execution:Review the provided code. Refactor and comment it strictly adhering to every rule above. Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
+
+The desc String Formatting: The description string MUST be a multi-line, triple-quoted block string.
+It must utilize the Doxygen @brief tag and include @param tags explaining the C-function arguments.
+
+Execution:
+Review the provided code.
+Refactor and comment it strictly adhering to every rule above.
+Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
 """"

@@ -96,6 +96,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     params = "const PhotonStateSoA *restrict all_photons, const long int num_rays, blueprint_data_t *restrict result"
 
     # Python: Generate the loop body for the streaming bundle architecture.
+    # Note: Includes CRITICAL FIX to pre-load results from Host to Device.
     loop_body = f"""
     // Variable current_chunk_size defines the active range for the current streaming bundle.
     const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY);
@@ -111,6 +112,11 @@ def calculate_and_fill_blueprint_data_universal() -> None:
                    all_photons->f + (m * num_rays) + start_idx,
                    sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);
     }}
+
+    // Pre-load existing results from Host to Device.
+    // This prevents valid Window/Source hits from being overwritten with garbage by the D2H copy.
+    cudaMemcpy(d_result_bundle, result + start_idx,
+               sizeof(blueprint_data_t) * current_chunk_size, cudaMemcpyHostToDevice);
 
     // --- KERNEL LAUNCH ---
     {launch_body}
