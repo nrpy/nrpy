@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, cast
 
 import sympy as sp
 
@@ -220,7 +220,7 @@ class SO3Expressions:
         :param aU: Vector.
         :return: Norm |a|.
         """
-        return sp.sqrt(SO3Expressions.dot_product3(aU, aU))
+        return cast(sp.Expr, sp.sqrt(SO3Expressions.dot_product3(aU, aU)))
 
     @staticmethod
     def cross_product3(aU: List[sp.Expr], bU: List[sp.Expr]) -> List[sp.Expr]:
@@ -340,7 +340,7 @@ class SO3Expressions:
         :param R: Matrix.
         :return: trace(R).
         """
-        return R[0][0] + R[1][1] + R[2][2]
+        return cast(sp.Expr, R[0][0] + R[1][1] + R[2][2])
 
     @staticmethod
     def axis_angle_general_branch_axis(
