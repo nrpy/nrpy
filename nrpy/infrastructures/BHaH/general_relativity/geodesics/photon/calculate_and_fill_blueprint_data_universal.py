@@ -30,6 +30,13 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     }
 
     kernel_body = r"""
+    // --- MACRO DEFINITIONS ---
+    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // Layout: [Component][RayID]
+    #ifndef IDX_LOCAL
+    #define IDX_LOCAL(c, ray_id, N) ((c) * (N) + (ray_id))
+    #endif
+
     // --- THREAD IDENTIFICATION ---
     // Local 1D thread mapping within the current VRAM bundle.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x;

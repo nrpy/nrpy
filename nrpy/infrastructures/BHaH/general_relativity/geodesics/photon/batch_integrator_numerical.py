@@ -2,38 +2,27 @@
 Orchestration module for the Project Singularity-Axiom numerical integration pipeline.
 
 This module generates the high-level C orchestrator responsible for managing the
-life cycle of photon trajectories in curved spacetimes. It implements a Native CUDA
-Streaming Bundle architecture that strictly adheres to the following physical constraints:
-
-1. Memory Architecture: Utilizes a flattened Structure of Arrays (SoA).
-   Memory is transferred in strided bundles of 32,768 photons to protect the 10GB VRAM hardware limit.
-2. Dual-Stream Overlap: Employs `cudaStream_t` to overlap the memory transfers
-   of Batch N+1 with the computational integration of Batch N.
-3. Temporal Binning: Employs a lock-free `TimeSlotManager` remaining strictly on
-   the host CPU to bin active rays by physical coordinate time ($t$).
-4. Stream Compaction: Implements a staged integration pattern where active photons
-   are processed in dense bundles. Uses hardware-optimized warp-aggregated atomics
-   to circumvent memory contention and ensure saturation.
-
+life cycle of photon trajectories in numerical spacetimes. It strictly implements a 
+Split-Pipeline architecture, decoupling the Runge-Kutta-Fehlberg 4(5) integration 
+kernels. Intermediate tensors and state vectors are persisted in Global VRAM via 
+flattened Structure of Arrays (SoA) scratchpad bundles. This design avoids register 
+spilling and cache thrashing on the hardware by trading maximum VRAM bandwidth for 
+register stability.
 Author: Dalton J. Moone.
 """
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 def batch_integrator_numerical(spacetime_name: str) -> None:
     """
-    Generate the Native CUDA orchestrator for the batched integration pipeline.
+    Generate the Native CUDA orchestrator for the batched numerical integration pipeline.
 
-    Metaprograms a dual-stream architecture pipeline generating independent CUDA kernels 
-    for stream compaction, RKF45 numerical integration, and event detection. Data transfers 
-    are strictly scheduled to map thread-local registers over VRAM to prevent GPU bottlenecks.
-    
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
     :raises ValueError: If an unsupported spacetime metric identifier is provided.
     """
-    # Python: Register simulation control parameters.
+    
+    # Register core physics and numerical simulation parameters to the global struct.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -58,534 +47,418 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         add_to_parfile=True,
     )
 
-    # --- KERNEL 1: INIT BATCH ---
-    # Hydrates the thread-local state for a fresh bundle of photons.
-    init_body = r"""
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < bundle_size) {
-        // Reset status flags for the new integration cycle.
-        needs_step_bundle[tid] = true;
-        status_bundle[tid] = ACTIVE;
-        retries_bundle[tid] = 0;
-        
-        // Optimization: Access parameters from Constant Memory Cache (64KB).
-        h_bundle[tid] = d_commondata.numerical_initial_h;
-        
-        // Initialize history arrays for event detection to current state.
-        for(int k=0; k<9; k++) {
-            double val = f_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)];
-            f_p_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)] = val;
-            f_p_p_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)] = val;
-        }
-    }
-    """
-    init_prefunc, init_launch = generate_kernel_and_launch_code(
-        kernel_name="init_batch",
-        kernel_body=init_body,
-        arg_dict_cuda={
-            "f_bundle": "const double *restrict",
-            "f_p_bundle": "double *restrict",
-            "f_p_p_bundle": "double *restrict",
-            "h_bundle": "double *restrict",
-            "needs_step_bundle": "bool *restrict",
-            "status_bundle": "termination_type_t *restrict",
-            "retries_bundle": "int *restrict",
-            "bundle_size": "const long int"
-        },
-        arg_dict_host={},
-        parallelization="cuda",
-        launch_dict={
-            "blocks_per_grid": ["(bundle_size + 63) / 64"],
-            "threads_per_block": ["64", "1", "1"],
-            "stream": "s_compute"
-        },
-        launchblock_with_braces=True,
-        cfunc_decorators="__global__"
-    )
+    prefunc = ""
 
-    # --- KERNEL 2: WARP-AGGREGATED STREAM COMPACTION ---
-    # Filters out inactive rays using warp-level intrinsics to maintain high SIMD efficiency.
-    # Note: Uses atomicAdd as requested in the master prompt.
-    compaction_body = r"""
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    int lane = threadIdx.x % 32;
-
-    // 1. Predicate: Is this ray active?
-    bool active = (tid < bundle_size) && needs_step_bundle[tid] && (status_bundle[tid] == ACTIVE);
-    
-    // 2. Warp Vote: The active thread mask is generated using hardware intrinsics.
-    unsigned int mask = __ballot_sync(0xFFFFFFFF, active);
-    
-    // 3. EXIT IF WARP EMPTY (Crucial Check for defined behavior of __ffs).
-    if (mask == 0) return;
-    
-    // 4. Calculate Offsets using population counts.
-    int lane_offset = __popc(mask & ((1 << lane) - 1));
-    int warp_total = __popc(mask);
-
-    int global_base = 0;
-    
-    // 5. Elect Leader (First Active Lane) to Reserve Global Space.
-    if (active && lane_offset == 0) {
-        // The warp leader performs a single atomic transaction.
-        global_base = atomicAdd(d_active_count, warp_total);
-    }
-    
-    // 6. Broadcast Base to Warp.
-    // __ffs(mask) returns 1-based index of first set bit. Subtract 1 for lane index.
-    global_base = __shfl_sync(mask, global_base, __ffs(mask) - 1);
-
-    // 7. Write to Dense Array.
-    if (active) {
-        int pos = global_base + lane_offset;
-        compacted_local_ids[pos] = tid;
-    }
-    """
-    compaction_prefunc, compaction_launch = generate_kernel_and_launch_code(
-        kernel_name="stream_compaction",
-        kernel_body=compaction_body,
-        arg_dict_cuda={
-            "needs_step_bundle": "const bool *restrict",
-            "status_bundle": "const termination_type_t *restrict",
-            "compacted_local_ids": "int *restrict",
-            "d_active_count": "int *restrict",
-            "bundle_size": "const long int"
-        },
-        arg_dict_host={},
-        parallelization="cuda",
-        launch_dict={
-            "blocks_per_grid": ["(bundle_size + 63) / 64"],
-            "threads_per_block": ["64", "1", "1"],
-            "stream": "s_compute"
-        },
-        launchblock_with_braces=True,
-        cfunc_decorators="__global__"
-    )
-
-    # --- KERNEL 3: FUSED RKF45 INTEGRATION ---
-    # The Physics Core. Uses Shared Memory for intermediate states.
-    rkf45_body = r"""
-    int cid = blockIdx.x * blockDim.x + threadIdx.x;
-    // Early exit if this thread index exceeds the number of active rays packed by the compaction kernel.
-    if (cid >= *d_active_count) return;
-
-    int local_idx = compacted_local_ids[cid];
-
-    // Thread-local register allocations for the 10-component metric $g_{\mu\nu}$ and 40-component connection $\Gamma^\alpha_{\beta\gamma}$.
-    // Retaining these strictly in registers prevents catastrophic VRAM spilling and adheres to the 255-register limit of the sm_86 architecture.
-    double metric_local[10];
-    double conn_local[40];
-
-    // Shared memory allocation for the 54-component $k$-array spanning 6 RKF45 stages.
-    // Ordering the array with the 64-thread dimension last ensures contiguous, coalesced memory access across the warp.
-    // [Stage][Component][ThreadID]
-    __shared__ double k_shared[6][9][64];
-
-    double f_start_local[9];
-    double f_temp_local[9];
-
-    // Load initial state from VRAM to Registers.
-    for(int k=0; k<9; k++) {
-        f_start_local[k] = f_bundle[IDX_LOCAL(k, local_idx, BUNDLE_CAPACITY)];
-        f_temp_local[k] = f_start_local[k];
-    }
-
-    // --- RKF45 Integration Loop (6 Stages) ---
-    for(int stage = 1; stage <= 6; stage++) {
-        // Fused metric/connection evaluation.
-        placeholder_interpolation_engine_KerrSchild_Cartesian(&d_commondata, f_temp_local, metric_local, conn_local);
-
-        double k_local[9];
-        // Calculate derivatives (Geodesic Equation).
-        calculate_ode_rhs(f_temp_local, metric_local, conn_local, k_local);
-
-        // Store result in Shared Memory.
-        for(int c=0; c<9; c++) {
-            k_shared[stage-1][c][threadIdx.x] = k_local[c];
-        }
-
-        if (stage < 6) {
-            // Passes the 3D shared memory base pointer directly to evaluate the intermediate RKF45 stages.
-            calculate_rkf45_stage_f_temp(stage + 1, f_start_local, &k_shared[0][0][threadIdx.x], h_bundle[local_idx], f_temp_local);
-        }
-    }
-
-    double f_out_local[9];
-    double f_err_local[9];
-    // Finalize step and compute error.
-    rkf45_kernel(f_start_local, &k_shared[0][0][threadIdx.x], h_bundle[local_idx], f_out_local, f_err_local);
-
-    // Update step size and checking acceptance in registers.
-    // Optimization: Pass address of d_commondata to access Constant Memory.
-    bool accepted = update_photon_state_and_stepsize(f_start_local, f_start_local, f_out_local, f_err_local, &h_bundle[local_idx], &affine_param_bundle[local_idx], &retries_bundle[local_idx], &d_commondata);
-
-    if (!accepted) {
-        if (retries_bundle[local_idx] > d_commondata.rkf45_max_retries) {
-            status_bundle[local_idx] = FAILURE_RKF45_REJECTION_LIMIT;
-            needs_step_bundle[local_idx] = false;
-        } else {
-            // Signal that at least one ray is still active and retrying.
-            *d_bundle_has_active = true;
-        }
-    } else {
-        needs_step_bundle[local_idx] = false;
-
-        // Perform VRAM-local state rotation entirely within VRAM, bypassing historical host synchronization.
-        // f_p_p <- f_p; f_p <- f_start; f <- f_out
-        for(int k=0; k<9; ++k) {
-            f_p_p_bundle[IDX_LOCAL(k, local_idx, BUNDLE_CAPACITY)] = f_p_bundle[IDX_LOCAL(k, local_idx, BUNDLE_CAPACITY)];
-            f_p_bundle[IDX_LOCAL(k, local_idx, BUNDLE_CAPACITY)] = f_start_local[k];
-            f_bundle[IDX_LOCAL(k, local_idx, BUNDLE_CAPACITY)] = f_out_local[k];
-        }
-    }
-    """
-    rkf45_prefunc, rkf45_launch = generate_kernel_and_launch_code(
-        kernel_name="fused_rkf45",
-        kernel_body=rkf45_body,
-        arg_dict_cuda={
-            "f_bundle": "double *restrict",
-            "f_p_bundle": "double *restrict",
-            "f_p_p_bundle": "double *restrict",
-            "h_bundle": "double *restrict",
-            "affine_param_bundle": "double *restrict",
-            "needs_step_bundle": "bool *restrict",
-            "status_bundle": "termination_type_t *restrict",
-            "retries_bundle": "int *restrict",
-            "compacted_local_ids": "const int *restrict",
-            "d_active_count": "const int *restrict",
-            "d_bundle_has_active": "bool *restrict"
-        },
-        arg_dict_host={},
-        parallelization="cuda",
-        launch_dict={
-            "blocks_per_grid": ["(BUNDLE_CAPACITY + 63) / 64"], 
-            "threads_per_block": ["64", "1", "1"],
-            "stream": "s_compute",
-            "sm": 27648 # Explicitly reserve 27KB Shared Memory for k_shared.
-        },
-        launchblock_with_braces=True,
-        cfunc_decorators="__global__"
-    )
-
-    # --- KERNEL 4: EVENT DETECTION ---
-    # Black-box placeholder that validates termination conditions.
-    event_body = r"""
-    int tid = blockIdx.x * blockDim.x + threadIdx.x;
-    if (tid < bundle_size && status_bundle[tid] == ACTIVE) {
-        double f_local[9], f_p_local[9], f_p_p_local[9];
-        // Load history from VRAM.
-        for(int k=0; k<9; k++) {
-            f_local[k] = f_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)];
-            f_p_local[k] = f_p_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)];
-            f_p_p_local[k] = f_p_p_bundle[IDX_LOCAL(k, tid, BUNDLE_CAPACITY)];
-        }
-
-        // Call the event detection manager (inlined logic).
-        // Optimization: Manager implicitly uses d_commondata global.
-        event_detection_manager(f_local, f_p_local, f_p_p_local, 
-                                &status_bundle[tid], 
-                                &results_buffer[start_idx + tid],
-                                &on_pos_window_prev_bundle[tid], 
-                                &on_pos_source_prev_bundle[tid]);
-    }
-    """
-    event_prefunc, event_launch = generate_kernel_and_launch_code(
-        kernel_name="event_detection",
-        kernel_body=event_body,
-        arg_dict_cuda={
-            "f_bundle": "const double *restrict",
-            "f_p_bundle": "const double *restrict",
-            "f_p_p_bundle": "const double *restrict",
-            "status_bundle": "termination_type_t *restrict",
-            "results_buffer": "blueprint_data_t *restrict",
-            "on_pos_window_prev_bundle": "bool *restrict",   
-            "on_pos_source_prev_bundle": "bool *restrict",   
-            "start_idx": "const long int",
-            "bundle_size": "const long int"
-        },
-        arg_dict_host={},
-        parallelization="cuda",
-        launch_dict={
-            "blocks_per_grid": ["(bundle_size + 63) / 64"],
-            "threads_per_block": ["64", "1", "1"],
-            "stream": "s_compute"
-        },
-        launchblock_with_braces=True,
-        cfunc_decorators="__global__"
-    )
-
-    # --- MAIN C-FUNCTION GENERATION ---
     includes = [
         "BHaH_defines.h", 
         "BHaH_device_defines.h", 
         "BHaH_function_prototypes.h", 
         "cuda_runtime.h", 
-        "math.h", 
         "cuda_intrinsics.h"
     ]
-    desc = r"""@brief Finalized Project Singularity-Axiom Orchestrator (Native CUDA Architecture).
 
-    This function serves as the master entry point for the ray-tracing pipeline.
-    It performs the following high-level operations:
-    1. Memory Management: Allocates dual-stream buffers in VRAM and Pinned Host RAM.
-    2. Stream Architecture: Executes 9-strided asynchronous bridge transfers overlapping computation.
-    3. Staged Integration: Executes the fused RKF45 logic leveraging explicit `__shared__` memory buffers.
-    4. Event Processing: Evaluates local coordinate transformations for spatial planes.
+    desc = r"""@brief Orchestrates the batched Split-Pipeline relativistic ray tracing loop.
 
-    @param commondata Struct containing global spacetime parameters.
-    @param num_rays The total number of photon trajectories to simulate, represented as $num\_rays$.
-    @param results_buffer Device array storing the final physical intersections and bounds, mapped via $f^\mu$."""
-    
+    This function serves as the central Host-bound CPU loop for evaluating photon
+    geodesics. It utilizes a TimeSlotManager to bin active rays by their physical 
+    coordinate time $t$. The Split-Pipeline architecture maps mathematical tensors 
+    like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to VRAM scratchpads to
+    respect the 255-register hardware limit per thread on sm_86 architecture.
+
+    @param commondata Struct containing global spacetime and numerical tolerances.
+    @param num_rays The total number of photon trajectories to simulate.
+    @param results_buffer Device array storing the final physical intersections."""
+
     cfunc_type = "void"
+
     name = "batch_integrator_numerical"
+
     params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
 
-    # Python: Extract physical inline helpers from the global CFunction_dict registry.
-    metric_func = cfc.CFunction_dict[f"g4DD_metric_{spacetime_name}"].full_function
-    conn_func = cfc.CFunction_dict[f"connections_{spacetime_name}"].full_function
-    interp_func = cfc.CFunction_dict[f"placeholder_interpolation_engine_{spacetime_name}"].full_function
-    rhs_func = cfc.CFunction_dict["calculate_ode_rhs"].full_function
+    include_CodeParameters_h = True
 
-    # Python: Enforce linear top-down concatenation for C-compiler compliance. Tensor math precedes interpolation, which precedes ODE evaluations.
-    prefunc = metric_func + conn_func + interp_func + rhs_func + init_prefunc + compaction_prefunc + rkf45_prefunc + event_prefunc
+    body = fr"""
+    // --- 1. HOST & DEVICE ALLOCATION ---
+    
+    // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
+    PhotonStateSoA all_photons_host;
 
-    # Python: Manually patch generated launch strings to index dual-stream arrays (e.g., f_bundle[s_compute]).
-    # This bypasses the ignored arg_dict_host and corrects pointer types without altering the locked gpu_kernel.py.
-    init_launch = init_launch.replace("f_bundle, ", "f_bundle[s_compute], ").replace("h_bundle, ", "h_bundle[s_compute], ").replace("needs_step_bundle, ", "needs_step_bundle[s_compute], ").replace("status_bundle, ", "status_bundle[s_compute], ").replace("retries_bundle, ", "retries_bundle[s_compute], ")
-    init_launch = init_launch.replace("f_p_bundle, ", "f_p_bundle[s_compute], ").replace("f_p_p_bundle, ", "f_p_p_bundle[s_compute], ")
-    
-    compaction_launch = compaction_launch.replace("needs_step_bundle, ", "needs_step_bundle[s_compute], ").replace("status_bundle, ", "status_bundle[s_compute], ")
-    
-    rkf45_launch = rkf45_launch.replace("f_bundle, ", "f_bundle[s_compute], ").replace("h_bundle, ", "h_bundle[s_compute], ").replace("affine_param_bundle, ", "affine_param_bundle[s_compute], ").replace("needs_step_bundle, ", "needs_step_bundle[s_compute], ").replace("status_bundle, ", "status_bundle[s_compute], ").replace("retries_bundle, ", "retries_bundle[s_compute], ")
-    rkf45_launch = rkf45_launch.replace("f_p_bundle, ", "f_p_bundle[s_compute], ").replace("f_p_p_bundle, ", "f_p_p_bundle[s_compute], ")
-    
-    event_launch = event_launch.replace("on_pos_window_prev_bundle, ", "on_pos_window_prev_bundle[s_compute], ").replace("on_pos_source_prev_bundle, ", "on_pos_source_prev_bundle[s_compute], ").replace("f_bundle, ", "f_bundle[s_compute], ").replace("status_bundle, ", "status_bundle[s_compute], ").replace("results_buffer, ", "d_results_buffer, ")
-    event_launch = event_launch.replace("f_p_bundle, ", "f_p_bundle[s_compute], ").replace("f_p_p_bundle, ", "f_p_p_bundle[s_compute], ")
-
-    body = rf"""
-    // --- HOST INITIALIZATION ---
-    PhotonStateSoA all_photons_host; // Host-side replica of the flattened master storage.
-    
-    // Host-to-Device transfer: Pinned memory allocation ensures non-pageable memory for maximum PCIe DMA throughput.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the state vector $f^\mu$.
     BHAH_MALLOC_PINNED(all_photons_host.f, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the first derivative.
+    BHAH_MALLOC_PINNED(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the second derivative.
+    BHAH_MALLOC_PINNED(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking the physical affine parameter $\lambda$.
     BHAH_MALLOC_PINNED(all_photons_host.affine_param, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking individual integration step sizes $h$.
     BHAH_MALLOC_PINNED(all_photons_host.h, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking the current trajectory termination status.
     BHAH_MALLOC_PINNED(all_photons_host.status, sizeof(termination_type_t) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking the number of step-size rejections.
     BHAH_MALLOC_PINNED(all_photons_host.rejection_retries, sizeof(int) * num_rays);
-
-    // Allocate Pinned Memory for Persistence Flags required by Batch C logic.
+    // Host-to-Device transfer allocation: Pinned memory tracking if the photon was previously on the positive side of the window.
     BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking if the photon was previously on the positive side of the source.
     BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
 
-    TimeSlotManager tsm; // Lock-free temporal arena bounded exclusively to the Host CPU context.
-    slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
+    // Extraction buffer used by the TimeSlotManager to map sparse indices to contiguous execution blocks.
+    long int *chunk_buffer;
+    BHAH_MALLOC_PINNED(chunk_buffer, sizeof(long int) * BUNDLE_CAPACITY);
 
-    // Note: Initial conditions are assumed to be populated by the Batch A kernel prior to this call.
-    int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
-    if(initial_slot_idx != -1) {{
-        for(long int i=0; i<num_rays; ++i) slot_add_photon(&tsm, initial_slot_idx, i);
-    }}
+    // Bridge array for the state vector $f^\mu$.
+    double *f_bridge;
+    // Bridge array for the first derivative of the state vector.
+    double *f_p_bridge;
+    // Bridge array for the second derivative of the state vector.
+    double *f_p_p_bridge;
+    // Bridge array storing the affine parameter $\lambda$.
+    double *affine_bridge;
+    // Bridge array storing the current integration step size $h$.
+    double *h_bridge;
+    // Bridge array storing the current trajectory termination status.
+    termination_type_t *status_bridge;
+    // Bridge array counting the number of step-size rejections.
+    int *retries_bridge;
+    // Bridge array tracking if the photon was previously on the positive side of the window.
+    bool *on_pos_window_prev_bridge;
+    // Bridge array tracking if the photon was previously on the positive side of the source plane.
+    bool *on_pos_source_prev_bridge;
 
-    // Initialize Persistence Flags to TRUE for all rays.
-    // This provides a valid 'previous state' for the first time step, preventing false-positive event detections.
-    for(long int i=0; i<num_rays; ++i) {{
-        all_photons_host.on_positive_side_of_window_prev[i] = true;
-        all_photons_host.on_positive_side_of_source_prev[i] = true;
-    }}
+    // Allocate Bridge arrays in Host Pinned Memory to allow fast chunked transfers to the GPU.
+    BHAH_MALLOC_PINNED(f_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(f_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(f_p_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(affine_bridge, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(h_bridge, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(status_bridge, sizeof(termination_type_t) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(retries_bridge, sizeof(int) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(on_pos_window_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(on_pos_source_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY);
 
-    // --- CUDA DUAL-STREAM BUFFER ALLOCATION ---
-    cudaStream_t streams[2];
-    cudaStreamCreate(&streams[0]);
-    cudaStreamCreate(&streams[1]);
+    // Host-to-Device transfer: Maps the global spacetime constants to the device cache to ensure zero-latency read access.
+    cudaMemcpyToSymbol(d_commondata, commondata, sizeof(commondata_struct));
 
-    termination_type_t *bundle_status_host[2];
-    double *bundle_time_host[2];
-    double *f_bundle[2];
-    double *f_p_bundle[2];
-    double *f_p_p_bundle[2];
-    termination_type_t *status_bundle[2];
-    double *h_bundle[2];
-    bool *needs_step_bundle[2];
-    int *retries_bundle[2];
-    double *affine_param_bundle[2];
+    // VRAM scratchpad tracking the current state vector $f^\mu$ bounding the RKF45 step.
+    double *d_f_bundle;
+    // VRAM scratchpad locking the anchor state vector $f_{{start}}$ to calculate the final stage update.
+    double *d_f_start_bundle;
+    // VRAM scratchpad tracking the intermediate cumulative RKF45 stage updates.
+    double *d_f_temp_bundle;
+    // VRAM scratchpad tracking the history state $f^\mu_{{n-1}}$ for geometric intersection detection.
+    double *d_f_prev_bundle;
+    // VRAM scratchpad tracking the history state $f^\mu_{{n-2}}$ for geometric intersection detection.
+    double *d_f_pre_prev_bundle;
+
+    // Allocate 1D VRAM Scratchpad arrays ensuring strict adherence to the hardware bounds.
+    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_f_start_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_f_temp_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_f_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_f_pre_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
+
+    // VRAM scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
+    double *d_metric_bundle;
+    // VRAM scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
+    double *d_connection_bundle;
+
+    BHAH_MALLOC_DEVICE(d_metric_bundle, sizeof(double) * 10 * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_connection_bundle, sizeof(double) * 40 * BUNDLE_CAPACITY);
+
+    // Derivative tensor storing $\dot{{f}}$ across all 6 intermediate RKF45 stages.
+    double *d_k_bundle;
     
-    // Double-buffered Device Pointers for Persistence Flags
-    bool *on_pos_window_prev_bundle[2];
-    bool *on_pos_source_prev_bundle[2];
+    // Allocate VRAM for the 6-stage $k$-bundle to strictly prevent register bleeding.
+    BHAH_MALLOC_DEVICE(d_k_bundle, sizeof(double) * 6 * 9 * BUNDLE_CAPACITY);
 
-    for(int i=0; i<2; i++) {{
-        // Device-to-Host transfer: Pinned memory allocation for status array to facilitate asynchronous CPU retrieval.
-        BHAH_MALLOC_PINNED(bundle_status_host[i], sizeof(termination_type_t) * BUNDLE_CAPACITY);
-        // Device-to-Host transfer: Pinned memory allocation for temporal state data.
-        BHAH_MALLOC_PINNED(bundle_time_host[i], sizeof(double) * BUNDLE_CAPACITY);
+    // VRAM array regulating active integration step sizing $h$.
+    double *d_h;
+    // VRAM array regulating total affine parameter progress $\lambda$.
+    double *d_affine;
+    // VRAM array holding the current trajectory status limits.
+    termination_type_t *d_status;
+    // VRAM array tracking sequential error rejections per photon.
+    int *d_retries;
+    // VRAM array flagging the previous observer window boundary side.
+    bool *d_on_pos_window_prev;
+    // VRAM array flagging the previous source emission boundary side.
+    bool *d_on_pos_source_prev;
 
-        // Host-to-Device transfer: VRAM allocation for the physical state vector $f^\mu$ bounding the RKF45 batch.
-        BHAH_MALLOC_DEVICE(f_bundle[i], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(f_p_bundle[i], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(f_p_p_bundle[i], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        
-        // Host-to-Device transfer: VRAM allocation for the trajectory status enumerations.
-        BHAH_MALLOC_DEVICE(status_bundle[i], sizeof(termination_type_t) * BUNDLE_CAPACITY);
-        // Host-to-Device transfer: VRAM allocation tracking individual integration step sizes $h$.
-        BHAH_MALLOC_DEVICE(h_bundle[i], sizeof(double) * BUNDLE_CAPACITY);
-        // Host-to-Device transfer: VRAM allocation for boolean stepping masks.
-        BHAH_MALLOC_DEVICE(needs_step_bundle[i], sizeof(bool) * BUNDLE_CAPACITY);
-        // Host-to-Device transfer: VRAM allocation tracking local truncation error rejections.
-        BHAH_MALLOC_DEVICE(retries_bundle[i], sizeof(int) * BUNDLE_CAPACITY);
-        // Host-to-Device transfer: VRAM allocation tracking total affine progression $\lambda$.
-        BHAH_MALLOC_DEVICE(affine_param_bundle[i], sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_h, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_affine, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_status, sizeof(termination_type_t) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_retries, sizeof(int) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_on_pos_window_prev, sizeof(bool) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_on_pos_source_prev, sizeof(bool) * BUNDLE_CAPACITY);
 
-        // Allocate VRAM buffers for persistence flags in the dual-stream pipeline.
-        BHAH_MALLOC_DEVICE(on_pos_window_prev_bundle[i], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(on_pos_source_prev_bundle[i], sizeof(bool) * BUNDLE_CAPACITY);
-    }}
-
-    int *compacted_local_ids;
-    int *d_active_count;
-    bool *d_bundle_has_active;
-    
-    // Host-to-Device transfer: VRAM allocations for thread compaction logic tracking and indexing.
-    BHAH_MALLOC_DEVICE(compacted_local_ids, sizeof(int) * BUNDLE_CAPACITY);
-    BHAH_MALLOC_DEVICE(d_active_count, sizeof(int));
-    BHAH_MALLOC_DEVICE(d_bundle_has_active, sizeof(bool));
-
+    // Final intersection blueprint results buffer mapped directly to VRAM.
     blueprint_data_t *d_results_buffer;
-    
-    // Device-to-Host transfer: VRAM allocation storing the final intersected geometry outputs.
     BHAH_MALLOC_DEVICE(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
 
+    // Lock-free temporal TimeSlotManager confined entirely to the Host CPU context.
+    TimeSlotManager tsm;
+    slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
+
+
+    // --- 2. INITIALIZATION PHASE ---
+    
+    // 3D array storing the spatial Cartesian coordinates of the observer window center.
+    double window_center_out[3]; 
+    // 3D orthonormal basis vector pointing along the x-axis of the local window geometry.
+    double n_x_out[3]; 
+    // 3D orthonormal basis vector pointing along the y-axis of the local window geometry.
+    double n_y_out[3]; 
+    // 3D orthonormal basis vector pointing along the z-axis of the local window geometry.
+    double n_z_out[3];
+
+    // Kernel Launch: Evaluate initial conditions on the Host to populate the master $f^\mu$ state vector.
+    set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);
+
+    // Total integer calculation defining total iterative blocks required to process all photon indices.
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY;
 
-    // --- PIPELINE LOOP ---
-    for (long int batch_idx = 0; batch_idx < num_batches; batch_idx++) {{
-        int s_compute = batch_idx % 2;
-        int s_transfer = (batch_idx + 1) % 2;
-        long int start_idx = batch_idx * BUNDLE_CAPACITY;
-        long int bundle_size = MIN(BUNDLE_CAPACITY, num_rays - start_idx);
+    // Loop iterator for evaluating the initialization constraint across sequential blocks.
+    long int init_batch;
+    for (init_batch = 0; init_batch < num_batches; ++init_batch) {{
+        // The master index offset for the current batch initialization.
+        long int start_idx = init_batch * BUNDLE_CAPACITY;
+        // The constrained integer size of the active chunk bounded by the hardware capacity.
+        long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx);
 
-        // 1. Initial bridging transfer reserved exclusively for Batch 0 alignment.
-        if (batch_idx == 0) {{
-            for(int k=0; k<9; k++) {{
-                // Host-to-Device transfer: Asynchronously maps the $k$-th component of the state vector to VRAM using strict pointer arithmetic.
-                cudaMemcpyAsync(f_bundle[s_compute] + (k * BUNDLE_CAPACITY),
-                                all_photons_host.f + (k * num_rays) + start_idx,
-                                bundle_size * sizeof(double), cudaMemcpyHostToDevice, streams[s_compute]);
+        // Loop index iterating over the specific initialization batch elements.
+        int init_i;
+        for (init_i = 0; init_i < chunk_size; ++init_i) {{
+            // The calculated global long integer index corresponding to the specific ray in the master SoA.
+            long int master_idx = start_idx + init_i;
+            // Loop index over the 9 tensor components of the state vector.
+            int init_k;
+            for (init_k = 0; init_k < 9; ++init_k) {{
+                f_bridge[init_k * BUNDLE_CAPACITY + init_i] = all_photons_host.f[init_k * num_rays + master_idx];
             }}
-            // Transfer Persistence Flags for Batch 0 (Host -> Device).
-            cudaMemcpyAsync(on_pos_window_prev_bundle[s_compute], all_photons_host.on_positive_side_of_window_prev + start_idx, bundle_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_compute]);
-            cudaMemcpyAsync(on_pos_source_prev_bundle[s_compute], all_photons_host.on_positive_side_of_source_prev + start_idx, bundle_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_compute]);
         }}
 
-        // 2. Compute stream synchronization blocks CPU solely to confirm prior kernels have flushed their buffer footprint.
-        cudaStreamSynchronize(streams[s_compute]);
+        // Host-to-Device transfer: Pushes packed initial states to VRAM to exploit parallel geometric evaluations.
+        cudaMemcpy(d_f_bundle, f_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
 
-        // 3. Process the CPU-Bound TimeSlotManager parsing exclusively on Pinned RAM to preserve maximum SM throughput.
-        if (batch_idx > 0) {{
-            int prev_s = (batch_idx - 1) % 2;
-            long int prev_start = (batch_idx - 1) * BUNDLE_CAPACITY;
-            long int prev_size = MIN(BUNDLE_CAPACITY, num_rays - prev_start);
-            for (long int j = 0; j < prev_size; j++) {{
-                if (bundle_status_host[prev_s][j] == ACTIVE) {{
-                    long int p_idx = prev_start + j;
-                    int s_idx = slot_get_index(&tsm, bundle_time_host[prev_s][j]);
-                    if (s_idx != -1) slot_add_photon(&tsm, s_idx, p_idx);
+        // Kernel Launch: Calculate $g_{{\mu\nu}}$ required for the Hamiltonian constraint. Thread ID maps to photon index.
+        interpolation_kernel_{spacetime_name}(d_f_bundle, d_metric_bundle, NULL, chunk_size);
+        
+        // Kernel Launch: Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$.
+        p0_reverse_kernel(d_f_bundle, d_metric_bundle, chunk_size);
+
+        // Device-to-Host transfer: Retrieves the mathematically constrained state vector back to CPU RAM.
+        cudaMemcpy(f_bridge, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+
+        // Loop index for gathering post-constraint logic and re-scattering to the master array.
+        int gather_i;
+        for (gather_i = 0; gather_i < chunk_size; ++gather_i) {{
+            // The calculated global index for the scatter update back to the main SoA.
+            long int master_idx = start_idx + gather_i;
+            // Loop index over the 9 tensor components to ensure complete state transfer.
+            int gather_k;
+            for (gather_k = 0; gather_k < 9; ++gather_k) {{
+                all_photons_host.f[gather_k * num_rays + master_idx] = f_bridge[gather_k * BUNDLE_CAPACITY + gather_i];
+            }}
+        }}
+    }}
+
+    // Loop iterator traversing the entire global ray count to synchronize starting properties.
+    long int sync_i;
+    for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
+        // Loop iterator updating tensor states.
+        int sync_k;
+        for (sync_k = 0; sync_k < 9; ++sync_k) {{
+            all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i];
+            all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i];
+        }}
+        all_photons_host.on_positive_side_of_window_prev[sync_i] = true;
+        all_photons_host.on_positive_side_of_source_prev[sync_i] = true;
+        all_photons_host.status[sync_i] = ACTIVE;
+        all_photons_host.h[sync_i] = commondata->numerical_initial_h;
+        all_photons_host.affine_param[sync_i] = 0.0;
+        all_photons_host.rejection_retries[sync_i] = 0;
+
+        // Integer representing the assigned temporal slot for the current photon.
+        int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]);
+        if (s_idx != -1) {{
+            slot_add_photon(&tsm, s_idx, sync_i);
+        }}
+    }}
+
+
+    // --- 3. TEMPORAL LOOP (The Engine) ---
+    
+    // Outer loop iterator for the physical time bins.
+    int slot_idx;
+    for (slot_idx = 0; slot_idx < tsm.num_slots; ++slot_idx) {{
+        while (tsm.slot_counts[slot_idx] > 0) {{
+            
+            // Evaluated bounded integer size corresponding to active trajectories in this specific time bin.
+            long int chunk_size = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]);
+            slot_remove_chunk(&tsm, slot_idx, chunk_buffer, chunk_size);
+
+            // Inner loop iterator for populating contiguous memory bridges.
+            int bridge_i;
+            for (bridge_i = 0; bridge_i < chunk_size; ++bridge_i) {{
+                // Master index retrieved from the extraction buffer array.
+                long int m_idx = chunk_buffer[bridge_i];
+                // Component loop iterator mapping values directly into the bridge transfer blocks.
+                int c_k;
+                for (c_k = 0; c_k < 9; ++c_k) {{
+                    f_bridge[c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx];
+                    f_p_bridge[c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx];
+                    f_p_p_bridge[c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx];
+                }}
+                h_bridge[bridge_i] = all_photons_host.h[m_idx];
+                status_bridge[bridge_i] = all_photons_host.status[m_idx];
+                retries_bridge[bridge_i] = all_photons_host.rejection_retries[m_idx];
+                affine_bridge[bridge_i] = all_photons_host.affine_param[m_idx];
+                on_pos_window_prev_bridge[bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx];
+                on_pos_source_prev_bridge[bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx];
+            }}
+
+            // Host-to-Device transfer: Pushes packed $f^\mu$ execution chunk to VRAM scratchpad.
+            cudaMemcpy(d_f_bundle, f_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed $f_p$ execution chunk to VRAM scratchpad.
+            cudaMemcpy(d_f_prev_bundle, f_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed $f_p_p$ execution chunk to VRAM scratchpad.
+            cudaMemcpy(d_f_pre_prev_bundle, f_p_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed integration step sizes $h$ to VRAM scratchpad.
+            cudaMemcpy(d_h, h_bridge, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed status flags to VRAM scratchpad.
+            cudaMemcpy(d_status, status_bridge, sizeof(termination_type_t) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed rejection retries to VRAM scratchpad.
+            cudaMemcpy(d_retries, retries_bridge, sizeof(int) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed affine progress $\lambda$ to VRAM scratchpad.
+            cudaMemcpy(d_affine, affine_bridge, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed window history side flags.
+            cudaMemcpy(d_on_pos_window_prev, on_pos_window_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes packed source history side flags.
+            cudaMemcpy(d_on_pos_source_prev, on_pos_source_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+
+            // Device-to-Device transfer: Baselines the starting state $f_{{start}}$ to protect base vectors during RKF45 intermediate updates.
+            cudaMemcpy(d_f_start_bundle, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToDevice);
+            // Device-to-Device transfer: Mirrors initial state to the $f_{{temp}}$ integration accumulator.
+            cudaMemcpy(d_f_temp_bundle, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToDevice);
+
+            // Iterator for tracking the active RKF45 intermediate step mapping.
+            int stage;
+            for (stage = 1; stage <= 6; ++stage) {{
+                // Kernel Launch: Evaluate $g_{{\mu\nu}}$ and $\Gamma^\alpha_{{\beta\gamma}}$ based on current $f_{{temp}}$.
+                interpolation_kernel_{spacetime_name}(d_f_temp_bundle, d_metric_bundle, d_connection_bundle, chunk_size);
+                
+                // Kernel Launch: Compute the differential tensor $\dot{{f}}$ mapping strictly to Global VRAM $k$-bundles.
+                calculate_ode_rhs_kernel(d_f_temp_bundle, d_metric_bundle, d_connection_bundle, d_k_bundle, stage, chunk_size);
+                
+                // Kernel Launch: Accumulate updates generating the intermediate vector $f_{{temp}}$ utilizing Butcher tableau coefficients.
+                rkf45_stage_update(d_f_start_bundle, d_k_bundle, d_h, stage, chunk_size, d_f_temp_bundle);
+            }}
+
+            // Kernel Launch: Adjust step-size $h$ based on explicit local truncation limits bounding the trajectory errors.
+            rkf45_finalize_and_control(d_f_bundle, d_f_start_bundle, d_k_bundle, d_h, d_status, d_affine, d_retries, chunk_size);
+            
+            // Kernel Launch: Check geometric intersection events across local orthonormal plane coordinates mapping spatial geometry.
+            event_detection_manager_kernel(d_f_bundle, d_f_prev_bundle, d_f_pre_prev_bundle, d_results_buffer, d_status, d_on_pos_window_prev, d_on_pos_source_prev, chunk_size);
+
+            // Device-to-Host transfer: Retrieves updated states $f^\mu$ back to the CPU Bridge arrays.
+            cudaMemcpy(f_bridge, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves updated $f_p$ histories.
+            cudaMemcpy(f_p_bridge, d_f_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves updated $f_p_p$ histories.
+            cudaMemcpy(f_p_p_bridge, d_f_pre_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves modified step sizes $h$.
+            cudaMemcpy(h_bridge, d_h, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves updated termination flags.
+            cudaMemcpy(status_bridge, d_status, sizeof(termination_type_t) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves current rejection retries.
+            cudaMemcpy(retries_bridge, d_retries, sizeof(int) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves adapted affine parameter progression $\lambda$.
+            cudaMemcpy(affine_bridge, d_affine, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves persistent window boundary flags.
+            cudaMemcpy(on_pos_window_prev_bridge, d_on_pos_window_prev, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves persistent source boundary flags.
+            cudaMemcpy(on_pos_source_prev_bridge, d_on_pos_source_prev, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+
+            // Loop iterator traversing the finalized trajectory bundle to process statuses.
+            int fin_i;
+            for (fin_i = 0; fin_i < chunk_size; ++fin_i) {{
+                // Master index mapped from the bounded extraction array.
+                long int m_idx = chunk_buffer[fin_i];
+                // Component loop iterator for unpacking bridge data.
+                int fin_k;
+                for (fin_k = 0; fin_k < 9; ++fin_k) {{
+                    all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[fin_k * BUNDLE_CAPACITY + fin_i];
+                    all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[fin_k * BUNDLE_CAPACITY + fin_i];
+                    all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[fin_k * BUNDLE_CAPACITY + fin_i];
+                }}
+                all_photons_host.h[m_idx] = h_bridge[fin_i];
+                all_photons_host.status[m_idx] = status_bridge[fin_i];
+                all_photons_host.rejection_retries[m_idx] = retries_bridge[fin_i];
+                all_photons_host.affine_param[m_idx] = affine_bridge[fin_i];
+                all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[fin_i];
+                all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[fin_i];
+
+                if (status_bridge[fin_i] == ACTIVE) {{
+                    // Extract $f^0$ (coordinate time) to evaluate the next discrete temporal bin.
+                    int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); 
+                    if (next_s_idx != -1) {{
+                        slot_add_photon(&tsm, next_s_idx, m_idx);
+                    }}
+                }} else if (status_bridge[fin_i] == FAILURE_RKF45_REJECTION_LIMIT) {{
+                    // Re-add to current bin to attempt integration with an adapted step-size scalar.
+                    slot_add_photon(&tsm, slot_idx, m_idx);
                 }}
             }}
         }}
-
-        // 4. Overlap asynchronous Host-to-Device 9-strided transfers for the subsequent Batch N+1.
-        if (batch_idx + 1 < num_batches) {{
-            long int next_start = (batch_idx + 1) * BUNDLE_CAPACITY;
-            long int next_size = MIN(BUNDLE_CAPACITY, num_rays - next_start);
-            for(int k=0; k<9; k++) {{
-                // Host-to-Device transfer: Asynchronously maps the $k$-th component of the subsequent bundle's vector to VRAM using strict pointer arithmetic.
-                cudaMemcpyAsync(f_bundle[s_transfer] + (k * BUNDLE_CAPACITY),
-                                all_photons_host.f + (k * num_rays) + next_start,
-                                next_size * sizeof(double), cudaMemcpyHostToDevice, streams[s_transfer]);
-            }}
-            // [CRITICAL FIX]: Transfer Persistence Flags for Batch N+1 (Host -> Device).
-            cudaMemcpyAsync(on_pos_window_prev_bundle[s_transfer], all_photons_host.on_positive_side_of_window_prev + next_start, next_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_transfer]);
-            cudaMemcpyAsync(on_pos_source_prev_bundle[s_transfer], all_photons_host.on_positive_side_of_source_prev + next_start, next_size * sizeof(bool), cudaMemcpyHostToDevice, streams[s_transfer]);
-        }}
-
-        // 5. Initialize VRAM-local status masks directly inside the compute stream context.
-        {init_launch}
-
-        // 6. Fused Compute Loop: Synchronized iteration bounds physical ODE evolution mapping.
-        bool active_rays_exist = true;
-        while(active_rays_exist) {{
-            int zero = 0;
-            // Host-to-Device transfer: Zeroes the active thread counter directly inside VRAM prior to atomic operations.
-            cudaMemcpyAsync(d_active_count, &zero, sizeof(int), cudaMemcpyHostToDevice, streams[s_compute]);
-            bool device_has_active = false;
-            // Host-to-Device transfer: Disables the boolean execution loop trigger for device-side evaluation.
-            cudaMemcpyAsync(d_bundle_has_active, &device_has_active, sizeof(bool), cudaMemcpyHostToDevice, streams[s_compute]);
-
-            {compaction_launch}
-            {rkf45_launch}
-            
-            // Note: Event detection runs inside the loop to catch terminations immediately.
-            {event_launch}
-
-            // Device-to-Host transfer: Validates continuation requirement based on numerical integration completion limits.
-            cudaMemcpyAsync(&active_rays_exist, d_bundle_has_active, sizeof(bool), cudaMemcpyDeviceToHost, streams[s_compute]);
-            cudaStreamSynchronize(streams[s_compute]);
-        }}
-
-        // 8. Retrieve updated numerical statuses bounding physical progression maps (D2H Transfer).
-        // Device-to-Host transfer: Asynchronously pulls the status array back to pinned memory for CPU-side TimeSlotManager evaluation.
-        cudaMemcpyAsync(bundle_status_host[s_compute], status_bundle[s_compute], bundle_size * sizeof(termination_type_t), cudaMemcpyDeviceToHost, streams[s_compute]);
-        // Device-to-Host transfer: Asynchronously pulls the physical coordinate time $t$ back to pinned memory for re-binning.
-        cudaMemcpyAsync(bundle_time_host[s_compute], f_bundle[s_compute], bundle_size * sizeof(double), cudaMemcpyDeviceToHost, streams[s_compute]);
-        
-        // Retrieve Updated Persistence Flags for Batch N (Device -> Host).
-        cudaMemcpyAsync(all_photons_host.on_positive_side_of_window_prev + start_idx, on_pos_window_prev_bundle[s_compute], bundle_size * sizeof(bool), cudaMemcpyDeviceToHost, streams[s_compute]);
-        cudaMemcpyAsync(all_photons_host.on_positive_side_of_source_prev + start_idx, on_pos_source_prev_bundle[s_compute], bundle_size * sizeof(bool), cudaMemcpyDeviceToHost, streams[s_compute]);
     }}
 
-    // Resolve final pipeline batch outputs remaining in the transit buffer post-orchestration loop.
-    int final_s = (num_batches - 1) % 2;
-    cudaStreamSynchronize(streams[final_s]);
-    long int final_start = (num_batches - 1) * BUNDLE_CAPACITY;
-    long int final_size = MIN(BUNDLE_CAPACITY, num_rays - final_start);
-    for (long int j = 0; j < final_size; j++) {{
-        if (bundle_status_host[final_s][j] == ACTIVE) {{
-            long int p_idx = final_start + j;
-            int s_idx = slot_get_index(&tsm, bundle_time_host[final_s][j]);
-            if (s_idx != -1) slot_add_photon(&tsm, s_idx, p_idx);
-        }}
-    }}
-
-    // Export validated device-native blueprints safely mapped into the master C host struct.
-    // Device-to-Host transfer: Extracts the complete physical root-finding results.
+    // --- 4. CLEANUP ---
+    
+    // Device-to-Host transfer: Extracts validated device-native blueprints mapped into the host pointer.
     cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);
 
-    // --- MEMORY DE-ALLOCATIONS ---
-    for(int i=0; i<2; i++) {{
-        BHAH_FREE_PINNED(bundle_status_host[i]); BHAH_FREE_PINNED(bundle_time_host[i]);
-        BHAH_FREE_DEVICE(f_bundle[i]); BHAH_FREE_DEVICE(f_p_bundle[i]); BHAH_FREE_DEVICE(f_p_p_bundle[i]);
-        BHAH_FREE_DEVICE(status_bundle[i]);
-        BHAH_FREE_DEVICE(h_bundle[i]); BHAH_FREE_DEVICE(needs_step_bundle[i]);
-        BHAH_FREE_DEVICE(retries_bundle[i]); BHAH_FREE_DEVICE(affine_param_bundle[i]);
-        BHAH_FREE_DEVICE(on_pos_window_prev_bundle[i]); 
-        BHAH_FREE_DEVICE(on_pos_source_prev_bundle[i]);
-    }}
-    BHAH_FREE_DEVICE(compacted_local_ids); BHAH_FREE_DEVICE(d_active_count);
-    BHAH_FREE_DEVICE(d_bundle_has_active); BHAH_FREE_DEVICE(d_results_buffer);
-
+    // Host Memory Free: Purges the primary Host array states.
     BHAH_FREE_PINNED(all_photons_host.f);
+    BHAH_FREE_PINNED(all_photons_host.f_p);
+    BHAH_FREE_PINNED(all_photons_host.f_p_p);
     BHAH_FREE_PINNED(all_photons_host.affine_param);
     BHAH_FREE_PINNED(all_photons_host.h);
     BHAH_FREE_PINNED(all_photons_host.status);
     BHAH_FREE_PINNED(all_photons_host.rejection_retries);
     BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_window_prev);
     BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_source_prev);
+    
+    // Host Memory Free: Purges bridge components supporting scatter logic.
+    BHAH_FREE_PINNED(chunk_buffer);
+    BHAH_FREE_PINNED(f_bridge);
+    BHAH_FREE_PINNED(f_p_bridge);
+    BHAH_FREE_PINNED(f_p_p_bridge);
+    BHAH_FREE_PINNED(affine_bridge);
+    BHAH_FREE_PINNED(h_bridge);
+    BHAH_FREE_PINNED(status_bridge);
+    BHAH_FREE_PINNED(retries_bridge);
+    BHAH_FREE_PINNED(on_pos_window_prev_bridge);
+    BHAH_FREE_PINNED(on_pos_source_prev_bridge);
 
+    // Device Memory Free: Purges VRAM operational pipeline scratchpads.
+    BHAH_FREE_DEVICE(d_f_bundle);
+    BHAH_FREE_DEVICE(d_f_start_bundle);
+    BHAH_FREE_DEVICE(d_f_temp_bundle);
+    BHAH_FREE_DEVICE(d_f_prev_bundle);
+    BHAH_FREE_DEVICE(d_f_pre_prev_bundle);
+    BHAH_FREE_DEVICE(d_metric_bundle);
+    BHAH_FREE_DEVICE(d_connection_bundle);
+    BHAH_FREE_DEVICE(d_k_bundle);
+    BHAH_FREE_DEVICE(d_h);
+    BHAH_FREE_DEVICE(d_affine);
+    BHAH_FREE_DEVICE(d_status);
+    BHAH_FREE_DEVICE(d_retries);
+    BHAH_FREE_DEVICE(d_on_pos_window_prev);
+    BHAH_FREE_DEVICE(d_on_pos_source_prev);
+    BHAH_FREE_DEVICE(d_results_buffer);
+
+    // Explicitly free the temporal sorting struct mapping the execution grid.
     slot_manager_free(&tsm);
-
-    // Explicitly destroy the CUDA streams to prevent runtime resource leaks
-    cudaStreamDestroy(streams[0]);
-    cudaStreamDestroy(streams[1]);
     """
 
     cfc.register_CFunction(
@@ -595,6 +468,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
-        body=body,
+        include_CodeParameters_h=include_CodeParameters_h,
+        body=body
     )

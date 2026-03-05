@@ -1,4 +1,4 @@
-"""
+r"""
 Generates the CUDA kernel and host-side orchestrator for the interpolation engine.
 
 This module provides the global memory kernel responsible for evaluating the spacetime
@@ -12,7 +12,7 @@ import nrpy.c_function as cfc
 from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 def interpolation_kernel(spacetime_name: str) -> None:
-    """
+    r"""
     Register the global CUDA kernel for tensor interpolation.
 
     The generated kernel unpacks the photon state vector $f^{\mu}$ from global VRAM, 
@@ -30,6 +30,11 @@ def interpolation_kernel(spacetime_name: str) -> None:
     metric_worker = f"g4DD_metric_{spacetime_name}"
     conn_worker = f"connections_{spacetime_name}"
 
+    # Extract function bodies for inlining from the CFunction dictionary
+    # This ensures they are visible to the compiler within the same .cu file
+    metric_c_code = cfc.CFunction_dict[metric_worker].full_function
+    conn_c_code = cfc.CFunction_dict[conn_worker].full_function
+
     # Python: Define the argument dictionary for the CUDA kernel generation.
     # Note: commondata is removed here because it is accessed directly via constant memory.
     arg_dict = {
@@ -40,7 +45,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     }
 
     # Python: Define the GPU kernel body.
-    kernel_body = f"""
+    kernel_body = fr"""
     // --- THREAD IDENTIFICATION ---
     // The identifier i represents the global thread index mapped to a specific photon ray.
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -107,7 +112,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
     }
 
-    prefunc, body = generate_kernel_and_launch_code(
+    prefunc_kernel, body = generate_kernel_and_launch_code(
         kernel_name=f"interpolation_kernel_{spacetime_name}",
         kernel_body=kernel_body,
         arg_dict_cuda=arg_dict,
@@ -118,10 +123,13 @@ def interpolation_kernel(spacetime_name: str) -> None:
         thread_tiling_macro_suffix="RKF45"
     )
 
+    # Consolidation: Prepend the worker functions to satisfy the inlining mandate
+    prefunc = "\n\n".join([metric_c_code, conn_c_code, prefunc_kernel])
+
     # Python: Define arguments for C-Function registration strictly before the call.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_intrinsics.h"]
     
-    desc = f"""@brief Orchestrates the CUDA kernel for the {spacetime_name} interpolation engine.
+    desc = fr"""@brief Orchestrates the CUDA kernel for the {spacetime_name} interpolation engine.
     
     @param d_f_bundle Pointer to the state vector bundle $f^{{\mu}}$ in VRAM.
     @param d_metric_bundle Pointer to the destination metric bundle $g_{{\mu\\nu}}$ in VRAM.
