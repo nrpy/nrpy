@@ -32,67 +32,6 @@ import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 
-def _rank1_exprs_lhses(
-    rank1: List[sp.Expr], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-1 vector into expression and LHS-name lists.
-
-    :param rank1: Rank-1 vector.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        exprs.append(rank1[i])
-        lhses.append(f"{varname}[{i}]")
-    return exprs, lhses
-
-
-def _rank2_exprs_lhses(
-    rank2: List[List[sp.Expr]], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-2 tensor into expression and LHS-name lists.
-
-    :param rank2: Rank-2 tensor.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        for j in range(3):
-            exprs.append(rank2[i][j])
-            lhses.append(f"{varname}[{i}][{j}]")
-    return exprs, lhses
-
-
-def verify_unrotate_hot_path_antiparallel_regression() -> None:
-    r"""
-    Check the direct-matrix hot path on a deterministic anti-parallel basis case.
-
-    This verifies numerical behavior for a 180-degree basis flip without any
-    axis-angle decomposition in the hot path. The operation tested here is
-    ``x^i_fixed = R^i{}_j x^j_rot`` under the module's rotation convention.
-
-    Doctests:
-    >>> from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
-    >>> xhat = [-1.0, 0.0, 0.0]
-    >>> yhat = [0.0, 1.0, 0.0]
-    >>> zhat = [0.0, 0.0, -1.0]
-    >>> R = [[xhat[0], yhat[0], zhat[0]], [xhat[1], yhat[1], zhat[1]], [xhat[2], yhat[2], zhat[2]]]
-    >>> v_rot = [1.25, -0.5, 2.0]
-    >>> v_fixed = [sum(R[i][j] * v_rot[j] for j in range(3)) for i in range(3)]
-    >>> v_fixed
-    [-1.25, -0.5, -2.0]
-    >>> v_expected = [complex(v).real for v in rotate(v_rot, [0.0, 1.0, 0.0], 3.141592653589793)]
-    >>> max(abs(a - b) for a, b in zip(v_fixed, v_expected)) < 1e-14
-    True
-    """
-
-
 def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     r"""
     Register ``unrotate_xCart_to_fixed_frame`` as generated C source.
@@ -124,6 +63,22 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     True
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "openmp", file_ext="c")
+
+    This verifies numerical behavior for a 180-degree basis flip without any
+    axis-angle decomposition in the hot path. The operation tested here is
+    ``x^i_fixed = R^i{}_j x^j_rot`` under the module's rotation convention.
+    >>> from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
+    >>> xhat = [-1.0, 0.0, 0.0]
+    >>> yhat = [0.0, 1.0, 0.0]
+    >>> zhat = [0.0, 0.0, -1.0]
+    >>> R = [[xhat[0], yhat[0], zhat[0]], [xhat[1], yhat[1], zhat[1]], [xhat[2], yhat[2], zhat[2]]]
+    >>> v_rot = [1.25, -0.5, 2.0]
+    >>> v_fixed = [sum(R[i][j] * v_rot[j] for j in range(3)) for i in range(3)]
+    >>> v_fixed
+    [-1.25, -0.5, -2.0]
+    >>> v_expected = [complex(v).real for v in rotate(v_rot, [0.0, 1.0, 0.0], 3.141592653589793)]
+    >>> max(abs(a - b) for a, b in zip(v_fixed, v_expected)) < 1e-14
+    True
     """
     # Step 1: Register cumulative-hat commondata CodeParameters.
     _ = par.register_CodeParameter(
@@ -221,7 +176,8 @@ Convention:
         verbose=False,
     )
 
-    R_exprs, R_lhses = _rank2_exprs_lhses(R_from_hats, "R")
+    R_exprs = [R_from_hats[i][j] for i in range(3) for j in range(3)]
+    R_lhses = [f"R[{i}][{j}]" for i in range(3) for j in range(3)]
     R_codegen = ccg.c_codegen(
         R_exprs,
         R_lhses,
@@ -229,7 +185,8 @@ Convention:
         verbose=False,
     )
 
-    x_exprs, x_lhses = _rank1_exprs_lhses(x_fixed_expr, "xCart")
+    x_exprs = [x_fixed_expr[i] for i in range(3)]
+    x_lhses = [f"xCart[{i}]" for i in range(3)]
     x_codegen = ccg.c_codegen(
         x_exprs,
         x_lhses,
