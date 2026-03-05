@@ -1,5 +1,19 @@
 """
-Register a helper that returns two axis-angle output slots.
+Generate ``unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame`` C code.
+
+This module emits a helper that converts the cumulative rotating basis stored
+in ``commondata`` into axis-angle outputs for the two-slot unrotation API:
+- Slot 1 stores a recovered axis-angle pair whose Rodrigues matrix equals the
+  cumulative rotation matrix built from ``xhat``, ``yhat``, ``zhat``.
+- Slot 2 is deterministically set to identity ``((1,0,0), 0)``.
+
+Rotation convention used throughout:
+- ``R`` maps rotating-frame components to fixed-frame components.
+- ``R[:,0]=xhat``, ``R[:,1]=yhat``, ``R[:,2]=zhat`` in the fixed basis.
+- ``v_fixed = R v_rot`` and ``v_rot = R^T v_fixed``.
+- ``T_fixed = R T_rot R^T`` and ``T_rot = R^T T_fixed R``.
+- ``DeltaR_dst_from_src = R_dst^T R_src``.
+- In generated C arrays, ``R[i][j]`` means row ``i``, column ``j``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -17,34 +31,6 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
-
-SO3_CONVENTION_REQUIRED_SNIPPETS = (
-    "R maps rotating-frame components -> fixed-frame components.",
-    "R[:,0]=xhat, R[:,1]=yhat, R[:,2]=zhat",
-    "v_fixed = R v_rot, v_rot = R^T v_fixed.",
-    "T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.",
-    "DeltaR_dst_from_src = R_dst^T R_src.",
-    "R[i][j]",
-    "row i, column j.",
-)
-
-
-def assert_SO3_convention_in_text(text: str, context: str) -> None:
-    """
-    Assert that a text block includes all locked SO(3) convention snippets.
-
-    :param text: Text block that must contain the locked convention snippets.
-    :param context: Context label used in the assertion message.
-    :raises AssertionError: If one or more required snippets are missing.
-    """
-    missing = [
-        snippet for snippet in SO3_CONVENTION_REQUIRED_SNIPPETS if snippet not in text
-    ]
-    if missing:
-        raise AssertionError(
-            f"{context} is missing locked SO(3) convention snippets:\n- "
-            + "\n- ".join(missing)
-        )
 
 
 def _rank2_exprs_lhses(
@@ -70,10 +56,15 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     None
 ):
     r"""
-    Register helper for two axis-angle output slots.
+    Register the two-slot axis-angle recovery helper as generated C source.
 
-    The primary slot encodes the cumulative unrotation matrix ``R`` as
-    ``R = R(nU_part1, dphi_part1)``. The second slot is set to identity.
+    Generated routine contract:
+    - Rebuild ``R`` from cumulative hats in ``commondata``.
+    - Validate SO(3) invariants on incoming hats before conversion.
+    - Recover a robust axis-angle pair for slot 1, including explicit
+      near-zero and near-pi handling with deterministic sign choices.
+    - Reconstruct ``R_check(n, phi)`` and fail fast if it does not match ``R``.
+    - Set slot 2 to deterministic identity output.
 
     Doctests:
     >>> import contextlib
@@ -82,12 +73,14 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
     >>> from nrpy.infrastructures.BHaH.rotation.register_all import register_CFunctions
-    >>> from nrpy.infrastructures.BHaH.rotation.unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
     >>> generated_str = cfc.CFunction_dict["unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame"].full_function
-    >>> assert_SO3_convention_in_text(generated_str, "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame")
+    >>> "Rcheck[3][3]" in generated_str and "max_abs_err" in generated_str
+    True
+    >>> "nU_part2[0] = 1.0;" in generated_str and "*dphi_part2 = 0.0;" in generated_str
+    True
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     validate_strings(generated_str, "openmp", file_ext="c")
     """

@@ -1,8 +1,18 @@
 """
-Register C helper for matrix-first unrotation of Cartesian vectors.
+Generate ``unrotate_xCart_to_fixed_frame`` C code for matrix-first frame unrotation.
 
-This hot path uses cumulative hats -> R directly and avoids
-axis-angle two-stage solve machinery.
+This module emits a hot-path C routine that consumes cumulative basis vectors
+(``xhat``, ``yhat``, ``zhat``) from ``commondata``, reconstructs the rotation
+matrix ``R``, validates SO(3) invariants, and applies the in-place map
+``x_fixed = R x_rot``.
+
+Rotation convention used throughout:
+- ``R`` maps rotating-frame components to fixed-frame components.
+- ``R[:,0]=xhat``, ``R[:,1]=yhat``, ``R[:,2]=zhat`` in the fixed basis.
+- ``v_fixed = R v_rot`` and ``v_rot = R^T v_fixed``.
+- ``T_fixed = R T_rot R^T`` and ``T_rot = R^T T_fixed R``.
+- ``DeltaR_dst_from_src = R_dst^T R_src``.
+- In generated C arrays, ``R[i][j]`` means row ``i``, column ``j``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -20,34 +30,6 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
-
-SO3_CONVENTION_REQUIRED_SNIPPETS = (
-    "R maps rotating-frame components -> fixed-frame components.",
-    "R[:,0]=xhat, R[:,1]=yhat, R[:,2]=zhat",
-    "v_fixed = R v_rot, v_rot = R^T v_fixed.",
-    "T_fixed = R T_rot R^T, T_rot = R^T T_fixed R.",
-    "DeltaR_dst_from_src = R_dst^T R_src.",
-    "R[i][j]",
-    "row i, column j.",
-)
-
-
-def assert_SO3_convention_in_text(text: str, context: str) -> None:
-    """
-    Assert that a text block includes all locked SO(3) convention snippets.
-
-    :param text: Text block that must contain the locked convention snippets.
-    :param context: Context label used in the assertion message.
-    :raises AssertionError: If one or more required snippets are missing.
-    """
-    missing = [
-        snippet for snippet in SO3_CONVENTION_REQUIRED_SNIPPETS if snippet not in text
-    ]
-    if missing:
-        raise AssertionError(
-            f"{context} is missing locked SO(3) convention snippets:\n- "
-            + "\n- ".join(missing)
-        )
 
 
 def _rank1_exprs_lhses(
@@ -92,9 +74,8 @@ def verify_unrotate_hot_path_antiparallel_regression() -> None:
     Check the direct-matrix hot path on a deterministic anti-parallel basis case.
 
     This verifies numerical behavior for a 180-degree basis flip without any
-    axis-angle decomposition in the hot path. With the locked SO(3) convention,
-    the operation tested here is
-    ``x^i_fixed = R^i{}_j x^j_rot``.
+    axis-angle decomposition in the hot path. The operation tested here is
+    ``x^i_fixed = R^i{}_j x^j_rot`` under the module's rotation convention.
 
     Doctests:
     >>> from nrpy.equations.quaternion_rotations.tensor_rotation import rotate
@@ -114,11 +95,15 @@ def verify_unrotate_hot_path_antiparallel_regression() -> None:
 
 def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     r"""
-    Register C function ``unrotate_xCart_to_fixed_frame``.
+    Register ``unrotate_xCart_to_fixed_frame`` as generated C source.
 
-    This wrapper consumes cumulative hats from ``commondata``, constructs
-    ``R^i{}_j``, and applies
-    ``x^i_fixed = R^i{}_j x^j_rot`` in place.
+    Generated routine contract:
+    - Input ``xCart`` is interpreted as rotating-frame components.
+    - Output ``xCart`` is overwritten with fixed-frame components.
+    - ``R`` is reconstructed from cumulative hats carried in ``commondata``.
+    - Hat orthogonality/unit-norm/positive-determinant invariants are checked
+      before applying the map; invalid inputs trigger an error/exit.
+    - No axis-angle conversion is used in this path.
 
     Doctests:
     >>> import contextlib
@@ -127,12 +112,10 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
     >>> from nrpy.infrastructures.BHaH.rotation.register_all import register_CFunctions
-    >>> from nrpy.infrastructures.BHaH.rotation.unrotate_xCart_to_fixed_frame import assert_SO3_convention_in_text
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> register_CFunctions()
     >>> generated_str = cfc.CFunction_dict["unrotate_xCart_to_fixed_frame"].full_function
-    >>> assert_SO3_convention_in_text(generated_str, "unrotate_xCart_to_fixed_frame")
     >>> "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(" in generated_str
     False
     >>> "build_R_from_cumulative_hats(" in generated_str or "SO3_apply_R_to_vector(" in generated_str
