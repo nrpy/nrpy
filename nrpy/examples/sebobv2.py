@@ -120,8 +120,8 @@ SEBOBv2_IMR_waveform(&commondata);
         body += r"""
 // Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_fine; i++) {
-    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_fine[IDX_WF(i,TIME)] - commondata.t_attach)
-    , creal(commondata.waveform_fine[IDX_WF(i,STRAIN21)]), cimag(commondata.waveform_fine[IDX_WF(i,STRAIN21)]));
+    printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
+    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]));
 }
 """
     if output_commondata:
@@ -162,7 +162,7 @@ BHaH.seobnr.utils.cumulative_integration.register_CFunction_cumulative_integrati
 # register SEOBNRv5 coefficients
 BHaH.seobnr.SEOBNRv5_quasi_precessing_spin_coefficients.register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients()
 
-#register h_NR fits
+# register h_NR fits
 BHaH.seobnr.SEOBNRv5_aligned_spin_hNR_fits_at_t_attach.register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach()
 
 # register initial condition routines
