@@ -182,9 +182,9 @@ if enable_BHaHAHA:
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 superB.initial_data.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
+    set_of_CoordSystems=set_of_CoordSystems,
     ID_persist_struct_str="",
 )
 

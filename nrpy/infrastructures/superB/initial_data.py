@@ -9,7 +9,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Optional, Union, cast
+from typing import List, Optional, Set, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -98,10 +98,10 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
 
 
 def register_CFunction_initial_data(
-    CoordSystem: str,
     IDtype: str,
     IDCoordSystem: str,
     ID_persist_struct_str: str,
+    set_of_CoordSystems: Set[str],
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
@@ -112,10 +112,10 @@ def register_CFunction_initial_data(
 
     The function performs the following operations:
     1. Registers the exact ADM initial data function.
-    2. Registers a function for converting ADM initial data to BSSN variables in the specified coordinate system.
+    2. Registers functions for converting ADM initial data to BSSN variables in the specified coordinate systems.
     3. Generates C code for setting initial data and applying boundary conditions.
 
-    :param CoordSystem: The coordinate system for the calculation.
+    :param set_of_CoordSystems: Set of coordinate systems for ADM->BSSN converters.
     :param IDtype: The type of initial data.
     :param IDCoordSystem: The native coordinate system of the initial data.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
@@ -124,6 +124,7 @@ def register_CFunction_initial_data(
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
 
+    :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -154,14 +155,18 @@ def register_CFunction_initial_data(
         )
         print("Assuming initial data functionality is implemented elsewhere.")
 
-    register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
-        CoordSystem,
-        IDCoordSystem=IDCoordSystem,
-        ID_persist_struct_str=ID_persist_struct_str,
-        enable_T4munu=enable_T4munu,
-    )
-    if CoordSystem.startswith("GeneralRFM"):
-        BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(CoordSystem)
+    coord_systems_to_register = set(set_of_CoordSystems)
+    if not coord_systems_to_register:
+        raise ValueError("set_of_CoordSystems must be non-empty.")
+    for coord in sorted(coord_systems_to_register):
+        register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+            coord,
+            IDCoordSystem=IDCoordSystem,
+            ID_persist_struct_str=ID_persist_struct_str,
+            enable_T4munu=enable_T4munu,
+        )
+        if coord.startswith("GeneralRFM"):
+            BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(coord)
 
     desc = "Set initial data."
     cfunc_type = "void"
@@ -186,7 +191,7 @@ switch (initial_data_part) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
 """
-    if CoordSystem.startswith("GeneralRFM"):
+    if any(coord.startswith("GeneralRFM") for coord in coord_systems_to_register):
         body += """      generalrfm_precompute(commondata, params, (const REAL *restrict *)griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
 """
     body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,

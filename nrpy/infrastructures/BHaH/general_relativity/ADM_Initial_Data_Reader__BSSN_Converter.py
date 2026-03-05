@@ -7,14 +7,14 @@ Author: Zachariah B. Etienne
 
 # Initialize core Python/NRPy modules
 # Step 1: Initialize core Python/NRPy modules
-from typing import List, Optional, Tuple
+from typing import List, Optional, Set, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
 import nrpy.c_codegen as ccg  # NRPy: C code generation
 import nrpy.c_function as cfc  # NRPy: C function registration
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.grid as gri  # NRPy: Functions having to do with numerical grids
-import nrpy.helpers.jacobians as jac
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
@@ -201,23 +201,24 @@ def Cfunction_ADM_SphorCart_to_Cart(
     T4SphorCartUU = ixp.declarerank2("T4SphorCartUU", symmetry="sym01", dimension=4)
 
     # Compute Jacobian to convert to Cartesian coordinates
-    gammaCartDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        IDCoordSystem, gammaSphorCartDD
+    basis_transforms = bt.basis_transforms[IDCoordSystem]
+    gammaCartDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        gammaSphorCartDD
     )
 
-    KCartDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        IDCoordSystem, KSphorCartDD
+    KCartDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        KSphorCartDD
     )
-    betaCartU = jac.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
-        IDCoordSystem, betaSphorCartU
+    betaCartU = basis_transforms.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
+        betaSphorCartU
     )
-    BCartU = jac.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
-        IDCoordSystem, BSphorCartU
+    BCartU = basis_transforms.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
+        BSphorCartU
     )
     T4CartUU = ixp.zerorank2(dimension=4)
     if enable_T4munu:
-        T4CartUU = jac.basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
-            IDCoordSystem, T4SphorCartUU
+        T4CartUU = basis_transforms.basis_transform_4tensorUU_from_time_indep_rfmbasis_to_Cartesian(
+            T4SphorCartUU
         )
 
     alpha = sp.symbols("initial_data->alpha", real=True)
@@ -371,22 +372,23 @@ After the basis transform, all BSSN quantities are rescaled."""
     BCartU = ixp.declarerank1("BSSN_Cart_basis->BU")
 
     # Compute Jacobian to convert to Cartesian coordinates
-    gammabarDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        CoordSystem, gammabarCartDD
+    basis_transforms = bt.basis_transforms[CoordSystem]
+    gammabarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        gammabarCartDD
     )
-    AbarDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        CoordSystem, AbarCartDD
+    AbarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        AbarCartDD
     )
-    betaU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis(
-        CoordSystem, betaCartU
+    betaU = basis_transforms.basis_transform_vectorU_from_Cartesian_to_rfmbasis(
+        betaCartU
     )
-    BU = jac.basis_transform_vectorU_from_Cartesian_to_rfmbasis(CoordSystem, BCartU)
+    BU = basis_transforms.basis_transform_vectorU_from_Cartesian_to_rfmbasis(BCartU)
     if enable_T4munu:
         T4CartUU = ixp.declarerank2(
             "BSSN_Cart_basis->T4UU", symmetry="sym01", dimension=4
         )
-        T4UU = jac.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
-            CoordSystem, T4CartUU
+        T4UU = basis_transforms.basis_transform_4tensorUU_from_Cartesian_to_time_indep_rfmbasis(
+            T4CartUU
         )
 
     # Next rescale:
@@ -621,8 +623,11 @@ def register_BHaH_defines_h(
     BHd_str += ID_persist_struct_str + "\n"
     BHd_str += "} ID_persist_struct;\n"
 
-    # register into BHaH_defines.h
-    BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
+    # register into BHaH_defines.h (idempotent for identical definitions)
+    bhah_defines_dict = par.glb_extras_dict.setdefault("BHaH_defines", {})
+    existing = bhah_defines_dict.get(__name__, "")
+    if BHd_str not in existing:
+        BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHd_str)
 
 
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
@@ -967,6 +972,38 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         include_CodeParameters_h=False,
         body=body,
     )
+
+
+def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+    set_of_CoordSystems: Set[str],
+    addl_includes: Optional[List[str]] = None,
+    IDCoordSystem: str = "Spherical",
+    enable_T4munu: bool = False,
+    enable_fd_functions: bool = False,
+    ID_persist_struct_str: str = "",
+) -> None:
+    """
+    Register ADM->BSSN converters for multiple coordinate systems.
+
+    One-time typedef registration is handled in setup_ADM_initial_data_reader(),
+    while CoordSystem-specific CFunction registration is run once per CoordSystem.
+
+    :param set_of_CoordSystems: Set of coordinate systems for output BSSN variables.
+    :param addl_includes: Additional header files to include.
+    :param IDCoordSystem: Coordinate system for input ADM variables. Defaults to "Spherical".
+    :param enable_T4munu: Whether to include stress-energy tensor components.
+    :param enable_fd_functions: Whether to enable finite-difference functions.
+    :param ID_persist_struct_str: String for persistent ID structure.
+    """
+    for CoordSystem in sorted(set_of_CoordSystems):
+        register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+            CoordSystem=CoordSystem,
+            addl_includes=addl_includes,
+            IDCoordSystem=IDCoordSystem,
+            enable_T4munu=enable_T4munu,
+            enable_fd_functions=enable_fd_functions,
+            ID_persist_struct_str=ID_persist_struct_str,
+        )
 
 
 if __name__ == "__main__":
