@@ -34,8 +34,7 @@ from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 def register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle() -> None:
     """
-    Register the generated C function
-    ``rotate_BSSN_Cartesian_basis_from_axis_angle``.
+    Register the generated C function ``rotate_BSSN_Cartesian_basis_from_axis_angle``.
 
     High-level behavior:
     - Interprets ``nU`` and ``dphi`` as an axis-angle rotation.

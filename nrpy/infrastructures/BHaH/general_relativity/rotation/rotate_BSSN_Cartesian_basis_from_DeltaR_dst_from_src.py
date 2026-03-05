@@ -31,8 +31,7 @@ from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 def register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src() -> None:
     """
-    Register the generated C function
-    ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
+    Register the generated C function ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
 
     High-level behavior:
     - Treats ``DeltaR_dst_from_src`` as the basis-change matrix from source
