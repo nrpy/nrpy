@@ -363,7 +363,8 @@ for(int p = 0; p < 1; p++) {{
     
     // Outer loop iterator for the physical time bins.
     int slot_idx;
-    for (slot_idx = 0; slot_idx < tsm.num_slots; ++slot_idx) {{
+    for (slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{
+        printf("Processing Time Bin: %d | Active Rays in Bin: %ld\n", slot_idx, tsm.slot_counts[slot_idx]);
         while (tsm.slot_counts[slot_idx] > 0) {{
             
             // Evaluated bounded integer size corresponding to active trajectories in this specific time bin.
@@ -587,6 +588,10 @@ for(int p = 0; p < 1; p++) {{
                     int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); 
                     if (next_s_idx != -1) {{
                         slot_add_photon(&tsm, next_s_idx, m_idx);
+                    }} else {{
+                        // Catch photons that fall outside the TimeSlotManager bounds
+                        // and officially terminate them so they don't remain stuck as ACTIVE (7).
+                        all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED;
                     }}
                 }} else if (status_bridge[fin_i] == REJECTED) {{
                     // Re-add to current bin to attempt integration with an adapted step-size scalar.

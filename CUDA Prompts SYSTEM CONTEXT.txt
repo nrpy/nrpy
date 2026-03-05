@@ -539,3 +539,8 @@ Review the provided code.
 Refactor and comment it strictly adhering to every rule above.
 Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
 """"
+
+To check GPU:
+"
+watch -n 1 nvidia-smi
+"
