@@ -361,18 +361,18 @@ REAL hNR55 = hNR[HNR55] * nu;
 REAL hNR22 = hNR[HNR22] * nu;
 
 if (fabs(hNR21) < hNR22 / hNR21_threshold) {
-    hNR21 = signbit(hNR21) * hNR22/hNR21_threshold;
+    hNR21 = copysign(hNR21) * hNR22/hNR21_threshold;
 }
 
 if (fabs(hNR43) < hNR22 / hNR43_threshold) {
-    hNR43 = signbit(hNR43) * hNR22/hNR43_threshold;
+    hNR43 = copysign(hNR43) * hNR22/hNR43_threshold;
 }
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos);
 REAL rho55 = rhos[RHO55];
 
 if (fabs(hNR55) < hNR22 / hNR55_threshold) {
-    hNR55 = signbit(hNR55) * hNR22/hNR55_threshold;
+    hNR55 = copysign(hNR55) * hNR22/hNR55_threshold;
 }
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
