@@ -1,3 +1,13 @@
+"""
+Scaffold registration and implementation module.
+
+This code registers the AKV C scaffold implements the equations
+through SymPy to generate efficient C code,
+referencing the callbacks defined in the scaffold.
+
+Author: Wesley Inselman
+"""
+
 from __future__ import annotations
 
 from inspect import currentframe as cfr
@@ -5,18 +15,41 @@ from pathlib import Path
 from types import FrameType as FT
 from typing import Union, cast
 
-import nrpy.c_function as cfc
 import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
+from nrpy.equations.general_relativity.bhahaha.approx_killing_vector_spin import (
+    ApproxKillingSpinClass,
+)
 from nrpy.infrastructures import BHaH
-from nrpy.equations.general_relativity.bhahaha.approx_killing_vector_spin import ApproxKillingSpinClass
-
-
 
 
 def register_CFunction_diagnostics_akv_spin(
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the BHaHAHA approximate Killing vector (AKV) spin diagnostic C function.
+
+    This generates C code for the AKV spin diagnostic, including code for the
+    horizon surface element and the L1-reduced AKV integrands, then registers
+    the resulting 'diagnostics_akv_spin' C function with NRPy. During the
+    parallel-codegen registration phase, the function records the call and
+    returns 'None' without generating code.
+
+    Args
+        enable_fd_functions: Whether to have NRPy emit finite-difference helper
+            functions when generating C code for expressions that require finite
+            differencing.
+
+    Returns
+        'None' during the parallel-codegen registration phase. Otherwise,
+        returns the populated NRPy environment after registering the generated
+        C function.
+
+    Raises
+        FileNotFoundError: If the required companion C scaffold file
+            'bah_diagnostics_akv_spin.c' is not found alongside this module.
+    """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -48,8 +81,6 @@ def register_CFunction_diagnostics_akv_spin(
         verbose=False,
     )
 
-
-    
     # Build AKV L1-reduced per-point integrands.
     # NOTE: ApproxKillingSpinClass defines Hmn/Nmn/Jm as *densities* (they include sqrt(q)).
     # The AKV scaffold contract expects the callback to return *integrands with no quadrature weight*.
@@ -61,11 +92,9 @@ def register_CFunction_diagnostics_akv_spin(
     Jraw = akv.Jm_integrand
 
     akv_exprs = (
-
         [Hraw[m][n] for m in range(3) for n in range(3)]
         + [Nraw[m][n] for m in range(3) for n in range(3)]
         + [Jraw[m] for m in range(3)]
-        
     )
 
     akv_outvars = (
@@ -257,10 +286,14 @@ static void bhahaha_akv_eval_l1_integrands_default_impl(
   const int i0 = BHAHAHA_AKV_AH_SLAB_I0;         // AH slab index in the 3D grid
 
   // Compute the surface element using the exact same sqrt(det q) as used in w2d.
-  """ + area_codegen_cb + r"""
+  """
+        + area_codegen_cb
+        + r"""
 
   // Human-readable SymPy expressions, CSE'd and FD-optimized by NRPy:
-  """ + akv_codegen + r"""
+  """
+        + akv_codegen
+        + r"""
 
 #if (BHAHAHA_AKV_CALLBACK_DENSITY_FREE) && (BHAHAHA_AKV_EXPR_ARE_DENSITIES)
   // Return density-free integrands if expressions include sqrt(q) and w2d includes sqrt(det q).
@@ -383,7 +416,9 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
     desc = "BHaHAHA apparent horizon diagnostics: Approximate Killing Vector (AKV) spin diagnostics."
     cfunc_type = "int"
     name = "diagnostics_akv_spin"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
 
     body = r"""
   const int grid = 0;
@@ -460,7 +495,9 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
 
 """
-    body += area_codegen + r"""
+    body += (
+        area_codegen
+        + r"""
       const int p2d = it_full * N_phi_tot + ip_full;
 
 #if BHAHAHA_AKV_WEIGHTS_INCLUDE_DX
@@ -500,6 +537,15 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
   g.geom = (const void *)&ctx;
 
+  // Compute horizon area A = sum_p w^{(p)} over interior points:
+  REAL A_H = 0.0;
+  for (int it_full = NGt; it_full < NGt + N_theta; it_full++) {
+    for (int ip_full = NGp; ip_full < NGp + N_phi; ip_full++) {
+      const int p2d = it_full * N_phi_tot + ip_full;
+      A_H += w2d[p2d];
+    }
+  }
+
   akv_params_t pars;
   memset(&pars, 0, sizeof(pars));
   pars.method = AKV_METHOD_L1_REDUCED;
@@ -510,6 +556,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   pars.reg_eps_max = 1e-6;
   pars.reg_max_tries = 6;
   pars.gap_ratio_thresh = 1.5;
+  pars.horizon_area = (AKV_REAL)A_H;
   pars.build_spin_vector = (BHAHAHA_AKV_ENABLE_SPIN_VECTOR ? true : false);
   pars.allow_debug_assembly = false;
 
@@ -610,6 +657,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   return (int)err;
 #endif
 """
+    )
 
     cfc.register_CFunction(
         subdirectory="",
