@@ -33,25 +33,6 @@ import nrpy.params as par
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 
-def _rank2_exprs_lhses(
-    rank2: List[List[sp.Expr]], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-2 tensor into expression and LHS-name lists.
-
-    :param rank2: Rank-2 tensor.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        for j in range(3):
-            exprs.append(rank2[i][j])
-            lhses.append(f"{varname}[{i}][{j}]")
-    return exprs, lhses
-
-
 def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame() -> (
     None
 ):
@@ -194,7 +175,8 @@ Convention:
         verbose=False,
     )
 
-    R_exprs, R_lhses = _rank2_exprs_lhses(R_from_hats, "R")
+    R_exprs = [R_from_hats[i][j] for i in range(3) for j in range(3)]
+    R_lhses = [f"R[{i}][{j}]" for i in range(3) for j in range(3)]
     R_codegen = ccg.c_codegen(
         R_exprs,
         R_lhses,
@@ -223,7 +205,8 @@ Convention:
         verbose=False,
     )
 
-    Rcheck_exprs, Rcheck_lhses = _rank2_exprs_lhses(Rcheck_expr, "Rcheck")
+    Rcheck_exprs = [Rcheck_expr[i][j] for i in range(3) for j in range(3)]
+    Rcheck_lhses = [f"Rcheck[{i}][{j}]" for i in range(3) for j in range(3)]
     Rcheck_codegen = ccg.c_codegen(
         Rcheck_exprs,
         Rcheck_lhses,
