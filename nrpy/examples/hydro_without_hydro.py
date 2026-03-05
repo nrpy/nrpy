@@ -113,9 +113,9 @@ if parallelization == "cuda":
 BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
 BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 BHaH.general_relativity.initial_data.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem="Spherical",
+    set_of_CoordSystems=set_of_CoordSystems,
     enable_checkpointing=True,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""

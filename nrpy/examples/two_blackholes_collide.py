@@ -177,9 +177,9 @@ if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunction_find_global_sum()
 
 BHaH.general_relativity.initial_data.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
+    set_of_CoordSystems=set_of_CoordSystems,
     ID_persist_struct_str="",
 )
 

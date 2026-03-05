@@ -100,18 +100,16 @@ BHaH.general_relativity.BSSN.diagnostics.register_CFunction_diagnostics(
 BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
 BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 
-for CoordSystem in set_of_CoordSystems:
-    par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-    BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
-        CoordSystem=CoordSystem,
-        IDtype=IDtype,
-        IDCoordSystem="Spherical",
-        enable_checkpointing=True,
-        ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
-        populate_ID_persist_struct_str=r"""
+BHaH.general_relativity.BSSN.initial_data.register_CFunction_initial_data(
+    IDtype=IDtype,
+    IDCoordSystem="Spherical",
+    set_of_CoordSystems=set_of_CoordSystems,
+    enable_checkpointing=True,
+    ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
+    populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
 """,
-        free_ID_persist_struct_str=r"""
+    free_ID_persist_struct_str=r"""
 {
   free(ID_persist.r_Schw_arr);
   free(ID_persist.rho_energy_arr);
@@ -123,8 +121,11 @@ TOVola_solve(commondata, &ID_persist);
   free(ID_persist.r_iso_arr);
 }
 """,
-        enable_T4munu=True,
-    )
+    enable_T4munu=True,
+)
+
+for CoordSystem in set_of_CoordSystems:
+    par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
     BHaH.general_relativity.BSSN.rhs_eval.register_CFunction_rhs_eval(
         CoordSystem=CoordSystem,

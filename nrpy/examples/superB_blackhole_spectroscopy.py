@@ -215,9 +215,9 @@ if enable_BHaHAHA:
 BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
 BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions()
 superB.initial_data.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
+    set_of_CoordSystems=set_of_CoordSystems,
     enable_checkpointing=False,
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
