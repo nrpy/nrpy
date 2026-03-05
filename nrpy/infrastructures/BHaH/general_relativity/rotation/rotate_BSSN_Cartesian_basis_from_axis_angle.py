@@ -1,14 +1,21 @@
 """
-Register C helper that rotates Cartesian-basis BSSN vectors and tensors.
+Generate C code for rotating BSSN Cartesian-basis fields from axis-angle input.
 
-Global SO(3) convention used here:
-- R maps rotating-frame components -> fixed-frame components.
-- Columns: R[:,0]=xhat, R[:,1]=yhat, R[:,2]=zhat (all in fixed basis).
-- v_fixed = R v_rot
-- v_rot = R^T v_fixed
-- T_fixed = R T_rot R^T
-- T_rot = R^T T_fixed R
-- DeltaR_dst_from_src = R_dst^T R_src
+This module registers a wrapper C routine that:
+1. takes an axis-angle pair ``(nU, dphi)``,
+2. builds a 3x3 rotation matrix using Rodrigues' formula, and
+3. delegates the actual field rotation to the matrix-based helper
+   ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
+
+If the provided axis has near-zero norm, the wrapper uses an identity matrix
+so the update is a deterministic no-op.
+
+SO(3) convention used here:
+- ``R`` maps rotating-frame components to fixed-frame components.
+- ``R[:,0]=xhat``, ``R[:,1]=yhat``, ``R[:,2]=zhat`` (all in fixed basis).
+- ``v_fixed = R v_rot`` and ``v_rot = R^T v_fixed``.
+- ``T_fixed = R T_rot R^T`` and ``T_rot = R^T T_fixed R``.
+- ``DeltaR_dst_from_src = R_dst^T R_src``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -25,28 +32,22 @@ import nrpy.c_function as cfc
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 
-def _rank2_exprs_lhses(
-    rank2: List[List[sp.Expr]], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-2 tensor into expression and LHS-name lists.
-
-    :param rank2: Rank-2 tensor.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        for j in range(3):
-            exprs.append(rank2[i][j])
-            lhses.append(f"{varname}[{i}][{j}]")
-    return exprs, lhses
-
-
 def register_CFunction_rotate_BSSN_Cartesian_basis_from_axis_angle() -> None:
     """
-    Register C function ``rotate_BSSN_Cartesian_basis_from_axis_angle``.
+    Register the generated C function
+    ``rotate_BSSN_Cartesian_basis_from_axis_angle``.
+
+    High-level behavior:
+    - Interprets ``nU`` and ``dphi`` as an axis-angle rotation.
+    - Normalizes ``nU`` when possible and builds ``R`` via Rodrigues.
+    - Falls back to identity when ``|nU|`` is effectively zero.
+    - Applies the rotation to ``vetU``, ``betU``, ``lambdaU``, ``hDD``, and
+      ``aDD`` by calling the DeltaR-based helper.
+
+    In-place contract:
+    - All vector and tensor arguments are read and overwritten in place.
+    - Symmetric tensor storage behavior is inherited from the callee:
+      only upper-triangular entries are authoritative and updated.
 
     Doctests:
     >>> import contextlib
@@ -103,7 +104,8 @@ Convention:
     R_expr = SO3Expressions.rodrigues_matrix_from_unit_axis(
         nU_unit_sym, sp.Symbol("dphi")
     )
-    R_exprs, R_lhses = _rank2_exprs_lhses(R_expr, "R")
+    R_exprs = [R_expr[i][j] for i in range(3) for j in range(3)]
+    R_lhses = [f"R[{i}][{j}]" for i in range(3) for j in range(3)]
     R_codegen = ccg.c_codegen(R_exprs, R_lhses, include_braces=False, verbose=False)
 
     # Step 3: Build Rodrigues matrix from (nU,dphi), then delegate to

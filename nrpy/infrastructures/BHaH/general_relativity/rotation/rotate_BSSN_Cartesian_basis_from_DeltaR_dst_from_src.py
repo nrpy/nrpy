@@ -1,14 +1,17 @@
 """
-Register C helper that rotates Cartesian-basis BSSN vectors and tensors by DeltaR.
+Generate C code for rotating BSSN Cartesian-basis fields using a matrix.
 
-Global SO(3) convention used here:
-- R maps rotating-frame components -> fixed-frame components.
-- Columns: R[:,0]=xhat, R[:,1]=yhat, R[:,2]=zhat (all in fixed basis).
-- v_fixed = R v_rot
-- v_rot = R^T v_fixed
-- T_fixed = R T_rot R^T
-- T_rot = R^T T_fixed R
-- DeltaR_dst_from_src = R_dst^T R_src
+This module registers the core C routine that rotates BSSN vectors and
+symmetric rank-2 tensors using a supplied matrix
+``DeltaR_dst_from_src``. The update is performed in place, with explicit
+alias-safe temporaries and equation-derived SO(3) expressions.
+
+SO(3) convention used here:
+- ``R`` maps rotating-frame components to fixed-frame components.
+- ``R[:,0]=xhat``, ``R[:,1]=yhat``, ``R[:,2]=zhat`` (all in fixed basis).
+- ``v_fixed = R v_rot`` and ``v_rot = R^T v_fixed``.
+- ``T_fixed = R T_rot R^T`` and ``T_rot = R^T T_fixed R``.
+- ``DeltaR_dst_from_src = R_dst^T R_src``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -26,46 +29,21 @@ import nrpy.indexedexp as ixp
 from nrpy.equations.rotation.SO3_rotations import SO3Expressions
 
 
-def _rank2_exprs_lhses(
-    rank2: List[List[sp.Expr]], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-2 tensor into expression and LHS-name lists.
-
-    :param rank2: Rank-2 tensor.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        for j in range(3):
-            exprs.append(rank2[i][j])
-            lhses.append(f"{varname}[{i}][{j}]")
-    return exprs, lhses
-
-
-def _rank1_exprs_lhses(
-    rank1: List[sp.Expr], varname: str
-) -> tuple[List[sp.Expr], List[str]]:
-    """
-    Flatten a rank-1 vector into expression and LHS-name lists.
-
-    :param rank1: Rank-1 vector.
-    :param varname: Output C variable name.
-    :return: Tuple of flattened expression and LHS-name lists.
-    """
-    exprs: List[sp.Expr] = []
-    lhses: List[str] = []
-    for i in range(3):
-        exprs.append(rank1[i])
-        lhses.append(f"{varname}[{i}]")
-    return exprs, lhses
-
-
 def register_CFunction_rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src() -> None:
     """
-    Register C function ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
+    Register the generated C function
+    ``rotate_BSSN_Cartesian_basis_from_DeltaR_dst_from_src``.
+
+    High-level behavior:
+    - Treats ``DeltaR_dst_from_src`` as the basis-change matrix from source
+      rotating components to destination rotating components.
+    - Rotates vectors ``vetU``, ``betU``, and ``lambdaU`` in place.
+    - Rotates symmetric tensors ``hDD`` and ``aDD`` in place.
+
+    Symmetric tensor storage contract:
+    - Input: upper-triangular components are authoritative.
+    - Internal: full symmetric local tensors are reconstructed.
+    - Output: only upper-triangular components are written back.
 
     Doctests:
     >>> import contextlib
@@ -136,14 +114,18 @@ Convention:
     ) -> tuple[List[sp.Expr], List[str]]:
         v_sym = _rank1_named(input_name)
         v_rot_expr = SO3Expressions.apply_R_to_vector(DeltaR_sym, v_sym)
-        return _rank1_exprs_lhses(v_rot_expr, output_name)
+        exprs = [v_rot_expr[i] for i in range(3)]
+        lhses = [f"{output_name}[{i}]" for i in range(3)]
+        return exprs, lhses
 
     def _tensor_exprs_lhses(
         input_name: str, output_name: str
     ) -> tuple[List[sp.Expr], List[str]]:
         t_sym = _rank2_named(input_name)
         t_rot_expr = SO3Expressions.apply_R_to_tensorDD(DeltaR_sym, t_sym)
-        return _rank2_exprs_lhses(t_rot_expr, output_name)
+        exprs = [t_rot_expr[i][j] for i in range(3) for j in range(3)]
+        lhses = [f"{output_name}[{i}][{j}]" for i in range(3) for j in range(3)]
+        return exprs, lhses
 
     all_exprs: List[sp.Expr] = []
     all_lhses: List[str] = []
