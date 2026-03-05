@@ -153,7 +153,14 @@ def rkf45_finalize_and_control_kernel() -> None:
             }}
             
             // Accumulate Maximum Normalized Error
-            err_norm = fmax(err_norm, DivCUDA(err_abs, scale));
+            double current_err = DivCUDA(err_abs, scale);
+            
+            // EXPLICIT NaN REJECTION: Guard against IEEE 754 fmax behavior
+            if (isnan(current_err)) {{
+                err_norm = 1e30; // Force an artificially massive error to guarantee rejection
+            }} else {{
+                err_norm = fmax(err_norm, current_err);
+            }}
         }}
     }}
 

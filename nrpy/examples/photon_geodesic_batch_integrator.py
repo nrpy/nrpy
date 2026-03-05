@@ -23,8 +23,10 @@ import subprocess
 import sys
 
 # NRPy core and helper modules for C code generation
+import nrpy.c_function as cfc
 import nrpy.helpers.generic as gh
 import nrpy.params as par
+
 
 # Physics/Math Generators (Symbolic definitions of spacetimes and geodesics)
 from nrpy.equations.general_relativity.geodesics import analytic_spacetimes as anasp
@@ -95,7 +97,7 @@ if __name__ == "__main__":
     shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
 
-    # Instruct NRPy+ to use the BHaH infrastructure for macro expansions and SoA layouts
+    # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
     # Explicitly set parallelization to CUDA to enable device-specific header generation
     par.set_parval_from_str("parallelization", "cuda")
@@ -129,7 +131,23 @@ if __name__ == "__main__":
     find_event_time_and_state.find_event_time_and_state()
     handle_source_plane_intersection.handle_source_plane_intersection()
     handle_window_plane_intersection.handle_window_plane_intersection()
+    
+    # The event manager kernel natively ingests the C code from the three helpers above into its prefunc.
     event_detection_manager_kernel.event_detection_manager_kernel()
+
+    # --- Native NRPy Cleanup ---
+    # Remove the inline helper functions from the global CFunction dictionary.
+    # Because the manager kernel incorporates their logic directly via its prefunc, 
+    # popping them prevents the infrastructure from generating standalone .cu files 
+    # and prevents 'ghost' prototypes in BHaH_function_prototypes.h. This eliminates 
+    # nvlink multiple-definition conflicts during relocatable device code linking.
+    for internal_func in [
+        "find_event_time_and_state", 
+        "handle_source_plane_intersection", 
+        "handle_window_plane_intersection"
+    ]:
+        cfc.CFunction_dict.pop(internal_func, None)
+
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
 
     # --- Infrastructure Helpers ---
@@ -189,7 +207,7 @@ if __name__ == "__main__":
 
     # Execution Initial Conditions
     par.glb_code_params_dict["scan_density"].defaultvalue = 700
-    par.glb_code_params_dict["t_start"].defaultvalue = 500.0
+    par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling
     print(" -> Generating parameter handling code...")

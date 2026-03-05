@@ -56,7 +56,7 @@ def handle_source_plane_intersection() -> None:
     2. Projects the intersection state $x^\mu$ into local 2D coordinates.
     3. Filters based on physical radial bounds [$r_{min}$, $r_{max}$]."""
     
-    cfunc_type = "BHAH_HD_FUNC bool"
+    cfunc_type = "static BHAH_HD_INLINE bool"
     name = "handle_source_plane_intersection"
     
     params = (

@@ -57,7 +57,7 @@ def handle_window_plane_intersection() -> None:
     2. Projects the 3D intersection point $x^i$ onto the local window axes.
     3. Validates if the intersection falls within the physical window boundaries."""
 
-    cfunc_type = "BHAH_HD_FUNC bool"
+    cfunc_type = "static BHAH_HD_INLINE bool"
     name = "handle_window_plane_intersection"
 
     params = (

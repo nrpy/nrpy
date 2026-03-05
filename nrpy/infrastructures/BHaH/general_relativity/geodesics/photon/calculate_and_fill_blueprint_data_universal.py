@@ -52,7 +52,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     // --- EVENT DETECTION & TERMINATION CHECKS ---
     // === Termination Dispatch: Celestial Sphere (Escape) ===
     if (d_status_bundle[c] == TERMINATION_TYPE_CELESTIAL_SPHERE) {
-        // Unpack final coordinates from the bundled state vector $f^\mu$ in VRAM.
+        // Unpack final coordinates from the bundled state vector $f^mu$ in VRAM.
         // Mapped to thread-local variables to minimize global memory reads.
         const double x_final = d_f_bundle[IDX_LOCAL(1, c, BUNDLE_CAPACITY)];
         const double y_final = d_f_bundle[IDX_LOCAL(2, c, BUNDLE_CAPACITY)];
@@ -62,11 +62,10 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         const double r_final = sqrt(x_final*x_final + y_final*y_final + z_final*z_final);
 
         // --- CELESTIAL PROJECTION ---
-        // Map the Cartesian escape coordinates to the celestial sphere to prevent division by zero.
-        if (r_final > 1e-9) {
-            d_result_bundle[c].final_theta = acos(z_final / r_final); // Polar angle $\theta$ relative to the $z$-axis.
-            d_result_bundle[c].final_phi = atan2(y_final, x_final);   // Azimuthal angle $\phi$ in the $xy$-plane.
-        }
+        // Map the Cartesian escape coordinates to the celestial sphere.
+        d_result_bundle[c].final_theta = acos(z_final / r_final); // Polar angle $\theta$ relative to the $z$-axis.
+        d_result_bundle[c].final_phi = atan2(y_final, x_final);   // Azimuthal angle $\phi$ in the $xy$-plane.
+        
     }
     """
 
@@ -113,7 +112,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     cudaMemcpy(d_status_bundle, all_photons->status + start_idx,
                sizeof(termination_type_t) * current_chunk_size, cudaMemcpyHostToDevice);
 
-    // Transfer the 9-component state vector $f^\mu$ for the current bundle.
+    // Transfer the 9-component state vector $f^mu$ for the current bundle.
     for(int m=0; m<9; m++) {{
         cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                    all_photons->f + (m * num_rays) + start_idx,

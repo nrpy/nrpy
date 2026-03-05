@@ -36,7 +36,7 @@ def find_event_time_and_state() -> None:
     Mapping logic directly to `f_local` preserves the strict sm_86 architecture limits by
     bypassing global memory fetches and keeping all intermediates within the 255
     registers per thread."""
-    cfunc_type = "BHAH_HD_FUNC void"
+    cfunc_type = "static BHAH_HD_INLINE void"
     name = "find_event_time_and_state"
     params = (
         "const double *restrict f_local, "

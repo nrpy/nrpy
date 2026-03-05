@@ -38,7 +38,8 @@ batch_structs_c_code = r"""
         FAILURE_T_MAX_EXCEEDED,            // 4: Integration exceeded maximum allowable physical time.
         FAILURE_SLOT_MANAGER_ERROR,        // 5: TimeSlotManager failed to allocate or retrieve the photon.
         TERMINATION_TYPE_FAILURE,          // 6: Generic unclassified numerical failure.
-        ACTIVE                             // 7: Photon is currently undergoing integration.
+        ACTIVE,                             // 7: Photon is currently undergoing integration.
+        REJECTED,                          // 8: Photon rkf45 step was rejected and step
     } termination_type_t;
 
     // Stores the final physical properties of a photon upon integration termination.
@@ -147,7 +148,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // The variable $y_{{pix}}$ is the local physical distance along the vertical camera axis.
     const double y_pix = -{cd_access}window_height/2.0 + (row + 0.5) * ({cd_access}window_height / {cd_access}scan_density);
 
-    // The array $target\_pos$ stores the global Cartesian intersection point on the projection window $x^\mu$.
+    // The array $target\_pos$ stores the global Cartesian intersection point on the projection window $x^mu$.
     const double target_pos[3] = {{
         {cd_access}window_center_x + x_pix*nx_0 + y_pix*ny_0,
         {cd_access}window_center_y + x_pix*nx_1 + y_pix*ny_1,

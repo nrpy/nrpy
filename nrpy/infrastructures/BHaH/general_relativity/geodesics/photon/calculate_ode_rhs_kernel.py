@@ -49,7 +49,7 @@ def calculate_ode_rhs_kernel(
     # This maps global memory directly to the local scalar registers expected by ccg.c_codegen.
     preamble_lines = [
         "// --- STATE VECTOR & COORDINATE UNPACKING ---",
-        "// Load spacetime coordinates $x^{\\mu}$ from the global state bundle."
+        "// Load spacetime coordinates $x^mu$ from the global state bundle."
     ]
 
     for j, sym in enumerate(coordinate_symbols):
@@ -60,7 +60,7 @@ def calculate_ode_rhs_kernel(
 
     preamble_lines.extend([
         "\n    // --- MOMENTUM UNPACKING ---",
-        "// Load contravariant four-momenta $p^{\\mu}$ from the global state bundle."
+        "// Load contravariant four-momenta $p^mu$ from the global state bundle."
     ])
     for j in range(4):
         if f"pU{j}" in used_symbol_names:
@@ -70,7 +70,7 @@ def calculate_ode_rhs_kernel(
 
     preamble_lines.extend([
         "\n    // --- METRIC TENSOR UNPACKING ---",
-        "// Load the symmetric covariant metric $g_{\\mu\\nu}$ from the pre-calculated VRAM bundle."
+        "// Load the symmetric covariant metric $g_mu_nu$ from the pre-calculated VRAM bundle."
     ])
     curr_idx = 0
     for m in range(4):
@@ -125,14 +125,14 @@ def calculate_ode_rhs_kernel(
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
-    #define IDX_F(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_METRIC maps a component to the flattened symmetric metric bundle.
-    #define IDX_METRIC(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_CONN maps a component to the flattened Christoffel connection bundle.
-    #define IDX_CONN(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_K maps a stage and component triplet to the flattened derivative bundle.
-    // Hardware Justification: The stage index dictates the massive offset $stage \\times 9 \\times Capacity$.
-    #define IDX_K(s, c, ray_id) (((s)-1) * 9 * chunk_size + (c) * chunk_size + (ray_id))
+    // Hardware Justification: The stage index dictates the massive offset $stage times 9 times Capacity$.
+    #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     {preamble_unpacking_str}
 
@@ -140,7 +140,7 @@ def calculate_ode_rhs_kernel(
     // Local register declarations to capture the evaluated derivatives $\\dot{{f}}$.
     double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8;
     
-    // Evaluate the derivatives $dx^{{\mu}}/d\\lambda$ and $dp^{{\mu}}/d\\lambda$ using hardware FMA instructions.
+    // Evaluate the derivatives $dx^{{\\mu}}/d\\lambda$ and $dp^{{\\mu}}/d\\lambda$ using hardware FMA instructions.
     {body_math}
 
     // --- GLOBAL VRAM WRITE ---
@@ -184,9 +184,9 @@ def calculate_ode_rhs_kernel(
     
     desc = r"""@brief Orchestrates the CUDA kernel for computing the photon geodesic ODE right-hand sides.
     
-    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in VRAM.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in VRAM.
-    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\Gamma^{\alpha}_{\beta\gamma}$ in VRAM.
+    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\\mu}$ in VRAM.
+    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\\mu\nu}$ in VRAM.
+    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\\Gamma^{\\alpha}_{\beta\\gamma}$ in VRAM.
     @param d_k_bundle Pointer to the massive derivative bundle array in VRAM.
     @param stage The current RKF45 stage index used to offset the write location.
     @param chunk_size The number of active rays in the current bundle batch.

@@ -59,7 +59,7 @@ def time_slot_manager_helpers() -> None:
 
     // @brief Computes the designated slot index for a given physical coordinate time.
     static inline int slot_get_index(const TimeSlotManager *tsm, double t) {
-        if (t < tsm->t_min || t >= tsm->t_max) return -1;
+        if (isnan(t) || t < tsm->t_min || t >= tsm->t_max) return -1;
         return (int)floor((t - tsm->t_min) / tsm->delta_t_slot);
     }
 

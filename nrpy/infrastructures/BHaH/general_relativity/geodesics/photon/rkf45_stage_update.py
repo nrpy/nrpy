@@ -49,11 +49,11 @@ def rkf45_stage_update() -> None:
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a (component, ray) pair to the flattened state bundle.
     // Layout: [Component][RayID] (Structure of Arrays for coalescing).
-    #define IDX_F(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     // IDX_K maps a (stage, component, ray) triplet to the flattened derivative bundle.
     // Layout: [Stage][Component][RayID].
-    #define IDX_K(s, c, ray_id) ((s) * 9 * chunk_size + (c) * chunk_size + (ray_id))
+    #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- STATE LOADING ---
     // Load the local step size $h$ from VRAM.

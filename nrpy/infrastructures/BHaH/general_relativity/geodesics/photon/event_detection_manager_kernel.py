@@ -66,6 +66,15 @@ def event_detection_manager_kernel() -> None:
     const double y = f_local[2]; 
     const double z = f_local[3];
 
+    // --- CELESTIAL ESCAPE CHECK ---
+    // Evaluates if the photon has exceeded the coordinate escape radius r_escape.
+    // Calculation occurs after hydration to reuse existing thread-local registers.
+    const double r_sq = x*x + y*y + z*z;
+    if (r_sq > (d_commondata.r_escape * d_commondata.r_escape)) {
+        d_status_bundle[i] = TERMINATION_TYPE_CELESTIAL_SPHERE;
+        return;
+    }
+
     // --- EVENT DETECTION & TERMINATION CHECKS ---
     // Evaluates physical plane intersections strictly using localized variables.
     

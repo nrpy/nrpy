@@ -55,11 +55,11 @@ def interpolation_kernel(spacetime_name: str) -> None:
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
-    #define IDX_F(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_METRIC maps a component to the flattened symmetric metric bundle.
-    #define IDX_METRIC(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_CONN maps a component to the flattened Christoffel connection bundle.
-    #define IDX_CONN(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- STATE UNPACKING ---
     // Local register array storing the 9-component state vector $f^{{\mu}}$.
