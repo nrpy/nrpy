@@ -13,7 +13,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.jacobians as jcb
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
@@ -109,27 +109,25 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian(
 
     # Step 6: Perform Basis Transformations to Cartesian
     # Use Jacobians to transform Tensors and Vectors from the simulation basis (e.g., Spherical) to Cartesian.
+    basis_transforms = bt.basis_transforms[
+        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
+    ]
 
     # Transform Metric: gamma_{ij}
-    gammaDD_cart = jcb.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem,
+    gammaDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
         AitoB.gammaDD,
     )
 
     # Transform Velocity: v^i
-    VU_Cart = jcb.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem, VU
-    )
+    VU_Cart = basis_transforms.basis_transform_vectorU_from_rfmbasis_to_Cartesian(VU)
 
     # Transform Shift: beta^i
-    betaU_Cart = jcb.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem,
+    betaU_Cart = basis_transforms.basis_transform_vectorU_from_rfmbasis_to_Cartesian(
         AitoB.betaU,
     )
 
     # Transform Momentum: S_i
-    StildeD_Cart = jcb.basis_transform_vectorD_from_rfmbasis_to_Cartesian(
-        CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem,
+    StildeD_Cart = basis_transforms.basis_transform_vectorD_from_rfmbasis_to_Cartesian(
         StildeD,
     )
 

@@ -13,7 +13,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.jacobians as jac
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -490,6 +490,7 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
     prefunc += "".join(sorted(defines_list, key=str.casefold))
 
     rfm = refmetric.reference_metric[CoordSystem]
+    basis_transforms = bt.basis_transforms[CoordSystem]
     rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
     rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
     ghatDD = rfm.ghatDD
@@ -504,11 +505,13 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
         for j in range(3):
             rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + ghatDD[i][j]
             rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
-    Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_gammabarDD
+    Cart_gammabarDD = (
+        basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+            rfm_gammabarDD
+        )
     )
-    Cart_AbarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_AbarDD
+    Cart_AbarDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        rfm_AbarDD
     )
     exp4phi = sp.sympify(0)
     cf = sp.Symbol("cf", real=True)
