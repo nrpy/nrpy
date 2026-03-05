@@ -132,8 +132,8 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const long int i = start_idx + c;
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
-    // IDX_F maps a component to the flattened state bundle using SoA layout aligned to the active chunk_size.
-    #define IDX_F(comp, ray_id) ((comp) * chunk_size + (ray_id))
+    // IDX_F maps a component to the flattened state bundle using SoA layout aligned to the active BUNDLE_CAPACITY.
+    #define IDX_F(comp, ray_id) ((comp) * BUNDLE_CAPACITY + (ray_id))
     // IDX_H maps to the 1D adaptive step size bundle.
     #define IDX_H(ray_id) (ray_id)
 
@@ -232,10 +232,10 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
     // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
     for(int m=0; m<9; m++) {{
-        cudaMemcpy(all_photons->f + (m * num_rays) + start_idx,
-                   d_f_bundle + (m * chunk_size),
-                   sizeof(double) * chunk_size,
-                   cudaMemcpyDeviceToHost);
+        cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
+                d_f_bundle + (m * BUNDLE_CAPACITY),
+                sizeof(double) * chunk_size,
+                cudaMemcpyDeviceToHost);
     }}
 
     // --- 1-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---

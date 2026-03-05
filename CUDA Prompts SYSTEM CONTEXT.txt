@@ -97,6 +97,22 @@ Part 2: Update to batch_integrator_numerical.cuThis update ensures the integrati
 Why this is safer for the RTX 3080:Register Stability: By moving the $r > r_{escape}$ check to the event manager, you stop integrating "dead" rays immediately without adding the expensive acos and atan2 functions to your high-frequency loop.Memory Headroom: Freeing the d_k_bundle alone recovers approximately $13.8\text{ MB}$ per $32\text{k}$ bundle, and the d_connection_bundle recovers $10.5\text{ MB}$. While small individually, purging these before the finalization pass ensures that any larger resolution runs do not trigger a VRAM overflow.
 """
 
+BUNDLE_CAPACITY Vs chunk_size:
+""""
+--- STRICT ARCHITECTURAL RULE: MEMORY STRIDING VS. THREAD BOUNDING ---
+When operating on batched data within the Split-Pipeline architecture, you MUST strictly separate the concepts of Memory Striding and Thread Bounding to prevent buffer overruns and zero-state data corruption on the final execution batch.
+
+* VRAM Scratchpad Allocation: Arrays like `d_f_bundle`, `d_metric_bundle`, and `d_k_bundle` are statically allocated based on the maximum hardware limit (`BUNDLE_CAPACITY = 32768`).
+* MEMORY STRIDING (MUST USE BUNDLE_CAPACITY): 
+  When defining Structure of Arrays (SoA) access macros, the offset multiplier MUST ALWAYS be `BUNDLE_CAPACITY`. The physical layout of the VRAM does not shrink on the final batch.
+  CORRECT: `#define IDX_F(comp, ray_id) ((comp) * BUNDLE_CAPACITY + (ray_id))`
+  FATAL: `#define IDX_F(comp, ray_id) ((comp) * chunk_size + (ray_id))`
+  
+* THREAD BOUNDING & TRANSFERS (MUST USE chunk_size):
+  The variable `chunk_size` represents the actual physical number of active photons in the current batch (which will be less than `BUNDLE_CAPACITY` on the final remainder batch). 
+  1. Thread Guards: You MUST use `chunk_size` to prevent phantom threads from executing: `if (i >= chunk_size) return;`
+  2. Memory Transfers: You MUST use `chunk_size` for the payload size in `cudaMemcpy` to avoid host-array buffer overruns: `sizeof(double) * chunk_size`. However, the device pointer offset must still respect the VRAM stride (e.g., `d_f_bundle + (comp * BUNDLE_CAPACITY)`).
+""""
 
 
 

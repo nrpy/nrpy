@@ -289,9 +289,9 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 // Ensure the master SoA is populated with valid floating-point data
 // before the RKF45 integrator attempts to step.
 printf("\n=================================================\n");
-printf(" INITIAL CONDITIONS PROBE (FIRST 3 RAYS)\n");
+printf(" INITIAL CONDITIONS PROBE (FIRST 1 RAYS)\n");
 printf("=================================================\n");
-for(int p = 0; p < 3; p++) {{
+for(int p = 0; p < 1; p++) {{
     printf("Ray %d:\n", p);
     printf("  State  -> t: %f, x: %f, y: %f, z: %f\n", 
            all_photons_host.f[0 * num_rays + p],
@@ -310,6 +310,49 @@ for(int p = 0; p < 3; p++) {{
         printf("  [FATAL] NaN detected in spatial coordinates!\n");
     }}
     }}
+    printf("=================================================\n\n");
+
+
+    // --- DIAGNOSTIC PROBE: ZERO-STATE DETECTOR ---
+    // Ensure the master SoA is populated with valid floating-point data
+    // and hunt down any perfectly zeroed states.
+    printf("\n=================================================\n");
+    printf(" ZERO-STATE DETECTOR PROBE\n");
+    printf("=================================================\n");
+    long int zero_ray_count = 0;
+
+    for (long int p = 0; p < num_rays; p++) {{
+        double t   = all_photons_host.f[0 * num_rays + p];
+        double x   = all_photons_host.f[1 * num_rays + p];
+        double y   = all_photons_host.f[2 * num_rays + p];
+        double z   = all_photons_host.f[3 * num_rays + p];
+        double p_t = all_photons_host.f[4 * num_rays + p];
+        double p_x = all_photons_host.f[5 * num_rays + p];
+        double p_y = all_photons_host.f[6 * num_rays + p];
+        double p_z = all_photons_host.f[7 * num_rays + p];
+
+        // Check if the entire 8-component vector is identically zero
+        if (t == 0.0 && x == 0.0 && y == 0.0 && z == 0.0 &&
+            p_t == 0.0 && p_x == 0.0 && p_y == 0.0 && p_z == 0.0) {{
+        
+        // Print the first 20 occurrences to inspect, then suppress the rest
+        if (zero_ray_count < 20) {{
+            printf("Ray %ld is exactly ALL ZEROS:\n", p);
+            printf("  State  -> t: %f, x: %f, y: %f, z: %f\n", t, x, y, z);
+            printf("  Moment -> p_t: %f, p_x: %f, p_y: %f, p_z: %f\n", p_t, p_x, p_y, p_z);
+        }} else if (zero_ray_count == 20) {{
+            printf("  ... suppressing further zero-state prints to prevent terminal flood ...\n");
+        }}
+        zero_ray_count++;
+        }}
+        
+        // Check for NaN propagation (only checking the first 3 rays to avoid flood)
+        if (p < 3 && isnan(x)) {{
+            printf("  [FATAL] NaN detected in spatial coordinates for Ray %ld!\n", p);
+        }}
+    }}
+
+    printf("Total completely zeroed states found: %ld out of %ld total rays.\n", zero_ray_count, num_rays);
     printf("=================================================\n\n");
 
 

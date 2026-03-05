@@ -75,9 +75,9 @@ def rkf45_finalize_and_control_kernel() -> None:
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F: Maps (component, ray) to the flattened State-of-Arrays (SoA) layout.
-    #define IDX_F(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_K: Maps (stage, component, ray) to the flattened derivative bundle.
-    #define IDX_K(s, c, ray_id) ((s) * 9 * chunk_size + (c) * chunk_size + (ray_id))
+    #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- PARAMETER LOAD ---
     // Load tolerances and state variables from Global VRAM and Constant Memory.
@@ -121,7 +121,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         double f_4th = MulCUDA(0.1157407407407407, k0);
         f_4th = FusedMulAddCUDA(0.5489278752436647, k2, f_4th);
         f_4th = FusedMulAddCUDA(0.5353313840155946, k3, f_4th);
-        f_4th = FusedMulSubCUDA(0.2, k4, f_4th);
+        f_4th = FusedMulAddCUDA(-0.2, k4, f_4th);
         f_4th = FusedMulAddCUDA(h_local, f_4th, f_n);
 
         // 4. Compute 5th Order Candidate (Physical Update)
@@ -129,7 +129,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         double update = MulCUDA(0.1185185185185185, k0);
         update = FusedMulAddCUDA(0.5189863547758285, k2, update);
         update = FusedMulAddCUDA(0.5061137692716641, k3, update);
-        update = FusedMulSubCUDA(0.18, k4, update);
+        update = FusedMulAddCUDA(-0.18, k4, update);
         update = FusedMulAddCUDA(0.0363636363636364, k5, update);
         
         const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n);

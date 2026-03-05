@@ -90,7 +90,7 @@ def g4DD_metric(
     @param commondata Struct containing global spacetime parameters.
     @param f_local Thread-local array containing the 1D flattened state vector.
     @param metric_local Thread-local array where the symmetric metric components are stored."""
-    cfunc_type = "BHAH_HD_INLINE void"
+    cfunc_type = "static BHAH_HD_INLINE void"
     name = f"g4DD_metric_{spacetime_name}"
     params = (
         "const commondata_struct *restrict commondata, "

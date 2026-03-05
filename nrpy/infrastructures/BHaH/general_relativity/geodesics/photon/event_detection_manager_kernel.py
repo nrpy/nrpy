@@ -39,7 +39,7 @@ def event_detection_manager_kernel() -> None:
 
     // --- MACROS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
-    #define IDX_F(c, ray_id) ((c) * chunk_size + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- TEMPORAL EXPLOSION CHECK ---
     // Reads $p^t$ directly from VRAM to terminate doomed rays before register hydration.

@@ -191,7 +191,7 @@ def diagnose_blueprint(blueprint_path: Optional[str] = None) -> None:
     print(header)
     print("-" * len(header))
 
-    for i in range(min(5, total_rays)):
+    for i in range(min(9, total_rays)):
         rec = data[i]
         tt = rec["termination_type"]
         # Context-aware display: show plane coords for disk hits, angles for sphere hits.

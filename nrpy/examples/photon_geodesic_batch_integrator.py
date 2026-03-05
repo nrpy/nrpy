@@ -131,9 +131,14 @@ if __name__ == "__main__":
     find_event_time_and_state.find_event_time_and_state()
     handle_source_plane_intersection.handle_source_plane_intersection()
     handle_window_plane_intersection.handle_window_plane_intersection()
-    
-    # The event manager kernel natively ingests the C code from the three helpers above into its prefunc.
     event_detection_manager_kernel.event_detection_manager_kernel()
+    calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
+
+    # --- Infrastructure Helpers ---
+    time_slot_manager_helpers.time_slot_manager_helpers()
+    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
+    main.main(SPACETIME)
+
 
     # --- Native NRPy Cleanup ---
     # Remove the inline helper functions from the global CFunction dictionary.
@@ -144,16 +149,11 @@ if __name__ == "__main__":
     for internal_func in [
         "find_event_time_and_state", 
         "handle_source_plane_intersection", 
-        "handle_window_plane_intersection"
+        "handle_window_plane_intersection",
+        f"g4DD_metric_{SPACETIME}", 
+        f"connections_{SPACETIME}"     
     ]:
         cfc.CFunction_dict.pop(internal_func, None)
-
-    calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
-
-    # --- Infrastructure Helpers ---
-    time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
-    main.main(SPACETIME)
 
     # ##########################################################################
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 700
+    par.glb_code_params_dict["scan_density"].defaultvalue = 3
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling

@@ -90,7 +90,7 @@ def connections(
     @param commondata Struct containing global spacetime parameters.
     @param f_local Thread-local array containing the 1D flattened state vector.
     @param Gamma_local Thread-local array where the connection components are stored."""
-    cfunc_type = "BHAH_HD_INLINE void"
+    cfunc_type = "static BHAH_HD_INLINE void"
     name = f"connections_{spacetime_name}"
     params = (
         "const commondata_struct *restrict commondata, "
