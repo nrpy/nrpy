@@ -66,13 +66,8 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 
 
-================================================================================
-LLM TASK DIRECTIVE: GENERATE THE NUMERICAL BATCH INTEGRATOR ORCHESTRATOR
-================================================================================
+Plan for batch integrator:
 """"
-ROLE: You are an expert HPC Software Engineer targeting the NVIDIA RTX 3080 (Ampere/sm_86).
-TASK: Generate the C-code for the master orchestrator (`batch_integrator_numerical.c`) using the provided Python metaprogramming wrapper.
-
 --- STRICT ARCHITECTURAL RULE: THE SPLIT-PIPELINE MANDATE ---
 To prevent register pressure from exceeding the 255-register limit of the RTX 3080 during complex numerical spacetime evaluations, you MUST strictly enforce a "Split-Pipeline" architecture.
 * Do NOT attempt to "fuse" the RKF45 integration kernels. 
