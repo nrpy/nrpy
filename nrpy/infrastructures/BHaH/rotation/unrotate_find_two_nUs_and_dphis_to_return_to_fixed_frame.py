@@ -48,8 +48,6 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     - Set slot 2 to deterministic identity output.
 
     Doctests:
-    >>> import contextlib
-    >>> import io
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
@@ -62,8 +60,8 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     True
     >>> "nU_part2[0] = 1.0;" in generated_str and "*dphi_part2 = 0.0;" in generated_str
     True
-    >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     validate_strings(generated_str, "openmp", file_ext="c")
+    >>> validation_desc = "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame__openmp"
+    >>> validate_strings(generated_str, validation_desc, file_ext="c")
     """
     # Step 1: Register cumulative-hat commondata CodeParameters.
     _ = par.register_CodeParameter(

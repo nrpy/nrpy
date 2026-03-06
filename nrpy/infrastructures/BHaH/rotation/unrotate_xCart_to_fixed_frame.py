@@ -45,8 +45,6 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     - No axis-angle conversion is used in this path.
 
     Doctests:
-    >>> import contextlib
-    >>> import io
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
@@ -61,8 +59,8 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     False
     >>> "const REAL x_in[3]" in generated_str and "xCart[0]" in generated_str and "detR" in generated_str
     True
-    >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     validate_strings(generated_str, "openmp", file_ext="c")
+    >>> validation_desc = "unrotate_xCart_to_fixed_frame__openmp"
+    >>> validate_strings(generated_str, validation_desc, file_ext="c")
 
     This verifies numerical behavior for a 180-degree basis flip without any
     axis-angle decomposition in the hot path. The operation tested here is
