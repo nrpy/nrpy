@@ -433,9 +433,6 @@ This function performs the following steps:
 if __name__ == "__main__":
     import doctest
 
-    # Ensure doctests can write cache files in restricted environments.
-    os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
-
     results = doctest.testmod()
 
     if results.failed > 0:

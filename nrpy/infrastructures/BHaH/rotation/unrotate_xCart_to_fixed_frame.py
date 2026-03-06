@@ -1,5 +1,5 @@
 """
-Generate ``unrotate_xCart_to_fixed_frame`` C code for matrix-first frame unrotation.
+Generate ``unrotate_xCart_to_fixed_frame`` C code for direct frame unrotation.
 
 This module emits a hot-path C routine that consumes cumulative basis vectors
 (``xhat``, ``yhat``, ``zhat``) from ``commondata``, reconstructs the rotation
@@ -48,10 +48,9 @@ def register_CFunction_unrotate_xCart_to_fixed_frame() -> None:
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.register_all import register_CFunctions
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
-    >>> register_CFunctions()
+    >>> register_CFunction_unrotate_xCart_to_fixed_frame()
     >>> generated_str = cfc.CFunction_dict["unrotate_xCart_to_fixed_frame"].full_function
     >>> "unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(" in generated_str
     False
