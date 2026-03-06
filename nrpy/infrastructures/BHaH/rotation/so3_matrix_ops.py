@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from __future__ import annotations
 
-from typing import List, Tuple, cast
+from typing import List, Tuple
 
 import sympy as sp
 
@@ -63,9 +63,7 @@ Convention:
 
 def register_CFunction_so3_axis_angle_to_R() -> None:
     """Register `so3_axis_angle_to_R`."""
-    n_unit_sym = cast(
-        List[sp.Expr], [sp.Symbol("nx"), sp.Symbol("ny"), sp.Symbol("nz")]
-    )
+    n_unit_sym: List[sp.Expr] = [sp.Symbol("nx"), sp.Symbol("ny"), sp.Symbol("nz")]
     R_expr = SO3Expressions.rodrigues_matrix_from_unit_axis(
         n_unit_sym, sp.Symbol("dphi")
     )
