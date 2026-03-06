@@ -51,10 +51,8 @@ def register_CFunction_unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> from nrpy.helpers.generic import validate_strings
-    >>> from nrpy.infrastructures.BHaH.rotation.register_all import register_CFunctions
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
-    >>> register_CFunctions()
     >>> generated_str = cfc.CFunction_dict["unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame"].full_function
     >>> "Rcheck[3][3]" in generated_str and "max_abs_err" in generated_str
     True
