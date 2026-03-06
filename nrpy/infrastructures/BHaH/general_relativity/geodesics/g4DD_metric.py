@@ -164,16 +164,7 @@ if __name__ == "__main__":
             raise RuntimeError(f"FAIL: '{cfunc_name}' was not registered.")
 
         logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
-
-        # 4. Output Files
-        Bdefines_h.output_BHaH_defines_h(project_dir=".")
-        for func_name, c_function in cfc.CFunction_dict.items():
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(c_function.full_function)
-            logger.info("    ... Wrote %s", filename)
-
-        logger.info(" -> Success! All files generated.")
+        logger.info(" -> Success! All tests passed without file output.")
 
     except (RuntimeError, ValueError) as e:
         logger.error(" -> FAIL: g4DD_metric.py test failed with error: %s", e)

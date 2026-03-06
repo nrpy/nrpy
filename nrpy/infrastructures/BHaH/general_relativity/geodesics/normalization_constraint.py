@@ -134,8 +134,6 @@ if __name__ == "__main__":
     logger = logging.getLogger("TestNormCheckAnalytic")
 
     # --- Configuration ---
-    # We still need a valid key to grab the symbolic expression from Geodesic_Equations,
-    # even though the final C function name won't include the spacetime.
     SPACETIME = "KerrSchild_Cartesian"
     PARTICLE_test = "photon"
     # ---------------------
@@ -152,21 +150,16 @@ if __name__ == "__main__":
         # 1. Acquire Symbolic Data
         logger.info(" -> Acquiring symbolic normalization constraint...")
         geodesic_data = Geodesic_Equations[GEO_KEY]
-        # [Fix 2] Renamed variable to avoid shadowing function argument
         test_norm_expr = geodesic_data.norm_constraint_expr
 
         if test_norm_expr is None:
             raise ValueError(f"norm_constraint_expr is None for key {GEO_KEY}")
 
         # 2. Run the Generator
-        # Note: We pass PARTICLE here to handle array sizing and naming.
-        # Spacetime name is no longer passed.
         logger.info(" -> Calling normalization_constraint()...")
         normalization_constraint(test_norm_expr, PARTICLE_test)
 
         # 3. Validation
-        # Construct expected name to verify registration
-        # [Fix 3] Renamed variable to avoid shadowing local variable in function
         test_suffix = "photon" if PARTICLE_test == "photon" else "massive"
         cfunc_name = f"normalization_constraint_{test_suffix}"
 
@@ -175,13 +168,7 @@ if __name__ == "__main__":
                 f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
             )
         logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
-
-        # 4. Output Files
-        filename = f"{cfunc_name}.c"
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info(" -> Written to %s", filename)
+        logger.info(" -> Success! All tests passed without file output.")
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: normalization_constraint test failed with error: %s", e)

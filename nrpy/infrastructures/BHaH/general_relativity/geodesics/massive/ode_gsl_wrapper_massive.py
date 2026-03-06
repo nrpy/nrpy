@@ -75,8 +75,6 @@ if __name__ == "__main__":
     import os
     import sys
 
-    import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-
     # Ensure local modules can be imported
     sys.path.append(os.getcwd())
 
@@ -86,23 +84,16 @@ if __name__ == "__main__":
 
     SPACETIME = "KerrSchild_Cartesian"
 
-    logger.info("Test: Generating GSL Wrapper C-code for %s...", SPACETIME)
+    logger.info("Test: Registering GSL Wrapper C-code for %s...", SPACETIME)
 
     try:
         # 1. Run the Generator
         ode_gsl_wrapper_massive(SPACETIME)
 
-        # 2. Output
+        # 2. Verify Registration
         func_name = f"ode_gsl_wrapper_massive_{SPACETIME}"
         if func_name in cfc.CFunction_dict:
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(cfc.CFunction_dict[func_name].full_function)
-            logger.info(" -> Success! Wrote %s", filename)
-
-            # Also output defines to check struct registration
-            Bdefines_h.output_BHaH_defines_h(project_dir=".")
-            logger.info(" -> Updated BHaH_defines.h")
+            logger.info(" -> Success! Function '%s' registered.", func_name)
         else:
             raise RuntimeError(f"Function {func_name} not registered.")
 

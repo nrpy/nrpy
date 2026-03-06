@@ -129,7 +129,7 @@ if __name__ == "__main__":
     SPACETIME = "KerrSchild_Cartesian"
     GEO_KEY = f"{SPACETIME}_photon"
 
-    logger.info("Test: Generating ODE RHS C-code...")
+    logger.info("Test: Registering ODE RHS C-code...")
 
     try:
         # 1. Acquire Symbolic Data
@@ -138,13 +138,10 @@ if __name__ == "__main__":
         # 2. Run the Generator (Passing both RHS expressions and Coordinate list)
         calculate_ode_rhs(geodesic_data.geodesic_rhs, geodesic_data.xx)
 
-        # 3. Output
+        # 3. Validate Registration
         func_name = "calculate_ode_rhs"
         if func_name in cfc.CFunction_dict:
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(cfc.CFunction_dict[func_name].full_function)
-            logger.info(" -> Success! Wrote %s", filename)
+            logger.info(" -> Success! Function %s registered.", func_name)
         else:
             raise RuntimeError(f"Function {func_name} not registered.")
 
