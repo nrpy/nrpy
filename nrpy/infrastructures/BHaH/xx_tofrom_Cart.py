@@ -18,7 +18,6 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-from nrpy.equations.generalrfm import fisheye
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -127,6 +126,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     Setting up reference_metric[UWedgeHSinhSph]...
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
+    Setting up reference_metric[GeneralRFM_fisheyeN2]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -140,23 +140,20 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     parallelization = par.parval_from_str("parallelization")
 
-    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
-    num_transitions = -1
-    if is_fisheye:
-        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
-        if not suffix.isdigit():
-            raise ValueError(
-                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
-            )
-        num_transitions = int(suffix)
-        if num_transitions < 1:
-            raise ValueError(
-                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
-            )
-
-    rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
+    rfm = refmetric.reference_metric[CoordSystem]
+    rfm_obj = rfm
+    is_generalrfm = CoordSystem.startswith("GeneralRFM")
+    provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    provider = getattr(rfm, "general_rfm_provider", None)
+    provider_meta = getattr(rfm, "general_rfm_provider_meta", {})
+    is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
+    if is_generalrfm and not is_fisheye_provider:
+        raise ValueError(
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2."
+        )
+    num_transitions = int(provider_meta.get("num_transitions", -1))
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
-        {"r", "rCart"} if is_fisheye else set()
+        {"r", "rCart"} if is_fisheye_provider else set()
     )
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
@@ -172,7 +169,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     # Step 2: Generate the core C-code for the coordinate transformation.
     core_body_list: List[str] = []
-    if is_fisheye:
+    if is_fisheye_provider:
         # ---------------------------------------------------------------------
         # Fisheye inverse map (Cart -> xx):
         #
@@ -185,18 +182,17 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         # then recover:
         #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
         # ---------------------------------------------------------------------
-        # Register fisheye CodeParameters (and reuse their symbols):
-        fe = fisheye.build_fisheye(num_transitions=num_transitions)
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        fisheye_provider = provider
 
         # Closed-form 1D expressions for rbar(r) and drbar/dr:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        (rbar_unscaled, drbar_unscaled, _, _) = (
-            fisheye._radius_map_unscaled_and_derivs_closed_form(
-                r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
-            )
+        rbar_unscaled, drbar_unscaled, _, _ = (
+            fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
         )
-        rbar_of_r_expr = fe.c * rbar_unscaled
-        drbar_dr_expr = fe.c * drbar_unscaled
+        rbar_of_r_expr = fisheye_provider.c * rbar_unscaled
+        drbar_dr_expr = fisheye_provider.c * drbar_unscaled
 
         # Newton solve: f(r) = rbar(r) - rCart = 0, so f'(r) = drbar/dr
         rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
@@ -214,8 +210,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             verbose=False,
         )
 
-        core_body_list.append(
-            f"""
+        core_body_list.append(f"""
   const REAL rCart = sqrt(Cartx*Cartx + Carty*Carty + Cartz*Cartz);
   if(rCart <= (REAL)0.0) {{
     xx[0] = (REAL)0.0;
@@ -293,20 +288,15 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     xx[1] = scale * Carty;
     xx[2] = scale * Cartz;
   }}
-"""
-        )
+""")
 
-    elif cast(refmetric.ReferenceMetric, rfm).requires_NewtonRaphson_for_Cart_to_xx:
+    elif rfm_obj.requires_NewtonRaphson_for_Cart_to_xx:
         # Part 2a: Handle mixed analytical and Newton-Raphson inversions.
         analytic_exprs: List[sp.Expr] = []
         analytic_names: List[str] = []
         for i in range(3):
-            if cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[
-                i
-            ] == sp.sympify(0):
-                analytic_exprs.append(
-                    cast(refmetric.ReferenceMetric, rfm).Cart_to_xx[i]
-                )
+            if rfm_obj.NewtonRaphson_f_of_xx[i] == sp.sympify(0):
+                analytic_exprs.append(rfm_obj.Cart_to_xx[i])
                 analytic_names.append(f"xx[{i}]")
 
         if analytic_exprs:
@@ -322,24 +312,20 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 )
             )
 
-        core_body_list.append(
-            """
+        core_body_list.append("""
   // Next perform Newton-Raphson iterations as needed:
   const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
   const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
   int iter;
-"""
-        )
+""")
         for i in range(3):
-            if cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[
-                i
-            ] != sp.sympify(0):
+            if rfm_obj.NewtonRaphson_f_of_xx[i] != sp.sympify(0):
                 nr_input_exprs = [
-                    cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[i],
+                    rfm_obj.NewtonRaphson_f_of_xx[i],
                     sp.diff(
-                        cast(refmetric.ReferenceMetric, rfm).NewtonRaphson_f_of_xx[i],
-                        cast(refmetric.ReferenceMetric, rfm).xx[i],
+                        rfm_obj.NewtonRaphson_f_of_xx[i],
+                        rfm_obj.xx[i],
                     ),
                 ]
                 nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
@@ -351,8 +337,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                     include_braces=True,
                     verbose=False,
                 )
-                core_body_list.append(
-                    f"""
+                core_body_list.append(f"""
   {{
   int tolerance_has_been_met = 0;
   iter = 0;
@@ -385,12 +370,11 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   }}
   xx[{i}] = xx{i};
   }}
-"""
-                )
+""")
     else:
         # Part 2b: Handle purely analytical inversions.
         processed_exprs = _prepare_sympy_exprs_for_codegen(
-            list(cast(refmetric.ReferenceMetric, rfm).Cart_to_xx), local_C_vars
+            list(rfm_obj.Cart_to_xx), local_C_vars
         )
         core_body_list.append(
             ccg.c_codegen(
@@ -401,8 +385,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     # Part 2c: Add logic to find the nearest grid point index.
-    core_body_list.append(
-        """
+    core_body_list.append("""
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
       //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
@@ -418,31 +401,26 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       Cart_to_i0i1i2[0] = (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[1] = (int)( ( xx[1] - params->xxmin1 ) / params->dxx1 + (REAL)NGHOSTS );
       Cart_to_i0i1i2[2] = (int)( ( xx[2] - params->xxmin2 ) / params->dxx2 + (REAL)NGHOSTS );
-"""
-    )
+""")
     core_body = "".join(core_body_list)
 
     # Step 3: Assemble the full C function body.
-    body_parts = [
-        """
+    body_parts = ["""
   // Set (Cartx, Carty, Cartz) relative to the global (as opposed to local) grid.
   //   This local grid may be offset from the origin by adjusting
   //   (Cart_originx, Cart_originy, Cart_originz) to nonzero values.
   REAL Cartx = xCart[0];
   REAL Carty = xCart[1];
   REAL Cartz = xCart[2];
-"""
-    ]
+"""]
     if relative_to == "local_grid_center":
-        body_parts.append(
-            """
+        body_parts.append("""
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
   Cartx -= params->Cart_originx;
   Carty -= params->Cart_originy;
   Cartz -= params->Cart_originz;
   {
-"""
-        )
+""")
         body_parts.append(core_body)
         body_parts.append("  }\n")
     else:
@@ -503,34 +481,30 @@ def register_CFunction_xx_to_Cart(
 
     parallelization = par.parval_from_str("parallelization")
 
-    is_fisheye = CoordSystem.startswith("GeneralRFM_fisheyeN")
-    num_transitions = -1
-    if is_fisheye:
-        suffix = CoordSystem[len("GeneralRFM_fisheyeN") :]
-        if not suffix.isdigit():
-            raise ValueError(
-                f"Invalid fisheye CoordSystem='{CoordSystem}'. Expected 'GeneralRFM_fisheyeN[integer]'."
-            )
-        num_transitions = int(suffix)
-        if num_transitions < 1:
-            raise ValueError(
-                f"Invalid fisheye CoordSystem='{CoordSystem}': N must be >= 1."
-            )
+    rfm = refmetric.reference_metric[CoordSystem]
+    is_generalrfm = CoordSystem.startswith("GeneralRFM")
+    provider_name = getattr(rfm, "general_rfm_provider_name", "")
+    provider = getattr(rfm, "general_rfm_provider", None)
+    is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
+    if is_generalrfm and not is_fisheye_provider:
+        raise ValueError(
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in xx_to_Cart."
+        )
 
-    rfm = refmetric.reference_metric[CoordSystem] if not is_fisheye else None
-    local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye else set())
+    local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye_provider else set())
 
     # Step 2: Prepare SymPy expressions for C code generation.
-    if is_fisheye:
-        # Register fisheye CodeParameters (and reuse their symbols):
-        fe = fisheye.build_fisheye(num_transitions=num_transitions)
+    if is_fisheye_provider:
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        fisheye_provider = provider
 
         # Closed-form 1D expression for rbar(r):
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        (rbar_unscaled, _, _, _) = fisheye._radius_map_unscaled_and_derivs_closed_form(
-            r=r_local, a_list=fe.a_list, R_list=fe.R_list, s_list=fe.s_list
+        rbar_unscaled, _, _, _ = (
+            fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
         )
-        rbar_expr_local = fe.c * rbar_unscaled
+        rbar_expr_local = fisheye_provider.c * rbar_unscaled
 
         rbar_processed = _prepare_sympy_exprs_for_codegen(
             [rbar_expr_local], local_C_vars
@@ -562,8 +536,7 @@ if(r2 <= (REAL)0.0) {{
 """
     else:
         raw_xx_to_Cart_exprs = [
-            cast(refmetric.ReferenceMetric, rfm).xx_to_Cart[i] + gri.Cart_origin[i]
-            for i in range(3)
+            rfm.xx_to_Cart[i] + gri.Cart_origin[i] for i in range(3)
         ]
         processed_exprs = _prepare_sympy_exprs_for_codegen(
             raw_xx_to_Cart_exprs, local_C_vars
@@ -574,14 +547,11 @@ if(r2 <= (REAL)0.0) {{
             processed_exprs,
             ["xCart[0]", "xCart[1]", "xCart[2]"],
         )
-        body = (
-            """
+        body = """
 const REAL xx0 = xx[0];
 const REAL xx1 = xx[1];
 const REAL xx2 = xx[2];
-"""
-            + codegen_results
-        )
+""" + codegen_results
 
     # Step 4: Register the C function.
     cfc.register_CFunction(

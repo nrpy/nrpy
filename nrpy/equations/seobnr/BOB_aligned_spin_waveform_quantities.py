@@ -61,7 +61,7 @@ class BOB_aligned_spin_waveform_quantities:
 
         :return None:
         """
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, t) = sp.symbols(
+        m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_0, t = sp.symbols(
             "m1 m2 chi1 chi2 omega_qnm tau_qnm t_0 t", real=True
         )
 

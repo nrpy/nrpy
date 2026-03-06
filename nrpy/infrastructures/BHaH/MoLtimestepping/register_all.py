@@ -22,6 +22,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
+
 import nrpy.params as par
 from nrpy.infrastructures import BHaH
 

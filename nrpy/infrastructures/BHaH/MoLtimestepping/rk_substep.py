@@ -26,6 +26,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
          Samuel Tootle (GPU support in NRPy2)
          Brandon Clark (original, NRPy1 version)
 """
+
 from typing import Dict, List, Union
 
 import sympy as sp

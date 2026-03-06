@@ -150,6 +150,8 @@ def get_coord_family(cs: str) -> str:
     :raises ValueError: If the coordinate system is not supported.
     :return: The coordinate family name.
     """
+    if cs.startswith("GeneralRFM_fisheye"):
+        return "Cartesian"
     plane_configs = bhah_plane_configs()
     for family in plane_configs["xy"]:
         if family in cs:
@@ -174,7 +176,7 @@ def generate_plane_loop_code(config: Dict[str, Sequence[str]], plane: str) -> st
     # Map written coordinates and output file by plane:
     # xy -> write x,y into row[0],row[1] and use out_xy
     # yz -> write y, z into row[0],row[1] and use out_yz
-    (row_map, num_coords, out_file) = (
+    row_map, num_coords, out_file = (
         ("row[0]=xCart[0]; row[1]=xCart[1];", 2, "out_xy")
         if plane == "xy"
         else ("row[0]=xCart[1]; row[1]=xCart[2];", 2, "out_yz")
@@ -352,7 +354,6 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
   fclose(out_xy);
   fclose(out_yz);
 """
-
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,

@@ -1,3 +1,3 @@
-from . import (    
-    diagnostics_nearest,    
+from . import (
+    diagnostics_nearest,
 )

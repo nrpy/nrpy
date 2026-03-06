@@ -11,6 +11,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
 import sys
 from inspect import currentframe as cfr
 from types import FrameType as FT
@@ -20,7 +21,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.jacobians as jac
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -52,6 +53,7 @@ def register_CFunction_numgrid__external_input_set_up() -> (
     Grid function "external_spherical_hDD22" with rank 2 has parity type 9.
     Grid function "external_spherical_trK" with rank 0 has parity type 0.
     Grid function "external_spherical_WW" with rank 0 has parity type 0.
+    Setting up basis_transforms[Spherical]...
     Setting up reference_metric[Spherical]...
     """
     if pcg.pcg_registration_phase():
@@ -277,13 +279,14 @@ This function performs the following steps:
             for j in range(i, 3):
                 body += f"const REAL Cart_{prefix}{i}{j} = external_input_gfs[IDX4(INTERP_{prefix.upper()}{labels[i]}{labels[j]}GF, i0, i1, i2)];\n"
     # Cartesian -> Spherical basis transform
+    basis_transforms = bt.basis_transforms["Spherical"]
     Cart_gammaDD = ixp.declarerank2("Cart_gammaDD", symmetry="sym01")
-    Sph_gammaDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        "Spherical", Cart_gammaDD
+    Sph_gammaDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        Cart_gammaDD
     )
     Cart_KDD = ixp.declarerank2("Cart_KDD", symmetry="sym01")
-    Sph_KDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        "Spherical", Cart_KDD
+    Sph_KDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        Cart_KDD
     )
     rfm = refmetric.reference_metric["Spherical"]
 
@@ -429,6 +432,9 @@ This function performs the following steps:
 
 if __name__ == "__main__":
     import doctest
+
+    # Ensure doctests can write cache files in restricted environments.
+    os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
 
     results = doctest.testmod()
 

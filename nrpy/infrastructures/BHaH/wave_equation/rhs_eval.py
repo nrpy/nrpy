@@ -71,7 +71,8 @@ def register_CFunction_rhs_eval(
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     if enable_rfm_precompute:
         params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
+            "REAL *restrict xx[3]",
+            "const rfm_struct *restrict rfmstruct, const REAL *restrict auxevol_gfs",
         )
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquationCurvilinear_RHSs(CoordSystem, enable_rfm_precompute)
@@ -141,6 +142,7 @@ def register_CFunction_rhs_eval(
     if enable_rfm_precompute:
         arg_dict_cuda = {
             "rfmstruct": "const rfm_struct *restrict",
+            "auxevol_gfs": "const REAL *restrict",
             **arg_dict_cuda,
         }
     else:

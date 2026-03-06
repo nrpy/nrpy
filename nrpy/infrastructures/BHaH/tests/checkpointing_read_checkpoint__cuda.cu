@@ -24,13 +24,17 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
 
-  // If the checkpoint doesn't exist then return 0.
-  if (access(filename, F_OK) != 0)
-    return 0;
-
+  // If the checkpoint doesn't exist then return 0; if it does exist and can't be read, then error out.
   FILE *cp_file = fopen(filename, "r");
+  if (cp_file == NULL) {
+    if (errno == ENOENT)
+      return 0; // checkpoint doesn't exist
+    fprintf(stderr, "read_checkpoint: FATAL: could not open %s for reading: %s\n", filename, strerror(errno));
+    exit(EXIT_FAILURE);
+  } // END IF fopen failed
+
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
-  fprintf(stderr, "cd struct size = %ld time=%e\n", sizeof(commondata_struct), commondata->time);
+  fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
@@ -38,14 +42,20 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     int count;
     FREAD(&count, sizeof(int), 1, cp_file, filename, "count");
 
-    int *out_data_indices = (int *)malloc(sizeof(int) * count);
-    REAL *compact_out_data = (REAL *)malloc(sizeof(REAL) * NUM_EVOL_GFS * count);
+    int *restrict out_data_indices;
+    BHAH_MALLOC(out_data_indices, sizeof(int) * count);
+    REAL *restrict compact_out_data;
+    BHAH_MALLOC(compact_out_data, sizeof(REAL) * NUM_EVOL_GFS * count);
 
     const int Nxx_plus_2NGHOSTS0 = griddata[grid].params.Nxx_plus_2NGHOSTS0;
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
-    const int ntot_grid =
-        griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2;
+    const int ntot_grid = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+    if (count < 0 || count > ntot_grid) {
+      fprintf(stderr, "read_checkpoint: FATAL: invalid count=%d for grid=%d (ntot_grid=%d) in %s\n", count, grid, ntot_grid, filename);
+      exit(EXIT_FAILURE);
+    } // END IF count is invalid, error out.
     fprintf(stderr, "Reading checkpoint: grid = %d | pts = %d / %d | %d\n", grid, count, ntot_grid, Nxx_plus_2NGHOSTS2);
     FREAD(out_data_indices, sizeof(int), count, cp_file, filename, "out_data_indices");
     FREAD(compact_out_data, sizeof(REAL), count * NUM_EVOL_GFS, cp_file, filename, "compact_out_data");

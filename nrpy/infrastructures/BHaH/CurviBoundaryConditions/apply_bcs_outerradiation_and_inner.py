@@ -458,9 +458,7 @@ const REAL rinv = 1.0 / r;
 const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * rinv);
 
 return partial_t_f_outgoing_wave + k * rinv*rinv*rinv;
-""".replace(
-        "params,", "streamid," if parallelization == "cuda" else "params,"
-    )
+""".replace("params,", "streamid," if parallelization == "cuda" else "params,")
 
     cf = cfc.CFunction(
         subdirectory=CoordSystem,
@@ -535,9 +533,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
                                                         i0,i1,i2, FACEX0,FACEX1,FACEX2);
     }
   }
-""".replace(
-        "params,", "streamid," if parallelization == "cuda" else "params,"
-    ).replace(
+""".replace("params,", "streamid," if parallelization == "cuda" else "params,").replace(
         "custom_", "d_gridfunctions_" if parallelization == "cuda" else "custom_"
     )
     comments = "Apply BCs to pure points."

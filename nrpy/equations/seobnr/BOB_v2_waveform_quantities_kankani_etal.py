@@ -54,11 +54,11 @@ class BOB_v2_waveform_quantities:
             - 'wdot_t_attach' : the first time derivative of the angular frequency of the (l=2,m=2) mode at the t_attach.
         :return None:
         """
-        (m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t) = sp.symbols(
+        m1, m2, chi1, chi2, omega_qnm, tau_qnm, t_attach, t_p, t = sp.symbols(
             "m1 m2 chi1 chi2 omega_qnm tau_qnm t_attach t_p t", real=True
         )
 
-        (M_f, a_f) = sp.symbols("M_f a_f", real=True)
+        M_f, a_f = sp.symbols("M_f a_f", real=True)
         chif = a_f / M_f
 
         # NQC matching parameters

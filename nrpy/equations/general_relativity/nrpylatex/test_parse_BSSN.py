@@ -38,8 +38,7 @@ def test_example_BSSN() -> bool:
     alpha_rhs = cast(sp.Expr, None)
     trK_rhs = cast(sp.Expr, None)
 
-    parse_latex(
-        r"""
+    parse_latex(r"""
         % declare coord x y z
         % ignore "\begin{align}" "\end{align}" "\\%" "\qquad"
 
@@ -125,8 +124,7 @@ def test_example_BSSN() -> bool:
                 + \frac{1}{2} \Delta^k \left(\Delta_{ijk} + \Delta_{jik}\right) \\%
                 &\qquad+ \bar{\gamma}^{kl} \left(\Delta^m_{ki} \Delta_{jml} + \Delta^m_{kj} \Delta_{iml} + \Delta^m_{ik} \Delta_{mjl}\right)
         \end{align}
-    """
-    )
+    """)
     rhs = BSSN_RHSs.BSSN_RHSs["Cartesian_RbarDD_gridfunctions"]
     (
         trusted_alpha_rhs,
