@@ -102,6 +102,8 @@ def register_CFunction_initial_data(
     IDtype: str,
     IDCoordSystem: str,
     ID_persist_struct_str: str,
+    initial_data_addl_includes: Optional[List[str]] = None,
+    initial_data_prefunc_str: str = "",
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
@@ -120,6 +122,8 @@ def register_CFunction_initial_data(
     :param IDCoordSystem: The native coordinate system of the initial data.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
+    :param initial_data_addl_includes: Optional additional include headers for initial_data().
+    :param initial_data_prefunc_str: Optional helper C code emitted before initial_data().
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
@@ -131,6 +135,8 @@ def register_CFunction_initial_data(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if initial_data_addl_includes:
+        includes.extend(initial_data_addl_includes)
 
     try:
         ID: Union[InitialData_Cartesian, InitialData_Spherical]
@@ -177,10 +183,24 @@ if( read_checkpoint(commondata, griddata) ) return;
     body += """
 switch (initial_data_part) {
   case INITIALDATA_BIN_ONE: {"""
+    body += """
+    const bool is_root_pe = (CkMyPe() == 0);
+    const double t_bin_one_start = CkWallTimer();
+    if (is_root_pe) CkPrintf("[startup][initial_data] INITIALDATA_BIN_ONE begin (TwoPunctures setup + ADM->BSSN part 1)\\n");
+"""
     body += "ID_persist_struct ID_persist;\n"
 
     if populate_ID_persist_struct_str:
+        body += """
+    const double t_id_setup_start = CkWallTimer();
+"""
         body += populate_ID_persist_struct_str
+        body += """
+    if (is_root_pe) CkPrintf("[startup][initial_data] TwoPunctures ID setup/solve took %.3f s\\n", CkWallTimer() - t_id_setup_start);
+"""
+    body += """
+    const double t_convert_start = CkWallTimer();
+"""
     body += """
     for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
@@ -192,8 +212,20 @@ switch (initial_data_part) {
     body += f"""initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,
 griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_persist, {IDtype}, initial_data_part);
     }}"""
+    body += """
+    if (is_root_pe) CkPrintf("[startup][initial_data] ADM->BSSN conversion (INITIALDATA_BIN_ONE) took %.3f s\\n", CkWallTimer() - t_convert_start);
+"""
     if free_ID_persist_struct_str:
+        body += """
+    const double t_id_free_start = CkWallTimer();
+"""
         body += free_ID_persist_struct_str
+        body += """
+    if (is_root_pe) CkPrintf("[startup][initial_data] Free TwoPunctures ID memory took %.3f s\\n", CkWallTimer() - t_id_free_start);
+"""
+    body += """
+    if (is_root_pe) CkPrintf("[startup][initial_data] INITIALDATA_BIN_ONE total %.3f s\\n", CkWallTimer() - t_bin_one_start);
+"""
     body += """
     break;
   }"""
@@ -203,6 +235,8 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     )
     body += f"""
   case INITIALDATA_APPLYBCS_INNERONLY: {{
+    const bool is_root_pe = (CkMyPe() == 0);
+    const double t_inner_bcs_start = CkWallTimer();
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
 
       // Unpack griddata struct:
@@ -212,10 +246,13 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
 
       {apply_inner_bcs_block}
     }}
+    if (is_root_pe) CkPrintf("[startup][initial_data] INITIALDATA_APPLYBCS_INNERONLY took %.3f s\\n", CkWallTimer() - t_inner_bcs_start);
     break;
   }}"""
     body += """
   case INITIALDATA_BIN_TWO: {
+    const bool is_root_pe = (CkMyPe() == 0);
+    const double t_bin_two_start = CkWallTimer();
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
@@ -223,21 +260,26 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
     body += f"""      initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs,
                                                          NULL, {IDtype}, initial_data_part);
     }}
+    if (is_root_pe) CkPrintf("[startup][initial_data] ADM->BSSN conversion (INITIALDATA_BIN_TWO / lambdaU pass) took %.3f s\\n", CkWallTimer() - t_bin_two_start);
     break;
   }}"""
     body += """
   case INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER: {
+    const bool is_root_pe = (CkMyPe() == 0);
+    const double t_outer_inner_bcs_start = CkWallTimer();
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       // Unpack griddata struct:
       params_struct *restrict params = &griddata[grid].params;
       apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
     }
+    if (is_root_pe) CkPrintf("[startup][initial_data] INITIALDATA_APPLYBCS_OUTEREXTRAPANDINNER took %.3f s\\n", CkWallTimer() - t_outer_inner_bcs_start);
     break;
   }
 }
 """
     cfc.register_CFunction(
         includes=includes,
+        prefunc=initial_data_prefunc_str if initial_data_prefunc_str else None,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

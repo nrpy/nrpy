@@ -50,6 +50,45 @@
 #define MAP_GLOBAL_TO_LOCAL_IDX1(chareidx1, global_idx1, Nxx1chare) (global_idx1 - (chareidx1 * Nxx1chare))// Assumes gridpoint lies within local grid of chare
 #define MAP_GLOBAL_TO_LOCAL_IDX2(chareidx2, global_idx2, Nxx2chare) (global_idx2 - (chareidx2 * Nxx2chare))// Assumes gridpoint point lies within local grid of chare
 
+// Compute owner chare index for one axis from a global index, matching the
+// ownership convention used when ghost zones overlap between neighboring chares.
+static inline int superb_owner_chare_idx_1d(const int global_idx, const int Nxx_chare, const int Nchare, const int nghosts) {
+  int chare_idx = (global_idx - nghosts) / Nxx_chare;
+  if (chare_idx < 0)
+    chare_idx = 0;
+  if (chare_idx > Nchare - 1)
+    chare_idx = Nchare - 1;
+  return chare_idx;
+}
+
+// Compute owner chare idx3 for a global idx3 point.
+static inline int superb_globalidx3_to_owner_idx3(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                                  const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare, const int Nchare0,
+                                                  const int Nchare1, const int Nchare2, const int nghosts) {
+  int globali, globalj, globalk;
+  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  const int charei = superb_owner_chare_idx_1d(globali, Nxx0_chare, Nchare0, nghosts);
+  const int charej = superb_owner_chare_idx_1d(globalj, Nxx1_chare, Nchare1, nghosts);
+  const int charek = superb_owner_chare_idx_1d(globalk, Nxx2_chare, Nchare2, nghosts);
+  return charei + Nchare0 * (charej + Nchare1 * charek);
+}
+
+// Compute local idx3 on the owner chare for a global idx3 point.
+static inline int superb_globalidx3_to_owner_localidx3(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                                       const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare,
+                                                       const int Nxx_plus_2NGHOSTS0_chare, const int Nxx_plus_2NGHOSTS1_chare,
+                                                       const int Nchare0, const int Nchare1, const int Nchare2, const int nghosts) {
+  int globali, globalj, globalk;
+  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  const int charei = superb_owner_chare_idx_1d(globali, Nxx0_chare, Nchare0, nghosts);
+  const int charej = superb_owner_chare_idx_1d(globalj, Nxx1_chare, Nchare1, nghosts);
+  const int charek = superb_owner_chare_idx_1d(globalk, Nxx2_chare, Nchare2, nghosts);
+  const int locali = globali - charei * Nxx0_chare;
+  const int localj = globalj - charej * Nxx1_chare;
+  const int localk = globalk - charek * Nxx2_chare;
+  return IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0_chare, Nxx_plus_2NGHOSTS1_chare);
+}
+
 #define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES2(g, inner, i, j) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((inner) + NGHOSTS * (g))))

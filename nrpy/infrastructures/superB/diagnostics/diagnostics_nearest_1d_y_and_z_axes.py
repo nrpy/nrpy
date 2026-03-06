@@ -224,6 +224,7 @@ static int compare_by_coord(const void *a, const void *b) {
 
     body = rf"""
 #include "set_CodeParameters.h"
+  (void)charecommstruct;
   switch (which_diagnostics_part) {{
 
     case DIAGNOSTICS_SETUP_1D: {{
@@ -231,6 +232,8 @@ static int compare_by_coord(const void *a, const void *b) {
       const int Nxx0chare = params_chare->Nxx0;
       const int Nxx1chare = params_chare->Nxx1;
       const int Nxx2chare = params_chare->Nxx2;
+      const int nghosts = (params_chare->Nxx_plus_2NGHOSTS0 - params_chare->Nxx0) / 2;
+      const int idx3_this_chare = IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]);
 
       // Build filename component with runtime coordinate system name and grid number
       char coordsys_with_grid[128];
@@ -297,8 +300,8 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+        if (superb_globalidx3_to_owner_idx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts) == idx3_this_chare) {{
           num_diagnostics_chare++;
         }}
       }}
@@ -323,9 +326,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
-          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+        if (superb_globalidx3_to_owner_idx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts) == idx3_this_chare) {{
+          int localidx3 = superb_globalidx3_to_owner_localidx3(
+              idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, params_chare->Nxx_plus_2NGHOSTS0,
+              params_chare->Nxx_plus_2NGHOSTS1, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts);
           diagnosticstruct->localidx3_diagnostic_1d_y_pt[which_diagnostics_chare] = localidx3;
           diagnosticstruct->locali0_diagnostic_1d_y_pt[which_diagnostics_chare] =
             MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
@@ -362,8 +367,8 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+        if (superb_globalidx3_to_owner_idx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts) == idx3_this_chare) {{
           num_diagnostics_chare++;
         }}
       }}
@@ -388,9 +393,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
-          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+        if (superb_globalidx3_to_owner_idx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts) == idx3_this_chare) {{
+          int localidx3 = superb_globalidx3_to_owner_localidx3(
+              idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, params_chare->Nxx_plus_2NGHOSTS0,
+              params_chare->Nxx_plus_2NGHOSTS1, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts);
           diagnosticstruct->localidx3_diagnostic_1d_z_pt[which_diagnostics_chare] = localidx3;
           diagnosticstruct->locali0_diagnostic_1d_z_pt[which_diagnostics_chare] =
             MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
@@ -435,7 +442,13 @@ static int compare_by_coord(const void *a, const void *b) {
       }}
 
       // Source pointer for this grid
+      if (gridfuncs_diags == NULL || gridfuncs_diags[grid] == NULL) {{
+        if (CkMyPe() == 0)
+          fprintf(stderr, "[diag] DIAGNOSTICS_WRITE_Y: gridfuncs_diags[%d] is NULL; skipping write.\n", grid);
+        break;
+      }}
       const REAL *restrict src = gridfuncs_diags[grid];
+      const int Ntot_chare = params_chare->Nxx_plus_2NGHOSTS0 * params_chare->Nxx_plus_2NGHOSTS1 * params_chare->Nxx_plus_2NGHOSTS2;
 
       // Row buffer: [axis_coord, gfs...]
       const int NUM_COLS = 1 + NUM_GFS_NEAREST;
@@ -458,6 +471,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0   = i0_diagnostic_pt[which_pt];
         const int i1   = i1_diagnostic_pt[which_pt];
         const int i2   = i2_diagnostic_pt[which_pt];
+        if (idx3 < 0 || idx3 >= Ntot_chare)
+          continue;
+        if (i0 < 0 || i0 >= params_chare->Nxx_plus_2NGHOSTS0 || i1 < 0 || i1 >= params_chare->Nxx_plus_2NGHOSTS1 || i2 < 0 ||
+            i2 >= params_chare->Nxx_plus_2NGHOSTS2)
+          continue;
 
         REAL xCart[3];
         REAL xOrig[3] = {{ xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2] }};
@@ -507,7 +525,13 @@ static int compare_by_coord(const void *a, const void *b) {
       }}
 
       // Source pointer for this grid
+      if (gridfuncs_diags == NULL || gridfuncs_diags[grid] == NULL) {{
+        if (CkMyPe() == 0)
+          fprintf(stderr, "[diag] DIAGNOSTICS_WRITE_Z: gridfuncs_diags[%d] is NULL; skipping write.\n", grid);
+        break;
+      }}
       const REAL *restrict src = gridfuncs_diags[grid];
+      const int Ntot_chare = params_chare->Nxx_plus_2NGHOSTS0 * params_chare->Nxx_plus_2NGHOSTS1 * params_chare->Nxx_plus_2NGHOSTS2;
 
       const int NUM_COLS = 1 + NUM_GFS_NEAREST;
       REAL *row = (REAL *)malloc(sizeof(REAL) * (size_t)NUM_COLS);
@@ -529,6 +553,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0   = i0_diagnostic_pt[which_pt];
         const int i1   = i1_diagnostic_pt[which_pt];
         const int i2   = i2_diagnostic_pt[which_pt];
+        if (idx3 < 0 || idx3 >= Ntot_chare)
+          continue;
+        if (i0 < 0 || i0 >= params_chare->Nxx_plus_2NGHOSTS0 || i1 < 0 || i1 >= params_chare->Nxx_plus_2NGHOSTS1 || i2 < 0 ||
+            i2 >= params_chare->Nxx_plus_2NGHOSTS2)
+          continue;
 
         REAL xCart[3];
         REAL xOrig[3] = {{ xx_chare[0][i0], xx_chare[1][i1], xx_chare[2][i2] }};

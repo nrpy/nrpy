@@ -840,7 +840,10 @@ extern /* readonly */ CProxy_Interpolator3d interpolator3dArray;"""
     file_output_str += r"""
 Timestepping::Timestepping(CommondataObject &&inData) {
 
-  CkPrintf("Timestepping chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
+  const bool is_root_chare = (thisIndex.x == 0 && thisIndex.y == 0 && thisIndex.z == 0);
+  const double t_ctor_start = CkWallTimer();
+  if (is_root_chare && CkMyPe() == 0)
+    CkPrintf("[startup] Timestepping constructor begin (PE %d)\n", CkMyPe());
 
   commondata = inData.commondata;
 
@@ -873,6 +876,8 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     const int thisIndex_arr[3] = {thisIndex.x, thisIndex.y, thisIndex.z};
     numerical_grids_chare(&commondata, griddata, griddata_chare, thisIndex_arr);
   }
+  if (is_root_chare && CkMyPe() == 0)
+    CkPrintf("[startup] numerical_grids* setup done in %.3f s\n", CkWallTimer() - t_ctor_start);
 
   // Step 2: Initial data are set on y_n_gfs gridfunctions. Allocate storage for them first.
   for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
@@ -884,9 +889,9 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     file_output_str += """
 //Allocate storage for gridfunctions on each grid.
 for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-  const int Nxx_plus_2NGHOSTS_tot = (griddata[grid].params.Nxx_plus_2NGHOSTS0 * //
-                                     griddata[grid].params.Nxx_plus_2NGHOSTS1 * //
-                                     griddata[grid].params.Nxx_plus_2NGHOSTS2);
+  const int Nxx_plus_2NGHOSTS_tot = (griddata_chare[grid].params.Nxx_plus_2NGHOSTS0 * //
+                                     griddata_chare[grid].params.Nxx_plus_2NGHOSTS1 * //
+                                     griddata_chare[grid].params.Nxx_plus_2NGHOSTS2);
 
   BHAH_MALLOC(griddata_chare[grid].gridfuncs.y_n_gfs, sizeof(REAL) * Nxx_plus_2NGHOSTS_tot * NUM_EVOL_GFS);
 
@@ -909,6 +914,8 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
   // Allocate storage for temporary buffers, needed for communicating face data
   for(int grid=0; grid<commondata.NUMGRIDS; grid++)
     timestepping_malloc_tmpBuffer(&commondata, &griddata_chare[grid].params, &griddata_chare[grid].gridfuncs, &griddata_chare[grid].nonlocalinnerbcstruct, &griddata_chare[grid].tmpBuffers);
+  if (is_root_chare && CkMyPe() == 0)
+    CkPrintf("[startup] Timestepping constructor complete in %.3f s\\n", CkWallTimer() - t_ctor_start);
 """
     if initialize_constant_auxevol:
         file_output_str += r"""
@@ -963,8 +970,6 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
 
     file_output_str += r"""
-    free(griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3);
-    free(griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt);
     free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
     free(griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_src_chares);
     free(griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_src_chare_id);
@@ -1236,7 +1241,9 @@ void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
   const int pt_at_outer_boundary_idx3 =  IDX3(pt_at_outer_boundary_i0, pt_at_outer_boundary_i1, pt_at_outer_boundary_i2);
   const int idx3_this_chare = IDX3_OF_CHARE(thisIndex.x, thisIndex.y, thisIndex.z);
 
-  if (griddata_chare[grid].charecommstruct.globalidx3pt_to_chareidx3[pt_at_outer_boundary_idx3] == idx3_this_chare) {
+  const int nghosts = (Nxx_plus_2NGHOSTS0chare - Nxx0chare) / 2;
+  if (superb_globalidx3_to_owner_idx3(pt_at_outer_boundary_idx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                      Nchare1, Nchare2, nghosts) == idx3_this_chare) {
     const int locali0 = MAP_GLOBAL_TO_LOCAL_IDX0(thisIndex.x, pt_at_outer_boundary_i0, Nxx0chare);
     const int locali1 = MAP_GLOBAL_TO_LOCAL_IDX1(thisIndex.y, pt_at_outer_boundary_i1, Nxx1chare);
     const int locali2 = MAP_GLOBAL_TO_LOCAL_IDX2(thisIndex.z, pt_at_outer_boundary_i2, Nxx2chare);
@@ -1318,6 +1325,9 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
   const int Nchare0 = commondata.Nchare0;
   const int Nchare1 = commondata.Nchare1;
   const int Nchare2 = commondata.Nchare2;
+  const int Nxx0 = griddata_chare[grid].params.Nxx0;
+  const int Nxx1 = griddata_chare[grid].params.Nxx1;
+  const int Nxx2 = griddata_chare[grid].params.Nxx2;
   const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
@@ -1327,7 +1337,6 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
   const int *restrict idx3_of_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_dst_chares;
   const int *restrict num_srcpts_tosend_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_tosend_each_chare;
   int **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
-  const int *restrict globalidx3pt_to_localidx3pt = griddata_chare[grid].charecommstruct.globalidx3pt_to_localidx3pt;
 
   const REAL *restrict gfs = nullptr;
   int NUM_GFS;
@@ -1342,7 +1351,21 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
     for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
       for (int which_srcpt = 0; which_srcpt < num_srcpts_tosend_each_chare[which_dst_chare]; which_srcpt++) {
         const int globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
-        const int localidx3srcpt = globalidx3pt_to_localidx3pt[globalidx3srcpt];
+        int globali, globalj, globalk;
+        REVERSE_IDX3GENERAL(globalidx3srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+        const int locali = MAP_GLOBAL_TO_LOCAL_IDX0(thisIndex.x, globali, Nxx0);
+        const int localj = MAP_GLOBAL_TO_LOCAL_IDX1(thisIndex.y, globalj, Nxx1);
+        const int localk = MAP_GLOBAL_TO_LOCAL_IDX2(thisIndex.z, globalk, Nxx2);
+        if ((unsigned)locali >= (unsigned)Nxx_plus_2NGHOSTS0 || (unsigned)localj >= (unsigned)Nxx_plus_2NGHOSTS1 ||
+            (unsigned)localk >= (unsigned)Nxx_plus_2NGHOSTS2) {
+          fprintf(stderr,
+                  "ERROR: send_nonlocalinnerbc_data(): mapped source point outside local bounds. "
+                  "this_chare=(%d,%d,%d) global=(%d,%d,%d) local=(%d,%d,%d) local_dims=(%d,%d,%d) idx3=%d\n",
+                  thisIndex.x, thisIndex.y, thisIndex.z, globali, globalj, globalk, locali, localj, localk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
+                  Nxx_plus_2NGHOSTS2, globalidx3srcpt);
+          CkAbort("ERROR: send_nonlocalinnerbc_data() found out-of-bounds source index on this chare.");
+        }
+        const int localidx3srcpt = IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
         const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_tosend_each_chare[which_dst_chare]);
         tmpBuffer_innerbc_send[idx2] = gfs[IDX4pt(gfs_to_sync[which_gf], localidx3srcpt)];
       }

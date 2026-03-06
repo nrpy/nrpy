@@ -174,7 +174,9 @@ def register_CFunction_diagnostics_nearest(
     body += r"""
         const int idx3 = IDX3(i0_center, i1_center, i2_center);
 
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+        const int nghosts = (params_chare->Nxx_plus_2NGHOSTS0 - params_chare->Nxx0) / 2;
+        if (superb_globalidx3_to_owner_idx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params_chare->Nxx0, params_chare->Nxx1,
+                                            params_chare->Nxx2, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2, nghosts) ==
             IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
 
           const int NUM_nearest_GFS_0d = (int)(sizeof which_gfs_0d / sizeof which_gfs_0d[0]);

@@ -239,15 +239,13 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     prefunc += """
 // PUP routine for struct charecomm_struct
 void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
-  const int ntot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
+  (void)params;
   const int ntotchare = params_chare.Nxx_plus_2NGHOSTS0 * params_chare.Nxx_plus_2NGHOSTS1 * params_chare.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
-    cc.globalidx3pt_to_chareidx3 = (int *restrict)malloc(sizeof(int) * ntot);
-    cc.globalidx3pt_to_localidx3pt = (int *restrict)malloc(sizeof(int) * ntot);
+    cc.globalidx3pt_to_chareidx3 = NULL;
+    cc.globalidx3pt_to_localidx3pt = NULL;
     cc.localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
   }
-  PUParray(p, cc.globalidx3pt_to_chareidx3, ntot);
-  PUParray(p, cc.globalidx3pt_to_localidx3pt, ntot);
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
 
