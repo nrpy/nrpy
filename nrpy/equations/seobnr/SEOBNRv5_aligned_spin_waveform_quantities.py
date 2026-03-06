@@ -57,6 +57,7 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
 
         Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1', 'chi2', 'Hreal', 'Omega' and 'Omega_circ'
         Outputs: 'flux' and 'hlms'
+        :param apply_special_amplitude_coefficients: Flag to enable/disable the computation of special amplitude coefficients.
         """
         (
             m1,
