@@ -119,7 +119,7 @@ SEBOBv2_IMR_waveform(&commondata);
     if output_waveform:
         body += r"""
 // Step TBD: Print the resulting waveform.
-for (size_t i = 0; i < commondata.nsteps_fine; i++) {
+for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]));
 }

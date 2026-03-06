@@ -31,7 +31,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities(
+        apply_special_amplitude_coefficients=True
+    )
     hlms_dict = wf.strain()
     hlms = []
     hlms_labels = []

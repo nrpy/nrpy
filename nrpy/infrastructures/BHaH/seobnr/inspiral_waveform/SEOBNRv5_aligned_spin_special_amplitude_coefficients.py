@@ -31,7 +31,9 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities()
+    wf = SEOBNRv5_wf.SEOBNRv5_aligned_spin_waveform_quantities(
+        apply_special_amplitude_coefficients=True
+    )
 
     rholm: List[sp.Expr] = []
     rholm_labels: List[str] = []

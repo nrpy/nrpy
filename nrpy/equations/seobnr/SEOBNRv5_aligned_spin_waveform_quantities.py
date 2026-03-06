@@ -35,7 +35,7 @@ thismodule = __name__
 class SEOBNRv5_aligned_spin_waveform_quantities:
     """Class for computing the SEOBNRv5 aligned-spin gravitational-wave strain and flux."""
 
-    def __init__(self) -> None:
+    def __init__(self, apply_special_amplitude_coefficients: bool = False) -> None:
         """
         Compute the SEOBNRv5 aligned-spin gravitational-wave strain and flux.
 
@@ -70,13 +70,21 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
             self.Hreal,
             self.Omega,
             self.Omega_circ,
-            self.c_43,
-            self.c_21,
-            self.c_55,
+            c_43,
+            c_21,
+            c_55,
         ) = sp.symbols(
             "m1 m2 r phi prstar pphi chi1 chi2 Hreal Omega Omega_circ c_43 c_21 c_55",
             real=True,
         )
+        if apply_special_amplitude_coefficients:
+            self.c_43 = c_43
+            self.c_21 = c_21
+            self.c_55 = c_55
+        else:
+            self.c_43 = sp.sympify(0)
+            self.c_21 = sp.sympify(0)
+            self.c_55 = sp.sympify(0)
         self.rho = {}
         for l in range(2, 9):
             for m in range(1, l + 1):
