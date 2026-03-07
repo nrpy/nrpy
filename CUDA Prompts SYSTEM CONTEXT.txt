@@ -508,7 +508,107 @@ Refactor and comment it strictly adhering to every rule above.
 Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
 """"
 
-To check GPU:
+Hope:
 "
-watch -n 1 nvidia-smi
+Gemini said
+You are absolutely right to question the "sluggish" behavior. At r≈51, the spacetime is nearly Minkowski, and a 4th/5th order integrator like RKF45 should easily take steps as large as your maximum allowed h 
+max
+​
+ =10.0. The fact that it is collapsing to h≈0.0027 with 0% rejections indicates it has found a "false equilibrium" where it believes it is producing a high local truncation error.
+
+After a deep dive into your RKF45 implementation logic across the provided scripts, I have found the "smoking gun." The integrator is currently broken in its stage-update sequence, which is causing it to evaluate derivatives at the wrong positions.
+
+1. The "Off-by-One" Stage Update Bug
+In batch_integrator_numerical.cu, your integration loop looks like this:
+
+C
+for (stage = 1; stage <= 6; ++stage) {
+    interpolation_kernel(... d_f_temp_bundle ...); // 1. Interp at f_temp
+    calculate_ode_rhs_kernel(... d_k_bundle, stage ...); // 2. Calc k_i
+    rkf45_stage_update(... d_f_temp_bundle); // 3. Update f_temp for next?
+}
+Now, look at the switch(stage) inside rkf45_stage_update.cu:
+
+Stage 1: It calculates k 
+1
+​
+ . Then update_val is set to 0.0. This sets f_temp = f_start.
+
+Stage 2: It calculates k 
+2
+​
+  at the position f_temp. But since the previous stage set f_temp = f_start, k 
+2
+​
+  is evaluated at the exact same point as k 
+1
+​
+ .
+
+Stage 3: It calculates k 
+3
+​
+  at f_temp. The previous stage (stage 2) set update_val = 0.25 * k1. So k 
+3
+​
+  is evaluated at f 
+n
+​
+ + 
+4
+1
+​
+ hk 
+1
+​
+ .
+
+The Error: In the RKF45 Butcher Tableau, k 
+2
+​
+  is supposed to be evaluated at f 
+n
+​
+ + 
+4
+1
+​
+ hk 
+1
+​
+ . Your code evaluates k 
+2
+​
+  at f 
+n
+​
+  and k 
+3
+​
+  at f 
+n
+​
+ + 
+4
+1
+​
+ hk 
+1
+​
+ . Every single stage is shifted by one, and two stages (k 
+1
+​
+  and k 
+2
+​
+ ) are identical.
+
+Because the derivatives are being evaluated at the "wrong" physical positions for the coefficients being used, the internal error estimator (f 
+5th
+​
+ −f 
+4th
+​
+ ) is seeing a massive mathematical inconsistency. It interprets this mismatch as "trajectory error" and shrinks the step size until the difference becomes small enough to pass—which is why you are seeing the h collapse.
 "
+

@@ -71,40 +71,40 @@ def rkf45_stage_update() -> None:
         // Apply coefficients based on the current RKF45 stage.
         // Math operations use intrinsics to ensure precise rounding modes.
         switch (stage) {
-            case 1:
-                // Stage 1 is simply the base state itself (no $k$ contribution).
-                update_val = 0.0; 
-                break;
-            case 2:
-                // $k_1$ contribution: 1/4
-                update_val = MulCUDA(0.25, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]));
-                break;
-            case 3:
-                // $k_1$: 3/32, $k_2$: 9/32
-                update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                             MulCUDA(0.28125, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)])));
-                break;
-            case 4:
-                // $k_1$: 1932/2197, $k_2$: -7200/2197, $k_3$: 7296/2197
-                update_val = FusedMulAddCUDA(1932.0/2197.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                             FusedMulAddCUDA(-7200.0/2197.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                             MulCUDA(7296.0/2197.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]))));
-                break;
-            case 5:
-                // $k_1$: 439/216, $k_2$: -8, $k_3$: 3680/513, $k_4$: -845/4104
-                update_val = FusedMulAddCUDA(439.0/216.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                             FusedMulAddCUDA(-8.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                             FusedMulAddCUDA(3680.0/513.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
-                             MulCUDA(-845.0/4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)])))));
-                break;
-            case 6:
-                // $k_1$: -8/27, $k_2$: 2, $k_3$: -3544/2565, $k_4$: 1859/4104, $k_5$: -11/40
-                update_val = FusedMulAddCUDA(-8.0/27.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                             FusedMulAddCUDA(2.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                             FusedMulAddCUDA(-3544.0/2565.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
-                             FusedMulAddCUDA(1859.0/4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]),
-                             MulCUDA(-0.275, ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]))))));
-                break;
+        case 1:
+        // We just finished k1. Prepare f_temp for k2: f_n + (1/4) * h * k1
+        update_val = MulCUDA(0.25, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]));
+        break;
+        case 2:
+        // We just finished k2. Prepare f_temp for k3: f_n + h * (3/32*k1 + 9/32*k2)
+        update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]), 
+                                    MulCUDA(0.28125, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)])));
+        break;
+        case 3:
+        // Prepare for k4.
+        update_val = FusedMulAddCUDA(1932.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                    FusedMulAddCUDA(-7200.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                    MulCUDA(7296.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]))));
+        break;
+        case 4:
+        // Prepare for k5.
+        update_val = FusedMulAddCUDA(439.0 / 216.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                    FusedMulAddCUDA(-8.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                    FusedMulAddCUDA(3680.0 / 513.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
+                                                                    MulCUDA(-845.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)])))));
+        break;
+        case 5:
+        // Prepare for k6.
+        update_val = FusedMulAddCUDA(-8.0 / 27.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                    FusedMulAddCUDA(2.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                    FusedMulAddCUDA(-3544.0 / 2565.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
+                                                                    FusedMulAddCUDA(1859.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]),
+                                                                                    MulCUDA(-0.275, ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]))))));
+        break;
+        case 6:
+        // k6 is the final derivative; we don't need to update f_temp anymore 
+        // because rkf45_finalize_and_control will compute the final f_n+1.
+        return; 
         }
 
         // --- GLOBAL VRAM WRITE ---
