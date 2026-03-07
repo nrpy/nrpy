@@ -21,6 +21,107 @@ from nrpy.equations.general_relativity.InitialData_Spherical import (
 )
 from nrpy.infrastructures import BHaH
 
+_TWOPUNCTURES_SOLVE_ONCE_AND_BROADCAST_PREFUNC = r"""
+static inline void tp_write_derivs(FILE *fp, const derivs *v, const int ntotal) {
+#define TP_WRITE(ptr) fwrite((const void *)(ptr), sizeof(REAL), ntotal, fp)
+  TP_WRITE(v->d0);
+  TP_WRITE(v->d1);
+  TP_WRITE(v->d2);
+  TP_WRITE(v->d3);
+  TP_WRITE(v->d11);
+  TP_WRITE(v->d12);
+  TP_WRITE(v->d13);
+  TP_WRITE(v->d22);
+  TP_WRITE(v->d23);
+  TP_WRITE(v->d33);
+#undef TP_WRITE
+}
+
+static inline void tp_read_derivs(FILE *fp, derivs *v, const int ntotal) {
+#define TP_READ(ptr) fread((void *)(ptr), sizeof(REAL), ntotal, fp)
+  TP_READ(v->d0);
+  TP_READ(v->d1);
+  TP_READ(v->d2);
+  TP_READ(v->d3);
+  TP_READ(v->d11);
+  TP_READ(v->d12);
+  TP_READ(v->d13);
+  TP_READ(v->d22);
+  TP_READ(v->d23);
+  TP_READ(v->d33);
+#undef TP_READ
+}
+
+static void tp_solve_once_and_broadcast(ID_persist_struct *restrict ID_persist) {
+  if (CkNumPes() <= 1) {
+    const double t0 = CkWallTimer();
+    TP_solve(ID_persist);
+    CkPrintf("[startup] TP_solve complete in %.3f s (single-PE)\n", CkWallTimer() - t0);
+    return;
+  }
+  const int ntotal = ID_persist->npoints_A * ID_persist->npoints_B * ID_persist->npoints_phi;
+  const char *tp_dump = "twopunctures_idpersist.bin";
+  const char *tp_done = "twopunctures_idpersist.done";
+
+  if (CkMyPe() == 0) {
+    const double t0 = CkWallTimer();
+    (void)remove(tp_done);
+    (void)remove(tp_dump);
+    ID_persist->verbose = false;
+    TP_solve(ID_persist);
+    CkPrintf("[startup] TP_solve complete in %.3f s on PE 0\n", CkWallTimer() - t0);
+    FILE *fp = fopen(tp_dump, "wb");
+    if (fp == NULL)
+      CkAbort("ERROR: could not open twopunctures_idpersist.bin for writing.");
+    if (fwrite((const void *)ID_persist, sizeof(ID_persist_struct), 1, fp) != 1)
+      CkAbort("ERROR: writing ID_persist header failed.");
+    tp_write_derivs(fp, &ID_persist->v, ntotal);
+    tp_write_derivs(fp, &ID_persist->cf_v, ntotal);
+    fclose(fp);
+    FILE *done = fopen(tp_done, "wb");
+    if (done == NULL)
+      CkAbort("ERROR: could not create twopunctures_idpersist.done.");
+    fclose(done);
+    return;
+  }
+
+  extern void allocate_derivs(derivs * v, int n);
+  allocate_derivs(&ID_persist->v, ntotal);
+  allocate_derivs(&ID_persist->cf_v, ntotal);
+
+  int tries = 0;
+  const double t_wait_start = CkWallTimer();
+  while (access(tp_done, F_OK) != 0) {
+    usleep(100000);
+    tries++;
+    if (tries > 6000)
+      CkAbort("ERROR: timed out waiting for twopunctures_idpersist.done");
+  }
+
+  FILE *fp = fopen(tp_dump, "rb");
+  if (fp == NULL)
+    CkAbort("ERROR: could not open twopunctures_idpersist.bin for reading.");
+  const derivs v_local = ID_persist->v;
+  const derivs cf_v_local = ID_persist->cf_v;
+  ID_persist_struct tmp;
+  if (fread((void *)&tmp, sizeof(ID_persist_struct), 1, fp) != 1)
+    CkAbort("ERROR: reading ID_persist header failed.");
+  *ID_persist = tmp;
+  ID_persist->v = v_local;
+  ID_persist->cf_v = cf_v_local;
+  tp_read_derivs(fp, &ID_persist->v, ntotal);
+  tp_read_derivs(fp, &ID_persist->cf_v, ntotal);
+  fclose(fp);
+  if (CkMyPe() == 1)
+    CkPrintf("[startup] non-root PEs loaded TP data after %.3f s wait\n", CkWallTimer() - t_wait_start);
+}
+"""
+
+_TWOPUNCTURES_SOLVE_ONCE_AND_BROADCAST_POPULATE = r"""
+initialize_ID_persist_struct(commondata, &ID_persist);
+tp_solve_once_and_broadcast(&ID_persist);
+"""
+
 
 def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem: str,
@@ -104,6 +205,7 @@ def register_CFunction_initial_data(
     ID_persist_struct_str: str,
     initial_data_addl_includes: Optional[List[str]] = None,
     initial_data_prefunc_str: str = "",
+    enable_tp_solve_broadcast: bool = False,
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
@@ -124,6 +226,7 @@ def register_CFunction_initial_data(
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param initial_data_addl_includes: Optional additional include headers for initial_data().
     :param initial_data_prefunc_str: Optional helper C code emitted before initial_data().
+    :param enable_tp_solve_broadcast: If True, inject helper C code and default setup that solves TwoPunctures on PE 0 and broadcasts the result to other PEs.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
@@ -137,6 +240,21 @@ def register_CFunction_initial_data(
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if initial_data_addl_includes:
         includes.extend(initial_data_addl_includes)
+    if enable_tp_solve_broadcast and "<unistd.h>" not in includes:
+        includes.append("<unistd.h>")
+
+    prefunc_blocks: List[str] = []
+    if initial_data_prefunc_str:
+        prefunc_blocks.append(initial_data_prefunc_str)
+    if enable_tp_solve_broadcast:
+        prefunc_blocks.append(_TWOPUNCTURES_SOLVE_ONCE_AND_BROADCAST_PREFUNC)
+    effective_prefunc = "\n".join(prefunc_blocks) if prefunc_blocks else None
+
+    effective_populate_ID_persist_struct_str = populate_ID_persist_struct_str
+    if enable_tp_solve_broadcast and not effective_populate_ID_persist_struct_str:
+        effective_populate_ID_persist_struct_str = (
+            _TWOPUNCTURES_SOLVE_ONCE_AND_BROADCAST_POPULATE
+        )
 
     try:
         ID: Union[InitialData_Cartesian, InitialData_Spherical]
@@ -190,11 +308,11 @@ switch (initial_data_part) {
 """
     body += "ID_persist_struct ID_persist;\n"
 
-    if populate_ID_persist_struct_str:
+    if effective_populate_ID_persist_struct_str:
         body += """
     const double t_id_setup_start = CkWallTimer();
 """
-        body += populate_ID_persist_struct_str
+        body += effective_populate_ID_persist_struct_str
         body += """
     if (is_root_pe) CkPrintf("[startup][initial_data] TwoPunctures ID setup/solve took %.3f s\\n", CkWallTimer() - t_id_setup_start);
 """
@@ -279,7 +397,7 @@ griddata[grid].xx, &griddata[grid].bcstruct, &griddata[grid].gridfuncs, &ID_pers
 """
     cfc.register_CFunction(
         includes=includes,
-        prefunc=initial_data_prefunc_str if initial_data_prefunc_str else None,
+        prefunc=effective_prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
