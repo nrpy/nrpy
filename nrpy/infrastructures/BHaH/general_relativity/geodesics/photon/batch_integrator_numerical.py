@@ -47,7 +47,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         add_to_parfile=True,
     )
 
-    prefunc = ""
+    prefunc = " "
 
     includes = [
         "BHaH_defines.h", 
@@ -214,6 +214,73 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     // Kernel Launch: Evaluate initial conditions on the Host to populate the master $f^\mu$ state vector.
     set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);
 
+
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    // --- DIAGNOSTIC PROBE: DETAILED INITIAL POSITION & PLACEHOLDER ALIGNMENT ---
+    // Algorithmic Step: Scans the master Host SoA immediately following the initialization kernel call.
+    // Hardware Justification: This architectural step verifies that the Host-side $set\_initial\_conditions$
+    // routine has correctly populated the starting coordinates $x^\mu$ and zeroed the $p_t$ and $\lambda$ components.
+    // Identifying coordinate misalignment here isolates initialization logic failures from downstream VRAM integration errors.
+    long int init_mismatch_count = 0; // Tracks the total number of trajectories with unaligned initial states.
+    long int mismatch_t = 0;          // Tracks failures in coordinate time $t$.
+    long int mismatch_x = 0;          // Tracks failures in spatial coordinate $x$.
+    long int mismatch_y = 0;          // Tracks failures in spatial coordinate $y$.
+    long int mismatch_z = 0;          // Tracks failures in spatial coordinate $z$.
+    long int mismatch_pt = 0;         // Tracks failures in temporal momentum $p_t$.
+    long int mismatch_lam = 0;        // Tracks failures in affine parameter $\lambda$.
+
+    // Loop iterator traversing the global ray count to validate Host-side coordinate hydration.
+    for (long int p = 0; p < num_rays; p++) {{
+        // Retrieving the initialized coordinate time $t$ and spatial coordinates $x^i$ from the master SoA.
+        const double t_check = all_photons_host.f[0 * num_rays + p];
+        const double x_check = all_photons_host.f[1 * num_rays + p];
+        const double y_check = all_photons_host.f[2 * num_rays + p];
+        const double z_check = all_photons_host.f[3 * num_rays + p];
+
+        // Retrieving the placeholders for temporal momentum $p_t$ (index 4) and the affine parameter $\lambda$ (index 8).
+        const double pt_check = all_photons_host.f[4 * num_rays + p];
+        const double lam_check = all_photons_host.f[8 * num_rays + p];
+
+        // Evaluates the physical state against the prescribed camera coordinates and numerical boundaries.
+        // A tolerance of $10^{-10}$ is utilized to accommodate floating-point variance in basis transformations.
+        bool fail_t = fabs(t_check - commondata->t_start) > 1e-10;
+        bool fail_x = fabs(x_check - commondata->camera_pos_x) > 1e-10;
+        bool fail_y = fabs(y_check - commondata->camera_pos_y) > 1e-10;
+        bool fail_z = fabs(z_check - commondata->camera_pos_z) > 1e-10;
+        bool fail_pt = fabs(pt_check) > 1e-15;
+        bool fail_lam = fabs(lam_check) > 1e-15;
+
+        if (fail_t) mismatch_t++;
+        if (fail_x) mismatch_x++;
+        if (fail_y) mismatch_y++;
+        if (fail_z) mismatch_z++;
+        if (fail_pt) mismatch_pt++;
+        if (fail_lam) mismatch_lam++;
+
+        if (fail_t || fail_x || fail_y || fail_z || fail_pt || fail_lam) {{
+        init_mismatch_count++;
+        }}
+    }}
+
+    // Reporting the fractional failure rate if any trajectories deviate from the intended camera parameters.
+    if (init_mismatch_count > 0) {{
+        const double mismatch_percent = ((double)init_mismatch_count / (double)num_rays) * 100.0;
+        printf("[DIAGNOSTIC] Initialization Alignment Check: %ld out of %ld rays (%.2f%%) fail coordinate/placeholder validation.\n", 
+            init_mismatch_count, num_rays, mismatch_percent);
+        printf("             Component Breakdown of Failures:\n");
+        printf("               $t$       (Target: %.2f) : %ld rays (%.2f%%)\n", commondata->t_start, mismatch_t, ((double)mismatch_t / num_rays) * 100.0);
+        printf("               $x$       (Target: %.2f) : %ld rays (%.2f%%)\n", commondata->camera_pos_x, mismatch_x, ((double)mismatch_x / num_rays) * 100.0);
+        printf("               $y$       (Target: %.2f) : %ld rays (%.2f%%)\n", commondata->camera_pos_y, mismatch_y, ((double)mismatch_y / num_rays) * 100.0);
+        printf("               $z$       (Target: %.2f) : %ld rays (%.2f%%)\n", commondata->camera_pos_z, mismatch_z, ((double)mismatch_z / num_rays) * 100.0);
+        printf("               $p_t$     (Target: 0.0)  : %ld rays (%.2f%%)\n", mismatch_pt, ((double)mismatch_pt / num_rays) * 100.0);
+        printf("               $\\lambda$ (Target: 0.0)  : %ld rays (%.2f%%)\n", mismatch_lam, ((double)mismatch_lam / num_rays) * 100.0);
+    }}
+
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
     // Total integer calculation defining total iterative blocks required to process all photon indices.
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY;
 
@@ -242,6 +309,44 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
         // Kernel Launch: Calculate $g_{{\mu\nu}}$ required for the Hamiltonian constraint. Thread ID maps to photon index.
         interpolation_kernel_{spacetime_name}(d_f_bundle, d_metric_bundle, NULL, chunk_size);
+
+
+        // --- DIAGNOSTIC PROBE: VRAM METRIC INTEGRITY CHECK ---
+        // Algorithmic Step: Syncs the metric scratchpad to the Host to verify geometric stability.
+        // Hardware Justification: This architectural step identifies coordinate singularities in VRAM 
+        // before the Hamiltonian constraint $p_\mu p^\mu = 0$ is evaluated by the $p0\_reverse$ kernel.
+        double *metric_diag_bridge; // Temporary bridge for metric tensor components.
+        BHAH_MALLOC_PINNED(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY); 
+
+        // Device-to-Host transfer: Retrieves the symmetric metric tensor $g_{{\mu\nu}}$ for inspection.
+        cudaMemcpy(metric_diag_bridge, d_metric_bundle, sizeof(double) * 10 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost); 
+
+        long int metric_nan_count = 0; // Counter for non-finite metric components.
+        int m_diag_i;
+        for (m_diag_i = 0; m_diag_i < chunk_size; ++m_diag_i) {{
+        bool m_has_nan = false;
+        int m_diag_k;
+        for (m_diag_k = 0; m_diag_k < 10; ++m_diag_k) {{
+            // Evaluates $g_{{\mu\nu}}$ for $NaN$ or $Inf$ signifying a coordinate breakdown.
+            if (isnan(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i]) || 
+                isinf(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i])) {{
+            m_has_nan = true;
+            break;
+            }}
+        }}
+        if (m_has_nan) {{
+            metric_nan_count++;
+        }}
+        }}
+
+        if (metric_nan_count > 0) {{
+        double m_nan_percentage = ((double)metric_nan_count / (double)chunk_size) * 100.0;
+        printf("[DIAGNOSTIC] Init Batch %ld: %ld rays (%.2f%%) have invalid Metric G_mu_nu before p_t solve.\n", 
+                init_batch, metric_nan_count, m_nan_percentage);
+        }}
+        BHAH_FREE_PINNED(metric_diag_bridge); 
+
+
         
         // Kernel Launch: Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$.
         p0_reverse_kernel(d_f_bundle, d_metric_bundle, chunk_size);
@@ -260,6 +365,43 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 all_photons_host.f[gather_k * num_rays + master_idx] = f_bridge[gather_k * BUNDLE_CAPACITY + gather_i];
             }}
         }}
+
+        // --- DIAGNOSTIC PROBE: INITIALIZATION NaN DETECTOR ---
+      // Scans the newly constraint-solved batch for non-finite values.
+      // Hardware Justification: This architectural step executes immediately after the Device-to-Host transfer
+      // to verify the integrity of the initial state $f^\mu$ before committing it to the integration engine.
+      long int nan_count = 0; // Tracks the total number of corrupted photon trajectories in the current batch.
+
+      // Loop iterator scanning the bounded execution chunk.
+      int diag_i;
+      for (diag_i = 0; diag_i < chunk_size; ++diag_i) {{
+        bool has_nan = false; // Persistent flag indicating a non-finite tensor component was identified.
+        
+        // Component loop iterator mapping values across the 9 tensor dimensions.
+        int diag_k;
+        for (diag_k = 0; diag_k < 9; ++diag_k) {{
+          // Evaluates the bridged state vector $f^\mu$ for standard IEEE-754 NaN representation.
+          if (isnan(f_bridge[diag_k * BUNDLE_CAPACITY + diag_i])) {{
+            has_nan = true;
+            break; // Terminates evaluation early to minimize redundant CPU cache line fetches.
+          }}
+        }}
+        
+        if (has_nan) {{
+          nan_count++; // Increments the global error tracking counter.
+        }}
+      }}
+
+      // Evaluates if any trajectories failed the Hamiltonian constraint solving phase.
+      if (nan_count > 0) {{
+        // Double precision scalar representing the fractional failure rate of the Hamiltonian constraint.
+        double nan_percentage = ((double)nan_count / (double)chunk_size) * 100.0;
+        printf("[DIAGNOSTIC] Init Batch %ld: %ld out of %ld rays (%.2f%%) contain NaN in state f^mu after p_t solve.\n", init_batch, nan_count, (long int)chunk_size, nan_percentage);
+      }}
+
+
+
+
     }}
 
     // Loop iterator traversing the entire global ray count to synchronize starting properties.
@@ -274,7 +416,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.on_positive_side_of_window_prev[sync_i] = true;
         all_photons_host.on_positive_side_of_source_prev[sync_i] = true;
         all_photons_host.status[sync_i] = ACTIVE;
-        all_photons_host.h[sync_i] = commondata->numerical_initial_h;
         all_photons_host.affine_param[sync_i] = 0.0;
         all_photons_host.rejection_retries[sync_i] = 0;
 

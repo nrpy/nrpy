@@ -96,7 +96,6 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Python: Register necessary global parameters for the grid setup and numerical controls.
     par.register_CodeParameter("int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "t_start", 100.0, commondata=True, add_to_parfile=True)
-    par.register_CodeParameter("REAL", __name__, "h_init", 0.1, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "window_width", 10.0, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "window_height", 10.0, commondata=True, add_to_parfile=True)
 
@@ -186,16 +185,17 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     WriteCUDA(&d_f_bundle[IDX_F(8, c)], 0.0);
 
     // Initialize the adaptive step size $h$ for the RKF45 integrator.
-    WriteCUDA(&d_h_bundle[IDX_H(c)], {cd_access}h_init);
+    WriteCUDA(&d_h_bundle[IDX_H(c)], {cd_access}numerical_initial_h);
 
     // --- MACRO CLEANUP ---
     #undef IDX_F
     #undef IDX_H
     """
-
+    
+    # Force a strict 1D execution grid to match the VRAM Structure of Arrays
     launch_dict = {
-        "threads_per_block": ["256", "1", "1"],
-        "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
+        "blocks_per_grid": ["(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
     }
 
     kernel_prefunc, launch_code = generate_kernel_and_launch_code(
@@ -211,25 +211,25 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Python: Generate the host-side loop string to iterate over the dataset in bundles.
     # We use 'start_idx' as the iterator and 'BUNDLE_CAPACITY' as the stride.
     loop_body = f"""
-    // Variable chunk_size defines the active range for the current streaming bundle.
-    const long int chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY);
+        // Variable chunk_size defines the active range for the current streaming bundle.
+        const long int chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY);
 
-    {launch_code}
+        {launch_code}
 
-    // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
-    // Algorithmic Step: Catch unrecoverable device faults immediately after kernel execution.
-    // Fatal unrecoverable error exit if the device execution fails.
-    #ifdef DEBUG
-    cudaDeviceSynchronize();
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess) {{
-        printf("Init Kernel Failed: %s\\n", cudaGetErrorString(err));
-        exit(1);
-    }}
-    #endif
+        // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
+        // Hardware Justification: This trap is critical because -rdc=true (Relocatable Device Code) 
+        // can cause silent link-time symbol failures if d_commondata is not properly defined.
+        #ifdef DEBUG
+        cudaDeviceSynchronize();
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {{
+            printf("Init Kernel Failed on Batch starting at %ld: %s\\n", (long int)start_idx, cudaGetErrorString(err));
+            exit(1);
+        }}
+        #endif
 
     // --- 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
-    // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
+    // Algorithmic Step: Transfer initialized state vectors $f^mu$ from VRAM back to host RAM.
     // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
     for(int m=0; m<9; m++) {{
         cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 

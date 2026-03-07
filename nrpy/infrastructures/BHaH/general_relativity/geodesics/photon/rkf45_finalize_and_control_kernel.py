@@ -113,18 +113,22 @@ def rkf45_finalize_and_control_kernel() -> None:
         const double k4  = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]);
         const double k5  = ReadCUDA(&d_k_bundle[IDX_K(5, comp, i)]);
 
-        // 2. Compute 5th Order Candidate
-        // Evaluates the physical update utilizing exact double-precision Runge-Kutta coefficients.
-        // Coeffs: 16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55
-        double update = MulCUDA(16.0 / 135.0, k0);
+        // --- 5TH ORDER CANDIDATE EVALUATION & STATE CORRUPTION SAFEGUARD ---
+        // Evaluates the physical state update $f^\mu_{{n+1}}$ utilizing exact double-precision Runge-Kutta coefficients.
+        // This architectural step occurs here to catch non-linear tensor interactions near event horizons before VRAM persistence.
+        double update = MulCUDA(16.0 / 135.0, k0); // Intermediate accumulator for the 5th order step update.
         update = FusedMulAddCUDA(6656.0 / 12825.0, k2, update);
         update = FusedMulAddCUDA(28561.0 / 56430.0, k3, update);
         update = FusedMulAddCUDA(-9.0 / 50.0, k4, update);
         update = FusedMulAddCUDA(2.0 / 55.0, k5, update);
 
-        const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n);
-        f_5th_cache[comp] = f_5th_val;
+        const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n); // The 5th order candidate state $f^\mu_{{n+1}}$.
+        f_5th_cache[comp] = f_5th_val; // Caches the evaluated component to thread-local registers.
 
+        // Evaluates the physical state for numerical singularities to guarantee the rejection of corrupted trajectory steps.
+        if (isnan(f_5th_val) || isinf(f_5th_val)) {{
+        err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
+        }}
         // 3. Compute Truncation Error 
         // Evaluates the truncation error directly via coefficient deltas ($C_5 - C_4$) to prevent 
         // catastrophic floating-point cancellation against the anchor state $f_n$.
@@ -159,12 +163,12 @@ def rkf45_finalize_and_control_kernel() -> None:
         // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
         double current_err = DivCUDA(err_abs, scale);
         
-        // EXPLICIT NaN REJECTION: Guards against IEEE 754 fmax behavior.
-        if (isnan(current_err)) {{
-            err_norm = 1e30; // Forces an artificially massive error to guarantee rejection.
+        // Evaluates the calculated error norm for numerical singularities to guard against IEEE-754 fmax behavior.
+        if (isnan(current_err) || isinf(current_err)) {{
+            err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
         }} else {{
-            err_norm = fmax(err_norm, current_err);
-        }}
+            err_norm = fmax(err_norm, current_err); // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
+            }}
         }}
     }}
 

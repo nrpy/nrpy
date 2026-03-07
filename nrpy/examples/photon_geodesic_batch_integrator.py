@@ -231,7 +231,8 @@ if __name__ == "__main__":
     cuda_macros = {
         "BHAH_HD_FUNC": "#define BHAH_HD_FUNC __device__\n",
         "BHAH_HD_INLINE": "#define BHAH_HD_INLINE __device__ __inline__\n",
-        "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)\n"
+        "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)\n",
+        "GLOBAL_COMMONDATA_EXTERN": "extern __constant__ commondata_struct d_commondata;\n"
     }
 
     BHaH_defines_h.output_BHaH_defines_h(

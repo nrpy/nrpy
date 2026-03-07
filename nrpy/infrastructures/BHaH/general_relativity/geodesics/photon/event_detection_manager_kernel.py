@@ -42,8 +42,20 @@ def event_detection_manager_kernel() -> None:
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- TEMPORAL EXPLOSION CHECK ---
-    // Reads $p^t$ directly from VRAM to terminate doomed rays before register hydration.
+    // Reads p_t directly from VRAM to terminate doomed rays before register hydration.
     const double p_t = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
+
+    // --- DIAGNOSTIC: NaN DETECTOR ---
+    if (isnan(p_t)) {
+        // Use a device-side static counter to prevent terminal flooding
+        // Note: static __device__ variable definition must go outside the kernel, 
+        // or we can just use a simple warp-level heuristic for a quick check.
+        // For a quick inline diagnostic without globals, we just print the first few threads:
+        if (i < 500) { 
+            printf("[DIAGNOSTIC] Ray %d: p_t is NaN in Event Detection Manager!\n", i);
+        }
+    }
+
     if (AbsCUDA(p_t) > d_commondata.p_t_max) {
         d_status_bundle[i] = FAILURE_PT_TOO_BIG;
         return;
