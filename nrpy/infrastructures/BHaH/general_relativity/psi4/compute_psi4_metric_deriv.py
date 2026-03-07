@@ -39,7 +39,7 @@ def generate_CFunction_psi4_metric_deriv_quantities(
 
     desc = "Compute metric derivative quantities gamma_{ij,kl}, Gamma^i_{jk}, and K_{ij,k} needed for psi4."
     name = "psi4_metric_deriv_quantities"
-    cfunc_type = "void"
+    cfunc_type = "static void"
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
     arg_dict_cuda = {
