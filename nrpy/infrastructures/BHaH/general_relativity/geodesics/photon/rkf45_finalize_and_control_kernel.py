@@ -89,12 +89,11 @@ def rkf45_finalize_and_control_kernel() -> None:
     // --- COMPUTE & CACHE LOOP ---
     // We compute the 5th order candidate and error component-by-component.
     // We cache the result in 'f_5th_cache' (18 registers) instead of storing all K-vectors (108 registers).
-    
     double f_5th_cache[9];
-    double err_norm = 0.0; 
-    
-    // NOTE: For L1 momentum floor, we need the sum of absolute momenta from the START state.
-    // We load them specifically here to avoid re-reading inside the loop.
+    double err_norm = 0.0;
+
+    // --- L1 MOMENTUM FLOOR ---
+    // Evaluates the L1 momentum floor using the initial state to avoid re-reading inside the loop.
     double p_L1 = 0.0;
     {{
         const double px = ReadCUDA(&d_f_start[IDX_F(5, i)]);
@@ -104,121 +103,115 @@ def rkf45_finalize_and_control_kernel() -> None:
     }}
 
     for (int comp = 0; comp < 9; ++comp) {{
-        // 1. Load Base State
+        // 1. Load Base State & Derivative Components
+        // Scalar loads mapped directly to registers for the current tensor component.
         const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);
+        const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]);
+        const double k1  = ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]);
+        const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]);
+        const double k3  = ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]);
+        const double k4  = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]);
+        const double k5  = ReadCUDA(&d_k_bundle[IDX_K(5, comp, i)]);
 
-        // 2. Load Derivative Components (Scalar Loads -> Registers)
-        // We only hold these 6 doubles in registers for the duration of this loop iteration.
-        const double k0 = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]);
-        const double k1 = ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]);
-        const double k2 = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]);
-        const double k3 = ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]);
-        const double k4 = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]);
-        const double k5 = ReadCUDA(&d_k_bundle[IDX_K(5, comp, i)]);
-
-        // 3. Compute 4th Order Baseline (Error Estimator)
-        // Coeffs: 25/216, 0, 1408/2565, 2197/4104, -1/5, 0
-        double f_4th = MulCUDA(0.1157407407407407, k0);
-        f_4th = FusedMulAddCUDA(0.5489278752436647, k2, f_4th);
-        f_4th = FusedMulAddCUDA(0.5353313840155946, k3, f_4th);
-        f_4th = FusedMulAddCUDA(-0.2, k4, f_4th);
-        f_4th = FusedMulAddCUDA(h_local, f_4th, f_n);
-
-        // 4. Compute 5th Order Candidate (Physical Update)
+        // 2. Compute 5th Order Candidate
+        // Evaluates the physical update utilizing exact double-precision Runge-Kutta coefficients.
         // Coeffs: 16/135, 0, 6656/12825, 28561/56430, -9/50, 2/55
-        double update = MulCUDA(0.1185185185185185, k0);
-        update = FusedMulAddCUDA(0.5189863547758285, k2, update);
-        update = FusedMulAddCUDA(0.5061137692716641, k3, update);
-        update = FusedMulAddCUDA(-0.18, k4, update);
-        update = FusedMulAddCUDA(0.0363636363636364, k5, update);
-        
+        double update = MulCUDA(16.0 / 135.0, k0);
+        update = FusedMulAddCUDA(6656.0 / 12825.0, k2, update);
+        update = FusedMulAddCUDA(28561.0 / 56430.0, k3, update);
+        update = FusedMulAddCUDA(-9.0 / 50.0, k4, update);
+        update = FusedMulAddCUDA(2.0 / 55.0, k5, update);
+
         const double f_5th_val = FusedMulAddCUDA(h_local, update, f_n);
-        
-        // Cache the result for potential write-back to Global VRAM.
         f_5th_cache[comp] = f_5th_val;
 
-        // 5. Error Normalization
+        // 3. Compute Truncation Error 
+        // Evaluates the truncation error directly via coefficient deltas ($C_5 - C_4$) to prevent 
+        // catastrophic floating-point cancellation against the anchor state $f_n$.
+        // Delta Coeffs: (16/135 - 25/216), 0, (6656/12825 - 1408/2565), (28561/56430 - 2197/4104), (-9/50 - -1/5), 2/55
+        double err_val = MulCUDA(1.0 / 360.0, k0);
+        err_val = FusedMulAddCUDA(-128.0 / 4275.0, k2, err_val);
+        err_val = FusedMulAddCUDA(-2197.0 / 75240.0, k3, err_val);
+        err_val = FusedMulAddCUDA(1.0 / 50.0, k4, err_val);
+        err_val = FusedMulAddCUDA(2.0 / 55.0, k5, err_val);
+
+        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val));
+
         // --- ERROR NORMALIZATION & L-INFINITY NORM ---
         // Evaluates the normalized error for each tensor component to dictate the RKF45 adaptive step size $h$.
-        if (comp < 8) {{ // Exclude affine param (index 8) from error check
-        const double err_abs = AbsCUDA(SubCUDA(f_5th_val, f_4th));
+        if (comp < 8) {{ // Excludes the affine parameter (index 8) from the error check.
         double scale = 0.0;
 
-        if (comp == 0) {{ // Time $t$
-            // Mixed tolerance scaling ensures stable error bounds for massive coordinate time values.
+        if (comp == 0) {{ 
+            // Coordinate Time $t$: Applies pure absolute tolerance to prevent secular drift.
+            scale = atol; 
+        }} else if (comp <= 3) {{ 
+            // Spatial Position $x^i$: Mixed tolerance scaling bounds spatial position variation.
             scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-        }} else if (comp <= 3) {{ // Spatial Position $x^i$
-            // Mixed tolerance scaling ensures stable error bounds for spatial coordinate propagation.
+        }} else if (comp == 4) {{ 
+            // Temporal Momentum $p_t$: Mixed tolerance scaling enforces energy conservation bounds.
             scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-        }} else if (comp == 4) {{ // Energy $p_t$
-             // Mixed tolerance scaling enforces strict conservation of the temporal momentum component.
-            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-        }} else {{ // Spatial Momentum $p_i$
-            // Implements an L1 momentum floor to prevent division by zero during deep field traversals.
+        }} else {{ 
+            // Spatial Momentum $p_i$: Mixed tolerance bounded by the $L_1$ momentum floor.
             scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
         }}
 
-        // Accumulate the maximum normalized error equivalent to the $L_\infty$ norm.
+        // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
         double current_err = DivCUDA(err_abs, scale);
-
-        // EXPLICIT NaN REJECTION: Guard against IEEE 754 fmax behavior
+        
+        // EXPLICIT NaN REJECTION: Guards against IEEE 754 fmax behavior.
         if (isnan(current_err)) {{
-            err_norm = 1e30; // Force an artificially massive error to guarantee rejection
+            err_norm = 1e30; // Forces an artificially massive error to guarantee rejection.
         }} else {{
             err_norm = fmax(err_norm, current_err);
         }}
         }}
     }}
 
-    // --- CONTROL LOGIC ---
+    // --- UNIFIED ADAPTIVE CONTROL LOGIC ---
+    // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
+    double safety = d_commondata.rkf45_safety_factor;
+    double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0;
+    
+    double h_new = MulCUDA(safety, MulCUDA(h_local, factor));
+    h_new = fmax(h_new, d_commondata.rkf45_h_min);
+    h_new = fmin(h_new, d_commondata.rkf45_h_max);
+
     if (err_norm <= 1.0) {{
         // === ACCEPTED STEP ===
-        
-        // 1. Flush Cached State to Persistent VRAM
+        // Flush Cached State to Persistent VRAM.
         // This coalesced write commits the local register cache to global memory.
         #pragma unroll
         for (int comp = 0; comp < 9; ++comp) {{
-            WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]);
+        WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]);
         }}
 
-        // 2. Update Affine Parameter lambda
+        // Update Affine Parameter $\lambda$.
         const double old_affine = ReadCUDA(&d_affine[i]);
         WriteCUDA(&d_affine[i], AddCUDA(old_affine, h_local));
 
-        // 3. Reset Retries & Set Status
+        // Reset Retries & Set Status.
         WriteCUDA(&d_retries[i], 0);
         WriteCUDA(&d_status[i], ACTIVE);
-
-        // 4. Grow Step Size (Safety Factor)
-        // Scale h based on error norm, bounded by h_max.
-        double safety = {cd_access}rkf45_safety_factor;
-        double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0;
-        double h_new = MulCUDA(safety, MulCUDA(h_local, factor));
-        h_new = fmin(h_new, {cd_access}rkf45_h_max);
         
-        WriteCUDA(&d_h[i], h_new);
-
+        // Commit the newly adapted step size $h$ to VRAM.
+        WriteCUDA(&d_h[i], h_new); 
     }} else {{
         // === REJECTED STEP ===
-
-        // 1. Increment Retry Counter
+        // Increment Retry Counter.
         const int new_retries = retries + 1;
         WriteCUDA(&d_retries[i], new_retries);
 
-        // 2. Shrink Step Size
-        // Reduce h by half, bounded by h_min.
-        double h_new = MulCUDA(0.5, h_local);
-        h_new = fmax(h_new, {cd_access}rkf45_h_min);
-        WriteCUDA(&d_h[i], h_new);
-
-        // 3. Update Status
-        if (new_retries > {cd_access}rkf45_max_retries) {{
-            WriteCUDA(&d_status[i], FAILURE_RKF45_REJECTION_LIMIT);
+        // Update Status.
+        if (new_retries > d_commondata.rkf45_max_retries) {{
+        WriteCUDA(&d_status[i], FAILURE_RKF45_REJECTION_LIMIT);
         }} else {{
-            WriteCUDA(&d_status[i], REJECTED); 
+        WriteCUDA(&d_status[i], REJECTED);
         }}
         
-        // Note: d_f_persistent is NOT updated, preserving the valid state for retry.
+        // Commit the scaled retry step size $h$ to VRAM.
+        // Note: d_f_persistent is NOT updated, preserving the valid state.
+        WriteCUDA(&d_h[i], h_new); 
     }}
     """
 

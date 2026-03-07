@@ -204,7 +204,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-8
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-8
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-8
+    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-13
 
     # Execution Initial Conditions
     par.glb_code_params_dict["scan_density"].defaultvalue = 500

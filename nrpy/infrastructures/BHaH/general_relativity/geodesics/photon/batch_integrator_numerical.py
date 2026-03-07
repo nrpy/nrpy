@@ -360,10 +360,18 @@ for(int p = 0; p < 1; p++) {{
 
 
     // --- 3. TEMPORAL LOOP (The Engine) ---
-    
+
+    // Integer tracking the global number of active photon trajectories to allow early loop termination.
+    long int total_active_photons = num_rays;
+
     // Outer loop iterator for the physical time bins.
     int slot_idx;
     for (slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{
+        // Evaluates the early exit condition to terminate the temporal engine if all geometric trajectories have concluded.
+        if (total_active_photons <= 0) {{
+        break;
+        }}
+
         printf("Processing Time Bin: %d | Active Rays in Bin: %ld\n", slot_idx, tsm.slot_counts[slot_idx]);
         while (tsm.slot_counts[slot_idx] > 0) {{
             
@@ -591,6 +599,7 @@ for(int p = 0; p < 1; p++) {{
             double t_sum = 0;
             double h_avg = 0;
             double r2_sum = 0; // Sum of squared radii: x^2 + y^2 + z^2
+            double pt_sum = 0; // Sum of momentum p^t
 
             for (int diag_i = 0; diag_i < chunk_size; diag_i++) {{
                 // 1. Track Numerical Status
@@ -611,6 +620,9 @@ for(int p = 0; p < 1; p++) {{
                 double y_loc = f_bridge[2 * BUNDLE_CAPACITY + diag_i];
                 double z_loc = f_bridge[3 * BUNDLE_CAPACITY + diag_i];
                 r2_sum += (x_loc*x_loc + y_loc*y_loc + z_loc*z_loc);
+
+                // 4. Track Momentum p^t (Component 4)
+                pt_sum += f_bridge[4 * BUNDLE_CAPACITY + diag_i];
             }}
 
             // Hardware Justification: Single print statement every 500 calls to prevent IO bottlenecks.
@@ -619,6 +631,7 @@ for(int p = 0; p < 1; p++) {{
                 printf("\n[Bin %d | Call %d] Engine Status Report:\n", slot_idx, diagnostic_call_id);
                 printf("  - Avg Coordinate Time (t): %.6f\n", t_sum / chunk_size);
                 printf("  - Avg Squared Radius (r^2): %.6f\n", r2_sum / chunk_size);
+                printf("  - Avg Momentum (p^t):      %.6f\n", pt_sum / chunk_size);
                 printf("  - Avg Step Size (h):       %.6e\n", h_avg / chunk_size);
                 printf("  - ACCEPTED (Forward):      %ld (%.1f%%)\n", accepted_count, (double)accepted_count/chunk_size * 100.0);
                 printf("  - REJECTED (Retry):       %ld (%.1f%%)\n", rejected_count, (double)rejected_count/chunk_size * 100.0);
@@ -652,17 +665,20 @@ for(int p = 0; p < 1; p++) {{
 
                 if (status_bridge[fin_i] == ACTIVE) {{
                     // Extract $f^0$ (coordinate time) to evaluate the next discrete temporal bin.
-                    int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); 
+                    int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]);
                     if (next_s_idx != -1) {{
                         slot_add_photon(&tsm, next_s_idx, m_idx);
                     }} else {{
-                        // Catch photons that fall outside the TimeSlotManager bounds
-                        // and officially terminate them so they don't remain stuck as ACTIVE (7).
+                        // Terminates photons that fall outside the TimeSlotManager bounds to prevent persistent ACTIVE state.
                         all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED;
+                        total_active_photons--;
                     }}
-                }} else if (status_bridge[fin_i] == REJECTED) {{
-                    // Re-add to current bin to attempt integration with an adapted step-size scalar.
+                    }} else if (status_bridge[fin_i] == REJECTED) {{
+                    // Re-add to current bin to attempt integration with an adapted step-size scalar $h$.
                     slot_add_photon(&tsm, slot_idx, m_idx);
+                    }} else {{
+                    // Decrements the global counter as the photon has reached a terminal physical state or numerical failure limit.
+                    total_active_photons--;
                 }}
             }}
         }}

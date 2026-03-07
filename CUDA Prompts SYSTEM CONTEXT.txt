@@ -507,3 +507,749 @@ Review the provided code.
 Refactor and comment it strictly adhering to every rule above.
 Ensure the physics remains front and center, the hardware logic is explicitly justified, and the metaprogramming boundaries are respected.
 """
+
+
+Most recent output:
+""
+Gemini said
+Review of LLM 1
+What I Agree With: LLM 1 correctly deduced that integrating the new historical affine parameter bundles (λ 
+n−1
+​
+  and λ 
+n−2
+​
+ ) is structurally required for the root-finder to maintain sub-step precision. Furthermore, its logic to replace the global d_results_buffer with a chunked blueprint_bridge that scatters back to the host is functionally accurate and necessary for your specific architecture.
+
+What I Disagree With: It failed multiple strict formatting rules. It squished Python imports onto the same line as the mandatory Author: docstring sign-off. It repeatedly violated the Master Order for register_CFunction by passing empty strings (prefunc="" and postfunc="") where they were not natively generated, which introduces compilation bloat. Finally, it failed to wrap several mathematical variables in C-comments with proper LaTeX delimiters (e.g., passing d_affine_bundle without explaining it tracks λ 
+n
+​
+ ).
+
+Review of LLM 2
+What I Agree With: LLM 2 correctly caught the LaTeX documentation omissions and the generic visual dividers used by LLM 1. It accurately identified that the thread hierarchy documentation was incomplete.
+
+What I Disagree With: LLM 2 is fundamentally incorrect regarding the d_results_buffer and the "PCIe Bottleneck" critique. While keeping a single global buffer in VRAM is usually best practice, LLM 2 failed to understand your Temporal Binning architecture. The TimeSlotManager bins photons dynamically, meaning the chunk_size elements processed in any given batch correspond to a non-contiguous, randomized set of master indices (m_idx). The array that maps the local GPU thread index i to the global master index m_idx (chunk_buffer) resides exclusively on the Host CPU. If the device kernel wrote directly to a global d_results_buffer[i], it would repeatedly overwrite the first BUNDLE_CAPACITY elements of the array. Therefore, LLM 1's approach—writing to a chunked d_blueprint_bundle and scattering the data back to the master array on the Host—is structurally mandatory.
+
+Corrected Code Blocks
+Here are the fully corrected Python scripts and C-snippets that strictly conform to your architectural mandates, register constraints, and documentation standards.
+
+1. event_detection_manager_kernel.py
+Python
+"""
+Generates the C orchestrator for geometric event detection.
+
+This module provides the high-level logic for detecting crossings of the
+observer window and the source emission plane. It operates strictly within 
+the Split-Pipeline architecture, reading from VRAM scratchpad bundles.
+
+Author: Dalton J. Moone.
+"""
+import nrpy.c_function as cfc
+import nrpy.params as par
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+
+
+def event_detection_manager_kernel() -> None:
+    """
+    Register the event_detection_manager global CUDA kernel.
+
+    This function performs the geometric checks for plane crossings. It is designed
+    to be called within the main integration loop for every active photon.
+
+    :param: None (This is a generator function requiring no Python-side inputs).
+    :raises SystemError: If C function registration fails during the pipeline compilation.
+    """
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        ["p_t_max"],
+        [1e5],
+        commondata=True,
+        add_to_parfile=True,
+    )
+
+    find_event_c_code = cfc.CFunction_dict["find_event_time_and_state"].full_function
+    window_c_code = cfc.CFunction_dict["handle_window_plane_intersection"].full_function
+    source_c_code = cfc.CFunction_dict["handle_source_plane_intersection"].full_function
+
+    kernel_body = r"""
+    // --- THREAD IDENTIFICATION & BOUNDS ---
+    // Thread ID maps to a unique active photon index `i` to evaluate bounding intersections in parallel.
+    // The bounds are strictly constrained by the active `chunk_size` of the current temporal bin.
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= chunk_size) return;
+
+    // --- MACROS ---
+    // IDX_F maps a component to the flattened state bundle using SoA layout.
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+
+    // --- TEMPORAL EXPLOSION CHECK ---
+    // Reads $p^t$ directly from VRAM to terminate doomed rays before register hydration.
+    const double p_t = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
+    if (AbsCUDA(p_t) > d_commondata.p_t_max) {
+        d_status_bundle[i] = FAILURE_PT_TOO_BIG;
+        return;
+    }
+
+    // Terminated photons cleanly bypass the geometric evaluation logic.
+    if (d_status_bundle[i] != ACTIVE) return;
+
+    // --- TEMPORAL REGISTER HYDRATION ---
+    // Reads historical affine parameters $\lambda$ to supply the root-finder logic.
+    const double t2 = ReadCUDA(&d_affine_bundle[i]);
+    const double t1 = ReadCUDA(&d_affine_p_bundle[i]);
+    const double t0 = ReadCUDA(&d_affine_p_p_bundle[i]);
+
+    // --- LOCAL REGISTER HYDRATION ---
+    // 1-Pass read from global VRAM bundles into thread-local arrays to respect sm_86 limits.
+    double f_local[9], f_p_local[9], f_p_p_local[9];
+    #pragma unroll
+    for (int c = 0; c < 9; c++) {
+        f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]);
+        f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]);
+        f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]);
+    }
+
+    const double x = f_local[1]; 
+    const double y = f_local[2]; 
+    const double z = f_local[3];
+
+    // --- CELESTIAL ESCAPE CHECK ---
+    // Evaluates if the photon has exceeded the coordinate escape radius $r_{escape}$.
+    const double r_sq = x*x + y*y + z*z;
+    if (r_sq > (d_commondata.r_escape * d_commondata.r_escape)) {
+        d_status_bundle[i] = TERMINATION_TYPE_CELESTIAL_SPHERE;
+        return;
+    }
+
+    // --- EVENT DETECTION & TERMINATION CHECKS ---
+    // Evaluates physical plane intersections strictly using localized variables.
+    
+    // Window observer intersection logic
+    double w_normal[3];
+    w_normal[0] = d_commondata.window_center_x - d_commondata.camera_pos_x;
+    w_normal[1] = d_commondata.window_center_y - d_commondata.camera_pos_y;
+    w_normal[2] = d_commondata.window_center_z - d_commondata.camera_pos_z;
+    
+    const double mag_inv = 1.0 / SqrtCUDA(w_normal[0]*w_normal[0] + w_normal[1]*w_normal[1] + w_normal[2]*w_normal[2]);
+    w_normal[0] *= mag_inv; w_normal[1] *= mag_inv; w_normal[2] *= mag_inv;
+    
+    const double w_dist = d_commondata.window_center_x*w_normal[0] + d_commondata.window_center_y*w_normal[1] + d_commondata.window_center_z*w_normal[2];
+    const double w_val = x*w_normal[0] + y*w_normal[1] + z*w_normal[2] - w_dist;
+    
+    const bool on_pos_win_curr = (w_val > 1e-10);
+    const bool on_pos_win_prev = d_on_pos_window_prev[i];
+
+    if (on_pos_win_curr != on_pos_win_prev) {
+         double f_int[9], lam;
+         find_event_time_and_state(f_local, f_p_local, f_p_p_local, t0, t1, t2, w_normal, w_dist, &lam, f_int);
+         // Pass the explicit thread memory slot to prevent uncoalesced global reads
+         handle_window_plane_intersection(f_int, lam, &d_blueprint_bundle[i]);
+    }
+    d_on_pos_window_prev[i] = on_pos_win_curr;
+
+    // Source accretion disk intersection logic
+    const double s_normal[3] = {d_commondata.source_plane_normal_x, d_commondata.source_plane_normal_y, d_commondata.source_plane_normal_z};
+    const double s_dist = d_commondata.source_plane_center_x*s_normal[0] + d_commondata.source_plane_center_y*s_normal[1] + d_commondata.source_plane_center_z*s_normal[2];
+    const double s_val = x*s_normal[0] + y*s_normal[1] + z*s_normal[2] - s_dist;
+    
+    const bool on_pos_src_curr = (s_val > 1e-10);
+    const bool on_pos_src_prev = d_on_pos_source_prev[i];
+
+    if (on_pos_src_curr != on_pos_src_prev) {
+         double f_int[9], lam;
+         find_event_time_and_state(f_local, f_p_local, f_p_p_local, t0, t1, t2, s_normal, s_dist, &lam, f_int);
+         if (handle_source_plane_intersection(f_int, lam, &d_blueprint_bundle[i])) {
+             d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE;
+         }
+    }
+    d_on_pos_source_prev[i] = on_pos_src_curr;
+
+    // --- HISTORY SHIFT ---
+    // VRAM bundles are updated only for active trajectories to stage the next RKF45 step.
+    if (d_status_bundle[i] == ACTIVE) {
+        #pragma unroll
+        for (int c = 0; c < 9; c++) {
+            WriteCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)], f_p_local[c]);
+            WriteCUDA(&d_f_prev_bundle[IDX_F(c, i)], f_local[c]);
+        }
+        WriteCUDA(&d_affine_p_p_bundle[i], t1);
+        WriteCUDA(&d_affine_p_bundle[i], t2);
+    }
+
+    #undef IDX_F
+    """
+
+    arg_dict = {
+        "d_f_bundle": "const double *restrict",
+        "d_f_prev_bundle": "double *restrict",
+        "d_f_pre_prev_bundle": "double *restrict",
+        "d_affine_bundle": "const double *restrict",
+        "d_affine_p_bundle": "double *restrict",
+        "d_affine_p_p_bundle": "double *restrict",
+        "d_blueprint_bundle": "blueprint_data_t *restrict",
+        "d_status_bundle": "termination_type_t *restrict",
+        "d_on_pos_window_prev": "bool *restrict",
+        "d_on_pos_source_prev": "bool *restrict",
+        "chunk_size": "const int",
+        "commondata": "const commondata_struct *restrict"
+    }
+
+    launch_dict = {
+        "threads_per_block": ["256", "1", "1"],
+        "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+    }
+
+    prefunc_kernel, body = generate_kernel_and_launch_code(
+        kernel_name="event_detection_manager_kernel",
+        kernel_body=kernel_body,
+        arg_dict_cuda=arg_dict,
+        arg_dict_host=arg_dict,
+        parallelization="cuda",
+        launch_dict=launch_dict,
+        cfunc_decorators="__global__",
+        thread_tiling_macro_suffix="RKF45"
+    )
+
+    prefunc = "\n\n".join([find_event_c_code, window_c_code, source_c_code, prefunc_kernel])
+
+    includes = [
+        "BHaH_defines.h", 
+        "BHaH_device_defines.h", 
+        "BHaH_function_prototypes.h", 
+        "<math.h>", 
+        "<stdbool.h>",
+        "cuda_intrinsics.h"
+    ]
+    
+    desc = r"""@brief GPU-optimized detection of plane crossings using consolidated blueprints.
+
+    @param d_f_bundle VRAM SoA pointer to the state array for step $f^\mu_{n}$.
+    @param d_f_prev_bundle VRAM SoA pointer to the state array for step $f^\mu_{n-1}$.
+    @param d_f_pre_prev_bundle VRAM SoA pointer to the state array for step $f^\mu_{n-2}$.
+    @param d_affine_bundle VRAM array tracking the affine parameter $\lambda_n$.
+    @param d_affine_p_bundle VRAM array tracking the previous affine parameter $\lambda_{n-1}$.
+    @param d_affine_p_p_bundle VRAM array tracking the pre-previous affine parameter $\lambda_{n-2}$.
+    @param d_blueprint_bundle Pointer to the array of blueprint data structures $b_i$.
+    @param d_status_bundle Pointer to the array of termination statuses.
+    @param d_on_pos_window_prev VRAM array tracking the window plane side.
+    @param d_on_pos_source_prev VRAM array tracking the source plane side.
+    @param chunk_size The number of active rays in the current bundle batch.
+    @param commondata Struct containing global spacetime and numerical tolerances."""
+    
+    cfunc_type = "void"
+    name = "event_detection_manager_kernel"
+    
+    params = (
+        "const double *restrict d_f_bundle, "
+        "double *restrict d_f_prev_bundle, "
+        "double *restrict d_f_pre_prev_bundle, "
+        "const double *restrict d_affine_bundle, "
+        "double *restrict d_affine_p_bundle, "
+        "double *restrict d_affine_p_p_bundle, "
+        "blueprint_data_t *restrict d_blueprint_bundle, "
+        "termination_type_t *restrict d_status_bundle, "
+        "bool *restrict d_on_pos_window_prev, "
+        "bool *restrict d_on_pos_source_prev, "
+        "const int chunk_size, "
+        "const commondata_struct *restrict commondata"
+    )
+    
+    cfc.register_CFunction(
+        prefunc=prefunc,
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body
+    )
+2. find_event_time_and_state.py
+Python
+"""
+Registers the high-precision event-finding C kernel.
+
+This module resolves exact coordinate intersections when a plane
+crossing is detected. It utilizes second-order quadratic interpolation
+for root-finding and Lagrange interpolation for state reconstruction at
+the intersection boundaries, executing strictly within thread-local registers.
+
+Author: Dalton J. Moone.
+"""
+import nrpy.c_function as cfc
+
+
+def find_event_time_and_state() -> None:
+    """
+    Register the find_event_time_and_state C function.
+
+    This function resolves the exact coordinate intersection when a plane
+    crossing is detected. It ensures sub-step accuracy for photon mapping.
+
+    :param: None (This is a generator function requiring no Python-side inputs).
+    :raises SystemError: Implicitly raises exceptions if C-function registration fails.
+    """
+    includes = ["BHaH_defines.h", "<math.h>"]
+    desc = r"""@brief Portable high-performance second-order root-finding.
+
+    @param f_local The thread-local state array for step $f^\mu_{n}$.
+    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
+    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param t0 The true affine parameter $\lambda_{n-2}$.
+    @param t1 The true affine parameter $\lambda_{n-1}$.
+    @param t2 The true affine parameter $\lambda_{n}$.
+    @param normal The geometric unit normal vector $n_i$ of the target plane.
+    @param dist The scalar distance $d$ from the origin to the target plane.
+    @param event_lambda Pointer to the local affine parameter $\lambda$ to be updated.
+    @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
+
+    Detailed algorithm: Uses position data $x^i$ from the current and two previous
+    integration steps (passed as thread-local arrays) to construct a quadratic model
+    of the trajectory relative to the target plane. The intersection $\lambda$ is solved via the
+    quadratic formula and the full state $f^\mu$ is reconstructed via Lagrange polynomials."""
+    
+    cfunc_type = "static BHAH_HD_INLINE void"
+    name = "find_event_time_and_state"
+    params = (
+        "const double *restrict f_local, "
+        "const double *restrict f_p_local, "
+        "const double *restrict f_p_p_local, "
+        "const double t0, "
+        "const double t1, "
+        "const double t2, "
+        "const double *restrict normal, "
+        "const double dist, "
+        "double *restrict event_lambda, "
+        "double *restrict event_f_intersect"
+    )
+    
+    body = r"""
+    // --- TEMPORAL AND GEOMETRIC STATE UNPACKING ---
+    // Evaluates the geometric plane equation $n_i x^i - d$ at the historical steps.
+    const double f0 = f_p_p_local[1]*normal[0] + f_p_p_local[2]*normal[1] + f_p_p_local[3]*normal[2] - dist; // Plane evaluation at step $n-2$.
+    const double f1 = f_p_local[1]*normal[0] + f_p_local[2]*normal[1] + f_p_local[3]*normal[2] - dist;     // Plane evaluation at step $n-1$.
+    const double f2 = f_local[1]*normal[0] + f_local[2]*normal[1] + f_local[3]*normal[2] - dist;           // Plane evaluation at step $n$.
+
+    // --- STEP 1: LINEAR SEED CALCULATION ---
+    // Provides a fallback value if the quadratic interpolation fails or is unnecessary.
+    double t_linear;
+    if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) {
+        t_linear = (f2 * t1 - f1 * t2) / (f2 - f1);
+    } else if ( (f0 * f1 <= 0.0 || fabs(f0) < 1e-12) && fabs(f1 - f0) > 1e-15 ) {
+        t_linear = (f1 * t0 - f0 * t1) / (f1 - f0);
+    } else {
+        t_linear = t1;
+    }
+
+    // --- STEP 2: QUADRATIC INTERPOLATION (SECOND-ORDER ACCURACY) ---
+    const double h0 = t1 - t0; // Interval size $\Delta\lambda$ between step $n-2$ and $n-1$.
+    const double h1 = t2 - t1; // Interval size $\Delta\lambda$ between step $n-1$ and $n$.
+    double lambda_event = t_linear; // The resulting affine parameter $\lambda$ for the crossing.
+
+    if (fabs(h0) > 1e-15 && fabs(h1) > 1e-15) {
+        // Newton form divided differences for the quadratic model: $f(t) = a(t-t_2)^2 + b(t-t_2) + f_2$.
+        const double delta0 = (f1 - f0) / h0;
+        const double delta1 = (f2 - f1) / h1;
+        const double a = (delta1 - delta0) / (h1 + h0); // The second-order coefficient representing relative acceleration.
+        const double b = a * h1 + delta1;               // The first-order coefficient representing relative velocity.
+        const double discriminant = b*b - 4.0 * a * f2; // Discriminant $b^2 - 4ac$ for the quadratic intersection.
+
+        if (discriminant >= 0.0 && fabs(a) > 1e-16) {
+            // Use the stable form of the quadratic formula $t = t_2 - \frac{2c}{-b \pm \sqrt{b^2 - 4ac}}$ to minimize truncation error.
+            double denom = (b >= 0.0) ? (b + sqrt(discriminant)) : (b - sqrt(discriminant));
+            if (fabs(denom) > 1e-16) {
+                double t_quad = t2 - (2.0 * f2 / denom);
+                double t_min = (t0 < t2) ? t0 : t2;
+                double t_max = (t0 < t2) ? t2 : t0;
+                // Bound check: ensure the quadratic root $\lambda_{root}$ lies within the historical integration window.
+                if (t_quad >= t_min && t_quad <= t_max) lambda_event = t_quad;
+            }
+        }
+    }
+
+    // --- STEP 3: LAGRANGE STATE RECONSTRUCTION ---
+    // Reconstruct the full 9-component state vector $f^\mu$ at the exact $\lambda_{event}$.
+    const double t = lambda_event;
+    double L0, L1, L2; // Lagrange basis polynomials $L_i(t)$.
+    if (fabs(h0) < 1e-15 || fabs(h1) < 1e-15) {
+        // Fallback to linear weights $L_i$ if the intervals are degenerate.
+        L0 = 0.0; L1 = (t2 - t) / (t2 - t1); L2 = (t - t1) / (t2 - t1);
+    } else {
+        L0 = ((t - t1) * (t - t2)) / ((t0 - t1) * (t0 - t2));
+        L1 = ((t - t0) * (t - t2)) / ((t1 - t0) * (t1 - t2));
+        L2 = ((t - t0) * (t - t1)) / ((t2 - t0) * (t2 - t1));
+    }
+
+    // Assign the final computed event parameter $\lambda$.
+    *event_lambda = lambda_event;
+
+    // Interpolate all 9 components $f^\mu$: $\{t, x, y, z, p_t, p_x, p_y, p_z, \lambda\}$.
+    for (int i = 0; i < 9; i++) {
+        event_f_intersect[i] = f_p_p_local[i] * L0 +
+                               f_p_local[i]   * L1 +
+                               f_local[i]     * L2;
+    }
+    """
+
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body
+    )
+3. handle_window_plane_intersection.py
+Python
+"""
+Generates the C engine to handle a window plane intersection.
+
+This module calculates the local 2D coordinates on the observer's camera window
+when a photon crosses the window plane. It relies entirely on constant memory
+to preserve hardware register constraints.
+
+Author: Dalton J. Moone.
+"""
+import nrpy.c_function as cfc
+import nrpy.params as par
+
+
+def handle_window_plane_intersection() -> None:
+    """
+    Generate and register the C engine for processing window plane intersections.
+
+    This function defines the geometric transformation from global Cartesian
+    coordinates to the local camera frame ($n_x$, $n_y$, $n_z$).
+
+    :param: None (This is a generator function requiring no Python-side inputs).
+    :raises SystemError: Implicitly raises exceptions if parameter registration or C-function registration fails.
+    """
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "window_center_x",
+            "window_center_y",
+            "window_center_z",
+            "camera_pos_x",
+            "camera_pos_y",
+            "camera_pos_z",
+            "window_up_vec_x",
+            "window_up_vec_y",
+            "window_up_vec_z",
+            "window_width",
+            "window_height",
+        ],
+        [50.0, 0.0, 0.0, 51.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        commondata=True,
+        add_to_parfile=True,
+    )
+
+    includes = [
+        "BHaH_defines.h",
+        "BHaH_device_defines.h",
+        "BHaH_function_prototypes.h",
+        "<math.h>",
+        "<stdbool.h>",
+        "cuda_intrinsics.h"
+    ]
+
+    desc = r"""@brief Processes a window plane intersection without terminating the trajectory.
+
+    @param f_local Thread-local array containing the 9-component photon state $f^\mu$.
+    @param lam_intersect True affine parameter $\lambda$ of the crossing.
+    @param final_blueprint_data Pointer to the blueprint structure $b_i$ for data persistence.
+
+    Algorithm:
+    1. Reconstructs the orthonormal camera basis ($w_x$, $w_y$, $w_z$).
+    2. Projects the 3D intersection point $x^i$ onto the local window axes.
+    3. Validates if the intersection falls within the physical window boundaries."""
+
+    cfunc_type = "static BHAH_HD_INLINE bool"
+    name = "handle_window_plane_intersection"
+
+    params = (
+        "const double *restrict f_local, "
+        "const double lam_intersect, "
+        "blueprint_data_t *restrict final_blueprint_data"
+    )
+
+    body = r"""
+    // --- STATE UNPACKING ---
+    // Maps global states to immediate thread-local variables to minimize VRAM latency.
+    const double t_intersect = f_local[0]; // Coordinate time $t$ at intersection.
+    const double x_intersect = f_local[1]; // Cartesian $x$ at intersection.
+    const double y_intersect = f_local[2]; // Cartesian $y$ at intersection.
+    const double z_intersect = f_local[3]; // Cartesian $z$ at intersection.
+    const double L_intersect = lam_intersect; // True affine parameter $\lambda$ of the crossing.
+
+    // --- CAMERA BASIS RECONSTRUCTION ---
+    // Reconstructs the orthonormal frame to map the physical intersection onto the virtual pixel grid.
+    const double window_center[3] = {d_commondata.window_center_x, d_commondata.window_center_y, d_commondata.window_center_z}; 
+
+    double w_z[3] = {
+        d_commondata.window_center_x - d_commondata.camera_pos_x,
+        d_commondata.window_center_y - d_commondata.camera_pos_y,
+        d_commondata.window_center_z - d_commondata.camera_pos_z
+    }; 
+
+    double mag_w_z = SqrtCUDA(w_z[0]*w_z[0] + w_z[1]*w_z[1] + w_z[2]*w_z[2]); 
+    if (mag_w_z > 1e-12) {
+        double inv_mag = 1.0 / mag_w_z; // Inverse multiplication is utilized to optimize floating-point arithmetic speed.
+        w_z[0] *= inv_mag; w_z[1] *= inv_mag; w_z[2] *= inv_mag;
+    }
+
+    const double window_up[3] = {d_commondata.window_up_vec_x, d_commondata.window_up_vec_y, d_commondata.window_up_vec_z}; 
+
+    double w_x[3]; // Horizontal basis vector $w_x$ (orthogonal to $w_z$ and 'up').
+    w_x[0] = window_up[1]*w_z[2] - window_up[2]*w_z[1];
+    w_x[1] = window_up[2]*w_z[0] - window_up[0]*w_z[2];
+    w_x[2] = window_up[0]*w_z[1] - window_up[1]*w_z[0];
+
+    double mag_w_x = SqrtCUDA(w_x[0]*w_x[0] + w_x[1]*w_x[1] + w_x[2]*w_x[2]); 
+
+    if (mag_w_x < 1e-9) {
+        double alt_up[3] = {1.0, 0.0, 0.0}; 
+        if (AbsCUDA(w_z[0]) > 0.999) { alt_up[0] = 0.0; alt_up[1] = 1.0; }
+        w_x[0] = alt_up[1]*w_z[2] - alt_up[2]*w_z[1];
+        w_x[1] = alt_up[2]*w_z[0] - alt_up[0]*w_z[2];
+        w_x[2] = alt_up[0]*w_z[1] - alt_up[1]*w_z[0];
+        mag_w_x = SqrtCUDA(w_x[0]*w_x[0] + w_x[1]*w_x[1] + w_x[2]*w_x[2]);
+    }
+
+    double inv_mag_w_x = 1.0 / mag_w_x;
+    w_x[0] *= inv_mag_w_x; w_x[1] *= inv_mag_w_x; w_x[2] *= inv_mag_w_x;
+
+    double w_y[3]; // Vertical basis vector $w_y$ completing the right-handed frame.
+    w_y[0] = w_z[1]*w_x[2] - w_z[2]*w_x[1];
+    w_y[1] = w_z[2]*w_x[0] - w_z[0]*w_x[2];
+    w_y[2] = w_z[0]*w_x[1] - w_z[1]*w_x[0];
+
+    // --- PROJECTION & VALIDATION ---
+    // Transforms the global spatial intersection into the local 2D window coordinate system.
+    const double relative_pos[3] = {
+        x_intersect - window_center[0],
+        y_intersect - window_center[1],
+        z_intersect - window_center[2]
+    }; 
+
+    const double local_y_w = relative_pos[0]*w_x[0] + relative_pos[1]*w_x[1] + relative_pos[2]*w_x[2]; 
+    const double local_z_w = relative_pos[0]*w_y[0] + relative_pos[1]*w_y[1] + relative_pos[2]*w_y[2]; 
+
+    if (AbsCUDA(local_y_w) <= d_commondata.window_width / 2.0 && AbsCUDA(local_z_w) <= d_commondata.window_height / 2.0) {
+        final_blueprint_data->y_w = local_y_w; // Store local horizontal offset.
+        final_blueprint_data->z_w = local_z_w; // Store local vertical offset.
+        final_blueprint_data->t_w = t_intersect; // Persistent coordinate time of crossing.
+        final_blueprint_data->L_w = L_intersect; // Persistent affine parameter of crossing.
+        return true;
+    }
+
+    return false;
+    """
+
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body
+    )
+4. handle_source_plane_intersection.py
+Python
+"""
+Generates the C engine to handle a source plane intersection.
+
+This module computes the impact parameters on the physical emission plane 
+strictly executing within thread-local registers and constant memory.
+
+Author: Dalton J. Moone.
+"""
+import nrpy.c_function as cfc
+import nrpy.params as par
+
+
+def handle_source_plane_intersection() -> None:
+    """
+    Generate and register the C engine for source plane intersection handling.
+
+    This function defines the local coordinate system of the source plane
+    and checks if the photon hit the active region ($r_{min}$ to $r_{max}$).
+
+    :param: None (This is a generator function requiring no Python-side inputs).
+    :raises SystemError: Implicitly raises exceptions if parameter registration or C-function registration fails.
+    """
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        [
+            "source_plane_normal_x",
+            "source_plane_normal_y",
+            "source_plane_normal_z",
+            "source_plane_center_x",
+            "source_plane_center_y",
+            "source_plane_center_z",
+            "source_up_vec_x",
+            "source_up_vec_y",
+            "source_up_vec_z",
+            "source_r_min",
+            "source_r_max",
+        ],
+        [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 6.0, 25.0],
+        commondata=True,
+        add_to_parfile=True,
+    )
+
+    includes = [
+        "BHaH_defines.h",
+        "BHaH_device_defines.h",
+        "BHaH_function_prototypes.h",
+        "<math.h>",
+        "<stdbool.h>",
+        "cuda_intrinsics.h"
+    ]
+    
+    desc = r"""@brief Processes a terminal intersection with the source emission plane.
+
+    @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
+    @param lam_intersect True affine parameter $\lambda$ of the crossing.
+    @param final_blueprint_data Pointer to the local blueprint structure $b_i$ to store impact geometries.
+
+    Algorithm:
+    1. Reconstructs the source plane orthonormal basis ($s_x$, $s_y$, $s_z$).
+    2. Projects the intersection state $x^\mu$ into local 2D coordinates.
+    3. Filters based on physical radial bounds [$r_{min}$, $r_{max}$]."""
+    
+    cfunc_type = "static BHAH_HD_INLINE bool"
+    name = "handle_source_plane_intersection"
+    
+    params = (
+        "const double *restrict source_event_f_intersect, "
+        "const double lam_intersect, "
+        "blueprint_data_t *restrict final_blueprint_data"
+    )
+    
+    body = r"""
+    // --- PREAMBLE: UNPACK INTERSECTION STATE ---
+    // Reads intersection data from thread-local registers, circumventing IDX_GLOBAL global reads.
+    const double t_intersect = source_event_f_intersect[0]; // Coordinate time $t$ at intersection.
+    const double x_intersect = source_event_f_intersect[1]; // Cartesian $x^1$ at intersection.
+    const double y_intersect = source_event_f_intersect[2]; // Cartesian $x^2$ at intersection.
+    const double z_intersect = source_event_f_intersect[3]; // Cartesian $x^3$ at intersection.
+    const double L_intersect = lam_intersect; // True affine parameter $\lambda$ of the crossing.
+
+    // --- STEP 1: RECONSTRUCT SOURCE PLANE BASIS ---
+    // Force routing via __constant__ cache
+    const double s_z[3] = { d_commondata.source_plane_normal_x, d_commondata.source_plane_normal_y, d_commondata.source_plane_normal_z }; 
+    const double source_up[3] = { d_commondata.source_up_vec_x, d_commondata.source_up_vec_y, d_commondata.source_up_vec_z }; 
+
+    double s_x[3]; // Horizontal basis vector $s_x$ for the source plane.
+    s_x[0] = source_up[1]*s_z[2] - source_up[2]*s_z[1];
+    s_x[1] = source_up[2]*s_z[0] - source_up[0]*s_z[2];
+    s_x[2] = source_up[0]*s_z[1] - source_up[1]*s_z[0];
+
+    double mag_s_x = SqrtCUDA(s_x[0]*s_x[0] + s_x[1]*s_x[1] + s_x[2]*s_x[2]); 
+
+    if (mag_s_x < 1e-9) {
+        double alt_up[3] = {1.0, 0.0, 0.0}; 
+        if (AbsCUDA(s_z[0]) > 0.999) { alt_up[0] = 0.0; alt_up[1] = 1.0; }
+        s_x[0] = alt_up[1]*s_z[2] - alt_up[2]*s_z[1];
+        s_x[1] = alt_up[2]*s_z[0] - alt_up[0]*s_z[2];
+        s_x[2] = alt_up[0]*s_z[1] - alt_up[1]*s_z[0];
+        mag_s_x = SqrtCUDA(s_x[0]*s_x[0] + s_x[1]*s_x[1] + s_x[2]*s_x[2]);
+    }
+
+    double inv_mag_s_x = 1.0 / mag_s_x;
+    s_x[0] *= inv_mag_s_x; s_x[1] *= inv_mag_s_x; s_x[2] *= inv_mag_s_x;
+
+    double s_y[3]; // Vertical basis vector $s_y$ completing the local orthogonal system.
+    s_y[0] = s_z[1]*s_x[2] - s_z[2]*s_x[1];
+    s_y[1] = s_z[2]*s_x[0] - s_z[0]*s_x[2];
+    s_y[2] = s_z[0]*s_x[1] - s_z[1]*s_x[0];
+
+    // --- STEP 2: PROJECT INTO LOCAL SOURCE COORDINATES ---
+    const double relative_pos[3] = {
+        x_intersect - d_commondata.source_plane_center_x,
+        y_intersect - d_commondata.source_plane_center_y,
+        z_intersect - d_commondata.source_plane_center_z
+    }; 
+
+    const double local_y_s = relative_pos[0]*s_x[0] + relative_pos[1]*s_x[1] + relative_pos[2]*s_x[2]; 
+    const double local_z_s = relative_pos[0]*s_y[0] + relative_pos[1]*s_y[1] + relative_pos[2]*s_y[2]; 
+
+    // --- STEP 3: RADIAL FILTERING AND TERMINATION ---
+    const double r_sq = local_y_s*local_y_s + local_z_s*local_z_s; // Squared radial distance $r^2$ from the source center.
+    const double r_min_sq = d_commondata.source_r_min * d_commondata.source_r_min; 
+    const double r_max_sq = d_commondata.source_r_max * d_commondata.source_r_max; 
+
+    if (r_sq >= r_min_sq && r_sq <= r_max_sq) {
+        final_blueprint_data->termination_type = TERMINATION_TYPE_SOURCE_PLANE; 
+        final_blueprint_data->y_s = local_y_s;
+        final_blueprint_data->z_s = local_z_s;
+        final_blueprint_data->t_s = t_intersect;
+        final_blueprint_data->L_s = L_intersect;
+        return true;
+    }
+    return false;
+    """
+
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body
+    )
+5. batch_integrator_numerical.cu C-Snippets
+Here are the C blocks formatted with the proper mathematical LaTeX mappings that LLM 2 requested, keeping LLM 1's necessary chunked logic.
+
+Block 1A:
+
+C
+    // Host-to-Device transfer allocation: Pinned memory tracking previous affine parameters $\lambda_{n-1}$ and $\lambda_{n-2}$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p, sizeof(double) * num_rays);
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
+
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for blueprints $b_i$.
+    blueprint_data_t *blueprint_bridge;
+    double *affine_p_bridge;
+    double *affine_p_p_bridge;
+    BHAH_MALLOC_PINNED(blueprint_bridge, sizeof(blueprint_data_t) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(affine_p_bridge, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(affine_p_p_bridge, sizeof(double) * BUNDLE_CAPACITY);
+Block 1B:
+
+C
+    // VRAM scratchpad tracking intersection events $b_i$ to strictly prevent register bleeding.
+    blueprint_data_t *d_blueprint_bundle;
+    // VRAM scratchpads tracking the historical affine parameters $\lambda_{n-1}$ and $\lambda_{n-2}$.
+    double *d_affine_p_bundle;
+    double *d_affine_p_p_bundle;
+    BHAH_MALLOC_DEVICE(d_blueprint_bundle, sizeof(blueprint_data_t) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_affine_p_bundle, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_affine_p_p_bundle, sizeof(double) * BUNDLE_CAPACITY);
+Block 1E:
+
+C
+            // Host-to-Device transfer: Pushes the active blueprint evaluations $b_i$ to VRAM.
+            cudaMemcpy(d_blueprint_bundle, blueprint_bridge, sizeof(blueprint_data_t) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the previous affine parameters $\lambda_{n-1}$ and $\lambda_{n-2}$ to VRAM.
+            cudaMemcpy(d_affine_p_bundle, affine_p_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_affine_p_p_bundle, affine_p_p_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+Block 1G:
+
+C
+            // Device-to-Host transfer: Retrieves the updated blueprint results $b_i$ to Host memory.
+            cudaMemcpy(blueprint_bridge, d_blueprint_bundle, sizeof(blueprint_data_t) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the updated historical affine parameters $\lambda_{n-1}$ and $\lambda_{n-2}$ to Host memory.
+            cudaMemcpy(affine_p_bridge, d_affine_p_bundle, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+            cudaMemcpy(affine_p_p_bridge, d_affine_p_p_bundle, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+Would you like me to walk through the complete logic flow of the temporal slot manager to double-check that the m_idx to local i mapping is safely maintained across all the new bridges?
+""
+
