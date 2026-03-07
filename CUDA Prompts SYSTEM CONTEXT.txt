@@ -64,38 +64,6 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 """"
 
-Plan to update the blueprint script:
-"""
-Since the calculate_and_fill_blueprint_data_universal script allocates its own internal VRAM staging buffers to process the dataset in batches , freeing the massive integration scratchpads (d_k_bundle, d_connection_bundle, etc.) first provides the maximum memory headroom for the final trigonometry-heavy calculations.Below is the structured prompt and plan to update your system.Part 1: Update to event_detection_manager_kernel.pyThis update adds the "Celestial Escape" check. To maximize efficiency, we perform the check immediately after the registers are hydrated with the current state $f^\mu$.Instruction: Locate the kernel_body and insert the following logic after the coordinate variables (x, y, z) are defined:C    // --- CELESTIAL ESCAPE CHECK ---
-    // Evaluates if the photon has exceeded the coordinate escape radius r_escape.
-    // Calculation occurs after hydration to reuse existing thread-local registers.
-    const double r_sq = x*x + y*y + z*z;
-    if (r_sq > (d_commondata.r_escape * d_commondata.r_escape)) {
-        d_status_bundle[i] = TERMINATION_TYPE_CELESTIAL_SPHERE;
-        return;
-    }
-Part 2: Update to batch_integrator_numerical.cuThis update ensures the integration VRAM is purged before the blueprint finalizer runs, preventing potential "Out of Memory" errors on the 10GB hardware.Instruction: Refactor the CLEANUP section of your orchestrator to follow this specific execution order:D2H Sync: Perform a final cudaMemcpy of the device statuses and d_results_buffer to the Host. This ensures the Host's results_buffer contains all the "Window" and "Source" hits found during the loop.VRAM Purge: Free the large d_k_bundle (6-stage derivatives), d_connection_bundle, and d_metric_bundle scratchpads.Finalization Call: Invoke the blueprint finalizer using the Host results buffer.Final Cleanup: Free the remaining master arrays.Revised Cleanup Sequence Code:C++  // --- 4. CLEANUP & FINALIZATION ---
-
-  // 1. Sync all geometric hits (Window/Source) from Device to Host before purging scratchpads.
-  cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);
-
-  // 2. VRAM PURGE: Free heavy integration scratchpads to clear headroom for the finalization pass.
-  BHAH_FREE_DEVICE(d_k_bundle);
-  BHAH_FREE_DEVICE(d_connection_bundle);
-  BHAH_FREE_DEVICE(d_metric_bundle);
-  BHAH_FREE_DEVICE(d_f_temp_bundle);
-  BHAH_FREE_DEVICE(d_f_start_bundle);
-  // Keep d_results_buffer alive if needed, or free if the Pass uses Host pointers exclusively.
-
-  // 3. FINALIZATION PASS: Process escaped photons (Celestial Sphere) and sync final statuses.
-  // Note: This script internally manages its own H2D/D2H transfers in 32k batches.
-  calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer);
-
-  // 4. HOST CLEANUP: Purge primary pinned memory arrays.
-  BHAH_FREE_PINNED(all_photons_host.f);
-  // ... [Remaining BHAH_FREE_PINNED calls] ...
-Why this is safer for the RTX 3080:Register Stability: By moving the $r > r_{escape}$ check to the event manager, you stop integrating "dead" rays immediately without adding the expensive acos and atan2 functions to your high-frequency loop.Memory Headroom: Freeing the d_k_bundle alone recovers approximately $13.8\text{ MB}$ per $32\text{k}$ bundle, and the d_connection_bundle recovers $10.5\text{ MB}$. While small individually, purging these before the finalization pass ensures that any larger resolution runs do not trigger a VRAM overflow.
-"""
 
 BUNDLE_CAPACITY Vs chunk_size:
 """"

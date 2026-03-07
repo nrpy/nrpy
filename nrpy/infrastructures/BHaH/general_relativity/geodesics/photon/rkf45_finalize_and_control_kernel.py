@@ -138,29 +138,35 @@ def rkf45_finalize_and_control_kernel() -> None:
         f_5th_cache[comp] = f_5th_val;
 
         // 5. Error Normalization
+        // --- ERROR NORMALIZATION & L-INFINITY NORM ---
+        // Evaluates the normalized error for each tensor component to dictate the RKF45 adaptive step size $h$.
         if (comp < 8) {{ // Exclude affine param (index 8) from error check
-            const double err_abs = AbsCUDA(SubCUDA(f_5th_val, f_4th));
-            double scale = 0.0;
+        const double err_abs = AbsCUDA(SubCUDA(f_5th_val, f_4th));
+        double scale = 0.0;
 
-            if (comp == 0) {{ // Time t
-                scale = atol;
-            }} else if (comp <= 3) {{ // Position x, y, z
-                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-            }} else if (comp == 4) {{ // Energy p_t
-                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-            }} else {{ // Spatial Momentum p_i (Uses L1 Floor)
-                scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
-            }}
-            
-            // Accumulate Maximum Normalized Error
-            double current_err = DivCUDA(err_abs, scale);
-            
-            // EXPLICIT NaN REJECTION: Guard against IEEE 754 fmax behavior
-            if (isnan(current_err)) {{
-                err_norm = 1e30; // Force an artificially massive error to guarantee rejection
-            }} else {{
-                err_norm = fmax(err_norm, current_err);
-            }}
+        if (comp == 0) {{ // Time $t$
+            // Mixed tolerance scaling ensures stable error bounds for massive coordinate time values.
+            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+        }} else if (comp <= 3) {{ // Spatial Position $x^i$
+            // Mixed tolerance scaling ensures stable error bounds for spatial coordinate propagation.
+            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+        }} else if (comp == 4) {{ // Energy $p_t$
+             // Mixed tolerance scaling enforces strict conservation of the temporal momentum component.
+            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+        }} else {{ // Spatial Momentum $p_i$
+            // Implements an L1 momentum floor to prevent division by zero during deep field traversals.
+            scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
+        }}
+
+        // Accumulate the maximum normalized error equivalent to the $L_\infty$ norm.
+        double current_err = DivCUDA(err_abs, scale);
+
+        // EXPLICIT NaN REJECTION: Guard against IEEE 754 fmax behavior
+        if (isnan(current_err)) {{
+            err_norm = 1e30; // Force an artificially massive error to guarantee rejection
+        }} else {{
+            err_norm = fmax(err_norm, current_err);
+        }}
         }}
     }}
 

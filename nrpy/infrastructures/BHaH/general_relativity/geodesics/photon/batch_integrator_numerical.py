@@ -391,29 +391,40 @@ for(int p = 0; p < 1; p++) {{
                 on_pos_source_prev_bridge[bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx];
             }}
 
-            // Host-to-Device transfer: Pushes packed $f^\mu$ execution chunk to VRAM scratchpad.
-            cudaMemcpy(d_f_bundle, f_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed $f_p$ execution chunk to VRAM scratchpad.
-            cudaMemcpy(d_f_prev_bundle, f_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed $f_p_p$ execution chunk to VRAM scratchpad.
-            cudaMemcpy(d_f_pre_prev_bundle, f_p_p_bridge, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed integration step sizes $h$ to VRAM scratchpad.
-            cudaMemcpy(d_h, h_bridge, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed status flags to VRAM scratchpad.
-            cudaMemcpy(d_status, status_bridge, sizeof(termination_type_t) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed rejection retries to VRAM scratchpad.
-            cudaMemcpy(d_retries, retries_bridge, sizeof(int) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed affine progress $\lambda$ to VRAM scratchpad.
-            cudaMemcpy(d_affine, affine_bridge, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed window history side flags.
-            cudaMemcpy(d_on_pos_window_prev, on_pos_window_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
-            // Host-to-Device transfer: Pushes packed source history side flags.
-            cudaMemcpy(d_on_pos_source_prev, on_pos_source_prev_bridge, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyHostToDevice);
+            // --- HOST-TO-DEVICE PAYLOAD TRANSFER ---
+            // Transfers the active execution chunk of the state vector $f^\mu$ and its history to the VRAM scratchpad.
+            // Hardware Justification: Component-wise Host-to-Device transfers bounded by $chunk\_size$ minimize PCIe bus saturation, while $BUNDLE\_CAPACITY$ enforces the rigid SoA stride.
+            for (int c_k = 0; c_k < 9; ++c_k) {{
+                // Host-to-Device transfer: Pushes the active trajectory state $f^\mu$ to VRAM to minimize PCIe overhead.
+                cudaMemcpy(d_f_bundle + c_k * BUNDLE_CAPACITY, f_bridge + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+                // Host-to-Device transfer: Pushes the history state $f^\mu_{{n-1}}$ to VRAM for geometric intersection detection.
+                cudaMemcpy(d_f_prev_bundle + c_k * BUNDLE_CAPACITY, f_p_bridge + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+                // Host-to-Device transfer: Pushes the history state $f^\mu_{{n-2}}$ to VRAM.
+                cudaMemcpy(d_f_pre_prev_bundle + c_k * BUNDLE_CAPACITY, f_p_p_bridge + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            }}
 
-            // Device-to-Device transfer: Baselines the starting state $f_{{start}}$ to protect base vectors during RKF45 intermediate updates.
-            cudaMemcpy(d_f_start_bundle, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToDevice);
-            // Device-to-Device transfer: Mirrors initial state to the $f_{{temp}}$ integration accumulator.
-            cudaMemcpy(d_f_temp_bundle, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToDevice);
+            // Host-to-Device transfer: Pushes the scalar integration step sizes $h$ to VRAM to utilize high-bandwidth device memory.
+            cudaMemcpy(d_h, h_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the numerical status flags to VRAM to track active vs. terminated states per thread.
+            cudaMemcpy(d_status, status_bridge, sizeof(termination_type_t) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the consecutive rejection counters to VRAM to evaluate RKF45 adaptive limits.
+            cudaMemcpy(d_retries, retries_bridge, sizeof(int) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the affine parameter $\lambda$ to VRAM to maintain integration progress.
+            cudaMemcpy(d_affine, affine_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the persistent window boundary flags to VRAM to detect geometric sign changes.
+            cudaMemcpy(d_on_pos_window_prev, on_pos_window_prev_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
+            // Host-to-Device transfer: Pushes the persistent source boundary flags to VRAM to detect emission plane intersections.
+            cudaMemcpy(d_on_pos_source_prev, on_pos_source_prev_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
+
+            // --- DEVICE-TO-DEVICE BASELINE SYNCHRONIZATION ---
+            // Duplicates the freshly loaded initial state $f^\mu$ into the persistent integrator scratchpads.
+            // Hardware Justification: Device-to-Device copies ensure zero-state corruption is prevented entirely within the high-bandwidth VRAM domain.
+            for (int c_k = 0; c_k < 9; ++c_k) {{
+                // Device-to-Device transfer: Baselines the anchor state $f_{{start}}$ within the VRAM boundary.
+                cudaMemcpy(d_f_start_bundle + c_k * BUNDLE_CAPACITY, d_f_bundle + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToDevice);
+                // Device-to-Device transfer: Initializes the intermediate accumulator $f_{{temp}}$ within the VRAM boundary.
+                cudaMemcpy(d_f_temp_bundle + c_k * BUNDLE_CAPACITY, d_f_bundle + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToDevice);
+            }}
 
             // Iterator for tracking the active RKF45 intermediate step mapping.
             int stage;
@@ -545,24 +556,30 @@ for(int p = 0; p < 1; p++) {{
             // Kernel Launch: Check geometric intersection events across local orthonormal plane coordinates mapping spatial geometry.
             event_detection_manager_kernel(d_f_bundle, d_f_prev_bundle, d_f_pre_prev_bundle, d_results_buffer, d_status, d_on_pos_window_prev, d_on_pos_source_prev, chunk_size);
 
-            // Device-to-Host transfer: Retrieves updated states $f^\mu$ back to the CPU Bridge arrays.
-            cudaMemcpy(f_bridge, d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves updated $f_p$ histories.
-            cudaMemcpy(f_p_bridge, d_f_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves updated $f_p_p$ histories.
-            cudaMemcpy(f_p_p_bridge, d_f_pre_prev_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves modified step sizes $h$.
-            cudaMemcpy(h_bridge, d_h, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves updated termination flags.
-            cudaMemcpy(status_bridge, d_status, sizeof(termination_type_t) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves current rejection retries.
-            cudaMemcpy(retries_bridge, d_retries, sizeof(int) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves adapted affine parameter progression $\lambda$.
-            cudaMemcpy(affine_bridge, d_affine, sizeof(double) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves persistent window boundary flags.
-            cudaMemcpy(on_pos_window_prev_bridge, d_on_pos_window_prev, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
-            // Device-to-Host transfer: Retrieves persistent source boundary flags.
-            cudaMemcpy(on_pos_source_prev_bridge, d_on_pos_source_prev, sizeof(bool) * BUNDLE_CAPACITY, cudaMemcpyDeviceToHost);
+            // --- DEVICE-TO-HOST STATE RETRIEVAL ---
+            // Extracts the updated trajectory states and termination flags from VRAM back to the Host Pinned bridges.
+            // Hardware Justification: Device-to-Host transfers bounded by $chunk\_size$ prevent buffer overruns and minimize PCIe latency.
+            for (int c_k = 0; c_k < 9; ++c_k) {{
+                // Device-to-Host transfer: Retrieves the integrated state $f^\mu$ to Host memory.
+                cudaMemcpy(f_bridge + c_k * BUNDLE_CAPACITY, d_f_bundle + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+                // Device-to-Host transfer: Retrieves the history state $f^\mu_{{n-1}}$ to Host memory.
+                cudaMemcpy(f_p_bridge + c_k * BUNDLE_CAPACITY, d_f_prev_bundle + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+                // Device-to-Host transfer: Retrieves the history state $f^\mu_{{n-2}}$ to Host memory.
+                cudaMemcpy(f_p_p_bridge + c_k * BUNDLE_CAPACITY, d_f_pre_prev_bundle + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+            }}
+
+            // Device-to-Host transfer: Retrieves the adapted step sizes $h$ to Host Pinned memory to seed the next integration bin.
+            cudaMemcpy(h_bridge, d_h, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the numerical termination statuses to Host Pinned memory for TimeSlotManager routing.
+            cudaMemcpy(status_bridge, d_status, sizeof(termination_type_t) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the integration rejection counters to Host Pinned memory.
+            cudaMemcpy(retries_bridge, d_retries, sizeof(int) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the updated affine parameter $\lambda$ to Host Pinned memory.
+            cudaMemcpy(affine_bridge, d_affine, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the persistent window boundary flags to Host Pinned memory for the next trajectory cycle.
+            cudaMemcpy(on_pos_window_prev_bridge, d_on_pos_window_prev, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
+            // Device-to-Host transfer: Retrieves the persistent source boundary flags to Host Pinned memory.
+            cudaMemcpy(on_pos_source_prev_bridge, d_on_pos_source_prev, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
 
             // Loop iterator traversing the finalized trajectory bundle to process statuses.
             int fin_i;

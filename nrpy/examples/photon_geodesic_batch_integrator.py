@@ -206,7 +206,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-10
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 3
+    par.glb_code_params_dict["scan_density"].defaultvalue = 500
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling
