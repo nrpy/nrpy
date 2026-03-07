@@ -50,6 +50,7 @@ if sum((paper, QC0)) > 1:
     raise ValueError("--paper and --QC0 are mutually exclusive.")
 
 par.set_parval_from_str("Infrastructure", "BHaH")
+par.set_parval_from_str("reference_metric::use_generalrfm_fisheye_stable", QC0)
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"

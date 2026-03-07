@@ -22,6 +22,7 @@ from nrpy.helpers.cached_functions import cached_simplify
 from nrpy.helpers.generic import superfast_uniq
 
 par.register_param(str, __name__, "CoordSystem_to_register_CodeParameters", "All")
+par.register_param(bool, __name__, "use_generalrfm_fisheye_stable", False)
 
 
 class ReferenceMetric:
@@ -1743,7 +1744,16 @@ class ReferenceMetric:
 
         # If this is a known GeneralRFM provider, override the default map.
         if self.CoordSystem.startswith("GeneralRFM_fisheyeN"):
-            from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
+            use_stable_fisheye = cast(
+                bool,
+                par.parval_from_str(f"{__name__}::use_generalrfm_fisheye_stable"),
+            )
+            if use_stable_fisheye:
+                from nrpy.equations.generalrfm import (
+                    fisheye_stable as generalrfm_fisheye,
+                )
+            else:
+                from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
 
             match = re.match(r"GeneralRFM_fisheyeN(\d+)$", self.CoordSystem)
             if not match:
