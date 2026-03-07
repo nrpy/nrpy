@@ -581,6 +581,56 @@ for(int p = 0; p < 1; p++) {{
             // Device-to-Host transfer: Retrieves the persistent source boundary flags to Host Pinned memory.
             cudaMemcpy(on_pos_source_prev_bridge, d_on_pos_source_prev, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
 
+            /////////////////////////////////////////////////////////////////////////////////
+
+            // --- CONSOLIDATED BUNDLE & PROGRESS MONITOR (RADIAL) ---
+            // Scans the retrieved bridges to track physics progress, radius, and throughput.
+            long int accepted_count = 0;
+            long int rejected_count = 0;
+            long int terminated_count = 0;
+            double t_sum = 0;
+            double h_avg = 0;
+            double r2_sum = 0; // Sum of squared radii: x^2 + y^2 + z^2
+
+            for (int diag_i = 0; diag_i < chunk_size; diag_i++) {{
+                // 1. Track Numerical Status
+                if (status_bridge[diag_i] == ACTIVE) {{
+                    accepted_count++;
+                }} else if (status_bridge[diag_i] == REJECTED) {{
+                    rejected_count++;
+                }} else {{
+                    terminated_count++;
+                }}
+
+                // 2. Track Physics Progress (Component 0 = t)
+                t_sum += f_bridge[0 * BUNDLE_CAPACITY + diag_i]; 
+                h_avg += h_bridge[diag_i];
+
+                // 3. Track Radial Distance (Components 1, 2, 3 = x, y, z)
+                double x_loc = f_bridge[1 * BUNDLE_CAPACITY + diag_i];
+                double y_loc = f_bridge[2 * BUNDLE_CAPACITY + diag_i];
+                double z_loc = f_bridge[3 * BUNDLE_CAPACITY + diag_i];
+                r2_sum += (x_loc*x_loc + y_loc*y_loc + z_loc*z_loc);
+            }}
+
+            // Hardware Justification: Single print statement every 500 calls to prevent IO bottlenecks.
+            static int diagnostic_call_id = 0;
+            if (diagnostic_call_id++ % 750 == 0 || (rejected_count == chunk_size && rejected_count > 0)) {{
+                printf("\n[Bin %d | Call %d] Engine Status Report:\n", slot_idx, diagnostic_call_id);
+                printf("  - Avg Coordinate Time (t): %.6f\n", t_sum / chunk_size);
+                printf("  - Avg Squared Radius (r^2): %.6f\n", r2_sum / chunk_size);
+                printf("  - Avg Step Size (h):       %.6e\n", h_avg / chunk_size);
+                printf("  - ACCEPTED (Forward):      %ld (%.1f%%)\n", accepted_count, (double)accepted_count/chunk_size * 100.0);
+                printf("  - REJECTED (Retry):       %ld (%.1f%%)\n", rejected_count, (double)rejected_count/chunk_size * 100.0);
+                printf("  - TERMINATED:             %ld\n", terminated_count);
+
+                if (rejected_count == chunk_size) {{
+                    printf("  !! ALERT: 100%% Rejection Rate. Integrator is spinning on noisy data.\n");
+                }}
+            }}
+
+            ///////////////////////////////////////////////////////////////////////////////////////////////////
+
             // Loop iterator traversing the finalized trajectory bundle to process statuses.
             int fin_i;
             for (fin_i = 0; fin_i < chunk_size; ++fin_i) {{
