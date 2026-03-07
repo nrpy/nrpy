@@ -95,9 +95,9 @@ enable_psi4 = True
 if enable_psi4 and not enable_BHaHAHA:
     raise ValueError("enable_psi4 requires enable_BHaHAHA to be True.")
 swm2sh_maximum_l_mode_generated = 8
-swm2sh_maximum_l_mode_to_compute = 2 if not paper else 8
-if paper and enable_psi4:
-    list_of_psi4_extraction_radii = [80.0, 160.0]
+swm2sh_maximum_l_mode_to_compute = 2 if (not paper and not QC0) else 8
+if enable_psi4 and (paper or QC0):
+    list_of_psi4_extraction_radii = [80.0, 160.0] if paper else [5.0, 10.0, 15.0, 20.0, 25.0]
     num_psi4_extraction_radii = len(list_of_psi4_extraction_radii)
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
