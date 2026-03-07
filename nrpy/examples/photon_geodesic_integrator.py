@@ -24,6 +24,7 @@ import os
 import shutil
 
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
@@ -61,6 +62,8 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.p0_reverse im
 
 # Step 2: Set codegen and compile-time parameters
 par.set_parval_from_str("Infrastructure", "BHaH")
+enable_parallel_codegen = True
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
 project_name = "photon_geodesic_integrator"
 project_dir = os.path.join("project", project_name)
@@ -113,8 +116,6 @@ ode_gsl_wrapper(SPACETIME)
 #########################################################
 # STEP 4: Declare the main C function
 #         This drives the integration logic.
-
-
 def main_c() -> None:
     """Generate the main() function for the geodesic integrator."""
     includes = [
@@ -279,57 +280,63 @@ def main_c() -> None:
 # Register the main function
 main_c()
 
-#########################################################
-# STEP 5: Generate Header Files and Makefile
-#         This creates the actual build files.
 
-print("Generating header files and Makefile...")
+if __name__ == "__main__":
+    # ---------------------------------------------------------
+    # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
+    # ---------------------------------------------------------
+    if enable_parallel_codegen:
+        pcg.do_parallel_codegen()
 
-# A. CodeParameters Headers
-CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
-CPs.register_CFunctions_params_commondata_struct_set_to_default()
+    # Apply code parameters overrides requested by the professor
+    print("Setting default code parameters...")
+    par.adjust_CodeParam_default("source_plane_normal_x", 0.0)
+    par.adjust_CodeParam_default("source_plane_normal_y", 0.0)
+    par.adjust_CodeParam_default("source_plane_normal_z", 1.0)
+    par.adjust_CodeParam_default("source_r_max", 20.0)
 
-# B. Parameter File Defaults (required by infrastructure, even if unused)
-cmdline_input_and_parfiles.generate_default_parfile(
-    project_dir=project_dir, project_name=project_name
-)
-cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-    project_name=project_name
-)
+    print("Generating header files and Makefile...")
 
-# C. BHaH Defines (Includes GSL headers)
-# We use standard strings, not Path objects, to ensure valid C syntax on all OSs
-additional_includes = [
-    "gsl/gsl_vector.h",
-    "gsl/gsl_matrix.h",
-    "gsl/gsl_odeiv2.h",
-    "gsl/gsl_errno.h",
-    "gsl/gsl_math.h",
-]
+    # A. CodeParameters Headers
+    CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
+    CPs.register_CFunctions_params_commondata_struct_set_to_default()
 
-Bdefines_h.output_BHaH_defines_h(
-    project_dir=project_dir,
-    additional_includes=additional_includes,
-    enable_rfm_precompute=False,
-)
+    # B. Parameter File Defaults (required by infrastructure, even if unused)
+    cmdline_input_and_parfiles.generate_default_parfile(
+        project_dir=project_dir, project_name=project_name
+    )
+    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+        project_name=project_name
+    )
 
-# D. Makefile
-# We need to link against GSL. Using gsl-config is standard.
-addl_cflags = ["$(shell gsl-config --cflags)"]
-addl_libs = ["$(shell gsl-config --libs)"]
+    # C. BHaH Defines (Includes GSL headers)
+    additional_includes = [
+        "gsl/gsl_vector.h",
+        "gsl/gsl_matrix.h",
+        "gsl/gsl_odeiv2.h",
+        "gsl/gsl_errno.h",
+        "gsl/gsl_math.h",
+    ]
 
-Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
-    project_dir=project_dir,
-    project_name=project_name,
-    exec_or_library_name=project_name,
-    addl_CFLAGS=addl_cflags,
-    addl_libraries=addl_libs,
-)
+    Bdefines_h.output_BHaH_defines_h(
+        project_dir=project_dir,
+        additional_includes=additional_includes,
+        enable_rfm_precompute=False,
+    )
 
-print("-" * 50)
-print(f"Project generated successfully in: {project_dir}")
-print("To compile and run:")
-print(f"  cd {project_dir}")
-print("  make")
-print(f"  ./{project_name}")
-print("-" * 50)
+    # D. Makefile
+    addl_cflags = ["$(shell gsl-config --cflags)"]
+    addl_libs = ["$(shell gsl-config --libs)"]
+
+    Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+        addl_CFLAGS=addl_cflags,
+        addl_libraries=addl_libs,
+    )
+
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    )
+    print(f"    Parameter file can be found in {project_name}.par")

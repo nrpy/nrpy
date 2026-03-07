@@ -201,15 +201,7 @@ if __name__ == "__main__":
             " -> PASS: connection_struct registered successfully in BHaH_defines."
         )
 
-        # 4. Output Files to Current Directory
-        Bdefines_h.output_BHaH_defines_h(project_dir=".")
-        for func_name, c_function in cfc.CFunction_dict.items():
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(c_function.full_function)
-            logger.info("    ... Wrote %s", filename)
-
-        logger.info(" -> Success! All files generated.")
+        logger.info(" -> Success! All tests passed without file output.")
 
     except (ImportError, RuntimeError, ValueError) as e:
         logger.error(" -> FAIL: connections_analytic test failed with error: %s", e)

@@ -109,7 +109,7 @@ if __name__ == "__main__":
     SPACETIME = "KerrSchild_Cartesian"
     GEO_KEY = f"{SPACETIME}_photon"
 
-    logger.info("Test: Generating p0_reverse C-code for %s...", SPACETIME)
+    logger.info("Test: Registering p0_reverse C-code for %s...", SPACETIME)
 
     try:
         # 1. Acquire Symbolic Data
@@ -119,11 +119,11 @@ if __name__ == "__main__":
         if geodesic_data.p0_photon is None:
             raise ValueError(f"p0_photon is None for key {GEO_KEY}")
 
-        # 3. Run the Generator
+        # 2. Run the Generator
         logger.info(" -> Calling p0_reverse()...")
         p0_reverse(geodesic_data.p0_photon)
 
-        # 4. Validation
+        # 3. Validation
         cfunc_name = "p0_reverse"
 
         if cfunc_name not in cfc.CFunction_dict:
@@ -131,13 +131,6 @@ if __name__ == "__main__":
                 f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
             )
         logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
-
-        # 5. Output Files
-        filename = f"{cfunc_name}.c"
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info(" -> Written to %s", filename)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: p0_reverse test failed with error: %s", e)

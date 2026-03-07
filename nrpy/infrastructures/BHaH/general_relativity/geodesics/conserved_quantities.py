@@ -178,14 +178,8 @@ if __name__ == "__main__":
         if cfunc_name not in cfc.CFunction_dict:
             raise RuntimeError(f"FAIL: '{cfunc_name}' was not registered.")
 
-        cfunc = cfc.CFunction_dict[cfunc_name]
         logger.info(" -> PASS: '%s' registered.", cfunc_name)
-
-        # 3. Output to file
-        filename = f"{cfunc_name}.c"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info("    ... Wrote %s", filename)
+        logger.info(" -> Success! All tests passed without file output.")
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: Test failed with error: %s", e)

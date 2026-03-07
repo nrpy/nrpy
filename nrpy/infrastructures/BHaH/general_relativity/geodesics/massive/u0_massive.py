@@ -109,7 +109,7 @@ if __name__ == "__main__":
     SPACETIME = "KerrSchild_Cartesian"
     GEO_KEY = f"{SPACETIME}_massive"
 
-    logger.info("Test: Generating u0_massive C-code for %s...", SPACETIME)
+    logger.info("Test: Registering u0_massive C-code for %s...", SPACETIME)
 
     try:
         # 1. Acquire Symbolic Data
@@ -119,11 +119,11 @@ if __name__ == "__main__":
         if geodesic_data.u0_massive is None:
             raise ValueError(f"u0_massive is None for key {GEO_KEY}")
 
-        # 3. Run the Generator
+        # 2. Run the Generator
         logger.info(" -> Calling u0_massive()...")
         u0_massive(geodesic_data.u0_massive)
 
-        # 4. Validation
+        # 3. Validation
         cfunc_name = "u0_massive"
 
         if cfunc_name not in cfc.CFunction_dict:
@@ -131,13 +131,6 @@ if __name__ == "__main__":
                 f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
             )
         logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
-
-        # 5. Output Files
-        filename = f"{cfunc_name}.c"
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info(" -> Written to %s", filename)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error(" -> FAIL: u0_massive test failed with error: %s", e)
