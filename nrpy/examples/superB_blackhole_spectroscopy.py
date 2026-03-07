@@ -37,14 +37,23 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--paper", action="store_true", help="use the paper-version parameters"
 )
+parser.add_argument(
+    "--QC0",
+    action="store_true",
+    help="use QC0_mclachlan initial data preset",
+)
 args = parser.parse_args()
 paper = args.paper
+QC0 = args.QC0
+
+if sum((paper, QC0)) > 1:
+    raise ValueError("--paper and --QC0 are mutually exclusive.")
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_blackhole_spectroscopy"
-CoordSystem = "SinhCylindrical"
+CoordSystem = "SinhCylindrical" if not QC0 else "GeneralRFM_fisheyeN1"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "TP_Interp"
 IDCoordSystem = "Cartesian"
@@ -54,14 +63,17 @@ num_fisheye_transitions = (
     else None
 )
 
-initial_sep = 0.5 if not paper else 10.0
+initial_sep = (0.5 if not paper else 10.0) if not QC0 else (1.168642873 * 2.0)
 mass_ratio = 1.0  # must be >= 1.0. Will need higher resolution for > 1.0.
 BH_m_chix = 0.0  # dimensionless spin parameter for less-massive BH
 BH_M_chix = 0.0  # dimensionless spin parameter for more-massive BH
+initial_p_t = 0.0 if not QC0 else 0.3331917498
 initial_p_r = 0.0  # want this to be <= 0.0. 0.0 -> fall from rest, < 0.0 -> boosted toward each other.
 TP_npoints_A = 48
 TP_npoints_B = 48
-TP_npoints_phi = 4
+TP_npoints_phi = 4 if not QC0 else 36
+TP_bare_mass_m = (1.0 / (1.0 + mass_ratio)) if not QC0 else 0.453
+TP_bare_mass_M = (mass_ratio / (1.0 + mass_ratio)) if not QC0 else 0.453
 
 enable_KreissOliger_dissipation = True
 enable_CAKO = True
@@ -73,11 +85,11 @@ KreissOliger_strength_nongauge = 0.3
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 2.0
-grid_physical_size = 300.0
+grid_physical_size = 300.0 if not QC0 else 60.0
 diagnostics_output_every = 0.5
 enable_charm_checkpointing = True
 default_checkpoint_every = 20.0
-t_final = 1.5 * grid_physical_size
+t_final = (1.5 * grid_physical_size) if not QC0 else 100.0
 enable_psi4 = True
 if enable_psi4 and not enable_BHaHAHA:
     raise ValueError("enable_psi4 requires enable_BHaHAHA to be True.")
@@ -89,31 +101,30 @@ if paper and enable_psi4:
 Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
-    "GeneralRFM_fisheyeN1": [200, 200, 200],
+    "Cartesian": [960, 960, 960],
+    "GeneralRFM_fisheyeN1": [960, 960, 960] if not QC0 else [256, 256, 256],
 }
 default_BH1_mass = default_BH2_mass = 0.5
-default_BH1_z_posn = +0.25 if not paper else +5.0
-default_BH2_z_posn = -0.25 if not paper else -5.0
+default_BH1_z_posn = (+0.25 if not paper else +5.0) if not QC0 else +1.1515
+default_BH2_z_posn = (-0.25 if not paper else -5.0) if not QC0 else -1.1515
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions is not None:
-    for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
-    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
-if num_fisheye_transitions == 1:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 50.0,
-            "fisheye_phys_w_trans1": 10.0,
-        }
-    )
+    if num_fisheye_transitions != 1:
+        raise ValueError(
+            f"{CoordSystem} is unsupported in this example; only GeneralRFM_fisheyeN1 is supported."
+        )
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 1.5 if not QC0 else 5.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 80.0 if not QC0 else 6.0,
+        "fisheye_phys_w_trans1": 30.0 if not QC0 else 20.0,
+    }
 enable_rfm_precompute = True
 MoL_method = "RK4" if not paper else "SSPRK33"
 fd_order = 8
-radiation_BC_fd_order = 4 if not paper else 8
+radiation_BC_fd_order = (4 if not paper else 8) if not QC0 else 8
 enable_intrinsics = True
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
@@ -132,9 +143,9 @@ if "Cylindrical" in CoordSystem:
     par.adjust_CodeParam_default("Nchare1", 1)
     par.adjust_CodeParam_default("Nchare2", 4)
 if ("Cartesian" in CoordSystem) or CoordSystem.startswith("GeneralRFM"):
-    par.adjust_CodeParam_default("Nchare0", 4)
-    par.adjust_CodeParam_default("Nchare1", 4)
-    par.adjust_CodeParam_default("Nchare2", 4)
+    par.adjust_CodeParam_default("Nchare0", 24 if not QC0 else 16)
+    par.adjust_CodeParam_default("Nchare1", 20 if not QC0 else 8)
+    par.adjust_CodeParam_default("Nchare2", 32 if not QC0 else 8)
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
@@ -150,6 +161,8 @@ if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     par.adjust_CodeParam_default("CFL_FACTOR", 0.5)
     OMP_collapse = 2  # might be slightly faster
+if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+    par.adjust_CodeParam_default("CFL_FACTOR", 0.25)
 
 project_dir = os.path.join("project", project_name)
 
@@ -220,10 +233,7 @@ superB.initial_data.register_CFunction_initial_data(
     IDCoordSystem=IDCoordSystem,
     enable_checkpointing=False,
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
-    populate_ID_persist_struct_str=r"""
-initialize_ID_persist_struct(commondata, &ID_persist);
-TP_solve(&ID_persist);
-""",
+    enable_tp_solve_broadcast=True,
     free_ID_persist_struct_str=r"""
 {
   extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
@@ -401,13 +411,13 @@ par.adjust_CodeParam_default("initial_sep", initial_sep)
 par.adjust_CodeParam_default("mass_ratio", mass_ratio)
 par.adjust_CodeParam_default("bbhxy_BH_m_chix", BH_m_chix)
 par.adjust_CodeParam_default("bbhxy_BH_M_chix", BH_M_chix)
-par.adjust_CodeParam_default("initial_p_t", 0.0)
+par.adjust_CodeParam_default("initial_p_t", initial_p_t)
 par.adjust_CodeParam_default("initial_p_r", initial_p_r)
 par.adjust_CodeParam_default("TP_npoints_A", TP_npoints_A)
 par.adjust_CodeParam_default("TP_npoints_B", TP_npoints_B)
 par.adjust_CodeParam_default("TP_npoints_phi", TP_npoints_phi)
-par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
-par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
+par.adjust_CodeParam_default("TP_bare_mass_m", TP_bare_mass_m)
+par.adjust_CodeParam_default("TP_bare_mass_M", TP_bare_mass_M)
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 if enable_psi4:
@@ -422,24 +432,29 @@ if paper and enable_psi4:
         new_cparam_type=f"REAL[{num_psi4_extraction_radii}]",
     )
 if enable_BHaHAHA:
-    # Set BHaHAHA defaults to reasonable values.
-    par.adjust_CodeParam_default(
-        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
-    )
-    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
-    par.adjust_CodeParam_default(
-        "bah_M_scale",
-        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
-    )
-    par.adjust_CodeParam_default(
-        "bah_max_search_radius",
-        [
-            0.6 * default_BH1_mass,
-            0.6 * default_BH2_mass,
-            1.1 * (default_BH1_mass + default_BH2_mass),
-        ],
-    )
-    par.adjust_CodeParam_default("bah_verbosity_level", 0)
+    # Set BHaHAHA defaults when those parameters are registered in this build mode.
+    if "bah_initial_grid_z_center" in par.glb_code_params_dict:
+        par.adjust_CodeParam_default(
+            "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+        )
+    if "bah_Nr_interp_max" in par.glb_code_params_dict:
+        par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    if "bah_M_scale" in par.glb_code_params_dict:
+        par.adjust_CodeParam_default(
+            "bah_M_scale",
+            [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+        )
+    if "bah_max_search_radius" in par.glb_code_params_dict:
+        par.adjust_CodeParam_default(
+            "bah_max_search_radius",
+            [
+                0.6 * default_BH1_mass,
+                0.6 * default_BH2_mass,
+                1.1 * (default_BH1_mass + default_BH2_mass),
+            ],
+        )
+    if "bah_verbosity_level" in par.glb_code_params_dict:
+        par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 #########################################################
 # STEP 3: Generate header files, register C functions and
@@ -551,7 +566,8 @@ superB.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Make
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./charmrun +p4 ./{project_name} to run with 4 processors, for example."
 )
-print(f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log")
+if enable_charm_checkpointing:
+    print(f"To restart from checkpoint, run ./charmrun +p4 ./{project_name} +restart log")
 print(f"    Parameter file can be found in {project_name}.par")
 
 # print(cfc.CFunction_dict["initial_data"].full_function)
