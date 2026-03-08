@@ -253,7 +253,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     ]
     desc = f"""
  * @file diagnostics_nearest_2d_xy_and_yz_planes.c
- * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single {CoordSystem} grid.
+ * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single grid.
  *
  * Overview:
  * For the specified grid at the current time, this routine:
