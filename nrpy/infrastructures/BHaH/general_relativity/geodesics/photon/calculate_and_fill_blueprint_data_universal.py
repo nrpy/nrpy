@@ -70,9 +70,17 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     """
 
     launch_dict = {
-        "threads_per_block": ["256", "1", "1"],
-        "blocks_per_grid": ["(current_chunk_size + 256 - 1) / 256", "1", "1"],
-    }
+            "threads_per_block": [
+                "BHAH_THREADS_IN_X_DIR_RKF45", 
+                "1", 
+                "1"
+            ],
+            "blocks_per_grid": [
+                "(current_chunk_size + BHAH_THREADS_IN_X_DIR_RKF45 - 1) / BHAH_THREADS_IN_X_DIR_RKF45", 
+                "1", 
+                "1"
+            ],
+        }
 
     prefunc, launch_body = generate_kernel_and_launch_code(
         kernel_name=kernel_name,

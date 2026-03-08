@@ -4,7 +4,6 @@ Generates the C engine to handle a window plane intersection.
 This module calculates the local 2D coordinates on the observer's camera window
 when a photon crosses the window plane. It relies entirely on constant memory
 to preserve hardware register constraints.
-
 Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
@@ -50,6 +49,7 @@ def handle_window_plane_intersection() -> None:
     desc = r"""@brief Processes a window plane intersection without terminating the trajectory.
 
     @param f_local Thread-local array containing the 9-component photon state $f^\mu$.
+    @param lam_intersect The explicit affine parameter $\lambda$ of the intersection.
     @param final_blueprint_data Pointer to the blueprint structure $b_i$ for data persistence.
 
     Algorithm:
@@ -62,6 +62,7 @@ def handle_window_plane_intersection() -> None:
 
     params = (
         "const double *restrict f_local, "
+        "const double lam_intersect, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
 
@@ -74,7 +75,6 @@ def handle_window_plane_intersection() -> None:
     const double x_intersect = f_local[1]; // Cartesian $x$ at intersection.
     const double y_intersect = f_local[2]; // Cartesian $y$ at intersection.
     const double z_intersect = f_local[3]; // Cartesian $z$ at intersection.
-    const double L_intersect = f_local[8]; // Affine parameter $\lambda$ at intersection.
 
     // --- CAMERA BASIS RECONSTRUCTION ---
     // Reconstructs the orthonormal frame to map the physical intersection onto the virtual pixel grid.
@@ -133,14 +133,13 @@ def handle_window_plane_intersection() -> None:
         final_blueprint_data->y_w = local_y_w; // Store local horizontal offset.
         final_blueprint_data->z_w = local_z_w; // Store local vertical offset.
         final_blueprint_data->t_w = t_intersect; // Persistent coordinate time of crossing.
-        final_blueprint_data->L_w = L_intersect; // Persistent affine parameter of crossing.
+        final_blueprint_data->L_w = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
     }
 
     return false;
     """
 
-    # Enforcing strict Master Order. Omitted prefunc/postfunc to prevent compilation bloat.
     cfc.register_CFunction(
         includes=includes,
         desc=desc,

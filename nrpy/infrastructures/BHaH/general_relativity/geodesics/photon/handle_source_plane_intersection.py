@@ -3,7 +3,6 @@ Generates the C engine to handle a source plane intersection.
 
 This module computes the impact parameters on the physical emission plane 
 strictly executing within thread-local registers and constant memory.
-
 Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
@@ -49,6 +48,7 @@ def handle_source_plane_intersection() -> None:
     desc = r"""@brief Processes a terminal intersection with the source emission plane.
 
     @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
+    @param lam_intersect The explicit affine parameter $\lambda$ of the intersection.
     @param final_blueprint_data Pointer to the local blueprint structure $b_i$ to store impact geometries.
 
     Algorithm:
@@ -61,6 +61,7 @@ def handle_source_plane_intersection() -> None:
     
     params = (
         "const double *restrict source_event_f_intersect, "
+        "const double lam_intersect, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
     
@@ -73,7 +74,6 @@ def handle_source_plane_intersection() -> None:
     const double x_intersect = source_event_f_intersect[1]; // Cartesian $x^1$ at intersection.
     const double y_intersect = source_event_f_intersect[2]; // Cartesian $x^2$ at intersection.
     const double z_intersect = source_event_f_intersect[3]; // Cartesian $x^3$ at intersection.
-    const double L_intersect = source_event_f_intersect[8]; // Affine parameter $\lambda$ at intersection.
 
     // --- STEP 1: RECONSTRUCT SOURCE PLANE BASIS ---
     // Force routing via __constant__ cache
@@ -124,7 +124,7 @@ def handle_source_plane_intersection() -> None:
         final_blueprint_data->y_s = local_y_s;
         final_blueprint_data->z_s = local_z_s;
         final_blueprint_data->t_s = t_intersect;
-        final_blueprint_data->L_s = L_intersect;
+        final_blueprint_data->L_s = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
     }
     return false;

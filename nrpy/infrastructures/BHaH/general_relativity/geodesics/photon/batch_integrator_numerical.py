@@ -195,6 +195,47 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     blueprint_data_t *d_results_buffer;
     BHAH_MALLOC_DEVICE(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
 
+    // Host-to-Device transfer allocation: Pinned memory tracking the history step $\lambda_{{n-1}}$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory tracking the history step $\lambda_{{n-2}}$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory locking the observer window intersection.
+    BHAH_MALLOC_PINNED(all_photons_host.window_event_found, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory locking the source emission plane intersection.
+    BHAH_MALLOC_PINNED(all_photons_host.source_event_found, sizeof(bool) * num_rays);
+
+    // Bridge array storing the historical affine parameter $\lambda_{{n-1}}$ for chunked transfers.
+    double *affine_p_bridge;
+    // Bridge array storing the historical affine parameter $\lambda_{{n-2}}$ for chunked transfers.
+    double *affine_p_p_bridge;
+    // Bridge array tracking if the window event was previously found.
+    bool *window_event_found_bridge;
+    // Bridge array tracking if the source event was previously found.
+    bool *source_event_found_bridge;
+
+    // Allocate Bridge arrays in Host Pinned Memory to allow fast chunked transfers to the GPU.
+    BHAH_MALLOC_PINNED(affine_p_bridge, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(affine_p_p_bridge, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(window_event_found_bridge, sizeof(bool) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_PINNED(source_event_found_bridge, sizeof(bool) * BUNDLE_CAPACITY);
+
+    // VRAM array tracking historical affine parameter $\lambda_{{n-1}}$.
+    double *d_affine_prev;
+    // VRAM array tracking historical affine parameter $\lambda_{{n-2}}$.
+    double *d_affine_pre_prev;
+    // VRAM array guarding the window intersection coordinates from multi-trigger overwrites.
+    bool *d_window_event_found;
+    // VRAM array guarding the source intersection coordinates from multi-trigger overwrites.
+    bool *d_source_event_found;
+    // VRAM array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
+    long int *d_chunk_buffer;
+
+    BHAH_MALLOC_DEVICE(d_affine_prev, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_affine_pre_prev, sizeof(double) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_window_event_found, sizeof(bool) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_source_event_found, sizeof(bool) * BUNDLE_CAPACITY);
+    BHAH_MALLOC_DEVICE(d_chunk_buffer, sizeof(long int) * BUNDLE_CAPACITY);
+
     // Lock-free temporal TimeSlotManager confined entirely to the Host CPU context.
     TimeSlotManager tsm;
     slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
@@ -419,6 +460,12 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         all_photons_host.affine_param[sync_i] = 0.0;
         all_photons_host.rejection_retries[sync_i] = 0;
 
+        // Initializes the affine parameter histories and sets the intersection locks to false.
+        all_photons_host.affine_param_p[sync_i] = 0.0;
+        all_photons_host.affine_param_p_p[sync_i] = 0.0;
+        all_photons_host.window_event_found[sync_i] = false;
+        all_photons_host.source_event_found[sync_i] = false;
+
         // Integer representing the assigned temporal slot for the current photon.
         int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]);
         if (s_idx != -1) {{
@@ -512,8 +559,12 @@ for(int p = 0; p < 1; p++) {{
         if (total_active_photons <= 0) {{
         break;
         }}
-
-        printf("Processing Time Bin: %d | Active Rays in Bin: %ld\n", slot_idx, tsm.slot_counts[slot_idx]);
+        /////////////////////////////////////////////////////////////////////////////////////////////////
+        if (slot_idx % 500 == 0) {{
+            printf("Processing Time Bin: %d | Active Rays in Bin: %ld\n", slot_idx, tsm.slot_counts[slot_idx]);
+            fflush(stdout); 
+        }}
+        //////////////////////////////////////////////////////////////////////////////////////
         while (tsm.slot_counts[slot_idx] > 0) {{
             
             // Evaluated bounded integer size corresponding to active trajectories in this specific time bin.
@@ -538,6 +589,12 @@ for(int p = 0; p < 1; p++) {{
                 affine_bridge[bridge_i] = all_photons_host.affine_param[m_idx];
                 on_pos_window_prev_bridge[bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx];
                 on_pos_source_prev_bridge[bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx];
+
+                // Pack affine parameter progression and event guards into physically contiguous buffers for DMA efficiency.
+                affine_p_bridge[bridge_i] = all_photons_host.affine_param_p[m_idx];
+                affine_p_p_bridge[bridge_i] = all_photons_host.affine_param_p_p[m_idx];
+                window_event_found_bridge[bridge_i] = all_photons_host.window_event_found[m_idx];
+                source_event_found_bridge[bridge_i] = all_photons_host.source_event_found[m_idx];
             }}
 
             // --- HOST-TO-DEVICE PAYLOAD TRANSFER ---
@@ -564,6 +621,17 @@ for(int p = 0; p < 1; p++) {{
             cudaMemcpy(d_on_pos_window_prev, on_pos_window_prev_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
             // Host-to-Device transfer: Pushes the persistent source boundary flags to VRAM to detect emission plane intersections.
             cudaMemcpy(d_on_pos_source_prev, on_pos_source_prev_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
+
+            // Host-to-Device transfer: Pushes the discrete affine history buffers tracking $\lambda_{{n-1}}$ and $\lambda_{{n-2}}$.
+            cudaMemcpy(d_affine_prev, affine_p_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_affine_pre_prev, affine_p_p_bridge, sizeof(double) * chunk_size, cudaMemcpyHostToDevice);
+            
+            // Host-to-Device transfer: Pushes the event guards to lock geometric intersections upon detection.
+            cudaMemcpy(d_window_event_found, window_event_found_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_source_event_found, source_event_found_bridge, sizeof(bool) * chunk_size, cudaMemcpyHostToDevice);
+
+            // Host-to-Device transfer: Pushes the master index keys $m_{{idx}}$ to map thread IDs to absolute global indices.
+            cudaMemcpy(d_chunk_buffer, chunk_buffer, sizeof(long int) * chunk_size, cudaMemcpyHostToDevice);
 
             // --- DEVICE-TO-DEVICE BASELINE SYNCHRONIZATION ---
             // Duplicates the freshly loaded initial state $f^\mu$ into the persistent integrator scratchpads.
@@ -703,8 +771,7 @@ for(int p = 0; p < 1; p++) {{
 
             
             // Kernel Launch: Check geometric intersection events across local orthonormal plane coordinates mapping spatial geometry.
-            event_detection_manager_kernel(d_f_bundle, d_f_prev_bundle, d_f_pre_prev_bundle, d_results_buffer, d_status, d_on_pos_window_prev, d_on_pos_source_prev, chunk_size);
-
+            event_detection_manager_kernel(d_f_bundle, d_f_prev_bundle, d_f_pre_prev_bundle, d_affine, d_affine_prev, d_affine_pre_prev, d_results_buffer, d_status, d_on_pos_window_prev, d_on_pos_source_prev, d_window_event_found, d_source_event_found, d_chunk_buffer, chunk_size);
             // --- DEVICE-TO-HOST STATE RETRIEVAL ---
             // Extracts the updated trajectory states and termination flags from VRAM back to the Host Pinned bridges.
             // Hardware Justification: Device-to-Host transfers bounded by $chunk\_size$ prevent buffer overruns and minimize PCIe latency.
@@ -729,6 +796,14 @@ for(int p = 0; p < 1; p++) {{
             cudaMemcpy(on_pos_window_prev_bridge, d_on_pos_window_prev, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
             // Device-to-Host transfer: Retrieves the persistent source boundary flags to Host Pinned memory.
             cudaMemcpy(on_pos_source_prev_bridge, d_on_pos_source_prev, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
+
+            // Device-to-Host transfer: Retrieves the tracked affine history vectors back to Host Pinned memory for routing.
+            cudaMemcpy(affine_p_bridge, d_affine_prev, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+            cudaMemcpy(affine_p_p_bridge, d_affine_pre_prev, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost);
+
+            // Device-to-Host transfer: Retrieves the updated event locks back to Host Pinned memory.
+            cudaMemcpy(window_event_found_bridge, d_window_event_found, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
+            cudaMemcpy(source_event_found_bridge, d_source_event_found, sizeof(bool) * chunk_size, cudaMemcpyDeviceToHost);
 
             /////////////////////////////////////////////////////////////////////////////////
 
@@ -766,9 +841,9 @@ for(int p = 0; p < 1; p++) {{
                 pt_sum += f_bridge[4 * BUNDLE_CAPACITY + diag_i];
             }}
 
-            // Hardware Justification: Single print statement every 500 calls to prevent IO bottlenecks.
+            // Hardware Justification: Single print statement every 4000 calls to prevent IO bottlenecks.
             static int diagnostic_call_id = 0;
-            if (diagnostic_call_id++ % 750 == 0 || (rejected_count == chunk_size && rejected_count > 0)) {{
+            if (diagnostic_call_id++ % 4000 == 0 || (rejected_count == chunk_size && rejected_count > 0)) {{
                 printf("\n[Bin %d | Call %d] Engine Status Report:\n", slot_idx, diagnostic_call_id);
                 printf("  - Avg Coordinate Time (t): %.6f\n", t_sum / chunk_size);
                 printf("  - Avg Squared Radius (r^2): %.6f\n", r2_sum / chunk_size);
@@ -803,6 +878,12 @@ for(int p = 0; p < 1; p++) {{
                 all_photons_host.affine_param[m_idx] = affine_bridge[fin_i];
                 all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[fin_i];
                 all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[fin_i];
+
+                // Scatter memory assignment extracting history $\lambda$ and locked statuses to the master array.
+                all_photons_host.affine_param_p[m_idx] = affine_p_bridge[fin_i];
+                all_photons_host.affine_param_p_p[m_idx] = affine_p_p_bridge[fin_i];
+                all_photons_host.window_event_found[m_idx] = window_event_found_bridge[fin_i];
+                all_photons_host.source_event_found[m_idx] = source_event_found_bridge[fin_i];
 
                 if (status_bridge[fin_i] == ACTIVE) {{
                     // Extract $f^0$ (coordinate time) to evaluate the next discrete temporal bin.
@@ -850,6 +931,10 @@ for(int p = 0; p < 1; p++) {{
     BHAH_FREE_PINNED(all_photons_host.rejection_retries);
     BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_window_prev);
     BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_source_prev);
+    BHAH_FREE_PINNED(all_photons_host.affine_param_p);
+    BHAH_FREE_PINNED(all_photons_host.affine_param_p_p);
+    BHAH_FREE_PINNED(all_photons_host.window_event_found);
+    BHAH_FREE_PINNED(all_photons_host.source_event_found);
     
     // Host Memory Free: Purges bridge components supporting scatter logic mapped to PCIe DMA transfers.
     BHAH_FREE_PINNED(chunk_buffer);
@@ -862,6 +947,10 @@ for(int p = 0; p < 1; p++) {{
     BHAH_FREE_PINNED(retries_bridge);
     BHAH_FREE_PINNED(on_pos_window_prev_bridge);
     BHAH_FREE_PINNED(on_pos_source_prev_bridge);
+    BHAH_FREE_PINNED(affine_p_bridge);
+    BHAH_FREE_PINNED(affine_p_p_bridge);
+    BHAH_FREE_PINNED(window_event_found_bridge);
+    BHAH_FREE_PINNED(source_event_found_bridge);
 
     // Device Memory Free: Purges remaining VRAM operational pipeline scratchpads.
     BHAH_FREE_DEVICE(d_f_bundle);
@@ -873,6 +962,11 @@ for(int p = 0; p < 1; p++) {{
     BHAH_FREE_DEVICE(d_retries);
     BHAH_FREE_DEVICE(d_on_pos_window_prev);
     BHAH_FREE_DEVICE(d_on_pos_source_prev);
+    BHAH_FREE_DEVICE(d_affine_prev);
+    BHAH_FREE_DEVICE(d_affine_pre_prev);
+    BHAH_FREE_DEVICE(d_window_event_found);
+    BHAH_FREE_DEVICE(d_source_event_found);
+    BHAH_FREE_DEVICE(d_chunk_buffer);
     BHAH_FREE_DEVICE(d_results_buffer);
 
     // Memory Free: Purges the temporal sorting struct mapping the Host-side execution grid.

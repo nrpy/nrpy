@@ -19,21 +19,24 @@ def find_event_time_and_state() -> None:
     :raises SystemError: If C function registration fails within the NRPy+ pipeline.
     """
     includes = ["BHaH_defines.h", "<math.h>"]
-    desc = """@brief Portable high-performance second-order root-finding.
+    desc = r"""@brief Portable high-performance second-order root-finding.
 
-    @param f_local The thread-local state array for step $f^\\mu_{n}$.
-    @param f_p_local The thread-local state array for step $f^\\mu_{n-1}$.
-    @param f_p_p_local The thread-local state array for step $f^\\mu_{n-2}$.
+    @param f_local The thread-local state array for step $f^\mu_{n}$.
+    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
+    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param lam The current affine parameter $\lambda_{n}$.
+    @param lam_p The history affine parameter $\lambda_{n-1}$.
+    @param lam_p_p The history affine parameter $\lambda_{n-2}$.
     @param normal The geometric unit normal vector $n_i$ of the target plane.
     @param dist The scalar distance $d$ from the origin to the target plane.
-    @param event_lambda Pointer to the local affine parameter $\\lambda$ to be updated.
-    @param event_f_intersect The thread-local array where the reconstructed state $f^\\mu$ is stored.
+    @param event_lambda Pointer to the local affine parameter $\lambda$ to be updated.
+    @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
 
     Detailed algorithm: Uses position data $x^i$ from the current and two previous
-    integration steps (passed as thread-local arrays) to construct a quadratic model
-    of the trajectory relative to the target plane. The intersection $\\lambda$ is solved via the
-    quadratic formula and the full state $f^\\mu$ is reconstructed via Lagrange polynomials.
-    Mapping logic directly to `f_local` preserves the strict sm_86 architecture limits by
+    integration steps to construct a quadratic model of the trajectory relative 
+    to the target plane. The intersection $\lambda$ is solved via the quadratic formula 
+    and the full state $f^\mu$ is reconstructed via Lagrange polynomials.
+    Mapping logic directly to thread-local registers preserves the strict sm_86 architecture limits by
     bypassing global memory fetches and keeping all intermediates within the 255
     registers per thread."""
     cfunc_type = "static BHAH_HD_INLINE void"
@@ -42,6 +45,9 @@ def find_event_time_and_state() -> None:
         "const double *restrict f_local, "
         "const double *restrict f_p_local, "
         "const double *restrict f_p_p_local, "
+        "const double lam, "
+        "const double lam_p, "
+        "const double lam_p_p, "
         "const double *restrict normal, "
         "const double dist, "
         "double *restrict event_lambda, "
@@ -57,27 +63,23 @@ def find_event_time_and_state() -> None:
     const double f1 = f_p_local[1]*normal[0] + f_p_local[2]*normal[1] + f_p_local[3]*normal[2] - dist;     // Plane evaluation at step $n-1$.
     const double f2 = f_local[1]*normal[0] + f_local[2]*normal[1] + f_local[3]*normal[2] - dist;           // Plane evaluation at step $n$.
 
-    const double t0 = f_p_p_local[8]; // Affine parameter $\lambda$ at step $n-2$.
-    const double t1 = f_p_local[8];   // Affine parameter $\lambda$ at step $n-1$.
-    const double t2 = f_local[8];     // Affine parameter $\lambda$ at step $n$.
-
     // --- STEP 1: LINEAR SEED CALCULATION ---
     // Provides a fallback value if the quadratic interpolation fails or is unnecessary.
     // Uses linear interpolation $\frac{y_2 x_1 - y_1 x_2}{y_2 - y_1}$ for numerical stability.
 
-    double t_linear;
+    double t_linear; // Fallback linear interpolation for the affine parameter $\lambda$.
     if ( (f1 * f2 <= 0.0 || fabs(f1) < 1e-12) && fabs(f2 - f1) > 1e-15 ) {
-        t_linear = (f2 * t1 - f1 * t2) / (f2 - f1);
+        t_linear = (f2 * lam_p - f1 * lam) / (f2 - f1);
     } else if ( (f0 * f1 <= 0.0 || fabs(f0) < 1e-12) && fabs(f1 - f0) > 1e-15 ) {
-        t_linear = (f1 * t0 - f0 * t1) / (f1 - f0);
+        t_linear = (f1 * lam_p_p - f0 * lam_p) / (f1 - f0);
     } else {
-        t_linear = t1;
+        t_linear = lam_p;
     }
 
     // --- STEP 2: QUADRATIC INTERPOLATION (SECOND-ORDER ACCURACY) ---
-    const double h0 = t1 - t0; // Interval size $\Delta\lambda$ between step $n-2$ and $n-1$.
-    const double h1 = t2 - t1; // Interval size $\Delta\lambda$ between step $n-1$ and $n$.
-    double lambda_event = t_linear; // The resulting affine parameter $\lambda$ for the crossing.
+    const double h0 = lam_p - lam_p_p; // Interval size $\Delta\lambda$ between step $n-2$ and $n-1$.
+    const double h1 = lam - lam_p;     // Interval size $\Delta\lambda$ between step $n-1$ and $n$.
+    double lambda_event = t_linear;    // The resulting affine parameter $\lambda$ for the crossing.
 
     if (fabs(h0) > 1e-15 && fabs(h1) > 1e-15) {
         // Newton form divided differences for the quadratic model: $f(t) = a(t-t_2)^2 + b(t-t_2) + f_2$.
@@ -91,9 +93,9 @@ def find_event_time_and_state() -> None:
             // Use the stable form of the quadratic formula $t = t_2 - \frac{2c}{-b \pm \sqrt{b^2 - 4ac}}$ to minimize truncation error.
             double denom = (b >= 0.0) ? (b + sqrt(discriminant)) : (b - sqrt(discriminant));
             if (fabs(denom) > 1e-16) {
-                double t_quad = t2 - (2.0 * f2 / denom);
-                double t_min = (t0 < t2) ? t0 : t2;
-                double t_max = (t0 < t2) ? t2 : t0;
+                double t_quad = lam - (2.0 * f2 / denom);
+                double t_min = (lam_p_p < lam) ? lam_p_p : lam;
+                double t_max = (lam_p_p < lam) ? lam : lam_p_p;
                 // Bound check: ensure the quadratic root $\lambda_{root}$ lies within the historical integration window.
                 if (t_quad >= t_min && t_quad <= t_max) lambda_event = t_quad;
             }
@@ -103,14 +105,14 @@ def find_event_time_and_state() -> None:
     // --- STEP 3: LAGRANGE STATE RECONSTRUCTION ---
     // Reconstruct the full 9-component state vector $f^\mu$ at the exact $\lambda_{event}$.
     const double t = lambda_event;
-    double L0, L1, L2; // Lagrange basis polynomials $L_i(t)$.
+    double L0, L1, L2; // Lagrange basis polynomials $L_i(t)$ mapped to the thread-local state.
     if (fabs(h0) < 1e-15 || fabs(h1) < 1e-15) {
         // Fallback to linear weights $L_i$ if the intervals are degenerate.
-        L0 = 0.0; L1 = (t2 - t) / (t2 - t1); L2 = (t - t1) / (t2 - t1);
+        L0 = 0.0; L1 = (lam - t) / (lam - lam_p); L2 = (t - lam_p) / (lam - lam_p);
     } else {
-        L0 = ((t - t1) * (t - t2)) / ((t0 - t1) * (t0 - t2));
-        L1 = ((t - t0) * (t - t2)) / ((t1 - t0) * (t1 - t2));
-        L2 = ((t - t0) * (t - t1)) / ((t2 - t0) * (t2 - t1));
+        L0 = ((t - lam_p) * (t - lam)) / ((lam_p_p - lam_p) * (lam_p_p - lam));
+        L1 = ((t - lam_p_p) * (t - lam)) / ((lam_p - lam_p_p) * (lam_p - lam));
+        L2 = ((t - lam_p_p) * (t - lam_p)) / ((lam - lam_p_p) * (lam - lam_p));
     }
 
     // Assign the final computed event parameter $\lambda$.
