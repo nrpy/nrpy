@@ -19,7 +19,7 @@ def register_CFunctions(set_of_CoordSystems: Set[str]) -> None:
     - the two single-point basis transforms register private
       ``__rfm__{CoordSystem}`` kernels,
     - ``rfm_wrapper_functions`` then emits the unsuffixed public runtime
-      dispatchers used by pointwise and bulk routines.
+      dispatchers used by single-point and bulk routines.
     """
     BHaH.general_relativity.basis_transforms.basis_transform_BSSN_rfm_to_Cartesian_single_point.register_CFunction_basis_transform_BSSN_rfm_to_Cartesian_single_point(
         set_of_CoordSystems=set_of_CoordSystems
@@ -27,7 +27,6 @@ def register_CFunctions(set_of_CoordSystems: Set[str]) -> None:
     BHaH.general_relativity.basis_transforms.basis_transform_BSSN_Cartesian_to_rfm_single_point.register_CFunction_basis_transform_BSSN_Cartesian_to_rfm_single_point(
         set_of_CoordSystems=set_of_CoordSystems
     )
-    BHaH.general_relativity.basis_transforms.BSSN_to_ADM_Cartesian.register_CFunction_BSSN_to_ADM_Cartesian()
 
 
 if __name__ == "__main__":
