@@ -9,6 +9,8 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Dict, List, Tuple, Union, cast
 
+import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -194,7 +196,7 @@ def register_CFunction_bhahaha_find_horizons(
     )
     _ = BSSN_quantities["Cartesian"]
     bssn_to_adm = BSSN_to_ADM(CoordSystem="Cartesian", enable_rfm_precompute=False)
-    adm_output_pairs: List[Tuple[str, object]] = [
+    adm_output_pairs: List[Tuple[str, sp.Basic]] = [
         (
             name,
             bssn_to_adm.gammaDD[i][j] if "GAMMADD" in name else bssn_to_adm.KDD[i][j],
