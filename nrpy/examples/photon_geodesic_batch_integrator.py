@@ -119,7 +119,7 @@ if __name__ == "__main__":
     # --- Fundamental Tensor Calculations (VRAM Persisted) ---
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-    #conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
 
     # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
     interpolation_kernel.interpolation_kernel(SPACETIME)
@@ -158,6 +158,19 @@ if __name__ == "__main__":
     # ##########################################################################
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
+
+    # The RTX 3080 (sm_86 architecture) performs optimally with block sizes of 128 or 256 
+    # for register-heavy kernels, rather than the infrastructure's default of 32.
+    if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
+        par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
+    
+    par.glb_extras_dict["DEVICE_THREAD_MACROS"].update({
+        "BHAH_THREADS_IN_X_DIR_DEFAULT": 256,
+        "BHAH_THREADS_IN_Y_DIR_DEFAULT": 1,
+        "BHAH_THREADS_IN_Z_DIR_DEFAULT": 1,
+    })
+
+
     print(" -> Overriding desired CodeParameters before .par generation...")
 
     # Analytic Spacetime Parameters
@@ -169,7 +182,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 150.0
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 1.0
+    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 200.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
     par.glb_code_params_dict["t_integration_max"].defaultvalue = 10000.0
 
@@ -201,13 +214,13 @@ if __name__ == "__main__":
 
     # RKF45 Adaptive Control Tolerances
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-8
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-8
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-08
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-08
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-13
+    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 500
+    par.glb_code_params_dict["scan_density"].defaultvalue = 333
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling
@@ -303,6 +316,7 @@ if __name__ == "__main__":
         blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
         output_image_path = os.path.join(project_dir, "lensed_output.png")
+        STATIC_IMAGE_PIXEL_WIDTH = 700
 
         c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
         c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
@@ -321,7 +335,7 @@ if __name__ == "__main__":
 
         rli.generate_static_lensed_image(
             output_filename=output_image_path,
-            output_pixel_width=cfg.STATIC_IMAGE_PIXEL_WIDTH,
+            output_pixel_width=STATIC_IMAGE_PIXEL_WIDTH,
             source_image_width=source_physical_width,
             sphere_image=starmap_path,
             source_image=disk_texture,

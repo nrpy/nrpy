@@ -71,12 +71,12 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     launch_dict = {
             "threads_per_block": [
-                "BHAH_THREADS_IN_X_DIR_RKF45", 
-                "1", 
-                "1"
+                "BHAH_THREADS_IN_X_DIR_DEFAULT", 
+                "BHAH_THREADS_IN_Y_DIR_DEFAULT", 
+                "BHAH_THREADS_IN_Z_DIR_DEFAULT"
             ],
             "blocks_per_grid": [
-                "(current_chunk_size + BHAH_THREADS_IN_X_DIR_RKF45 - 1) / BHAH_THREADS_IN_X_DIR_RKF45", 
+                "(current_chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", 
                 "1", 
                 "1"
             ],
@@ -88,7 +88,8 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         arg_dict_cuda=arg_dict_cuda,
         arg_dict_host=arg_dict_cuda,
         parallelization="cuda",
-        launch_dict=launch_dict,
+        launch_dict=launch_dict,             
+        thread_tiling_macro_suffix="DEFAULT",  # <-- Changed to DEFAULT
         cfunc_decorators="__global__",
     )
 

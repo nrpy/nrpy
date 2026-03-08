@@ -267,7 +267,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const double wc_y = commondata->window_center_y;
     const double wc_z = commondata->window_center_z;
 
-    // Vector $n_z$ normal to the camera window representing the line of sight.
+    // Vector n_z normal to the camera window representing the line of sight.
     double n_z[3] = {{wc_x - cam_x, wc_y - cam_y, wc_z - cam_z}};
     double mag_n_z = sqrt(n_z[0]*n_z[0] + n_z[1]*n_z[1] + n_z[2]*n_z[2]);
     for(int j=0; j<3; j++) n_z[j] /= mag_n_z;
@@ -275,7 +275,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Geometric reference vector defining the upward orientation.
     const double guide_up[3] = {{commondata->window_up_vec_x, commondata->window_up_vec_y, commondata->window_up_vec_z}};
 
-    // Basis vector $n_x$ describing the horizontal camera axis.
+    // Basis vector n_x describing the horizontal camera axis.
     double n_x[3] = {{n_z[1]*guide_up[2] - n_z[2]*guide_up[1], n_z[2]*guide_up[0] - n_z[0]*guide_up[2], n_z[0]*guide_up[1] - n_z[1]*guide_up[0]}};
     double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
 
@@ -291,7 +291,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     for(int j=0; j<3; j++) n_x[j] /= mag_n_x;
 
-    // Basis vector $n_y$ describing the vertical camera axis.
+    // Basis vector n_y describing the vertical camera axis.
     double n_y[3] = {{n_z[1]*n_x[2] - n_z[2]*n_x[1], n_z[2]*n_x[0] - n_z[0]*n_x[2], n_z[0]*n_x[1] - n_z[1]*n_x[0]}};
 
     window_center_out[0] = wc_x;
@@ -308,10 +308,33 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const double ny_1 = n_y[1];
     const double ny_2 = n_y[2];
 
+    // --- DYNAMIC GEOMETRIC PLANE INITIALIZATION ---
+    // Algorithmic Step: Evaluate the initial side of the observer and source planes natively on the CPU.
+    // Hardware Justification: Computed efficiently exactly once since all photons originate from the identical camera coordinate, preventing redundant VRAM allocation and PCIe transfers.
+    const double val_window = n_z[0] * (cam_x - wc_x) +
+                              n_z[1] * (cam_y - wc_y) +
+                              n_z[2] * (cam_z - wc_z);
+    
+    // Evaluates strictly greater than zero per the physical observer constraints.
+    const bool init_window_side = (val_window > 0.0);
+
+    const double val_source = commondata->source_plane_normal_x * (cam_x - commondata->source_plane_center_x) +
+                              commondata->source_plane_normal_y * (cam_y - commondata->source_plane_center_y) +
+                              commondata->source_plane_normal_z * (cam_z - commondata->source_plane_center_z);
+    
+    // Evaluates true if exactly zero per physical emission constraints.
+    const bool init_source_side = (val_source >= 0.0);
+
+    // Loop iterator traversing the entire global ray count to hydrate initial plane boundaries.
+    for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {{
+        all_photons->on_positive_side_of_window_prev[plane_i] = init_window_side;
+        all_photons->on_positive_side_of_source_prev[plane_i] = init_source_side;
+    }}
+
     // --- VRAM STAGING ALLOCATION ---
-    // Device pointer for the chunked VRAM state staging buffer $d\_f\_bundle$.
+    // Device pointer for the chunked VRAM state staging buffer d_f_bundle.
     double *d_f_bundle;
-    // Device pointer for the chunked VRAM step size staging buffer $d\_h\_bundle$.
+    // Device pointer for the chunked VRAM step size staging buffer d_h_bundle.
     double *d_h_bundle;
     
     // Hardware Justification: Memory is processed in bundles to protect the 10GB hardware limit.
