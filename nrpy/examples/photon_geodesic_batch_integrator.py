@@ -182,7 +182,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 150.0
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 200.0
+    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 300.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
     par.glb_code_params_dict["t_integration_max"].defaultvalue = 10000.0
 
@@ -220,7 +220,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 333
+    par.glb_code_params_dict["scan_density"].defaultvalue = 1000
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling

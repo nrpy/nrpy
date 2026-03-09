@@ -21,7 +21,7 @@ from nrpy.helpers.loop import loop
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
-    #define BUNDLE_CAPACITY 32768 // Maximum number of photons processed per batch to fit within L1/L2 cache.
+    #define BUNDLE_CAPACITY 65536 // Maximum number of photons processed per batch to fit within L1/L2 cache.
 
     // Defines the physical planes where a photon trajectory might terminate.
     typedef enum {
@@ -112,7 +112,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "ny_1": "const double",
         "ny_2": "const double",
         "start_idx": "const long int",
-        "chunk_size": "const long int",
+        "chunk_size": "const long int"
     }
 
     # Python: Retrieve the correct accessor for constant memory (e.g., "d_commondata.").
@@ -196,6 +196,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     launch_dict = {
         "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
         "blocks_per_grid": ["(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
+        "stream": "stream_idx"
     }
 
     kernel_prefunc, launch_code = generate_kernel_and_launch_code(
@@ -385,7 +386,8 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "double window_center_out[3], "
         "double n_x_out[3], "
         "double n_y_out[3], "
-        "double n_z_out[3]"
+        "double n_z_out[3],"
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function using the canonical Master Order.

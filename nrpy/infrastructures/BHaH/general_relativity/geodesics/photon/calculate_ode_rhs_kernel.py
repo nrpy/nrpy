@@ -166,6 +166,7 @@ def calculate_ode_rhs_kernel(
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc, body = generate_kernel_and_launch_code(
@@ -201,7 +202,8 @@ def calculate_ode_rhs_kernel(
         "const double *restrict d_connection_bundle, "
         "double *restrict d_k_bundle, "
         "const int stage, "
-        "const int chunk_size"
+        "const int chunk_size,"
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function using the canonical Master Order.

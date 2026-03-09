@@ -121,6 +121,7 @@ def rkf45_stage_update() -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc, body = generate_kernel_and_launch_code(
@@ -155,7 +156,8 @@ def rkf45_stage_update() -> None:
         "const double *restrict d_h, "
         "const int stage, "
         "const int chunk_size, "
-        "double *restrict d_f_temp"
+        "double *restrict d_f_temp,"
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function (Host Launcher + Device Kernel).

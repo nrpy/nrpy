@@ -173,6 +173,7 @@ def event_detection_manager_kernel() -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc_kernel, body = generate_kernel_and_launch_code(
@@ -232,7 +233,8 @@ def event_detection_manager_kernel() -> None:
         "bool *restrict d_window_event_found, "
         "bool *restrict d_source_event_found, "
         "const long int *restrict d_chunk_buffer, "
-        "const int chunk_size"
+        "const int chunk_size,"
+        "const int stream_idx"
     )
     
     include_CodeParameters_h = False

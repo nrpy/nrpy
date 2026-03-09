@@ -99,6 +99,7 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc, body = generate_kernel_and_launch_code(
@@ -128,7 +129,8 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     params = (
         "double *restrict d_f_bundle, "
         "const double *restrict d_metric_bundle, "
-        "const int chunk_size"
+        "const int chunk_size,"
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function using the canonical Master Order.

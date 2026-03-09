@@ -80,6 +80,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
                 "1", 
                 "1"
             ],
+        "stream": "stream_idx"
         }
 
     prefunc, launch_body = generate_kernel_and_launch_code(
@@ -108,7 +109,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
-    params = "const PhotonStateSoA *restrict all_photons, const long int num_rays, blueprint_data_t *restrict result"
+    params = "const PhotonStateSoA *restrict all_photons, const long int num_rays, blueprint_data_t *restrict result, const int stream_idx"
 
     # Python: Generate the loop body for the streaming bundle architecture.
     # Note: Includes CRITICAL FIX to pre-load results from Host to Device.

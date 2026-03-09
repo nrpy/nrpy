@@ -60,7 +60,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         "d_status": "termination_type_t *restrict",  # Write: Ray status flags
         "d_affine": "double *restrict",              # Read/Write: Affine parameter lambda
         "d_retries": "int *restrict",                # Read/Write: Retry counter
-        "chunk_size": "const long int"               # Input: Active bundle size
+        "chunk_size": "const long int"        # Input: Active bundle size
     }
 
     # Python: Define the GPU kernel body using raw strings.
@@ -223,6 +223,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc, body = generate_kernel_and_launch_code(
@@ -260,7 +261,8 @@ def rkf45_finalize_and_control_kernel() -> None:
         "termination_type_t *restrict d_status, "
         "double *restrict d_affine, "
         "int *restrict d_retries, "
-        "const long int chunk_size"
+        "const long int chunk_size, "
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function (Host Launcher + Device Kernel).

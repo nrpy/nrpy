@@ -110,6 +110,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
+        "stream": "stream_idx"
     }
 
     prefunc_kernel, body = generate_kernel_and_launch_code(
@@ -144,7 +145,8 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "const double *restrict d_f_bundle, "
         "double *restrict d_metric_bundle, "
         "double *restrict d_connection_bundle, "
-        "const int chunk_size"
+        "const int chunk_size,"
+        "const int stream_idx"
     )
 
     # Python: Register the complete C function using the canonical Master Order.
