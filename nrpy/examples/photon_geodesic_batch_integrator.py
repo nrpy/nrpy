@@ -214,13 +214,13 @@ if __name__ == "__main__":
 
     # RKF45 Adaptive Control Tolerances
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-08
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-08
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-12
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-12
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 1000
+    par.glb_code_params_dict["scan_density"].defaultvalue = 4000
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling
@@ -316,7 +316,7 @@ if __name__ == "__main__":
         blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
         output_image_path = os.path.join(project_dir, "lensed_output.png")
-        STATIC_IMAGE_PIXEL_WIDTH = 700
+        STATIC_IMAGE_PIXEL_WIDTH = 2000
 
         c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
         c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
