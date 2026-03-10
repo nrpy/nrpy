@@ -17,11 +17,12 @@ from nrpy.helpers.parallelization.utilities import (
 )
 from nrpy.helpers.loop import loop
 
-# Python: Define the C-structs required for the simulation pipeline.
+# Define the C-structs required for the simulation pipeline.
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
-    #define BUNDLE_CAPACITY 65536 // Maximum number of photons processed per batch to fit within L1/L2 cache.
+    // Maximum number of photons processed per batch to fit within L1/L2 cache.
+    #define BUNDLE_CAPACITY 65536 
 
     // Defines the physical planes where a photon trajectory might terminate.
     typedef enum {
@@ -31,29 +32,29 @@ batch_structs_c_code = r"""
 
     // Defines the specific exit condition for a photon's integration loop.
     typedef enum {
-        TERMINATION_TYPE_CELESTIAL_SPHERE, // 0: Photon escaped to infinity (exceeded r_escape).
+        TERMINATION_TYPE_CELESTIAL_SPHERE, // 0: Photon escaped to infinity.
         TERMINATION_TYPE_SOURCE_PLANE,     // 1: Photon successfully hit the source emission plane.
         FAILURE_PT_TOO_BIG,                // 2: Integration failed due to unbounded momentum $p_t$.
         FAILURE_RKF45_REJECTION_LIMIT,     // 3: Adaptive step-size rejected too many consecutive times.
-        FAILURE_T_MAX_EXCEEDED,            // 4: Integration exceeded maximum allowable physical time.
+        FAILURE_T_MAX_EXCEEDED,            // 4: Integration exceeded maximum allowable physical coordinate time $t$.
         FAILURE_SLOT_MANAGER_ERROR,        // 5: TimeSlotManager failed to allocate or retrieve the photon.
         TERMINATION_TYPE_FAILURE,          // 6: Generic unclassified numerical failure.
-        ACTIVE,                             // 7: Photon is currently undergoing integration.
-        REJECTED,                          // 8: Photon rkf45 step was rejected and step
+        ACTIVE,                            // 7: Photon is currently undergoing integration.
+        REJECTED,                          // 8: Photon RKF45 step was rejected.
     } termination_type_t;
 
     // Stores the final physical properties of a photon upon integration termination.
     typedef struct {
         termination_type_t termination_type; // The exit condition of the photon.
-        double y_w; // Local y-coordinate intersection on the observer window.
-        double z_w; // Local z-coordinate intersection on the observer window.
-        double y_s; // Local y-coordinate intersection on the source plane.
-        double z_s; // Local z-coordinate intersection on the source plane.
-        double final_theta; // Final polar angle $\theta$ at termination.
-        double final_phi;   // Final azimuthal angle $\phi$ at termination.
-        double L_w; // Affine parameter $\lambda$ at the window intersection.
+        double y_w; // Local $y$-coordinate intersection on the observer window.
+        double z_w; // Local $z$-coordinate intersection on the observer window.
+        double y_s; // Local $y$-coordinate intersection on the source plane.
+        double z_s; // Local $z$-coordinate intersection on the source plane.
+        double final_theta; // Final polar angle $theta$ at termination.
+        double final_phi;   // Final azimuthal angle $phi$ at termination.
+        double L_w; // Affine parameter $lambda$ at the window intersection.
         double t_w; // Physical coordinate time $t$ at the window intersection.
-        double L_s; // Affine parameter $\lambda$ at the source intersection.
+        double L_s; // Affine parameter $lambda$ at the source intersection.
         double t_s; // Physical coordinate time $t$ at the source intersection.
     } __attribute__((packed)) blueprint_data_t;
 
@@ -61,13 +62,13 @@ batch_structs_c_code = r"""
     // Flattened SoA Struct (Master Storage)
     // ==========================================
     typedef struct {
-        double *f; // Flattened state vector: 9 components (t, x, y, z, p_t, p_x, p_y, p_z, aux).
+        double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
         double *f_p; // State vector at the previous integration step.
         double *f_p_p; // State vector at two integration steps prior.
-        double *affine_param; // Current affine parameter $\lambda$ for the trajectory.
-        double *affine_param_p; // Affine parameter $\lambda$ at the previous step.
-        double *affine_param_p_p; // Affine parameter $\lambda$ at two steps prior.
-        double *h; // Current adaptive step size for the RKF45 integrator.
+        double *affine_param; // Current affine parameter $lambda$ for the trajectory.
+        double *affine_param_p; // Affine parameter $lambda$ at the previous step.
+        double *affine_param_p_p; // Affine parameter $lambda$ at two steps prior.
+        double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
 
@@ -76,11 +77,11 @@ batch_structs_c_code = r"""
         bool *on_positive_side_of_source_prev; // True if photon was previously 'above' the source plane.
 
         bool *source_event_found; // Flag indicating a source plane intersection was detected.
-        double *source_event_lambda; // Exact affine parameter $\lambda$ of the source intersection.
+        double *source_event_lambda; // Exact affine parameter $lambda$ of the source intersection.
         double *source_event_f_intersect; // Interpolated 9-component state vector at the source intersection.
 
         bool *window_event_found; // Flag indicating an observer window intersection was detected.
-        double *window_event_lambda; // Exact affine parameter $\lambda$ of the window intersection.
+        double *window_event_lambda; // Exact affine parameter $lambda$ of the window intersection.
         double *window_event_f_intersect; // Interpolated 9-component state vector at the window intersection.
     } PhotonStateSoA;
 """
@@ -93,14 +94,13 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
     :raises Exception: Propagates NRPy+ core exceptions during AST generation.
     """
-    # Python: Register necessary global parameters for the grid setup and numerical controls.
+    # Register necessary global parameters for the grid setup and numerical controls.
     par.register_CodeParameter("int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "t_start", 100.0, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "window_width", 10.0, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "window_height", 10.0, commondata=True, add_to_parfile=True)
 
-    # Python: Dictionary mapping for GPU kernel arguments.
-    # Note: Global parameters like camera position are accessed directly via Constant Memory.
+    # Dictionary mapping for GPU kernel arguments.
     arg_dict_cuda = {
         "num_rays": "const long int",
         "d_f_bundle": "double *restrict",
@@ -115,13 +115,13 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "chunk_size": "const long int"
     }
 
-    # Python: Retrieve the correct accessor for constant memory (e.g., "d_commondata.").
+    # Retrieve the correct accessor for constant memory (e.g., "d_commondata.").
     cd_access = get_commondata_access("cuda")
 
-    # Python: Define the GPU kernel body utilizing raw strings for LaTeX and strict variable documentation.
+    # Define the GPU kernel body utilizing raw strings for LaTeX and strict variable documentation.
     kernel_body = rf"""
     // --- THREAD IDENTIFICATION & BOUNDARY CHECKS ---
-    // The identifier $c$ represents the local thread index within the current bundle batch.
+    // Thread ID maps to a unique photon index within the current bundle batch via the identifier $c$.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Hardware Justification: Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
@@ -142,12 +142,12 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Horizontal pixel coordinate index within the virtual observer's projection frame.
     const int col = i % {cd_access}scan_density;
 
-    // The variable $x_{{pix}}$ is the local physical distance along the horizontal camera axis.
+    // Local physical distance $x_{{pix}}$ along the horizontal camera axis.
     const double x_pix = -{cd_access}window_width/2.0 + (col + 0.5) * ({cd_access}window_width / {cd_access}scan_density);
-    // The variable $y_{{pix}}$ is the local physical distance along the vertical camera axis.
+    // Local physical distance $y_{{pix}}$ along the vertical camera axis.
     const double y_pix = -{cd_access}window_height/2.0 + (row + 0.5) * ({cd_access}window_height / {cd_access}scan_density);
 
-    // The array $target\_pos$ stores the global Cartesian intersection point on the projection window $x^mu$.
+    // The array $target\_pos$ stores the global Cartesian intersection point $x^\mu$ on the projection window.
     const double target_pos[3] = {{
         {cd_access}window_center_x + x_pix*nx_0 + y_pix*ny_0,
         {cd_access}window_center_y + x_pix*nx_1 + y_pix*ny_1,
@@ -157,7 +157,6 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // --- INITIAL STATE POPULATION ---
     // Algorithmic Step: Write the starting position and spatial momentum explicitly to the VRAM bundle.
     // Hardware Justification: Single coalesced writes via WriteCUDA prevent warp serialization on sm_86.
-    
     WriteCUDA(&d_f_bundle[IDX_F(0, c)], {cd_access}t_start); // Coordinate time $t$
     WriteCUDA(&d_f_bundle[IDX_F(1, c)], {cd_access}camera_pos_x); // Spatial position $x$
     WriteCUDA(&d_f_bundle[IDX_F(2, c)], {cd_access}camera_pos_y); // Spatial position $y$
@@ -180,8 +179,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     WriteCUDA(&d_f_bundle[IDX_F(6, c)], V_y * inv_mag_V); // Initial momentum component $p^y$
     WriteCUDA(&d_f_bundle[IDX_F(7, c)], V_z * inv_mag_V); // Initial momentum component $p^z$
     
-    // Explicitly set the intitial path length to zero. 
-    // See geodesics.py in /nrpy/equations/general_relativity/geodesics to define path length.
+    // Explicitly set the initial path length to zero.
     WriteCUDA(&d_f_bundle[IDX_F(8, c)], 0.0);
 
     // Initialize the adaptive step size $h$ for the RKF45 integrator.
@@ -192,7 +190,6 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     #undef IDX_H
     """
     
-    # Force a strict 1D execution grid to match the VRAM Structure of Arrays
     launch_dict = {
         "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
         "blocks_per_grid": ["(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
@@ -209,8 +206,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         cfunc_decorators="__global__",
     )
 
-    # Python: Generate the host-side loop string to iterate over the dataset in bundles.
-    # We use 'start_idx' as the iterator and 'BUNDLE_CAPACITY' as the stride.
+    # Generate the host-side loop string to iterate over the dataset in bundles.
     loop_body = f"""
         // Variable chunk_size defines the active range for the current streaming bundle.
         const long int chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY);
@@ -218,19 +214,19 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         {launch_code}
 
         // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
-        // Hardware Justification: This trap is critical because -rdc=true (Relocatable Device Code) 
-        // can cause silent link-time symbol failures if d_commondata is not properly defined.
+        // Hardware Justification: This trap is critical because -rdc=true can cause silent link-time symbol failures.
         #ifdef DEBUG
         cudaDeviceSynchronize();
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {{
+            // Fatal unrecoverable error during kernel synchronization.
             printf("Init Kernel Failed on Batch starting at %ld: %s\\n", (long int)start_idx, cudaGetErrorString(err));
             exit(1);
         }}
         #endif
 
     // --- 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
-    // Algorithmic Step: Transfer initialized state vectors $f^mu$ from VRAM back to host RAM.
+    // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
     // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
     for(int m=0; m<9; m++) {{
         cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
@@ -260,28 +256,32 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     body = rf"""
     // --- HOST-SIDE GEOMETRY SETUP ---
     // Algorithmic Step: Pre-calculate the projection plane basis vectors to save device registers.
-    const double cam_x = commondata->camera_pos_x;
-    const double cam_y = commondata->camera_pos_y;
-    const double cam_z = commondata->camera_pos_z;
+    const double cam_x = commondata->camera_pos_x; // The $x$-coordinate of the camera.
+    const double cam_y = commondata->camera_pos_y; // The $y$-coordinate of the camera.
+    const double cam_z = commondata->camera_pos_z; // The $z$-coordinate of the camera.
 
-    const double wc_x = commondata->window_center_x;
-    const double wc_y = commondata->window_center_y;
-    const double wc_z = commondata->window_center_z;
+    const double wc_x = commondata->window_center_x; // The $x$-coordinate of the geometric window center.
+    const double wc_y = commondata->window_center_y; // The $y$-coordinate of the geometric window center.
+    const double wc_z = commondata->window_center_z; // The $z$-coordinate of the geometric window center.
 
-    // Vector n_z normal to the camera window representing the line of sight.
+    // Vector $n_z^i$ normal to the camera window representing the line of sight.
     double n_z[3] = {{wc_x - cam_x, wc_y - cam_y, wc_z - cam_z}};
+    // Magnitude of the normal vector $n_z^i$.
     double mag_n_z = sqrt(n_z[0]*n_z[0] + n_z[1]*n_z[1] + n_z[2]*n_z[2]);
+    // Normalize the $n_z^i$ vector.
     for(int j=0; j<3; j++) n_z[j] /= mag_n_z;
 
     // Geometric reference vector defining the upward orientation.
     const double guide_up[3] = {{commondata->window_up_vec_x, commondata->window_up_vec_y, commondata->window_up_vec_z}};
 
-    // Basis vector n_x describing the horizontal camera axis.
+    // Basis vector $n_x^i$ describing the horizontal camera axis.
     double n_x[3] = {{n_z[1]*guide_up[2] - n_z[2]*guide_up[1], n_z[2]*guide_up[0] - n_z[0]*guide_up[2], n_z[0]*guide_up[1] - n_z[1]*guide_up[0]}};
+    // Magnitude of the horizontal basis vector $n_x^i$.
     double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
 
     // Functional Justification: Fallback logic prevents cross-product singularities at geometric poles for numerical stability.
     if (mag_n_x < 1e-9) {{
+        // Alternative upward reference vector to avoid cross-product singularities.
         double alternative_up[3] = {{0.0, 1.0, 0.0}};
         if (fabs(n_z[1]) > 0.999) {{ alternative_up[1] = 0.0; alternative_up[2] = 1.0; }}
         n_x[0] = alternative_up[1]*n_z[2] - alternative_up[2]*n_z[1];
@@ -290,28 +290,39 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
     }}
 
+    // Normalize the $n_x^i$ vector.
     for(int j=0; j<3; j++) n_x[j] /= mag_n_x;
 
-    // Basis vector n_y describing the vertical camera axis.
+    // Basis vector $n_y^i$ describing the vertical camera axis.
     double n_y[3] = {{n_z[1]*n_x[2] - n_z[2]*n_x[1], n_z[2]*n_x[0] - n_z[0]*n_x[2], n_z[0]*n_x[1] - n_z[1]*n_x[0]}};
 
+    // Output the $x$-component of the geometric window center.
     window_center_out[0] = wc_x;
+    // Output the $y$-component of the geometric window center.
     window_center_out[1] = wc_y;
+    // Output the $z$-component of the geometric window center.
     window_center_out[2] = wc_z;
     for(int j=0; j<3; j++) {{
+        // Output the normalized basis vectors $n_x^i, n_y^i, n_z^i$.
         n_x_out[j] = n_x[j]; n_y_out[j] = n_y[j]; n_z_out[j] = n_z[j];
     }}
 
+    // Extracted basis component for GPU argument passing.
     const double nx_0 = n_x[0];
+    // Extracted basis component for GPU argument passing.
     const double nx_1 = n_x[1];
+    // Extracted basis component for GPU argument passing.
     const double nx_2 = n_x[2];
+    // Extracted basis component for GPU argument passing.
     const double ny_0 = n_y[0];
+    // Extracted basis component for GPU argument passing.
     const double ny_1 = n_y[1];
+    // Extracted basis component for GPU argument passing.
     const double ny_2 = n_y[2];
 
     // --- DYNAMIC GEOMETRIC PLANE INITIALIZATION ---
     // Algorithmic Step: Evaluate the initial side of the observer and source planes natively on the CPU.
-    // Hardware Justification: Computed efficiently exactly once since all photons originate from the identical camera coordinate, preventing redundant VRAM allocation and PCIe transfers.
+    // Hardware Justification: Computed efficiently exactly once to prevent redundant VRAM allocation and PCIe transfers.
     const double val_window = n_z[0] * (cam_x - wc_x) +
                               n_z[1] * (cam_y - wc_y) +
                               n_z[2] * (cam_z - wc_z);
@@ -319,6 +330,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // Evaluates strictly greater than zero per the physical observer constraints.
     const bool init_window_side = (val_window > 0.0);
 
+    // Initial dot product to evaluate proximity to the source plane.
     const double val_source = commondata->source_plane_normal_x * (cam_x - commondata->source_plane_center_x) +
                               commondata->source_plane_normal_y * (cam_y - commondata->source_plane_center_y) +
                               commondata->source_plane_normal_z * (cam_z - commondata->source_plane_center_z);
@@ -350,7 +362,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     BHAH_FREE_DEVICE(d_h_bundle);
     """
 
-    # Python: Establish the final strings to satisfy the Translation Unit Inlining Mandate.
+    # Establish the final strings to satisfy the Translation Unit Inlining Mandate.
     prefunc = f"{kernel_prefunc}"
 
     includes = [
@@ -366,11 +378,11 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     
     Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
-    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
+    temporal momentum $p^t = 0$ and affine parameter $lambda = 0$ for downstream constraint solvers.
     
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.
-    @param all_photons Pointer to the master SoA state vector $f^\mu$ in host memory.
+    @param all_photons Pointer to the master SoA state vector $f^mu$ in host memory.
     @param window_center_out Output buffer for the geometric window center.
     @param n_x_out Output buffer for the $x$-axis basis vector $n_x^i$.
     @param n_y_out Output buffer for the $y$-axis basis vector $n_y^i$.
@@ -390,7 +402,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "const int stream_idx"
     )
 
-    # Python: Register the complete C function using the canonical Master Order.
+    include_CodeParameters_h = False
+
+    # Register the complete C function using the canonical Master Order.
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
@@ -398,6 +412,17 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=False,
+        include_CodeParameters_h=include_CodeParameters_h,
         body=body
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

@@ -1,20 +1,19 @@
 """
-Registers the high-precision event-finding C kernel.
+This module contains the high-precision event-finding C kernel.
 
 This module resolves exact coordinate intersections when a plane
 crossing is detected. It utilizes second-order quadratic interpolation
 for root-finding and Lagrange interpolation for state reconstruction at
-the intersection boundaries, executing strictly within thread-local registers.
-
-Author: Dalton J. Moone.
-"""
+the intersection boundaries. Executing strictly within thread-local registers
+bypasses global memory fetches, preserving the sm_86 architecture limit of 255 registers per thread.
+Author: Dalton J. Moone."""
 
 import nrpy.c_function as cfc
 
 
 def find_event_time_and_state() -> None:
     """
-    Register the find_event_time_and_state C function.
+    This function defines the find_event_time_and_state C function configuration.
 
     :raises SystemError: If C function registration fails within the NRPy+ pipeline.
     """
@@ -83,19 +82,19 @@ def find_event_time_and_state() -> None:
 
     if (fabs(h0) > 1e-15 && fabs(h1) > 1e-15) {
         // Newton form divided differences for the quadratic model: $f(t) = a(t-t_2)^2 + b(t-t_2) + f_2$.
-        const double delta0 = (f1 - f0) / h0;
-        const double delta1 = (f2 - f1) / h1;
+        const double delta0 = (f1 - f0) / h0; // The first divided difference for interval $n-2$ to $n-1$.
+        const double delta1 = (f2 - f1) / h1; // The first divided difference for interval $n-1$ to $n$.
         const double a = (delta1 - delta0) / (h1 + h0); // The second-order coefficient representing relative acceleration.
         const double b = a * h1 + delta1;               // The first-order coefficient representing relative velocity.
         const double discriminant = b*b - 4.0 * a * f2; // Discriminant $b^2 - 4ac$ for the quadratic intersection.
 
         if (discriminant >= 0.0 && fabs(a) > 1e-16) {
             // Use the stable form of the quadratic formula $t = t_2 - \frac{2c}{-b \pm \sqrt{b^2 - 4ac}}$ to minimize truncation error.
-            double denom = (b >= 0.0) ? (b + sqrt(discriminant)) : (b - sqrt(discriminant));
+            double denom = (b >= 0.0) ? (b + sqrt(discriminant)) : (b - sqrt(discriminant)); // Stable denominator for the quadratic root.
             if (fabs(denom) > 1e-16) {
-                double t_quad = lam - (2.0 * f2 / denom);
-                double t_min = (lam_p_p < lam) ? lam_p_p : lam;
-                double t_max = (lam_p_p < lam) ? lam : lam_p_p;
+                double t_quad = lam - (2.0 * f2 / denom); // The computed quadratic root $\lambda_{root}$.
+                double t_min = (lam_p_p < lam) ? lam_p_p : lam; // Minimum bound of the historical integration window.
+                double t_max = (lam_p_p < lam) ? lam : lam_p_p; // Maximum bound of the historical integration window.
                 // Bound check: ensure the quadratic root $\lambda_{root}$ lies within the historical integration window.
                 if (t_quad >= t_min && t_quad <= t_max) lambda_event = t_quad;
             }
@@ -104,7 +103,7 @@ def find_event_time_and_state() -> None:
 
     // --- STEP 3: LAGRANGE STATE RECONSTRUCTION ---
     // Reconstruct the full 9-component state vector $f^\mu$ at the exact $\lambda_{event}$.
-    const double t = lambda_event;
+    const double t = lambda_event; // Local copy of the event parameter $\lambda_{event}$.
     double L0, L1, L2; // Lagrange basis polynomials $L_i(t)$ mapped to the thread-local state.
     if (fabs(h0) < 1e-15 || fabs(h1) < 1e-15) {
         // Fallback to linear weights $L_i$ if the intervals are degenerate.
@@ -119,7 +118,7 @@ def find_event_time_and_state() -> None:
     *event_lambda = lambda_event;
 
     // Interpolate all 9 components $f^\mu$: $\{t, x, y, z, p_t, p_x, p_y, p_z, \lambda\}$.
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 9; i++) { // Loop index $i$ over the 9 state vector components.
         event_f_intersect[i] = f_p_p_local[i] * L0 +
                                f_p_local[i]   * L1 +
                                f_local[i]     * L2;
@@ -135,3 +134,14 @@ def find_event_time_and_state() -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

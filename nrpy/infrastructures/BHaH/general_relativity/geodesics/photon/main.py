@@ -105,19 +105,12 @@ def main(spacetime_name: str) -> None:
 
 
 if __name__ == "__main__":
-    # Standard testing routine for the generator
-    SPACETIME = "KerrSchild_Cartesian"
-    logger.info("Generating main.c orchestrator for spacetime: %s", SPACETIME)
+    import doctest
+    import sys
 
-    try:
-        main(SPACETIME)
-        if "main" in cfc.CFunction_dict:
-            with open("main.c", "w", encoding="utf-8") as f:
-                f.write(cfc.CFunction_dict["main"].full_function)
-            logger.info("Successfully generated main.c")
-        else:
-            logger.error("Function registration failed.")
-            sys.exit(1)
-    except (RuntimeError, OSError) as e:
-        logger.error("Generation failed: %s", e)
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

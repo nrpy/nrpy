@@ -4,9 +4,9 @@ Generates the native CUDA kernel and host-side orchestrator for the RKF45 Finali
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module provides the global memory kernel responsible for computing the final 5th-order
 solution, estimating the local truncation error, and executing the adaptive step-size
-controller logic on VRAM bundles. It implements a "Split-Pipeline" architecture to minimize
-register pressure by operating on persistent VRAM scratchpads rather than fused registers.
-
+controller logic on VRAM bundles. To prevent register spilling on the NVIDIA RTX 3080 (which has 
+a hard limit of 255 registers per thread), we strictly enforce a Split-Pipeline architecture, 
+reading and writing intermediate stages via global VRAM scratchpads rather than fused registers.
 Author: Dalton J. Moone.
 """
 
@@ -28,7 +28,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     :raises TypeError: If incorrect parameters are passed to the code generation functions.
     """
 
-    # Python: Registers RKF45 control parameters to CodeParameters for global access.
+    # Registers RKF45 control parameters to CodeParameters for global access.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -48,10 +48,10 @@ def rkf45_finalize_and_control_kernel() -> None:
         "int", __name__, "rkf45_max_retries", 10, commondata=True, add_to_parfile=True
     )
 
-    # Python: Retrieve the accessor for constant memory (e.g., "d_commondata.").
+    # Retrieve the accessor for constant memory (e.g., "d_commondata.").
     cd_access = get_commondata_access("cuda")
 
-    # Python: Define the argument dictionary for the CUDA kernel generation utility.
+    # Define the argument dictionary for the CUDA kernel generation utility.
     arg_dict_cuda = {
         "d_f_persistent": "double *restrict",        # Read/Write: Persistent state bundle
         "d_f_start": "const double *restrict",       # Input: Base state at t_n
@@ -60,62 +60,60 @@ def rkf45_finalize_and_control_kernel() -> None:
         "d_status": "termination_type_t *restrict",  # Write: Ray status flags
         "d_affine": "double *restrict",              # Read/Write: Affine parameter lambda
         "d_retries": "int *restrict",                # Read/Write: Retry counter
-        "chunk_size": "const long int"        # Input: Active bundle size
+        "chunk_size": "const long int"               # Input: Active bundle size
     }
 
-    # Python: Define the GPU kernel body using raw strings.
+    # Define the GPU kernel body using raw strings.
     # Note: We strictly avoid declaring double k[6][9] to prevent Register Bleeding.
     kernel_body = rf"""
     // --- THREAD IDENTIFICATION ---
-    // Map the global thread index to the unique ray identifier within the bundle.
+    // Thread ID maps to the unique photon index to ensure independent ray calculations.
     const long int i = blockIdx.x * blockDim.x + threadIdx.x;
     
     // Architectural Guard: Prevent out-of-bounds VRAM access if grid size > chunk_size.
     if (i >= chunk_size) return;
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
-    // IDX_F: Maps (component, ray) to the flattened State-of-Arrays (SoA) layout.
+    // Maps (component, ray) to the flattened State-of-Arrays (SoA) layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-    // IDX_K: Maps (stage, component, ray) to the flattened derivative bundle.
+    // Maps (stage, component, ray) to the flattened derivative bundle.
     #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     // --- PARAMETER LOAD ---
     // Load tolerances and state variables from Global VRAM and Constant Memory.
-    const double rtol = {cd_access}rkf45_error_tolerance;
-    const double atol = {cd_access}rkf45_absolute_error_tolerance;
-    double h_local = ReadCUDA(&d_h[i]);
-    const int retries = ReadCUDA(&d_retries[i]);
+    const double rtol = {cd_access}rkf45_error_tolerance; // Relative tolerance bounds.
+    const double atol = {cd_access}rkf45_absolute_error_tolerance; // Absolute tolerance bounds.
+    double h_local = ReadCUDA(&d_h[i]); // Local step size $h$.
+    const int retries = ReadCUDA(&d_retries[i]); // Current count of failed adaptation attempts.
 
     // --- COMPUTE & CACHE LOOP ---
-    // We compute the 5th order candidate and error component-by-component.
-    // We cache the result in 'f_5th_cache' (18 registers) instead of storing all K-vectors (108 registers).
-    double f_5th_cache[9];
-    double err_norm = 0.0;
+    // We compute the 5th order candidate and error component-by-component to bound register usage.
+    double f_5th_cache[9]; // Thread-local register cache for the evaluated 5th-order state.
+    double err_norm = 0.0; // Accumulator for the maximum normalized truncation error norm $L_\infty$.
 
     // --- L1 MOMENTUM FLOOR ---
-    // Evaluates the L1 momentum floor using the initial state to avoid re-reading inside the loop.
+    // Evaluates the $L_1$ momentum floor using the initial state to avoid redundant VRAM reads inside the main loop.
     double p_L1 = 0.0;
     {{
-        const double px = ReadCUDA(&d_f_start[IDX_F(5, i)]);
-        const double py = ReadCUDA(&d_f_start[IDX_F(6, i)]);
-        const double pz = ReadCUDA(&d_f_start[IDX_F(7, i)]);
+        const double px = ReadCUDA(&d_f_start[IDX_F(5, i)]); // Spatial momentum $p_x$.
+        const double py = ReadCUDA(&d_f_start[IDX_F(6, i)]); // Spatial momentum $p_y$.
+        const double pz = ReadCUDA(&d_f_start[IDX_F(7, i)]); // Spatial momentum $p_z$.
         p_L1 = AddCUDA(AbsCUDA(px), AddCUDA(AbsCUDA(py), AbsCUDA(pz)));
     }}
 
     for (int comp = 0; comp < 9; ++comp) {{
-        // 1. Load Base State & Derivative Components
+        // --- BASE STATE AND DERIVATIVE COMPONENT LOAD ---
         // Scalar loads mapped directly to registers for the current tensor component.
-        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);
-        const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]);
-        const double k1  = ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]);
-        const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]);
-        const double k3  = ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]);
-        const double k4  = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]);
-        const double k5  = ReadCUDA(&d_k_bundle[IDX_K(5, comp, i)]);
+        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state tensor component $f_n$.
+        const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]); // Stage 0 derivative vector $k_0$.
+        const double k1  = ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]); // Stage 1 derivative vector $k_1$.
+        const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]); // Stage 2 derivative vector $k_2$.
+        const double k3  = ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]); // Stage 3 derivative vector $k_3$.
+        const double k4  = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]); // Stage 4 derivative vector $k_4$.
+        const double k5  = ReadCUDA(&d_k_bundle[IDX_K(5, comp, i)]); // Stage 5 derivative vector $k_5$.
 
         // --- 5TH ORDER CANDIDATE EVALUATION & STATE CORRUPTION SAFEGUARD ---
-        // Evaluates the physical state update $f^\mu_{{n+1}}$ utilizing exact double-precision Runge-Kutta coefficients.
-        // This architectural step occurs here to catch non-linear tensor interactions near event horizons before VRAM persistence.
+        /* Evaluates the physical state update $f^\mu_{{n+1}}$ utilizing exact double-precision Runge-Kutta coefficients to catch non-linear tensor interactions near event horizons before VRAM persistence. */
         double update = MulCUDA(16.0 / 135.0, k0); // Intermediate accumulator for the 5th order step update.
         update = FusedMulAddCUDA(6656.0 / 12825.0, k2, update);
         update = FusedMulAddCUDA(28561.0 / 56430.0, k3, update);
@@ -127,71 +125,68 @@ def rkf45_finalize_and_control_kernel() -> None:
 
         // Evaluates the physical state for numerical singularities to guarantee the rejection of corrupted trajectory steps.
         if (isnan(f_5th_val) || isinf(f_5th_val)) {{
-        err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
+            err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
         }}
-        // 3. Compute Truncation Error 
-        // Evaluates the truncation error directly via coefficient deltas ($C_5 - C_4$) to prevent 
-        // catastrophic floating-point cancellation against the anchor state $f_n$.
-        // Delta Coeffs: (16/135 - 25/216), 0, (6656/12825 - 1408/2565), (28561/56430 - 2197/4104), (-9/50 - -1/5), 2/55
-        double err_val = MulCUDA(1.0 / 360.0, k0);
+
+        // --- TRUNCATION ERROR EVALUATION --- 
+        /* Evaluates the truncation error directly via coefficient deltas ($C_5 - C_4$) to prevent catastrophic floating-point cancellation against the anchor state $f_n$. */
+        double err_val = MulCUDA(1.0 / 360.0, k0); // Intermediate accumulator for the truncation error.
         err_val = FusedMulAddCUDA(-128.0 / 4275.0, k2, err_val);
         err_val = FusedMulAddCUDA(-2197.0 / 75240.0, k3, err_val);
         err_val = FusedMulAddCUDA(1.0 / 50.0, k4, err_val);
         err_val = FusedMulAddCUDA(2.0 / 55.0, k5, err_val);
 
-        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val));
+        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val)); // The absolute magnitude of the local truncation error.
 
         // --- ERROR NORMALIZATION & L-INFINITY NORM ---
         // Evaluates the normalized error for each tensor component to dictate the RKF45 adaptive step size $h$.
-        if (comp < 8) {{ // Excludes the affine parameter (index 8) from the error check.
-        double scale = 0.0;
+        if (comp < 8) {{ // Excludes the affine parameter $\lambda$ (index 8) from the error check.
+            double scale = 0.0; // The bounded tolerance scale limit for the current tensor component.
 
-        if (comp == 0) {{ 
-            // Coordinate Time $t$: Applies pure absolute tolerance to prevent secular drift.
-            scale = atol; 
-        }} else if (comp <= 3) {{ 
-            // Spatial Position $x^i$: Mixed tolerance scaling bounds spatial position variation.
-            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-        }} else if (comp == 4) {{ 
-            // Temporal Momentum $p_t$: Mixed tolerance scaling enforces energy conservation bounds.
-            scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
-        }} else {{ 
-            // Spatial Momentum $p_i$: Mixed tolerance bounded by the $L_1$ momentum floor.
-            scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
-        }}
+            if (comp == 0) {{ 
+                // Coordinate Time $t$: Applies pure absolute tolerance to prevent secular drift.
+                scale = atol; 
+            }} else if (comp <= 3) {{ 
+                // Spatial Position $x^i$: Mixed tolerance scaling bounds spatial position variation.
+                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+            }} else if (comp == 4) {{ 
+                // Temporal Momentum $p_t$: Mixed tolerance scaling enforces energy conservation bounds.
+                scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n)));
+            }} else {{ 
+                // Spatial Momentum $p_i$: Mixed tolerance bounded by the $L_1$ momentum floor.
+                scale = AddCUDA(atol, MulCUDA(rtol, p_L1));
+            }}
 
-        // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
-        double current_err = DivCUDA(err_abs, scale);
-        
-        // Evaluates the calculated error norm for numerical singularities to guard against IEEE-754 fmax behavior.
-        if (isnan(current_err) || isinf(current_err)) {{
-            err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
-        }} else {{
-            err_norm = fmax(err_norm, current_err); // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
+            double current_err = DivCUDA(err_abs, scale); // The normalized error for the specific tensor component.
+            
+            // Evaluates the calculated error norm for numerical singularities to guard against IEEE-754 fmax behavior.
+            if (isnan(current_err) || isinf(current_err)) {{
+                err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
+            }} else {{
+                err_norm = fmax(err_norm, current_err); // Accumulates the maximum normalized error equivalent to the $L_\infty$ norm.
             }}
         }}
     }}
 
     // --- UNIFIED ADAPTIVE CONTROL LOGIC ---
     // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
-    double safety = d_commondata.rkf45_safety_factor;
-    double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0;
+    double safety = d_commondata.rkf45_safety_factor; // Safety factor for step-size scaling.
+    double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step.
     
-    double h_new = MulCUDA(safety, MulCUDA(h_local, factor));
+    double h_new = MulCUDA(safety, MulCUDA(h_local, factor)); // The candidate new step size $h$.
     h_new = fmax(h_new, d_commondata.rkf45_h_min);
     h_new = fmin(h_new, d_commondata.rkf45_h_max);
 
     if (err_norm <= 1.0) {{
-        // === ACCEPTED STEP ===
-        // Flush Cached State to Persistent VRAM.
-        // This coalesced write commits the local register cache to global memory.
+        // --- ACCEPTED STEP MEMORY COMMIT ---
+        // Device-to-Device memory transfer commits the local register cache to persistent global VRAM.
         #pragma unroll
         for (int comp = 0; comp < 9; ++comp) {{
-        WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]);
+            WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]);
         }}
 
         // Update Affine Parameter $\lambda$.
-        const double old_affine = ReadCUDA(&d_affine[i]);
+        const double old_affine = ReadCUDA(&d_affine[i]); // Previous affine parameter $\lambda$.
         WriteCUDA(&d_affine[i], AddCUDA(old_affine, h_local));
 
         // Reset Retries & Set Status.
@@ -201,32 +196,31 @@ def rkf45_finalize_and_control_kernel() -> None:
         // Commit the newly adapted step size $h$ to VRAM.
         WriteCUDA(&d_h[i], h_new); 
     }} else {{
-        // === REJECTED STEP ===
+        // --- REJECTED STEP HANDLING ---
         // Increment Retry Counter.
-        const int new_retries = retries + 1;
+        const int new_retries = retries + 1; // Updated retry count for the current step.
         WriteCUDA(&d_retries[i], new_retries);
 
-        // Update Status.
+        // Update Status for fatal unrecoverable errors vs recoverable rejections.
         if (new_retries > d_commondata.rkf45_max_retries) {{
-        WriteCUDA(&d_status[i], FAILURE_RKF45_REJECTION_LIMIT);
+            WriteCUDA(&d_status[i], FAILURE_RKF45_REJECTION_LIMIT);
         }} else {{
-        WriteCUDA(&d_status[i], REJECTED);
+            WriteCUDA(&d_status[i], REJECTED);
         }}
         
-        // Commit the scaled retry step size $h$ to VRAM.
-        // Note: d_f_persistent is NOT updated, preserving the valid state.
+        // Commit the scaled retry step size $h$ to VRAM without overwriting persistent state vectors.
         WriteCUDA(&d_h[i], h_new); 
     }}
     """
 
-    # Python: Generate the CUDA kernel and the C host wrapper.
+    # Generate the CUDA kernel launch definitions.
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
         "stream": "stream_idx"
     }
 
-    prefunc, body = generate_kernel_and_launch_code(
+    prefunc, launch_code = generate_kernel_and_launch_code(
         kernel_name="rkf45_finalize_and_control_kernel",
         kernel_body=kernel_body,
         arg_dict_cuda=arg_dict_cuda,
@@ -236,7 +230,12 @@ def rkf45_finalize_and_control_kernel() -> None:
         cfunc_decorators="__global__",
     )
 
-    # Python: Define arguments for C-Function registration strictly before the call.
+    # Orchestrate the outer C-string that wraps the launch code execution.
+    body = f"""
+    {launch_code}
+    """
+
+    # Define arguments for C-Function registration strictly in the Master Order.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_intrinsics.h", "<math.h>"]
     
     desc = r"""@brief Finalizes the RKF45 step, checks errors, and updates state/stepsize.
@@ -244,9 +243,9 @@ def rkf45_finalize_and_control_kernel() -> None:
     @param d_f_persistent Device pointer to the persistent state (updated on acceptance).
     @param d_f_start Device pointer to the base state (read-only).
     @param d_k_bundle Device pointer to all 6 derivative vectors.
-    @param d_h Device pointer to the step size.
+    @param d_h Device pointer to the step size $h$.
     @param d_status Device pointer to the ray status (ACTIVE, REJECTED, FAILURE).
-    @param d_affine Device pointer to the affine parameter.
+    @param d_affine Device pointer to the affine parameter $\lambda$.
     @param d_retries Device pointer to the retry counter.
     @param chunk_size The number of rays in the current bundle."""
 
@@ -265,7 +264,9 @@ def rkf45_finalize_and_control_kernel() -> None:
         "const int stream_idx"
     )
 
-    # Python: Register the complete C function (Host Launcher + Device Kernel).
+    include_CodeParameters_h = False
+
+    # Register the complete C function (Host Launcher + Device Kernel).
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
@@ -273,6 +274,17 @@ def rkf45_finalize_and_control_kernel() -> None:
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=False,
+        include_CodeParameters_h=include_CodeParameters_h,
         body=body
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

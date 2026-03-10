@@ -1,7 +1,7 @@
 """
-Generates the CUDA kernel and host-side orchestrator for computing the photon geodesic ODE right-hand sides.
+This module defines the CUDA kernel and host-side orchestrator for computing the photon geodesic ODE right-hand sides.
 
-This module evaluates the spatial and temporal derivatives $\dot{f}$ required during 
+This module evaluates the spatial and temporal derivatives $dot{f}$ required during 
 the RKF45 integration step. It reads pre-calculated metric and connection tensors 
 from VRAM bundles to minimize register pressure on the RTX 3080 architecture.
 
@@ -16,10 +16,10 @@ from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_co
 def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]) -> None:
     """
-    Register the global CUDA kernel to compute the ODE right-hand side.
+    This function defines the global CUDA kernel to compute the ODE right-hand side.
 
     The generated kernel maps VRAM tensor data into thread-local registers matching 
-    the symbols expected by the generated geodesic equations. It computes the 9 
+    the symbols expected by the generated geodesic equations. It computes the $9$ 
     derivative components and writes them to the specific stage offset in the 
     RKF45 derivative bundle.
 
@@ -30,12 +30,12 @@ def calculate_ode_rhs_kernel(
     if not geodesic_rhs_expressions:
         raise ValueError("geodesic_rhs_expressions must contain at least one mathematical expression.")
 
-    # Python: Identify all unique mathematical symbols used in the generated RHS expressions.
+    # Identify all unique mathematical symbols used in the generated RHS expressions.
     used_symbol_names = {
         str(sym) for expr in geodesic_rhs_expressions for sym in expr.free_symbols
     }
 
-    # Python: Define the argument dictionary for the CUDA kernel generation.
+    # Define the argument dictionary for the CUDA kernel generation.
     arg_dict = {
         "d_f_temp_bundle": "const double *restrict",
         "d_metric_bundle": "const double *restrict",
@@ -45,32 +45,32 @@ def calculate_ode_rhs_kernel(
         "chunk_size": "const int"
     }
 
-    # Python: Build the VRAM data unpacking block. 
+    # Build the VRAM data unpacking block. 
     # This maps global memory directly to the local scalar registers expected by ccg.c_codegen.
     preamble_lines = [
         "// --- STATE VECTOR & COORDINATE UNPACKING ---",
-        "// Load spacetime coordinates $x^mu$ from the global state bundle."
+        "// Load spacetime coordinates $x^{\\mu}$ from the global state bundle."
     ]
 
     for j, sym in enumerate(coordinate_symbols):
         if str(sym) in used_symbol_names:
             preamble_lines.append(
-                f"const double {str(sym)} = ReadCUDA(&d_f_temp_bundle[IDX_F({j}, i)]);"
+                f"const double {str(sym)} = ReadCUDA(&d_f_temp_bundle[IDX_F({j}, i)]); // Maps the coordinate ${str(sym)}$ from global VRAM to a thread-local register."
             )
 
     preamble_lines.extend([
         "\n    // --- MOMENTUM UNPACKING ---",
-        "// Load contravariant four-momenta $p^mu$ from the global state bundle."
+        "// Load contravariant four-momenta $p^{\\mu}$ from the global state bundle."
     ])
     for j in range(4):
         if f"pU{j}" in used_symbol_names:
             preamble_lines.append(
-                f"const double pU{j} = ReadCUDA(&d_f_temp_bundle[IDX_F({j+4}, i)]);"
+                f"const double pU{j} = ReadCUDA(&d_f_temp_bundle[IDX_F({j+4}, i)]); // Maps the momentum component $p^{{{j}}}$ from global VRAM to a thread-local register."
             )
 
     preamble_lines.extend([
         "\n    // --- METRIC TENSOR UNPACKING ---",
-        "// Load the symmetric covariant metric $g_mu_nu$ from the pre-calculated VRAM bundle."
+        "// Load the symmetric covariant metric $g_{\\mu\\nu}$ from the pre-calculated VRAM bundle."
     ])
     curr_idx = 0
     for m in range(4):
@@ -78,7 +78,7 @@ def calculate_ode_rhs_kernel(
             comp_name = f"metric_g4DD{m}{n}"
             if comp_name in used_symbol_names:
                 preamble_lines.append(
-                    f"const double {comp_name} = ReadCUDA(&d_metric_bundle[IDX_METRIC({curr_idx}, i)]);"
+                    f"const double {comp_name} = ReadCUDA(&d_metric_bundle[IDX_METRIC({curr_idx}, i)]); // Maps the metric component $g_{{{m}{n}}}$ from global VRAM to a thread-local register."
                 )
             curr_idx += 1
 
@@ -93,13 +93,13 @@ def calculate_ode_rhs_kernel(
                 comp_name = f"conn_Gamma4UDD{a}{m}{n}"
                 if comp_name in used_symbol_names:
                     preamble_lines.append(
-                        f"const double {comp_name} = ReadCUDA(&d_connection_bundle[IDX_CONN({curr_idx}, i)]);"
+                        f"const double {comp_name} = ReadCUDA(&d_connection_bundle[IDX_CONN({curr_idx}, i)]); // Maps the connection component $\\Gamma^{{{a}}}_{{{m}{n}}}$ from global VRAM to a thread-local register."
                     )
                 curr_idx += 1
 
     preamble_unpacking_str = "\n    ".join(preamble_lines)
 
-    # Python: Generate the raw C math string from the SymPy expressions.
+    # Generate the raw C math string from the SymPy expressions.
     # Output targets are local scalar registers k_out_0 through k_out_8.
     k_array_outputs = [f"k_out_{j}" for j in range(9)]
     raw_c_code = ccg.c_codegen(
@@ -111,49 +111,49 @@ def calculate_ode_rhs_kernel(
         verbose=False,
     )
     
-    # Python: Translate SIMD macro signatures to native CUDA hardware intrinsics.
+    # Translate SIMD macro signatures to native CUDA hardware intrinsics.
     body_math = raw_c_code.replace("SIMD", "CUDA")
 
-    # Python: Define the GPU kernel body.
+    # Define the GPU kernel body.
     kernel_body = f"""
     // --- THREAD IDENTIFICATION ---
-    // The identifier i represents the global thread index mapped to a specific photon ray.
-    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    // The identifier $i$ represents the global thread index mapped to a specific photon ray.
+    const int i = blockIdx.x * blockDim.x + threadIdx.x; // Thread ID maps to unique photon index.
 
     // Hardware Justification: Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
     if (i >= chunk_size) return;
 
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
-    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+    #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the state bundle.
     // IDX_METRIC maps a component to the flattened symmetric metric bundle.
-    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+    #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the metric bundle.
     // IDX_CONN maps a component to the flattened Christoffel connection bundle.
-    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the connection bundle.
     // IDX_K maps a stage and component triplet to the flattened derivative bundle.
-    // Hardware Justification: The stage index dictates the massive offset $stage times 9 times Capacity$.
-    #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
+    // Hardware Justification: The stage index dictates the massive offset $stage \\times 9 \\times Capacity$.
+    #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the RKF45 derivative bundle.
 
     {preamble_unpacking_str}
 
     // --- GEODESIC RHS EVALUATION ---
-    // Local register declarations to capture the evaluated derivatives $\\dot{{f}}$.
-    double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8;
+    // Local register declarations to capture the evaluated derivatives $dot{{f}}$.
+    double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8; // Thread-local registers allocate memory for the $9$ derivative outputs.
     
     // Evaluate the derivatives $dx^{{\\mu}}/d\\lambda$ and $dp^{{\\mu}}/d\\lambda$ using hardware FMA instructions.
     {body_math}
 
     // --- GLOBAL VRAM WRITE ---
     // Write the computed derivatives to the correct RKF45 stage offset within the massive derivative bundle.
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 0, i)], k_out_0);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 1, i)], k_out_1);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 2, i)], k_out_2);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 3, i)], k_out_3);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 4, i)], k_out_4);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 5, i)], k_out_5);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 6, i)], k_out_6);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 7, i)], k_out_7);
-    WriteCUDA(&d_k_bundle[IDX_K(stage, 8, i)], k_out_8);
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 0, i)], k_out_0); // Write derivative component $0$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 1, i)], k_out_1); // Write derivative component $1$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 2, i)], k_out_2); // Write derivative component $2$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 3, i)], k_out_3); // Write derivative component $3$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 4, i)], k_out_4); // Write derivative component $4$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 5, i)], k_out_5); // Write derivative component $5$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 6, i)], k_out_6); // Write derivative component $6$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 7, i)], k_out_7); // Write derivative component $7$ to VRAM.
+    WriteCUDA(&d_k_bundle[IDX_K(stage, 8, i)], k_out_8); // Write derivative component $8$ to VRAM.
 
     // --- MACRO CLEANUP ---
     #undef IDX_F
@@ -162,7 +162,7 @@ def calculate_ode_rhs_kernel(
     #undef IDX_K
     """
 
-    # Python: Generate the kernel and the C host wrapper.
+    # Generate the kernel and the C host wrapper.
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
@@ -180,14 +180,14 @@ def calculate_ode_rhs_kernel(
         thread_tiling_macro_suffix="RKF45"
     )
 
-    # Python: Define arguments for C-Function registration strictly before the call.
+    # Define arguments for C-Function registration sequentially from top to bottom.
     includes = ["BHaH_defines.h", "cuda_intrinsics.h"]
     
     desc = r"""@brief Orchestrates the CUDA kernel for computing the photon geodesic ODE right-hand sides.
     
-    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\\mu}$ in VRAM.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\\mu\nu}$ in VRAM.
-    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\\Gamma^{\\alpha}_{\beta\\gamma}$ in VRAM.
+    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in VRAM.
+    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in VRAM.
+    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\Gamma^{\alpha}_{\beta\gamma}$ in VRAM.
     @param d_k_bundle Pointer to the massive derivative bundle array in VRAM.
     @param stage The current RKF45 stage index used to offset the write location.
     @param chunk_size The number of active rays in the current bundle batch.
@@ -206,7 +206,9 @@ def calculate_ode_rhs_kernel(
         "const int stream_idx"
     )
 
-    # Python: Register the complete C function using the canonical Master Order.
+    include_CodeParameters_h = False
+
+    # Register the complete C function using the canonical Master Order sequence.
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
@@ -214,6 +216,17 @@ def calculate_ode_rhs_kernel(
         cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=False,
+        include_CodeParameters_h=include_CodeParameters_h,
         body=body
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

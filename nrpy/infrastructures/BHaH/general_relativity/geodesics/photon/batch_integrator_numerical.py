@@ -1,12 +1,12 @@
 """
 Orchestration module for the Project Singularity-Axiom numerical integration pipeline.
 
-This module generates the high-level C orchestrator responsible for managing the
-life cycle of photon trajectories in numerical spacetimes. It strictly implements a 
-Split-Pipeline architecture, decoupling the Runge-Kutta-Fehlberg 4(5) integration 
-kernels. Intermediate tensors and state vectors are persisted in Global VRAM via 
-flattened Structure of Arrays (SoA) scratchpad bundles. This design avoids register 
-spilling and cache thrashing on the hardware by trading maximum VRAM bandwidth for 
+This module structures the high-level C orchestrator responsible for managing the
+life cycle of photon trajectories $x^\\mu$ in numerical spacetimes. It implements a
+Split-Pipeline architecture, decoupling the Runge-Kutta-Fehlberg 4(5) integration
+kernels. Intermediate tensors and state vectors are persisted in Global VRAM via
+flattened Structure of Arrays (SoA) scratchpad bundles. This design avoids register
+spilling and cache thrashing on the hardware by trading maximum VRAM bandwidth for
 register stability.
 Author: Dalton J. Moone.
 """
@@ -16,13 +16,13 @@ import nrpy.params as par
 
 def batch_integrator_numerical(spacetime_name: str) -> None:
     """
-    Generate the Native CUDA orchestrator for the batched numerical integration pipeline.
+    Construct the Native CUDA orchestrator for the batched numerical integration pipeline.
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
     :raises ValueError: If an unsupported spacetime metric identifier is provided.
     """
     
-    # Register core physics and numerical simulation parameters to the global struct.
+    # Core physics and numerical simulation parameters for the global spacetime struct.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -47,8 +47,6 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         add_to_parfile=True,
     )
 
-    prefunc = " "
-
     includes = [
         "BHaH_defines.h", 
         "BHaH_global_device_defines.h",
@@ -57,16 +55,15 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         "cuda_intrinsics.h"
     ]
 
-    desc = r"""@brief Orchestrates the batched Split-Pipeline relativistic ray tracing loop.
+    desc = r"""@brief Central Host-bound CPU orchestrator for the batched Split-Pipeline relativistic ray tracing loop.
 
-    This function serves as the central Host-bound CPU loop for evaluating photon
-    geodesics. It utilizes a TimeSlotManager to bin active rays by their physical 
-    coordinate time $t$. The Split-Pipeline architecture maps mathematical tensors 
-    like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to VRAM scratchpads to
-    respect the 255-register hardware limit per thread on sm_86 architecture.
+    This function acts as the primary loop for evaluating photon geodesics $x^\\mu$.
+    It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$. 
+    The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to VRAM scratchpads.
+    Mapping tensors to VRAM respects the 255-register hardware limit per thread on sm_86 architecture.
 
     @param commondata Struct containing global spacetime and numerical tolerances.
-    @param num_rays The total number of photon trajectories to simulate.
+    @param num_rays Total number of photon trajectories to simulate.
     @param results_buffer Device array storing the final physical intersections."""
 
     cfunc_type = "void"
@@ -85,34 +82,36 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the state vector $f^\mu$.
     BHAH_MALLOC_PINNED(all_photons_host.f, sizeof(double) * 9 * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the first derivative.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the first derivative $\dot{{f}}^\mu$.
     BHAH_MALLOC_PINNED(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the second derivative.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the second derivative $\ddot{{f}}^\mu$.
     BHAH_MALLOC_PINNED(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking the physical affine parameter $\lambda$.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the physical affine parameter $\lambda$.
     BHAH_MALLOC_PINNED(all_photons_host.affine_param, sizeof(double) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking individual integration step sizes $h$.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for individual integration step sizes $h$.
     BHAH_MALLOC_PINNED(all_photons_host.h, sizeof(double) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking the current trajectory termination status.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the trajectory termination status.
     BHAH_MALLOC_PINNED(all_photons_host.status, sizeof(termination_type_t) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking the number of step-size rejections.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the number of step-size rejections.
     BHAH_MALLOC_PINNED(all_photons_host.rejection_retries, sizeof(int) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking if the photon was previously on the positive side of the window.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the previous observer window boundary state.
     BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking if the photon was previously on the positive side of the source.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the previous source emission boundary state.
     BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking the history step $\lambda_{{n-1}}$.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the history step $\lambda_{{n-1}}$.
     BHAH_MALLOC_PINNED(all_photons_host.affine_param_p, sizeof(double) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory tracking the history step $\lambda_{{n-2}}$.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the history step $\lambda_{{n-2}}$.
     BHAH_MALLOC_PINNED(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory locking the observer window intersection.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the observer window intersection lock.
     BHAH_MALLOC_PINNED(all_photons_host.window_event_found, sizeof(bool) * num_rays);
-    // Host-to-Device transfer allocation: Pinned memory locking the source emission plane intersection.
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the source emission plane intersection lock.
     BHAH_MALLOC_PINNED(all_photons_host.source_event_found, sizeof(bool) * num_rays);
 
-    // Arrays of CUDA streams for asynchronous hardware orchestration.
+    // Array of CUDA streams for asynchronous hardware orchestration.
     cudaStream_t streams[2];
+    // Initializes the primary CUDA stream mapped to the first double-buffer context.
     cudaStreamCreate(&streams[0]);
+    // Initializes the secondary CUDA stream mapped to the second double-buffer context.
     cudaStreamCreate(&streams[1]);
 
     // Host-to-Device transfer: Maps the global spacetime constants to the device cache to ensure zero-latency read access.
@@ -121,31 +120,31 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     // --- DOUBLE-BUFFERED BRIDGE ARRAYS ---
     // Extraction buffer used by the TimeSlotManager to map sparse indices to contiguous execution blocks.
     long int *chunk_buffer[2];
-    // Bridge array for the state vector $f^\mu$.
+    // Bridge array staging the state vector $f^\mu$ for Host-to-Device transfers.
     double *f_bridge[2];
-    // Bridge array for the first derivative of the state vector.
+    // Bridge array staging the first derivative $\dot{{f}}^\mu$ for Host-to-Device transfers.
     double *f_p_bridge[2];
-    // Bridge array for the second derivative of the state vector.
+    // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for Host-to-Device transfers.
     double *f_p_p_bridge[2];
-    // Bridge array storing the affine parameter $\lambda$.
+    // Bridge array staging the affine parameter $\lambda$ for Host-to-Device transfers.
     double *affine_bridge[2];
-    // Bridge array storing the current integration step size $h$.
+    // Bridge array staging the current integration step size $h$ for Host-to-Device transfers.
     double *h_bridge[2];
-    // Bridge array storing the current trajectory termination status.
+    // Bridge array staging the current trajectory termination status for Host-to-Device transfers.
     termination_type_t *status_bridge[2];
-    // Bridge array counting the number of step-size rejections.
+    // Bridge array staging the number of step-size rejections for Host-to-Device transfers.
     int *retries_bridge[2];
-    // Bridge array tracking if the photon was previously on the positive side of the window.
+    // Bridge array staging the previous observer window boundary side flag for Host-to-Device transfers.
     bool *on_pos_window_prev_bridge[2];
-    // Bridge array tracking if the photon was previously on the positive side of the source plane.
+    // Bridge array staging the previous source emission boundary side flag for Host-to-Device transfers.
     bool *on_pos_source_prev_bridge[2];
-    // Bridge array storing the historical affine parameter $\lambda_{{n-1}}$ for chunked transfers.
+    // Bridge array staging the historical affine parameter $\lambda_{{n-1}}$ for chunked Host-to-Device transfers.
     double *affine_p_bridge[2];
-    // Bridge array storing the historical affine parameter $\lambda_{{n-2}}$ for chunked transfers.
+    // Bridge array staging the historical affine parameter $\lambda_{{n-2}}$ for chunked Host-to-Device transfers.
     double *affine_p_p_bridge[2];
-    // Bridge array tracking if the window event was previously found.
+    // Bridge array staging the observer window event lock for Host-to-Device transfers.
     bool *window_event_found_bridge[2];
-    // Bridge array tracking if the source event was previously found.
+    // Bridge array staging the source emission event lock for Host-to-Device transfers.
     bool *source_event_found_bridge[2];
 
     // --- DOUBLE-BUFFERED VRAM SCRATCHPADS ---
@@ -163,7 +162,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     double *d_metric_bundle[2];
     // VRAM scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
     double *d_connection_bundle[2];
-    // Derivative tensor storing $\dot{{f}}$ across all 6 intermediate RKF45 stages.
+    // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
     double *d_k_bundle[2];
     // VRAM array regulating active integration step sizing $h$.
     double *d_h[2];
@@ -191,49 +190,51 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     // Loop iterator for instantiating the double-buffered operational arrays.
     for (int s = 0; s < 2; ++s) {{
         // Allocate Bridge arrays in Host Pinned Memory to allow fast, overlapped chunked transfers to the GPU.
-        BHAH_MALLOC_PINNED(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_PINNED(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY);
+        BHAH_MALLOC_PINNED(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Pin chunk buffers.
+        BHAH_MALLOC_PINNED(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
+        BHAH_MALLOC_PINNED(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
+        BHAH_MALLOC_PINNED(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
+        BHAH_MALLOC_PINNED(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
+        BHAH_MALLOC_PINNED(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
+        BHAH_MALLOC_PINNED(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
+        BHAH_MALLOC_PINNED(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
+        BHAH_MALLOC_PINNED(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
+        BHAH_MALLOC_PINNED(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
+        BHAH_MALLOC_PINNED(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
+        BHAH_MALLOC_PINNED(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
+        BHAH_MALLOC_PINNED(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
+        BHAH_MALLOC_PINNED(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
 
         // Allocate 1D VRAM Scratchpad arrays ensuring strict adherence to the hardware bounds.
-        BHAH_MALLOC_DEVICE(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_h[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_affine[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_retries[s], sizeof(int) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY);
-        BHAH_MALLOC_DEVICE(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY);
+        BHAH_MALLOC_DEVICE(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
+        BHAH_MALLOC_DEVICE(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
+        BHAH_MALLOC_DEVICE(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
+        BHAH_MALLOC_DEVICE(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
+        BHAH_MALLOC_DEVICE(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
+        BHAH_MALLOC_DEVICE(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
+        BHAH_MALLOC_DEVICE(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
     }}
 
-    // Final intersection blueprint results buffer mapped directly to VRAM.
+    // Device-native struct pointer storing the final physical plane intersections.
     blueprint_data_t *d_results_buffer;
+    // Allocates the blueprint results buffer directly in VRAM to avoid mid-computation PCIe transfers.
     BHAH_MALLOC_DEVICE(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
 
-    // Lock-free temporal TimeSlotManager confined entirely to the Host CPU context.
+    // Host-bound struct managing temporal binning of photon trajectories $x^\\mu$.
     TimeSlotManager tsm;
+    // Initializes the temporal manager strictly on the CPU to coordinate the Split-Pipeline batches.
     slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
 
     // --- DIAGNOSTIC MEMORY ALLOCATION ---
@@ -250,171 +251,170 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     }}
 
 
+/* Algorithmic Step: Evaluate initial coordinate states and map global spacetime metrics to memory bounds. Hardware Justification: This pre-computation stage occurs prior to the temporal loop to maximize coalesced memory access during iterative integration. */
     // --- 2. INITIALIZATION PHASE ---
     
-    // 3D array storing the spatial Cartesian coordinates of the observer window center.
-    double window_center_out[3]; 
-    // 3D orthonormal basis vector pointing along the x-axis of the local window geometry.
-    double n_x_out[3]; 
-    // 3D orthonormal basis vector pointing along the y-axis of the local window geometry.
-    double n_y_out[3]; 
-    // 3D orthonormal basis vector pointing along the z-axis of the local window geometry.
-    double n_z_out[3];
+    double window_center_out[3]; // 3D array storing the spatial Cartesian coordinates $x^i$ of the observer window center.
+    double n_x_out[3]; // 3D orthonormal basis vector pointing along the $x$-axis of the local window geometry.
+    double n_y_out[3]; // 3D orthonormal basis vector pointing along the $y$-axis of the local window geometry.
+    double n_z_out[3]; // 3D orthonormal basis vector pointing along the $z$-axis of the local window geometry.
 
-    // Kernel Launch: Evaluate initial conditions on the Host to populate the master $f^\mu$ state vector.
     // Hardware Justification: Operates synchronously as the Host array must be fully populated before VRAM offloading.
     set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out, 0);
 
+    /* Algorithmic Step: Scans the master Host SoA immediately following the initialization kernel call. Hardware Justification: This architectural step verifies that the Host-side logic has correctly populated the starting coordinates $x^\\mu$ and zeroed the temporal momentum $p_t$ and affine parameter $\lambda$ components. */
     // --- DIAGNOSTIC PROBE: DETAILED INITIAL POSITION & PLACEHOLDER ALIGNMENT ---
-    // Algorithmic Step: Scans the master Host SoA immediately following the initialization kernel call.
-    // Hardware Justification: This architectural step verifies that the Host-side logic has correctly populated the starting coordinates $x^\mu$ and zeroed the $p_t$ and $\lambda$ components.
-    long int init_mismatch_count = 0; 
-    long int mismatch_t = 0, mismatch_x = 0, mismatch_y = 0, mismatch_z = 0, mismatch_pt = 0, mismatch_lam = 0;
+    
+    long int init_mismatch_count = 0; // Accumulator tracking the total number of physical state initializations that failed structural validation.
+    long int mismatch_t = 0; // Counter tracking validation failures for the temporal coordinate $t$.
+    long int mismatch_x = 0; // Counter tracking validation failures for the spatial coordinate $x$.
+    long int mismatch_y = 0; // Counter tracking validation failures for the spatial coordinate $y$.
+    long int mismatch_z = 0; // Counter tracking validation failures for the spatial coordinate $z$.
+    long int mismatch_pt = 0; // Counter tracking validation failures for the temporal momentum $p_t$.
+    long int mismatch_lam = 0; // Counter tracking validation failures for the affine parameter $\lambda$.
 
-    for (long int p = 0; p < num_rays; p++) {{
-        const double t_check = all_photons_host.f[0 * num_rays + p];
-        const double x_check = all_photons_host.f[1 * num_rays + p];
-        const double y_check = all_photons_host.f[2 * num_rays + p];
-        const double z_check = all_photons_host.f[3 * num_rays + p];
-        const double pt_check = all_photons_host.f[4 * num_rays + p];
-        const double lam_check = all_photons_host.f[8 * num_rays + p];
+    for (long int p = 0; p < num_rays; p++) {{ // Loop iterator index $p$ mapping to a unique photon trajectory $x^\\mu$ during diagnostic validation.
+        const double t_check = all_photons_host.f[0 * num_rays + p]; // Evaluates the current temporal coordinate $t$ from the Host SoA.
+        const double x_check = all_photons_host.f[1 * num_rays + p]; // Evaluates the current spatial coordinate $x$ from the Host SoA.
+        const double y_check = all_photons_host.f[2 * num_rays + p]; // Evaluates the current spatial coordinate $y$ from the Host SoA.
+        const double z_check = all_photons_host.f[3 * num_rays + p]; // Evaluates the current spatial coordinate $z$ from the Host SoA.
+        const double pt_check = all_photons_host.f[4 * num_rays + p]; // Evaluates the initial temporal momentum $p_t$ from the Host SoA.
+        const double lam_check = all_photons_host.f[8 * num_rays + p]; // Evaluates the initial affine parameter $\lambda$ from the Host SoA.
 
-        bool fail_t = fabs(t_check - commondata->t_start) > 1e-10;
-        bool fail_x = fabs(x_check - commondata->camera_pos_x) > 1e-10;
-        bool fail_y = fabs(y_check - commondata->camera_pos_y) > 1e-10;
-        bool fail_z = fabs(z_check - commondata->camera_pos_z) > 1e-10;
-        bool fail_pt = fabs(pt_check) > 1e-15;
-        bool fail_lam = fabs(lam_check) > 1e-15;
+        bool fail_t = fabs(t_check - commondata->t_start) > 1e-10; // Boolean flag indicating temporal coordinate $t$ validation failure.
+        bool fail_x = fabs(x_check - commondata->camera_pos_x) > 1e-10; // Boolean flag indicating spatial coordinate $x$ validation failure.
+        bool fail_y = fabs(y_check - commondata->camera_pos_y) > 1e-10; // Boolean flag indicating spatial coordinate $y$ validation failure.
+        bool fail_z = fabs(z_check - commondata->camera_pos_z) > 1e-10; // Boolean flag indicating spatial coordinate $z$ validation failure.
+        bool fail_pt = fabs(pt_check) > 1e-15; // Boolean flag indicating temporal momentum $p_t$ validation failure.
+        bool fail_lam = fabs(lam_check) > 1e-15; // Boolean flag indicating affine parameter $\lambda$ validation failure.
 
-        if (fail_t) mismatch_t++;
-        if (fail_x) mismatch_x++;
-        if (fail_y) mismatch_y++;
-        if (fail_z) mismatch_z++;
-        if (fail_pt) mismatch_pt++;
-        if (fail_lam) mismatch_lam++;
+        if (fail_t) mismatch_t++; // Increments the validation failure counter for temporal coordinate $t$.
+        if (fail_x) mismatch_x++; // Increments the validation failure counter for spatial coordinate $x$.
+        if (fail_y) mismatch_y++; // Increments the validation failure counter for spatial coordinate $y$.
+        if (fail_z) mismatch_z++; // Increments the validation failure counter for spatial coordinate $z$.
+        if (fail_pt) mismatch_pt++; // Increments the validation failure counter for temporal momentum $p_t$.
+        if (fail_lam) mismatch_lam++; // Increments the validation failure counter for affine parameter $\lambda$.
 
         if (fail_t || fail_x || fail_y || fail_z || fail_pt || fail_lam) {{
-            init_mismatch_count++;
+            init_mismatch_count++; // Increments the total accumulation of trajectory structural validation failures.
         }}
     }}
 
     if (init_mismatch_count > 0) {{
-        const double mismatch_percent = ((double)init_mismatch_count / (double)num_rays) * 100.0;
+        const double mismatch_percent = ((double)init_mismatch_count / (double)num_rays) * 100.0; // Calculates the failure rate percentage for the initial state alignment.
+        // Hardware Justification: This is a soft warning to surface initialization inconsistencies without halting execution.
         printf("[DIAGNOSTIC] Initialization Alignment Check: %ld out of %ld rays (%.2f%%) fail coordinate/placeholder validation.\n", init_mismatch_count, num_rays, mismatch_percent);
     }}
 
-    // Total integer calculation defining total iterative blocks required to process all photon indices.
-    long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY;
+    long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
 
-    // Loop iterator for evaluating the initialization constraint across sequential blocks.
-    for (long int init_batch = 0; init_batch < num_batches; ++init_batch) {{
-        long int start_idx = init_batch * BUNDLE_CAPACITY;
-        long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx);
+    for (long int init_batch = 0; init_batch < num_batches; ++init_batch) {{ // Loop iterator $init\_batch$ for evaluating the initialization constraint across sequential blocks.
+        long int start_idx = init_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current initialization batch.
+        long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed total trajectories.
 
-        // Loop index iterating over the specific initialization batch elements to pack the bridge.
-        for (int init_i = 0; init_i < chunk_size; ++init_i) {{
-            long int master_idx = start_idx + init_i;
-            for (int init_k = 0; init_k < 9; ++init_k) {{
-                f_bridge[0][init_k * BUNDLE_CAPACITY + init_i] = all_photons_host.f[init_k * num_rays + master_idx];
+        for (int init_i = 0; init_i < chunk_size; ++init_i) {{ // Loop index $init\_i$ iterating over the specific initialization batch elements to pack the bridge.
+            long int master_idx = start_idx + init_i; // Computes the absolute master index $m_{{idx}}$ tracking the photon within the global array.
+            for (int init_k = 0; init_k < 9; ++init_k) {{ // Loop index $init\_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
+                f_bridge[0][init_k * BUNDLE_CAPACITY + init_i] = all_photons_host.f[init_k * num_rays + master_idx]; // Assigns the active tensor state component to the Host-to-Device bridge.
             }}
         }}
 
-        // H2D: Asynchronously pushes strictly bounded initial states to VRAM on stream 0.
-        for (int c_k = 0; c_k < 9; ++c_k) {{
+        for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c\_k$ orchestrating Host-to-Device transfer of the 9 state vector $f^\mu$ components.
+            // Hardware Justification: Asynchronously pushes strictly bounded initial states to VRAM on stream 0 to minimize PCIe latency.
             cudaMemcpyAsync(d_f_bundle[0] + c_k * BUNDLE_CAPACITY, f_bridge[0] + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyHostToDevice, streams[0]);
         }}
 
-        // Kernel Launch: Calculate $g_{{\mu\nu}}$ required for the Hamiltonian constraint strictly on stream 0.
+        // Hardware Justification: Calculates symmetric metric tensor $g_{{\mu\nu}}$ strictly on stream 0 for the Hamiltonian constraint.
         interpolation_kernel_{spacetime_name}(d_f_bundle[0], d_metric_bundle[0], NULL, chunk_size, 0);
 
+        /* Algorithmic Step: Extracts metric payload to CPU space to confirm numerical stability prior to momentum solving. Hardware Justification: Ensures constraint solver convergence by intercepting unphysical spacetime regions immediately after VRAM transfer. */
         // --- DIAGNOSTIC PROBE: VRAM METRIC INTEGRITY CHECK ---
-        double *metric_diag_bridge; 
-        BHAH_MALLOC_PINNED(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY); 
         
-        // Device-to-Host transfer: Retrieves the symmetric metric tensor $g_{{\mu\nu}}$ for inspection. Only retrieves metric components for the active chunk.
-        for (int m_k = 0; m_k < 10; ++m_k) {{
+        double *metric_diag_bridge; // Pointer storing temporary pinned metric data to validate the device-side interpolation.
+        BHAH_MALLOC_PINNED(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY); // Host allocation: Pinned memory utilized to maximize PCIe DMA throughput for the metric $g_{{\mu\nu}}$ diagnostic bridge.
+        
+        for (int m_k = 0; m_k < 10; ++m_k) {{ 
+            // Loop index $m\_k$ orchestrating Device-to-Host transfer of the 10 metric tensor $g_{{\mu\nu}}$ components.
+            // Hardware Justification: Retrieves the symmetric metric tensor $g_{{\mu\nu}}$ to Host memory for inspection restricted to the active chunk.
             cudaMemcpyAsync(metric_diag_bridge + m_k * BUNDLE_CAPACITY, d_metric_bundle[0] + m_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost, streams[0]);
         }}
-        // Hard synchronization barrier to inspect the payload prior to constraint solving.
+        // Hardware Justification: Hard synchronization barrier on stream 0 to inspect the payload prior to constraint solving.
         cudaStreamSynchronize(streams[0]);
 
-        long int metric_nan_count = 0;
-        for (int m_diag_i = 0; m_diag_i < chunk_size; ++m_diag_i) {{
-            bool m_has_nan = false;
-            for (int m_diag_k = 0; m_diag_k < 10; ++m_diag_k) {{
+        long int metric_nan_count = 0; // Accumulator tracking the total number of metric tensor evaluations containing non-finite values.
+        for (int m_diag_i = 0; m_diag_i < chunk_size; ++m_diag_i) {{ // Loop iterator $m\_diag\_i$ scanning each trajectory within the current initialization chunk.
+            bool m_has_nan = false; // Boolean flag indicating if the specific metric tensor $g_{{\mu\nu}}$ contains a NaN or Inf value.
+            for (int m_diag_k = 0; m_diag_k < 10; ++m_diag_k) {{ // Loop index $m\_diag\_k$ iterating over the 10 independent components of the symmetric metric tensor $g_{{\mu\nu}}$.
                 if (isnan(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i]) || 
                     isinf(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i])) {{
-                    m_has_nan = true;
-                    break;
+                    m_has_nan = true; // Flags the trajectory metric state as invalid due to a non-finite value.
+                    break; // Terminates the tensor component loop early to conserve CPU cycles upon detecting a failure.
                 }}
             }}
-            if (m_has_nan) metric_nan_count++;
+            if (m_has_nan) metric_nan_count++; // Increments the total accumulation of corrupted metric tensor evaluations.
         }}
 
         if (metric_nan_count > 0) {{
+            // Hardware Justification: This is a soft warning to highlight numerical metric singularities without aborting the physics engine.
             printf("[DIAGNOSTIC] Init Batch %ld: %ld rays have invalid Metric G_mu_nu before p_t solve.\n", init_batch, metric_nan_count);
         }}
-        BHAH_FREE_PINNED(metric_diag_bridge); 
+        BHAH_FREE_PINNED(metric_diag_bridge); // Host Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         
-        // Kernel Launch: Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ on stream 0.
+        // Hardware Justification: Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ on stream 0.
         p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size, 0);
 
-        // Device-to-Host transfer: Retrieves the mathematically constrained state vector back to CPU RAM.
-        // NEW D2H: Retrieves strictly bounded constrained state vectors back to CPU RAM.
-        for (int c_k = 0; c_k < 9; ++c_k) {{
+        for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c\_k$ orchestrating Device-to-Host transfer of the 9 constrained state vector $f^\mu$ components.
+            // Hardware Justification: Retrieves strictly bounded constrained state vectors back to CPU RAM on stream 0.
             cudaMemcpyAsync(f_bridge[0] + c_k * BUNDLE_CAPACITY, d_f_bundle[0] + c_k * BUNDLE_CAPACITY, sizeof(double) * chunk_size, cudaMemcpyDeviceToHost, streams[0]);
         }}
+        // Hardware Justification: Hard synchronization barrier on stream 0 to guarantee PCIe transfer completion before Host unpacking.
         cudaStreamSynchronize(streams[0]);
 
-        // Unpack the validated constraint states back to the master SoA array.
-        long int nan_count = 0; 
-        for (int gather_i = 0; gather_i < chunk_size; ++gather_i) {{
-            long int master_idx = start_idx + gather_i;
-            bool has_nan = false;
-            for (int gather_k = 0; gather_k < 9; ++gather_k) {{
-                double val = f_bridge[0][gather_k * BUNDLE_CAPACITY + gather_i];
-                all_photons_host.f[gather_k * num_rays + master_idx] = val;
-                if (isnan(val)) has_nan = true;
+        long int nan_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing NaN values post-constraint solving.
+        for (int gather_i = 0; gather_i < chunk_size; ++gather_i) {{ // Loop iterator $gather\_i$ scanning each trajectory within the retrieved initialization chunk.
+            long int master_idx = start_idx + gather_i; // Computes the absolute master index $m_{{idx}}$ mapping the localized chunk to the global master SoA.
+            bool has_nan = false; // Boolean flag indicating if the specific state vector $f^\mu$ contains a NaN value.
+            for (int gather_k = 0; gather_k < 9; ++gather_k) {{ // Loop index $gather\_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
+                double val = f_bridge[0][gather_k * BUNDLE_CAPACITY + gather_i]; // Evaluates the updated numerical value of the specific tensor component.
+                all_photons_host.f[gather_k * num_rays + master_idx] = val; // Maps the valid constrained tensor scalar back to the global Host SoA.
+                if (isnan(val)) has_nan = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
             }}
-            if (has_nan) nan_count++;
+            if (has_nan) nan_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
         }}
 
         if (nan_count > 0) {{
+            // Hardware Justification: This is a soft warning alerting to unresolved constraints $p_\mu p^\mu = 0$ for isolated trajectories.
             printf("[DIAGNOSTIC] Init Batch %ld: %ld rays contain NaN in state f^mu after p_t solve.\n", init_batch, nan_count);
         }}
     }}
 
+    /* Algorithmic Step: Evaluate initial conserved quantities immediately after generating valid physical null states. Hardware Justification: This baselines the data via chunked VRAM kernels before the Split-Pipeline begins mutating the state vectors. */
     // --- BASELINE CONSERVED QUANTITIES ---
-    // Algorithmic Step: Evaluate initial conserved quantities immediately after generating valid physical null states.
-    // Hardware Justification: This baselines the data via chunked VRAM kernels before the Split-Pipeline begins mutating the state vectors.
+    
     if (commondata->perform_conservation_check) {{
+        // Hardware Justification: Executes global conserved quantities natively via chunked device parameters before pipeline processing.
         calculate_conserved_quantities_universal_{spacetime_name}_photon(&all_photons_host, num_rays, initial_cq_host);
     }}
 
-
-    // Loop iterator traversing the entire global ray count to synchronize starting properties.
-    long int sync_i;
+    long int sync_i; // Loop iterator index $sync\_i$ spanning the entire global ray count to synchronize starting properties across history states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
-        // Loop iterator updating tensor states.
-        int sync_k;
+        int sync_k; // Loop index $sync\_k$ iterating over the 9 tensor components to populate the historical derivatives $\dot{{f}}^\mu$ and $\ddot{{f}}^\mu$.
         for (sync_k = 0; sync_k < 9; ++sync_k) {{
-            all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i];
-            all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i];
+            all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the first history derivative matrix.
+            all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
         }}
-        all_photons_host.status[sync_i] = ACTIVE;
-        all_photons_host.affine_param[sync_i] = 0.0;
-        all_photons_host.rejection_retries[sync_i] = 0;
+        all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
+        all_photons_host.affine_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the affine parameter $\lambda$.
+        all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        // Initializes the affine parameter histories and sets the intersection locks to false.
-        all_photons_host.affine_param_p[sync_i] = 0.0;
-        all_photons_host.affine_param_p_p[sync_i] = 0.0;
-        all_photons_host.window_event_found[sync_i] = false;
-        all_photons_host.source_event_found[sync_i] = false;
+        all_photons_host.affine_param_p[sync_i] = 0.0; // Initializes the first historical affine parameter $\lambda_{{n-1}}$.
+        all_photons_host.affine_param_p_p[sync_i] = 0.0; // Initializes the second historical affine parameter $\lambda_{{n-2}}$.
+        all_photons_host.window_event_found[sync_i] = false; // Sets the observer window intersection logical lock to false.
+        all_photons_host.source_event_found[sync_i] = false; // Sets the source emission intersection logical lock to false.
 
-        // Integer representing the assigned temporal slot for the current photon.
-        int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]);
+        int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]); // Integer index $s\_idx$ mapping the current photon's temporal coordinate $t$ to a discrete execution bin in the TimeSlotManager.
         if (s_idx != -1) {{
-            slot_add_photon(&tsm, s_idx, sync_i);
+            slot_add_photon(&tsm, s_idx, sync_i); // Registers the active photon index to its corresponding temporal bin mapped by the orchestrator.
         }}
     }}
 
@@ -425,351 +425,397 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     long int total_active_photons = num_rays; 
 
     // Outer loop iterator for the physical time bins.
-    for (int slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{ 
+    for (int slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{  
         // Evaluates the early exit condition to terminate the temporal engine if all geometric trajectories have concluded.
-        if (total_active_photons <= 0) {{
-            break;
+        if (total_active_photons <= 0) {{ 
+            break; // Terminates the temporal engine early to conserve hardware cycles.
         }}
 
-        // Variables tracking the active stream state machine to overlap Host-to-Device latency.
-        int current = 0;
-        int next = 1;
-        long int active_chunks[2] = {{0, 0}};
+        int current = 0; // Integer index tracking the primary active hardware stream for execution overlapping.
+        int next = 1; // Integer index tracking the secondary hardware stream preparing the upcoming payload.
+        long int active_chunks[2] = {{ 0, 0}}; // 1D array storing the total number of trajectories queued for each operational stream.
 
+        /* Algorithmic Step: Populate the first bridge and launch asynchronous integration on the primary stream. Hardware Justification: Initializes the pipeline to allow subsequent Host-side packing to overlap with GPU compute. */
         // --- PHASE A: PRIME THE PUMP (Stream 0) ---
-        // Algorithmic Step: Populate the first bridge and launch asynchronous integration on the primary stream.
-        // Hardware Justification: Initializes the pipeline to allow subsequent Host-side packing to overlap with GPU compute.
-        active_chunks[current] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); 
         
-        if (active_chunks[current] > 0) {{
-            slot_remove_chunk(&tsm, slot_idx, chunk_buffer[current], active_chunks[current]); 
+        active_chunks[current] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the PCIe transfer to avoid VRAM overflow.
+        
+        if (active_chunks[current] > 0) {{ 
+            slot_remove_chunk(&tsm, slot_idx, chunk_buffer[current], active_chunks[current]); // Extracts the execution chunk mapping from the Host-side temporal bin.
 
-            // 1. Pack Host Data into Bridge Arrays [current]
-            for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{
-                long int m_idx = chunk_buffer[current][bridge_i];
-                for (int c_k = 0; c_k < 9; ++c_k) {{
-                    f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; 
-                    f_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx];
-                    f_p_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx];
+            for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
+                long int m_idx = chunk_buffer[current][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ iterating over the 9 tensor components of the state vectors.
+                    f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
+                    f_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
+                    f_p_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
                 }}
-                h_bridge[current][bridge_i] = all_photons_host.h[m_idx]; 
-                status_bridge[current][bridge_i] = all_photons_host.status[m_idx];
-                retries_bridge[current][bridge_i] = all_photons_host.rejection_retries[m_idx]; 
-                affine_bridge[current][bridge_i] = all_photons_host.affine_param[m_idx]; 
-                on_pos_window_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; 
-                on_pos_source_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; 
-                affine_p_bridge[current][bridge_i] = all_photons_host.affine_param_p[m_idx]; 
-                affine_p_p_bridge[current][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; 
-                window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; 
-                source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; 
+                h_bridge[current][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
+                status_bridge[current][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
+                retries_bridge[current][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
+                affine_bridge[current][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
+                on_pos_window_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
+                on_pos_source_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
+                affine_p_bridge[current][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
+                affine_p_p_bridge[current][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
+                window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
+                source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
             }}
 
-            // 2. Launch ASYNC Host-to-Device Transfers on streams[current]
-            for (int c_k = 0; c_k < 9; ++c_k) {{
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components.
+                // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [current] to minimize latency.
                 cudaMemcpyAsync(d_f_bundle[current] + c_k * BUNDLE_CAPACITY, f_bridge[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+                // Host-to-Device transfer: Asynchronously pushes first derivatives $\dot{{ f}}^\mu$ to VRAM strictly on stream [current] to minimize latency.
                 cudaMemcpyAsync(d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY, f_p_bridge[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]); 
+                // Host-to-Device transfer: Asynchronously pushes second derivatives $\ddot{{ f}}^\mu$ to VRAM strictly on stream [current] to minimize latency.
                 cudaMemcpyAsync(d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY, f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
             }}
+            // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_h[current], h_bridge[current], sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes status enums to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_status[current], status_bridge[current], sizeof(termination_type_t) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]); 
+            // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_retries[current], retries_bridge[current], sizeof(int) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]); 
+            // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_affine[current], affine_bridge[current], sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_on_pos_window_prev[current], on_pos_window_prev_bridge[current], sizeof(bool) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]); 
+            // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_on_pos_source_prev[current], on_pos_source_prev_bridge[current], sizeof(bool) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]); 
+            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_affine_prev[current], affine_p_bridge[current], sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_affine_pre_prev[current], affine_p_p_bridge[current], sizeof(double) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_window_event_found[current], window_event_found_bridge[current], sizeof(bool) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_source_event_found[current], source_event_found_bridge[current], sizeof(bool) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
+            // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [current] to minimize latency.
             cudaMemcpyAsync(d_chunk_buffer[current], chunk_buffer[current], sizeof(long int) * active_chunks[current], cudaMemcpyHostToDevice, streams[current]);
 
-            // 3. Device-to-Device Baseline Synchronization 
-            for (int c_k = 0; c_k < 9; ++c_k) {{
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Device baseline setup of the 9 state vector components.
+                // Device-to-Device transfer: Duplicates the initial physical state vector $f^\mu$ to anchor the final RKF45 evaluation.
                 cudaMemcpyAsync(d_f_start_bundle[current] + c_k * BUNDLE_CAPACITY, d_f_bundle[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyDeviceToDevice, streams[current]);
+                // Device-to-Device transfer: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
                 cudaMemcpyAsync(d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY, d_f_bundle[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyDeviceToDevice, streams[current]);
             }}
 
-            // 4. Launch the Compute Pipeline on streams[current]
-            for (int stage = 1; stage <= 6; ++stage) {{
-                interpolation_kernel_{spacetime_name}(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current], current); 
+            for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
+                // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ asynchronously on the active stream.
+                interpolation_kernel_{ spacetime_name}(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current], current); 
+                // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the active stream.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current], current); 
+                // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the active stream.
                 rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current], current); 
             }}
             
-            // Finalize step-size $h$ and detect geometric events
+            // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
             rkf45_finalize_and_control(d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current], current); 
-            event_detection_manager_kernel(d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], d_results_buffer, d_status[current],
-                d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current], current);
+            // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the active stream.
+            event_detection_manager_kernel(d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current], current);
 
-            // 5. Launch ASYNC Device-to-Host Transfers on streams[current]
-            for (int c_k = 0; c_k < 9; ++c_k) {{
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 state vector components.
+                // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the active stream.
                 cudaMemcpyAsync(f_bridge[current] + c_k * BUNDLE_CAPACITY, d_f_bundle[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+                // Device-to-Host transfer: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM asynchronously on the active stream.
                 cudaMemcpyAsync(f_p_bridge[current] + c_k * BUNDLE_CAPACITY, d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+                // Device-to-Host transfer: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM asynchronously on the active stream.
                 cudaMemcpyAsync(f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY, d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
             }}
+            // Device-to-Host transfer: Retrieves active step sizes $h$ back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(h_bridge[current], d_h[current], sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves updated status enums back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(status_bridge[current], d_status[current], sizeof(termination_type_t) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves active rejection counts back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(retries_bridge[current], d_retries[current], sizeof(int) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves total affine progression $\lambda$ back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(affine_bridge[current], d_affine[current], sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves updated window boundary flags back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(on_pos_window_prev_bridge[current], d_on_pos_window_prev[current], sizeof(bool) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves updated source boundary flags back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(on_pos_source_prev_bridge[current], d_on_pos_source_prev[current], sizeof(bool) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(affine_p_bridge[current], d_affine_prev[current], sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(affine_p_p_bridge[current], d_affine_pre_prev[current], sizeof(double) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves active window locks back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(window_event_found_bridge[current], d_window_event_found[current], sizeof(bool) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
+            // Device-to-Host transfer: Retrieves active source locks back to CPU RAM asynchronously on the active stream.
             cudaMemcpyAsync(source_event_found_bridge[current], d_source_event_found[current], sizeof(bool) * active_chunks[current], cudaMemcpyDeviceToHost, streams[current]);
         }}
 
+        /* Algorithmic Step: Continuously alternate between streams, packing the next payload while syncing the current. Hardware Justification: Completely hides PCIe DMA transfer latency behind the active RKF45 integration compute time. */
         // --- PHASE B: THE OVERLAP LOOP ---
-        // Algorithmic Step: Continuously alternate between streams, packing the next payload while syncing the current.
-        // Hardware Justification: Completely hides PCIe DMA transfer latency behind the active RKF45 integration compute time.
-        while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{ 
+        
+        while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{  
             
-            // QUEUE NEXT: Prepare the upcoming payload on the CPU.
-            active_chunks[next] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); 
-            if (active_chunks[next] > 0) {{
-                slot_remove_chunk(&tsm, slot_idx, chunk_buffer[next], active_chunks[next]); 
+            active_chunks[next] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming PCIe transfer execution block.
+            if (active_chunks[next] > 0) {{ 
+                slot_remove_chunk(&tsm, slot_idx, chunk_buffer[next], active_chunks[next]); // Extracts the next execution chunk mapping from the Host-side temporal bin.
                 
-                // Pack Host Data into Bridge Arrays using 'next' index
-                for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{
-                    long int m_idx = chunk_buffer[next][bridge_i];
-                    for (int c_k = 0; c_k < 9; ++c_k) {{
-                        f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx];
-                        f_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx];
-                        f_p_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx];
+                for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
+                    long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
+                    for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ iterating over the 9 tensor components of the state vectors.
+                        f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
+                        f_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
+                        f_p_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
                     }}
-                    h_bridge[next][bridge_i] = all_photons_host.h[m_idx];
-                    status_bridge[next][bridge_i] = all_photons_host.status[m_idx];
-                    retries_bridge[next][bridge_i] = all_photons_host.rejection_retries[m_idx];
-                    affine_bridge[next][bridge_i] = all_photons_host.affine_param[m_idx];
-                    on_pos_window_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx];
-                    on_pos_source_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx];
-                    affine_p_bridge[next][bridge_i] = all_photons_host.affine_param_p[m_idx];
-                    affine_p_p_bridge[next][bridge_i] = all_photons_host.affine_param_p_p[m_idx];
-                    window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx];
-                    source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx];
+                    h_bridge[next][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
+                    status_bridge[next][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
+                    retries_bridge[next][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
+                    affine_bridge[next][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
+                    on_pos_window_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
+                    on_pos_source_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
+                    affine_p_bridge[next][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
+                    affine_p_p_bridge[next][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
+                    window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
+                    source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
                 }}
 
-                // Launch ASYNC H2D -> Kernels -> D2H exactly as Phase A, strictly using streams[next]
-                for (int c_k = 0; c_k < 9; ++c_k) {{
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components for the upcoming payload.
+                    // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [next] to overlap execution.
                     cudaMemcpyAsync(d_f_bundle[next] + c_k * BUNDLE_CAPACITY, f_bridge[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                    // Host-to-Device transfer: Asynchronously pushes first derivatives $\dot{{ f}}^\mu$ to VRAM strictly on stream [next] to overlap execution.
                     cudaMemcpyAsync(d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY, f_p_bridge[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                    // Host-to-Device transfer: Asynchronously pushes second derivatives $\ddot{{ f}}^\mu$ to VRAM strictly on stream [next] to overlap execution.
                     cudaMemcpyAsync(d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY, f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
                 }}
+                // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_h[next], h_bridge[next], sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes status enums to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_status[next], status_bridge[next], sizeof(termination_type_t) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_retries[next], retries_bridge[next], sizeof(int) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_affine[next], affine_bridge[next], sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_on_pos_window_prev[next], on_pos_window_prev_bridge[next], sizeof(bool) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_on_pos_source_prev[next], on_pos_source_prev_bridge[next], sizeof(bool) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_affine_prev[next], affine_p_bridge[next], sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_affine_pre_prev[next], affine_p_p_bridge[next], sizeof(double) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_window_event_found[next], window_event_found_bridge[next], sizeof(bool) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_source_event_found[next], source_event_found_bridge[next], sizeof(bool) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
+                // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [next] to overlap execution.
                 cudaMemcpyAsync(d_chunk_buffer[next], chunk_buffer[next], sizeof(long int) * active_chunks[next], cudaMemcpyHostToDevice, streams[next]);
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Device baseline setup of the 9 state vector components for the upcoming payload.
+                    // Device-to-Device transfer: Duplicates the initial physical state vector $f^\mu$ to anchor the upcoming RKF45 evaluation.
                     cudaMemcpyAsync(d_f_start_bundle[next] + c_k * BUNDLE_CAPACITY, d_f_bundle[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyDeviceToDevice, streams[next]);
+                    // Device-to-Device transfer: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
                     cudaMemcpyAsync(d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY, d_f_bundle[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyDeviceToDevice, streams[next]);
                 }}
 
-                for (int stage = 1; stage <= 6; ++stage) {{ 
+                for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
+                    // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ asynchronously on the alternate stream.
                     interpolation_kernel_{spacetime_name}(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], active_chunks[next], next);
+                    // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the alternate stream.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], d_k_bundle[next], stage, active_chunks[next], next);
+                    // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the alternate stream.
                     rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next], next);
                 }}
 
+                // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the upcoming integration baseline.
                 rkf45_finalize_and_control(d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next], next);
+                // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the alternate stream.
                 event_detection_manager_kernel(d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_affine[next], d_affine_prev[next], d_affine_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next], next);
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 upcoming state vector components.
+                    // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     cudaMemcpyAsync(f_bridge[next] + c_k * BUNDLE_CAPACITY, d_f_bundle[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                    // Device-to-Host transfer: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     cudaMemcpyAsync(f_p_bridge[next] + c_k * BUNDLE_CAPACITY, d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                    // Device-to-Host transfer: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     cudaMemcpyAsync(f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY, d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY, sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
                 }}
+                // Device-to-Host transfer: Retrieves upcoming active step sizes $h$ back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(h_bridge[next], d_h[next], sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming updated status enums back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(status_bridge[next], d_status[next], sizeof(termination_type_t) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming active rejection counts back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(retries_bridge[next], d_retries[next], sizeof(int) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming total affine progression $\lambda$ back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(affine_bridge[next], d_affine[next], sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming updated window boundary flags back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(on_pos_window_prev_bridge[next], d_on_pos_window_prev[next], sizeof(bool) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming updated source boundary flags back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(on_pos_source_prev_bridge[next], d_on_pos_source_prev[next], sizeof(bool) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(affine_p_bridge[next], d_affine_prev[next], sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(affine_p_p_bridge[next], d_affine_pre_prev[next], sizeof(double) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming active window locks back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(window_event_found_bridge[next], d_window_event_found[next], sizeof(bool) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
+                // Device-to-Host transfer: Retrieves upcoming active source locks back to CPU RAM asynchronously on the alternate stream.
                 cudaMemcpyAsync(source_event_found_bridge[next], d_source_event_found[next], sizeof(bool) * active_chunks[next], cudaMemcpyDeviceToHost, streams[next]);
             }}
 
-            // SYNC CURRENT: CPU waits for the active compute stream to finish, then processes results.
-            if (active_chunks[current] > 0) {{
-                // Hard synchronization on the specific stream to guarantee memory stability before unpacking.
+            if (active_chunks[current] > 0) {{ 
+                // Device synchronization barrier strictly enforcing completion of the current stream before payload unpacking.
                 cudaStreamSynchronize(streams[current]);
 
-                // Unpack results from Bridge Arrays[current] back into all_photons_host
-                for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{
-                    long int m_idx = chunk_buffer[current][fin_i];
-                    for (int fin_k = 0; fin_k < 9; ++fin_k) {{
-                        all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i];
-                        all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i];
-                        all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i];
+                for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{  // Loop iterator $fin_i$ unpacking the finalized physical data back to the global Host matrix.
+                    long int m_idx = chunk_buffer[current][fin_i]; // Absolute master index $m_{{ idx}}$ retrieving the specific photon index from the execution chunk.
+                    for (int fin_k = 0; fin_k < 9; ++fin_k) {{  // Loop index $fin_k$ retrieving the 9 tensor components back into the global Host matrix.
+                        all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
+                        all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized first derivative $\dot{{ f}}^\mu$ into the global Host matrix.
+                        all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized second derivative $\ddot{{ f}}^\mu$ into the global Host matrix.
                     }}
-                    all_photons_host.h[m_idx] = h_bridge[current][fin_i];
-                    all_photons_host.status[m_idx] = status_bridge[current][fin_i];
-                    all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i];
-                    all_photons_host.affine_param[m_idx] = affine_bridge[current][fin_i];
-                    all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[current][fin_i];
-                    all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[current][fin_i];
-                    all_photons_host.affine_param_p[m_idx] = affine_p_bridge[current][fin_i];
-                    all_photons_host.affine_param_p_p[m_idx] = affine_p_p_bridge[current][fin_i];
-                    all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i];
-                    all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i];
+                    all_photons_host.h[m_idx] = h_bridge[current][fin_i]; // Unpacks the synchronized step size $h$ into the global Host matrix.
+                    all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
+                    all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
+                    all_photons_host.affine_param[m_idx] = affine_bridge[current][fin_i]; // Unpacks the synchronized affine parameter $\lambda$ into the global Host matrix.
+                    all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[current][fin_i]; // Unpacks the synchronized window boundary flag into the global Host matrix.
+                    all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[current][fin_i]; // Unpacks the synchronized source boundary flag into the global Host matrix.
+                    all_photons_host.affine_param_p[m_idx] = affine_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-1}}$ into the global Host matrix.
+                    all_photons_host.affine_param_p_p[m_idx] = affine_p_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-2}}$ into the global Host matrix.
+                    all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i]; // Unpacks the synchronized window lock into the global Host matrix.
+                    all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i]; // Unpacks the synchronized source lock into the global Host matrix.
 
-                    // Route trajectory status back to the TimeSlotManager.
-                    if (status_bridge[current][fin_i] == ACTIVE) {{
-                        int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); 
-                        if (next_s_idx != -1) {{
-                            slot_add_photon(&tsm, next_s_idx, m_idx); 
-                        }} else {{
-                            all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; 
-                            total_active_photons--;
+                    if (status_bridge[current][fin_i] == ACTIVE) {{  // Evaluates the continuation logic if the trajectory remains within safe physical bounds.
+                        int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); // Evaluates the updated temporal coordinate $t$ to determine the next operational bin.
+                        if (next_s_idx != -1) {{  // Confirms the physical state has not exceeded the maximum simulation time bounds.
+                            slot_add_photon(&tsm, next_s_idx, m_idx);  // Re-queues the updated physical state vector back into the host orchestrator.
+                        }} else {{ 
+                            all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; // Flags the physical state as permanently failed due to excessive propagation time.
+                            total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                         }}
-                    }} else if (status_bridge[current][fin_i] == REJECTED) {{ 
-                        // Re-add to current bin to attempt integration with an adapted step-size scalar $h$.
-                        slot_add_photon(&tsm, slot_idx, m_idx); 
-                    }} else {{
-                        // Decrements the global counter as the photon has reached a terminal state.
-                        total_active_photons--;
+                    }} else if (status_bridge[current][fin_i] == REJECTED) {{   // Evaluates the retry logic if the numerical step exceeded the requested tolerances.
+                        slot_add_photon(&tsm, slot_idx, m_idx); // Re-adds to the current bin to attempt integration with an adapted step-size scalar $h$.
+                    }} else {{ 
+                        total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                     }}
                 }}
-                // Mark the current chunk as fully processed.
-                active_chunks[current] = 0; 
+                active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
             }}
 
-            // SWAP POINTERS: Toggle the conveyor belts for the next cycle.
-            int temp = current;
-            current = next;
-            next = temp;
+            int temp = current; // Temporary integer scalar storing the primary stream index for logical pointer swapping.
+            current = next; // Shifts the primary execution tracker to the alternate stream index.
+            next = temp; // Assigns the cleared stream index back to the upcoming payload queue.
         }}
 
+        /* Algorithmic Step: Enforce a rigid hardware sync before advancing the physical time clock. Hardware Justification: Prevents race conditions and ensures all coordinate states $f^\mu$ strictly adhere to the current temporal bin limits. */
         // --- PHASE C: THE TIME BARRIER ---
-        // Algorithmic Step: Enforce a rigid hardware sync before advancing the physical time clock.
-        // Hardware Justification: Prevents race conditions and ensures all $f^\mu$ states strictly adhere to the current temporal bin limits.
-        cudaDeviceSynchronize(); 
-    }}
-
-    // --- 4. CLEANUP & FINALIZATION ---
-    
-    // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
-    cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost); 
-
-    // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$ 
-    // appending 0 as the final argument since we are relying strictly on the primary hardware stream.
-    calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);
-
-    // Loop iterator purging the double-buffered arrays across both hardware streams.
-    for (int s = 0; s < 2; ++s) {{
-        // Host Memory Free: Purges bridge components supporting scatter logic mapped to PCIe DMA transfers.
-        BHAH_FREE_PINNED(chunk_buffer[s]);
-        BHAH_FREE_PINNED(f_bridge[s]);
-        BHAH_FREE_PINNED(f_p_bridge[s]);
-        BHAH_FREE_PINNED(f_p_p_bridge[s]);
-        BHAH_FREE_PINNED(affine_bridge[s]);
-        BHAH_FREE_PINNED(h_bridge[s]);
-        BHAH_FREE_PINNED(status_bridge[s]);
-        BHAH_FREE_PINNED(retries_bridge[s]);
-        BHAH_FREE_PINNED(on_pos_window_prev_bridge[s]);
-        BHAH_FREE_PINNED(on_pos_source_prev_bridge[s]);
-        BHAH_FREE_PINNED(affine_p_bridge[s]);
-        BHAH_FREE_PINNED(affine_p_p_bridge[s]);
-        BHAH_FREE_PINNED(window_event_found_bridge[s]);
-        BHAH_FREE_PINNED(source_event_found_bridge[s]);
-
-        // Device Memory Free: Purges remaining VRAM operational pipeline scratchpads.
-        BHAH_FREE_DEVICE(d_f_bundle[s]);
-        BHAH_FREE_DEVICE(d_f_start_bundle[s]);
-        BHAH_FREE_DEVICE(d_f_temp_bundle[s]);
-        BHAH_FREE_DEVICE(d_f_prev_bundle[s]);
-        BHAH_FREE_DEVICE(d_f_pre_prev_bundle[s]);
-        BHAH_FREE_DEVICE(d_metric_bundle[s]);
-        BHAH_FREE_DEVICE(d_connection_bundle[s]);
-        BHAH_FREE_DEVICE(d_k_bundle[s]);
-        BHAH_FREE_DEVICE(d_h[s]);
-        BHAH_FREE_DEVICE(d_affine[s]);
-        BHAH_FREE_DEVICE(d_status[s]);
-        BHAH_FREE_DEVICE(d_retries[s]);
-        BHAH_FREE_DEVICE(d_on_pos_window_prev[s]);
-        BHAH_FREE_DEVICE(d_on_pos_source_prev[s]);
-        BHAH_FREE_DEVICE(d_affine_prev[s]);
-        BHAH_FREE_DEVICE(d_affine_pre_prev[s]);
-        BHAH_FREE_DEVICE(d_window_event_found[s]);
-        BHAH_FREE_DEVICE(d_source_event_found[s]);
-        BHAH_FREE_DEVICE(d_chunk_buffer[s]);
-
-        // Hardware Resource Free: Destroys the asynchronous orchestration streams.
-        cudaStreamDestroy(streams[s]);
-    }}
-
-
-    // --- CPU CONSERVATION DRIFT EVALUATION ---
-    if (commondata->perform_conservation_check) {{
-        // Kernel Launch: Stream the final state vectors to VRAM to calculate terminal conserved quantities.
-        calculate_conserved_quantities_universal_{spacetime_name}_photon(&all_photons_host, num_rays, final_cq_host);
-
-        printf("\n=================================================\n");
-        printf(" CONSERVED QUANTITIES DIAGNOSTIC REPORT\n");
-        printf("=================================================\n");
         
-        // Scalar variables tracking the maximum recorded relative drift for each physical quantity.
-        double max_err_E = 0.0, max_err_Lz = 0.0, max_err_Q = 0.0;
-        // Absolute master indices $m_{{idx}}$ identifying the trajectory responsible for the maximum numerical drift.
-        long int worst_ray_E = -1, worst_ray_Lz = -1, worst_ray_Q = -1;
+        cudaDeviceSynchronize(); // Device synchronization barrier strictly enforcing global state convergence before advancing the central time engine.
+    }}
 
-        // Loop iterator spanning the global dataset to calculate relative errors.
-        for (long int i = 0; i < num_rays; i++) {{
-            // Hardware Justification: Evaluate relative numerical drift natively on the CPU to prevent VRAM bottlenecks and leverage complex print formatting.
-            double err_E = fabs((final_cq_host[i].E - initial_cq_host[i].E) / (initial_cq_host[i].E + 1e-15));
-            double err_Lz = fabs((final_cq_host[i].Lz - initial_cq_host[i].Lz) / (initial_cq_host[i].Lz + 1e-15));
-            double err_Q = fabs((final_cq_host[i].Q - initial_cq_host[i].Q) / (initial_cq_host[i].Q + 1e-15));
+    /* Algorithmic Step: Process terminal photon trajectories and extract final geometric intersections. Hardware Justification: Memory transfers execute synchronously on the host to ensure all asynchronous VRAM operations have fully resolved. */
+    // --- 4. CLEANUP & FINALIZATION ---
+        
+        // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
+        cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost); 
 
-            if (err_E > max_err_E) {{ max_err_E = err_E; worst_ray_E = i; }}
-            if (err_Lz > max_err_Lz) {{ max_err_Lz = err_Lz; worst_ray_Lz = i; }}
-            if (err_Q > max_err_Q) {{ max_err_Q = err_Q; worst_ray_Q = i; }}
+        // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$ 
+        // appending 0 as the final argument since we are relying strictly on the primary hardware stream.
+        calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);
+
+        // Loop iterator $s$ purging the double-buffered arrays across both hardware streams.
+        for (int s = 0; s < 2; ++s) {{
+            // Host Memory Free: Purges bridge components supporting scatter logic mapped to PCIe DMA transfers.
+            BHAH_FREE_PINNED(chunk_buffer[s]); // Purges the execution chunk mapping bridge.
+            BHAH_FREE_PINNED(f_bridge[s]); // Purges the state vector $f^\mu$ bridge.
+            BHAH_FREE_PINNED(f_p_bridge[s]); // Purges the first derivative $\dot{{f}}^\mu$ bridge.
+            BHAH_FREE_PINNED(f_p_p_bridge[s]); // Purges the second derivative $\ddot{{f}}^\mu$ bridge.
+            BHAH_FREE_PINNED(affine_bridge[s]); // Purges the affine parameter $\lambda$ bridge.
+            BHAH_FREE_PINNED(h_bridge[s]); // Purges the integration step size $h$ bridge.
+            BHAH_FREE_PINNED(status_bridge[s]); // Purges the trajectory status bridge.
+            BHAH_FREE_PINNED(retries_bridge[s]); // Purges the error rejection scalar bridge.
+            BHAH_FREE_PINNED(on_pos_window_prev_bridge[s]); // Purges the observer window boundary flag bridge.
+            BHAH_FREE_PINNED(on_pos_source_prev_bridge[s]); // Purges the source emission boundary flag bridge.
+            BHAH_FREE_PINNED(affine_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ bridge.
+            BHAH_FREE_PINNED(affine_p_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ bridge.
+            BHAH_FREE_PINNED(window_event_found_bridge[s]); // Purges the observer window intersection lock bridge.
+            BHAH_FREE_PINNED(source_event_found_bridge[s]); // Purges the source emission intersection lock bridge.
+
+            // Device Memory Free: Purges remaining VRAM operational pipeline scratchpads.
+            BHAH_FREE_DEVICE(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
+            BHAH_FREE_DEVICE(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_connection_bundle[s]); // Purges the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
+            BHAH_FREE_DEVICE(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
+            BHAH_FREE_DEVICE(d_affine[s]); // Purges the total affine parameter progress $\lambda$ scratchpad.
+            BHAH_FREE_DEVICE(d_status[s]); // Purges the current trajectory status limit scratchpad.
+            BHAH_FREE_DEVICE(d_retries[s]); // Purges the sequential error rejection scratchpad.
+            BHAH_FREE_DEVICE(d_on_pos_window_prev[s]); // Purges the previous observer window boundary side scratchpad.
+            BHAH_FREE_DEVICE(d_on_pos_source_prev[s]); // Purges the previous source emission boundary side scratchpad.
+            BHAH_FREE_DEVICE(d_affine_prev[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_affine_pre_prev[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ scratchpad.
+            BHAH_FREE_DEVICE(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
+            BHAH_FREE_DEVICE(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
+            BHAH_FREE_DEVICE(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
+
+            // Hardware Resource Free: Destroys the asynchronous orchestration streams.
+            cudaStreamDestroy(streams[s]);
         }}
 
-        printf("  Max Relative Error (Energy E): %e (Ray %ld)\n", max_err_E, worst_ray_E);
-        printf("  Max Relative Error (Momentum Lz): %e (Ray %ld)\n", max_err_Lz, worst_ray_Lz);
-        printf("  Max Relative Error (Carter Q): %e (Ray %ld)\n", max_err_Q, worst_ray_Q);
-        printf("=================================================\n\n");
+        /* Algorithmic Step: Evaluate relative numerical drift on the CPU. Hardware Justification: Evaluating relative numerical drift natively on the CPU prevents VRAM bottlenecks and leverages complex print formatting. */
+        // --- CPU CONSERVATION DRIFT EVALUATION ---
+        if (commondata->perform_conservation_check) {{
+            // Kernel Launch: Stream the final state vectors $f^\mu$ to VRAM to calculate terminal conserved quantities.
+            calculate_conserved_quantities_universal_{spacetime_name}_photon(&all_photons_host, num_rays, final_cq_host);
 
-        // Host Memory Free: Purges pinned diagnostic buffers.
-        BHAH_FREE_PINNED(initial_cq_host);
-        BHAH_FREE_PINNED(final_cq_host);
-    }}
+            printf("\n=================================================\n");
+            printf(" CONSERVED QUANTITIES DIAGNOSTIC REPORT\n");
+            printf("=================================================\n");
+            
+            // Scalar variables tracking the maximum recorded relative drift for energy $E$, angular momentum $L_z$, and Carter constant $Q$.
+            double max_err_E = 0.0, max_err_Lz = 0.0, max_err_Q = 0.0;
+            // Absolute master indices $m_{{idx}}$ identifying the trajectory responsible for the maximum numerical drift in each respective quantity.
+            long int worst_ray_E = -1, worst_ray_Lz = -1, worst_ray_Q = -1;
 
-    // Host Memory Free: Purges the primary Host array states f^mu and affine parameters \lambda.
-    BHAH_FREE_PINNED(all_photons_host.f);
-    BHAH_FREE_PINNED(all_photons_host.f_p);
-    BHAH_FREE_PINNED(all_photons_host.f_p_p);
-    BHAH_FREE_PINNED(all_photons_host.affine_param);
-    BHAH_FREE_PINNED(all_photons_host.h);
-    BHAH_FREE_PINNED(all_photons_host.status);
-    BHAH_FREE_PINNED(all_photons_host.rejection_retries);
-    BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_window_prev);
-    BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_source_prev);
-    BHAH_FREE_PINNED(all_photons_host.affine_param_p);
-    BHAH_FREE_PINNED(all_photons_host.affine_param_p_p);
-    BHAH_FREE_PINNED(all_photons_host.window_event_found);
-    BHAH_FREE_PINNED(all_photons_host.source_event_found);
-    
-    // (The legacy un-indexed bridge and bundle frees have been removed from here)
+            // Loop iterator $i$ spanning the global dataset to calculate relative errors natively on the CPU.
+            for (long int i = 0; i < num_rays; i++) {{
+                double err_E = fabs((final_cq_host[i].E - initial_cq_host[i].E) / (initial_cq_host[i].E + 1e-15)); // Evaluates the relative numerical drift for energy $E$.
+                double err_Lz = fabs((final_cq_host[i].Lz - initial_cq_host[i].Lz) / (initial_cq_host[i].Lz + 1e-15)); // Evaluates the relative numerical drift for angular momentum $L_z$.
+                double err_Q = fabs((final_cq_host[i].Q - initial_cq_host[i].Q) / (initial_cq_host[i].Q + 1e-15)); // Evaluates the relative numerical drift for Carter constant $Q$.
 
-    // Device Memory Free: Purges the final single-pointer intersection blueprint buffer.
-    BHAH_FREE_DEVICE(d_results_buffer);
+                if (err_E > max_err_E) {{ max_err_E = err_E; worst_ray_E = i; }} // Updates the maximum tracked relative error and associated index $i$ for energy $E$.
+                if (err_Lz > max_err_Lz) {{ max_err_Lz = err_Lz; worst_ray_Lz = i; }} // Updates the maximum tracked relative error and associated index $i$ for angular momentum $L_z$.
+                if (err_Q > max_err_Q) {{ max_err_Q = err_Q; worst_ray_Q = i; }} // Updates the maximum tracked relative error and associated index $i$ for Carter constant $Q$.
+            }}
 
-    // Memory Free: Purges the temporal sorting struct mapping the Host-side execution grid.
-    slot_manager_free(&tsm);
+            printf("  Max Relative Error (Energy E): %e (Ray %ld)\n", max_err_E, worst_ray_E); // Output block printing the maximum relative error for energy $E$.
+            printf("  Max Relative Error (Momentum Lz): %e (Ray %ld)\n", max_err_Lz, worst_ray_Lz); // Output block printing the maximum relative error for angular momentum $L_z$.
+            printf("  Max Relative Error (Carter Q): %e (Ray %ld)\n", max_err_Q, worst_ray_Q); // Output block printing the maximum relative error for Carter constant $Q$.
+            printf("=================================================\n\n");
+
+            // Host Memory Free: Purges pinned diagnostic buffers.
+            BHAH_FREE_PINNED(initial_cq_host); // Purges pinned initial diagnostic data buffer.
+            BHAH_FREE_PINNED(final_cq_host); // Purges pinned final diagnostic data buffer.
+        }}
+
+        // Host Memory Free: Purges the primary Host array states $f^\mu$ and affine parameters $\lambda$.
+        BHAH_FREE_PINNED(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
+        BHAH_FREE_PINNED(all_photons_host.f_p); // Purges the primary Host array first derivative $\dot{{f}}^\mu$.
+        BHAH_FREE_PINNED(all_photons_host.f_p_p); // Purges the primary Host array second derivative $\ddot{{f}}^\mu$.
+        BHAH_FREE_PINNED(all_photons_host.affine_param); // Purges the primary Host array affine parameter $\lambda$.
+        BHAH_FREE_PINNED(all_photons_host.h); // Purges the primary Host array integration step size $h$.
+        BHAH_FREE_PINNED(all_photons_host.status); // Purges the primary Host array trajectory status enum.
+        BHAH_FREE_PINNED(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
+        BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_window_prev); // Purges the primary Host array observer window boundary flag.
+        BHAH_FREE_PINNED(all_photons_host.on_positive_side_of_source_prev); // Purges the primary Host array source emission boundary flag.
+        BHAH_FREE_PINNED(all_photons_host.affine_param_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-1}}$.
+        BHAH_FREE_PINNED(all_photons_host.affine_param_p_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-2}}$.
+        BHAH_FREE_PINNED(all_photons_host.window_event_found); // Purges the primary Host array observer window intersection lock.
+        BHAH_FREE_PINNED(all_photons_host.source_event_found); // Purges the primary Host array source emission intersection lock.
+        
+        // Device Memory Free: Purges the final single-pointer intersection blueprint buffer $b_i$.
+        BHAH_FREE_DEVICE(d_results_buffer);
+
+        // Memory Free: Purges the temporal sorting struct mapping the Host-side execution grid.
+        slot_manager_free(&tsm);
     """
 
-
     cfc.register_CFunction(
-        prefunc=prefunc,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
@@ -778,3 +824,14 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body
     )
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
