@@ -25,7 +25,7 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
 
   // If the checkpoint doesn't exist then return 0; if it does exist and can't be read, then error out.
-  FILE *cp_file = fopen(filename, "r");
+  FILE *cp_file = fopen(filename, "rb");
   if (cp_file == NULL) {
     if (errno == ENOENT)
       return 0; // checkpoint doesn't exist

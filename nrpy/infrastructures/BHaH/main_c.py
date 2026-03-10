@@ -154,6 +154,11 @@ def _generate_main_body(
     parallelization = par.parval_from_str("parallelization")
     is_cuda = parallelization == "cuda"
     compute_griddata = "griddata_device" if is_cuda else "griddata"
+    pre_free_memory_code = ""
+    if "free_bhahaha_horizon_shape_data_all_horizons" in cfc.CFunction_dict:
+        pre_free_memory_code = (
+            "  free_bhahaha_horizon_shape_data_all_horizons(&commondata);\n"
+        )
 
     # The body of the main() function is built as a list of C code strings.
     body_parts = []
@@ -291,13 +296,13 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
     device_sync = "BHAH_DEVICE_SYNC();" if is_cuda else ""
     if not is_cuda:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
 }}
         """
     else:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
   griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
 }}

@@ -54,7 +54,9 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
       exit(1);
     } // END IF cp_file == NULL
+
     FWRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
+
     fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
