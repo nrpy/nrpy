@@ -84,65 +84,66 @@ def rkf45_stage_update() -> None:
 
     // --- BUTCHER TABLEAU EVALUATION ---
     // Fused multiply-add intrinsics evaluate the intermediate Runge-Kutta stages to ensure exact IEEE 754 rounding behavior.
-    int comp; // Loop index for iterating over the tensor components.
-    for (comp = 0; comp < 9; ++comp) {
-        
-        // Load the base state component $f_{start}$ from memory.
-        const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]); // Component of the base state $f_{start}$.
-        
-        // Accumulator for the intermediate update step $f_{temp}$.
-        double update_val = 0.0; // Accumulates the stage update $k^{\mu}$ contributions.
+    
+    // Bypass the computation entirely for stage 6 to ensure OpenMP compliance.
+    if (stage != 6) {
+        int comp; // Loop index for iterating over the tensor components.
+        for (comp = 0; comp < 9; ++comp) {
+            
+            // Load the base state component $f_{start}$ from memory.
+            const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]); // Component of the base state $f_{start}$.
+            
+            // Accumulator for the intermediate update step $f_{temp}$.
+            double update_val = 0.0; // Accumulates the stage update $k^{\mu}$ contributions.
 
-        // Apply coefficients based on the current RKF45 stage.
-        switch (stage) {
-        case 1:
-        // Compute intermediate state for $k_2$.
-        update_val = MulCUDA(0.25, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)])); // Applies the $k_1$ coefficient.
-        break;
-        case 2:
-        // Compute intermediate state for $k_3$.
-        update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]), 
-                                    MulCUDA(0.28125, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]))); // Applies the $k_1$ and $k_2$ coefficients.
-        break;
-        case 3:
-        // Compute intermediate state for $k_4$.
-        update_val = FusedMulAddCUDA(1932.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                                    FusedMulAddCUDA(-7200.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                                                    MulCUDA(7296.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)])))); // Applies the $k_1$, $k_2$, and $k_3$ coefficients.
-        break;
-        case 4:
-        // Compute intermediate state for $k_5$.
-        update_val = FusedMulAddCUDA(439.0 / 216.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                                    FusedMulAddCUDA(-8.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                                                    FusedMulAddCUDA(3680.0 / 513.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
-                                                                    MulCUDA(-845.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]))))); // Applies coefficients up to $k_4$.
-        break;
-        case 5:
-        // Compute intermediate state for $k_6$.
-        update_val = FusedMulAddCUDA(-8.0 / 27.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
-                                    FusedMulAddCUDA(2.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
-                                                    FusedMulAddCUDA(-3544.0 / 2565.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
-                                                                    FusedMulAddCUDA(1859.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]),
-                                                                                    MulCUDA(-0.275, ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)])))))); // Applies coefficients up to $k_5$.
-        break;
-        case 6:
-        // Finalize derivative computation without updating $f_{temp}$.
-        return; // Exits kernel without updating $f_{temp}$.
+            // Apply coefficients based on the current RKF45 stage.
+            switch (stage) {
+            case 1:
+            // Compute intermediate state for $k_2$.
+            update_val = MulCUDA(0.25, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)])); // Applies the $k_1$ coefficient.
+            break;
+            case 2:
+            // Compute intermediate state for $k_3$.
+            update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]), 
+                                        MulCUDA(0.28125, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]))); // Applies the $k_1$ and $k_2$ coefficients.
+            break;
+            case 3:
+            // Compute intermediate state for $k_4$.
+            update_val = FusedMulAddCUDA(1932.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                        FusedMulAddCUDA(-7200.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                        MulCUDA(7296.0 / 2197.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)])))); // Applies the $k_1$, $k_2$, and $k_3$ coefficients.
+            break;
+            case 4:
+            // Compute intermediate state for $k_5$.
+            update_val = FusedMulAddCUDA(439.0 / 216.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                        FusedMulAddCUDA(-8.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                        FusedMulAddCUDA(3680.0 / 513.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
+                                                                        MulCUDA(-845.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]))))); // Applies coefficients up to $k_4$.
+            break;
+            case 5:
+            // Compute intermediate state for $k_6$.
+            update_val = FusedMulAddCUDA(-8.0 / 27.0, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
+                                        FusedMulAddCUDA(2.0, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]),
+                                                        FusedMulAddCUDA(-3544.0 / 2565.0, ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]),
+                                                                        FusedMulAddCUDA(1859.0 / 4104.0, ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]),
+                                                                                        MulCUDA(-0.275, ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)])))))); // Applies coefficients up to $k_5$.
+            break;
+            }
+
+            // --- GLOBAL MEMORY WRITE ---
+            // Writing the computed update $f_{temp} = f_n + h \times update\_val$ to global memory strictly enforces the split-pipeline communication constraint.
+            const double f_result = FusedMulAddCUDA(h, update_val, f_n); // Computes the step update and stores it in $f_{result}$.
+            
+            // Write the intermediate state $f_{temp}$ to the destination bundle in memory.
+            WriteCUDA(&d_f_temp[IDX_F(comp, i)], f_result); // Writes $f_{temp}$ to global memory.
         }
-
-        // --- GLOBAL MEMORY WRITE ---
-        // Writing the computed update $f_{temp} = f_n + h \times update\_val$ to global memory strictly enforces the split-pipeline communication constraint.
-        const double f_result = FusedMulAddCUDA(h, update_val, f_n); // Computes the step update and stores it in $f_{result}$.
-        
-        // Write the intermediate state $f_{temp}$ to the destination bundle in memory.
-        WriteCUDA(&d_f_temp[IDX_F(comp, i)], f_result); // Writes $f_{temp}$ to global memory.
     }
 
     // --- MACRO CLEANUP ---
     // Undefine macros to ensure hermetic compilation and prevent redefinition errors.
     #undef IDX_F
     #undef IDX_K
-"""
+    """
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
@@ -162,7 +163,9 @@ def rkf45_stage_update() -> None:
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_intrinsics.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
     
     desc = r"""@brief Orchestrates the memory kernel for RKF45 intermediate stage updates.
     

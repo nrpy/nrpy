@@ -119,6 +119,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "start_idx": "const long int",
         "chunk_size": "const long int"
     }
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict["commondata"] = "const commondata_struct *restrict"
 
     # --- ARCHITECTURE-SPECIFIC KERNEL PREAMBLE/POSTAMBLE (The Sandwich) ---
     if parallelization == "cuda":
@@ -410,11 +413,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Establish the final strings to satisfy the Translation Unit Inlining Mandate.
     prefunc = f"{kernel_prefunc}"
 
-    includes = [
-        "BHaH_defines.h",
-        "BHaH_function_prototypes.h",
-        "cuda_intrinsics.h",
-    ]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
 
     desc = r"""@brief Initializes Cartesian starting conditions for photons.
     

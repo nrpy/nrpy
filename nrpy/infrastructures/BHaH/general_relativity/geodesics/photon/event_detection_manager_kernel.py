@@ -71,7 +71,17 @@ def event_detection_manager_kernel() -> None:
         "chunk_size": "const int"
     }
 
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
+        arg_dict_host["commondata"] = "const commondata_struct *restrict"
+
+
     escape_statement = "return;" if parallelization == "cuda" else "continue;"
+
+    # Variables to handle architecture differences dynamically
+    commondata_arg = "" if parallelization == "cuda" else ", commondata"
+    pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
 
     if parallelization == "cuda":
         loop_preamble = """
@@ -114,7 +124,7 @@ def event_detection_manager_kernel() -> None:
     // --- LOCAL REGISTER HYDRATION ---
     // 1-Pass read from global memory bundles into thread-local arrays to respect hardware register limits.
     double f_local[9], f_p_local[9], f_p_p_local[9]; // Thread-local arrays holding the state vector $f^\mu$ and its history.
-    #pragma unroll
+    {pragma_unroll}
     for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components.
         f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]); // Hydrates the current step state $f^\mu_n$.
         f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]); // Hydrates the previous step state $f^\mu_{{n-1}}$.
@@ -164,8 +174,9 @@ def event_detection_manager_kernel() -> None:
             double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, w_normal, w_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
             // Writes the physical intersection to the persistent master index array slot via global mapping.
-            if (handle_window_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx])) {{
-                d_window_event_found[i] = true; // Locks the window intersection to prevent future overwrites.
+            // Window plane function call to pass commondata conditionally.
+            if (handle_window_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
+                d_window_event_found[i] = true; 
             }}
         }}
         d_on_pos_window_prev[i] = on_pos_win_curr; // Updates the window evaluation history for the next step.
@@ -185,7 +196,7 @@ def event_detection_manager_kernel() -> None:
             double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, s_normal, s_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
             // Writes the physical intersection to the persistent master index array slot via global mapping.
-            if (handle_source_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx])) {{
+            if (handle_source_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
                 d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE; // Marks the ray as terminated upon striking the source plane.
                 d_source_event_found[i] = true; // Locks the source intersection to prevent future overwrites.
             }}
@@ -198,7 +209,7 @@ def event_detection_manager_kernel() -> None:
     if (d_status_bundle[i] == ACTIVE) {{
         WriteCUDA(&d_affine_pre_prev[i], lam_p_local); // Shifts the previous affine parameter $\lambda_{{n-1}}$ to the pre-previous slot $\lambda_{{n-2}}$.
         WriteCUDA(&d_affine_prev[i], lam_local); // Shifts the current affine parameter $\lambda_n$ to the previous slot $\lambda_{{n-1}}$.
-        #pragma unroll
+        {pragma_unroll}
         for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components to shift the history.
             WriteCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)], f_p_local[c]); // Shifts the previous state $f^\mu_{{n-1}}$ to the pre-previous slot $f^\mu_{{n-2}}$.
             WriteCUDA(&d_f_prev_bundle[IDX_F(c, i)], f_local[c]); // Shifts the current state $f^\mu_{{n}}$ to the previous slot $f^\mu_{{n-1}}$.
@@ -228,14 +239,12 @@ def event_detection_manager_kernel() -> None:
     )
 
     prefunc = "\n\n".join([find_event_c_code, window_c_code, source_c_code, prefunc_kernel])
-    includes = [
-        "BHaH_defines.h", 
-        "BHaH_device_defines.h", 
-        "BHaH_function_prototypes.h", 
-        "<math.h>", 
-        "<stdbool.h>",
-        "cuda_intrinsics.h"
-    ]
+
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
+        includes.append("BHaH_device_defines.h")
+        
     desc = r"""@brief Optimized detection of plane crossings using consolidated blueprints.
 
     @param d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
@@ -256,6 +265,7 @@ def event_detection_manager_kernel() -> None:
     cfunc_type = "void"
     name = "event_detection_manager_kernel"
     params = (
+        "const commondata_struct *restrict commondata, "
         "const double *restrict d_f_bundle, "
         "double *restrict d_f_prev_bundle, "
         "double *restrict d_f_pre_prev_bundle, "

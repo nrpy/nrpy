@@ -132,11 +132,13 @@ def calculate_ode_rhs_kernel(
     # Generate the raw C math string from the SymPy expressions.
     # Output targets are local scalar registers k_out_0 through k_out_8.
     k_array_outputs = [f"k_out_{j}" for j in range(9)]
+
+    enable_simd = (parallelization == "cuda")
     raw_c_code = ccg.c_codegen(
         geodesic_rhs_expressions,
         k_array_outputs,
         enable_cse=True,
-        enable_simd=True,
+        enable_simd= enable_simd,
         include_braces=False,
         verbose=False,
     )
@@ -226,7 +228,7 @@ def calculate_ode_rhs_kernel(
     # --- CANONICAL MASTER ORDER SEQUENCE ---
     prefunc = prefunc_kernel
     
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 

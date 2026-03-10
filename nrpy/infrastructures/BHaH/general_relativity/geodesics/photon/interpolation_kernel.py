@@ -54,6 +54,11 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "chunk_size": "const long int"
     }
 
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
+        arg_dict_host["commondata"] = "const commondata_struct *restrict"
+
     if parallelization == "cuda":
         loop_preamble = """
     // --- CUDA THREAD IDENTIFICATION ---
@@ -147,7 +152,9 @@ def interpolation_kernel(spacetime_name: str) -> None:
 
     prefunc = "\n\n".join([metric_c_code, conn_c_code, prefunc_kernel])
     
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_intrinsics.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
     
     desc = fr"""@brief Orchestrates the memory kernel for the {spacetime_name} interpolation engine.
     
@@ -162,6 +169,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     name = f"interpolation_kernel_{spacetime_name}"
     
     params = (
+        "const commondata_struct *restrict commondata, "
         "const double *restrict d_f_bundle, "
         "double *restrict d_metric_bundle, "
         "double *restrict d_connection_bundle, "

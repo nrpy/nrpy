@@ -97,6 +97,12 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         "d_cq_bundle": "conserved_quantities_t *restrict",
         "current_chunk_size": "const long int",
     }
+    
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
+
+  
     arg_dict_host = arg_dict_cuda.copy()
 
     # Dynamically generate the unpacking logic based on the specific spacetime coordinates.
@@ -256,6 +262,8 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     # 7. Variable Definition (The Master Order)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
     
     desc = r"""@brief Computes conserved quantities for a batch of trajectories.
     @param all_photons The master Structure of Arrays containing the state vectors $f^\mu$.
@@ -270,6 +278,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     cfunc_type = "void"
     name = f"calculate_conserved_quantities_universal_{spacetime_name}_{particle_type}"
     params = (
+        "const commondata_struct *restrict commondata, "
         "const PhotonStateSoA *restrict all_photons, "
         "const long int num_rays, "
         "conserved_quantities_t *restrict cq_result"

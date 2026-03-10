@@ -148,7 +148,9 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         thread_tiling_macro_suffix="RKF45"
     )
 
-    includes = ["BHaH_defines.h", "cuda_intrinsics.h"] if parallelization == "cuda" else ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
     
     desc = r"""@brief Orchestrates the kernel for the initial temporal momentum calculation.
     

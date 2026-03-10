@@ -171,12 +171,13 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         loop_body=loop_body,
     )
 
-    prefunc = prefunc
-    includes_list = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
-    # 7. Variable Definition (The Master Order)
+    # 7. Variable Definition
     prefunc = prefunc
-    includes = includes_list
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
+
     desc = r"""@brief Evaluates the blueprint data for a batch of photon trajectories.
     @param all_photons The master Structure of Arrays containing the state vectors.
     @param num_rays The total number of photon trajectories.

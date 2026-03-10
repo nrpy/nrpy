@@ -9,7 +9,9 @@ memory to preserve hardware register constraints and prevent VRAM spilling.
 Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
+from nrpy.helpers.parallelization.utilities import get_commondata_access
 import nrpy.params as par
+
 
 
 def handle_window_plane_intersection() -> None:
@@ -18,6 +20,11 @@ def handle_window_plane_intersection() -> None:
 
     :raises SystemError: If C function registration fails during the pipeline compilation.
     """
+    parallelization = par.parval_from_str("parallelization")
+    
+    # Add the access variable
+    cd_access = get_commondata_access(parallelization)
+
     # Register the necessary C-code parameters for camera setup to ensure they are available in constant memory.
     par.register_CodeParameters(
         "REAL",
@@ -42,13 +49,12 @@ def handle_window_plane_intersection() -> None:
 
     # Define inclusion headers for the C function compilation.
     includes = [
-        "BHaH_defines.h",
-        "BHaH_device_defines.h",
-        "BHaH_function_prototypes.h",
-        "<math.h>",
-        "<stdbool.h>",
-        "cuda_intrinsics.h"
+        "BHaH_defines.h"
     ]
+
+    if parallelization == "cuda":
+        includes.append("BHaH_device_defines.h")
+        includes.append("cuda_intrinsics.h")
 
     # Define the Doxygen-formatted description for the C function.
     desc = r"""@brief Processes a window plane intersection without terminating the trajectory.
@@ -63,7 +69,7 @@ def handle_window_plane_intersection() -> None:
     3. Validates if the intersection falls within the physical window boundaries."""
 
     # Specify the signature components of the C function.
-    cfunc_type = "static BHAH_HD_INLINE bool"
+    cfunc_type = "BHAH_HD_INLINE bool"
     name = "handle_window_plane_intersection"
 
     # Define the specific C arguments passed into the kernel.
@@ -72,6 +78,8 @@ def handle_window_plane_intersection() -> None:
         "const double lam_intersect, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
+    if parallelization != "cuda":
+        params += ", const commondata_struct *restrict commondata"
 
     # Toggle generation of CodeParameters.h inclusion.
     include_CodeParameters_h = False
@@ -148,6 +156,9 @@ def handle_window_plane_intersection() -> None:
 
     return false;
     """
+
+    # Inject the string replacement right before registration
+    body = body.replace("d_commondata.", cd_access)
 
     # Register the C function using the defined components.
     cfc.register_CFunction(

@@ -270,11 +270,15 @@ if __name__ == "__main__":
         libs = ["-lm", "-lcudart"]
         ext = "cu"
     else:
-        # OpenMP / CPU Fallback
+# OpenMP / CPU Fallback
         cpu_macros = {
             # --- Memory Access Redirection ---
             "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))\n",
             "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))\n",
+            
+            # --- Device Memory Fallbacks ---
+            "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)\n",
+            "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)\n",
             
             # --- Basic Arithmetic Intrinsics (Required by RKF45 Kernels) ---
             "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))\n",
@@ -292,8 +296,8 @@ if __name__ == "__main__":
             "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline\n",
             
             # --- Parallelization & Scope Helpers ---
-            "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) (*(ptr) += (val))\n",
-            "GLOBAL_COMMONDATA_EXTERN": "extern commondata_struct *commondata;\n",
+            "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma(\"omp atomic\") *(ptr) += (val)\n",
+            "GLOBAL_COMMONDATA_EXTERN": "// CPU passes commondata by reference, no global needed.\n",
             "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n"
         }
 
@@ -309,11 +313,15 @@ if __name__ == "__main__":
         ext = "c"
 
     print(" -> Generating Makefile ")
+    
+    # Determine the correct optimization option string
+    opt_option = "nvcc" if parallelization == "cuda" else "fast"
+    
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        compiler_opt_option=compiler,
+        compiler_opt_option=opt_option, 
         addl_CFLAGS=cflags,
         addl_libraries=libs,
         CC=compiler,

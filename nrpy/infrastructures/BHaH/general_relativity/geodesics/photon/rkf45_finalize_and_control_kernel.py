@@ -47,6 +47,7 @@ def rkf45_finalize_and_control_kernel() -> None:
 
     parallelization = par.parval_from_str("parallelization")
     cd_access = get_commondata_access(parallelization)
+    pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
 
     arg_dict_cuda = {
         "d_f_persistent": "double *restrict",
@@ -69,6 +70,10 @@ def rkf45_finalize_and_control_kernel() -> None:
         "d_retries": "int *restrict",
         "chunk_size": "const long int"
     }
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
+        arg_dict_host["commondata"] = "const commondata_struct *restrict"
 
     if parallelization == "cuda":
         loop_preamble = """
@@ -123,7 +128,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         // Scalar loads mapped directly to registers for the current tensor component.
         const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]);     // Base state tensor component $f_n$.
         const double k0  = ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]); // Stage 0 derivative vector $k_0$.
-        const double k1  = ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]); // Stage 1 derivative vector $k_1$.
+        // Stage 1 (k1) is mathematically zeroed out in RKF45, so it is skipped.
         const double k2  = ReadCUDA(&d_k_bundle[IDX_K(2, comp, i)]); // Stage 2 derivative vector $k_2$.
         const double k3  = ReadCUDA(&d_k_bundle[IDX_K(3, comp, i)]); // Stage 3 derivative vector $k_3$.
         const double k4  = ReadCUDA(&d_k_bundle[IDX_K(4, comp, i)]); // Stage 4 derivative vector $k_4$.
@@ -197,7 +202,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     if (err_norm <= 1.0) {{
         // --- ACCEPTED STEP MEMORY COMMIT ---
         // Commits the local register cache to persistent global memory.
-        #pragma unroll
+        {pragma_unroll}
         for (int comp = 0; comp < 9; ++comp) {{
             WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]); // Commits the cached state component to persistent memory.
         }}
@@ -253,7 +258,9 @@ def rkf45_finalize_and_control_kernel() -> None:
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "cuda_intrinsics.h", "<math.h>"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
     
     desc = r"""@brief Finalizes the RKF45 step, checks errors, and updates state/stepsize.
     
@@ -272,6 +279,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     name = "rkf45_finalize_and_control"
     
     params = (
+        "const commondata_struct *restrict commondata, "
         "double *restrict d_f_persistent, "
         "const double *restrict d_f_start, "
         "const double *restrict d_k_bundle, "
@@ -283,17 +291,6 @@ def rkf45_finalize_and_control_kernel() -> None:
         "const int stream_idx"
     )
 
-    params = (
-        "double *restrict d_f_persistent, "
-        "const double *restrict d_f_start, "
-        "const double *restrict d_k_bundle, "
-        "double *restrict d_h, "
-        "termination_type_t *restrict d_status, "
-        "double *restrict d_affine, "
-        "int *restrict d_retries, "
-        "const long int chunk_size, "
-        "const int stream_idx"
-    )
 
     include_CodeParameters_h = False
     

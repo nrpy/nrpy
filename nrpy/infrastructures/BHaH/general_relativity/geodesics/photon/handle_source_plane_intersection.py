@@ -4,6 +4,7 @@ strictly executing within thread-local registers and constant memory.
 Author: Dalton J. Moone.
 """
 import nrpy.c_function as cfc
+from nrpy.helpers.parallelization.utilities import get_commondata_access
 import nrpy.params as par
 
 
@@ -13,6 +14,11 @@ def handle_source_plane_intersection() -> None:
 
     :raises SystemError: If C function registration fails during the pipeline compilation.
     """
+    parallelization = par.parval_from_str("parallelization")
+    
+    # Add the access variable
+    cd_access = get_commondata_access(parallelization)
+
     # Register core parameters for the emission plane geometry
     par.register_CodeParameters(
         "REAL",
@@ -36,13 +42,12 @@ def handle_source_plane_intersection() -> None:
     )
 
     includes = [
-        "BHaH_defines.h",
-        "BHaH_device_defines.h",
-        "BHaH_function_prototypes.h",
-        "<math.h>",
-        "<stdbool.h>",
-        "cuda_intrinsics.h"
+        "BHaH_defines.h"
     ]
+
+    if parallelization == "cuda":
+        includes.append("BHaH_device_defines.h")
+        includes.append("cuda_intrinsics.h")
     
     desc = r"""@brief Processes a terminal intersection with the source emission plane.
 
@@ -55,7 +60,7 @@ def handle_source_plane_intersection() -> None:
     2. Projects the intersection state $x^\mu$ into local 2D coordinates.
     3. Filters based on physical radial bounds [$r_{min}$, $r_{max}$]."""
     
-    cfunc_type = "static BHAH_HD_INLINE bool"
+    cfunc_type = "BHAH_HD_INLINE bool"
     
     name = "handle_source_plane_intersection"
     
@@ -64,6 +69,8 @@ def handle_source_plane_intersection() -> None:
         "const double lam_intersect, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
+    if parallelization != "cuda":
+        params += ", const commondata_struct *restrict commondata"
     
     include_CodeParameters_h = False
     
@@ -131,6 +138,9 @@ def handle_source_plane_intersection() -> None:
     }
     return false;
     """
+    
+    # Inject the string replacement right before registration
+    body = body.replace("d_commondata.", cd_access)
 
     cfc.register_CFunction(
         includes=includes,

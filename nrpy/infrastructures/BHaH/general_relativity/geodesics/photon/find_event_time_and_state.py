@@ -17,7 +17,7 @@ def find_event_time_and_state() -> None:
 
     :raises SystemError: If C function registration fails within the NRPy+ pipeline.
     """
-    includes = ["BHaH_defines.h", "<math.h>"]
+    includes = ["BHaH_defines.h"]
     desc = r"""@brief Portable high-performance second-order root-finding.
 
     @param f_local The thread-local state array for step $f^\mu_{n}$.
@@ -38,7 +38,7 @@ def find_event_time_and_state() -> None:
     Mapping logic directly to thread-local registers preserves the strict sm_86 architecture limits by
     bypassing global memory fetches and keeping all intermediates within the 255
     registers per thread."""
-    cfunc_type = "static BHAH_HD_INLINE void"
+    cfunc_type = "BHAH_HD_INLINE void"
     name = "find_event_time_and_state"
     params = (
         "const double *restrict f_local, "
