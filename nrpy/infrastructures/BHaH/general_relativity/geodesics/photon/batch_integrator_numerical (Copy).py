@@ -2,7 +2,7 @@
 Orchestration module for the Project Singularity-Axiom numerical integration pipeline.
 
 This module structures the high-level C orchestrator responsible for managing the
-life cycle of photon trajectories $x^\mu$ in numerical spacetimes. It implements a
+life cycle of photon trajectories $x^\\mu$ in numerical spacetimes. It implements a
 Split-Pipeline architecture, decoupling the Runge-Kutta-Fehlberg 4(5) integration
 kernels. Intermediate tensors and state vectors are persisted in Global VRAM via
 flattened Structure of Arrays (SoA) scratchpad bundles. This design avoids register
@@ -47,23 +47,20 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         add_to_parfile=True,
     )
 
-    parallelization = par.parval_from_str("parallelization")
-
     includes = [
         "BHaH_defines.h", 
         "BHaH_global_device_defines.h",
-        "BHaH_function_prototypes.h"
+        "BHaH_function_prototypes.h", 
+        "cuda_runtime.h", 
+        "cuda_intrinsics.h"
     ]
-
-    if parallelization == "cuda":
-        includes.extend(["cuda_runtime.h", "cuda_intrinsics.h"])
 
     desc = r"""@brief Central Host-bound CPU orchestrator for the batched Split-Pipeline relativistic ray tracing loop.
 
-    This function acts as the primary loop for evaluating photon geodesics $x^\mu$.
+    This function acts as the primary loop for evaluating photon geodesics $x^\\mu$.
     It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$. 
-    The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to memory scratchpads.
-    Mapping tensors to memory respects the hardware limit per thread on modern architectures.
+    The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to VRAM scratchpads.
+    Mapping tensors to VRAM respects the 255-register hardware limit per thread on sm_86 architecture.
 
     @param commondata Struct containing global spacetime and numerical tolerances.
     @param num_rays Total number of photon trajectories to simulate.
@@ -77,186 +74,165 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     include_CodeParameters_h = True
 
-    # --- DYNAMIC MACRO GENERATION ---
-    malloc_pinned = "BHAH_MALLOC_PINNED" if parallelization == "cuda" else "BHAH_MALLOC"
-    malloc_device = "BHAH_MALLOC_DEVICE" if parallelization == "cuda" else "BHAH_MALLOC"
-
-    if parallelization == "cuda":
-        stream_setup_str = """
-        // Array of CUDA streams for asynchronous hardware orchestration.
-        cudaStream_t streams[2];
-        // Initializes the primary CUDA stream mapped to the first double-buffer context.
-        cudaStreamCreate(&streams[0]);
-        // Initializes the secondary CUDA stream mapped to the second double-buffer context.
-        cudaStreamCreate(&streams[1]);
-
-        // Host-to-Device transfer: Maps the global spacetime constants to the device cache to ensure zero-latency read access.
-        cudaMemcpyToSymbol(d_commondata, commondata, sizeof(commondata_struct));"""
-        pin_comment = "Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for"
-        dev_comment = "Device memory allocation: Dedicated VRAM array ensuring strict adherence to the hardware bounds for"
-        bridge_alloc_comment = "Allocate Bridge arrays in Host Pinned Memory to allow fast, overlapped chunked transfers to the GPU."
-        scratch_alloc_comment = "Allocate 1D VRAM Scratchpad arrays ensuring strict adherence to the hardware bounds."
-    else:
-        stream_setup_str = """
-        // Streams not required for CPU execution.
-    
-        // Direct struct access utilized; explicit device symbol copying bypassed."""
-        pin_comment = "Host memory allocation: Primary CPU RAM mapped for"
-        dev_comment = "Host memory allocation: Primary CPU RAM mapped for"
-        bridge_alloc_comment = "Allocate memory arrays in Host RAM for the structural bridge payloads."
-        scratch_alloc_comment = "Allocate 1D Host Scratchpad arrays for temporal data staging."
-
     body = fr"""
     // --- 1. HOST & DEVICE ALLOCATION ---
     
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
     PhotonStateSoA all_photons_host;
 
-    // {pin_comment} the state vector $f^\mu$.
-    {malloc_pinned}(all_photons_host.f, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the first derivative $\dot{{f}}^\mu$.
-    {malloc_pinned}(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the second derivative $\ddot{{f}}^\mu$.
-    {malloc_pinned}(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the physical affine parameter $\lambda$.
-    {malloc_pinned}(all_photons_host.affine_param, sizeof(double) * num_rays);
-    // {pin_comment} individual integration step sizes $h$.
-    {malloc_pinned}(all_photons_host.h, sizeof(double) * num_rays);
-    // {pin_comment} the trajectory termination status.
-    {malloc_pinned}(all_photons_host.status, sizeof(termination_type_t) * num_rays);
-    // {pin_comment} the number of step-size rejections.
-    {malloc_pinned}(all_photons_host.rejection_retries, sizeof(int) * num_rays);
-    // {pin_comment} the previous observer window boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
-    // {pin_comment} the previous source emission boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
-    // {pin_comment} the history step $\lambda_{{n-1}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p, sizeof(double) * num_rays);
-    // {pin_comment} the history step $\lambda_{{n-2}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
-    // {pin_comment} the observer window intersection lock.
-    {malloc_pinned}(all_photons_host.window_event_found, sizeof(bool) * num_rays);
-    // {pin_comment} the source emission plane intersection lock.
-    {malloc_pinned}(all_photons_host.source_event_found, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the state vector $f^\mu$.
+    BHAH_MALLOC_PINNED(all_photons_host.f, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the first derivative $\dot{{f}}^\mu$.
+    BHAH_MALLOC_PINNED(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the second derivative $\ddot{{f}}^\mu$.
+    BHAH_MALLOC_PINNED(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the physical affine parameter $\lambda$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for individual integration step sizes $h$.
+    BHAH_MALLOC_PINNED(all_photons_host.h, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the trajectory termination status.
+    BHAH_MALLOC_PINNED(all_photons_host.status, sizeof(termination_type_t) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the number of step-size rejections.
+    BHAH_MALLOC_PINNED(all_photons_host.rejection_retries, sizeof(int) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the previous observer window boundary state.
+    BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the previous source emission boundary state.
+    BHAH_MALLOC_PINNED(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the history step $\lambda_{{n-1}}$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the history step $\lambda_{{n-2}}$.
+    BHAH_MALLOC_PINNED(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the observer window intersection lock.
+    BHAH_MALLOC_PINNED(all_photons_host.window_event_found, sizeof(bool) * num_rays);
+    // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the source emission plane intersection lock.
+    BHAH_MALLOC_PINNED(all_photons_host.source_event_found, sizeof(bool) * num_rays);
 
-    {stream_setup_str}
+    // Array of CUDA streams for asynchronous hardware orchestration.
+    cudaStream_t streams[2];
+    // Initializes the primary CUDA stream mapped to the first double-buffer context.
+    cudaStreamCreate(&streams[0]);
+    // Initializes the secondary CUDA stream mapped to the second double-buffer context.
+    cudaStreamCreate(&streams[1]);
+
+    // Host-to-Device transfer: Maps the global spacetime constants to the device cache to ensure zero-latency read access.
+    cudaMemcpyToSymbol(d_commondata, commondata, sizeof(commondata_struct));
 
     // --- DOUBLE-BUFFERED BRIDGE ARRAYS ---
     // Extraction buffer used by the TimeSlotManager to map sparse indices to contiguous execution blocks.
     long int *chunk_buffer[2];
-    // Bridge array staging the state vector $f^\mu$ for memory transfers.
+    // Bridge array staging the state vector $f^\mu$ for Host-to-Device transfers.
     double *f_bridge[2];
-    // Bridge array staging the first derivative $\dot{{f}}^\mu$ for memory transfers.
+    // Bridge array staging the first derivative $\dot{{f}}^\mu$ for Host-to-Device transfers.
     double *f_p_bridge[2];
-    // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for memory transfers.
+    // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for Host-to-Device transfers.
     double *f_p_p_bridge[2];
-    // Bridge array staging the affine parameter $\lambda$ for memory transfers.
+    // Bridge array staging the affine parameter $\lambda$ for Host-to-Device transfers.
     double *affine_bridge[2];
-    // Bridge array staging the current integration step size $h$ for memory transfers.
+    // Bridge array staging the current integration step size $h$ for Host-to-Device transfers.
     double *h_bridge[2];
-    // Bridge array staging the current trajectory termination status for memory transfers.
+    // Bridge array staging the current trajectory termination status for Host-to-Device transfers.
     termination_type_t *status_bridge[2];
-    // Bridge array staging the number of step-size rejections for memory transfers.
+    // Bridge array staging the number of step-size rejections for Host-to-Device transfers.
     int *retries_bridge[2];
-    // Bridge array staging the previous observer window boundary side flag for memory transfers.
+    // Bridge array staging the previous observer window boundary side flag for Host-to-Device transfers.
     bool *on_pos_window_prev_bridge[2];
-    // Bridge array staging the previous source emission boundary side flag for memory transfers.
+    // Bridge array staging the previous source emission boundary side flag for Host-to-Device transfers.
     bool *on_pos_source_prev_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-1}}$ for chunked memory transfers.
+    // Bridge array staging the historical affine parameter $\lambda_{{n-1}}$ for chunked Host-to-Device transfers.
     double *affine_p_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-2}}$ for chunked memory transfers.
+    // Bridge array staging the historical affine parameter $\lambda_{{n-2}}$ for chunked Host-to-Device transfers.
     double *affine_p_p_bridge[2];
-    // Bridge array staging the observer window event lock for memory transfers.
+    // Bridge array staging the observer window event lock for Host-to-Device transfers.
     bool *window_event_found_bridge[2];
-    // Bridge array staging the source emission event lock for memory transfers.
+    // Bridge array staging the source emission event lock for Host-to-Device transfers.
     bool *source_event_found_bridge[2];
 
     // --- DOUBLE-BUFFERED VRAM SCRATCHPADS ---
-    // Scratchpad tracking the current state vector $f^\mu$ bounding the RKF45 step.
+    // VRAM scratchpad tracking the current state vector $f^\mu$ bounding the RKF45 step.
     double *d_f_bundle[2];
-    // Scratchpad locking the anchor state vector $f_{{start}}$ to calculate the final stage update.
+    // VRAM scratchpad locking the anchor state vector $f_{{start}}$ to calculate the final stage update.
     double *d_f_start_bundle[2];
-    // Scratchpad tracking the intermediate cumulative RKF45 stage updates.
+    // VRAM scratchpad tracking the intermediate cumulative RKF45 stage updates.
     double *d_f_temp_bundle[2];
-    // Scratchpad tracking the history state $f^\mu_{{n-1}}$ for geometric intersection detection.
+    // VRAM scratchpad tracking the history state $f^\mu_{{n-1}}$ for geometric intersection detection.
     double *d_f_prev_bundle[2];
-    // Scratchpad tracking the history state $f^\mu_{{n-2}}$ for geometric intersection detection.
+    // VRAM scratchpad tracking the history state $f^\mu_{{n-2}}$ for geometric intersection detection.
     double *d_f_pre_prev_bundle[2];
-    // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
+    // VRAM scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
-    // Scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
+    // VRAM scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
     double *d_connection_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
     double *d_k_bundle[2];
-    // Array regulating active integration step sizing $h$.
+    // VRAM array regulating active integration step sizing $h$.
     double *d_h[2];
-    // Array regulating total affine parameter progress $\lambda$.
+    // VRAM array regulating total affine parameter progress $\lambda$.
     double *d_affine[2];
-    // Array holding the current trajectory status limits.
+    // VRAM array holding the current trajectory status limits.
     termination_type_t *d_status[2];
-    // Array tracking sequential error rejections per photon.
+    // VRAM array tracking sequential error rejections per photon.
     int *d_retries[2];
-    // Array flagging the previous observer window boundary side.
+    // VRAM array flagging the previous observer window boundary side.
     bool *d_on_pos_window_prev[2];
-    // Array flagging the previous source emission boundary side.
+    // VRAM array flagging the previous source emission boundary side.
     bool *d_on_pos_source_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-1}}$.
+    // VRAM array tracking historical affine parameter $\lambda_{{n-1}}$.
     double *d_affine_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-2}}$.
+    // VRAM array tracking historical affine parameter $\lambda_{{n-2}}$.
     double *d_affine_pre_prev[2];
-    // Array guarding the window intersection coordinates from multi-trigger overwrites.
+    // VRAM array guarding the window intersection coordinates from multi-trigger overwrites.
     bool *d_window_event_found[2];
-    // Array guarding the source intersection coordinates from multi-trigger overwrites.
+    // VRAM array guarding the source intersection coordinates from multi-trigger overwrites.
     bool *d_source_event_found[2];
-    // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
+    // VRAM array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
 
     // Loop iterator for instantiating the double-buffered operational arrays.
     for (int s = 0; s < 2; ++s) {{
-        // {bridge_alloc_comment}
-        {malloc_pinned}(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Pin chunk buffers.
-        {malloc_pinned}(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
-        {malloc_pinned}(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
-        {malloc_pinned}(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
-        {malloc_pinned}(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
-        {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
-        {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
-        {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
-        {malloc_pinned}(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
-        {malloc_pinned}(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
-        {malloc_pinned}(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
-        {malloc_pinned}(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
-        {malloc_pinned}(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
-        {malloc_pinned}(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
+        // Allocate Bridge arrays in Host Pinned Memory to allow fast, overlapped chunked transfers to the GPU.
+        BHAH_MALLOC_PINNED(chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Pin chunk buffers.
+        BHAH_MALLOC_PINNED(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
+        BHAH_MALLOC_PINNED(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
+        BHAH_MALLOC_PINNED(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
+        BHAH_MALLOC_PINNED(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
+        BHAH_MALLOC_PINNED(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
+        BHAH_MALLOC_PINNED(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
+        BHAH_MALLOC_PINNED(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
+        BHAH_MALLOC_PINNED(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
+        BHAH_MALLOC_PINNED(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
+        BHAH_MALLOC_PINNED(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
+        BHAH_MALLOC_PINNED(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
+        BHAH_MALLOC_PINNED(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
+        BHAH_MALLOC_PINNED(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
 
-        // {scratch_alloc_comment}
-        {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
-        {malloc_device}(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
-        {malloc_device}(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
-        {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
-        {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
-        {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
-        {malloc_device}(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
-        {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
-        {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
-        {malloc_device}(d_affine[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
-        {malloc_device}(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
-        {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
-        {malloc_device}(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
-        {malloc_device}(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
-        {malloc_device}(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
-        {malloc_device}(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
-        {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
-        {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
-        {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
+        // Allocate 1D VRAM Scratchpad arrays ensuring strict adherence to the hardware bounds.
+        BHAH_MALLOC_DEVICE(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
+        BHAH_MALLOC_DEVICE(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
+        BHAH_MALLOC_DEVICE(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
+        BHAH_MALLOC_DEVICE(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
+        BHAH_MALLOC_DEVICE(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
+        BHAH_MALLOC_DEVICE(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
+        BHAH_MALLOC_DEVICE(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
+        BHAH_MALLOC_DEVICE(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
     }}
 
     // Device-native struct pointer storing the final physical plane intersections.
     blueprint_data_t *d_results_buffer;
-    // {dev_comment} the blueprint results buffer to avoid mid-computation memory transfers.
-    {malloc_device}(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
+    // Allocates the blueprint results buffer directly in VRAM to avoid mid-computation PCIe transfers.
+    BHAH_MALLOC_DEVICE(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
 
-    // Host-bound struct managing temporal binning of photon trajectories $x^\mu$.
+    // Host-bound struct managing temporal binning of photon trajectories $x^\\mu$.
     TimeSlotManager tsm;
     // Initializes the temporal manager strictly on the CPU to coordinate the Split-Pipeline batches.
     slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
@@ -268,14 +244,14 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     conserved_quantities_t *final_cq_host = NULL;
 
     if (commondata->perform_conservation_check) {{
-        // {pin_comment} the initial diagnostic data.
-        {malloc_pinned}(initial_cq_host, sizeof(conserved_quantities_t) * num_rays);
-        // {pin_comment} the final diagnostic data.
-        {malloc_pinned}(final_cq_host, sizeof(conserved_quantities_t) * num_rays);
+        // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the initial diagnostic data.
+        BHAH_MALLOC_PINNED(initial_cq_host, sizeof(conserved_quantities_t) * num_rays);
+        // Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for the final diagnostic data.
+        BHAH_MALLOC_PINNED(final_cq_host, sizeof(conserved_quantities_t) * num_rays);
     }}
 
 
-    /* Algorithmic Step: Evaluate initial coordinate states and map global spacetime metrics to memory bounds. Hardware Justification: This pre-computation stage occurs prior to the temporal loop to maximize coalesced memory access during iterative integration. */
+/* Algorithmic Step: Evaluate initial coordinate states and map global spacetime metrics to memory bounds. Hardware Justification: This pre-computation stage occurs prior to the temporal loop to maximize coalesced memory access during iterative integration. */
     // --- 2. INITIALIZATION PHASE ---
     
     double window_center_out[3]; // 3D array storing the spatial Cartesian coordinates $x^i$ of the observer window center.

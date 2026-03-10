@@ -80,6 +80,7 @@ if __name__ == "__main__":
         default="project",
         help="The parent directory where the generated C project will reside.",
     )
+    parser.add_argument("--parallelization", type=str, default="cuda", choices=["cuda", "openmp"])
     args = parser.parse_args()
 
     # Step 2: Define strict project constants and simulation targets
@@ -97,10 +98,11 @@ if __name__ == "__main__":
     shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
 
+
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
-    # Explicitly set parallelization to CUDA to enable device-specific header generation
-    par.set_parval_from_str("parallelization", "cuda")
+    # Set parallelization
+    par.set_parval_from_str("parallelization", args.parallelization)
 
     # Step 4: Acquire Symbolic Physics Expressions
     print(f" -> Acquiring symbolic data for {GEO_KEY}...")
@@ -235,51 +237,88 @@ if __name__ == "__main__":
     )
 
     # ##########################################################################
-    # Step 7: Assemble Final C Project Infrastructure (RTX 3080 Optimized)
+    # Step 7: Assemble Final C Project Infrastructure
     # ##########################################################################
     print(" -> Assembling C project on disk...")
     
-    # Generate BHaH defines with custom CUDA macros for sm_86
-    cuda_macros = {
-        "BHAH_HD_FUNC": "#define BHAH_HD_FUNC __device__\n",
-        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE __device__ __inline__\n",
-        "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)\n",
-        "GLOBAL_COMMONDATA_EXTERN": "extern __constant__ commondata_struct d_commondata;\n"
-    }
+    parallelization = args.parallelization
 
-    BHaH_defines_h.output_BHaH_defines_h(
-        project_dir=project_dir, 
-        enable_rfm_precompute=False,
-        supplemental_defines_dict=cuda_macros
-    )
-    # Generate device-specific headers ONLY after all physics modules are registered
-    BHaH_device_defines_h.output_device_headers(project_dir=project_dir)
+    if parallelization == "cuda":
+        cuda_macros = {
+            "BHAH_HD_FUNC": "#define BHAH_HD_FUNC __device__\n",
+            "BHAH_HD_INLINE": "#define BHAH_HD_INLINE __device__ __inline__\n",
+            "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)\n",
+            "GLOBAL_COMMONDATA_EXTERN": "extern __constant__ commondata_struct d_commondata;\n"
+        }
+        BHaH_defines_h.output_BHaH_defines_h(
+            project_dir=project_dir, 
+            enable_rfm_precompute=False,
+            supplemental_defines_dict=cuda_macros
+        )
+        BHaH_device_defines_h.output_device_headers(project_dir=project_dir)
+        
+        print(" -> Copying hardware intrinsics...")
+        gh.copy_files(
+            package="nrpy.helpers",
+            filenames_list=["cuda_intrinsics.h"],
+            project_dir=project_dir,
+            subdirectory="."
+        )
+        
+        compiler = "nvcc"
+        cflags = ["-lcudart", "-DUSE_GPU", "-rdc=true", "-DDEBUG"]
+        libs = ["-lm", "-lcudart"]
+        ext = "cu"
+    else:
+        # OpenMP / CPU Fallback
+        cpu_macros = {
+            # --- Memory Access Redirection ---
+            "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))\n",
+            "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))\n",
+            
+            # --- Basic Arithmetic Intrinsics (Required by RKF45 Kernels) ---
+            "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))\n",
+            "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))\n",
+            "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))\n",
+            "FusedMulAddCUDA(a, b, c)": "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))\n",
 
-    print(" -> Copying hardware intrinsics...")
-    gh.copy_files(
-        package="nrpy.helpers",
-        filenames_list=["cuda_intrinsics.h"],
-        project_dir=project_dir,
-        subdirectory="."
-    )
+            # --- Hardware-Specific Math Redirection ---
+            "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)\n",
+            "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)\n",
+            "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)\n",
+            
+            # --- Function Decorators ---
+            "BHAH_HD_FUNC": "#define BHAH_HD_FUNC\n",
+            "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline\n",
+            
+            # --- Parallelization & Scope Helpers ---
+            "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) (*(ptr) += (val))\n",
+            "GLOBAL_COMMONDATA_EXTERN": "extern commondata_struct *commondata;\n",
+            "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n"
+        }
+
+        BHaH_defines_h.output_BHaH_defines_h(
+            project_dir=project_dir, 
+            enable_rfm_precompute=False,
+            supplemental_defines_dict=cpu_macros
+        )
+        
+        compiler = "gcc"
+        cflags = ["-fopenmp", "-O3", "-DDEBUG"]
+        libs = ["-lm"]
+        ext = "c"
 
     print(" -> Generating Makefile ")
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        compiler_opt_option="nvcc",
-        addl_CFLAGS=[ 
-            "-lcudart",
-            "-DUSE_GPU",
-            "-rdc=true",       
-            "-DDEBUG"
-        ],
-        addl_libraries=["-lm", "-lcudart"],
-        CC="nvcc",
-        src_code_file_ext="cu"
+        compiler_opt_option=compiler,
+        addl_CFLAGS=cflags,
+        addl_libraries=libs,
+        CC=compiler,
+        src_code_file_ext=ext
     )
-
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################

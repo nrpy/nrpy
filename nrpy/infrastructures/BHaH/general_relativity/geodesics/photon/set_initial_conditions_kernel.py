@@ -1,8 +1,8 @@
 """
-Module for generating the native CUDA kernel and host-side orchestrator for photon initialization.
+Module for generating the native C/CUDA kernel and host-side orchestrator for photon initialization.
 
 This module generates a C function that initializes photon trajectories in Cartesian coordinates
-using a "Split-Pipeline" architecture. It allocates a VRAM staging buffer to process rays
+using a "Split-Pipeline" architecture. It allocates a staging buffer to process rays
 in batches, initializing the spatial positions, spatial momenta, and adaptive step sizes,
 while explicitly setting the temporal momentum to zero for downstream constraint solving.
 
@@ -14,6 +14,7 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 from nrpy.helpers.parallelization.utilities import (
     generate_kernel_and_launch_code,
     get_commondata_access,
+    get_params_access,
 )
 from nrpy.helpers.loop import loop
 
@@ -50,11 +51,11 @@ batch_structs_c_code = r"""
         double z_w; // Local $z$-coordinate intersection on the observer window.
         double y_s; // Local $y$-coordinate intersection on the source plane.
         double z_s; // Local $z$-coordinate intersection on the source plane.
-        double final_theta; // Final polar angle $theta$ at termination.
-        double final_phi;   // Final azimuthal angle $phi$ at termination.
-        double L_w; // Affine parameter $lambda$ at the window intersection.
+        double final_theta; // Final polar angle $\theta$ at termination.
+        double final_phi;   // Final azimuthal angle $\phi$ at termination.
+        double L_w; // Affine parameter $\lambda$ at the window intersection.
         double t_w; // Physical coordinate time $t$ at the window intersection.
-        double L_s; // Affine parameter $lambda$ at the source intersection.
+        double L_s; // Affine parameter $\lambda$ at the source intersection.
         double t_s; // Physical coordinate time $t$ at the source intersection.
     } __attribute__((packed)) blueprint_data_t;
 
@@ -65,9 +66,9 @@ batch_structs_c_code = r"""
         double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
         double *f_p; // State vector at the previous integration step.
         double *f_p_p; // State vector at two integration steps prior.
-        double *affine_param; // Current affine parameter $lambda$ for the trajectory.
-        double *affine_param_p; // Affine parameter $lambda$ at the previous step.
-        double *affine_param_p_p; // Affine parameter $lambda$ at two steps prior.
+        double *affine_param; // Current affine parameter $\lambda$ for the trajectory.
+        double *affine_param_p; // Affine parameter $\lambda$ at the previous step.
+        double *affine_param_p_p; // Affine parameter $\lambda$ at two steps prior.
         double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
@@ -77,11 +78,11 @@ batch_structs_c_code = r"""
         bool *on_positive_side_of_source_prev; // True if photon was previously 'above' the source plane.
 
         bool *source_event_found; // Flag indicating a source plane intersection was detected.
-        double *source_event_lambda; // Exact affine parameter $lambda$ of the source intersection.
+        double *source_event_lambda; // Exact affine parameter $\lambda$ of the source intersection.
         double *source_event_f_intersect; // Interpolated 9-component state vector at the source intersection.
 
         bool *window_event_found; // Flag indicating an observer window intersection was detected.
-        double *window_event_lambda; // Exact affine parameter $lambda$ of the window intersection.
+        double *window_event_lambda; // Exact affine parameter $\lambda$ of the window intersection.
         double *window_event_f_intersect; // Interpolated 9-component state vector at the window intersection.
     } PhotonStateSoA;
 """
@@ -100,8 +101,12 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     par.register_CodeParameter("REAL", __name__, "window_width", 10.0, commondata=True, add_to_parfile=True)
     par.register_CodeParameter("REAL", __name__, "window_height", 10.0, commondata=True, add_to_parfile=True)
 
-    # Dictionary mapping for GPU kernel arguments.
-    arg_dict_cuda = {
+    # Dynamic architecture detection.
+    parallelization = par.parval_from_str("parallelization")
+    cd_access = get_commondata_access(parallelization)
+
+    # Dictionary mapping for GPU/CPU kernel arguments.
+    arg_dict = {
         "num_rays": "const long int",
         "d_f_bundle": "double *restrict",
         "d_h_bundle": "double *restrict",
@@ -115,18 +120,28 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "chunk_size": "const long int"
     }
 
-    # Retrieve the correct accessor for constant memory (e.g., "d_commondata.").
-    cd_access = get_commondata_access("cuda")
-
-    # Define the GPU kernel body utilizing raw strings for LaTeX and strict variable documentation.
-    kernel_body = rf"""
+    # --- ARCHITECTURE-SPECIFIC KERNEL PREAMBLE/POSTAMBLE (The Sandwich) ---
+    if parallelization == "cuda":
+        loop_preamble = r"""
     // --- THREAD IDENTIFICATION & BOUNDARY CHECKS ---
     // Thread ID maps to a unique photon index within the current bundle batch via the identifier $c$.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x;
 
     // Hardware Justification: Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
     if (c >= chunk_size) return;
+    """
+        loop_postamble = ""
+    else:
+        loop_preamble = r"""
+    // --- OPENMP LOOP ARCHITECTURE ---
+    // Hardware Justification: OpenMP parallelizes the batch processing across available CPU cores.
+    #pragma omp parallel for
+    for (long int c = 0; c < chunk_size; c++) {
+    """
+        loop_postamble = "} // End OpenMP loop"
 
+    # --- CORE MATH (Hardware Agnostic) ---
+    core_math = rf"""
     // The identifier $i$ represents the global ray index within the master $num\_rays$ SoA.
     const long int i = start_idx + c;
 
@@ -156,11 +171,13 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     // --- INITIAL STATE POPULATION ---
     // Algorithmic Step: Write the starting position and spatial momentum explicitly to the VRAM bundle.
-    // Hardware Justification: Single coalesced writes via WriteCUDA prevent warp serialization on sm_86.
-    WriteCUDA(&d_f_bundle[IDX_F(0, c)], {cd_access}t_start); // Coordinate time $t$
-    WriteCUDA(&d_f_bundle[IDX_F(1, c)], {cd_access}camera_pos_x); // Spatial position $x$
-    WriteCUDA(&d_f_bundle[IDX_F(2, c)], {cd_access}camera_pos_y); // Spatial position $y$
-    WriteCUDA(&d_f_bundle[IDX_F(3, c)], {cd_access}camera_pos_z); // Spatial position $z$
+    // Algorithmic Step: Write the starting position and spatial momentum explicitly to the VRAM bundle.
+    
+    // Hardware Justification: Single coalesced memory writes prevent warp serialization on sm_86 and ensure aligned cache access on CPUs.
+    d_f_bundle[IDX_F(0, c)] = {cd_access}t_start; // Coordinate time $t$
+    d_f_bundle[IDX_F(1, c)] = {cd_access}camera_pos_x; // Spatial position $x$
+    d_f_bundle[IDX_F(2, c)] = {cd_access}camera_pos_y; // Spatial position $y$
+    d_f_bundle[IDX_F(3, c)] = {cd_access}camera_pos_z; // Spatial position $z$
 
     // Vector component $V^x$ for the unnormalized geometric trajectory.
     const double V_x = target_pos[0] - {cd_access}camera_pos_x;
@@ -173,38 +190,94 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const double inv_mag_V = 1.0 / sqrt(V_x*V_x + V_y*V_y + V_z*V_z);
 
     // Explicitly set the temporal momentum $p^t = 0$ for downstream Hamiltonian constraint solving.
-    WriteCUDA(&d_f_bundle[IDX_F(4, c)], 0.0);
+    d_f_bundle[IDX_F(4, c)] = 0.0;
 
-    WriteCUDA(&d_f_bundle[IDX_F(5, c)], V_x * inv_mag_V); // Initial momentum component $p^x$
-    WriteCUDA(&d_f_bundle[IDX_F(6, c)], V_y * inv_mag_V); // Initial momentum component $p^y$
-    WriteCUDA(&d_f_bundle[IDX_F(7, c)], V_z * inv_mag_V); // Initial momentum component $p^z$
+    d_f_bundle[IDX_F(5, c)] = V_x * inv_mag_V; // Initial momentum component $p^x$
+    d_f_bundle[IDX_F(6, c)] = V_y * inv_mag_V; // Initial momentum component $p^y$
+    d_f_bundle[IDX_F(7, c)] = V_z * inv_mag_V; // Initial momentum component $p^z$
     
     // Explicitly set the initial path length to zero.
-    WriteCUDA(&d_f_bundle[IDX_F(8, c)], 0.0);
+    d_f_bundle[IDX_F(8, c)] = 0.0;
 
     // Initialize the adaptive step size $h$ for the RKF45 integrator.
-    WriteCUDA(&d_h_bundle[IDX_H(c)], {cd_access}numerical_initial_h);
+    d_h_bundle[IDX_H(c)] = {cd_access}numerical_initial_h;
+
+    // --- MACRO CLEANUP ---
 
     // --- MACRO CLEANUP ---
     #undef IDX_F
     #undef IDX_H
     """
+
+    kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
     
     launch_dict = {
         "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
         "blocks_per_grid": ["(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
         "stream": "stream_idx"
-    }
+    } if parallelization == "cuda" else None
 
     kernel_prefunc, launch_code = generate_kernel_and_launch_code(
         kernel_name=f"set_initial_conditions_kernel_{spacetime_name}",
         kernel_body=kernel_body,
-        arg_dict_cuda=arg_dict_cuda,
-        arg_dict_host=arg_dict_cuda,
-        parallelization="cuda",
+        arg_dict_cuda=arg_dict,
+        arg_dict_host=arg_dict,
+        parallelization=parallelization,
         launch_dict=launch_dict,
-        cfunc_decorators="__global__",
+        cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
+
+    # --- MEMORY BRIDGE ARCHITECTURE ---
+    if parallelization == "cuda":
+        sync_and_transfer_code = r"""
+        // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
+        // Hardware Justification: This trap is critical because -rdc=true can cause silent link-time symbol failures.
+        #ifdef DEBUG
+        cudaDeviceSynchronize();
+        cudaError_t err = cudaGetLastError();
+        if (err != cudaSuccess) {
+            // Fatal unrecoverable error during kernel synchronization.
+            printf("Init Kernel Failed on Batch starting at %ld: %s\n", (long int)start_idx, cudaGetErrorString(err));
+            exit(1);
+        }
+        #endif
+
+        // --- 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
+        // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
+        // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
+        for(int m=0; m<9; m++) {
+            cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
+                    d_f_bundle + (m * BUNDLE_CAPACITY),
+                    sizeof(double) * chunk_size,
+                    cudaMemcpyDeviceToHost);
+        }
+
+        // --- 1-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
+        // Algorithmic Step: Transfer initialized adaptive step sizes $h$ from VRAM back to host RAM.
+        // Hardware Justification: Device-to-Host transfer required to synchronize the master SoA state.
+        cudaMemcpy(all_photons->h + start_idx,
+                   d_h_bundle,
+                   sizeof(double) * chunk_size,
+                   cudaMemcpyDeviceToHost);
+        """
+    else:
+        sync_and_transfer_code = r"""
+        // --- 9-STRIDED BRIDGE TRANSFER (HOST-TO-HOST) ---
+        // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from staging buffer to master SoA.
+        // Hardware Justification: Memory is copied locally in RAM to seed the Time Slot Manager.
+        for(int m=0; m<9; m++) {
+            memcpy(all_photons->f + (m * num_rays) + start_idx, 
+                   d_f_bundle + (m * BUNDLE_CAPACITY),
+                   sizeof(double) * chunk_size);
+        }
+
+        // --- 1-STRIDED BRIDGE TRANSFER (HOST-TO-HOST) ---
+        // Algorithmic Step: Transfer initialized adaptive step sizes $h$ from staging buffer to master SoA.
+        // Hardware Justification: Local memory copy to synchronize the master SoA state.
+        memcpy(all_photons->h + start_idx,
+               d_h_bundle,
+               sizeof(double) * chunk_size);
+        """
 
     # Generate the host-side loop string to iterate over the dataset in bundles.
     loop_body = f"""
@@ -213,35 +286,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
         {launch_code}
 
-        // --- EXPLICIT HARDWARE ERROR SYNCHRONIZATION ---
-        // Hardware Justification: This trap is critical because -rdc=true can cause silent link-time symbol failures.
-        #ifdef DEBUG
-        cudaDeviceSynchronize();
-        cudaError_t err = cudaGetLastError();
-        if (err != cudaSuccess) {{
-            // Fatal unrecoverable error during kernel synchronization.
-            printf("Init Kernel Failed on Batch starting at %ld: %s\\n", (long int)start_idx, cudaGetErrorString(err));
-            exit(1);
-        }}
-        #endif
-
-    // --- 9-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
-    // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
-    // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
-    for(int m=0; m<9; m++) {{
-        cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
-                d_f_bundle + (m * BUNDLE_CAPACITY),
-                sizeof(double) * chunk_size,
-                cudaMemcpyDeviceToHost);
-    }}
-
-    // --- 1-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST) ---
-    // Algorithmic Step: Transfer initialized adaptive step sizes $h$ from VRAM back to host RAM.
-    // Hardware Justification: Device-to-Host transfer required to synchronize the master SoA state.
-    cudaMemcpy(all_photons->h + start_idx,
-               d_h_bundle,
-               sizeof(double) * chunk_size,
-               cudaMemcpyDeviceToHost);
+        {sync_and_transfer_code}
     """
     
     host_loop_code = loop(
@@ -369,20 +414,17 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
         "cuda_intrinsics.h",
-        "<math.h>",
-        "<stdio.h>",
-        "<stdlib.h>",
     ]
 
     desc = r"""@brief Initializes Cartesian starting conditions for photons.
     
     Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
-    temporal momentum $p^t = 0$ and affine parameter $lambda = 0$ for downstream constraint solvers.
+    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
     
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.
-    @param all_photons Pointer to the master SoA state vector $f^mu$ in host memory.
+    @param all_photons Pointer to the master SoA state vector $f^\mu$ in host memory.
     @param window_center_out Output buffer for the geometric window center.
     @param n_x_out Output buffer for the $x$-axis basis vector $n_x^i$.
     @param n_y_out Output buffer for the $y$-axis basis vector $n_y^i$.
@@ -391,6 +433,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     cfunc_type = "void"
     name = f"set_initial_conditions_kernel_{spacetime_name}"
     
+    stream_param = "const int stream_idx" if parallelization == "cuda" else ""
     params = (
         "const commondata_struct *restrict commondata, "
         "long int num_rays, "
@@ -398,9 +441,10 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "double window_center_out[3], "
         "double n_x_out[3], "
         "double n_y_out[3], "
-        "double n_z_out[3],"
-        "const int stream_idx"
+        "double n_z_out[3]"
     )
+    if stream_param:
+        params += f", {stream_param}"
 
     include_CodeParameters_h = False
 

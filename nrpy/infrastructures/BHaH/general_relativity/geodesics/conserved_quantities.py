@@ -2,9 +2,9 @@
 Evaluates the physical conserved quantities along photon trajectories using a streaming bundle architecture.
 
 This module implements a streaming bundle architecture to compute physical 
-conserved quantities along photon trajectories. It strictly manages VRAM usage 
-by processing photons in limited batches, using pinned memory transfers to bridge 
-the Host-Device gap, ensuring compliance with the hardware memory limits.
+conserved quantities along photon trajectories. It strictly manages memory usage 
+by processing photons in limited batches, bridging the Host-Device gap, ensuring 
+compliance with hardware execution limits for both CUDA and OpenMP.
 
 Author: Dalton J. Moone.
 """
@@ -17,6 +17,7 @@ import nrpy.params as par
 from nrpy.helpers.parallelization.utilities import (
     generate_kernel_and_launch_code,
     get_commondata_access,
+    get_params_access,
 )
 from nrpy.helpers.loop import loop
 from nrpy.equations.general_relativity.geodesics.geodesic_diagnostics.conserved_quantities import (
@@ -39,6 +40,11 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     else:
         raise ValueError(f"Unsupported particle_type: {particle_type}")
 
+    # 1. Architecture Detection
+    parallelization = par.parval_from_str("parallelization")
+    cd_access = get_commondata_access(parallelization)
+    params_access = get_params_access(parallelization)
+
     config_key = f"{spacetime_name}_{particle_type}"
     diagnostics = Geodesic_Diagnostics[config_key]
 
@@ -57,7 +63,6 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     if diagnostics.Q_expr is not None:
         list_of_syms.append(diagnostics.Q_expr)
         list_of_c_vars.append("d_cq_bundle[c].Q")
-
 
     # Define the C-structure for tracking physical conserved quantities.
     cq_struct_def = """
@@ -92,33 +97,30 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         "d_cq_bundle": "conserved_quantities_t *restrict",
         "current_chunk_size": "const long int",
     }
-
-
-    # Fetch the architecture-specific constant memory prefix (e.g., "d_commondata.").
-    cd_access = get_commondata_access("cuda")
+    arg_dict_host = arg_dict_cuda.copy()
 
     # Dynamically generate the unpacking logic based on the specific spacetime coordinates.
     preamble_lines = [
         "    // --- COORDINATE HYDRATION ---",
-        "    // Hardware Justification: Unpack position and momentum using strict SoA macros directly from the VRAM bundle."
+        "    // Hardware Justification: Unpack position and momentum using strict SoA macros directly from the bundle."
     ]
 
     # Map the analytic spatial coordinates (e.g., $x, y, z$ or $r, \theta, \phi$).
     for i, symbol in enumerate(diagnostics.xx):
         var_name = str(symbol)
-        preamble_lines.append(f"    const double {var_name} = d_f_bundle[IDX_LOCAL({i}, c, BUNDLE_CAPACITY)]; // Spatial coordinate ${var_name}$ evaluated from VRAM.")
+        preamble_lines.append(f"    const double {var_name} = d_f_bundle[IDX_LOCAL({i}, c, BUNDLE_CAPACITY)]; // Spatial coordinate ${var_name}$ evaluated from memory.")
         preamble_lines.append(f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$.")
 
     # Map the temporal and spatial momenta ($p_t, p_x, p_y, p_z$).
     for i in range(4):
-        preamble_lines.append(f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from VRAM.")
+        preamble_lines.append(f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory.")
         preamble_lines.append(f"    (void)p{i}; // Suppress unused variable warning for $p_{i}$.")
 
     preamble_lines.append("")
     preamble_lines.append("    // --- CONSTANT MEMORY HYDRATION ---")
-    preamble_lines.append("    // Hardware Justification: Extract spacetime physics constants natively from the 64KB d_commondata cache.")
+    preamble_lines.append(f"    // Hardware Justification: Extract spacetime physics constants natively from the {cd_access} cache.")
     
-    # Algorithmic Step: Scrape the SymPy abstract syntax tree for free variables and map them to the GPU constant memory.
+    # Algorithmic Step: Scrape the SymPy abstract syntax tree for free variables and map them to the memory cache.
     free_syms = set()
     for expr in list_of_syms:
         free_syms.update(expr.free_symbols)
@@ -131,17 +133,10 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     preamble = "\n".join(preamble_lines)
     
-
-    # Define the core __global__ kernel body executed on the device.
-    kernel_body = f"""
-    // --- MACRO DEFINITIONS ---
-    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
-    // Layout: [Component][RayID]
-    #ifndef IDX_LOCAL
-    #define IDX_LOCAL(comp, ray_id, N) ((comp) * (N) + (ray_id))
-    #endif
-
-    // --- THREAD IDENTIFICATION ---
+    # 2. The Kernel "Sandwich"
+    if parallelization == "cuda":
+        loop_preamble = """
+    // --- CUDA THREAD IDENTIFICATION ---
     // Local 1D thread mapping within the current VRAM bundle.
     // Thread ID maps to a unique photon index $c$.
     const long int c = blockIdx.x * blockDim.x + threadIdx.x; // Global thread evaluation index $c$.
@@ -149,13 +144,36 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     // --- BOUNDARY CHECK ---
     // Ensure out-of-bounds threads do not access invalid bundle addresses.
     if (c >= current_chunk_size) return;
+"""
+        loop_postamble = ""
+    else:
+        loop_preamble = """
+    // --- OPENMP LOOP ARCHITECTURE ---
+    // Distribute photon rays across available CPU threads for parallel evaluation.
+    #pragma omp parallel for
+    for(long int c = 0; c < current_chunk_size; c++) {
+"""
+        loop_postamble = "    } // End OpenMP loop"
 
-    {preamble}
+    core_math = f"""
+    // --- MACRO DEFINITIONS ---
+    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // Layout: [Component][RayID]
+    #ifndef IDX_LOCAL
+    #define IDX_LOCAL(comp, ray_id, N) ((comp) * (N) + (ray_id))
+    #endif
+
+{preamble}
 
     // --- DIAGNOSTIC EVALUATION ---
     // Evaluates the analytic SymPy expressions for the conserved quantities.
-    {math_kernel}
-    """
+{math_kernel}
+
+    // --- MACRO CLEANUP ---
+    #undef IDX_LOCAL
+"""
+
+    kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
     launch_dict = {
         "threads_per_block": [
@@ -170,40 +188,61 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         ],
     }
 
-    # Generate the kernel definition and the internal launch string.
+    # 3. Update the Kernel Launch
     prefunc, launch_body = generate_kernel_and_launch_code(
         kernel_name=kernel_name,
         kernel_body=kernel_body,
         arg_dict_cuda=arg_dict_cuda,
-        arg_dict_host=arg_dict_cuda,
-        parallelization="cuda",
+        arg_dict_host=arg_dict_host,
+        parallelization=parallelization,
         launch_dict=launch_dict,
         thread_tiling_macro_suffix="DEFAULT",
-        cfunc_decorators="__global__",
+        cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
+
+    # --- CONDITIONAL HOST ORCHESTRATION ---
+    if parallelization == "cuda":
+        host_to_device_transfer = r"""
+    // --- ASYNC MEMORY TRANSFER (HOST TO DEVICE) ---
+    // Transfer the state vector $f^\mu$ for the current bundle to VRAM.
+    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+        cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
+                   all_photons->f + (m * num_rays) + start_idx,
+                   sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);
+    }
+    """
+        device_to_host_transfer = r"""
+    // --- ASYNC MEMORY TRANSFER (DEVICE TO HOST) ---
+    // Retrieve the calculated conserved quantities back to the Pinned memory array.
+    cudaMemcpy(cq_result + start_idx, d_cq_bundle,
+               sizeof(conserved_quantities_t) * current_chunk_size, cudaMemcpyDeviceToHost);
+    """
+    else:
+        host_to_device_transfer = r"""
+    // --- SYNCHRONOUS MEMORY TRANSFER (HOST TO HOST CHUNK) ---
+    // Populating the bundle array for localized CPU chunk processing.
+    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+        memcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
+               all_photons->f + (m * num_rays) + start_idx,
+               sizeof(double) * current_chunk_size);
+    }
+    """
+        device_to_host_transfer = r"""
+    // --- SYNCHRONOUS MEMORY TRANSFER (HOST CHUNK TO HOST) ---
+    // Retrieve the calculated conserved quantities back to the main memory array.
+    memcpy(cq_result + start_idx, d_cq_bundle,
+           sizeof(conserved_quantities_t) * current_chunk_size);
+    """
 
     # Host-side chunked execution loop.
     loop_body = f"""
     // --- BUNDLE SIZING ---
-    // Variable $current\_chunk\_size$ defines the active range for the current streaming bundle.
-    const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current\_chunk\_size$.
-
-    // --- ASYNC MEMORY TRANSFER (HOST TO DEVICE) ---
-    // Transfer the 9-component state vector $f^\mu$ for the current bundle to VRAM.
-    // Hardware Justification: Component-wise transfers bounded by $BUNDLE\_CAPACITY$ prevent PCIe saturation.
-    for(int m=0; m<9; m++) {{ // Loop over all 9 elements of the state vector $f^\mu$.
-        cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
-                   all_photons->f + (m * num_rays) + start_idx,
-                   sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice); // Transmits component vector array Host-to-Device.
-    }}
-
-    // --- KERNEL LAUNCH ---
+    // Variable $current_chunk_size$ defines the active range for the current streaming bundle.
+    const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current_chunk_size$.
+    {host_to_device_transfer}
+        // --- KERNEL LAUNCH ---
     {launch_body}
-
-    // --- ASYNC MEMORY TRANSFER (DEVICE TO HOST) ---
-    // Retrieve the calculated conserved quantities back to the Pinned memory array.
-    cudaMemcpy(cq_result + start_idx, d_cq_bundle,
-               sizeof(conserved_quantities_t) * current_chunk_size, cudaMemcpyDeviceToHost); // Transmits physical diagnostic records Device-to-Host.
+    {device_to_host_transfer}
     """
 
     host_loop = loop(
@@ -216,18 +255,17 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     )
 
     # 7. Variable Definition (The Master Order)
-    # The prefunc parameter is previously defined via generate_kernel_and_launch_code.
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "math.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     
-    desc = f"""@brief Computes conserved quantities for a batch of trajectories.
+    desc = r"""@brief Computes conserved quantities for a batch of trajectories.
     @param all_photons The master Structure of Arrays containing the state vectors $f^\mu$.
     @param num_rays The total number of photon trajectories.
     @param cq_result The array of diagnostic structures to be populated.
 
     Detailed algorithm:
-    1. Allocates VRAM staging buffers for state vectors $f^\mu$ and quantity results.
+    1. Allocates execution staging buffers for state vectors $f^\mu$ and quantity results.
     2. Iterates over the global dataset in chunks of $BUNDLE\_CAPACITY$.
-    3. Transfers state data Host-to-Device, computes expressions, and transfers Device-to-Host."""
+    3. Prepares bundle memory, computes expressions natively on the targeted hardware, and unloads results."""
 
     cfunc_type = "void"
     name = f"calculate_conserved_quantities_universal_{spacetime_name}_{particle_type}"
@@ -238,19 +276,19 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     )
     include_CodeParameters_h = False
 
-    body = f"""
-    // --- VRAM STAGING ALLOCATION ---
-    // Hardware Justification: Allocate buffers statically sized to $BUNDLE\_CAPACITY$ to fit within 10GB VRAM limits.
-    double *d_f_bundle; // Device pointer for the bundled state vector $f^\mu$.
-    conserved_quantities_t *d_cq_bundle; // Device pointer for the bundled diagnostic outputs.
+    body = fr"""
+    // --- MEMORY STAGING ALLOCATION ---
+    // Hardware Justification: Allocate buffers statically sized to $BUNDLE\_CAPACITY$. Maps to VRAM or RAM based on platform.
+    double *d_f_bundle; // Pointer for the bundled state vector $f^\mu$.
+    conserved_quantities_t *d_cq_bundle; // Pointer for the bundled diagnostic outputs.
 
-    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocates device target array.
-    BHAH_MALLOC_DEVICE(d_cq_bundle, sizeof(conserved_quantities_t) * BUNDLE_CAPACITY); // Allocates device return array.
+    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocates device/host target array.
+    BHAH_MALLOC_DEVICE(d_cq_bundle, sizeof(conserved_quantities_t) * BUNDLE_CAPACITY); // Allocates device/host return array.
 
-    // --- HOST-SIDE PAGINATION LOOP ---
+    // --- PAGINATION LOOP ---
     {host_loop}
 
-    // --- VRAM CLEANUP ---
+    // --- MEMORY CLEANUP ---
     BHAH_FREE_DEVICE(d_f_bundle); // Releases memory for state vector $f^\mu$.
     BHAH_FREE_DEVICE(d_cq_bundle); // Releases memory for diagnostic outputs.
     """
