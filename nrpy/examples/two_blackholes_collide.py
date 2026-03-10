@@ -107,6 +107,7 @@ enable_CAKO = True
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
+basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 NUMGRIDS = len(set_of_CoordSystems)
 num_cuda_streams = NUMGRIDS
 par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
@@ -165,7 +166,7 @@ if enable_bhahaha:
             check=True,
         )
     BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
-        CoordSystem=CoordSystem, max_horizons=3
+        max_horizons=3
     )
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics, project_dir=project_dir
@@ -290,6 +291,9 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
+    set_of_CoordSystems=basis_transform_CoordSystems,
+)
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################

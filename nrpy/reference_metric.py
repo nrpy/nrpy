@@ -986,6 +986,60 @@ class ReferenceMetric:
             self.scalefactor_orthog_funcform[0] = self.f0_of_xx0_funcform
             self.scalefactor_orthog_funcform[1] = self.f1_of_xx1_funcform
             self.scalefactor_orthog_funcform[2] = self.f3_of_xx2_funcform
+        elif self.CoordSystem == "SinhCartesianSplitOffZ":
+            # Split xy and z sinh mappings so tall Cartesian boxes can use a
+            # different z stretching from the transverse directions.
+            AMPLXY, AMPLZ = par.register_CodeParameters(
+                "REAL",
+                self.CodeParam_modulename,
+                ["AMPLXY", "AMPLZ"],
+                [10.0, 10.0],
+                add_to_parfile=self.add_rfm_params_to_parfile,
+                add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            )
+            SINHWXY, SINHWZ = par.register_CodeParameters(
+                "REAL",
+                self.CodeParam_modulename,
+                ["SINHWXY", "SINHWZ"],
+                [0.2, 0.2],
+                add_to_glb_code_params_dict=self.add_CodeParams_to_glb_code_params_dict,
+            )
+            self.xxmin = [sp.sympify(-1), sp.sympify(-1), sp.sympify(-1)]
+            self.xxmax = [sp.sympify(+1), sp.sympify(+1), sp.sympify(+1)]
+
+            self.xx_to_Cart[0] = self.Sinhv1(self.xx[0], AMPLXY, SINHWXY)
+            self.xx_to_Cart[1] = self.Sinhv1(self.xx[1], AMPLXY, SINHWXY)
+            self.xx_to_Cart[2] = self.Sinhv1(self.xx[2], AMPLZ, SINHWZ)
+
+            self.xxSph[0] = sp.sqrt(
+                self.xx_to_Cart[0] ** 2
+                + self.xx_to_Cart[1] ** 2
+                + self.xx_to_Cart[2] ** 2
+            )
+            self.xxSph[1] = sp.acos(self.xx_to_Cart[2] / self.xxSph[0])
+            self.xxSph[2] = sp.atan2(self.xx_to_Cart[1], self.xx_to_Cart[0])
+
+            self.Cart_to_xx[0] = SINHWXY * sp.asinh(
+                self.Cartx * sp.sinh(1 / SINHWXY) / AMPLXY
+            )
+            self.Cart_to_xx[1] = SINHWXY * sp.asinh(
+                self.Carty * sp.sinh(1 / SINHWXY) / AMPLXY
+            )
+            self.Cart_to_xx[2] = SINHWZ * sp.asinh(
+                self.Cartz * sp.sinh(1 / SINHWZ) / AMPLZ
+            )
+
+            self.scalefactor_orthog[0] = sp.diff(self.xx_to_Cart[0], self.xx[0])
+            self.scalefactor_orthog[1] = sp.diff(self.xx_to_Cart[1], self.xx[1])
+            self.scalefactor_orthog[2] = sp.diff(self.xx_to_Cart[2], self.xx[2])
+
+            self.f0_of_xx0 = sp.diff(self.xx_to_Cart[0], self.xx[0])
+            self.f1_of_xx1 = sp.diff(self.xx_to_Cart[1], self.xx[1])
+            self.f3_of_xx2 = sp.diff(self.xx_to_Cart[2], self.xx[2])
+
+            self.scalefactor_orthog_funcform[0] = self.f0_of_xx0_funcform
+            self.scalefactor_orthog_funcform[1] = self.f1_of_xx1_funcform
+            self.scalefactor_orthog_funcform[2] = self.f3_of_xx2_funcform
 
         # Set the transpose of the matrix of unit vectors for all Cartesian-like coordinate systems.
         self.UnitVectors = [

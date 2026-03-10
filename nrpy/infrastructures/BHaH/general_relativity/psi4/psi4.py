@@ -178,7 +178,7 @@ MAYBE_UNUSED REAL {psi4_class.metric_deriv_var_list_str};
         arg_dict_host,
         parallelization="openmp",
         comments=desc,
-        cfunc_type=cfunc_type,
+        cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
         thread_tiling_macro_suffix="PSI4",
     )
