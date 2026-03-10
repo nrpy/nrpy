@@ -178,7 +178,6 @@ if __name__ == "__main__":
     par.glb_code_params_dict["a_spin"].defaultvalue = 0.9
 
     # Batch Integrator & Numerical Limits
-    par.glb_code_params_dict["debug_mode"].defaultvalue = True
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 150.0

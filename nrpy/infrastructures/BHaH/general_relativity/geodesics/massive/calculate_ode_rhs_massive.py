@@ -140,49 +140,12 @@ def calculate_ode_rhs_massive(
 
 
 if __name__ == "__main__":
-    # Ensure local modules can be imported
-    sys.path.append(os.getcwd())
+    import doctest
+    import sys
 
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("TestCalculateODERHS")
-
-    try:
-        from nrpy.equations.general_relativity.geodesics.geodesics import (
-            Geodesic_Equations,
-        )
-    except ImportError:
-        logger.error("Error: Could not import Geodesic_Equations for testing.")
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-
-    SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massive"
-
-    logger.info("Test: Generating ODE RHS C-code for %s...", SPACETIME)
-
-    try:
-        # 1. Acquire Symbolic Data
-        logger.info(" -> Acquiring symbolic geodesic RHS expressions...")
-        geodesic_data = Geodesic_Equations[GEO_KEY]
-
-        # 2. Run the Generator
-        calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, geodesic_data.xx)
-
-        # 3. Validation and Output
-        func_name = "calculate_ode_rhs_massive"
-        if func_name in cfc.CFunction_dict:
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(cfc.CFunction_dict[func_name].full_function)
-            logger.info(" -> PASS: Wrote %s", filename)
-        else:
-            raise RuntimeError(
-                f"Function {func_name} not registered in CFunction_dict."
-            )
-
-    except RuntimeError as e:
-        logger.error(" -> FAIL: Test failed with error: %s", e)
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

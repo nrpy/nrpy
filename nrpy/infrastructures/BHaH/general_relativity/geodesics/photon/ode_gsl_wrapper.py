@@ -75,41 +75,12 @@ def ode_gsl_wrapper(spacetime_name: str) -> None:
 
 
 if __name__ == "__main__":
-    import logging
-    import os
+    import doctest
     import sys
 
-    import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-
-    # Ensure local modules can be imported
-    sys.path.append(os.getcwd())
-
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("TestGSLWrapper")
-
-    SPACETIME = "KerrSchild_Cartesian"
-
-    logger.info("Test: Generating GSL Wrapper C-code for %s...", SPACETIME)
-
-    try:
-        # 1. Run the Generator
-        ode_gsl_wrapper(SPACETIME)
-
-        # 2. Output
-        func_name = f"ode_gsl_wrapper_{SPACETIME}"
-        if func_name in cfc.CFunction_dict:
-            filename = f"{func_name}.c"
-            with open(filename, "w", encoding="utf-8") as f:
-                f.write(cfc.CFunction_dict[func_name].full_function)
-            logger.info(" -> Success! Wrote %s", filename)
-
-            # Also output defines to check struct registration
-            Bdefines_h.output_BHaH_defines_h(project_dir=".")
-            logger.info(" -> Updated BHaH_defines.h")
-        else:
-            raise RuntimeError(f"Function {func_name} not registered.")
-
-    except (RuntimeError, OSError) as e:
-        logger.error("Test failed: %s", e)
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

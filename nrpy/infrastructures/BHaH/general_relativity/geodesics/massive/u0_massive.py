@@ -113,56 +113,12 @@ def u0_massive(u0_expr: sp.Expr) -> None:
 
 
 if __name__ == "__main__":
-    # Ensure local modules can be imported
-    sys.path.append(os.getcwd())
+    import doctest
+    import sys
 
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("TestU0MassiveAnalytic")
-
-    try:
-        from nrpy.equations.general_relativity.geodesics.geodesics import (
-            Geodesic_Equations,
-        )
-    except ImportError as e:
-        logger.error("Error: Could not import required modules: %s", e)
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-
-    SPACETIME = "KerrSchild_Cartesian"
-    GEO_KEY = f"{SPACETIME}_massive"
-
-    logger.info("Test: Generating u0_massive C-code for %s...", SPACETIME)
-
-    try:
-        # 1. Acquire Symbolic Data
-        logger.info(" -> Acquiring symbolic Hamiltonian constraint (u^0)...")
-        geodesic_data = Geodesic_Equations[GEO_KEY]
-
-        if geodesic_data.u0_massive is None:
-            raise ValueError(f"u0_massive is None for key {GEO_KEY}")
-
-        # 2. Run the Generator
-        logger.info(" -> Calling u0_massive()...")
-        u0_massive(geodesic_data.u0_massive)
-
-        # 3. Validation
-        cfunc_name = "u0_massive"
-        if cfunc_name not in cfc.CFunction_dict:
-            raise RuntimeError(
-                f"FAIL: '{cfunc_name}' was not registered in cfc.CFunction_dict."
-            )
-        logger.info(" -> PASS: '%s' function registered successfully.", cfunc_name)
-
-        # 4. Output Files
-        filename = f"{cfunc_name}.c"
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info(" -> Written to %s", filename)
-
-    except (RuntimeError, ValueError, KeyError) as e:
-        logger.error(" -> FAIL: u0_massive test failed with error: %s", e)
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

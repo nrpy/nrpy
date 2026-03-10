@@ -41,8 +41,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     par.register_CodeParameters(
         "bool",
         __name__,
-        ["perform_conservation_check", "debug_mode"],
-        [True, True],
+        ["perform_conservation_check"],
+        [True],
         commondata=True,
         add_to_parfile=True,
     )
