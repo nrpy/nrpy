@@ -136,7 +136,7 @@ def register_CFunction_Ricci_eval(
         arg_dict_host,
         parallelization="cuda" if is_cuda else "openmp",
         comments=desc,
-        cfunc_type=cfunc_type,
+        cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
         thread_tiling_macro_suffix="RICCI_EVAL",
     )

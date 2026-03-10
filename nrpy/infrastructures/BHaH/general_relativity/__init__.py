@@ -4,6 +4,7 @@ from . import (
     Ricci_eval,
     TOVola,
     TwoPunctures,
+    basis_transforms,
     cahdprefactor_gf,
     constraints_eval,
     diagnostic_gfs_set,
@@ -14,5 +15,4 @@ from . import (
     psi4,
     psi4_spinweightm2_decomposition,
     rhs_eval,
-    rotation,
 )

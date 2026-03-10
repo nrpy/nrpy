@@ -13,27 +13,24 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.indexedexp as ixp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric
+from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_bhahaha_find_horizons(
-    CoordSystem: str,
     max_horizons: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function for finding horizons with BHaHAHA.
 
-    :param CoordSystem: CoordSystem of project, where horizon finding will take place.
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If EvolvedConformalFactor_cf set to unsupported value.
 
-    >>> env = register_CFunction_bhahaha_find_horizons(CoordSystem="Cartesian", max_horizons=1)
+    >>> env = register_CFunction_bhahaha_find_horizons(max_horizons=1)  # doctest: +ELLIPSIS
+    Setting up BSSN_Quantities[Cartesian]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -181,23 +178,62 @@ def register_CFunction_bhahaha_find_horizons(
         "BHaH_function_prototypes.h",
         "sys/time.h",
     ]
+    # Single source of truth for the ADM metric slots BHaHAHA stores and the
+    # corresponding Cartesian tensor components used to build them.
+    final_adm_metric_components: Tuple[Tuple[str, int, int], ...] = (
+        ("FINAL_INTERP_GAMMADDXXGF", 0, 0),
+        ("FINAL_INTERP_GAMMADDXYGF", 0, 1),
+        ("FINAL_INTERP_GAMMADDXZGF", 0, 2),
+        ("FINAL_INTERP_GAMMADDYYGF", 1, 1),
+        ("FINAL_INTERP_GAMMADDYZGF", 1, 2),
+        ("FINAL_INTERP_GAMMADDZZGF", 2, 2),
+        ("FINAL_INTERP_KDDXXGF", 0, 0),
+        ("FINAL_INTERP_KDDXYGF", 0, 1),
+        ("FINAL_INTERP_KDDXZGF", 0, 2),
+        ("FINAL_INTERP_KDDYYGF", 1, 1),
+        ("FINAL_INTERP_KDDYZGF", 1, 2),
+        ("FINAL_INTERP_KDDZZGF", 2, 2),
+    )
+    _ = BSSN_quantities["Cartesian"]
+    bssn_to_adm = BSSN_to_ADM(CoordSystem="Cartesian", enable_rfm_precompute=False)
+    adm_output_pairs: List[Tuple[str, sp.Basic]] = [
+        (
+            name,
+            bssn_to_adm.gammaDD[i][j] if "GAMMADD" in name else bssn_to_adm.KDD[i][j],
+        )
+        for name, i, j in final_adm_metric_components
+    ]
     prefunc = r"""
 // Enum for indexing the final ADM metric components BHaHAHA expects.
 enum FINAL_ADM_METRIC_INDICES {
-  FINAL_INTERP_GAMMADDXXGF,
-  FINAL_INTERP_GAMMADDXYGF,
-  FINAL_INTERP_GAMMADDXZGF,
-  FINAL_INTERP_GAMMADDYYGF,
-  FINAL_INTERP_GAMMADDYZGF,
-  FINAL_INTERP_GAMMADDZZGF,
-  FINAL_INTERP_KDDXXGF,
-  FINAL_INTERP_KDDXYGF,
-  FINAL_INTERP_KDDXZGF,
-  FINAL_INTERP_KDDYYGF,
-  FINAL_INTERP_KDDYZGF,
-  FINAL_INTERP_KDDZZGF,
+"""
+    prefunc += "\n".join(f"  {name}," for name, _, _ in final_adm_metric_components)
+    prefunc += r"""
   BHAHAHA_NUM_METRIC_COMPONENTS
 }; // END ENUM: FINAL_ADM_METRIC_INDICES
+
+/**
+ * Convert one Cartesian-basis BSSN point to the ADM metric components BHaHAHA expects.
+ *
+ * @param[in] cf Conformal factor.
+ * @param[in] trK Trace of the extrinsic curvature.
+ * @param[in] hDD00-hDD22 Cartesian conformal 3-metric components.
+ * @param[in] aDD00-aDD22 Cartesian traceless extrinsic-curvature components.
+ * @param[out] metric_components Final ADM metric components in `FINAL_ADM_METRIC_INDICES` order.
+ */
+static void BHaHAHA_BSSN_to_ADM_Cartesian(const REAL cf, const REAL trK, const REAL hDD00, const REAL hDD01, const REAL hDD02,
+                                          const REAL hDD11, const REAL hDD12, const REAL hDD22, const REAL aDD00,
+                                          const REAL aDD01, const REAL aDD02, const REAL aDD11, const REAL aDD12,
+                                          const REAL aDD22, REAL *restrict metric_components) {
+"""
+    prefunc += ccg.c_codegen(
+        [expr for _, expr in adm_output_pairs],
+        [f"metric_components[{name}]" for name, _ in adm_output_pairs],
+        include_braces=False,
+        verbose=False,
+    )
+    prefunc += r"""
+} // END FUNCTION: BHaHAHA_BSSN_to_ADM_Cartesian
 
 // Enum for indexing interpolated BSSN gridfunctions. (NRPy-specific)
 enum INTERP_BSSN_GF_INDICES {
@@ -349,8 +385,8 @@ void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict co
 } // END FUNCTION: free_bhahaha_horizon_shape_data_all_horizons
 
 /**
- * Interpolates BSSN metric data from a Cartesian NRPy grid to a spherical grid,
- * transforms it to ADM Cartesian components, and stores it for BHaHAHA.
+ * Interpolates BSSN metric data from an NRPy grid to a spherical grid,
+ * transforms it at each single point to ADM Cartesian components, and stores it for BHaHAHA.
  *
  * The function performs the following steps:
  * 1. Determines spherical grid parameters (Ntheta, Nphi, dtheta, dphi from `current_horizon_params`)
@@ -360,14 +396,14 @@ void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict co
  * 4. Populates `dst_x0x1x2_interp`: For each point on the spherical grid (defined by `radii`,
  *    theta, phi around `x_center`, `y_center`, `z_center`), converts its Cartesian
  *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2`.
- * 5. Initializes source gridfunction pointers (`src_gf_ptrs`) for BSSN variables from `y_n_gfs`.
+ * 5. Initializes source gridfunction pointers (`src_gf_ptrs`) for the required BSSN variables from `y_n_gfs`.
  * 6. Allocates temporary memory for interpolated BSSN variables at spherical grid points
  *    (`dst_data_ptrs_bssn`). Exits on failure.
  * 7. Performs 3D interpolation of BSSN GFs from the source Cartesian grid (`xx`, `src_gf_ptrs`)
  *    to the spherical target points (`dst_x0x1x2_interp`), storing results in `dst_data_ptrs_bssn`.
- * 8. Transforms interpolated BSSN data to ADM Cartesian components: For each point, uses
- *    the interpolated BSSN values (cf, trK, aDD, hDD) and reference-metric coordinates
- *    (xx0, xx1, xx2) to compute g_ij and K_ij in Cartesian coordinates.
+ * 8. Transforms interpolated native-basis BSSN data to ADM Cartesian components at each single point:
+ *    For each point, uses the trusted single-point basis-transform helper and a private BHaHAHA ADM helper
+ *    on stack storage only.
  * 9. Stores the resulting ADM components (gxx, gxy, ..., Kzz) into `input_metric_data_target_array`
  *    in the flat layout expected by BHaHAHA.
  * 10. Frees allocated temporary memory (`dst_x0x1x2_interp` and `dst_data_ptrs_bssn`).
@@ -461,95 +497,52 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
                                              params->Nxx_plus_2NGHOSTS1, params->Nxx_plus_2NGHOSTS2, BHAHAHA_NUM_INTERP_GFS, xx, src_gf_ptrs,
                                              total_interp_points, dst_x0x1x2_interp, dst_data_ptrs_bssn);
 
-  {                             // Start of BSSN to ADM transformation block
-#include "set_CodeParameters.h" // NRPy-specific include for coordinate transformations and symbolic expressions
+  { // Start of BSSN to ADM transformation block
+    params_struct point_params = *params;
+    point_params.Nxx_plus_2NGHOSTS0 = 1;
+    point_params.Nxx_plus_2NGHOSTS1 = 1;
+    point_params.Nxx_plus_2NGHOSTS2 = 1;
 
-    // STEP 8: Transform interpolated BSSN data to ADM Cartesian components.
+    // STEP 8: Transform interpolated native-basis BSSN data to ADM Cartesian components.
 #pragma omp parallel for
     for (int iphi = 0; iphi < Nphi_interp; iphi++) {
       for (int itheta = 0; itheta < Ntheta_interp; itheta++) {
         for (int ir = 0; ir < actual_Nr_interp; ir++) {
           const int offset = total_interp_points;
           const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
-          const REAL xx0 = dst_x0x1x2_interp[idx3][0];
-          const REAL xx1 = dst_x0x1x2_interp[idx3][1];
-          const REAL xx2 = dst_x0x1x2_interp[idx3][2];
+          const REAL xx_src[3] = {
+              dst_x0x1x2_interp[idx3][0],
+              dst_x0x1x2_interp[idx3][1],
+              dst_x0x1x2_interp[idx3][2],
+          };
+          REAL point_bssn_gfs[NUM_EVOL_GFS] = {0};
+          REAL point_metric_data[BHAHAHA_NUM_METRIC_COMPONENTS];
 
-          const REAL cf = dst_data_ptrs_bssn[INTERP_CFGF_IDX][idx3];
-          const REAL trK = dst_data_ptrs_bssn[INTERP_TRKGF_IDX][idx3];
+          point_bssn_gfs[CFGF] = dst_data_ptrs_bssn[INTERP_CFGF_IDX][idx3];
+          point_bssn_gfs[TRKGF] = dst_data_ptrs_bssn[INTERP_TRKGF_IDX][idx3];
+          point_bssn_gfs[HDD00GF] = dst_data_ptrs_bssn[INTERP_HDD00GF_IDX][idx3];
+          point_bssn_gfs[HDD01GF] = dst_data_ptrs_bssn[INTERP_HDD01GF_IDX][idx3];
+          point_bssn_gfs[HDD02GF] = dst_data_ptrs_bssn[INTERP_HDD02GF_IDX][idx3];
+          point_bssn_gfs[HDD11GF] = dst_data_ptrs_bssn[INTERP_HDD11GF_IDX][idx3];
+          point_bssn_gfs[HDD12GF] = dst_data_ptrs_bssn[INTERP_HDD12GF_IDX][idx3];
+          point_bssn_gfs[HDD22GF] = dst_data_ptrs_bssn[INTERP_HDD22GF_IDX][idx3];
+          point_bssn_gfs[ADD00GF] = dst_data_ptrs_bssn[INTERP_ADD00GF_IDX][idx3];
+          point_bssn_gfs[ADD01GF] = dst_data_ptrs_bssn[INTERP_ADD01GF_IDX][idx3];
+          point_bssn_gfs[ADD02GF] = dst_data_ptrs_bssn[INTERP_ADD02GF_IDX][idx3];
+          point_bssn_gfs[ADD11GF] = dst_data_ptrs_bssn[INTERP_ADD11GF_IDX][idx3];
+          point_bssn_gfs[ADD12GF] = dst_data_ptrs_bssn[INTERP_ADD12GF_IDX][idx3];
+          point_bssn_gfs[ADD22GF] = dst_data_ptrs_bssn[INTERP_ADD22GF_IDX][idx3];
+
+          basis_transform_BSSN_rfm_to_Cartesian_single_point(params, &point_params, 0, xx_src, point_bssn_gfs);
+          BHaHAHA_BSSN_to_ADM_Cartesian(point_bssn_gfs[CFGF], point_bssn_gfs[TRKGF], point_bssn_gfs[HDD00GF], point_bssn_gfs[HDD01GF],
+                                        point_bssn_gfs[HDD02GF], point_bssn_gfs[HDD11GF], point_bssn_gfs[HDD12GF], point_bssn_gfs[HDD22GF],
+                                        point_bssn_gfs[ADD00GF], point_bssn_gfs[ADD01GF], point_bssn_gfs[ADD02GF], point_bssn_gfs[ADD11GF],
+                                        point_bssn_gfs[ADD12GF], point_bssn_gfs[ADD22GF], point_metric_data);
+
+          for (int gf = 0; gf < BHAHAHA_NUM_METRIC_COMPONENTS; gf++) {
+            input_metric_data_target_array[gf * offset + idx3] = point_metric_data[gf];
+          } // END LOOP: for gf (final metric-component copy)
 """
-    defines_list: List[str] = []
-    for i in range(3):
-        for j in range(i, 3):
-            defines_list += [
-                f"const REAL rfm_hDD{i}{j} = dst_data_ptrs_bssn[INTERP_HDD{i}{j}GF_IDX][idx3];\n"
-            ]
-            defines_list += [
-                f"const REAL rfm_aDD{i}{j} = dst_data_ptrs_bssn[INTERP_ADD{i}{j}GF_IDX][idx3];\n"
-            ]
-    prefunc += "".join(sorted(defines_list, key=str.casefold))
-
-    rfm = refmetric.reference_metric[CoordSystem]
-    basis_transforms = bt.basis_transforms[CoordSystem]
-    rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
-    rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
-    ghatDD = rfm.ghatDD
-    if CoordSystem.startswith("GeneralRFM"):
-        provider = getattr(rfm, "general_rfm_provider", None)
-        if provider is None:
-            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
-        ghatDD = provider.ghatDD
-    rfm_gammabarDD = ixp.zerorank2()
-    rfm_AbarDD = ixp.zerorank2()
-    for i in range(3):
-        for j in range(3):
-            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + ghatDD[i][j]
-            rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
-    Cart_gammabarDD = (
-        basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-            rfm_gammabarDD
-        )
-    )
-    Cart_AbarDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        rfm_AbarDD
-    )
-    exp4phi = sp.sympify(0)
-    cf = sp.Symbol("cf", real=True)
-    EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-    if EvolvedConformalFactor_cf == "phi":
-        exp4phi = sp.exp(4 * cf)
-    elif EvolvedConformalFactor_cf == "chi":
-        exp4phi = 1 / cf
-    elif EvolvedConformalFactor_cf == "W":
-        exp4phi = 1 / cf**2
-    else:
-        raise ValueError(
-            f"Error EvolvedConformalFactor_cf type = {EvolvedConformalFactor_cf} unknown."
-        )
-    expr_list: List[sp.Expr] = []
-    name_list: List[str] = []
-    Cart_gammaDD = ixp.zerorank2()
-    labels = ["X", "Y", "Z"]
-    for i in range(3):
-        for j in range(i, 3):
-            Cart_gammaDD[i][j] = exp4phi * Cart_gammabarDD[i][j]
-            expr_list += [Cart_gammaDD[i][j]]
-            name_list += [
-                f"input_metric_data_target_array[FINAL_INTERP_GAMMADD{labels[i]}{labels[j]}GF * offset + idx3]"
-            ]
-    Cart_KDD = ixp.zerorank2()
-    trK = sp.Symbol("trK", real=True)
-    for i in range(3):
-        for j in range(i, 3):
-            Cart_KDD[i][j] = (
-                exp4phi * Cart_AbarDD[i][j]
-                + sp.Rational(1, 3) * Cart_gammaDD[i][j] * trK
-            )
-            expr_list += [Cart_KDD[i][j]]
-            name_list += [
-                f"input_metric_data_target_array[FINAL_INTERP_KDD{labels[i]}{labels[j]}GF * offset + idx3]"
-            ]
-    prefunc += ccg.c_codegen(expr_list, name_list, include_braces=True, verbose=False)
 
     prefunc += r"""
         } // END LOOP: for ir (BSSN to ADM transformation)

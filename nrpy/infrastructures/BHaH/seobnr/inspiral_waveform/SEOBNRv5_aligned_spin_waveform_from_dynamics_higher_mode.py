@@ -44,12 +44,12 @@ if (strain_modes_single_timestep == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for strain_modes_single_timestep\\n");
   exit(1);
 }
-commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODESSTORED*sizeof(double complex));
+commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODES*sizeof(double complex));
 if (commondata->waveform_low == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_low\\n");
   exit(1);
 }
-commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODESSTORED*sizeof(double complex));
+commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(double complex));
 if (commondata->waveform_fine == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_fine\\n");
   exit(1);
@@ -71,7 +71,13 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   //store
   SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
-  commondata->waveform_low[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN22)] = strain_modes_single_timestep[STRAIN22-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN21)] = strain_modes_single_timestep[STRAIN21-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN33)] = strain_modes_single_timestep[STRAIN33-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN32)] = strain_modes_single_timestep[STRAIN32-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN44)] = strain_modes_single_timestep[STRAIN44-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN43)] = strain_modes_single_timestep[STRAIN43-1];
+  commondata->waveform_low[IDX_WF(i,STRAIN55)] = strain_modes_single_timestep[STRAIN55-1];
 }
 //high sampling
 for (i = 0; i < commondata->nsteps_fine; i++) {
@@ -89,7 +95,13 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   //store only 2,2 mode for now, higher modes will be stored in a future update
   SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
-  commondata->waveform_fine[IDX_WF(i,STRAIN)] = strain_modes_single_timestep[STRAIN22-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN22)] = strain_modes_single_timestep[STRAIN22-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN21)] = strain_modes_single_timestep[STRAIN21-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN33)] = strain_modes_single_timestep[STRAIN33-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN32)] = strain_modes_single_timestep[STRAIN32-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN44)] = strain_modes_single_timestep[STRAIN44-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN43)] = strain_modes_single_timestep[STRAIN43-1];
+  commondata->waveform_fine[IDX_WF(i,STRAIN55)] = strain_modes_single_timestep[STRAIN55-1];
   
 
 }
