@@ -185,7 +185,9 @@ def _generate_main_body(
     metadata_only_checkpoint_read = ""
     calling_for_first_time_expr = "true"
     if checkpointing_enabled:
-        checkpoint_read_args = "&commondata, NULL, NULL" if is_cuda else "&commondata, NULL"
+        checkpoint_read_args = (
+            "&commondata, NULL, NULL" if is_cuda else "&commondata, NULL"
+        )
         metadata_only_checkpoint_read = f"""
 // If a checkpoint exists, load commondata first so the grid hierarchy can be
 // rebuilt from restart state before the full checkpoint payload is read.

@@ -18,7 +18,11 @@
   } while (0)
 
 /**
- * Read a checkpoint file
+ * Read a checkpoint file.
+ *
+ * If griddata == NULL, read only commondata metadata and return 1 when the
+ * checkpoint exists. This supports rebuilding grids from restart state before
+ * loading the full checkpoint payload.
  */
 int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *restrict griddata, griddata_struct *restrict griddata_device) {
   char filename[256];
@@ -34,10 +38,16 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
   } // END IF fopen failed
 
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
+
   fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
+  if (griddata == NULL) {
+    fclose(cp_file);
+    return 1;
+  }
 
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
-    FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
+    params_struct checkpoint_params;
+    FREAD(&checkpoint_params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
 
     int count;
     FREAD(&count, sizeof(int), 1, cp_file, filename, "count");
@@ -51,6 +61,16 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     const int ntot_grid = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+    if (checkpoint_params.Nxx_plus_2NGHOSTS0 != Nxx_plus_2NGHOSTS0 || checkpoint_params.Nxx_plus_2NGHOSTS1 != Nxx_plus_2NGHOSTS1 ||
+        checkpoint_params.Nxx_plus_2NGHOSTS2 != Nxx_plus_2NGHOSTS2 || checkpoint_params.CoordSystem_hash != griddata[grid].params.CoordSystem_hash) {
+      fprintf(stderr,
+              "read_checkpoint: FATAL: checkpoint/grid rebuild mismatch on grid %d: checkpoint dims=(%d,%d,%d) hash=%d, rebuilt dims=(%d,%d,%d) "
+              "hash=%d\n",
+              grid, checkpoint_params.Nxx_plus_2NGHOSTS0, checkpoint_params.Nxx_plus_2NGHOSTS1, checkpoint_params.Nxx_plus_2NGHOSTS2,
+              checkpoint_params.CoordSystem_hash, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].params.CoordSystem_hash);
+      exit(EXIT_FAILURE);
+    } // END IF checkpoint params disagree with rebuilt grid shape/coordinate system
 
     if (count < 0 || count > ntot_grid) {
       fprintf(stderr, "read_checkpoint: FATAL: invalid count=%d for grid=%d (ntot_grid=%d) in %s\n", count, grid, ntot_grid, filename);
@@ -69,6 +89,12 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
     BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
 #endif // __CUDACC__
+
+    const size_t ntot_gfs = (size_t)ntot_grid * (size_t)NUM_EVOL_GFS;
+#pragma omp parallel for
+    for (size_t i = 0; i < ntot_gfs; i++) {
+      griddata[grid].gridfuncs.y_n_gfs[i] = 0.0;
+    } // END LOOP zeroing all restored evolution-grid storage
 
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {

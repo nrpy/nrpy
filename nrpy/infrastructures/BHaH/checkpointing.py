@@ -401,14 +401,15 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
         body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
-        mask_condition = (
-            "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
-        )
+        mask_condition = "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
     else:
         body += "const int maskval = 1;\n"
         mask_condition = "maskval >= +0"
-    body += r"""
-        if (""" + mask_condition + r""")
+    body += (
+        r"""
+        if ("""
+        + mask_condition
+        + r""")
           count++;
       } // END LOOP over all gridpoints
       FWRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
@@ -421,17 +422,19 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
       for (int i = 0; i < ntot_grid; i++) {
 """
+    )
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
         body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
-        mask_condition = (
-            "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
-        )
+        mask_condition = "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
     else:
         body += "const int maskval = 1;\n"
         mask_condition = "maskval >= +0"
-    body += r"""
-        if (""" + mask_condition + r""") {
+    body += (
+        r"""
+        if ("""
+        + mask_condition
+        + r""") {
           out_data_indices[which_el] = i;
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
             compact_out_data[which_el * NUM_EVOL_GFS + gf] = griddata[grid].gridfuncs.y_n_gfs[ntot_grid * gf + i];
@@ -451,6 +454,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
   } // END IF ready to write checkpoint
 """
+    )
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
