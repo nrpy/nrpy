@@ -52,8 +52,24 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   } while (0)
 
 """
+    if enable_bhahaha:
+        prefunc += r"""
+static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict commondata) {
+  for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
+    commondata->bhahaha_params_and_data[i].input_metric_data = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+  } // END LOOP over horizons
+} // END FUNCTION sanitize_checkpoint_commondata_pointers
 
-    desc = "Read a checkpoint file"
+"""
+
+    desc = """Read a checkpoint file.
+
+If griddata == NULL, read only commondata metadata and return 1 when the
+checkpoint exists. This supports rebuilding grids from restart state before
+loading the full checkpoint payload."""
     cfunc_type = "int"
     name = "read_checkpoint"
     params = (
@@ -79,16 +95,22 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   } // END IF fopen failed
 
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
+"""
+    if enable_bhahaha:
+        body += r"""
+  sanitize_checkpoint_commondata_pointers(commondata);
+"""
+    body += r"""
   fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
+  if (griddata == NULL) {
+    fclose(cp_file);
+    return 1;
+  }
 """
     if enable_bhahaha:
         body += r"""
   for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
     bhahaha_params_and_data_struct *restrict horizon_params = &commondata->bhahaha_params_and_data[i];
-    horizon_params->input_metric_data = NULL;
-    horizon_params->prev_horizon_m1 = NULL;
-    horizon_params->prev_horizon_m2 = NULL;
-    horizon_params->prev_horizon_m3 = NULL;
 
     uint8_t has_prev_horizon_shapes = 0;
     FREAD(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, filename, "has_prev_horizon_shapes");
@@ -116,7 +138,8 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
     body += r"""
   for(int grid=0; grid < commondata->NUMGRIDS; grid++) {
-    FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
+    params_struct checkpoint_params;
+    FREAD(&checkpoint_params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
 
     int count;
     FREAD(&count, sizeof(int), 1, cp_file, filename, "count");
@@ -130,6 +153,20 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     const int ntot_grid = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+    if (checkpoint_params.Nxx_plus_2NGHOSTS0 != Nxx_plus_2NGHOSTS0 ||
+        checkpoint_params.Nxx_plus_2NGHOSTS1 != Nxx_plus_2NGHOSTS1 ||
+        checkpoint_params.Nxx_plus_2NGHOSTS2 != Nxx_plus_2NGHOSTS2 ||
+        checkpoint_params.CoordSystem_hash != griddata[grid].params.CoordSystem_hash) {
+      fprintf(stderr,
+              "read_checkpoint: FATAL: checkpoint/grid rebuild mismatch on grid %d: checkpoint dims=(%d,%d,%d) hash=%d, rebuilt dims=(%d,%d,%d) hash=%d\n",
+              grid,
+              checkpoint_params.Nxx_plus_2NGHOSTS0, checkpoint_params.Nxx_plus_2NGHOSTS1, checkpoint_params.Nxx_plus_2NGHOSTS2,
+              checkpoint_params.CoordSystem_hash,
+              Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+              griddata[grid].params.CoordSystem_hash);
+      exit(EXIT_FAILURE);
+    } // END IF checkpoint params disagree with rebuilt grid shape/coordinate system
 
     if (count < 0 || count > ntot_grid) {
       fprintf(stderr,
@@ -150,6 +187,12 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
     BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
 #endif // __CUDACC__
+
+    const size_t ntot_gfs = (size_t)ntot_grid * (size_t)NUM_EVOL_GFS;
+#pragma omp parallel for
+    for (size_t i = 0; i < ntot_gfs; i++) {
+      griddata[grid].gridfuncs.y_n_gfs[i] = 0.0;
+    } // END LOOP zeroing all restored evolution-grid storage
 
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
@@ -357,10 +400,15 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 """
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
+        body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
+        mask_condition = (
+            "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
+        )
     else:
         body += "const int maskval = 1;\n"
+        mask_condition = "maskval >= +0"
     body += r"""
-        if (maskval >= +0)
+        if (""" + mask_condition + r""")
           count++;
       } // END LOOP over all gridpoints
       FWRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
@@ -375,15 +423,20 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 """
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
+        body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
+        mask_condition = (
+            "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
+        )
     else:
         body += "const int maskval = 1;\n"
+        mask_condition = "maskval >= +0"
     body += r"""
-        if (maskval >= +0) {
+        if (""" + mask_condition + r""") {
           out_data_indices[which_el] = i;
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
             compact_out_data[which_el * NUM_EVOL_GFS + gf] = griddata[grid].gridfuncs.y_n_gfs[ntot_grid * gf + i];
           which_el++;
-        } // END IF maskval >= +0
+        } // END IF selected checkpoint mask condition
       } // END LOOP over all gridpoints
 
       FWRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");
