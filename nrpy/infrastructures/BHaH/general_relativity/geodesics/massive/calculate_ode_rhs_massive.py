@@ -1,18 +1,17 @@
-"""
-Register C function for computing massive particle geodesic ODE right-hand sides.
+r"""
+Define C function for computing massive particle geodesic ODE right-hand sides.
 
-This module registers the 'calculate_ode_rhs_massive' C function, which evaluates
+This module defines the 'calculate_ode_rhs_massive' C function, which evaluates
 the right-hand sides (RHS) of the coupled system of 8 first-order ODEs governing
 massive particle geodesics.
 
-It utilizes the flattened SoA architecture via local batch indexing (j) and
-supports GPU offloading via OpenMP.
+It utilizes a thread-local architecture for maximum CPU register efficiency,
+discarding the previous SoA block indexing methodology.
 
 The system is derived from:
-    d(x^mu)/d(tau) = u^mu
-    d(u^mu)/d(tau) = -Gamma^mu_{alpha beta} u^alpha u^beta
-
-Author: Dalton J. Moone
+    $dx^\mu/d\tau = u^\mu$
+    $du^\mu/d\tau = -\Gamma^\mu_{\alpha\beta} u^\alpha u^\beta$
+Author: Dalton J. Moone.
 """
 
 import sys
@@ -28,74 +27,52 @@ def calculate_ode_rhs_massive(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
     """
-    Generate the C engine for the massive particle geodesic ODE right-hand sides.
+    Define the C engine for the massive particle geodesic ODE right-hand sides.
+
+    This function processes the SymPy expressions into highly optimized, thread-local
+    C code for execution on CPU architectures.
 
     :param geodesic_rhs_expressions: List of 8 symbolic expressions for the RHS.
     :param coordinate_symbols: List of 4 symbolic coordinates (e.g., [t, x, y, z]).
     """
-    # Step 1: Define metadata and GPU pragmas
-    includes = ["BHaH_defines.h"]
-    desc = """@brief Portable GPU-ready derivatives for the massive geodesic ODE system.
-
-    Calculates dx^mu/dtau and du^mu/dtau using the provided state vector and
-    pre-computed Christoffel symbols. Uses SoA indexing for SIMD/GPU efficiency.
-
-    Input:
-        f_temp: Local state vector [t, x, y, z, u^t, u^x, u^y, u^z]
-        metric_g4DD: Flattened metric array.
-        conn_GammaUDD: Flattened Christoffel symbol array.
-        bundle_capacity: Total capacity of the SIMD/GPU bundle.
-        stage: RK stage index.
-        j: Local index within the bundle.
-    Output:
-        k_array: The computed derivatives stored in SoA format."""
-
-    name = "calculate_ode_rhs_massive"
-    cfunc_type = "void"
-
-    params = """
-                  const double *restrict f_temp,
-                  const double *restrict metric_g4DD,
-                  const double *restrict conn_GammaUDD,
-                  double *restrict k_array,
-                  const int bundle_capacity,
-                  const int stage,
-                  const int j"""
-
-    # Step 2: Analyze symbols used in the expressions to avoid unnecessary unpacking
+    # Extract unique symbols used in the mathematical expressions
     used_symbol_names = {
         str(sym) for expr in geodesic_rhs_expressions for sym in expr.free_symbols
     }
 
-    # Step 3: Generate the Dynamic Preamble
-    preamble_lines = ["// Step 1: Unpack coordinates from state vector [t, x, y, z]"]
+    # Construct the thread-local unpacking preamble
+    preamble_lines = [
+        "  // --- THREAD-LOCAL STATE UNPACKING ---",
+        "  // Algorithmic Step: Extract spatial coordinates $x^i$ and 4-velocity $u^\mu$ from the local state vector.",
+        "  // Hardware Justification: Caching these values into local scalars forces the compiler to allocate fast hardware registers."
+    ]
+
     for i, sym in enumerate(coordinate_symbols):
         if str(sym) in used_symbol_names:
             preamble_lines.append(
-                f"const double {str(sym)} = f_temp[IDX_LOCAL({i}, j, bundle_capacity)];"
+                f"  const double {str(sym)} = f_local[{i}]; // Unpack coordinate ${str(sym)}$."
             )
 
-    preamble_lines.append(
-        "\n  // Step 2: Unpack 4-velocity components [u^0, u^1, u^2, u^3]"
-    )
     for i in range(4):
         if f"uU{i}" in used_symbol_names:
             preamble_lines.append(
-                f"const double uU{i} = f_temp[IDX_LOCAL({i+4}, j, bundle_capacity)];"
+                f"  const double uU{i} = f_local[{i+4}]; // Unpack 4-velocity component $u^{i}$."
             )
 
-    preamble_lines.append("\n  // Step 3: Unpack metric components")
+    preamble_lines.append("\n  // --- METRIC AND CONNECTION UNPACKING ---")
+    preamble_lines.append("  // Algorithmic Step: Extract pre-computed metric $g_{\\mu\\nu}$ and Christoffel symbols $\\Gamma^\\alpha_{\\mu\\nu}$.")
+    preamble_lines.append("  // Hardware Justification: Reading from the thread-local arrays guarantees L1 cache hits.")
+
     curr_idx = 0
     for m in range(4):
         for n in range(m, 4):
             comp_name = f"metric_g4DD{m}{n}"
             if comp_name in used_symbol_names:
                 preamble_lines.append(
-                    f"const double {comp_name} = metric_g4DD[IDX_LOCAL({curr_idx}, j, bundle_capacity)];"
+                    f"  const double {comp_name} = metric_local[{curr_idx}]; // Unpack metric component $g_{{{m}{n}}}$."
                 )
             curr_idx += 1
 
-    preamble_lines.append("\n  // Step 4: Unpack Christoffel symbols (Connections)")
     curr_idx = 0
     for a in range(4):
         for m in range(4):
@@ -103,42 +80,69 @@ def calculate_ode_rhs_massive(
                 comp_name = f"conn_Gamma4UDD{a}{m}{n}"
                 if comp_name in used_symbol_names:
                     preamble_lines.append(
-                        f"const double {comp_name} = conn_GammaUDD[IDX_LOCAL({curr_idx}, j, bundle_capacity)];"
+                        f"  const double {comp_name} = Gamma_local[{curr_idx}]; // Unpack Christoffel symbol $\\Gamma^{a}_{{{m}{n}}}$."
                     )
                 curr_idx += 1
 
-    # Step 4: Map SymPy RHS results to the flattened k_array
-    # massive system has 8 components (4 position derivatives, 4 velocity derivatives)
+    # Map SymPy RHS results directly to the thread-local output array
     k_array_outputs = [
-        f"k_array[IDX_LOCAL((stage - 1) * 8 + {i}, j, bundle_capacity)]"
+        f"k_local[{i}]"
         for i in range(8)
     ]
 
-    # Step 5: Generate Calculation Body
-    print(f" -> Generating C worker function: {name} ...")
+    # Generate the highly optimized CSE core math block
     kernel = ccg.c_codegen(
         geodesic_rhs_expressions, k_array_outputs, enable_cse=True, include_braces=False
     )
 
-    body = "\n  ".join(preamble_lines) + "\n\n" + kernel
+    # Define C-function arguments and metadata in Master Order
+    includes = ["BHaH_defines.h"]
+    
+    desc = r"""@brief Portable CPU derivatives for the massive geodesic ODE system.
 
-    # Step 6: Register C Function with GPU target declarations
+    Calculates $dx^\mu/d\tau$ and $du^\mu/d\tau$ using the provided state vector and
+    pre-computed Christoffel symbols $\Gamma^\mu_{\alpha\beta}$. Uses thread-local arrays to guarantee
+    intermediate values remain in hardware registers.
+
+    @param f_local Local state vector $[t, x, y, z, u^t, u^x, u^y, u^z]$.
+    @param metric_local Thread-local flattened metric array $g_{\mu\nu}$.
+    @param Gamma_local Thread-local flattened Christoffel symbol array $\Gamma^\mu_{\alpha\beta}$.
+    @param k_local The computed derivatives $dx^\mu/d\tau$ and $du^\mu/d\tau$ stored in thread-local format."""
+
+    cfunc_type = "BHAH_HD_INLINE void"
+    
+    name = "calculate_ode_rhs_massive"
+
+    params = (
+        "const double *restrict f_local, "
+        "const double *restrict metric_local, "
+        "const double *restrict Gamma_local, "
+        "double *restrict k_local"
+    )
+    
+    include_CodeParameters_h = False
+
+    body = "\n".join(preamble_lines) + "\n\n"
+    body += "  // --- GEODESIC EQUATION EVALUATION ---\n"
+    body += "  // Algorithmic Step: Evaluate the SymPy-generated Common Subexpression Elimination (CSE) block for the ODE RHS.\n"
+    body += "  // Hardware Justification: CSE minimizes total FLOPs and maximizes register reuse during derivative calculation.\n"
+    body += f"  {kernel}"
+
+    # Register the function, omitting empty kwargs to prevent bloat
     cfc.register_CFunction(
-        prefunc="#ifdef USE_GPU\n#pragma omp declare target\n#endif",
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,
         params=params,
+        include_CodeParameters_h=include_CodeParameters_h,
         body=body,
-        include_CodeParameters_h=False,
-        postfunc="#ifdef USE_GPU\n#pragma omp end declare target\n#endif",
     )
-    print(f"    ... {name}() registration complete.")
 
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
     if results.failed > 0:
