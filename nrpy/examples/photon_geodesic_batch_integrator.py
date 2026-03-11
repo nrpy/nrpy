@@ -44,6 +44,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     connections,
     conserved_quantities,
     g4DD_metric,
+    normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     batch_integrator_numerical,
@@ -122,6 +123,7 @@ if __name__ == "__main__":
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
     conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+    normalization_constraint.normalization_constraint(geodesic_data.norm_constraint_expr, PARTICLE)
 
     # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
     interpolation_kernel.interpolation_kernel(SPACETIME)

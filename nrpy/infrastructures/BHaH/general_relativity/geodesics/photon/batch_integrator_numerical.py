@@ -234,6 +234,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     bool *source_event_found_bridge[2];
 
     // --- DOUBLE-BUFFERED VRAM SCRATCHPADS ---
+    // Scratchpad array holding the physical normalization diagnostic outputs.
+    normalization_constraint_t *d_norm_bundle[2];
     // Scratchpad tracking the current state vector $f^\mu$ bounding the RKF45 step.
     double *d_f_bundle[2];
     // Scratchpad locking the anchor state vector $f_{{start}}$ to calculate the final stage update.
@@ -311,6 +313,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
         {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
+        {malloc_device}(d_norm_bundle[s], sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate diagnostic outputs scratchpad.
     }}
 
     // Device-native struct pointer storing the final physical plane intersections.
@@ -790,13 +793,70 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
      }}
 
     /* Algorithmic Step: Process terminal photon trajectories and extract final geometric intersections. Hardware Justification: Memory transfers execute synchronously on the host to ensure all asynchronous execution pipelines have fully resolved. */
-    // --- 4. CLEANUP & FINALIZATION ---
+    // --- 4. Conserved Values & CLEANUP & FINALIZATION ---
 
         // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
         {results_memcpy}
 
         // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$.
         {calc_blueprint}
+
+        /* Algorithmic Step: Evaluate terminal normalization constraint. Hardware Justification: Reuses the primary execution stream to dynamically compute metric $g_{{\mu\nu}}$ and check the $p_\mu p^\mu$ invariant without persistent host memory. */
+        // --- TERMINAL NORMALIZATION DIAGNOSTIC ---
+        if (commondata->perform_conservation_check) {{
+            normalization_constraint_t *norm_diag_bridge; // Host pointer for retrieving diagnostic normalization records.
+            {malloc_pinned}(norm_diag_bridge, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Hardware Justification: Pinned memory maximizes PCIe transfer bandwidth for diagnostic arrays.
+
+            double max_err_norm = 0.0; // Scalar tracking the maximum absolute drift from the expected normalization constraint invariant $C$.
+            long int worst_ray_norm = -1; // Absolute index identifying the trajectory $x^\mu$ with the highest constraint violation.
+
+            long int norm_num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Integer calculation defining the total sequential blocks required to process all photon trajectories.
+
+            for (long int norm_batch = 0; norm_batch < norm_num_batches; ++norm_batch) {{ // Loop iterator $norm_batch$ for evaluating the terminal normalization constraint across sequential chunks.
+                long int start_idx = norm_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current normalization batch.
+                long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed the total trajectory count.
+
+                for (int norm_i = 0; norm_i < chunk_size; ++norm_i) {{ // Loop index $norm_i$ iterating over the specific normalization batch elements to pack the bridge.
+                    long int master_idx = start_idx + norm_i; // Computes the absolute master index $m_{{idx}}$ tracking the specific photon within the global matrix.
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{ // Loop index $norm_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
+                        f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] = all_photons_host.f[norm_k * num_rays + master_idx]; // Assigns the terminal tensor state vector component to the primary bridge array.
+                    }}
+                }}
+
+                for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating the asynchronous memory transfer of the 9 state vector $f^\mu$ components.
+                    {h2d_f_comment}
+                    {memcpy_async("d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "f_bridge[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyHostToDevice", "streams[0]")}
+                }}
+
+                // Kernel Launch: Calculates the symmetric metric tensor $g_{{\mu\nu}}$ strictly on the primary operational pipeline to supply the normalization constraint evaluator.
+                interpolation_kernel_{spacetime_name}(commondata, d_f_bundle[0], d_metric_bundle[0], NULL, chunk_size{stream_arg});
+
+                // Kernel Launch: Computes the normalization constraint $C = g_{{\mu\nu}} p^\mu p^\nu$ natively on the active hardware pipeline synchronously with the memory stream.
+                normalization_constraint_photon(d_f_bundle[0], d_metric_bundle[0], d_norm_bundle[0], chunk_size{stream_arg});
+
+                // Device-to-Host transfer: Retrieves active diagnostic normalization records back to the Host RAM asynchronously on the primary stream.
+                {memcpy_async("norm_diag_bridge", "d_norm_bundle[0]", "sizeof(normalization_constraint_t) * chunk_size", "cudaMemcpyDeviceToHost", "streams[0]")}
+
+                // Device synchronization barrier strictly enforcing completion of the primary stream before diagnostic payload unpacking.
+                {stream_sync('streams[0]')}
+
+                for (int norm_i = 0; norm_i < chunk_size; ++norm_i) {{ // Loop iterator $norm_i$ scanning each trajectory within the current diagnostic memory chunk.
+                    double current_norm_err = fabs(norm_diag_bridge[norm_i].C); // Evaluates the absolute numerical drift for the physical scalar invariant $C$.
+                    if (current_norm_err > max_err_norm) {{
+                        max_err_norm = current_norm_err; // Updates the maximum tracked absolute error for the geometric normalization constraint.
+                        worst_ray_norm = start_idx + norm_i; // Updates the absolute master index $m_{{idx}}$ associated with the maximum geometric constraint violation.
+                    }}
+                }}
+            }}
+
+            printf("\n=================================================\n");
+            printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
+            printf("=================================================\n");
+            printf("  Max Absolute Error (Normalization Constraint |g_mu_nu p^mu p^nu|): %e (Ray %ld)\n", max_err_norm, worst_ray_norm);
+            {free_pinned}(norm_diag_bridge); // Memory Free: Purges the diagnostic bridge utilized for the geometric normalization constraint checks.
+        }}
+
+
 
         // Loop iterator $s$ purging the double-buffered arrays across both hardware streams.
         for (int s = 0; s < 2; ++s) {{
@@ -836,6 +896,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
             {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
+            {free_device}(d_norm_bundle[s]); // Purges the diagnostic outputs scratchpad.
 
             {stream_destroy}
         }}
