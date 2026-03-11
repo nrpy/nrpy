@@ -106,12 +106,28 @@ def register_CFunction_initial_data(
     body = ""
     host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
     if enable_checkpointing:
-        body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
-if( read_checkpoint(commondata, griddata) ) return;
-""".replace(
-            "griddata",
-            f"{host_griddata}, griddata" if parallelization in ["cuda"] else "griddata",
+        checkpoint_read_call = (
+            "read_checkpoint(commondata, griddata_host, griddata)"
+            if parallelization in ["cuda"]
+            else "read_checkpoint(commondata, griddata)"
         )
+        restart_body = """
+// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise rebuild omitted restart points and return.
+if( CHECKPOINT_READ_CALL ) {
+  for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+    if (griddata[grid].bcstruct.bc_info.num_inner_boundary_points > 0)
+      apply_bcs_inner_only(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
+  }
+"""
+        if "interpatch_interpolation_evol_gfs_driver" in cfc.CFunction_dict:
+            restart_body += """
+  if (commondata->num_src_dst_pairs > 0)
+    interpatch_interpolation_evol_gfs_driver(commondata, griddata);
+"""
+        restart_body += """  return;
+}
+"""
+        body += restart_body.replace("CHECKPOINT_READ_CALL", checkpoint_read_call)
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str

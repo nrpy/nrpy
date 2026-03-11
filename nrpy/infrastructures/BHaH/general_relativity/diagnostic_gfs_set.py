@@ -133,6 +133,7 @@ def register_CFunction_diagnostic_gfs_set(
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     const params_struct *restrict params = &griddata[grid].params;
     const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
+    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL *restrict y_n_gfs = griddata[grid].gridfuncs.y_n_gfs;
     MAYBE_UNUSED REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
@@ -174,7 +175,14 @@ def register_CFunction_diagnostic_gfs_set(
                                         inner_bc_apply_gfs);
     } // END set inner BCs on desired GFs
 """
-    body += "  } // END LOOP over grids\n"
+    body += """
+    LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+      const int idx3 = IDX3(i0, i1, i2);
+      diagnostic_gfs[grid][IDX4pt(DIAG_LAPSEGF, idx3)] = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
+      diagnostic_gfs[grid][IDX4pt(DIAG_WGF, idx3)] = y_n_gfs[IDX4pt(CFGF, idx3)];
+    } // END LOOP over all gridpoints to set lapse/W diagnostics
+  } // END LOOP over grids
+"""
 
     cfc.register_CFunction(
         subdirectory="diagnostics",

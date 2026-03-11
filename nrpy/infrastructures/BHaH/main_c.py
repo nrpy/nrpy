@@ -154,6 +154,12 @@ def _generate_main_body(
     parallelization = par.parval_from_str("parallelization")
     is_cuda = parallelization == "cuda"
     compute_griddata = "griddata_device" if is_cuda else "griddata"
+    checkpointing_enabled = "read_checkpoint" in cfc.CFunction_dict
+    pre_free_memory_code = ""
+    if "free_bhahaha_horizon_shape_data_all_horizons" in cfc.CFunction_dict:
+        pre_free_memory_code = (
+            "  free_bhahaha_horizon_shape_data_all_horizons(&commondata);\n"
+        )
 
     # The body of the main() function is built as a list of C code strings.
     body_parts = []
@@ -176,6 +182,18 @@ def _generate_main_body(
         + (", griddata_host" if is_cuda else "")
         + ", calling_for_first_time"
     )
+    metadata_only_checkpoint_read = ""
+    calling_for_first_time_expr = "true"
+    if checkpointing_enabled:
+        checkpoint_read_args = (
+            "&commondata, NULL, NULL" if is_cuda else "&commondata, NULL"
+        )
+        metadata_only_checkpoint_read = f"""
+// If a checkpoint exists, load commondata first so the grid hierarchy can be
+// rebuilt from restart state before the full checkpoint payload is read.
+const int checkpoint_has_been_read = read_checkpoint({checkpoint_read_args});
+"""
+        calling_for_first_time_expr = "!checkpoint_has_been_read"
 
     step1_c_code = f"""
 // Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
@@ -184,6 +202,7 @@ commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite the default values with those from the parameter file.
 //           Then overwrite the parameter file values with those provided via command line arguments.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
+{metadata_only_checkpoint_read}
 
 // Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
 //           where each structure contains data specific to an individual grid.
@@ -204,8 +223,9 @@ params_struct_set_to_default(&commondata, {compute_griddata});
 //           bcstruct, rfm_precompute, timestep, and others.
 {{
   IFCUDARUN(for (int grid = 0; grid < MAXNUMGRIDS; grid++) griddata_device[grid].params.is_host = false;);
-  // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
-  const bool calling_for_first_time = true;
+  // Fresh starts zero time bookkeeping here; restart runs preserve the
+  // checkpointed time/iteration state and rebuild grids from it.
+  const bool calling_for_first_time = {calling_for_first_time_expr};
   numerical_grids_and_timestep({numerical_grids_args});
 }} // END setup of numerical & temporal grids.
 """
@@ -291,13 +311,13 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
     device_sync = "BHAH_DEVICE_SYNC();" if is_cuda else ""
     if not is_cuda:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
 }}
         """
     else:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
   griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
 }}
