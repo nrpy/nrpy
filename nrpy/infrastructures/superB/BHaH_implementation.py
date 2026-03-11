@@ -26,6 +26,33 @@ from nrpy.infrastructures.BHaH import (
 )
 
 
+def register_CFunction_free_bhahaha_horizon_shape_data_all_horizons() -> None:
+    """Register the BHaHAHA horizon-shape teardown helper."""
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Free memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
+for all horizons."""
+    cfunc_type = "void"
+    name = "free_bhahaha_horizon_shape_data_all_horizons"
+    params = "commondata_struct *restrict commondata"
+    body = r"""
+  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
+    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
+    BHAH_FREE(current_horizon_params->prev_horizon_m1);
+    BHAH_FREE(current_horizon_params->prev_horizon_m2);
+    BHAH_FREE(current_horizon_params->prev_horizon_m3);
+  } // END LOOP: for h
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+
+
 def string_for_step7e_to_g_main_loop_for_each_horizon(
     single_horizon: bool = False,
     enable_timing: bool = True,
@@ -543,34 +570,6 @@ const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     return outstring
 
 
-def string_for_func_free_bhahaha_horizon_shape_data_all_horizons() -> str:
-    r"""
-    Generate the C string for function: free_bhahaha_horizon_shape_data_all_horizons.
-
-    :return: Raw C string.
-    """
-    outstring = r"""
-/**
- * Frees memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
- * for all horizons.
- *
- * @param commondata - Pointer to `commondata_struct` containing the BHaHAHA data.
- * @return - None (`void`).
- */
-void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict commondata) {
-  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
-    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
-    if (current_horizon_params != NULL) {
-      BHAH_FREE(current_horizon_params->prev_horizon_m1);
-      BHAH_FREE(current_horizon_params->prev_horizon_m2);
-      BHAH_FREE(current_horizon_params->prev_horizon_m3);
-    } // END IF: current_horizon_params != NULL
-  } // END LOOP: for h
-} // END FUNCTION: free_bhahaha_horizon_shape_data_all_horizons
-"""
-    return outstring
-
-
 def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     r"""
     Generate the C code string for BSSN→ADM Cartesian transformation.
@@ -937,8 +936,6 @@ def build_bhahaha_prefunc(
 
     prefunc += string_for_static_func_initialize_bhahaha_solver_params_and_shapes()
 
-    prefunc += string_for_func_free_bhahaha_horizon_shape_data_all_horizons()
-
     prefunc += r"""
 
 /**
@@ -1051,6 +1048,7 @@ def register_CFunction_bhahaha_find_horizons(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    register_CFunction_free_bhahaha_horizon_shape_data_all_horizons()
     register_bhahaha_commondata_and_params(max_horizons)
 
     includes = [

@@ -20,6 +20,33 @@ from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.infrastructures import BHaH
 
 
+def register_CFunction_free_bhahaha_horizon_shape_data_all_horizons() -> None:
+    """Register the BHaHAHA horizon-shape teardown helper."""
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Free memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
+for all horizons."""
+    cfunc_type = "void"
+    name = "free_bhahaha_horizon_shape_data_all_horizons"
+    params = "commondata_struct *restrict commondata"
+    body = r"""
+  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
+    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
+    BHAH_FREE(current_horizon_params->prev_horizon_m1);
+    BHAH_FREE(current_horizon_params->prev_horizon_m2);
+    BHAH_FREE(current_horizon_params->prev_horizon_m3);
+  } // END LOOP: for h
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+
+
 def register_CFunction_bhahaha_find_horizons(
     max_horizons: int,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -48,6 +75,7 @@ def register_CFunction_bhahaha_find_horizons(
         "BHaHAHA diagnostics",
         is_commondata=True,
     )
+    register_CFunction_free_bhahaha_horizon_shape_data_all_horizons()
 
     # Register commondata parameters
     # Dictionary for REAL type parameters
@@ -365,24 +393,6 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
   // STEP 4: Sets `current_horizon_params->input_metric_data` to NULL.
   current_horizon_params->input_metric_data = NULL;
 } // END FUNCTION: initialize_bhahaha_solver_params_and_shapes
-
-/**
- * Frees memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
- * for all horizons.
- *
- * @param commondata - Pointer to `commondata_struct` containing the BHaHAHA data.
- * @return - None (`void`).
- */
-void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict commondata) {
-  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
-    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
-    if (current_horizon_params != NULL) {
-      BHAH_FREE(current_horizon_params->prev_horizon_m1);
-      BHAH_FREE(current_horizon_params->prev_horizon_m2);
-      BHAH_FREE(current_horizon_params->prev_horizon_m3);
-    } // END IF: current_horizon_params != NULL
-  } // END LOOP: for h
-} // END FUNCTION: free_bhahaha_horizon_shape_data_all_horizons
 
 /**
  * Interpolates BSSN metric data from an NRPy grid to a spherical grid,

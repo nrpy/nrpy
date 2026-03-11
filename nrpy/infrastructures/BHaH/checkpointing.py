@@ -45,13 +45,31 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     size_t _got = fread((ptr), (size), (nmemb), (stream));                                                   \
     if (_got != _expected) {                                                                                 \
       fprintf(stderr,                                                                                        \
-              "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n",         \
+              "read_checkpoint: FATAL: error while reading %s (%s): expected %zu items, got %zu.\n",       \
               (filename), (context), _expected, _got);                                                       \
       exit(EXIT_FAILURE);                                                                                    \
     }                                                                                                        \
   } while (0)
+
 """
-    desc = "Read a checkpoint file"
+    if enable_bhahaha:
+        prefunc += r"""
+static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict commondata) {
+  for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
+    commondata->bhahaha_params_and_data[i].input_metric_data = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+  } // END LOOP over horizons
+} // END FUNCTION sanitize_checkpoint_commondata_pointers
+
+"""
+
+    desc = """Read a checkpoint file.
+
+If griddata == NULL, read only commondata metadata and return 1 when the
+checkpoint exists. This supports rebuilding grids from restart state before
+loading the full checkpoint payload."""
     cfunc_type = "int"
     name = "read_checkpoint"
     params = (
@@ -67,7 +85,7 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
 
   // If the checkpoint doesn't exist then return 0; if it does exist and can't be read, then error out.
-  FILE *cp_file = fopen(filename, "r");
+  FILE *cp_file = fopen(filename, "rb");
   if (cp_file == NULL) {
     if (errno == ENOENT) return 0;  // checkpoint doesn't exist
     fprintf(stderr,
@@ -77,24 +95,51 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   } // END IF fopen failed
 
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
+"""
+    if enable_bhahaha:
+        body += r"""
+  sanitize_checkpoint_commondata_pointers(commondata);
+"""
+    body += r"""
   fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
+  if (griddata == NULL) {
+    fclose(cp_file);
+    return 1;
+  }
 """
     if enable_bhahaha:
         body += r"""
   for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
-    FREAD(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file, filename, "bhahaha_params_and_data[i]");
-    commondata->bhahaha_params_and_data[i].prev_horizon_m1 = malloc(sizeof(REAL) * 64 * 32);
-    commondata->bhahaha_params_and_data[i].prev_horizon_m2 = malloc(sizeof(REAL) * 64 * 32);
-    commondata->bhahaha_params_and_data[i].prev_horizon_m3 = malloc(sizeof(REAL) * 64 * 32);
-    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file, filename, "bhahaha_params_and_data[i].prev_horizon_m1");
-    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file, filename, "bhahaha_params_and_data[i].prev_horizon_m2");
-    FREAD(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file, filename, "bhahaha_params_and_data[i].prev_horizon_m3");
+    bhahaha_params_and_data_struct *restrict horizon_params = &commondata->bhahaha_params_and_data[i];
+
+    uint8_t has_prev_horizon_shapes = 0;
+    FREAD(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, filename, "has_prev_horizon_shapes");
+    if (has_prev_horizon_shapes != (uint8_t)0) {
+      const int n = commondata->bah_num_resolutions_multigrid - 1;
+      const int ntheta_max = commondata->bah_Ntheta_array_multigrid[n];
+      const int nphi_max = commondata->bah_Nphi_array_multigrid[n];
+      const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
+      if (n < 0 || ntheta_max <= 0 || nphi_max <= 0) {
+        fprintf(stderr,
+                "read_checkpoint: FATAL: invalid horizon-shape dimensions in commondata for horizon %d: (%d,%d).\n",
+                i, ntheta_max, nphi_max);
+        exit(EXIT_FAILURE);
+      } // END IF invalid dimensions
+
+      BHAH_MALLOC(horizon_params->prev_horizon_m1, sizeof(REAL) * npts);
+      BHAH_MALLOC(horizon_params->prev_horizon_m2, sizeof(REAL) * npts);
+      BHAH_MALLOC(horizon_params->prev_horizon_m3, sizeof(REAL) * npts);
+      FREAD(horizon_params->prev_horizon_m1, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m1");
+      FREAD(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m2");
+      FREAD(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m3");
+    } // END IF has_prev_horizon_shapes
   } // END LOOP over horizons
 """
 
     body += r"""
   for(int grid=0; grid < commondata->NUMGRIDS; grid++) {
-    FREAD(&griddata[grid].params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
+    params_struct checkpoint_params;
+    FREAD(&checkpoint_params, sizeof(params_struct), 1, cp_file, filename, "griddata[grid].params");
 
     int count;
     FREAD(&count, sizeof(int), 1, cp_file, filename, "count");
@@ -108,6 +153,20 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     const int Nxx_plus_2NGHOSTS1 = griddata[grid].params.Nxx_plus_2NGHOSTS1;
     const int Nxx_plus_2NGHOSTS2 = griddata[grid].params.Nxx_plus_2NGHOSTS2;
     const int ntot_grid = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+
+    if (checkpoint_params.Nxx_plus_2NGHOSTS0 != Nxx_plus_2NGHOSTS0 ||
+        checkpoint_params.Nxx_plus_2NGHOSTS1 != Nxx_plus_2NGHOSTS1 ||
+        checkpoint_params.Nxx_plus_2NGHOSTS2 != Nxx_plus_2NGHOSTS2 ||
+        checkpoint_params.CoordSystem_hash != griddata[grid].params.CoordSystem_hash) {
+      fprintf(stderr,
+              "read_checkpoint: FATAL: checkpoint/grid rebuild mismatch on grid %d: checkpoint dims=(%d,%d,%d) hash=%d, rebuilt dims=(%d,%d,%d) hash=%d\n",
+              grid,
+              checkpoint_params.Nxx_plus_2NGHOSTS0, checkpoint_params.Nxx_plus_2NGHOSTS1, checkpoint_params.Nxx_plus_2NGHOSTS2,
+              checkpoint_params.CoordSystem_hash,
+              Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+              griddata[grid].params.CoordSystem_hash);
+      exit(EXIT_FAILURE);
+    } // END IF checkpoint params disagree with rebuilt grid shape/coordinate system
 
     if (count < 0 || count > ntot_grid) {
       fprintf(stderr,
@@ -129,6 +188,12 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * ntot_grid * NUM_EVOL_GFS);
 #endif // __CUDACC__
 
+    const size_t ntot_gfs = (size_t)ntot_grid * (size_t)NUM_EVOL_GFS;
+#pragma omp parallel for
+    for (size_t i = 0; i < ntot_gfs; i++) {
+      griddata[grid].gridfuncs.y_n_gfs[i] = 0.0;
+    } // END LOOP zeroing all restored evolution-grid storage
+
 #pragma omp parallel for
     for (int i = 0; i < count; i++) {
       for (int gf = 0; gf < NUM_EVOL_GFS; gf++) {
@@ -149,7 +214,7 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
   // Next set t_0 and n_0
   commondata->t_0 = commondata->time;
   commondata->nn_0 = commondata->nn;
-  
+
   IFCUDARUN(BHAH_DEVICE_SYNC());
 
   return 1;
@@ -239,7 +304,9 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
 #define FWRITE(ptr, size, nmemb, fp, what)                                                                                                  \
   BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
+
 """
+
     body = r"""
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
@@ -256,16 +323,61 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
       exit(1);
     } // END IF cp_file == NULL
+"""
+    if enable_bhahaha:
+        body += r"""
+    commondata_struct checkpoint_commondata = *commondata;
+    for (int i = 0; i < checkpoint_commondata.bah_max_num_horizons; i++) {
+      checkpoint_commondata.bhahaha_params_and_data[i].input_metric_data = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+    } // END LOOP over all apparent horizons in sanitized commondata copy
+"""
+    body += r"""
+"""
+    if enable_bhahaha:
+        body += r"""
+    FWRITE(&checkpoint_commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
+"""
+    else:
+        body += r"""
     FWRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
+"""
+    body += r"""
     fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 """
     if enable_bhahaha:
         body += r"""
     for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
-      FWRITE(&commondata->bhahaha_params_and_data[i], sizeof(bhahaha_params_and_data_struct), 1, cp_file, "bhahaha_params_and_data_struct");
-      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m1, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m1");
-      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m2, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m2");
-      FWRITE(commondata->bhahaha_params_and_data[i].prev_horizon_m3, sizeof(REAL), 64 * 32, cp_file, "bhahaha_prev_horizon_m3");
+      const bhahaha_params_and_data_struct *restrict horizon_params = &commondata->bhahaha_params_and_data[i];
+      const int has_m1 = horizon_params->prev_horizon_m1 != NULL;
+      const int has_m2 = horizon_params->prev_horizon_m2 != NULL;
+      const int has_m3 = horizon_params->prev_horizon_m3 != NULL;
+      const int any_prev_horizon_shapes = has_m1 || has_m2 || has_m3;
+      const int all_prev_horizon_shapes = has_m1 && has_m2 && has_m3;
+      if (any_prev_horizon_shapes && !all_prev_horizon_shapes) {
+        fprintf(stderr,
+                "write_checkpoint: FATAL: inconsistent BHaHAHA horizon-shape allocation state for horizon %d.\n",
+                i);
+        exit(EXIT_FAILURE);
+      } // END IF inconsistent allocation state
+
+      const uint8_t has_prev_horizon_shapes = all_prev_horizon_shapes ? (uint8_t)1 : (uint8_t)0;
+      FWRITE(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, "has_prev_horizon_shapes");
+      if (has_prev_horizon_shapes != (uint8_t)0) {
+        const int n = commondata->bah_num_resolutions_multigrid - 1;
+        const int ntheta_max = commondata->bah_Ntheta_array_multigrid[n];
+        const int nphi_max = commondata->bah_Nphi_array_multigrid[n];
+        const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
+        if (n < 0 || ntheta_max <= 0 || nphi_max <= 0) {
+          fprintf(stderr, "write_checkpoint: FATAL: invalid BHaHAHA horizon-shape dimensions for horizon %d.\n", i);
+          exit(EXIT_FAILURE);
+        } // END IF invalid dimensions
+        FWRITE(horizon_params->prev_horizon_m1, sizeof(REAL), npts, cp_file, "bhahaha_prev_horizon_m1");
+        FWRITE(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, "bhahaha_prev_horizon_m2");
+        FWRITE(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, "bhahaha_prev_horizon_m3");
+      } // END IF has_prev_horizon_shapes
     } // END LOOP over all apparent horizons
 """
     body += r"""
@@ -288,10 +400,16 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 """
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
+        body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
+        mask_condition = "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
     else:
         body += "const int maskval = 1;\n"
-    body += r"""
-        if (maskval >= +0)
+        mask_condition = "maskval >= +0"
+    body += (
+        r"""
+        if ("""
+        + mask_condition
+        + r""")
           count++;
       } // END LOOP over all gridpoints
       FWRITE(&count, sizeof(int), 1, cp_file, "gridpoint_count");
@@ -304,17 +422,24 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
       for (int i = 0; i < ntot_grid; i++) {
 """
+    )
     if enable_multipatch:
         body += "const int maskval = griddata[grid].mask[i];\n"
+        body += "const int owned_interior_maskval = griddata[grid].params.grid_idx;\n"
+        mask_condition = "maskval == owned_interior_maskval || maskval == BUFFER_ZONE || maskval == OUTER_BOUNDARY"
     else:
         body += "const int maskval = 1;\n"
-    body += r"""
-        if (maskval >= +0) {
+        mask_condition = "maskval >= +0"
+    body += (
+        r"""
+        if ("""
+        + mask_condition
+        + r""") {
           out_data_indices[which_el] = i;
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
             compact_out_data[which_el * NUM_EVOL_GFS + gf] = griddata[grid].gridfuncs.y_n_gfs[ntot_grid * gf + i];
           which_el++;
-        } // END IF maskval >= +0
+        } // END IF selected checkpoint mask condition
       } // END LOOP over all gridpoints
 
       FWRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");
@@ -329,6 +454,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
   } // END IF ready to write checkpoint
 """
+    )
     cfc.register_CFunction(
         prefunc=prefunc,
         includes=includes,
