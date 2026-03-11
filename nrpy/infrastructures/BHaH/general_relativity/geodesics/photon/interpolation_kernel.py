@@ -1,27 +1,25 @@
 r"""
 Provides the global memory kernel and orchestrator for the interpolation engine.
 
-This module evaluates the spacetime metric $g_{\mu\nu}$ and Christoffel symbols 
-$\Gamma^{\alpha}_{\beta\gamma}$ for a batch of photons. It operates on Structure 
-of Arrays (SoA) bundles, ensuring memory coalescence and minimizing latency during 
+This module evaluates the spacetime metric $g_{\mu\nu}$ and Christoffel symbols
+$\Gamma^{\alpha}_{\beta\gamma}$ for a batch of photons. It operates on Structure
+of Arrays (SoA) bundles, ensuring memory coalescence and minimizing latency during
 the integration step.
 
 Author: Dalton J. Moone.
 """
+
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access
-)
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+
 
 def interpolation_kernel(spacetime_name: str) -> None:
     r"""
     Register the global kernel for tensor interpolation.
 
-    This kernel unpacks the photon state vector $f^{\mu}$ from global memory, 
-    evaluates the metric and connection components using the specified spacetime 
+    This kernel unpacks the photon state vector $f^{\mu}$ from global memory,
+    evaluates the metric and connection components using the specified spacetime
     evaluators, and writes the resulting tensors back to memory bundles.
 
     :param spacetime_name: The string identifier for the target numerical spacetime.
@@ -31,8 +29,6 @@ def interpolation_kernel(spacetime_name: str) -> None:
         raise ValueError("spacetime_name must contain a valid string identifier.")
 
     parallelization = par.parval_from_str("parallelization")
-    cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     metric_worker = f"g4DD_metric_{spacetime_name}"
     conn_worker = f"connections_{spacetime_name}"
@@ -44,14 +40,14 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "d_f_bundle": "const double *restrict",
         "d_metric_bundle": "double *restrict",
         "d_connection_bundle": "double *restrict",
-        "chunk_size": "const long int"
+        "chunk_size": "const long int",
     }
-    
+
     arg_dict_host = {
         "d_f_bundle": "const double *restrict",
         "d_metric_bundle": "double *restrict",
         "d_connection_bundle": "double *restrict",
-        "chunk_size": "const long int"
+        "chunk_size": "const long int",
     }
 
     # Pass commondata explicitly when not using CUDA's global memory
@@ -80,7 +76,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         cd_ptr = "commondata"
         loop_postamble = "    } // End OpenMP loop"
 
-    core_math = fr"""
+    core_math = rf"""
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
@@ -99,7 +95,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
 
     // --- METRIC TENSOR EVALUATION ---
     double metric_local[10]; // Local register array storing the 10 upper-triangular components of $g_{{\mu\nu}}$.
-    
+
     // Evaluate the spacetime metric geometry.
     {metric_worker}({cd_ptr}, f_local, metric_local);
     // --- GLOBAL MEMORY WRITE (METRIC) ---
@@ -113,7 +109,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     if (d_connection_bundle != NULL) {{
         // Local register array storing the 40 components of $\Gamma^{{\alpha}}_{{\beta\gamma}}$.
         double Gamma_local[40];
-        
+
         // Evaluate the Christoffel symbols.
         {conn_worker}({cd_ptr}, f_local, Gamma_local);
 
@@ -136,7 +132,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx"
+        "stream": "stream_idx",
     }
 
     prefunc_kernel, launch_code = generate_kernel_and_launch_code(
@@ -147,27 +143,27 @@ def interpolation_kernel(spacetime_name: str) -> None:
         parallelization=parallelization,
         launch_dict=launch_dict,
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
-        thread_tiling_macro_suffix="RKF45"
+        thread_tiling_macro_suffix="RKF45",
     )
 
     prefunc = "\n\n".join([metric_c_code, conn_c_code, prefunc_kernel])
-    
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
-    
-    desc = fr"""@brief Orchestrates the memory kernel for the {spacetime_name} interpolation engine.
-    
+
+    desc = rf"""@brief Orchestrates the memory kernel for the {spacetime_name} interpolation engine.
+
     @param d_f_bundle Pointer to the state vector bundle $f^{{\mu}}$ in memory.
     @param d_metric_bundle Pointer to the destination metric bundle $g_{{\mu\nu}}$ in memory.
     @param d_connection_bundle Pointer to the destination connection bundle $\Gamma^{{\alpha}}_{{\beta\gamma}}$ in memory.
     @param chunk_size The number of active rays in the current bundle batch.
     """
-    
+
     cfunc_type = "void"
-    
+
     name = f"interpolation_kernel_{spacetime_name}"
-    
+
     params = (
         "const commondata_struct *restrict commondata, "
         "const double *restrict d_f_bundle, "
@@ -176,7 +172,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         "const long int chunk_size,"
         "const int stream_idx"
     )
-    
+
     body = launch_code
 
     cfc.register_CFunction(
@@ -187,8 +183,9 @@ def interpolation_kernel(spacetime_name: str) -> None:
         name=name,
         params=params,
         include_CodeParameters_h=False,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

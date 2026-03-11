@@ -1,8 +1,8 @@
 """
-This module implements a "Streaming Bundle" architecture to project escaped photon trajectories.
+Module implements a "Streaming Bundle" architecture to project escaped photon trajectories.
 
-This module evaluates the spatial coordinates of escaped photons and projects them onto the 
-celestial sphere. It strictly manages memory usage by processing photons in fixed batches, 
+Module evaluates the spatial coordinates of escaped photons and projects them onto the
+celestial sphere. It strictly manages memory usage by processing photons in fixed batches,
 ensuring compliance with hardware memory limits across both CPU and GPU execution contexts.
 
 Author: Dalton J. Moone.
@@ -10,27 +10,14 @@ Author: Dalton J. Moone.
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access
-)
 from nrpy.helpers.loop import loop
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+
 
 def calculate_and_fill_blueprint_data_universal() -> None:
-    """
-    This function computes the universal blueprint data for escaped photon trajectories.
-
-    :param None: This function requires no arguments.
-    :raises Exception: Propagates nrpy core exceptions on generation failure.
-    """
+    """Compute the universal blueprint data for escaped photon trajectories."""
     kernel_name = "calculate_and_fill_blueprint_data_universal_kernel"
     parallelization = par.parval_from_str("parallelization")
-    
-    # We retrieve the struct accessors for dynamic hardware compatibility, though they 
-    # may remain unused if this specific kernel does not require parameter or commondata structs.
-    cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
@@ -38,7 +25,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         "d_result_bundle": "blueprint_data_t *restrict",
         "current_chunk_size": "const long int",
     }
-    
+
     arg_dict_host = {
         "d_f_bundle": "const double *restrict",
         "d_status_bundle": "const termination_type_t *restrict",
@@ -99,16 +86,16 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     launch_dict = {
         "threads_per_block": [
-            "BHAH_THREADS_IN_X_DIR_DEFAULT", 
-            "BHAH_THREADS_IN_Y_DIR_DEFAULT", 
-            "BHAH_THREADS_IN_Z_DIR_DEFAULT"
+            "BHAH_THREADS_IN_X_DIR_DEFAULT",
+            "BHAH_THREADS_IN_Y_DIR_DEFAULT",
+            "BHAH_THREADS_IN_Z_DIR_DEFAULT",
         ],
         "blocks_per_grid": [
-            "(current_chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", 
-            "1", 
-            "1"
+            "(current_chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT",
+            "1",
+            "1",
         ],
-        "stream": "stream_idx"
+        "stream": "stream_idx",
     }
 
     prefunc, launch_body = generate_kernel_and_launch_code(
@@ -117,7 +104,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         arg_dict_cuda=arg_dict_cuda,
         arg_dict_host=arg_dict_host,
         parallelization=parallelization,
-        launch_dict=launch_dict,             
+        launch_dict=launch_dict,
         thread_tiling_macro_suffix="DEFAULT",
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
@@ -171,9 +158,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         loop_body=loop_body,
     )
 
-
     # 7. Variable Definition
-    prefunc = prefunc
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
@@ -225,6 +210,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

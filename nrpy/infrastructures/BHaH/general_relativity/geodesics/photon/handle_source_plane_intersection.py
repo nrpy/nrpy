@@ -1,21 +1,19 @@
 """
-This module computes the impact parameters on the physical emission plane 
-strictly executing within thread-local registers and constant memory.
+Module computes the impact parameters on the physical emission plane.
+
+Executing within thread-local registers and constant memory.
 Author: Dalton J. Moone.
 """
+
 import nrpy.c_function as cfc
-from nrpy.helpers.parallelization.utilities import get_commondata_access
 import nrpy.params as par
+from nrpy.helpers.parallelization.utilities import get_commondata_access
 
 
 def handle_source_plane_intersection() -> None:
-    """
-    Register the C engine for source plane intersection handling.
-
-    :raises SystemError: If C function registration fails during the pipeline compilation.
-    """
+    """Register the C engine for source plane intersection handling."""
     parallelization = par.parval_from_str("parallelization")
-    
+
     # Add the access variable
     cd_access = get_commondata_access(parallelization)
 
@@ -41,14 +39,12 @@ def handle_source_plane_intersection() -> None:
         add_to_parfile=True,
     )
 
-    includes = [
-        "BHaH_defines.h"
-    ]
+    includes = ["BHaH_defines.h"]
 
     if parallelization == "cuda":
         includes.append("BHaH_device_defines.h")
         includes.append("cuda_intrinsics.h")
-    
+
     desc = r"""@brief Processes a terminal intersection with the source emission plane.
 
     @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
@@ -59,11 +55,11 @@ def handle_source_plane_intersection() -> None:
     1. Reconstructs the source plane orthonormal basis ($s_x$, $s_y$, $s_z$).
     2. Projects the intersection state $x^\mu$ into local 2D coordinates.
     3. Filters based on physical radial bounds [$r_{min}$, $r_{max}$]."""
-    
+
     cfunc_type = "BHAH_HD_INLINE bool"
-    
+
     name = "handle_source_plane_intersection"
-    
+
     params = (
         "const double *restrict source_event_f_intersect, "
         "const double lam_intersect, "
@@ -71,9 +67,9 @@ def handle_source_plane_intersection() -> None:
     )
     if parallelization != "cuda":
         params += ", const commondata_struct *restrict commondata"
-    
+
     include_CodeParameters_h = False
-    
+
     body = r"""
     // --- UNPACK INTERSECTION STATE ---
     // Reads intersection data from thread-local registers, circumventing global reads.
@@ -138,7 +134,7 @@ def handle_source_plane_intersection() -> None:
     }
     return false;
     """
-    
+
     # Inject the string replacement right before registration
     body = body.replace("d_commondata.", cd_access)
 
@@ -149,7 +145,7 @@ def handle_source_plane_intersection() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
 
 

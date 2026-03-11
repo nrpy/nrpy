@@ -106,7 +106,6 @@ def main(spacetime_name: str) -> None:
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
     if results.failed > 0:

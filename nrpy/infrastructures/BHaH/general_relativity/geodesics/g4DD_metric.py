@@ -1,10 +1,10 @@
 """
 Generates the C function for computing upper-triangular metric components.
 
-This module registers the C function responsible for calculating the 10 unique 
-components of the covariant metric tensor. To prevent register spilling on 
-hardware architectures constrained by register limits, it evaluates all 
-mathematical expressions directly into a thread-local array passed down the 
+This module registers the C function responsible for calculating the 10 unique
+components of the covariant metric tensor. To prevent register spilling on
+hardware architectures constrained by register limits, it evaluates all
+mathematical expressions directly into a thread-local array passed down the
 call stack. The resulting C function is an inline device helper.
 Author: Dalton J. Moone.
 """
@@ -18,10 +18,10 @@ import sympy as sp
 # Python: Import NRPy core modules
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
 )
+
 
 def g4DD_metric(
     g4DD_exprs: List[List[sp.Expr]], spacetime_name: str, PARTICLE: str
@@ -65,7 +65,7 @@ def g4DD_metric(
     xx_symbols = Analytic_Spacetimes[spacetime_name].xx
     preamble_lines = [
         "// Unpack position coordinates $x^i$ from the thread-local state vector.",
-        f"// Evaluated at compile time for state vector size: {array_size}"
+        f"// Evaluated at compile time for state vector size: {array_size}",
     ]
 
     for i, symbol in enumerate(xx_symbols):
@@ -115,8 +115,9 @@ def g4DD_metric(
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

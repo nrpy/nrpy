@@ -1,29 +1,29 @@
 """
 Module for generating the native C/CUDA kernel and host-side orchestrator for photon initialization.
 
-This module generates a C function that initializes photon trajectories in Cartesian coordinates
+Module generates a C function that initializes photon trajectories in Cartesian coordinates
 using a "Split-Pipeline" architecture. It allocates a staging buffer to process rays
 in batches, initializing the spatial positions, spatial momenta, and adaptive step sizes,
 while explicitly setting the temporal momentum to zero for downstream constraint solving.
 
 Author: Dalton J. Moone.
 """
+
 import nrpy.c_function as cfc
-import nrpy.params as par
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.params as par
+from nrpy.helpers.loop import loop
 from nrpy.helpers.parallelization.utilities import (
     generate_kernel_and_launch_code,
     get_commondata_access,
-    get_params_access,
 )
-from nrpy.helpers.loop import loop
 
 # Define the C-structs required for the simulation pipeline.
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
     // Maximum number of photons processed per batch to fit within L1/L2 cache.
-    #define BUNDLE_CAPACITY 65536 
+    #define BUNDLE_CAPACITY 65536
 
     // Defines the physical planes where a photon trajectory might terminate.
     typedef enum {
@@ -88,18 +88,26 @@ batch_structs_c_code = r"""
 """
 Bdefines_h.register_BHaH_defines("photon_02_batch_structs", batch_structs_c_code)
 
+
 def set_initial_conditions_kernel(spacetime_name: str) -> None:
     """
-    Registers the C function and device kernel for Cartesian photon initialization.
+    Register the C function and device kernel for Cartesian photon initialization.
 
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
-    :raises Exception: Propagates NRPy+ core exceptions during AST generation.
     """
     # Register necessary global parameters for the grid setup and numerical controls.
-    par.register_CodeParameter("int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True)
-    par.register_CodeParameter("REAL", __name__, "t_start", 100.0, commondata=True, add_to_parfile=True)
-    par.register_CodeParameter("REAL", __name__, "window_width", 10.0, commondata=True, add_to_parfile=True)
-    par.register_CodeParameter("REAL", __name__, "window_height", 10.0, commondata=True, add_to_parfile=True)
+    par.register_CodeParameter(
+        "int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True
+    )
+    par.register_CodeParameter(
+        "REAL", __name__, "t_start", 100.0, commondata=True, add_to_parfile=True
+    )
+    par.register_CodeParameter(
+        "REAL", __name__, "window_width", 10.0, commondata=True, add_to_parfile=True
+    )
+    par.register_CodeParameter(
+        "REAL", __name__, "window_height", 10.0, commondata=True, add_to_parfile=True
+    )
 
     # Dynamic architecture detection.
     parallelization = par.parval_from_str("parallelization")
@@ -117,7 +125,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         "ny_1": "const double",
         "ny_2": "const double",
         "start_idx": "const long int",
-        "chunk_size": "const long int"
+        "chunk_size": "const long int",
     }
     # Pass commondata explicitly when not using CUDA's global memory
     if parallelization != "cuda":
@@ -175,7 +183,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // --- INITIAL STATE POPULATION ---
     // Algorithmic Step: Write the starting position and spatial momentum explicitly to the VRAM bundle.
     // Algorithmic Step: Write the starting position and spatial momentum explicitly to the VRAM bundle.
-    
+
     // Hardware Justification: Single coalesced memory writes prevent warp serialization on sm_86 and ensure aligned cache access on CPUs.
     d_f_bundle[IDX_F(0, c)] = {cd_access}t_start; // Coordinate time $t$
     d_f_bundle[IDX_F(1, c)] = {cd_access}camera_pos_x; // Spatial position $x$
@@ -198,7 +206,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     d_f_bundle[IDX_F(5, c)] = V_x * inv_mag_V; // Initial momentum component $p^x$
     d_f_bundle[IDX_F(6, c)] = V_y * inv_mag_V; // Initial momentum component $p^y$
     d_f_bundle[IDX_F(7, c)] = V_z * inv_mag_V; // Initial momentum component $p^z$
-    
+
     // Explicitly set the initial path length to zero.
     d_f_bundle[IDX_F(8, c)] = 0.0;
 
@@ -213,12 +221,20 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     """
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
-    
-    launch_dict = {
-        "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
-        "blocks_per_grid": ["(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
-        "stream": "stream_idx"
-    } if parallelization == "cuda" else None
+
+    launch_dict = (
+        {
+            "threads_per_block": ["BHAH_THREADS_IN_X_DIR_DEFAULT", "1", "1"],
+            "blocks_per_grid": [
+                "(chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT",
+                "1",
+                "1",
+            ],
+            "stream": "stream_idx",
+        }
+        if parallelization == "cuda"
+        else None
+    )
 
     kernel_prefunc, launch_code = generate_kernel_and_launch_code(
         kernel_name=f"set_initial_conditions_kernel_{spacetime_name}",
@@ -249,7 +265,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from VRAM back to host RAM.
         // Hardware Justification: Pinned memory on the host is hydrated via PCIe to seed the Time Slot Manager.
         for(int m=0; m<9; m++) {
-            cudaMemcpy(all_photons->f + (m * num_rays) + start_idx, 
+            cudaMemcpy(all_photons->f + (m * num_rays) + start_idx,
                     d_f_bundle + (m * BUNDLE_CAPACITY),
                     sizeof(double) * chunk_size,
                     cudaMemcpyDeviceToHost);
@@ -269,7 +285,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         // Algorithmic Step: Transfer initialized state vectors $f^\mu$ from staging buffer to master SoA.
         // Hardware Justification: Memory is copied locally in RAM to seed the Time Slot Manager.
         for(int m=0; m<9; m++) {
-            memcpy(all_photons->f + (m * num_rays) + start_idx, 
+            memcpy(all_photons->f + (m * num_rays) + start_idx,
                    d_f_bundle + (m * BUNDLE_CAPACITY),
                    sizeof(double) * chunk_size);
         }
@@ -291,7 +307,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
         {sync_and_transfer_code}
     """
-    
+
     host_loop_code = loop(
         idx_var="start_idx",
         lower_bound="0",
@@ -374,7 +390,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const double val_window = n_z[0] * (cam_x - wc_x) +
                               n_z[1] * (cam_y - wc_y) +
                               n_z[2] * (cam_z - wc_z);
-    
+
     // Evaluates strictly greater than zero per the physical observer constraints.
     const bool init_window_side = (val_window > 0.0);
 
@@ -382,7 +398,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     const double val_source = commondata->source_plane_normal_x * (cam_x - commondata->source_plane_center_x) +
                               commondata->source_plane_normal_y * (cam_y - commondata->source_plane_center_y) +
                               commondata->source_plane_normal_z * (cam_z - commondata->source_plane_center_z);
-    
+
     // Evaluates true if exactly zero per physical emission constraints.
     const bool init_source_side = (val_source >= 0.0);
 
@@ -397,7 +413,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     double *d_f_bundle;
     // Device pointer for the chunked VRAM step size staging buffer d_h_bundle.
     double *d_h_bundle;
-    
+
     // Hardware Justification: Memory is processed in bundles to protect the 10GB hardware limit.
     BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY);
     BHAH_MALLOC_DEVICE(d_h_bundle, sizeof(double) * BUNDLE_CAPACITY);
@@ -418,11 +434,11 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         includes.append("cuda_intrinsics.h")
 
     desc = r"""@brief Initializes Cartesian starting conditions for photons.
-    
+
     Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
     temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
-    
+
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.
     @param all_photons Pointer to the master SoA state vector $f^\mu$ in host memory.
@@ -433,7 +449,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     cfunc_type = "void"
     name = f"set_initial_conditions_kernel_{spacetime_name}"
-    
+
     stream_param = "const int stream_idx" if parallelization == "cuda" else ""
     params = (
         "const commondata_struct *restrict commondata, "
@@ -458,8 +474,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

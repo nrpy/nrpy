@@ -15,8 +15,6 @@ The system is derived from:
 Author: Dalton J. Moone
 """
 
-import logging
-import os
 import sys
 from typing import List
 
@@ -141,7 +139,6 @@ def calculate_ode_rhs_massive(
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
     if results.failed > 0:

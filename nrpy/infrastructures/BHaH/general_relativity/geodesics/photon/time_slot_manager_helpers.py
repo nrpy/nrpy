@@ -70,7 +70,7 @@ def time_slot_manager_helpers() -> None:
         if (isnan(t) || t < tsm->t_min || t >= tsm->t_max) return -1;
         return (int)floor((t - tsm->t_min) / tsm->delta_t_slot);
     }
-    
+
     // --- PHOTON REGISTRATION ---
     // @brief Atomically pushes a photon's global index into the appropriate temporal bin.
     /* Algorithmic Step: Implements a lock-free linked list insertion using a Compare-and-Swap (CAS) loop.
@@ -96,7 +96,7 @@ def time_slot_manager_helpers() -> None:
         // Atomic Operation: Increment the active photon count for the designated temporal bin.
         __sync_fetch_and_add(&tsm->slot_counts[slot_idx], 1L);
     }
-    
+
     // --- PHOTON EXTRACTION ---
     // @brief Atomically pops a specific number of photons from a designated time slot into a contiguous buffer.
     /* Algorithmic Step: Utilizes a CAS-based pop mechanism to safely extract the head of the linked list.
@@ -133,6 +133,7 @@ def time_slot_manager_helpers() -> None:
     }
     """
     Bdefines_h.register_BHaH_defines("time_slot_manager", portable_tsm)
+
 
 if __name__ == "__main__":
     import doctest

@@ -1,4 +1,4 @@
-"""
+r"""
 Orchestration module for the Project Singularity-Axiom numerical integration pipeline.
 
 This module structures the high-level C orchestrator responsible for managing the
@@ -14,14 +14,13 @@ Author: Dalton J. Moone.
 import nrpy.c_function as cfc
 import nrpy.params as par
 
+
 def batch_integrator_numerical(spacetime_name: str) -> None:
-    """
+    r"""
     Construct the Native CUDA orchestrator for the batched numerical integration pipeline.
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
-    :raises ValueError: If an unsupported spacetime metric identifier is provided.
     """
-    
     # Core physics and numerical simulation parameters for the global spacetime struct.
     par.register_CodeParameters(
         "REAL",
@@ -49,18 +48,17 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     parallelization = par.parval_from_str("parallelization")
 
-    includes = [
-        "BHaH_defines.h", 
-        "BHaH_function_prototypes.h"
-    ]
-    
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+
     if parallelization == "cuda":
-        includes.extend(["cuda_runtime.h", "cuda_intrinsics.h","BHaH_global_device_defines.h"])
+        includes.extend(
+            ["cuda_runtime.h", "cuda_intrinsics.h", "BHaH_global_device_defines.h"]
+        )
 
     desc = r"""@brief Central Host-bound CPU orchestrator for the batched Split-Pipeline relativistic ray tracing loop.
 
     This function acts as the primary loop for evaluating photon geodesics $x^\mu$.
-    It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$. 
+    It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$.
     The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to memory scratchpads.
     Mapping tensors to memory respects the hardware limit per thread on modern architectures.
 
@@ -98,15 +96,17 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     else:
         stream_setup_str = """
         // Streams not required for CPU execution.
-    
+
         // Direct struct access utilized; explicit device symbol copying bypassed."""
         pin_comment = "Host memory allocation: Primary CPU RAM mapped for"
         dev_comment = "Host memory allocation: Primary CPU RAM mapped for"
-        bridge_alloc_comment = "Allocate memory arrays in Host RAM for the structural bridge payloads."
-        scratch_alloc_comment = "Allocate 1D Host Scratchpad arrays for temporal data staging."
+        bridge_alloc_comment = (
+            "Allocate memory arrays in Host RAM for the structural bridge payloads."
+        )
+        scratch_alloc_comment = (
+            "Allocate 1D Host Scratchpad arrays for temporal data staging."
+        )
 
-
-    
     # This block configures the hardware-specific teardown and memory synchronization sequences.
     if parallelization == "cuda":
         results_memcpy = "cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);"
@@ -123,21 +123,21 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         free_device = "BHAH_FREE"
         free_pinned = "BHAH_FREE"
 
-
-
     # Establish memory transfer protocols based on the target parallelization architecture.
     if parallelization == "cuda":
         # Python: Generates asynchronous PCIe transfer commands for CUDA architectures.
-        def memcpy_async(dest, src, size, direction, stream):
+        def memcpy_async(
+            dest: str, src: str, size: str, direction: str, stream: str
+        ) -> str:
             return f"cudaMemcpyAsync({dest}, {src}, {size}, {direction}, {stream});"
-        
+
         # Generates hardware synchronization barriers for CUDA streams.
-        def stream_sync(stream):
+        def stream_sync(stream: str) -> str:
             return f"cudaStreamSynchronize({stream});"
-        
+
         stream_arg = ", 0"
         free_pinned = "BHAH_FREE_PINNED"
-        
+
         h2d_f_comment = r"// Hardware Justification: Asynchronously pushes strictly bounded initial states to VRAM on stream 0 to minimize PCIe latency."
         d2h_metric_comment = r"// Hardware Justification: Retrieves the symmetric metric tensor $g_{\mu\nu}$ to Host memory for inspection restricted to the active chunk."
         sync_metric_comment = r"// Hardware Justification: Hard synchronization barrier on stream 0 to inspect the payload prior to constraint solving."
@@ -145,16 +145,19 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         sync_f_comment = r"// Hardware Justification: Hard synchronization barrier on stream 0 to guarantee PCIe transfer completion before Host unpacking."
     else:
         # Generates synchronous Host memory copies for native OpenMP architectures.
-        def memcpy_async(dest, src, size, direction, stream):
+        def memcpy_async(
+            dest: str, src: str, size: str, direction: str, stream: str
+        ) -> str:
+            # pylint: disable=unused-argument
             return f"memcpy({dest}, {src}, {size});"
-        
-        # Omits stream synchronization as CPU execution is inherently synchronous.
-        def stream_sync(stream):
+
+        def stream_sync(stream: str) -> str:
+            # pylint: disable=unused-argument
             return r"// Hardware Justification: Stream synchronization is natively omitted for synchronous CPU execution."
-            
+
         stream_arg = ", 0"
         free_pinned = "BHAH_FREE"
-        
+
         h2d_f_comment = r"// Hardware Justification: Duplicates strictly bounded initial states to localized pipeline arrays using standard memory copies."
         d2h_metric_comment = r"// Hardware Justification: Duplicates the symmetric metric tensor $g_{\mu\nu}$ to diagnostic bridges via standard memory copies."
         sync_metric_comment = r"// Hardware Justification: Barrier omitted for synchronous Host execution prior to constraint solving."
@@ -165,9 +168,9 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     stream_arg_current = ", current" if parallelization == "cuda" else ", current"
     stream_arg_next = ", next" if parallelization == "cuda" else ", next"
 
-    body = fr"""
+    body = rf"""
     // --- 1. HOST & DEVICE ALLOCATION ---
-    
+
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
     PhotonStateSoA all_photons_host;
 
@@ -336,7 +339,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     /* Algorithmic Step: Evaluate initial coordinate states and map global spacetime metrics to memory bounds. Hardware Justification: This pre-computation stage occurs prior to the temporal loop to maximize coalesced memory access during iterative integration. */
     // --- 2. INITIALIZATION PHASE ---
-    
+
     double window_center_out[3]; // 3D array storing the spatial Cartesian coordinates $x^i$ of the observer window center.
     double n_x_out[3]; // 3D orthonormal basis vector pointing along the $x$-axis of the local window geometry.
     double n_y_out[3]; // 3D orthonormal basis vector pointing along the $y$-axis of the local window geometry.
@@ -347,7 +350,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     /* Algorithmic Step: Scans the master Host SoA immediately following the initialization kernel call. Hardware Justification: This architectural step verifies that the Host-side logic has correctly populated the starting coordinates $x^\mu$ and zeroed the temporal momentum $p_t$ and affine parameter $\lambda$ components. */
     // --- DIAGNOSTIC PROBE: DETAILED INITIAL POSITION & PLACEHOLDER ALIGNMENT ---
-    
+
     long int init_mismatch_count = 0; // Accumulator tracking the total number of physical state initializations that failed structural validation.
     long int mismatch_t = 0; // Counter tracking validation failures for the temporal coordinate $t$.
     long int mismatch_x = 0; // Counter tracking validation failures for the spatial coordinate $x$.
@@ -412,11 +415,11 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
         /* Algorithmic Step: Extracts metric payload to confirm numerical stability prior to momentum solving. Hardware Justification: Ensures constraint solver convergence by intercepting unphysical spacetime regions immediately after calculation. */
         // --- DIAGNOSTIC PROBE: METRIC INTEGRITY CHECK ---
-        
+
         double *metric_diag_bridge; // Pointer storing temporary metric data to validate the interpolation sequence.
         {malloc_pinned}(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY); // Memory allocation: Temporary bridge mapped to maximize throughput for the metric $g_{{\mu\nu}}$ diagnostic sequence.
-        
-        for (int m_k = 0; m_k < 10; ++m_k) {{ 
+
+        for (int m_k = 0; m_k < 10; ++m_k) {{
             // Loop index $m_k$ orchestrating memory transfer of the 10 metric tensor $g_{{\mu\nu}}$ components.
             {d2h_metric_comment}
             {memcpy_async("metric_diag_bridge + m_k * BUNDLE_CAPACITY", "d_metric_bundle[0] + m_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyDeviceToHost", "streams[0]")}
@@ -428,7 +431,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         for (int m_diag_i = 0; m_diag_i < chunk_size; ++m_diag_i) {{ // Loop iterator $m_diag_i$ scanning each trajectory within the current initialization chunk.
             bool m_has_nan = false; // Boolean flag indicating if the specific metric tensor $g_{{\mu\nu}}$ contains a NaN or Inf value.
             for (int m_diag_k = 0; m_diag_k < 10; ++m_diag_k) {{ // Loop index $m_diag_k$ iterating over the 10 independent components of the symmetric metric tensor $g_{{\mu\nu}}$.
-                if (isnan(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i]) || 
+                if (isnan(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i]) ||
                     isinf(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i])) {{
                     m_has_nan = true; // Flags the trajectory metric state as invalid due to a non-finite value.
                     break; // Terminates the tensor component loop early to conserve execution cycles upon detecting a failure.
@@ -442,7 +445,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             printf("[DIAGNOSTIC] Init Batch %ld: %ld rays have invalid Metric G_mu_nu before p_t solve.\n", init_batch, metric_nan_count);
         }}
         {free_pinned}(metric_diag_bridge); // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
-        
+
         // Hardware Justification: Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ natively on the active pipeline.
         p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
 
@@ -473,7 +476,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     /* Algorithmic Step: Evaluate initial conserved quantities immediately after generating valid physical null states. Hardware Justification: This baselines the data via chunked pipeline kernels before the Split-Pipeline begins mutating the state vectors. */
     // --- BASELINE CONSERVED QUANTITIES ---
-    
+
     if (commondata->perform_conservation_check) {{
         // Hardware Justification: Executes global conserved quantities natively via chunked device parameters before pipeline processing.
         calculate_conserved_quantities_universal_{spacetime_name}_photon(commondata, &all_photons_host, num_rays, initial_cq_host);
@@ -503,12 +506,12 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     // --- 3. TEMPORAL LOOP (The Engine) ---
     // Integer tracking the global number of active photon trajectories to allow early loop termination.
-    long int total_active_photons = num_rays; 
+    long int total_active_photons = num_rays;
 
     // Outer loop iterator for the physical time bins.
-    for (int slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{  
+    for (int slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{
         // Evaluates the early exit condition to terminate the temporal engine if all geometric trajectories have concluded.
-        if (total_active_photons <= 0) {{ 
+        if (total_active_photons <= 0) {{
             break; // Terminates the temporal engine early to conserve hardware cycles.
         }}
 
@@ -518,10 +521,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
         /* Algorithmic Step: Populate the first bridge and launch asynchronous integration on the primary stream. Hardware Justification: Initializes the pipeline to allow subsequent Host-side packing to overlap with GPU compute. */
         // --- PHASE A: PRIME THE PUMP (Stream 0) ---
-        
+
         active_chunks[current] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the PCIe transfer to avoid VRAM overflow.
-        
-        if (active_chunks[current] > 0) {{ 
+
+        if (active_chunks[current] > 0) {{
             slot_remove_chunk(&tsm, slot_idx, chunk_buffer[current], active_chunks[current]); // Extracts the execution chunk mapping from the Host-side temporal bin.
 
             for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the Host-side bridge arrays.
@@ -583,13 +586,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
                 // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ asynchronously on the active stream.
-                interpolation_kernel_{ spacetime_name}(commondata, d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current]{stream_arg_current}); 
+                interpolation_kernel_{ spacetime_name}(commondata, d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current]{stream_arg_current});
                 // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the active stream.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
                 // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the active stream.
                 rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
             }}
-            
+
             // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
             rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
             // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the active stream.
@@ -627,13 +630,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
         /* Algorithmic Step: Continuously alternate between streams, packing the next payload while syncing the current. Hardware Justification: Completely hides PCIe DMA transfer latency behind the active RKF45 integration compute time. */
         // --- PHASE B: THE OVERLAP LOOP ---
-        
-        while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{  
-            
+
+        while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{
+
             active_chunks[next] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming PCIe transfer execution block.
-            if (active_chunks[next] > 0) {{ 
+            if (active_chunks[next] > 0) {{
                 slot_remove_chunk(&tsm, slot_idx, chunk_buffer[next], active_chunks[next]); // Extracts the next execution chunk mapping from the Host-side temporal bin.
-                
+
                 for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{  // Loop iterator $bridge_i$ packing the physical state payloads into the next Host-side bridge array.
                     long int m_idx = chunk_buffer[next][bridge_i]; // Absolute master index $m_{{ idx}}$ mapping the active payload to the global trajectory matrix.
                     for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ iterating over the 9 tensor components of the state vectors.
@@ -734,7 +737,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 {memcpy_async("source_event_found_bridge[next]", "d_source_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
             }}
 
-            if (active_chunks[current] > 0) {{ 
+            if (active_chunks[current] > 0) {{
                 // Device synchronization barrier strictly enforcing completion of the current stream before payload unpacking.
                 {stream_sync("streams[current]")}
 
@@ -760,13 +763,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                         int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); // Evaluates the updated temporal coordinate $t$ to determine the next operational bin.
                         if (next_s_idx != -1) {{  // Confirms the physical state has not exceeded the maximum simulation time bounds.
                             slot_add_photon(&tsm, next_s_idx, m_idx);  // Re-queues the updated physical state vector back into the host orchestrator.
-                        }} else {{ 
+                        }} else {{
                             all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; // Flags the physical state as permanently failed due to excessive propagation time.
                             total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                         }}
                     }} else if (status_bridge[current][fin_i] == REJECTED) {{   // Evaluates the retry logic if the numerical step exceeded the requested tolerances.
                         slot_add_photon(&tsm, slot_idx, m_idx); // Re-adds to the current bin to attempt integration with an adapted step-size scalar $h$.
-                    }} else {{ 
+                    }} else {{
                         total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                     }}
                 }}
@@ -778,19 +781,19 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             next = temp; // Assigns the cleared stream index back to the upcoming payload queue.
         }}
 
-       /* Algorithmic Step: Enforce a rigid hardware sync before advancing the physical time clock. 
-        Hardware Justification: Prevents race conditions and ensures all coordinate states $f^\mu$ 
+       /* Algorithmic Step: Enforce a rigid hardware sync before advancing the physical time clock.
+        Hardware Justification: Prevents race conditions and ensures all coordinate states $f^\mu$
         strictly adhere to the current temporal bin limits. */
         // --- PHASE C: THE TIME BARRIER ---
-        BHAH_DEVICE_SYNC(); // Synchronize global state convergence before advancing the central time engine. 
+        BHAH_DEVICE_SYNC(); // Synchronize global state convergence before advancing the central time engine.
 
      }}
 
     /* Algorithmic Step: Process terminal photon trajectories and extract final geometric intersections. Hardware Justification: Memory transfers execute synchronously on the host to ensure all asynchronous execution pipelines have fully resolved. */
     // --- 4. CLEANUP & FINALIZATION ---
-        
+
         // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
-        {results_memcpy} 
+        {results_memcpy}
 
         // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$.
         {calc_blueprint}
@@ -846,7 +849,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             printf("\n=================================================\n");
             printf(" CONSERVED QUANTITIES DIAGNOSTIC REPORT\n");
             printf("=================================================\n");
-            
+
             // Scalar variables tracking the maximum recorded relative drift for energy $E$, angular momentum $L_z$, and Carter constant $Q$.
             double max_err_E = 0.0, max_err_Lz = 0.0, max_err_Q = 0.0;
             // Absolute master indices $m_{{idx}}$ identifying the trajectory responsible for the maximum numerical drift in each respective quantity.
@@ -887,15 +890,13 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         {free_pinned}(all_photons_host.affine_param_p_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-2}}$.
         {free_pinned}(all_photons_host.window_event_found); // Purges the primary Host array observer window intersection lock.
         {free_pinned}(all_photons_host.source_event_found); // Purges the primary Host array source emission intersection lock.
-        
+
         // Device Memory Free: Purges the final single-pointer intersection blueprint buffer $b_i$.
         {free_device}(d_results_buffer); // Purges the intersection blueprint buffer $b_i$.
 
         // Memory Free: Purges the temporal sorting struct mapping the Host-side execution grid.
         slot_manager_free(&tsm); // Purges the central time slot orchestrator.
     """
-
-
 
     cfc.register_CFunction(
         includes=includes,
@@ -904,9 +905,10 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
-    
+
+
 if __name__ == "__main__":
     import doctest
     import sys

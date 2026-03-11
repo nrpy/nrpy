@@ -1,12 +1,13 @@
-"""
-This module defines the global kernel and host-side orchestrator for computing the photon geodesic ODE right-hand sides.
+r"""
+Module defines the global kernel and host-side orchestrator for computing the photon geodesic ODE right-hand sides.
 
-This module evaluates the spatial and temporal derivatives $\dot{f}$ required during 
-the RKF45 integration step. It reads pre-calculated metric and connection tensors 
+Module evaluates the spatial and temporal derivatives $\dot{f}$ required during
+the RKF45 integration step. It reads pre-calculated metric and connection tensors
 from global memory bundles to minimize register pressure on the target architecture.
 
 Author: Dalton J. Moone.
 """
+
 from typing import List
 
 import sympy as sp
@@ -14,22 +15,18 @@ import sympy as sp
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access
-)
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 
 def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
 ) -> None:
-    """
+    r"""
     Register the global kernel to compute the ODE right-hand side.
 
-    The generated kernel maps memory tensor data into thread-local registers matching 
-    the symbols expected by the generated geodesic equations. It computes the $9$ 
-    derivative components and writes them to the specific stage offset in the 
+    The generated kernel maps memory tensor data into thread-local registers matching
+    the symbols expected by the generated geodesic equations. It computes the $9$
+    derivative components and writes them to the specific stage offset in the
     RKF45 derivative bundle.
 
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations representing the geodesic equations.
@@ -42,8 +39,6 @@ def calculate_ode_rhs_kernel(
         )
 
     parallelization = par.parval_from_str("parallelization")
-    cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     # Identify all unique mathematical symbols used in the generated RHS expressions.
     used_symbol_names = {
@@ -59,7 +54,7 @@ def calculate_ode_rhs_kernel(
         "stage": "const int",
         "chunk_size": "const long int",
     }
-    
+
     arg_dict_host = {
         "d_f_temp_bundle": "const double *restrict",
         "d_metric_bundle": "const double *restrict",
@@ -133,12 +128,12 @@ def calculate_ode_rhs_kernel(
     # Output targets are local scalar registers k_out_0 through k_out_8.
     k_array_outputs = [f"k_out_{j}" for j in range(9)]
 
-    enable_simd = (parallelization == "cuda")
+    enable_simd = parallelization == "cuda"
     raw_c_code = ccg.c_codegen(
         geodesic_rhs_expressions,
         k_array_outputs,
         enable_cse=True,
-        enable_simd= enable_simd,
+        enable_simd=enable_simd,
         include_braces=False,
         verbose=False,
     )
@@ -165,7 +160,7 @@ def calculate_ode_rhs_kernel(
         loop_postamble = "    } // End OpenMP loop"
         body_math = raw_c_code
 
-    core_math = fr"""
+    core_math = rf"""
     // --- MACRO DEFINITIONS FOR BUNDLE ACCESS ---
     // IDX_F maps a component to the flattened state bundle using SoA layout.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the state bundle.
@@ -182,7 +177,7 @@ def calculate_ode_rhs_kernel(
     // --- GEODESIC RHS EVALUATION ---
     // Local register declarations to capture the evaluated derivatives $\dot{{f}}$.
     double k_out_0, k_out_1, k_out_2, k_out_3, k_out_4, k_out_5, k_out_6, k_out_7, k_out_8; // Thread-local registers allocate memory for the $9$ derivative outputs.
-    
+
     // Evaluate the derivatives $dx^{{\mu}}/d\lambda$ and $dp^{{\mu}}/d\lambda$ using hardware FMA instructions.
     {body_math}
 
@@ -227,13 +222,13 @@ def calculate_ode_rhs_kernel(
 
     # --- CANONICAL MASTER ORDER SEQUENCE ---
     prefunc = prefunc_kernel
-    
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
     desc = r"""@brief Orchestrates the memory kernel for computing the photon geodesic ODE right-hand sides.
-    
+
     @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in memory.
     @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
     @param d_connection_bundle Pointer to the pre-calculated connection bundle $\Gamma^{\alpha}_{\beta\gamma}$ in memory.
@@ -243,7 +238,7 @@ def calculate_ode_rhs_kernel(
     """
 
     cfunc_type = "void"
-    
+
     name = "calculate_ode_rhs_kernel"
 
     params = (
@@ -257,7 +252,7 @@ def calculate_ode_rhs_kernel(
     )
 
     include_CodeParameters_h = False
-    
+
     body = launch_code
 
     # Register the complete C function using the canonical Master Order sequence.

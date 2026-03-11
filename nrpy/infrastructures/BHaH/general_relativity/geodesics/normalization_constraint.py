@@ -8,14 +8,17 @@ Author: Dalton J. Moone.
 """
 
 from typing import List
+
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+from nrpy.helpers.loop import loop
 from nrpy.helpers.parallelization.utilities import (
     generate_kernel_and_launch_code,
 )
-from nrpy.helpers.loop import loop
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+
 
 def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     """
@@ -70,19 +73,27 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     # Dynamically generate the unpacking logic based on the specific vector coordinates.
     preamble_lines = [
         "    // --- COMPONENT HYDRATION ---",
-        "    // Hardware Justification: Unpack 4-vector and metric components using strict SoA macros directly from the VRAM bundle."
+        "    // Hardware Justification: Unpack 4-vector and metric components using strict SoA macros directly from the VRAM bundle.",
     ]
 
     for i in range(4):
-        preamble_lines.append(f"    const double vU{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // 4-vector component $v^{i}$ evaluated from VRAM.")
-        preamble_lines.append(f"    (void)vU{i}; // Suppress unused variable warning for $v^{i}$.")
+        preamble_lines.append(
+            f"    const double vU{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // 4-vector component $v^{i}$ evaluated from VRAM."
+        )
+        preamble_lines.append(
+            f"    (void)vU{i}; // Suppress unused variable warning for $v^{i}$."
+        )
 
     # Map the metric tensor components.
     k = 0
     for i in range(4):
         for j in range(i, 4):
-            preamble_lines.append(f"    const double metric_g4DD{i}{j} = d_metric_bundle[IDX_LOCAL({k}, c, BUNDLE_CAPACITY)]; // Metric tensor component $g_{{{i}{j}}}$ evaluated from VRAM.")
-            preamble_lines.append(f"    (void)metric_g4DD{i}{j}; // Suppress unused variable warning for $g_{{{i}{j}}}$.")
+            preamble_lines.append(
+                f"    const double metric_g4DD{i}{j} = d_metric_bundle[IDX_LOCAL({k}, c, BUNDLE_CAPACITY)]; // Metric tensor component $g_{{{i}{j}}}$ evaluated from VRAM."
+            )
+            preamble_lines.append(
+                f"    (void)metric_g4DD{i}{j}; // Suppress unused variable warning for $g_{{{i}{j}}}$."
+            )
             k += 1
 
     preamble = "\n".join(preamble_lines)
@@ -180,7 +191,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
 
     # 7. Variable Definition (The Master Order)
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "math.h"]
-    
+
     desc = f"""@brief Computes the normalization constraint for a batch of trajectories.
     @param all_photons The master Structure of Arrays containing the state vectors $f^\\mu$.
     @param all_metrics The master Structure of Arrays containing the symmetric metric tensor $g_{{\\mu\\nu}}$.
@@ -191,7 +202,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
     1. Allocates VRAM staging buffers for state vectors $f^\\mu$, metrics $g_{{\\mu\\nu}}$, and quantity results.
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
     3. Transfers state and metric data Host-to-Device, computes expressions, and transfers Device-to-Host.
-    
+
     Expected Value: {expected_val} for {vec_desc}."""
 
     cfunc_type = "void"
@@ -235,6 +246,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

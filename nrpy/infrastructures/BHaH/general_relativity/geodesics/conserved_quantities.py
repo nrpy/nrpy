@@ -1,49 +1,42 @@
 """
 Evaluates the physical conserved quantities along photon trajectories using a streaming bundle architecture.
 
-This module implements a streaming bundle architecture to compute physical 
-conserved quantities along photon trajectories. It strictly manages memory usage 
-by processing photons in limited batches, bridging the Host-Device gap, ensuring 
+This module implements a streaming bundle architecture to compute physical
+conserved quantities along photon trajectories. It strictly manages memory usage
+by processing photons in limited batches, bridging the Host-Device gap, ensuring
 compliance with hardware execution limits for both CUDA and OpenMP.
 
 Author: Dalton J. Moone.
 """
 
 from typing import List
+
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access,
-)
-from nrpy.helpers.loop import loop
 from nrpy.equations.general_relativity.geodesics.geodesic_diagnostics.conserved_quantities import (
     Geodesic_Diagnostics,
 )
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+from nrpy.helpers.loop import loop
+from nrpy.helpers.parallelization.utilities import (
+    generate_kernel_and_launch_code,
+    get_commondata_access,
+)
+
 
 def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> None:
     """
-    Evaluates the C function and native kernel for conserved quantity evaluation.
+    Evaluate the C function and native kernel for conserved quantity evaluation.
 
     :param spacetime_name: The target analytic or numerical spacetime.
     :param particle_type: The particle classification (default is photon).
-    :raises ValueError: If the particle type is not supported.
     """
-    if particle_type == "massive":
-        array_size = 8
-    elif particle_type == "photon":
-        array_size = 9
-    else:
-        raise ValueError(f"Unsupported particle_type: {particle_type}")
-
     # 1. Architecture Detection
     parallelization = par.parval_from_str("parallelization")
     cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     config_key = f"{spacetime_name}_{particle_type}"
     diagnostics = Geodesic_Diagnostics[config_key]
@@ -58,7 +51,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     if diagnostics.L_exprs:
         list_of_syms.extend(diagnostics.L_exprs)
-        list_of_c_vars.extend(["d_cq_bundle[c].Lx", "d_cq_bundle[c].Ly", "d_cq_bundle[c].Lz"])
+        list_of_c_vars.extend(
+            ["d_cq_bundle[c].Lx", "d_cq_bundle[c].Ly", "d_cq_bundle[c].Lz"]
+        )
 
     if diagnostics.Q_expr is not None:
         list_of_syms.append(diagnostics.Q_expr)
@@ -90,55 +85,68 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         include_braces=False,
     )
 
-    kernel_name = f"calculate_conserved_quantities_{spacetime_name}_{particle_type}_kernel"
+    kernel_name = (
+        f"calculate_conserved_quantities_{spacetime_name}_{particle_type}_kernel"
+    )
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
         "d_cq_bundle": "conserved_quantities_t *restrict",
         "current_chunk_size": "const long int",
     }
-    
+
     # Pass commondata explicitly when not using CUDA's global memory
     if parallelization != "cuda":
         arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
 
-  
     arg_dict_host = arg_dict_cuda.copy()
 
     # Dynamically generate the unpacking logic based on the specific spacetime coordinates.
     preamble_lines = [
         "    // --- COORDINATE HYDRATION ---",
-        "    // Hardware Justification: Unpack position and momentum using strict SoA macros directly from the bundle."
+        "    // Hardware Justification: Unpack position and momentum using strict SoA macros directly from the bundle.",
     ]
 
     # Map the analytic spatial coordinates (e.g., $x, y, z$ or $r, \theta, \phi$).
     for i, symbol in enumerate(diagnostics.xx):
         var_name = str(symbol)
-        preamble_lines.append(f"    const double {var_name} = d_f_bundle[IDX_LOCAL({i}, c, BUNDLE_CAPACITY)]; // Spatial coordinate ${var_name}$ evaluated from memory.")
-        preamble_lines.append(f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$.")
+        preamble_lines.append(
+            f"    const double {var_name} = d_f_bundle[IDX_LOCAL({i}, c, BUNDLE_CAPACITY)]; // Spatial coordinate ${var_name}$ evaluated from memory."
+        )
+        preamble_lines.append(
+            f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$."
+        )
 
     # Map the temporal and spatial momenta ($p_t, p_x, p_y, p_z$).
     for i in range(4):
-        preamble_lines.append(f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory.")
-        preamble_lines.append(f"    (void)p{i}; // Suppress unused variable warning for $p_{i}$.")
+        preamble_lines.append(
+            f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory."
+        )
+        preamble_lines.append(
+            f"    (void)p{i}; // Suppress unused variable warning for $p_{i}$."
+        )
 
     preamble_lines.append("")
     preamble_lines.append("    // --- CONSTANT MEMORY HYDRATION ---")
-    preamble_lines.append(f"    // Hardware Justification: Extract spacetime physics constants natively from the {cd_access} cache.")
-    
+    preamble_lines.append(
+        f"    // Hardware Justification: Extract spacetime physics constants natively from the {cd_access} cache."
+    )
+
     # Algorithmic Step: Scrape the SymPy abstract syntax tree for free variables and map them to the memory cache.
     free_syms = set()
     for expr in list_of_syms:
         free_syms.update(expr.free_symbols)
-        
+
     for sym in free_syms:
         sym_name = str(sym)
         # Verify the variable is a registered global parameter (e.g., $a_{spin}$, $M_{scale}$).
         if sym_name in par.glb_code_params_dict:
-            preamble_lines.append(f"    const double {sym_name} = {cd_access}{sym_name}; // Parameter ${sym_name}$ extracted from constant cache.")
+            preamble_lines.append(
+                f"    const double {sym_name} = {cd_access}{sym_name}; // Parameter ${sym_name}$ extracted from constant cache."
+            )
 
     preamble = "\n".join(preamble_lines)
-    
+
     # 2. The Kernel "Sandwich"
     if parallelization == "cuda":
         loop_preamble = """
@@ -264,7 +272,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
-    
+
     desc = r"""@brief Computes conserved quantities for a batch of trajectories.
     @param all_photons The master Structure of Arrays containing the state vectors $f^\mu$.
     @param num_rays The total number of photon trajectories.
@@ -285,7 +293,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     )
     include_CodeParameters_h = False
 
-    body = fr"""
+    body = rf"""
     // --- MEMORY STAGING ALLOCATION ---
     // Hardware Justification: Allocate buffers statically sized to $BUNDLE\_CAPACITY$. Maps to VRAM or RAM based on platform.
     double *d_f_bundle; // Pointer for the bundled state vector $f^\mu$.
@@ -313,6 +321,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

@@ -1,4 +1,4 @@
-"""
+r"""
 Provides the native kernel and host-side orchestrator for the RKF45 Stage Update (Kernel 5).
 
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
@@ -12,26 +12,18 @@ Author: Dalton J. Moone.
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access
-)
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
 
 
 def rkf45_stage_update() -> None:
-    """
+    r"""
     Orchestrates the global memory kernel for RKF45 intermediate stage updates.
 
     The kernel reads the base state $f_{start}$ and the computed derivative vectors $k^{\mu}$
     from memory bundles, applies the Butcher Tableau coefficients, and writes the
     resulting temporary state $f_{temp}$ back to memory for the next interpolation step.
-
-    :raises TypeError: If incorrect parameters are passed to the code generation functions.
     """
     parallelization = par.parval_from_str("parallelization")
-    cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     arg_dict_cuda = {
         "d_f_start": "const double *restrict",
@@ -39,7 +31,7 @@ def rkf45_stage_update() -> None:
         "d_h": "const double *restrict",
         "stage": "const int",
         "chunk_size": "const int",
-        "d_f_temp": "double *restrict"
+        "d_f_temp": "double *restrict",
     }
 
     arg_dict_host = {
@@ -48,7 +40,7 @@ def rkf45_stage_update() -> None:
         "d_h": "const double *restrict",
         "stage": "const int",
         "chunk_size": "const int",
-        "d_f_temp": "double *restrict"
+        "d_f_temp": "double *restrict",
     }
 
     if parallelization == "cuda":
@@ -58,7 +50,7 @@ def rkf45_stage_update() -> None:
     const long int i = blockIdx.x * blockDim.x + threadIdx.x; // Global thread index $i$.
 
     // Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
-    if (i >= chunk_size) return; // Exits if thread index $i$ exceeds $chunk\_size$.
+    if (i >= chunk_size) return; // Exits if thread index $i$ exceeds $chunk_size$.
     """
         loop_postamble = ""
     else:
@@ -84,15 +76,15 @@ def rkf45_stage_update() -> None:
 
     // --- BUTCHER TABLEAU EVALUATION ---
     // Fused multiply-add intrinsics evaluate the intermediate Runge-Kutta stages to ensure exact IEEE 754 rounding behavior.
-    
+
     // Bypass the computation entirely for stage 6 to ensure OpenMP compliance.
     if (stage != 6) {
         int comp; // Loop index for iterating over the tensor components.
         for (comp = 0; comp < 9; ++comp) {
-            
+
             // Load the base state component $f_{start}$ from memory.
             const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]); // Component of the base state $f_{start}$.
-            
+
             // Accumulator for the intermediate update step $f_{temp}$.
             double update_val = 0.0; // Accumulates the stage update $k^{\mu}$ contributions.
 
@@ -104,7 +96,7 @@ def rkf45_stage_update() -> None:
             break;
             case 2:
             // Compute intermediate state for $k_3$.
-            update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]), 
+            update_val = FusedMulAddCUDA(0.09375, ReadCUDA(&d_k_bundle[IDX_K(0, comp, i)]),
                                         MulCUDA(0.28125, ReadCUDA(&d_k_bundle[IDX_K(1, comp, i)]))); // Applies the $k_1$ and $k_2$ coefficients.
             break;
             case 3:
@@ -131,9 +123,9 @@ def rkf45_stage_update() -> None:
             }
 
             // --- GLOBAL MEMORY WRITE ---
-            // Writing the computed update $f_{temp} = f_n + h \times update\_val$ to global memory strictly enforces the split-pipeline communication constraint.
+            // Writing the computed update $f_{temp} = f_n + h \times update_val$ to global memory strictly enforces the split-pipeline communication constraint.
             const double f_result = FusedMulAddCUDA(h, update_val, f_n); // Computes the step update and stores it in $f_{result}$.
-            
+
             // Write the intermediate state $f_{temp}$ to the destination bundle in memory.
             WriteCUDA(&d_f_temp[IDX_F(comp, i)], f_result); // Writes $f_{temp}$ to global memory.
         }
@@ -150,7 +142,7 @@ def rkf45_stage_update() -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx"
+        "stream": "stream_idx",
     }
 
     prefunc, launch_code = generate_kernel_and_launch_code(
@@ -166,9 +158,9 @@ def rkf45_stage_update() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
-    
+
     desc = r"""@brief Orchestrates the memory kernel for RKF45 intermediate stage updates.
-    
+
     @param d_f_start Pointer to the base state bundle ($f_{start}$) in memory.
     @param d_k_bundle Pointer to the flattened derivative array $k^{\mu}$ in memory.
     @param d_h Pointer to the step size array $h$ in memory.
@@ -177,11 +169,11 @@ def rkf45_stage_update() -> None:
     @param d_f_temp Pointer to the destination bundle for the intermediate state ($f_{temp}$).
     @param stream_idx The active execution stream identifier.
     """
-    
+
     cfunc_type = "void"
-    
+
     name = "rkf45_stage_update"
-    
+
     params = (
         "const double *restrict d_f_start, "
         "const double *restrict d_k_bundle, "
@@ -191,9 +183,9 @@ def rkf45_stage_update() -> None:
         "double *restrict d_f_temp, "
         "const int stream_idx"
     )
-    
+
     include_CodeParameters_h = False
-    
+
     body = f"""
     // --- HOST-SIDE ORCHESTRATION ---
     // Wraps the generated launch code to initiate the execution kernel.
@@ -208,7 +200,7 @@ def rkf45_stage_update() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
 
 

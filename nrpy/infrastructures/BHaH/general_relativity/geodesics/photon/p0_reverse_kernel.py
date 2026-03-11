@@ -8,21 +8,19 @@ Author: Dalton J. Moone.
 """
 
 import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.helpers.parallelization.utilities import (
-    generate_kernel_and_launch_code,
-    get_commondata_access,
-    get_params_access
-)
+from nrpy.helpers.parallelization.utilities import generate_kernel_and_launch_code
+
 
 def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     r"""
     Orchestrate the global kernel for the initial temporal momentum calculation.
 
-    The kernel loads the photon's spatial momenta and metric components 
-    from global memory, executes the Hamiltonian constraint solver, 
+    The kernel loads the photon's spatial momenta and metric components
+    from global memory, executes the Hamiltonian constraint solver,
     and writes the resulting temporal momentum $p^0$ back to the state vector bundle.
 
     :param p0_expr: The SymPy expression representing the negative root of the Hamiltonian constraint.
@@ -32,13 +30,11 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         raise ValueError("p0_expr must contain a valid symbolic expression.")
 
     parallelization = par.parval_from_str("parallelization")
-    cd_access = get_commondata_access(parallelization)
-    params_access = get_params_access(parallelization)
 
     arg_dict = {
         "d_f_bundle": "double *restrict",
         "d_metric_bundle": "const double *restrict",
-        "chunk_size": "const int"
+        "chunk_size": "const int",
     }
 
     # Dynamically format read/write macros and SIMD generation based on target architecture.
@@ -69,9 +65,14 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
 
     # Generate the raw C math string from the SymPy expression.
     body_math = ccg.c_codegen(
-        [p0_expr], ["p0_val"], enable_cse=True, enable_simd=enable_simd, verbose=False, include_braces=False
+        [p0_expr],
+        ["p0_val"],
+        enable_cse=True,
+        enable_simd=enable_simd,
+        verbose=False,
+        include_braces=False,
     )
-    
+
     # Translate SIMD macro signatures to native CUDA hardware intrinsics if targeting GPU.
     if parallelization == "cuda":
         body_math = body_math.replace("SIMD", "CUDA")
@@ -83,7 +84,9 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         for n in range(m, 4):
             comp_name = f"metric_g4DD{m}{n}"
             load_str = read_fmt.format(f"d_metric_bundle[IDX_METRIC({k}, i)]")
-            metric_loads.append(f"// Covariant metric component $g_{{{m}{n}}}$.\n    const double {comp_name} = {load_str};")
+            metric_loads.append(
+                f"// Covariant metric component $g_{{{m}{n}}}$.\n    const double {comp_name} = {load_str};"
+            )
             k += 1
     metric_load_str = "\n    ".join(metric_loads)
 
@@ -134,7 +137,7 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx"
+        "stream": "stream_idx",
     }
 
     prefunc, launch_code = generate_kernel_and_launch_code(
@@ -145,34 +148,34 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         parallelization=parallelization,
         launch_dict=launch_dict,
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
-        thread_tiling_macro_suffix="RKF45"
+        thread_tiling_macro_suffix="RKF45",
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
-    
+
     desc = r"""@brief Orchestrates the kernel for the initial temporal momentum calculation.
-    
+
     @param d_f_bundle Pointer to the state vector bundle $f^{\mu}$ in memory.
     @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
     @param chunk_size The number of active rays in the current bundle batch.
     @param stream_idx The hardware stream index for asynchronous execution.
     """
-    
+
     cfunc_type = "void"
-    
+
     name = "p0_reverse_kernel"
-    
+
     params = (
         "double *restrict d_f_bundle, "
         "const double *restrict d_metric_bundle, "
         "const int chunk_size, "
         "const int stream_idx"
     )
-    
+
     include_CodeParameters_h = False
-    
+
     body = launch_code
 
     cfc.register_CFunction(
@@ -183,8 +186,9 @@ def p0_reverse_kernel(p0_expr: sp.Expr) -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

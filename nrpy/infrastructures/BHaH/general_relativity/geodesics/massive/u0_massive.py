@@ -10,8 +10,6 @@ It utilizes the flattened SoA architecture via local and global batch indexing.
 Author: Dalton J. Moone
 """
 
-import logging
-import os
 import sys
 
 import sympy as sp
@@ -114,7 +112,6 @@ def u0_massive(u0_expr: sp.Expr) -> None:
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
     if results.failed > 0:

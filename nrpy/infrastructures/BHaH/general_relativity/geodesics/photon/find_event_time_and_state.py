@@ -1,22 +1,19 @@
 """
-This module contains the high-precision event-finding C kernel.
+Module contains the high-precision event-finding C kernel.
 
-This module resolves exact coordinate intersections when a plane
+Module resolves exact coordinate intersections when a plane
 crossing is detected. It utilizes second-order quadratic interpolation
 for root-finding and Lagrange interpolation for state reconstruction at
 the intersection boundaries. Executing strictly within thread-local registers
 bypasses global memory fetches, preserving the sm_86 architecture limit of 255 registers per thread.
-Author: Dalton J. Moone."""
+Author: Dalton J. Moone.
+"""
 
 import nrpy.c_function as cfc
 
 
 def find_event_time_and_state() -> None:
-    """
-    This function defines the find_event_time_and_state C function configuration.
-
-    :raises SystemError: If C function registration fails within the NRPy+ pipeline.
-    """
+    """Define find_event_time_and_state C function configuration."""
     includes = ["BHaH_defines.h"]
     desc = r"""@brief Portable high-performance second-order root-finding.
 
@@ -32,8 +29,8 @@ def find_event_time_and_state() -> None:
     @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
 
     Detailed algorithm: Uses position data $x^i$ from the current and two previous
-    integration steps to construct a quadratic model of the trajectory relative 
-    to the target plane. The intersection $\lambda$ is solved via the quadratic formula 
+    integration steps to construct a quadratic model of the trajectory relative
+    to the target plane. The intersection $\lambda$ is solved via the quadratic formula
     and the full state $f^\mu$ is reconstructed via Lagrange polynomials.
     Mapping logic directly to thread-local registers preserves the strict sm_86 architecture limits by
     bypassing global memory fetches and keeping all intermediates within the 255
@@ -132,8 +129,9 @@ def find_event_time_and_state() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

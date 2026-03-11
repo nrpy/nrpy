@@ -8,20 +8,16 @@ reconstructed orthonormal camera basis. This operation relies entirely on consta
 memory to preserve hardware register constraints and prevent VRAM spilling.
 Author: Dalton J. Moone.
 """
-import nrpy.c_function as cfc
-from nrpy.helpers.parallelization.utilities import get_commondata_access
-import nrpy.params as par
 
+import nrpy.c_function as cfc
+import nrpy.params as par
+from nrpy.helpers.parallelization.utilities import get_commondata_access
 
 
 def handle_window_plane_intersection() -> None:
-    """
-    Generate and register the C engine for processing window plane intersections.
-
-    :raises SystemError: If C function registration fails during the pipeline compilation.
-    """
+    """Generate and register the C engine for processing window plane intersections."""
     parallelization = par.parval_from_str("parallelization")
-    
+
     # Add the access variable
     cd_access = get_commondata_access(parallelization)
 
@@ -48,9 +44,7 @@ def handle_window_plane_intersection() -> None:
     )
 
     # Define inclusion headers for the C function compilation.
-    includes = [
-        "BHaH_defines.h"
-    ]
+    includes = ["BHaH_defines.h"]
 
     if parallelization == "cuda":
         includes.append("BHaH_device_defines.h")
@@ -168,8 +162,9 @@ def handle_window_plane_intersection() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

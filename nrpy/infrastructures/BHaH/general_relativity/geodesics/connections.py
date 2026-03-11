@@ -17,10 +17,10 @@ import sympy as sp
 # Python: Import NRPy core modules
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
 )
+
 
 def connections(
     Gamma4UDD_exprs: List[List[List[sp.Expr]]], spacetime_name: str, PARTICLE: str
@@ -65,7 +65,7 @@ def connections(
     xx_symbols = Analytic_Spacetimes[spacetime_name].xx
     preamble_lines = [
         "// Unpack position coordinates $x^i$ from the thread-local state vector.",
-        f"// Evaluated at compile time for state vector size: {array_size}"
+        f"// Evaluated at compile time for state vector size: {array_size}",
     ]
 
     for i, symbol in enumerate(xx_symbols):
@@ -101,7 +101,7 @@ def connections(
     body = rf"""
     // --- CONNECTION EVALUATION & THREAD-LOCAL UNPACKING ---
     // Algorithmic Step: Extract spatial coordinates $x^i$ and compute $Gamma^alpha_{{mu nu}}$.
-    // Hardware Justification: Thread-local execution prevents latency-heavy reads from VRAM 
+    // Hardware Justification: Thread-local execution prevents latency-heavy reads from VRAM
     // and guarantees mathematical intermediates stay in hardware registers.
     {preamble}
 
@@ -117,6 +117,7 @@ def connections(
         include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest

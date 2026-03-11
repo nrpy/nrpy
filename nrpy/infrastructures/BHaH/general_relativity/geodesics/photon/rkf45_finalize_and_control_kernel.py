@@ -4,27 +4,26 @@ Provides the native kernel and host-side orchestrator for the RKF45 Finalize & C
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module provides the global memory kernel responsible for computing the final 5th-order
 solution, estimating the local truncation error, and executing the adaptive step-size
-controller logic on VRAM bundles. To prevent register spilling on the NVIDIA RTX 3080 (which has 
-a hard limit of 255 registers per thread), we strictly enforce a Split-Pipeline architecture, 
+controller logic on VRAM bundles. To prevent register spilling on the NVIDIA RTX 3080 (which has
+a hard limit of 255 registers per thread), we strictly enforce a Split-Pipeline architecture,
 reading and writing intermediate stages via global VRAM scratchpads rather than fused registers.
 Author: Dalton J. Moone.
 """
 
-import nrpy.params as par
 import nrpy.c_function as cfc
+import nrpy.params as par
 from nrpy.helpers.parallelization.utilities import (
     generate_kernel_and_launch_code,
     get_commondata_access,
 )
 
+
 def rkf45_finalize_and_control_kernel() -> None:
     r"""
-    This function provides the global kernel for RKF45 finalization and error control.
+    Global kernel for RKF45 finalization and error control.
 
     The kernel computes the 4th and 5th order solutions, calculates the error norm,
     and updates the photon's status (ACTIVE/REJECTED) and step size $h$ in global memory.
-
-    :raises TypeError: If incorrect parameters are passed to the code generation functions.
     """
     par.register_CodeParameters(
         "REAL",
@@ -57,7 +56,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         "d_status": "termination_type_t *restrict",
         "d_affine": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int"
+        "chunk_size": "const long int",
     }
 
     arg_dict_host = {
@@ -68,7 +67,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         "d_status": "termination_type_t *restrict",
         "d_affine": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int"
+        "chunk_size": "const long int",
     }
     # Pass commondata explicitly when not using CUDA's global memory
     if parallelization != "cuda":
@@ -80,7 +79,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     // --- CUDA THREAD IDENTIFICATION ---
     // The identifier $i$ represents the global thread index mapped to a specific photon ray.
     const long int i = blockIdx.x * blockDim.x + threadIdx.x;
-    
+
     // Guard prevents out-of-bounds VRAM access for threads exceeding the active chunk.
     if (i >= chunk_size) return;
     """
@@ -150,7 +149,7 @@ def rkf45_finalize_and_control_kernel() -> None:
             err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
         }}
 
-        // --- TRUNCATION ERROR EVALUATION --- 
+        // --- TRUNCATION ERROR EVALUATION ---
         /* Evaluates the truncation error directly via coefficient deltas ($C_5 - C_4$) to prevent catastrophic floating-point cancellation against the anchor state $f_n$. */
         double err_val = MulCUDA(1.0 / 360.0, k0); // Intermediate accumulator for the truncation error.
         err_val = FusedMulAddCUDA(-128.0 / 4275.0, k2, err_val); // Accumulates the stage 2 error coefficient delta.
@@ -165,22 +164,22 @@ def rkf45_finalize_and_control_kernel() -> None:
         if (comp < 8) {{ // Excludes the affine parameter $\lambda$ (index 8) from the error check.
             double scale = 0.0; // The bounded tolerance scale limit for the current tensor component.
 
-            if (comp == 0) {{ 
+            if (comp == 0) {{
                 // Coordinate Time $t$: Applies pure absolute tolerance to prevent secular drift.
                 scale = atol; // Applies pure absolute tolerance bounds.
-            }} else if (comp <= 3) {{ 
+            }} else if (comp <= 3) {{
                 // Spatial Position $x^i$: Mixed tolerance scaling bounds spatial position variation.
                 scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n))); // Mixed tolerance scaling bounds positional variation.
-            }} else if (comp == 4) {{ 
+            }} else if (comp == 4) {{
                 // Temporal Momentum $p_t$: Mixed tolerance scaling enforces energy conservation bounds.
                 scale = AddCUDA(atol, MulCUDA(rtol, AbsCUDA(f_n))); // Mixed tolerance scaling bounds temporal momentum variation.
-            }} else {{ 
+            }} else {{
                 // Spatial Momentum $p_i$: Mixed tolerance bounded by the $L_1$ momentum floor.
                 scale = AddCUDA(atol, MulCUDA(rtol, p_L1)); // Mixed tolerance scaling bounds spatial momentum variation.
             }}
 
             double current_err = DivCUDA(err_abs, scale); // The normalized error for the specific tensor component.
-            
+
             // Evaluates the calculated error norm for numerical singularities to guard against IEEE-754 fmax behavior.
             if (isnan(current_err) || isinf(current_err)) {{
                 err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
@@ -194,7 +193,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
     double safety = {cd_access}rkf45_safety_factor; // Safety factor for step-size scaling.
     double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step $h$.
-    
+
     double h_new = MulCUDA(safety, MulCUDA(h_local, factor)); // The candidate new step size $h$.
     h_new = fmax(h_new, {cd_access}rkf45_h_min); // Enforces the minimum step size $h_{{min}}$ bound.
     h_new = fmin(h_new, {cd_access}rkf45_h_max); // Enforces the maximum step size $h_{{max}}$ bound.
@@ -214,7 +213,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         // Reset Retries & Set Status.
         WriteCUDA(&d_retries[i], 0); // Resets the retry counter to zero for the active ray.
         WriteCUDA(&d_status[i], ACTIVE); // Updates the ray status flag to active.
-        
+
         // Commit the newly adapted step size $h$ to memory.
         WriteCUDA(&d_h[i], h_new); // Commits the newly adapted step size $h$ to memory.
     }} else {{
@@ -229,7 +228,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         }} else {{
             WriteCUDA(&d_status[i], REJECTED); // Updates the ray status flag to a recoverable rejection.
         }}
-        
+
         // Commit the scaled retry step size $h$ to memory without overwriting persistent state vectors.
         WriteCUDA(&d_h[i], h_new); // Commits the scaled retry step size $h$ to memory.
     }}
@@ -245,7 +244,7 @@ def rkf45_finalize_and_control_kernel() -> None:
     launch_dict = {
         "threads_per_block": ["256", "1", "1"],
         "blocks_per_grid": ["(chunk_size + 256 - 1) / 256", "1", "1"],
-        "stream": "stream_idx"
+        "stream": "stream_idx",
     }
 
     prefunc, launch_code = generate_kernel_and_launch_code(
@@ -261,9 +260,9 @@ def rkf45_finalize_and_control_kernel() -> None:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
-    
+
     desc = r"""@brief Finalizes the RKF45 step, checks errors, and updates state/stepsize.
-    
+
     @param d_f_persistent Pointer to the persistent state $f^{\mu}$ (updated on acceptance).
     @param d_f_start Pointer to the base state $f^{\mu}$ (read-only).
     @param d_k_bundle Pointer to all 6 derivative vectors $k_n$.
@@ -275,9 +274,9 @@ def rkf45_finalize_and_control_kernel() -> None:
     """
 
     cfunc_type = "void"
-    
+
     name = "rkf45_finalize_and_control"
-    
+
     params = (
         "const commondata_struct *restrict commondata, "
         "double *restrict d_f_persistent, "
@@ -291,9 +290,8 @@ def rkf45_finalize_and_control_kernel() -> None:
         "const int stream_idx"
     )
 
-
     include_CodeParameters_h = False
-    
+
     body = launch_code
 
     cfc.register_CFunction(
@@ -304,8 +302,9 @@ def rkf45_finalize_and_control_kernel() -> None:
         name=name,
         params=params,
         include_CodeParameters_h=include_CodeParameters_h,
-        body=body
+        body=body,
     )
+
 
 if __name__ == "__main__":
     import doctest
