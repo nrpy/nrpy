@@ -492,9 +492,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
 
 """
-    body += (
-        area_codegen
-        + r"""
+    body += area_codegen + r"""
       const int p2d = it_full * N_phi_tot + ip_full;
 
 #if BHAHAHA_AKV_WEIGHTS_INCLUDE_DX
@@ -654,7 +652,6 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   return (int)err;
 #endif
 """
-    )
 
     cfc.register_CFunction(
         subdirectory="",
