@@ -147,7 +147,7 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
             "1",
             "1",
         ],
-    "stream": "stream_idx", 
+        "stream": "stream_idx",
     }
 
     # Generate the kernel definition and the internal launch string.
