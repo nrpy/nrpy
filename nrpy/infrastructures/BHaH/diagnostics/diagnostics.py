@@ -125,7 +125,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * (for example diagnostics_nearest(...), diagnostics_interp(...),
  * diagnostics_volume_integration(...), and optional extensions). Temporary storage is
  * freed before returning. Independently of output steps, a progress indicator is
- * advanced every call, and a trailing newline is printed when the run is about to finish.
+ * advanced every call.
  *
  * Scheduling rule (time-based with tolerance window):
  *   fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time) < 0.5 * dt
@@ -148,7 +148,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * @post
  * - On output steps, all enabled diagnostics execute and may write output.
  * - On non-output steps, no diagnostic I/O occurs and the solution state is unchanged.
- * - The progress indicator advances every call; a newline is printed if time + dt > t_final.
+ * - The progress indicator advances every call.
  *
  * @param[in,out] commondata  Global simulation metadata and run-time parameters
  *                            (e.g., time, dt, diagnostics_output_every, t_final, NUMGRIDS).
@@ -180,7 +180,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     if parallelization == "cuda":
         params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
     newline = "\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
-    rnewline = "\\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:                                                                                                                                                                                                           
@@ -247,7 +246,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
   }} // END if output step
 
   progress_indicator(commondata, griddata);
-  if (commondata->time + commondata->dt > commondata->t_final) printf("{rnewline}");
 """
     cfc.register_CFunction(
         subdirectory="diagnostics",
