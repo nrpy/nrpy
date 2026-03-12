@@ -43,8 +43,8 @@ def calculate_ode_rhs_massive(
     # Construct the thread-local unpacking preamble
     preamble_lines = [
         "  // --- THREAD-LOCAL STATE UNPACKING ---",
-        "  // Algorithmic Step: Extract spatial coordinates $x^i$ and 4-velocity $u^\mu$ from the local state vector.",
-        "  // Hardware Justification: Caching these values into local scalars forces the compiler to allocate fast hardware registers."
+        "  // Algorithmic Step: Extract spatial coordinates $x^i$ and 4-velocity $u^\\mu$ from the local state vector.",
+        "  // Hardware Justification: Caching these values into local scalars forces the compiler to allocate fast hardware registers.",
     ]
 
     for i, sym in enumerate(coordinate_symbols):
@@ -60,8 +60,12 @@ def calculate_ode_rhs_massive(
             )
 
     preamble_lines.append("\n  // --- METRIC AND CONNECTION UNPACKING ---")
-    preamble_lines.append("  // Algorithmic Step: Extract pre-computed metric $g_{\\mu\\nu}$ and Christoffel symbols $\\Gamma^\\alpha_{\\mu\\nu}$.")
-    preamble_lines.append("  // Hardware Justification: Reading from the thread-local arrays guarantees L1 cache hits.")
+    preamble_lines.append(
+        "  // Algorithmic Step: Extract pre-computed metric $g_{\\mu\\nu}$ and Christoffel symbols $\\Gamma^\\alpha_{\\mu\\nu}$."
+    )
+    preamble_lines.append(
+        "  // Hardware Justification: Reading from the thread-local arrays guarantees L1 cache hits."
+    )
 
     curr_idx = 0
     for m in range(4):
@@ -85,10 +89,7 @@ def calculate_ode_rhs_massive(
                 curr_idx += 1
 
     # Map SymPy RHS results directly to the thread-local output array
-    k_array_outputs = [
-        f"k_local[{i}]"
-        for i in range(8)
-    ]
+    k_array_outputs = [f"k_local[{i}]" for i in range(8)]
 
     # Generate the highly optimized CSE core math block
     kernel = ccg.c_codegen(
@@ -97,7 +98,7 @@ def calculate_ode_rhs_massive(
 
     # Define C-function arguments and metadata in Master Order
     includes = ["BHaH_defines.h"]
-    
+
     desc = r"""@brief Portable CPU derivatives for the massive geodesic ODE system.
 
     Calculates $dx^\mu/d\tau$ and $du^\mu/d\tau$ using the provided state vector and
@@ -110,7 +111,7 @@ def calculate_ode_rhs_massive(
     @param k_local The computed derivatives $dx^\mu/d\tau$ and $du^\mu/d\tau$ stored in thread-local format."""
 
     cfunc_type = "BHAH_HD_INLINE void"
-    
+
     name = "calculate_ode_rhs_massive"
 
     params = (
@@ -119,7 +120,7 @@ def calculate_ode_rhs_massive(
         "const double *restrict Gamma_local, "
         "double *restrict k_local"
     )
-    
+
     include_CodeParameters_h = False
 
     body = "\n".join(preamble_lines) + "\n\n"
@@ -142,7 +143,6 @@ def calculate_ode_rhs_massive(
 
 if __name__ == "__main__":
     import doctest
-    import sys
 
     results = doctest.testmod()
     if results.failed > 0:

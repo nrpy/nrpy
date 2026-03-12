@@ -34,9 +34,9 @@ def ode_gsl_wrapper_massive(spacetime_name: str) -> None:
     @param params Pointer to commondata_struct."""
 
     cfunc_type = "int"
-    
+
     name = f"ode_gsl_wrapper_massive_{spacetime_name}"
-    
+
     params = "double t, const double y[8], double f[8], void *params"
 
     body = rf"""  // --- GSL TO THREAD-LOCAL BRIDGE ---
