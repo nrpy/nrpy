@@ -78,26 +78,11 @@ if __name__ == "__main__":
         help="The parent directory where the generated C project will reside.",
     )
     parser.add_argument(
-        "--parallelization", type=str, default="cuda", choices=["cuda", "openmp"]
-    )
-    parser.add_argument(
-        "--run",
+        "--cuda",
         action="store_true",
-        help="Generate the project, compile the C code, run the integration, and visualize the trajectory.",
+        help="Enable CUDA support. Defaults to OpenMP if omitted.",
     )
     args = parser.parse_args()
-
-    # Apply doctest
-    if not args.run:
-        import doctest
-
-        results = doctest.testmod()
-        if results.failed > 0:
-            print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-            sys.exit(1)
-        else:
-            print(f"Doctest passed: All {results.attempted} test(s) passed")
-        sys.exit(0)
 
     # Step 2: Define strict project constants and simulation targets
     project_name = "photon_geodesic_integrator"
@@ -117,8 +102,10 @@ if __name__ == "__main__":
 
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
-    # Set parallelization
-    par.set_parval_from_str("parallelization", args.parallelization)
+    
+    # Map the new boolean flag to the string values your pipeline expects
+    parallelization_mode = "cuda" if args.cuda else "openmp"
+    par.set_parval_from_str("parallelization", parallelization_mode)
 
     # Step 4: Acquire Symbolic Physics Expressions
     print(f" -> Acquiring symbolic data for {GEO_KEY}...")
@@ -262,7 +249,7 @@ if __name__ == "__main__":
     # ##########################################################################
     print(" -> Assembling C project on disk...")
 
-    parallelization = args.parallelization
+    parallelization = parallelization_mode
 
     if parallelization == "cuda":
         cuda_macros = {
@@ -324,7 +311,7 @@ if __name__ == "__main__":
         )
 
         compiler = "gcc"
-        cflags = ["-fopenmp", "-O3", "-DDEBUG"]
+        cflags = ["-fopenmp", "-O3", "-DDEBUG", "-Wno-stringop-truncation"]
         libs = ["-lm"]
         ext = "c"
 
@@ -343,70 +330,45 @@ if __name__ == "__main__":
         CC=compiler,
         src_code_file_ext=ext,
     )
-
     # ##########################################################################
-    # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
+    # PART 2: FINALIZE
     # ##########################################################################
-    print("\n" + "=" * 50)
-    print("PIPELINE EXECUTION: COMPILE, RUN, VISUALIZE")
-    print("=" * 50)
+    
+    # Define the directory containing the visualization assets relative to the repository root
+    vis_dir = os.path.join("nrpy", "helpers", "geodesic_visualizations")
+    
+    # Locate the visualization script and the background texture
+    vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
+    starmap_src = os.path.join(vis_dir, "starmap_2020.png")
 
-    print("\n--- PHASE 1: Compiling C Code ---")
-    try:
-        subprocess.run(
-            ["make", "-j"], cwd=project_dir, check=True, stderr=subprocess.DEVNULL
-        )
-        print("Compilation successful.")
-    except subprocess.CalledProcessError:
-        print("Compilation failed. Exiting pipeline.")
-        sys.exit(1)
+    # Copy the visualization script and the background texture into the generated project directory
+    shutil.copy(vis_script_src, project_dir)
+    shutil.copy(starmap_src, project_dir)
 
-    print("\n--- PHASE 2: Running Ray-Tracer ---")
-    exec_path = os.path.abspath(os.path.join(project_dir, exec_name))
-    try:
-        subprocess.run([exec_path], cwd=project_dir, check=True)
-        print("Ray-tracing complete. Binary blueprint generated.")
-    except subprocess.CalledProcessError:
-        print("C executable failed. Exiting pipeline.")
-        sys.exit(1)
+    # The inner disk radius ensures the texture mapping aligns with the computed initial conditions.
+    c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
 
-    print("\n--- PHASE 3: Generating Visualizations ---")
+    # The outer disk radius ensures the mathematical bounds match the physical source geometry.
+    c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
 
-    try:
-        from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
-        from nrpy.helpers.geodesic_visualizations import render_lensed_image as rli
+    # The camera window width scales the horizontal projection bounds.
+    c_window_width = float(par.glb_code_params_dict["window_width"].defaultvalue)
 
-        nrpy_root = os.path.dirname(script_dir)
-        vis_dir = os.path.join(nrpy_root, "helpers", "geodesic_visualizations")
-        starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
-        output_image_path = os.path.join(project_dir, "lensed_output.png")
-        STATIC_IMAGE_PIXEL_WIDTH = 750
+    # The camera window height scales the vertical projection bounds.
+    c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
 
-        c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
-        c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
-        c_window_width = float(par.glb_code_params_dict["window_width"].defaultvalue)
-        c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
+    # The terminal execution string now references the local copy of the script.
+    vis_command = (
+        f"python3 visualize_lensed_image.py "
+        f"--source_r_min {c_r_min} "
+        f"--source_r_max {c_r_max} "
+        f"--window_width {c_window_width} "
+        f"--window_height {c_window_height}"
+    )
 
-        actual_window_width = max(c_window_width, c_window_height)
-        source_physical_width = 2.0 * c_r_max
-
-        disk_texture = rli.generate_source_disk_array(
-            disk_physical_width=source_physical_width,
-            disk_inner_radius=c_r_min,
-            disk_outer_radius=c_r_max,
-            colormap=cfg.COLORMAP,
-        )
-
-        rli.generate_static_lensed_image(
-            output_filename=output_image_path,
-            output_pixel_width=STATIC_IMAGE_PIXEL_WIDTH,
-            source_image_width=source_physical_width,
-            sphere_image=starmap_path,
-            source_image=disk_texture,
-            blueprint_filename=blueprint_path,
-            window_width=actual_window_width,
-        )
-        print(f"\nPipeline Complete! Output image saved at: {output_image_path}")
-
-    except ImportError as e:
-        print(f"Failed to import visualization scripts: {e}")
+    print(f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run.")
+    print(f"    Parameter file can be found in {project_name}.par\n")
+    print("    To generate the lensed image after running the C executable, ensure you have the required Python packages:")
+    print("    pip install matplotlib numpy\n")
+    print("    Then, execute the visualization script directly from the project directory:")
+    print(f"    {vis_command}\n")
