@@ -87,7 +87,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    # Apply strict doctest boilerplate for compliance
+    # Apply doctest
     if not args.run:
         import doctest
 
