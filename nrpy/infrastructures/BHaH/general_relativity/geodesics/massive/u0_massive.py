@@ -1,5 +1,5 @@
 """
-Register C function for computing the initial time component of 4-velocity.
+Register the C function for computing the initial time component of 4-velocity.
 
 This module registers the 'u0_massive' C function. It enforces
 the 4-velocity normalization constraint for massive particles (u.u = -1) by solving
