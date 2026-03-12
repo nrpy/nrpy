@@ -124,11 +124,9 @@ if __name__ == "__main__":
         lib_function_prefix="",
     )
 
-    print(
-        f"""
+    print(f"""
 To work with the generated JAX project:
 1. cd project/{project_name}
 2. pip install -e .  # Install in development mode
 3. Start coding!
-"""
-    )
+""")

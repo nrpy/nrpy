@@ -57,6 +57,8 @@ for i in range(3):
     _ = par.CodeParameter("REAL", __name__, f"invdxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
     _ = par.CodeParameter("REAL", __name__, f"dxx{i}", -0.1, add_to_parfile=False, add_to_set_CodeParameters_h=True)
 _ = par.CodeParameter("REAL", __name__, "convergence_factor", 1.0, commondata=True)
+
+
 # fmt: on
 
 
@@ -247,10 +249,10 @@ def register_CFunction_diagnostics() -> None:
 
     body = r"""
 const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
-// Explanation of the if() below:
-// Step 1: round(currtime / outevery) rounds to the nearest integer multiple of currtime.
-// Step 2: Multiplying by outevery yields the exact time we should output again, t_out.
-// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible!
+// Explanation of the if() below:                                                                                                                                                                                                           
+// Step 1: round(currtime / outevery) gives the nearest integer n to the ratio currtime/outevery.                                                                                                                                           
+// Step 2: Multiplying by outevery yields the nearest output time t_out = n * outevery.                                                                                                                                                     
+// Step 3: If fabs(t_out - currtime) < 0.5 * currdt, then currtime is as close to t_out as possible.                                                                                                                                        
 if(fabs(round(currtime / outevery) * outevery - currtime) < 0.5*currdt) {
 for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:

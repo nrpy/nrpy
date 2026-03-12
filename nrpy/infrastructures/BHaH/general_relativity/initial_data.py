@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import Set, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -22,10 +22,10 @@ from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_initial_data(
-    CoordSystem: str,
     IDtype: str,
     IDCoordSystem: str,
     ID_persist_struct_str: str,
+    set_of_CoordSystems: Set[str],
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
@@ -36,10 +36,10 @@ def register_CFunction_initial_data(
 
     The function performs the following operations:
     1. Registers the exact ADM initial data function.
-    2. Registers a function for converting ADM initial data to BSSN variables in the specified coordinate system.
+    2. Registers functions for converting ADM initial data to BSSN variables in the specified coordinate systems.
     3. Generates C code for setting initial data and applying boundary conditions.
 
-    :param CoordSystem: The coordinate system for the calculation.
+    :param set_of_CoordSystems: Set of coordinate systems for ADM->BSSN converters.
     :param IDtype: The type of initial data.
     :param IDCoordSystem: The native coordinate system of the initial data.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
@@ -48,6 +48,7 @@ def register_CFunction_initial_data(
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
 
+    :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -79,12 +80,19 @@ def register_CFunction_initial_data(
         )
         print("Assuming initial data functionality is implemented elsewhere.")
 
-    BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
-        CoordSystem,
+    coord_systems_to_register = set(set_of_CoordSystems)
+    if not coord_systems_to_register:
+        raise ValueError("set_of_CoordSystems must be non-empty.")
+
+    BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
+        set_of_CoordSystems=coord_systems_to_register,
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
     )
+    for coord in sorted(coord_systems_to_register):
+        if coord.startswith("GeneralRFM"):
+            BHaH.generalrfm_precompute.register_CFunctions_generalrfm_support(coord)
 
     desc = "Set initial data."
     cfunc_type = "void"
@@ -98,12 +106,28 @@ def register_CFunction_initial_data(
     body = ""
     host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
     if enable_checkpointing:
-        body += """// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise return.
-if( read_checkpoint(commondata, griddata) ) return;
-""".replace(
-            "griddata",
-            f"{host_griddata}, griddata" if parallelization in ["cuda"] else "griddata",
+        checkpoint_read_call = (
+            "read_checkpoint(commondata, griddata_host, griddata)"
+            if parallelization in ["cuda"]
+            else "read_checkpoint(commondata, griddata)"
         )
+        restart_body = """
+// Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise rebuild omitted restart points and return.
+if( CHECKPOINT_READ_CALL ) {
+  for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+    if (griddata[grid].bcstruct.bc_info.num_inner_boundary_points > 0)
+      apply_bcs_inner_only(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
+  }
+"""
+        if "interpatch_interpolation_evol_gfs_driver" in cfc.CFunction_dict:
+            restart_body += """
+  if (commondata->num_src_dst_pairs > 0)
+    interpatch_interpolation_evol_gfs_driver(commondata, griddata);
+"""
+        restart_body += """  return;
+}
+"""
+        body += restart_body.replace("CHECKPOINT_READ_CALL", checkpoint_read_call)
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
@@ -112,6 +136,8 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
 """
+    if any(coord.startswith("GeneralRFM") for coord in coord_systems_to_register):
+        body += f"  generalrfm_precompute(commondata, params, (const REAL *restrict *) {host_griddata}[grid].xx, {host_griddata}[grid].gridfuncs.auxevol_gfs);\n"
     body += (
         f"initial_data_reader__convert_ADM_{IDCoordSystem}_to_BSSN(commondata, params,"
         f"(const REAL *restrict *) {host_griddata}[grid].xx, (const REAL *restrict *) griddata[grid].xx,"

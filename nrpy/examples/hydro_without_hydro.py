@@ -113,9 +113,9 @@ if parallelization == "cuda":
 BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp()
 BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 BHaH.general_relativity.initial_data.register_CFunction_initial_data(
-    CoordSystem=CoordSystem,
     IDtype=IDtype,
     IDCoordSystem="Spherical",
+    set_of_CoordSystems=set_of_CoordSystems,
     enable_checkpointing=True,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
@@ -230,7 +230,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);""",
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )

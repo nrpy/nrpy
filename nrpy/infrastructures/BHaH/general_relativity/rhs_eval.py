@@ -373,7 +373,7 @@ def register_CFunction_rhs_eval(
         arg_dict_host,
         parallelization=parallelization,
         comments=desc,
-        cfunc_type=cfunc_type,
+        cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
         thread_tiling_macro_suffix="BSSN_RHS",
     )

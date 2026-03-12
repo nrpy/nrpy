@@ -127,6 +127,7 @@ def _generate_main_body(
     set_initial_data_after_auxevol_malloc: bool,
     boundary_conditions_desc: str,
     post_non_y_n_auxevol_mallocs: str,
+    post_params_struct_set_to_default: str,
     pre_diagnostics: str,
     pre_MoL_step_forward_in_time: str,
     post_MoL_step_forward_in_time: str,
@@ -143,6 +144,7 @@ def _generate_main_body(
     :param set_initial_data_after_auxevol_malloc: Flag to set initial data after auxevol malloc.
     :param boundary_conditions_desc: Description of the boundary conditions.
     :param post_non_y_n_auxevol_mallocs: String of post-malloc function calls.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default and before numerical_grids_and_timestep.
     :param pre_diagnostics: String of pre-diagnostics function calls.
     :param pre_MoL_step_forward_in_time: String of pre-MoL step function calls.
     :param post_MoL_step_forward_in_time: String of post-MoL step function calls.
@@ -152,6 +154,12 @@ def _generate_main_body(
     parallelization = par.parval_from_str("parallelization")
     is_cuda = parallelization == "cuda"
     compute_griddata = "griddata_device" if is_cuda else "griddata"
+    checkpointing_enabled = "read_checkpoint" in cfc.CFunction_dict
+    pre_free_memory_code = ""
+    if "free_bhahaha_horizon_shape_data_all_horizons" in cfc.CFunction_dict:
+        pre_free_memory_code = (
+            "  free_bhahaha_horizon_shape_data_all_horizons(&commondata);\n"
+        )
 
     # The body of the main() function is built as a list of C code strings.
     body_parts = []
@@ -174,6 +182,18 @@ def _generate_main_body(
         + (", griddata_host" if is_cuda else "")
         + ", calling_for_first_time"
     )
+    metadata_only_checkpoint_read = ""
+    calling_for_first_time_expr = "true"
+    if checkpointing_enabled:
+        checkpoint_read_args = (
+            "&commondata, NULL, NULL" if is_cuda else "&commondata, NULL"
+        )
+        metadata_only_checkpoint_read = f"""
+// If a checkpoint exists, load commondata first so the grid hierarchy can be
+// rebuilt from restart state before the full checkpoint payload is read.
+const int checkpoint_has_been_read = read_checkpoint({checkpoint_read_args});
+"""
+        calling_for_first_time_expr = "!checkpoint_has_been_read"
 
     step1_c_code = f"""
 // Step 1.a: Initialize each CodeParameter in the commondata struct to its default value.
@@ -182,6 +202,7 @@ commondata_struct_set_to_default(&commondata);
 // Step 1.b: Overwrite the default values with those from the parameter file.
 //           Then overwrite the parameter file values with those provided via command line arguments.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
+{metadata_only_checkpoint_read}
 
 // Step 1.c: Allocate memory for MAXNUMGRIDS griddata structs,
 //           where each structure contains data specific to an individual grid.
@@ -189,13 +210,22 @@ cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
 // Step 1.d: Initialize each CodeParameter in {compute_griddata}.params to its default value.
 params_struct_set_to_default(&commondata, {compute_griddata});
+"""
+    if post_params_struct_set_to_default:
+        step1_c_code += f"""
+
+// Step 1.d.1: Functions called after params_struct_set_to_default.
+{post_params_struct_set_to_default}
+"""
+    step1_c_code += f"""
 
 // Step 1.e: Set up numerical grids, including parameters such as NUMGRIDS, xx[3], masks, Nxx, dxx, invdxx,
 //           bcstruct, rfm_precompute, timestep, and others.
 {{
   IFCUDARUN(for (int grid = 0; grid < MAXNUMGRIDS; grid++) griddata_device[grid].params.is_host = false;);
-  // If this function is being called for the first time, initialize commondata.time, nn, t_0, and nn_0 to 0.
-  const bool calling_for_first_time = true;
+  // Fresh starts zero time bookkeeping here; restart runs preserve the
+  // checkpointed time/iteration state and rebuild grids from it.
+  const bool calling_for_first_time = {calling_for_first_time_expr};
   numerical_grids_and_timestep({numerical_grids_args});
 }} // END setup of numerical & temporal grids.
 """
@@ -244,40 +274,34 @@ for(int grid=0; grid<commondata.NUMGRIDS; grid++)
 
     # Step 5: Main simulation loop.
     diagnostics_call_args = f"&commondata, {f'{compute_griddata}, griddata_host' if is_cuda else compute_griddata}"
-    body_parts.append(
-        """
+    body_parts.append("""
 // Step 5: MAIN SIMULATION LOOP
 while(commondata.time < commondata.t_final) { // Main loop to progress forward in time.
   // Step 5.a: Main loop, part 1 (pre_diagnostics): Functions to run prior to diagnostics. E.g., regridding.
-"""
-    )
+""")
     body_parts.append(
         pre_diagnostics
         or "// (nothing here; specify by setting pre_diagnostics string in register_CFunction_main_c().)\n"
     )
 
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
   // Step 5.b: Main loop, part 2: Output diagnostics
   diagnostics({diagnostics_call_args});
 
   // Step 5.c: Main loop, part 3 (pre_MoL_step_forward_in_time): Prepare to step forward in time
-"""
-    )
+""")
     body_parts.append(
         pre_MoL_step_forward_in_time
         or "// (nothing here; specify by setting pre_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
     )
 
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
   // Step 5.d: Main loop, part 4: Step forward in time using Method of Lines with {MoL_method} algorithm,
   //           applying {boundary_conditions_desc} boundary conditions.
   MoL_step_forward_in_time(&commondata, {compute_griddata});
 
   // Step 5.e: Main loop, part 5 (post_MoL_step_forward_in_time): Finish up step in time
-"""
-    )
+""")
     body_parts.append(
         post_MoL_step_forward_in_time
         or "  // (nothing here; specify by setting post_MoL_step_forward_in_time string in register_CFunction_main_c().)\n"
@@ -287,13 +311,13 @@ while(commondata.time < commondata.t_final) { // Main loop to progress forward i
     device_sync = "BHAH_DEVICE_SYNC();" if is_cuda else ""
     if not is_cuda:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
 }}
         """
     else:
         free_memory_code = rf"""
-  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
+{pre_free_memory_code}  const bool free_non_y_n_gfs_and_core_griddata_pointers=true;
   griddata_free_device(&commondata, {compute_griddata}, free_non_y_n_gfs_and_core_griddata_pointers);
   griddata_free(&commondata, griddata_host, free_non_y_n_gfs_and_core_griddata_pointers);
 }}
@@ -303,17 +327,13 @@ for (int i = 0; i < NUM_STREAMS; ++i) {{
 BHAH_DEVICE_SYNC();
 cudaDeviceReset();
 """
-    body_parts.append(
-        f"""
+    body_parts.append(f"""
 }} // End main loop to progress forward in time.
 {device_sync}
 // Step 6: Free all allocated memory
-{{{free_memory_code}"""
-    )
-    body_parts.append(
-        r"""return 0;
-"""
-    )
+{{{free_memory_code}""")
+    body_parts.append(r"""return 0;
+""")
 
     # Construct the final body string and perform necessary replacements.
     body = "".join(body_parts)
@@ -327,6 +347,7 @@ def register_CFunction_main_c(
     boundary_conditions_desc: str = "",
     prefunc: str = "",
     post_non_y_n_auxevol_mallocs: str = "",
+    post_params_struct_set_to_default: str = "",
     pre_diagnostics: str = "",
     pre_MoL_step_forward_in_time: str = "",
     post_MoL_step_forward_in_time: str = "",
@@ -340,6 +361,7 @@ def register_CFunction_main_c(
     :param boundary_conditions_desc: Description of the boundary conditions, default is an empty string.
     :param prefunc: String that appears before main(). DO NOT populate this, EXCEPT when debugging, default is an empty string.
     :param post_non_y_n_auxevol_mallocs: Function calls after memory is allocated for non y_n and auxevol gridfunctions, default is an empty string.
+    :param post_params_struct_set_to_default: Function calls after params_struct_set_to_default and before numerical_grids_and_timestep, default is an empty string.
     :param pre_diagnostics: Function calls prior to diagnostics; e.g., regridding. Default is an empty string.
     :param pre_MoL_step_forward_in_time: Function calls AFTER diagnostics and prior to each right-hand-side update, default is an empty string.
     :param post_MoL_step_forward_in_time: Function calls after each right-hand-side update, default is an empty string.
@@ -391,6 +413,7 @@ def register_CFunction_main_c(
         set_initial_data_after_auxevol_malloc,
         boundary_conditions_desc,
         post_non_y_n_auxevol_mallocs,
+        post_params_struct_set_to_default,
         pre_diagnostics,
         pre_MoL_step_forward_in_time,
         post_MoL_step_forward_in_time,

@@ -59,7 +59,9 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         when the corresponding diagnostics phase is invoked.
     :param enable_interp_diagnostics: If True, include a call to diagnostics_interp(...)
         when the corresponding diagnostics phase is invoked.
-    :param enable_free_auxevol: Reserved for future use. Intended to control whether MoL
+    :param enable_volume_integration_diagnostics: If True, include a call to volume-integration
+        diagnostics when the corresponding diagnostics phase is invoked.
+     :param enable_free_auxevol: Reserved for future use. Intended to control whether MoL
         scratch arrays are freed before diagnostics and restored afterward; currently
         ignored by the generated code.
     :return: None if in registration phase (after recording the requested registration),

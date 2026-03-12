@@ -106,12 +106,12 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
   commondata_struct commondata; // Structure containing parameters common to all grids.
 
-  // Assign input diagnostics and parameters to commondata for widespread access.
-  commondata.bhahaha_diagnostics = bhahaha_diags;
-  commondata.bhahaha_params_and_data = bhahaha_params_and_data;
-
   // Step 1.b: Initialize commondata parameters to their default values.
   bah_commondata_struct_set_to_default(&commondata);
+  // Assign input diagnostics and parameters after defaults are set so zero-initialization
+  // does not clobber these caller-owned pointers.
+  commondata.bhahaha_diagnostics = bhahaha_diags;
+  commondata.bhahaha_params_and_data = bhahaha_params_and_data;
   commondata.eta_damping = bhahaha_params_and_data->eta_damping_times_M / bhahaha_params_and_data->M_scale;
   commondata.CFL_FACTOR = bhahaha_params_and_data->cfl_factor;
   commondata.KO_diss_strength = commondata.bhahaha_params_and_data->KO_strength;

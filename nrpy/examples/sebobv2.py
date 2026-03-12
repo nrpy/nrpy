@@ -107,6 +107,8 @@ SEOBNRv5_quasi_precessing_spin_dynamics(&commondata);
 SEOBNRv5_aligned_spin_initial_conditions_conservative(&commondata);
 // Step TBD: Run the trajectory generation.
 SEOBNRv5_aligned_spin_pa_integration(&commondata);
+// Step TBD: Calculate Special Amplitude Coefficients
+SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 // Step TBD: Compute and apply the NQC corrections
@@ -119,7 +121,7 @@ SEBOBv2_IMR_waveform(&commondata);
 // Step TBD: Print the resulting waveform.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
-    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN)]));
+    , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]));
 }
 """
     if output_commondata:
@@ -160,6 +162,9 @@ BHaH.seobnr.utils.cumulative_integration.register_CFunction_cumulative_integrati
 # register SEOBNRv5 coefficients
 BHaH.seobnr.SEOBNRv5_quasi_precessing_spin_coefficients.register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients()
 
+# register h_NR fits
+BHaH.seobnr.SEOBNRv5_aligned_spin_hNR_fits_at_t_attach.register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach()
+
 # register initial condition routines
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_multidimensional_root_wrapper.register_CFunction_SEOBNRv5_multidimensional_root_wrapper()
 BHaH.seobnr.initial_conditions.SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit.register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit()
@@ -197,6 +202,8 @@ BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_gamma_wrapper.register_CFunc
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_interpolate_modes.register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_from_dynamics_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.register_CFunction_SEOBNRv5_aligned_spin_waveform()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm()
+BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -273,8 +280,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
     enable_rfm_precompute=False,
-    supplemental_defines_dict={
-        "SEOBNR": """
+    supplemental_defines_dict={"SEOBNR": """
 #include<complex.h>
 #define COMPLEX double complex
 #define NUMVARS_SPIN 10
@@ -299,6 +305,20 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define OMEGA 6
 #define OMEGA_CIRC 7
 #define IDX(idx, var) ((idx)*NUMVARS + (var))
+#define NUMVARS_COEFFICIENTS 3
+#define RHO21 0
+#define RHO43 1
+#define RHO55 2
+#define IDX_COEFFICIENTS(idx, var) ((idx)*NUMVARS_COEFFICIENTS + (var))
+#define NUMVARS_HNRFITS 7
+#define HNR22 0
+#define HNR21 1
+#define HNR33 2
+#define HNR32 3
+#define HNR43 4
+#define HNR44 5
+#define HNR55 6
+#define IDX_HNRFITS(idx, var) ((idx)*NUMVARS_HNRFITS + (var))
 #define NUMMODES 8 
 #define STRAIN22 1
 #define STRAIN21 2
@@ -309,9 +329,8 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define STRAIN55 7
 #define NUMMODESSTORED 2 // process 2,2 mode for now
 #define STRAIN 1
-#define IDX_WF(idx,var) ((idx)*NUMMODESSTORED + (var))
-"""
-    },
+#define IDX_WF(idx,var) ((idx)*NUMMODES + (var))
+"""},
 )
 register_CFunction_main_c(
     output_waveform_flag,

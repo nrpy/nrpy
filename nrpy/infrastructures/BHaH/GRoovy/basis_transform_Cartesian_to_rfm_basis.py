@@ -13,7 +13,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.jacobians as jcb
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
@@ -64,14 +64,15 @@ def register_CFunction_basis_transform_Cartesian_to_rfm_basis(
     S_x, S_y, S_z = sp.symbols("S_x S_y S_z")
     vU_Cart = [vx, vy, vz]
     StildeD_Cart = [S_x, S_y, S_z]
+    basis_transforms = bt.basis_transforms[CoordSystem]
 
     # Step 4: Perform Symbolic Basis Transformations
     # Convert vectors from Cartesian basis to the specific reference metric basis (e.g., Spherical)
     # using Jacobian matrices.
-    vU = jcb.basis_transform_vectorU_from_Cartesian_to_rfmbasis(CoordSystem, vU_Cart)
+    vU = basis_transforms.basis_transform_vectorU_from_Cartesian_to_rfmbasis(vU_Cart)
 
-    StildeD = jcb.basis_transform_vectorD_from_Cartesian_to_rfmbasis(
-        CoordSystem, StildeD_Cart
+    StildeD = basis_transforms.basis_transform_vectorD_from_Cartesian_to_rfmbasis(
+        StildeD_Cart
     )
 
     # Step 5: Rescale vectors
@@ -93,14 +94,11 @@ def register_CFunction_basis_transform_Cartesian_to_rfm_basis(
     const REAL xx2 = xx[2][i2];
     """
 
-    pre_body = (
-        read_rfm_xx_arrays
-        + r"""
+    pre_body = read_rfm_xx_arrays + r"""
 
     auxevol_gfs[IDX4(RHOBGF, i0, i1, i2)] = prims->rho;
     auxevol_gfs[IDX4(PGF, i0, i1, i2)] = prims->press;
     """
-    )
 
     if evolving_temperature:
         pre_body += r"""

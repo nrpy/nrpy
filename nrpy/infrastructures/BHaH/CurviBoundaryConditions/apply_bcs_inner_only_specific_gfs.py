@@ -17,6 +17,7 @@ Authors: Zachariah B. Etienne
          Samuel D. Tootle
          sdtootle **at** gmail **dot* com
 """
+
 import nrpy.c_function as cfc
 
 

@@ -83,13 +83,11 @@ def generate_commondata_dataclass() -> str:
             field_str += f"  # {props['description']}"
         fields.append(field_str)
 
-    class_body = textwrap.dedent(
-        """
+    class_body = textwrap.dedent("""
         @dataclass
         class Commondata:
             \"\"\"Dataclass to store common simulation parameters.\"\"\"
-        """
-    )
+        """)
 
     if fields:
         class_body += "\n".join(fields)

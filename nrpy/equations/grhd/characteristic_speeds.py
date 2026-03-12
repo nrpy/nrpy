@@ -97,9 +97,9 @@ def find_cmax_cmin(
     g4UU = ADM_to_g4UU(gamma_faceDD, beta_faceU, alpha_face)
 
     # Original needed for GRMHD
-    (cmr, cpr) = find_cp_cm(flux_dirn, g4UU, u4U_r, cs2_r)
+    cmr, cpr = find_cp_cm(flux_dirn, g4UU, u4U_r, cs2_r)
 
-    (cml, cpl) = find_cp_cm(flux_dirn, g4UU, u4U_l, cs2_l)
+    cml, cpl = find_cp_cm(flux_dirn, g4UU, u4U_l, cs2_l)
 
     # The following algorithms have been verified with random floats:
 

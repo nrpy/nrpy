@@ -21,6 +21,7 @@ Authors: Brandon Clark
          zachetie **at** gmail **dot* com
          Gabriel M Steward
 """
+
 from typing import Dict, List, Tuple, Union
 
 import sympy as sp  # Import SymPy, Python's computer algebra system

@@ -55,6 +55,9 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.ode_gsl_wrap
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.massive.u0_massive import (
     u0_massive,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constraint import (
+    normalization_constraint,
+)
 
 # Step 2: Set codegen and compile-time parameters
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -84,10 +87,10 @@ geodesic_data = Geodesic_Equations[GEO_KEY]
 print("Registering C functions...")
 
 # 1. Metric
-g4DD_metric(metric_data.g4DD, SPACETIME)
+g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
 
 # 2. Connections (Christoffel Symbols)
-connections(geodesic_data.Gamma4UDD, SPACETIME)
+connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
 
 # 3. ODE Right-Hand Side
 calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, metric_data.xx)
@@ -95,12 +98,15 @@ calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, metric_data.xx)
 # 4. Hamiltonian Constraint Solver (for initial u^0)
 if geodesic_data.u0_massive is None:
     raise ValueError(f"u0_massive is None for {GEO_KEY}")
-u0_massive(geodesic_data.u0_massive, SPACETIME, metric_data.xx)
+u0_massive(geodesic_data.u0_massive)
 
 # 5. Conserved Quantities (Diagnostics)
 conserved_quantities(SPACETIME, PARTICLE)
 
-# 6. GSL Wrapper
+# 6. Normalization_constraint
+normalization_constraint(geodesic_data.norm_constraint_expr, PARTICLE)
+
+# 7. GSL Wrapper
 ode_gsl_wrapper_massive(SPACETIME)
 
 
@@ -120,13 +126,11 @@ def main_c() -> None:
         "gsl/gsl_math.h",
         "string.h",
     ]
-    desc = (
-        "@brief Main driver function for the massive geodesic integrator.\n"
-        "\n"
-        "Initializes the BHaH infrastructure, sets initial particle conditions, "
-        "performs time integration using GSL (RKF45), and outputs trajectory data "
-        "and conservation checks to stdout/files."
-    )
+    desc = """@brief Main driver function for the massive geodesic integrator.
+        
+        Initializes the BHaH infrastructure, sets initial particle conditions, 
+        performs time integration using GSL (RKF45), and outputs trajectory data 
+        and conservation checks to stdout/files."""
     cfunc_type = "int"
     name = "main"
     params = "int argc, char *argv[]"
@@ -165,8 +169,8 @@ def main_c() -> None:
 
     // C. Solve for u^0 using the pre-calculated metric
     double u0_val = 0.0;
-    // New Signature: (commondata, metric, y, u0_out)
-    u0_massive_{SPACETIME}(&commondata, &g4DD_local, y, &u0_val);
+    // Signature: (metric, y, u0_out)
+    u0_massive(&g4DD_local, y, &u0_val);
     y[4] = u0_val;
     // ---------------------------------------------------------
 
@@ -230,9 +234,15 @@ def main_c() -> None:
     printf("Integration finished after %d steps. Final tau = %.4f\\n", steps, tau);
 
     // 7. Post-Integration Diagnostics
-    double E_final, Lx_final, Ly_final, Lz_final, Q_final;
+    double E_final, Lx_final, Ly_final, Lz_final, Q_final, norm_final;
     conserved_quantities_{SPACETIME}_{PARTICLE}(&commondata, y,
                                                 &E_final, &Lx_final, &Ly_final, &Lz_final, &Q_final);
+    g4DD_metric_{SPACETIME}(&commondata, y, &g4DD_local);
+    normalization_constraint_massive(&g4DD_local, y, &norm_final);
+
+
+    printf("Final norm deviation (norm + 1): \\n");
+    printf("  norm_plus_1 = %.4e\\n", norm_final + 1);
 
     printf("Final Conserved Quantities:\\n");
     printf("  E = %.8f, Lz = %.8f, Q = %.8f\\n", E_final, Lz_final, Q_final);

@@ -44,6 +44,10 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     __host__ __device__; for OpenMP builds it is a plain C function. The result is returned by
     reference through the dV pointer in C.
 
+    For GeneralRFM coordinate systems, this helper is intentionally inert (`*dV = 0.0`) because
+    the active integration path computes dV from `DETGAMMAHATGF` in
+    diagnostics_volume_integration_helpers.h.
+
     :param CoordSystem: Name of the coordinate system used to select the reference metric data
                         embedded in the generated C function.
 
@@ -70,7 +74,15 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
     # fmt: on
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """
+    generalrfm_note = ""
+    if CoordSystem.startswith("GeneralRFM"):
+        generalrfm_note = """
+ *
+ * Note for GeneralRFM: this helper is intentionally inert (*dV = 0.0). GeneralRFM volume
+ * integration uses the DETGAMMAHATGF-backed path in diagnostics_volume_integration_helpers.h.
+"""
+
+    desc = f"""
  * @file sqrt_detgammahat_d3xx_volume_element.c
  * @brief Compute the local 3D volume element sqrt(detgammahat) * d3xx at a point.
  *
@@ -81,7 +93,7 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
  * The expression implemented is:
  *   dV = sqrt(detgammahat(xx0, xx1, xx2)) * abs(dxx0 * dxx1 * dxx2)
  * The absolute value ensures a positive volume element regardless of coordinate orientation.
- *
+{generalrfm_note}
  * @param[in]  params  Pointer to parameter struct (reference-metric data, grid spacings, and sizes).
  * @param[in]  xx0     Local coordinate 0 at which to evaluate the volume element.
  * @param[in]  xx1     Local coordinate 1 at which to evaluate the volume element.
@@ -92,19 +104,28 @@ def register_CFunction_sqrt_detgammahat_d3xx_volume_element(
  *
  * Note: If a user-editable block is provided in the implementation, users may add custom logic,
  * such as scaling or additional diagnostics, prior to writing the result.
- """
+"""
     cfunc_type = "void"
     name = "sqrt_detgammahat_d3xx_volume_element"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict dV"
     rfm = refmetric.reference_metric[CoordSystem]
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    expr_list = [sp.sqrt(sp.simplify(rfm.detgammahat)) * sp.Abs(dxx0 * dxx1 * dxx2)]
-    body = ccg.c_codegen(
-        expr_list,
-        ["*dV"],
-        include_braces=False,
-    )
+    if CoordSystem.startswith("GeneralRFM"):
+        # For GeneralRFM, diagnostics_volume_integration_helpers.h computes dV
+        # directly from the detgammahat gridfunction. Keep this helper inert.
+        expr_list = []
+        body = "*dV = 0.0;"
+    else:
+        detgammahat_expr = rfm.detgammahat
+        expr_list = [
+            sp.sqrt(sp.simplify(detgammahat_expr)) * sp.Abs(dxx0 * dxx1 * dxx2)
+        ]
+        body = ccg.c_codegen(
+            expr_list,
+            ["*dV"],
+            include_braces=False,
+        )
 
     parallelization = par.parval_from_str("parallelization")
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)

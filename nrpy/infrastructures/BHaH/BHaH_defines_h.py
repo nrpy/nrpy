@@ -29,7 +29,7 @@ core_modules_list = [
     "reference_metric",
     "nrpy.infrastructures.BHaH.CurviBoundaryConditions.BHaH_defines",
     "nrpy.infrastructures.BHaH.MoLtimestepping.BHaH_defines",
-    "nrpydev.infrastructures.BHaH.interpolation.interpolation",
+    "nrpydev.infrastructures.BHaH.interpolation.register_all",
     "grid",
 ]
 

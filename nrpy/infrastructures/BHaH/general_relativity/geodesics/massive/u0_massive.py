@@ -1,12 +1,11 @@
 """
 Register C function for computing the initial time component of 4-velocity.
 
-This module registers the 'u0_massive_{spacetime_name}' C function. It enforces
+This module registers the 'u0_massive' C function. It enforces
 the 4-velocity normalization constraint for massive particles (u.u = -1) by solving
 the quadratic Hamiltonian constraint for the time component u^0.
 
-It generates a preamble to unpack the state vector f[8] into local coordinates
-and spatial velocity components (u^i) required for the calculation.
+It generates a preamble to unpack the state vector f[8] into spatial velocity components (u^i) required for the calculation.
 
 Author: Dalton J. Moone
 """
@@ -15,7 +14,6 @@ import logging
 
 # Step 0.a: Import standard Python modules
 import sys
-from typing import List
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -25,44 +23,35 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 
 
-def u0_massive(
-    u0_expr: sp.Expr, spacetime_name: str, coord_symbols: List[sp.Symbol]
-) -> None:
+def u0_massive(u0_expr: sp.Expr) -> None:
     """
     Generate and register the C function to compute u^0 for a massive particle.
 
     :param u0_expr: The SymPy expression for u^0.
-    :param spacetime_name: Name of the spacetime (used for function naming).
-    :param coord_symbols: A list of SymPy symbols representing the coordinates
-                          (e.g., [t, x, y, z]).
     """
     # Step 3: Define C function metadata
     includes = ["BHaH_defines.h"]
-    desc = (
-        "@brief Computes the initial time-component of the 4-velocity (u^0).\n"
-        "\n"
-        "Solves the quadratic Hamiltonian constraint equation:\n"
-        "    g_munu u^mu u^nu = -1\n"
-        "for the positive root of u^0, given the spatial velocity components.\n"
-        "\n"
-        "Input:\n"
-        "    commondata: Simulation parameters (mass, spin, etc.).\n"
-        "    metric: The metric tensor components at the current location.\n"
-        "    f[8]: The state vector (specifically spatial velocities f[5]..f[7]).\n"
-        "Output:\n"
-        "    u0_out: The computed u^0 component."
-    )
-    name = f"u0_massive_{spacetime_name}"
+    desc = """@brief Computes the initial time-component of the 4-velocity (u^0)
+        
+        Solves the quadratic Hamiltonian constraint equation:
+            g_munu u^mu u^nu = -1
+        for the positive root of u^0, given the spatial velocity components.
+        
+        Input:
+            metric: The metric tensor components at the current location.
+            f[8]: The state vector (specifically spatial velocities f[5]..f[7]).
+        Output:
+            u0_out: The computed u^0 component."""
+    name = "u0_massive"
 
     params = (
-        "const commondata_struct *restrict commondata, "
         "const metric_struct *restrict metric, "
         "const double f[8], "
         "double *restrict u0_out"
     )
 
     # Step 4: Generate C body
-    print(f" -> Generating C worker function: {name} (Spacetime: {spacetime_name})...")
+    print(f" -> Generating C worker function: {name} ...")
 
     # 4a. Generate the Math Body (using CSE)
     body_math = ccg.c_codegen(
@@ -70,14 +59,7 @@ def u0_massive(
     )
 
     # 4b. Generate the Dynamic Preamble
-    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
-
-    # Unpack coordinates: y[0] -> t, y[1] -> x, etc.
-    for i, symbol in enumerate(coord_symbols):
-        preamble_lines.append(f"const double {str(symbol)} = f[{i}];")
-
-    preamble_lines.append("")
-    preamble_lines.append("// Unpack spatial velocity components from f[5]..f[7]")
+    preamble_lines = ["// Unpack spatial velocity components from f[5]..f[7]"]
     preamble_lines.append(
         "// Note: f[4] is u^0 (which we are computing), so we skip it."
     )
@@ -100,7 +82,7 @@ def u0_massive(
         desc=desc,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=False,
         body=full_body,
     )
     print(f"    ... {name}() registration complete.")
@@ -113,9 +95,6 @@ if __name__ == "__main__":
     sys.path.append(os.getcwd())
 
     try:
-        from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
-            Analytic_Spacetimes,
-        )
         from nrpy.equations.general_relativity.geodesics.geodesics import (
             Geodesic_Equations,
         )
@@ -137,19 +116,15 @@ if __name__ == "__main__":
         logger.info(" -> Acquiring symbolic Hamiltonian constraint (u^0)...")
         geodesic_data = Geodesic_Equations[GEO_KEY]
 
-        # 2. Acquire Coordinate Symbols
-        logger.info(" -> Acquiring coordinate symbols from AnalyticSpacetimes...")
-        spacetime_data = Analytic_Spacetimes[SPACETIME]
-
         if geodesic_data.u0_massive is None:
             raise ValueError(f"u0_massive is None for key {GEO_KEY}")
 
         # 3. Run the Generator
-        logger.info(" -> Calling u0_massive_analytic()...")
-        u0_massive(geodesic_data.u0_massive, SPACETIME, spacetime_data.xx)
+        logger.info(" -> Calling u0_massive()...")
+        u0_massive(geodesic_data.u0_massive)
 
         # 4. Validation
-        cfunc_name = f"u0_massive_{SPACETIME}"
+        cfunc_name = "u0_massive"
 
         if cfunc_name not in cfc.CFunction_dict:
             raise RuntimeError(
@@ -165,7 +140,7 @@ if __name__ == "__main__":
         logger.info(" -> Written to %s", filename)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(" -> FAIL: u0_massive_analytic test failed with error: %s", e)
+        logger.error(" -> FAIL: u0_massive test failed with error: %s", e)
         import traceback
 
         traceback.print_exc()

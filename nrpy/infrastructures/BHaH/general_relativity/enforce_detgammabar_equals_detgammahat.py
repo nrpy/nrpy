@@ -62,6 +62,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     name = "enforce_detgammabar_equals_detgammahat"
     arg_dict_cuda = {
         "in_gfs": "REAL *restrict",
+        "auxevol_gfs": "const REAL *restrict",
     }
     if enable_rfm_precompute:
         arg_dict_cuda = {
@@ -149,7 +150,7 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         arg_dict_host,
         parallelization=parallelization,
         comments=desc,
-        cfunc_type=cfunc_type,
+        cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
         thread_tiling_macro_suffix="DETGAMMA",
     )
