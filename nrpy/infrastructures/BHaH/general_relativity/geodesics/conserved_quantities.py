@@ -1,131 +1,82 @@
 """
-Register C function for computing conserved quantities along geodesics.
+Evaluates the physical conserved quantities along photon trajectories using a streaming bundle architecture.
 
-This module registers the 'conserved_quantities_{spacetime}_{particle_type}' C function.
-It uses a C-code preamble to unpack the input state vector f[N_state] into local variables
-matching the symbolic names (e.g., xx0, p0) used in the physics modules. For massive
-particles N_state = 8 (position + 4-velocity, assuming m=1); for photon particles
-N_state = 9 (position + 4-momentum + path-length diagnostic).
+This module implements a streaming bundle architecture to compute physical
+conserved quantities along photon trajectories. It strictly manages memory usage
+by processing photons in limited batches.
 
-Author: Dalton J. Moone
+Author: Dalton J. Moone.
 """
 
-# Step 0.a: Import standard Python modules
 from typing import List
 
-# Step 0.b: Import third-party modules
 import sympy as sp
 
-# Step 0.c: Import NRPy core modules
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
+import nrpy.params as par
 from nrpy.equations.general_relativity.geodesics.geodesic_diagnostics.conserved_quantities import (
     Geodesic_Diagnostics,
 )
+from nrpy.helpers.loop import loop
+from nrpy.helpers.parallelization.utilities import (
+    generate_kernel_and_launch_code,
+    get_commondata_access,
+)
 
 
-def conserved_quantities(spacetime_name: str, particle_type: str = "massive") -> None:
+def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> None:
     """
-    Generate and register the C function to compute conserved quantities.
+    Evaluate the C function and native kernel for conserved quantity evaluation.
 
-    This function instantiates the GeodesicDiagnostics class, identifies available
-    conserved quantities (E, L, Q), and generates a C function.
-    Assumes mass of all massive particles is m=1.
-
-    Particle Support:
-    - Massive: f[8], v^mu = u^mu (4-velocity).
-    - Photon: f[9], v^mu = p^mu (4-momentum).
-
-    :param spacetime_name: Name of the spacetime (e.g., "KerrSchild_Cartesian").
-    :param particle_type: "massive" or "photon".
-    :raises ValueError: If particle_type is not "massive" or "photon".
+    :param spacetime_name: The target analytic or numerical spacetime.
+    :param particle_type: The particle classification (default is photon).
     """
-    # Step 1: Specific setup based on particle type
-    if particle_type == "massive":
-        array_size = 8
-        vec_desc = "4-velocity u^mu"
-    elif particle_type == "photon":
-        array_size = 9
-        vec_desc = "4-momentum p^mu"
-    else:
-        raise ValueError(f"Unsupported particle_type: {particle_type}")
+    # 1. Architecture Detection
+    parallelization = par.parval_from_str("parallelization")
+    cd_access = get_commondata_access(parallelization)
 
-    # Step 2: Acquire Symbolic Diagnostics
     config_key = f"{spacetime_name}_{particle_type}"
     diagnostics = Geodesic_Diagnostics[config_key]
 
-    # Step 3: Determine Active Quantities and Build Lists
+    # Set up SymPy expressions and target C variables for the struct assignment.
     list_of_syms: List[sp.Expr] = []
     list_of_c_vars: List[str] = []
 
-    # Function signature: standard generic interface
-    # f[0..3]: Coordinates (t, x, y, z or similar)
-    # f[4..7]: 4-Momentum (p0, p1, p2, p3)
-    # f[8]   : Proper Length L (Photons only)
-    c_params = (
-        f"const commondata_struct *restrict commondata, const double f[{array_size}]"
-    )
-
-    # 3.a: Energy
     if diagnostics.E_expr is not None:
         list_of_syms.append(diagnostics.E_expr)
-        list_of_c_vars.append("*E")
-        c_params += ", double *restrict E"
+        list_of_c_vars.append("d_cq_bundle[c].E")
 
-    # 3.b: Angular Momentum (Vector)
     if diagnostics.L_exprs:
         list_of_syms.extend(diagnostics.L_exprs)
-        list_of_c_vars.extend(["*Lx", "*Ly", "*Lz"])
-        c_params += ", double *restrict Lx, double *restrict Ly, double *restrict Lz"
+        list_of_c_vars.extend(
+            ["d_cq_bundle[c].Lx", "d_cq_bundle[c].Ly", "d_cq_bundle[c].Lz"]
+        )
 
-    # 3.c: Carter Constant
     if diagnostics.Q_expr is not None:
         list_of_syms.append(diagnostics.Q_expr)
-        list_of_c_vars.append("*Q")
-        c_params += ", double *restrict Q"
+        list_of_c_vars.append("d_cq_bundle[c].Q")
 
-    # Step 4: Generate the Dynamic Preamble
-    # We unpack f[] into local 'const double' variables that match the SymPy symbols.
+    # Define the C-structure for tracking physical conserved quantities.
+    cq_struct_def = """
+    // --- CONSERVED QUANTITIES STRUCTURE ---
+    // Defines the physical conserved quantities evaluated along a photon trajectory.
+    // Hardware Justification: This Structure of Arrays (AoS) definition is injected into the global BHaH_defines.h header to ensure uniform memory mapping across the Host orchestrator and VRAM kernels.
+    typedef struct {
+    double E;   // Energy $E$ extracted from the temporal Killing vector.
+    double Lx;  // Angular momentum projection $L_x$.
+    double Ly;  // Angular momentum projection $L_y$.
+    double Lz;  // Angular momentum projection $L_z$ extracted from the azimuthal Killing vector.
+    double Q;   // Carter constant $Q$ separating the Hamilton-Jacobi equations.
+    } conserved_quantities_t;
+    """
 
-    preamble_lines = ["// Unpack position coordinates from f[0]..f[3]"]
+    # Register the struct definition to the global header generation pipeline.
+    Bdefines_h.register_BHaH_defines("conserved_quantities", cq_struct_def)
 
-    # 4.a: Unpack Coordinates (xx0, xx1, etc.)
-    # The diagnostics object holds the specific symbols used (e.g., xx0 vs t).
-    for i, symbol in enumerate(diagnostics.xx):
-        preamble_lines.append(f"const double {str(symbol)} = f[{i}];")
-
-    preamble_lines.append("")
-    preamble_lines.append("// Unpack 4-vector components from f[4]..f[7]")
-    preamble_lines.append("// For massive particles this is the 4-velocity u^mu (m=1),")
-    preamble_lines.append("// for photon particles this is the 4-momentum p^mu.")
-
-    # 4.b: Unpack components (p0, p1, p2, p3)
-    # The symbolic diagnostics module uses the names p0..p3 for the 4-vector;
-    # here p0..p3 represent u^mu for massive particles and p^mu for photons.
-    for i in range(4):
-        # SymPy symbol is "p0", maps to f[4]
-        preamble_lines.append(f"const double p{i} = f[{i+4}];")
-
-    preamble = "\n    ".join(preamble_lines)
-
-    # Step 5: Define Metadata
-    includes = ["BHaH_defines.h"]
-    desc = f"""@brief Computes conserved quantities for {spacetime_name} ({particle_type}).
-            
-        Computed: {', '.join([v.strip('*') for v in list_of_c_vars])}.
-
-        Expects state vector f[{array_size}] containing position and {vec_desc}.
-
-        Note: Input vector components are mapped to local variables p0..p3 to match 
-        the symbolic variable names used in the equation generation module."""
-    name = f"conserved_quantities_{spacetime_name}_{particle_type}"
-    params = c_params
-
-    # Step 6: Generate C Body
-
-    # Generate the computation kernel using the ORIGINAL symbols (no substitution).
-    # The C compiler will resolve "p0" because we defined it in the preamble.
-    kernel = ccg.c_codegen(
+    # Generate the highly optimized math evaluation block.
+    math_kernel = ccg.c_codegen(
         list_of_syms,
         list_of_c_vars,
         enable_cse=True,
@@ -133,63 +84,251 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "massive") ->
         include_braces=False,
     )
 
-    # Combine Preamble + Kernel
-    body = preamble + "\n\n" + kernel
+    kernel_name = (
+        f"calculate_conserved_quantities_{spacetime_name}_{particle_type}_kernel"
+    )
 
+    arg_dict_cuda = {
+        "d_f_bundle": "const double *restrict",
+        "d_cq_bundle": "conserved_quantities_t *restrict",
+        "current_chunk_size": "const long int",
+    }
+
+    # Pass commondata explicitly when not using CUDA's global memory
+    if parallelization != "cuda":
+        arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
+
+    arg_dict_host = arg_dict_cuda.copy()
+
+    # Dynamically generate the unpacking logic based on the specific spacetime coordinates.
+    preamble_lines = [
+        "    // --- COORDINATE HYDRATION ---",
+        "    // Hardware Justification: Unpack position and momentum using strict SoA macros directly from the bundle.",
+    ]
+
+    # Map the analytic spatial coordinates (e.g., $x, y, z$ or $r, \theta, \phi$).
+    for i, symbol in enumerate(diagnostics.xx):
+        var_name = str(symbol)
+        preamble_lines.append(
+            f"    const double {var_name} = d_f_bundle[IDX_LOCAL({i}, c, BUNDLE_CAPACITY)]; // Spatial coordinate ${var_name}$ evaluated from memory."
+        )
+        preamble_lines.append(
+            f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$."
+        )
+
+    # Map the temporal and spatial momenta ($p_t, p_x, p_y, p_z$).
+    for i in range(4):
+        preamble_lines.append(
+            f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory."
+        )
+        preamble_lines.append(
+            f"    (void)p{i}; // Suppress unused variable warning for $p_{i}$."
+        )
+
+    preamble_lines.append("")
+    preamble_lines.append("    // --- CONSTANT MEMORY HYDRATION ---")
+    preamble_lines.append(
+        f"    // Hardware Justification: Extract spacetime physics constants natively from the {cd_access} cache."
+    )
+
+    # Algorithmic Step: Scrape the SymPy abstract syntax tree for free variables and map them to the memory cache.
+    free_syms = set()
+    for expr in list_of_syms:
+        free_syms.update(expr.free_symbols)
+
+    for sym in free_syms:
+        sym_name = str(sym)
+        # Verify the variable is a registered global parameter (e.g., $a_{spin}$, $M_{scale}$).
+        if sym_name in par.glb_code_params_dict:
+            preamble_lines.append(
+                f"    const double {sym_name} = {cd_access}{sym_name}; // Parameter ${sym_name}$ extracted from constant cache."
+            )
+
+    preamble = "\n".join(preamble_lines)
+
+    # 2. The Kernel "Sandwich"
+    if parallelization == "cuda":
+        loop_preamble = """
+    // --- CUDA THREAD IDENTIFICATION ---
+    // Local 1D thread mapping within the current VRAM bundle.
+    // Thread ID maps to a unique photon index $c$.
+    const long int c = blockIdx.x * blockDim.x + threadIdx.x; // Global thread evaluation index $c$.
+
+    // --- BOUNDARY CHECK ---
+    // Ensure out-of-bounds threads do not access invalid bundle addresses.
+    if (c >= current_chunk_size) return;
+"""
+        loop_postamble = ""
+    else:
+        loop_preamble = """
+    // --- OPENMP LOOP ARCHITECTURE ---
+    // Distribute photon rays across available CPU threads for parallel evaluation.
+    #pragma omp parallel for
+    for(long int c = 0; c < current_chunk_size; c++) {
+"""
+        loop_postamble = "    } // End OpenMP loop"
+
+    core_math = f"""
+    // --- MACRO DEFINITIONS ---
+    // IDX_LOCAL maps a component to the flattened state bundle using SoA layout.
+    // Layout: [Component][RayID]
+    #ifndef IDX_LOCAL
+    #define IDX_LOCAL(comp, ray_id, N) ((comp) * (N) + (ray_id))
+    #endif
+
+{preamble}
+
+    // --- DIAGNOSTIC EVALUATION ---
+    // Evaluates the analytic SymPy expressions for the conserved quantities.
+{math_kernel}
+
+    // --- MACRO CLEANUP ---
+    #undef IDX_LOCAL
+"""
+
+    kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
+
+    launch_dict = {
+        "threads_per_block": [
+            "BHAH_THREADS_IN_X_DIR_DEFAULT",
+            "BHAH_THREADS_IN_Y_DIR_DEFAULT",
+            "BHAH_THREADS_IN_Z_DIR_DEFAULT",
+        ],
+        "blocks_per_grid": [
+            "(current_chunk_size + BHAH_THREADS_IN_X_DIR_DEFAULT - 1) / BHAH_THREADS_IN_X_DIR_DEFAULT",
+            "1",
+            "1",
+        ],
+    }
+
+    # 3. Update the Kernel Launch
+    prefunc, launch_body = generate_kernel_and_launch_code(
+        kernel_name=kernel_name,
+        kernel_body=kernel_body,
+        arg_dict_cuda=arg_dict_cuda,
+        arg_dict_host=arg_dict_host,
+        parallelization=parallelization,
+        launch_dict=launch_dict,
+        thread_tiling_macro_suffix="DEFAULT",
+        cfunc_decorators="__global__" if parallelization == "cuda" else "",
+    )
+
+    # --- CONDITIONAL HOST ORCHESTRATION ---
+    if parallelization == "cuda":
+        host_to_device_transfer = r"""
+    // --- ASYNC MEMORY TRANSFER (HOST TO DEVICE) ---
+    // Transfer the state vector $f^\mu$ for the current bundle to VRAM.
+    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+        cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
+                   all_photons->f + (m * num_rays) + start_idx,
+                   sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);
+    }
+    """
+        device_to_host_transfer = r"""
+    // --- ASYNC MEMORY TRANSFER (DEVICE TO HOST) ---
+    // Retrieve the calculated conserved quantities back to the Pinned memory array.
+    cudaMemcpy(cq_result + start_idx, d_cq_bundle,
+               sizeof(conserved_quantities_t) * current_chunk_size, cudaMemcpyDeviceToHost);
+    """
+    else:
+        host_to_device_transfer = r"""
+    // --- SYNCHRONOUS MEMORY TRANSFER (HOST TO HOST CHUNK) ---
+    // Populating the bundle array for localized CPU chunk processing.
+    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+        memcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
+               all_photons->f + (m * num_rays) + start_idx,
+               sizeof(double) * current_chunk_size);
+    }
+    """
+        device_to_host_transfer = r"""
+    // --- SYNCHRONOUS MEMORY TRANSFER (HOST CHUNK TO HOST) ---
+    // Retrieve the calculated conserved quantities back to the main memory array.
+    memcpy(cq_result + start_idx, d_cq_bundle,
+           sizeof(conserved_quantities_t) * current_chunk_size);
+    """
+
+    # Host-side chunked execution loop.
+    loop_body = f"""
+    // --- BUNDLE SIZING ---
+    // Variable $current_chunk_size$ defines the active range for the current streaming bundle.
+    const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current_chunk_size$.
+    {host_to_device_transfer}
+        // --- KERNEL LAUNCH ---
+    {launch_body}
+    {device_to_host_transfer}
+    """
+
+    host_loop = loop(
+        idx_var="start_idx",
+        lower_bound="0",
+        upper_bound="num_rays",
+        increment="BUNDLE_CAPACITY",
+        pragma="",
+        loop_body=loop_body,
+    )
+
+    # 7. Variable Definition (The Master Order)
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    if parallelization == "cuda":
+        includes.append("cuda_intrinsics.h")
+
+    desc = r"""@brief Computes conserved quantities for a batch of trajectories.
+    @param all_photons The master Structure of Arrays containing the state vectors $f^\mu$.
+    @param num_rays The total number of photon trajectories.
+    @param cq_result The array of diagnostic structures to be populated.
+
+    Detailed algorithm:
+    1. Allocates execution staging buffers for state vectors $f^\mu$ and quantity results.
+    2. Iterates over the global dataset in chunks of $BUNDLE\_CAPACITY$.
+    3. Prepares bundle memory, computes expressions natively on the targeted hardware, and unloads results."""
+
+    cfunc_type = "void"
+    name = f"calculate_conserved_quantities_universal_{spacetime_name}_{particle_type}"
+    params = (
+        "const commondata_struct *restrict commondata, "
+        "const PhotonStateSoA *restrict all_photons, "
+        "const long int num_rays, "
+        "conserved_quantities_t *restrict cq_result"
+    )
+    include_CodeParameters_h = False
+
+    body = rf"""
+    // --- MEMORY STAGING ALLOCATION ---
+    // Hardware Justification: Allocate buffers statically sized to $BUNDLE\_CAPACITY$. Maps to VRAM or RAM based on platform.
+    double *d_f_bundle; // Pointer for the bundled state vector $f^\mu$.
+    conserved_quantities_t *d_cq_bundle; // Pointer for the bundled diagnostic outputs.
+
+    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocates device/host target array.
+    BHAH_MALLOC_DEVICE(d_cq_bundle, sizeof(conserved_quantities_t) * BUNDLE_CAPACITY); // Allocates device/host return array.
+
+    // --- PAGINATION LOOP ---
+    {host_loop}
+
+    // --- MEMORY CLEANUP ---
+    BHAH_FREE_DEVICE(d_f_bundle); // Releases memory for state vector $f^\mu$.
+    BHAH_FREE_DEVICE(d_cq_bundle); // Releases memory for diagnostic outputs.
+    """
+
+    # 8. Function Registration
     cfc.register_CFunction(
+        prefunc=prefunc,
         includes=includes,
         desc=desc,
+        cfunc_type=cfunc_type,
         name=name,
         params=params,
-        include_CodeParameters_h=True,
+        include_CodeParameters_h=include_CodeParameters_h,
         body=body,
     )
-    print(f"    ... {name}() registration complete.")
 
 
 if __name__ == "__main__":
-    import logging
-    import os
+    import doctest
     import sys
 
-    # Ensure local modules can be imported
-    sys.path.append(os.getcwd())
-
-    # Configure logging
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger("TestConservedGen")
-
-    # Test Configuration
-    SPACETIME = "KerrSchild_Cartesian"
-    PARTICLE = "massive"
-
-    logger.info(
-        "Test: Generating Conserved Quantities C-code for %s_%s...", SPACETIME, PARTICLE
-    )
-
-    try:
-        # 1. Run the Generator
-        conserved_quantities(SPACETIME, PARTICLE)
-
-        # 2. Validation
-        cfunc_name = f"conserved_quantities_{SPACETIME}_{PARTICLE}"
-
-        # Check Registration
-        if cfunc_name not in cfc.CFunction_dict:
-            raise RuntimeError(f"FAIL: '{cfunc_name}' was not registered.")
-
-        cfunc = cfc.CFunction_dict[cfunc_name]
-        logger.info(" -> PASS: '%s' registered.", cfunc_name)
-
-        # 3. Output to file
-        filename = f"{cfunc_name}.c"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write(cfunc.full_function)
-        logger.info("    ... Wrote %s", filename)
-
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        logger.error(" -> FAIL: Test failed with error: %s", e)
-        import traceback
-
-        traceback.print_exc()
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

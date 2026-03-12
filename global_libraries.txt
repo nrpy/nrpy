@@ -1,0 +1,17 @@
+appdirs==1.4.4
+black==25.9.0
+clang-format==18.1.8
+click==8.3.0
+colorama==0.4.6
+dill==0.4.0
+importlib_resources==6.5.2
+mpmath==1.3.0
+multiprocess==0.70.18
+mypy_extensions==1.1.0
+nrpypn==2.0.1
+packaging==25.0
+pathspec==0.12.1
+platformdirs==4.4.0
+pytokens==0.1.10
+sympy==1.14.0
+typing_extensions==4.15.0
