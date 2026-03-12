@@ -3,9 +3,7 @@
 import os
 from typing import Union
 
-import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
 
 from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
 
@@ -27,6 +25,9 @@ def _load_texture(image_input: Union[str, np.ndarray]) -> np.ndarray:
     :raises FileNotFoundError: Raised if the provided file path does not exist.
     :raises TypeError: Raised if the input is not a string or NumPy array.
     """
+    # pylint: disable=import-outside-toplevel
+    from PIL import Image
+
     if isinstance(image_input, str):
         if not os.path.exists(image_input):
             raise FileNotFoundError(f"Texture file not found: {image_input}")
@@ -62,6 +63,9 @@ def generate_source_disk_array(
     :param colormap: The Matplotlib colormap name used for temperature mapping.
     :return: A uint8 RGB NumPy array of the generated accretion disk texture.
     """
+    # pylint: disable=import-outside-toplevel
+    import matplotlib.pyplot as plt
+
     half_width = disk_physical_width / 2.0
     # Create coordinate grid representing the flat source plane
     y_coords = np.linspace(-half_width, half_width, pixel_width)
@@ -123,6 +127,9 @@ def generate_static_lensed_image(
     :param display_image: If True, opens the resulting image using the default viewer.
     :raises FileNotFoundError: Raised if the specified blueprint file is not found.
     """
+    # pylint: disable=import-outside-toplevel
+    from PIL import Image
+
     print(f"--- Generating Static Lensed Image: '{output_filename}' ---")
 
     if not os.path.exists(blueprint_filename):

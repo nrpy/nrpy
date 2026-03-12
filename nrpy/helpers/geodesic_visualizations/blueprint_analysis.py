@@ -17,9 +17,6 @@ import os
 import sys
 from typing import Any, Optional
 
-import matplotlib.pyplot as plt
-import numpy as np
-
 # Temporarily add the script's directory to sys.path to ensure we can
 # import 'config_and_types.py' even if the script is called from elsewhere.
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,6 +40,10 @@ def plot_heatmaps(data: Any) -> None:
 
     :param data: The structured NumPy array containing ray termination data.
     """
+    # pylint: disable=import-outside-toplevel
+    import matplotlib.pyplot as plt
+    import numpy as np
+
     # --- Preamble: Descriptive Physical Variable Mapping ---
     # Extract coordinates from the structured array for plotting.
     y_w, z_w = data["y_w"], data["z_w"]
@@ -126,6 +127,9 @@ def diagnose_blueprint(blueprint_path: Optional[str] = None) -> None:
 
     :param blueprint_path: Path to the .bin file. Defaults to relative project path.
     """
+    # pylint: disable=import-outside-toplevel
+    import numpy as np
+
     if blueprint_path is None:
         # Default relative path construction based on your project structure.
         blueprint_path = os.path.abspath(
