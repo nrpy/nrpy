@@ -15,11 +15,8 @@ associated with the spacetime's symmetries, including Killing vectors and tensor
 Author: Dalton J. Moone.
 """
 
-import argparse
 import os
 import shutil
-import subprocess
-import sys
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -257,27 +254,6 @@ def main_c(spacetime: str, particle: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Massive Geodesic Integrator Pipeline."
-    )
-    parser.add_argument(
-        "--run",
-        action="store_true",
-        help="Generate the project, compile the C code, run the integration, and visualize the trajectory.",
-    )
-    args = parser.parse_args()
-
-    if not args.run:
-        import doctest
-
-        results = doctest.testmod()
-        if results.failed > 0:
-            print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-            sys.exit(1)
-        else:
-            print(f"Doctest passed: All {results.attempted} test(s) passed")
-        sys.exit(0)
-
     # ---------------------------------------------------------
     # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
     # ---------------------------------------------------------
@@ -384,110 +360,33 @@ if __name__ == "__main__":
         src_code_file_ext="c",
     )
 
+    # ---------------------------------------------------------
+    # PART 2: FINALIZE
+    # ---------------------------------------------------------
+
+    # Define the directory containing the visualization assets relative to the repository root
+    vis_dir = os.path.join("nrpy", "helpers", "geodesic_visualizations")
+
+    # Locate the visualization script
+    vis_script_src = os.path.join(vis_dir, "visualize_trajectory.py")
+
+    # Copy the visualization script into the generated project directory
+    if os.path.exists(vis_script_src):
+        shutil.copy(vis_script_src, project_dir)
+    else:
+        print(
+            f"Warning: Visualization script not found at {vis_script_src}. Please ensure it exists."
+        )
+
     print(
         f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
     )
-    print(f"    Parameter file can be found in {project_name}.par")
-
-    # ---------------------------------------------------------
-    # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
-    # ---------------------------------------------------------
-    import logging
-
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
-    logging.getLogger("matplotlib").setLevel(logging.WARNING)
-    logging.getLogger("PIL").setLevel(logging.WARNING)
-
-    print("\n" + "=" * 50)
-    print("PIPELINE EXECUTION: COMPILE, RUN, VISUALIZE")
-    print("=" * 50)
-
-    print("\n--- PHASE 1: Compiling C Code ---")
-
-    abs_project_dir = os.path.abspath(project_dir)
-    try:
-        subprocess.run(
-            ["make", "-j"], cwd=project_dir, check=True, stderr=subprocess.DEVNULL
-        )
-        print("Compilation successful.")
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"Compilation failed: {e}")
-        print("Tip: Ensure 'make' is installed and the Makefile was generated.")
-        sys.exit(1)
-
-    print("\n--- PHASE 2: Running Tracer ---")
-
-    # Strictly Linux execution path without OS checks
-    exec_path = os.path.join(abs_project_dir, project_name)
-
-    try:
-        subprocess.run([exec_path], cwd=abs_project_dir, check=True)
-        print("Tracing complete. Trajectory file generated.")
-    except subprocess.CalledProcessError:
-        print("C executable failed. Exiting pipeline.")
-        sys.exit(1)
-
-    print("\n--- PHASE 3: Visualizing Trajectory ---")
-
-    traj_file = os.path.join(abs_project_dir, "trajectory.txt")
-    if not os.path.exists(traj_file):
-        print(f"Error: {traj_file} not found.")
-        sys.exit(1)
-
-    try:
-        data = np.loadtxt(traj_file, comments="#")
-        x_pts = data[:, 2]
-        y_pts = data[:, 3]
-        z_pts = data[:, 4]
-
-        fig = plt.figure(figsize=(8, 8))
-        ax = fig.add_subplot(111, projection="3d")
-
-        ax.plot(
-            x_pts, y_pts, z_pts, label="Photon Trajectory", color="blue", linewidth=1.5
-        )
-
-        ax.scatter(
-            x_pts[0], y_pts[0], z_pts[0], color="green", marker="o", s=50, label="Start"
-        )
-        ax.scatter(
-            x_pts[-1],
-            y_pts[-1],
-            z_pts[-1],
-            color="red",
-            marker="x",
-            s=50,
-            label="End ($r < 2M$)",
-        )
-
-        M_scale = 1.0
-        r_horizon = 2.0 * M_scale
-
-        u_val = np.linspace(0, 2 * np.pi, 20)
-        v_val = np.linspace(0, np.pi, 10)
-        u, v = np.meshgrid(u_val, v_val, indexing="ij")
-
-        xh = r_horizon * np.cos(u) * np.sin(v)
-        yh = r_horizon * np.sin(u) * np.sin(v)
-        zh = r_horizon * np.cos(v)
-        ax.plot_surface(xh, yh, zh, color="black", alpha=0.3, label="Horizon")
-
-        ax.set_xlabel("$x$ ($M$)")
-        ax.set_ylabel("$y$ ($M$)")
-        ax.set_zlabel("$z$ ($M$)")
-        ax.set_title("Photon Geodesic in Kerr-Schild Cartesian Spacetime")
-        ax.legend()
-
-        plot_path = os.path.join(abs_project_dir, "photon_trajectory.png")
-        plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-        print(f"Visualization successfully saved to: {plot_path}")
-
-        print("Opening plot window...")
-        plt.show()
-
-    except (RuntimeError, ValueError, OSError) as e:
-        print(f"Plotting failed: {e}")
-        sys.exit(1)
+    print(f"    Parameter file can be found in {project_name}.par\n")
+    print(
+        "    To generate the trajectory plot after running the C executable, ensure you have the required Python packages:"
+    )
+    print("    pip install matplotlib numpy\n")
+    print(
+        "    Then, execute the visualization script directly from the project directory:"
+    )
+    print("    python3 visualize_trajectory.py --particle_type Massive\n")

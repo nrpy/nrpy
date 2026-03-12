@@ -17,8 +17,6 @@ Author: Dalton J. Moone.
 import argparse
 import os
 import shutil
-import subprocess
-import sys
 
 # NRPy core and helper modules for C code generation
 import nrpy.c_function as cfc
@@ -102,7 +100,7 @@ if __name__ == "__main__":
 
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
-    
+
     # Map the new boolean flag to the string values your pipeline expects
     parallelization_mode = "cuda" if args.cuda else "openmp"
     par.set_parval_from_str("parallelization", parallelization_mode)
@@ -333,10 +331,10 @@ if __name__ == "__main__":
     # ##########################################################################
     # PART 2: FINALIZE
     # ##########################################################################
-    
+
     # Define the directory containing the visualization assets relative to the repository root
     vis_dir = os.path.join("nrpy", "helpers", "geodesic_visualizations")
-    
+
     # Locate the visualization script and the background texture
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
     starmap_src = os.path.join(vis_dir, "starmap_2020.png")
@@ -366,9 +364,15 @@ if __name__ == "__main__":
         f"--window_height {c_window_height}"
     )
 
-    print(f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run.")
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run."
+    )
     print(f"    Parameter file can be found in {project_name}.par\n")
-    print("    To generate the lensed image after running the C executable, ensure you have the required Python packages:")
+    print(
+        "    To generate the lensed image after running the C executable, ensure you have the required Python packages:"
+    )
     print("    pip install matplotlib numpy\n")
-    print("    Then, execute the visualization script directly from the project directory:")
+    print(
+        "    Then, execute the visualization script directly from the project directory:"
+    )
     print(f"    {vis_command}\n")
