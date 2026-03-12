@@ -2,8 +2,9 @@ r"""
 Evaluates the temporal momentum component and provides the host-side orchestrator.
 
 This module evaluates the quadratic Hamiltonian constraint to enforce physical null
-trajectories for a batch of photons. It operates explicitly on VRAM and system memory bundles
-to resolve the negative root of the constraint equation for $p^t$.
+trajectories for a batch of photons. It operates to find the negative root of the
+constraint equation for $p^t$.
+
 Author: Dalton J. Moone.
 """
 

@@ -4,9 +4,8 @@ Provides the native kernel and host-side orchestrator for the RKF45 Finalize & C
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module provides the global memory kernel responsible for computing the final 5th-order
 solution, estimating the local truncation error, and executing the adaptive step-size
-controller logic on VRAM bundles. To prevent register spilling on the NVIDIA RTX 3080 (which has
-a hard limit of 255 registers per thread), we strictly enforce a Split-Pipeline architecture,
-reading and writing intermediate stages via global VRAM scratchpads rather than fused registers.
+controller logic.
+
 Author: Dalton J. Moone.
 """
 

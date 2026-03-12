@@ -1,11 +1,10 @@
 """
-Generates the C engine to handle a window plane intersection.
+C engine to handle a window plane intersection.
 
 This module provides the metaprogramming orchestration to generate the C function
 responsible for calculating the local 2D coordinates on the observer's camera window
 when a photon crosses the window plane. It maps global Cartesian intersections to a
-reconstructed orthonormal camera basis. This operation relies entirely on constant
-memory to preserve hardware register constraints and prevent VRAM spilling.
+reconstructed orthonormal camera basis.
 Author: Dalton J. Moone.
 """
 

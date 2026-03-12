@@ -3,8 +3,8 @@ Register C function for computing analytic Christoffel symbols.
 
 This module registers the C function, which calculates the 40 unique components
 of the Christoffel symbols for a specific spacetime. It generates a preamble
-to unpack coordinate variables directly from a thread-local state vector to
-minimize VRAM accesses and prevent register spilling on hardware architectures.
+to unpack coordinate variables directly from a thread-local state vector.
+
 Author: Dalton J. Moone.
 """
 

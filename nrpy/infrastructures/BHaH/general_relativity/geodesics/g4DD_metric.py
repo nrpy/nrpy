@@ -2,10 +2,8 @@
 Generates the C function for computing upper-triangular metric components.
 
 This module registers the C function responsible for calculating the 10 unique
-components of the covariant metric tensor. To prevent register spilling on
-hardware architectures constrained by register limits, it evaluates all
-mathematical expressions directly into a thread-local array passed down the
-call stack. The resulting C function is an inline device helper.
+components of the covariant metric tensor. The C function is an inline device helper.
+
 Author: Dalton J. Moone.
 """
 

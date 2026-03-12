@@ -2,9 +2,7 @@
 Provides the C orchestrator for geometric event detection.
 
 This module provides the high-level logic for detecting crossings of the
-observer window and the source emission plane. It operates strictly within
-the Split-Pipeline architecture, reading from global memory scratchpad bundles and
-incorporating absolute global mapping locks to prevent blueprint overwrites.
+observer window and the source emission plane.
 Author: Dalton J. Moone.
 """
 

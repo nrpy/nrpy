@@ -1,15 +1,13 @@
-"""
+r"""
 Orchestrator for the Split-Pipeline Photon Geodesic Integrator targeting the RTX 3080.
 
-This script generates a high-performance C project for simulating photon trajectories 
-in curved spacetimes. It utilizes a modular, SIMD-batch pipeline to circumvent the 
-255-register hardware limit of the Ampere architecture by persisting intermediate 
-tensors (metrics, connections, and derivatives) in Global VRAM scratchpads. 
+This module constructs a high-performance C project for simulating photon trajectories
+in curved spacetimes.
 
-The generated code employs a Structure of Arrays (SoA) memory layout and an 
+The generated code employs a Structure of Arrays (SoA) memory layout and an
 adaptive RKF45 integration scheme managed by a lock-free TimeSlotManager system.
 
-Author: Dalton J. Moone
+Author: Dalton J. Moone.
 """
 
 # ##############################################################################
@@ -27,14 +25,12 @@ import nrpy.c_function as cfc
 import nrpy.helpers.generic as gh
 import nrpy.params as par
 
-
 # Physics/Math Generators (Symbolic definitions of spacetimes and geodesics)
 from nrpy.equations.general_relativity.geodesics import analytic_spacetimes as anasp
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
 
 # NRPy BlackHoles@Home (BHaH) infrastructure modules for C project management
-from nrpy.infrastructures.BHaH import BHaH_defines_h
-from nrpy.infrastructures.BHaH import BHaH_device_defines_h
+from nrpy.infrastructures.BHaH import BHaH_defines_h, BHaH_device_defines_h
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
@@ -81,13 +77,33 @@ if __name__ == "__main__":
         default="project",
         help="The parent directory where the generated C project will reside.",
     )
-    parser.add_argument("--parallelization", type=str, default="cuda", choices=["cuda", "openmp"])
+    parser.add_argument(
+        "--parallelization", type=str, default="cuda", choices=["cuda", "openmp"]
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Generate the project, compile the C code, run the integration, and visualize the trajectory.",
+    )
     args = parser.parse_args()
+
+    # Apply strict doctest boilerplate for compliance
+    if not args.run:
+        import doctest
+
+        results = doctest.testmod()
+        if results.failed > 0:
+            print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+            sys.exit(1)
+        else:
+            print(f"Doctest passed: All {results.attempted} test(s) passed")
+        sys.exit(0)
 
     # Step 2: Define strict project constants and simulation targets
     project_name = "photon_geodesic_integrator"
     exec_name = "photon_geodesic_integrator"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
+    blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
 
     # Define the physical regime: Target spacetime and particle classification
     SPACETIME = "KerrSchild_Cartesian"
@@ -98,7 +114,6 @@ if __name__ == "__main__":
     print(f"Initializing project: {project_name}")
     shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
-
 
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
@@ -123,11 +138,15 @@ if __name__ == "__main__":
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
     conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
-    normalization_constraint.normalization_constraint(geodesic_data.norm_constraint_expr, PARTICLE)
+    normalization_constraint.normalization_constraint(
+        geodesic_data.norm_constraint_expr, PARTICLE
+    )
 
     # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
     interpolation_kernel.interpolation_kernel(SPACETIME)
-    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(geodesic_data.geodesic_rhs, geodesic_data.xx)
+    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
+        geodesic_data.geodesic_rhs, geodesic_data.xx
+    )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
 
@@ -143,19 +162,18 @@ if __name__ == "__main__":
     batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
     main.main(SPACETIME)
 
-
     # --- Native NRPy Cleanup ---
     # Remove the inline helper functions from the global CFunction dictionary.
-    # Because the manager kernel incorporates their logic directly via its prefunc, 
-    # popping them prevents the infrastructure from generating standalone .cu files 
-    # and prevents 'ghost' prototypes in BHaH_function_prototypes.h. This eliminates 
+    # Because the manager kernel incorporates their logic directly via its prefunc,
+    # popping them prevents the infrastructure from generating standalone .cu files
+    # and prevents 'ghost' prototypes in BHaH_function_prototypes.h. This eliminates
     # nvlink multiple-definition conflicts during relocatable device code linking.
     for internal_func in [
-        "find_event_time_and_state", 
-        "handle_source_plane_intersection", 
+        "find_event_time_and_state",
+        "handle_source_plane_intersection",
         "handle_window_plane_intersection",
-        f"g4DD_metric_{SPACETIME}", 
-        f"connections_{SPACETIME}"     
+        f"g4DD_metric_{SPACETIME}",
+        f"connections_{SPACETIME}",
     ]:
         cfc.CFunction_dict.pop(internal_func, None)
 
@@ -163,17 +181,18 @@ if __name__ == "__main__":
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
 
-    # The RTX 3080 (sm_86 architecture) performs optimally with block sizes of 128 or 256 
+    # The RTX 3080 (sm_86 architecture) performs optimally with block sizes of 128 or 256
     # for register-heavy kernels, rather than the infrastructure's default of 32.
     if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
         par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
-    
-    par.glb_extras_dict["DEVICE_THREAD_MACROS"].update({
-        "BHAH_THREADS_IN_X_DIR_DEFAULT": 256,
-        "BHAH_THREADS_IN_Y_DIR_DEFAULT": 1,
-        "BHAH_THREADS_IN_Z_DIR_DEFAULT": 1,
-    })
 
+    par.glb_extras_dict["DEVICE_THREAD_MACROS"].update(
+        {
+            "BHAH_THREADS_IN_X_DIR_DEFAULT": 256,
+            "BHAH_THREADS_IN_Y_DIR_DEFAULT": 1,
+            "BHAH_THREADS_IN_Z_DIR_DEFAULT": 1,
+        }
+    )
 
     print(" -> Overriding desired CodeParameters before .par generation...")
 
@@ -242,7 +261,7 @@ if __name__ == "__main__":
     # Step 7: Assemble Final C Project Infrastructure
     # ##########################################################################
     print(" -> Assembling C project on disk...")
-    
+
     parallelization = args.parallelization
 
     if parallelization == "cuda":
@@ -250,98 +269,100 @@ if __name__ == "__main__":
             "BHAH_HD_FUNC": "#define BHAH_HD_FUNC __device__\n",
             "BHAH_HD_INLINE": "#define BHAH_HD_INLINE __device__ __inline__\n",
             "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) atomicAdd(ptr, val)\n",
-            "GLOBAL_COMMONDATA_EXTERN": "extern __constant__ commondata_struct d_commondata;\n"
+            "GLOBAL_COMMONDATA_EXTERN": "extern __constant__ commondata_struct d_commondata;\n",
         }
         BHaH_defines_h.output_BHaH_defines_h(
-            project_dir=project_dir, 
+            project_dir=project_dir,
             enable_rfm_precompute=False,
-            supplemental_defines_dict=cuda_macros
+            supplemental_defines_dict=cuda_macros,
         )
         BHaH_device_defines_h.output_device_headers(project_dir=project_dir)
-        
+
         print(" -> Copying hardware intrinsics...")
         gh.copy_files(
             package="nrpy.helpers",
             filenames_list=["cuda_intrinsics.h"],
             project_dir=project_dir,
-            subdirectory="."
+            subdirectory=".",
         )
-        
+
         compiler = "nvcc"
         cflags = ["-lcudart", "-DUSE_GPU", "-rdc=true", "-DDEBUG"]
         libs = ["-lm", "-lcudart"]
         ext = "cu"
     else:
-# OpenMP / CPU Fallback
+        # OpenMP / CPU Fallback
         cpu_macros = {
             # --- Memory Access Redirection ---
             "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))\n",
             "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))\n",
-            
             # --- Device Memory Fallbacks ---
             "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)\n",
             "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)\n",
-            
             # --- Basic Arithmetic Intrinsics (Required by RKF45 Kernels) ---
             "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))\n",
             "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))\n",
             "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))\n",
             "FusedMulAddCUDA(a, b, c)": "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))\n",
-
             # --- Hardware-Specific Math Redirection ---
             "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)\n",
             "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)\n",
             "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)\n",
-            
             # --- Function Decorators ---
             "BHAH_HD_FUNC": "#define BHAH_HD_FUNC\n",
             "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline\n",
-            
             # --- Parallelization & Scope Helpers ---
-            "BHAH_WARP_ATOMIC_ADD(ptr, val)": "#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma(\"omp atomic\") *(ptr) += (val)\n",
+            "BHAH_WARP_ATOMIC_ADD(ptr, val)": '#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma("omp atomic") *(ptr) += (val)\n',
             "GLOBAL_COMMONDATA_EXTERN": "// CPU passes commondata by reference, no global needed.\n",
-            "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n"
+            "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n",
         }
 
         BHaH_defines_h.output_BHaH_defines_h(
-            project_dir=project_dir, 
+            project_dir=project_dir,
             enable_rfm_precompute=False,
-            supplemental_defines_dict=cpu_macros
+            supplemental_defines_dict=cpu_macros,
         )
-        
+
         compiler = "gcc"
         cflags = ["-fopenmp", "-O3", "-DDEBUG"]
         libs = ["-lm"]
         ext = "c"
 
     print(" -> Generating Makefile ")
-    
+
     # Determine the correct optimization option string
     opt_option = "nvcc" if parallelization == "cuda" else "fast"
-    
+
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
         exec_or_library_name=exec_name,
-        compiler_opt_option=opt_option, 
+        compiler_opt_option=opt_option,
         addl_CFLAGS=cflags,
         addl_libraries=libs,
         CC=compiler,
-        src_code_file_ext=ext
+        src_code_file_ext=ext,
     )
+
     # ##########################################################################
     # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
     # ##########################################################################
+    print("\n" + "=" * 50)
+    print("PIPELINE EXECUTION: COMPILE, RUN, VISUALIZE")
+    print("=" * 50)
+
     print("\n--- PHASE 1: Compiling C Code ---")
     try:
-        subprocess.run(["make"], cwd=project_dir, check=True)
+        subprocess.run(
+            ["make", "-j"], cwd=project_dir, check=True, stderr=subprocess.DEVNULL
+        )
         print("Compilation successful.")
     except subprocess.CalledProcessError:
         print("Compilation failed. Exiting pipeline.")
         sys.exit(1)
 
     print("\n--- PHASE 2: Running Ray-Tracer ---")
-    exec_path = os.path.join(project_dir, exec_name)
+    exec_path = os.path.abspath(os.path.join(project_dir, exec_name))
     try:
         subprocess.run([exec_path], cwd=project_dir, check=True)
         print("Ray-tracing complete. Binary blueprint generated.")
@@ -350,18 +371,13 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("\n--- PHASE 3: Generating Visualizations ---")
-    vis_dir = os.path.abspath(os.path.join(script_dir, "..", "helpers", "geodesic_visualizations"))
-    if not os.path.exists(vis_dir):
-        print(f"ERROR: Visualization directory not found at {vis_dir}")
-        sys.exit(1)
-
-    sys.path.append(vis_dir)
 
     try:
-        import config_and_types as cfg
-        import render_lensed_image as rli
+        from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
+        from nrpy.helpers.geodesic_visualizations import render_lensed_image as rli
 
-        blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
+        nrpy_root = os.path.dirname(script_dir)
+        vis_dir = os.path.join(nrpy_root, "helpers", "geodesic_visualizations")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
         output_image_path = os.path.join(project_dir, "lensed_output.png")
         STATIC_IMAGE_PIXEL_WIDTH = 500

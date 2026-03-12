@@ -1,7 +1,12 @@
 """
 Module generating the C data structures and helpers for the Time Slot Manager.
 
-This module sets up a lock-free Arena Allocator for Host-side orchestration of batched photon trajectories based on their physical coordinate time $t$. By binning photons temporally on the Host, this structure enforces the strict Split-Pipeline Architecture required for relativistic ray tracing on Numerical Spacetimes. It prepares discrete VRAM Scratchpad Bundles for specialized kernels, preventing register spilling and performance collapse on the NVIDIA RTX 3080, which imposes a strict limit of 255 registers per thread.
+This module sets up a lock-free Arena Allocator for Host-side orchestration
+of batched photon trajectories based on their physical coordinate time $t$.
+By binning photons temporally on the Host, this structure enforces the strict
+Split-Pipeline Architecture required for relativistic ray tracing on Numerical Spacetimes.
+It prepares discrete VRAM Scratchpad Bundles for specialized kernels.
+
 Author: Dalton J. Moone.
 """
 

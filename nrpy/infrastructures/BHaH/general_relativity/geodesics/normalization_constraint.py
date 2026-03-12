@@ -3,7 +3,7 @@ r"""
 Evaluate the normalization constraint along trajectories using a streaming bundle architecture.
 
 This module implements a pure mathematical execution kernel to compute the scalar invariant $C = g_{\mu\nu} v^\mu v^\nu$.
-It maps directly to the global scratchpad arrays managed by the central orchestrator to enforce hardware limits.
+
 Author: Dalton J. Moone.
 """
 
@@ -147,17 +147,8 @@ def normalization_constraint(norm_expr: sp.Expr, PARTICLE: str) -> None:
             "1",
             "1",
         ],
-        "stream": "stream_idx",
+    "stream": "stream_idx", 
     }
-
-    # Inject the asynchronous hardware stream parameter for CUDA targets.
-    if parallelization == "cuda":
-        launch_dict["stream"] = "0, stream_idx"
-
-    # Inject the asynchronous hardware stream parameter for CUDA targets.
-    if parallelization == "cuda":
-        # Hardware Justification: Supplying "0, stream" explicitly maps 0 bytes to the size_t shared memory argument, preserving the cudaStream_t stream parameter in the final execution index.
-        launch_dict["stream"] = "0, stream"
 
     # Generate the kernel definition and the internal launch string.
     prefunc, launch_body = generate_kernel_and_launch_code(

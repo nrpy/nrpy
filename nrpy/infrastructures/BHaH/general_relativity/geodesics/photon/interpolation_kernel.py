@@ -3,8 +3,7 @@ Provides the global memory kernel and orchestrator for the interpolation engine.
 
 This module evaluates the spacetime metric $g_{\mu\nu}$ and Christoffel symbols
 $\Gamma^{\alpha}_{\beta\gamma}$ for a batch of photons. It operates on Structure
-of Arrays (SoA) bundles, ensuring memory coalescence and minimizing latency during
-the integration step.
+of Arrays (SoA) bundles.
 
 Author: Dalton J. Moone.
 """

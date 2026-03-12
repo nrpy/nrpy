@@ -3,8 +3,7 @@ Evaluates the physical conserved quantities along photon trajectories using a st
 
 This module implements a streaming bundle architecture to compute physical
 conserved quantities along photon trajectories. It strictly manages memory usage
-by processing photons in limited batches, bridging the Host-Device gap, ensuring
-compliance with hardware execution limits for both CUDA and OpenMP.
+by processing photons in limited batches.
 
 Author: Dalton J. Moone.
 """

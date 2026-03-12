@@ -1,29 +1,28 @@
-"""
-Construct a complete C project for integrating massive geodesics in curved spacetime.
+r"""
+Module constructs a complete C project for integrating massive geodesics in curved spacetime.
 
-Project: NRPy+ Standalone Geodesic Integrator
-Description:
-    This script generates a standalone C application that evolves the trajectory 
-    of a massive test particle. It coordinates the generation of spacetime-specific 
-    physics kernels and links them with the GNU Scientific Library (GSL) for 
-    high-order time integration.
+The script produces a standalone C application that evolves the trajectory
+of a massive test particle. It coordinates the registration of spacetime-specific
+physics kernels and links them with the GNU Scientific Library (GSL) for
+high-order time integration.
 
-Physics Context:
-    The simulation solves the geodesic equation for a particle with non-zero mass:
-        $d(u^\\mu)/d(\\tau) = -\\Gamma^\\mu_{\\alpha \\beta} u^\\alpha u^\\beta$
-    subject to the normalization constraint $u^\\mu u_\\mu = -1$.
+The simulation solves the geodesic equation for a particle with non-zero mass:
+    $d(u^\\mu)/d(\\tau) = -\\Gamma^\\mu_{\\alpha \\beta} u^\\alpha u^\\beta$
+subject to the normalization constraint $u^\\mu u_\\mu = -1$.
 
-    Numerical fidelity is rigorously validated by monitoring constants of motion
-    associated with the spacetime's symmetries (Killing vectors and tensors).
-
+Numerical fidelity is validated by monitoring constants of motion
+associated with the spacetime's symmetries, including Killing vectors and tensors.
 Author: Dalton J. Moone.
 """
 
+import argparse
 import os
 import shutil
+import subprocess
 import sys
 
 import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.infrastructures.BHaH.CodeParameters as CPs
 import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
@@ -57,9 +56,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constr
 
 
 def register_struct_definitions() -> None:
-    """
-    Register the Structure of Arrays (SoA) and diagnostic structures into the global C headers.
-    """
+    """Register the Structure of Arrays (SoA) and diagnostic structures into the global C headers."""
     termination_enum_def = """
     // Defines the specific exit condition for a particle's integration loop.
     typedef enum {
@@ -76,19 +73,19 @@ def register_struct_definitions() -> None:
     // ==========================================
     // Hardware Justification: This Structure of Arrays (SoA) provides universal memory compatibility for shared physics kernels.
     typedef struct {
-        double *f; // Flattened state vector mapping components $t, x, y, z, u_t, u_x, u_y, u_z$.
+        double *f;            // Flattened state vector mapping components $t, x, y, z, u_t, u_x, u_y, u_z$.
         double *affine_param; // Current proper time $\\tau$ for the trajectory.
     } PhotonStateSoA;
     """
     Bdefines_h.register_BHaH_defines("PhotonStateSoA", photon_soa_def)
 
 
-def main_c(SPACETIME: str, PARTICLE: str) -> None:
+def main_c(spacetime: str, particle: str) -> None:
     """
     Generate the main() function for the massive geodesic integrator using GSL.
 
-    :param SPACETIME: The specific background spacetime descriptor.
-    :param PARTICLE: The type of test particle being integrated.
+    :param spacetime: The specific background spacetime descriptor.
+    :param particle: The type of test particle being integrated.
     """
     includes = [
         "BHaH_defines.h",
@@ -98,7 +95,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
         "gsl/gsl_matrix.h",
         "gsl/gsl_math.h",
         "string.h",
-        "stdlib.h"
+        "stdlib.h",
     ]
 
     desc = """@brief Main driver function for the massive geodesic integrator.
@@ -120,7 +117,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
     commondata.a_spin = 0.9; // The dimensionless spin $a$ of the central black hole.
 
     printf("Starting Mass Geodesic Integrator (CPU)...\\n");
-    printf("Spacetime: {SPACETIME}, M=%.2f, a=%.2f\\n", commondata.M_scale, commondata.a_spin);
+    printf("spacetime: {spacetime}, M=%.2f, a=%.2f\\n", commondata.M_scale, commondata.a_spin);
 
     // --- Step 2: Global Memory & Initial Conditions ---
     const double p_t_max = 1000;
@@ -147,7 +144,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
     double g4DD_local[10]; // Flat array holding the 10 independent components of the symmetric metric $g_{{\\mu\\nu}}$.
 
     // Hardware Justification: Calculate metric at initial position $y$ to solve the Hamiltonian constraint.
-    g4DD_metric_{SPACETIME}(&commondata, y, g4DD_local);
+    g4DD_metric_{spacetime}(&commondata, y, g4DD_local);
 
     double u0_val = 0.0; // Variable to store the computed time-component of the 4-velocity $u^t$.
     u0_massive(g4DD_local, y, 1, 1, 0, 0, &u0_val);
@@ -159,7 +156,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
 
     // --- Step 3: Pre-Integration Diagnostics ---
     conserved_quantities_t cq_init; // Struct instance to store the baseline constants of motion.
-    calculate_conserved_quantities_universal_{SPACETIME}_{PARTICLE}(&commondata, &all_particles, num_rays, &cq_init);
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(&commondata, &all_particles, num_rays, &cq_init);
 
     printf("Initial Conserved Quantities:\\n");
     printf("  E = %.8f, Lz = %.8f, Q = %.8f\\n", cq_init.E, cq_init.Lz, cq_init.Q);
@@ -170,7 +167,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
     gsl_odeiv2_control *c = gsl_odeiv2_control_y_new(1e-9, 0.0); // GSL control object to maintain local truncation error limits.
     gsl_odeiv2_evolve *e = gsl_odeiv2_evolve_alloc(8); // GSL evolution object tracking current integration state.
 
-    gsl_odeiv2_system sys = {{ode_gsl_wrapper_massive_{SPACETIME}, NULL, 8, &commondata}}; // Struct binding our ODE RHS function to the GSL framework.
+    gsl_odeiv2_system sys = {{ode_gsl_wrapper_massive_{spacetime}, NULL, 8, &commondata}}; // Struct binding our ODE RHS function to the GSL framework.
 
     double tau_max = 20000.0; // The predefined boundary limit for proper time $\\tau$ integration.
     double h = 1e-3; // Initial step size guess $h$ provided to the adaptive GSL routines.
@@ -205,7 +202,7 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
 
         double r_squared = y[1]*y[1] + y[2]*y[2] + y[3]*y[3]; // Radial Cartesian distance $r_squared$ from the origin.
         if (r_squared > r_squared_max ) {{
-            printf("Termination: Particle reached r_squared = %.4f at tau = %.4f\\n", r_squared, tau);
+            printf("Termination: particle reached r_squared = %.4f at tau = %.4f\\n", r_squared, tau);
             break;
         }}
         steps++;
@@ -216,15 +213,15 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
 
     // --- Step 7: Post-Integration Diagnostics ---
     conserved_quantities_t cq_final; // Struct holding constants of motion evaluated at the trajectory boundary.
-    calculate_conserved_quantities_universal_{SPACETIME}_{PARTICLE}(&commondata, &all_particles, num_rays, &cq_final);
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(&commondata, &all_particles, num_rays, &cq_final);
     
-    g4DD_metric_{SPACETIME}(&commondata, y, g4DD_local);
+    g4DD_metric_{spacetime}(&commondata, y, g4DD_local);
     
     normalization_constraint_t norm_final; // Struct tracking the residual of the Hamiltonian constraint $u^\\mu u_\\mu = -1$.
     // Hardware Justification: Evaluates final metric constraint deviation at the boundary limit.
-    normalization_constraint_{PARTICLE}(y, g4DD_local, &norm_final, 1, 0);
+    normalization_constraint_{particle}(y, g4DD_local, &norm_final, 1, 0);
 
-    printf("Final Normalization Constraint Evaluation (Massive Particle):\\n");
+    printf("Final Normalization Constraint Evaluation (Massive particle):\\n");
     printf("  Expected g_mu_nu p^mu p^nu = -1.0\\n");
     printf("  Calculated value (C)       = %.10g\\n", norm_final.C);
     printf("  Absolute Error |C + 1|     = %.10e\\n", fabs(norm_final.C + 1.0));
@@ -260,6 +257,34 @@ def main_c(SPACETIME: str, PARTICLE: str) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Massive Geodesic Integrator Pipeline."
+    )
+    parser.add_argument(
+        "--run",
+        action="store_true",
+        help="Generate the project, compile the C code, run the integration, and visualize the trajectory.",
+    )
+    args = parser.parse_args()
+
+    if not args.run:
+        import doctest
+
+        results = doctest.testmod()
+        if results.failed > 0:
+            print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+            sys.exit(1)
+        else:
+            print(f"Doctest passed: All {results.attempted} test(s) passed")
+        sys.exit(0)
+
+    # ---------------------------------------------------------
+    # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
+    # ---------------------------------------------------------
+    enable_parallel_codegen = True
+    if enable_parallel_codegen:
+        pcg.do_parallel_codegen()
+
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
 
@@ -281,11 +306,10 @@ if __name__ == "__main__":
     print("Registering Physics Kernels...")
     register_struct_definitions()
 
-    # 1. Fundamental Tensors
     g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
     calculate_ode_rhs_massive(geodesic_data.geodesic_rhs, metric_data.xx)
-    
+
     if geodesic_data.u0_massive is None:
         raise ValueError(f"u0_massive is None for {GEO_KEY}")
     u0_massive(geodesic_data.u0_massive)
@@ -296,14 +320,18 @@ if __name__ == "__main__":
 
     main_c(SPACETIME, PARTICLE)
 
-    print("Generating Header Files...")
+    print("Generating header files and Makefile...")
+
     CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
     CPs.register_CFunctions_params_commondata_struct_set_to_default()
-    cmdline_input_and_parfiles.generate_default_parfile(project_dir=project_dir, project_name=project_name)
-    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(project_name=project_name)
 
+    cmdline_input_and_parfiles.generate_default_parfile(
+        project_dir=project_dir, project_name=project_name
+    )
+    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+        project_name=project_name
+    )
 
-    # Required macros for GSL array indexing
     macro_defs = """
     // Ensure hardware-agnostic array indexing for standalone GSL test
     #ifndef IDX_LOCAL
@@ -321,6 +349,12 @@ if __name__ == "__main__":
     """
     Bdefines_h.register_BHaH_defines("gpu_batch_macros", macro_defs)
 
+    cpu_macros = {
+        "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)",
+        "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)",
+        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE",
+    }
+
     additional_includes = [
         "gsl/gsl_vector.h",
         "gsl/gsl_matrix.h",
@@ -329,20 +363,13 @@ if __name__ == "__main__":
         "gsl/gsl_math.h",
     ]
 
-    cpu_macros = {
-        "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)",
-        "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)",
-        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE", 
-    }
-
     Bdefines_h.output_BHaH_defines_h(
         project_dir=project_dir,
         additional_includes=additional_includes,
         enable_rfm_precompute=False,
-        supplemental_defines_dict=cpu_macros
+        supplemental_defines_dict=cpu_macros,
     )
 
-    print("Generating Makefile...")
     addl_cflags = ["$(shell gsl-config --cflags)"]
     addl_libs = ["$(shell gsl-config --libs)"]
 
@@ -354,33 +381,113 @@ if __name__ == "__main__":
         addl_CFLAGS=addl_cflags,
         addl_libraries=addl_libs,
         CC="gcc",
-        src_code_file_ext="c"
+        src_code_file_ext="c",
     )
 
-    print(" -> Patching Makefile for Windows compatibility...")
-    local_tmp_path = "tmp"
-    os.makedirs(os.path.join(project_dir, local_tmp_path), exist_ok=True)
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    )
+    print(f"    Parameter file can be found in {project_name}.par")
 
-    makefile_path = os.path.join(project_dir, "Makefile")
-    with open(makefile_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    # ---------------------------------------------------------
+    # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
+    # ---------------------------------------------------------
+    import logging
 
-    with open(makefile_path, "w", encoding="utf-8") as f:
-        f.write(f"export TMPDIR = $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TMP = $(CURDIR)/{local_tmp_path}\n")
-        f.write(f"export TEMP = $(CURDIR)/{local_tmp_path}\n")
-        f.write("\n")
-        f.write(content)
+    import matplotlib.pyplot as plt
+    import numpy as np
 
-    print("-" * 50)
-    print(f"Project generated successfully in {project_dir}")
+    logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
+    logging.getLogger("matplotlib").setLevel(logging.WARNING)
+    logging.getLogger("PIL").setLevel(logging.WARNING)
 
-    import doctest
-    import sys
+    print("\n" + "=" * 50)
+    print("PIPELINE EXECUTION: COMPILE, RUN, VISUALIZE")
+    print("=" * 50)
 
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+    print("\n--- PHASE 1: Compiling C Code ---")
+
+    abs_project_dir = os.path.abspath(project_dir)
+    try:
+        subprocess.run(
+            ["make", "-j"], cwd=project_dir, check=True, stderr=subprocess.DEVNULL
+        )
+        print("Compilation successful.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"Compilation failed: {e}")
+        print("Tip: Ensure 'make' is installed and the Makefile was generated.")
         sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    print("\n--- PHASE 2: Running Tracer ---")
+
+    # Strictly Linux execution path without OS checks
+    exec_path = os.path.join(abs_project_dir, project_name)
+
+    try:
+        subprocess.run([exec_path], cwd=abs_project_dir, check=True)
+        print("Tracing complete. Trajectory file generated.")
+    except subprocess.CalledProcessError:
+        print("C executable failed. Exiting pipeline.")
+        sys.exit(1)
+
+    print("\n--- PHASE 3: Visualizing Trajectory ---")
+
+    traj_file = os.path.join(abs_project_dir, "trajectory.txt")
+    if not os.path.exists(traj_file):
+        print(f"Error: {traj_file} not found.")
+        sys.exit(1)
+
+    try:
+        data = np.loadtxt(traj_file, comments="#")
+        x_pts = data[:, 2]
+        y_pts = data[:, 3]
+        z_pts = data[:, 4]
+
+        fig = plt.figure(figsize=(8, 8))
+        ax = fig.add_subplot(111, projection="3d")
+
+        ax.plot(
+            x_pts, y_pts, z_pts, label="Photon Trajectory", color="blue", linewidth=1.5
+        )
+
+        ax.scatter(
+            x_pts[0], y_pts[0], z_pts[0], color="green", marker="o", s=50, label="Start"
+        )
+        ax.scatter(
+            x_pts[-1],
+            y_pts[-1],
+            z_pts[-1],
+            color="red",
+            marker="x",
+            s=50,
+            label="End ($r < 2M$)",
+        )
+
+        M_scale = 1.0
+        r_horizon = 2.0 * M_scale
+
+        u_val = np.linspace(0, 2 * np.pi, 20)
+        v_val = np.linspace(0, np.pi, 10)
+        u, v = np.meshgrid(u_val, v_val, indexing="ij")
+
+        xh = r_horizon * np.cos(u) * np.sin(v)
+        yh = r_horizon * np.sin(u) * np.sin(v)
+        zh = r_horizon * np.cos(v)
+        ax.plot_surface(xh, yh, zh, color="black", alpha=0.3, label="Horizon")
+
+        ax.set_xlabel("$x$ ($M$)")
+        ax.set_ylabel("$y$ ($M$)")
+        ax.set_zlabel("$z$ ($M$)")
+        ax.set_title("Photon Geodesic in Kerr-Schild Cartesian Spacetime")
+        ax.legend()
+
+        plot_path = os.path.join(abs_project_dir, "photon_trajectory.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+        print(f"Visualization successfully saved to: {plot_path}")
+
+        print("Opening plot window...")
+        plt.show()
+
+    except (RuntimeError, ValueError, OSError) as e:
+        print(f"Plotting failed: {e}")
+        sys.exit(1)

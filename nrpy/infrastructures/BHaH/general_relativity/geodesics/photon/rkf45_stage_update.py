@@ -4,8 +4,6 @@ Provides the native kernel and host-side orchestrator for the RKF45 Stage Update
 Project Singularity-Axiom: Dual-Architecture (CPU/GPU) Portability.
 This module provides the global memory kernel responsible for evaluating the intermediate
 stages of the Runge-Kutta-Fehlberg 4(5) algorithm for relativistic ray tracing on Numerical Spacetimes.
-It strictly enforces a Split-Pipeline Architecture, operating on "Streaming Bundles" in VRAM to minimize
-bandwidth overhead and avoid fused kernels that cause register spilling on the RTX 3080 target hardware.
 
 Author: Dalton J. Moone.
 """

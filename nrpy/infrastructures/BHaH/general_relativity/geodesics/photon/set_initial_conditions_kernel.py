@@ -1,10 +1,10 @@
 """
 Module for generating the native C/CUDA kernel and host-side orchestrator for photon initialization.
 
-Module generates a C function that initializes photon trajectories in Cartesian coordinates
-using a "Split-Pipeline" architecture. It allocates a staging buffer to process rays
-in batches, initializing the spatial positions, spatial momenta, and adaptive step sizes,
-while explicitly setting the temporal momentum to zero for downstream constraint solving.
+Module generates a C function that initializes photon trajectories in Cartesian coordinates.
+It allocates a staging buffer to process rays in batches, initializing the spatial positions
+, spatial momenta, and adaptive step sizes, while explicitly setting the temporal momentum to
+zero for downstream constraint solving.
 
 Author: Dalton J. Moone.
 """

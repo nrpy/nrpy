@@ -4,8 +4,7 @@ Module contains the high-precision event-finding C kernel.
 Module resolves exact coordinate intersections when a plane
 crossing is detected. It utilizes second-order quadratic interpolation
 for root-finding and Lagrange interpolation for state reconstruction at
-the intersection boundaries. Executing strictly within thread-local registers
-bypasses global memory fetches, preserving the sm_86 architecture limit of 255 registers per thread.
+the intersection boundaries.
 Author: Dalton J. Moone.
 """
 

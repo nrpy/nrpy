@@ -3,7 +3,7 @@
 import os
 from typing import Union
 
-import config_and_types as cfg  # type: ignore
+from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image

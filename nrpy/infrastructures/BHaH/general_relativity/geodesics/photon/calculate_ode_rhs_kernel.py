@@ -3,7 +3,7 @@ Module defines the global kernel and host-side orchestrator for computing the ph
 
 Module evaluates the spatial and temporal derivatives $\dot{f}$ required during
 the RKF45 integration step. It reads pre-calculated metric and connection tensors
-from global memory bundles to minimize register pressure on the target architecture.
+from global memory bundles.
 
 Author: Dalton J. Moone.
 """
