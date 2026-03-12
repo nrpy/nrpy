@@ -38,7 +38,6 @@ from nrpy.infrastructures.superB.diagnostics.diagnostics_nearest_grid_center imp
 )
 
 
-
 def register_CFunction_diagnostics_nearest(
     CoordSystem: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -214,8 +213,6 @@ def register_CFunction_diagnostics_nearest(
     }
   } // END loop over grids
 """
-
-
 
     cfc.register_CFunction(
         subdirectory="diagnostics",
