@@ -218,6 +218,11 @@ typedef struct {
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================
+  // Dimensionless spin vector chi, based on a spin function Omega calculated based on a rotational one-form according to the same method as SpECTRE
+  REAL spin_chi_x_spectre;
+  REAL spin_chi_y_spectre;
+  REAL spin_chi_z_spectre;
+  
 } bhahaha_diagnostics_struct;
 
 //==================
