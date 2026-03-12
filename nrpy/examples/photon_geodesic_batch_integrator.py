@@ -242,7 +242,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 500
+    par.glb_code_params_dict["scan_density"].defaultvalue = 1000
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
 
     # Step 6: Generate C Code for Parameter Handling
@@ -380,7 +380,7 @@ if __name__ == "__main__":
         vis_dir = os.path.join(nrpy_root, "helpers", "geodesic_visualizations")
         starmap_path = os.path.join(vis_dir, cfg.SPHERE_TEXTURE_FILE)
         output_image_path = os.path.join(project_dir, "lensed_output.png")
-        STATIC_IMAGE_PIXEL_WIDTH = 500
+        STATIC_IMAGE_PIXEL_WIDTH = 750
 
         c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
         c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
