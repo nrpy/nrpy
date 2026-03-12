@@ -69,3 +69,14 @@ SOURCE_PHYSICAL_WIDTH = 2 * DISK_OUTER_RADIUS  # Total diameter of the source im
 # --- 6. Rendering Parameters ---
 STATIC_IMAGE_PIXEL_WIDTH = 700  # Resolution of the final lensed image
 CHUNK_SIZE = 10_000_000  # Number of rays to process in memory at once
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

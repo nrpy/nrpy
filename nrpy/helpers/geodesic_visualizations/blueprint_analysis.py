@@ -208,4 +208,15 @@ def diagnose_blueprint(blueprint_path: Optional[str] = None) -> None:
 
 
 if __name__ == "__main__":
-    diagnose_blueprint()
+    import doctest
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    # Only run the diagnostic function if the '--run' flag is provided
+    if "--run" in sys.argv:
+        diagnose_blueprint()

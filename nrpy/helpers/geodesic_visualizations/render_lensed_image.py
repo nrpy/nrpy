@@ -3,10 +3,11 @@
 import os
 from typing import Union
 
-from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+
+from nrpy.helpers.geodesic_visualizations import config_and_types as cfg
 
 # STATIC IMAGE RENDERING ENGINE
 # This script translates raw geodesic data (blueprints) into visual images. It performs
@@ -254,3 +255,15 @@ def generate_static_lensed_image(
 
     if display_image:
         img.show()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
