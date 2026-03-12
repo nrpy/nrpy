@@ -36,19 +36,16 @@ def register_CFunction_diagnostics_akv_spin(
     parallel-codegen registration phase, the function records the call and
     returns 'None' without generating code.
 
-    Args
-        enable_fd_functions: Whether to have NRPy emit finite-difference helper
-            functions when generating C code for expressions that require finite
-            differencing.
+    :param enable_fd_functions: Whether to have NRPy emit finite-difference helper
+        functions when generating C code for expressions that require finite
+        differencing.
 
-    Returns
-        'None' during the parallel-codegen registration phase. Otherwise,
+    :return: 'None' during the parallel-codegen registration phase. Otherwise,
         returns the populated NRPy environment after registering the generated
         C function.
 
-    Raises
-        FileNotFoundError: If the required companion C scaffold file
-            'bah_diagnostics_akv_spin.c' is not found alongside this module.
+    :raises FileNotFoundError: If the required companion C scaffold file
+        'bah_diagnostics_akv_spin.c' is not found alongside this module.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
