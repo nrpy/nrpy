@@ -83,8 +83,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Step 2: Define strict project constants and simulation targets
-    project_name = "photon_geodesic_integrator"
-    exec_name = "photon_geodesic_integrator"
+    project_name = "photon_geodesic_batch_integrator"
+    exec_name = "photon_geodesic_batch_integrator"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
     blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
 
@@ -338,10 +338,14 @@ if __name__ == "__main__":
     # Locate the visualization script and the background texture
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
     starmap_src = os.path.join(vis_dir, "starmap_2020.png")
+    
+    # Locate the blueprint analysis script 
+    blueprint_analysis_src = os.path.join(vis_dir, "blueprint_analysis.py")
 
-    # Copy the visualization script and the background texture into the generated project directory
+    # Copy the scripts and background texture into the generated project directory
     shutil.copy(vis_script_src, project_dir)
     shutil.copy(starmap_src, project_dir)
+    shutil.copy(blueprint_analysis_src, project_dir)
 
     # The inner disk radius ensures the texture mapping aligns with the computed initial conditions.
     c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
@@ -376,3 +380,5 @@ if __name__ == "__main__":
         "    Then, execute the visualization script directly from the project directory:"
     )
     print(f"    {vis_command}\n")
+    print("    To run the blueprint diagnostic and visualization suite:")
+    print("    python3 blueprint_analysis.py\n")

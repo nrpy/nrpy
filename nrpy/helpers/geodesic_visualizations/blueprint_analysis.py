@@ -17,18 +17,12 @@ import os
 import sys
 from typing import Any, Optional
 
+import nrpy.helpers.geodesic_visualizations.config_and_types as cfg # type: ignore
+
 # Temporarily add the script's directory to sys.path to ensure we can
-# import 'config_and_types.py' even if the script is called from elsewhere.
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.append(script_dir)
-
-try:
-    import config_and_types as cfg  # type: ignore
-except ImportError:
-    print(f"[!] ERROR: Cannot find 'config_and_types.py' in {script_dir}")
-    print("    Please ensure it is saved in the same directory as this script.")
-    sys.exit(1)
 
 
 def plot_heatmaps(data: Any) -> None:
@@ -131,18 +125,8 @@ def diagnose_blueprint(blueprint_path: Optional[str] = None) -> None:
     import numpy as np
 
     if blueprint_path is None:
-        # Default relative path construction based on your project structure.
-        blueprint_path = os.path.abspath(
-            os.path.join(
-                script_dir,
-                "..",
-                "..",
-                "..",
-                "project",
-                "photon_geodesic_integrator",
-                "light_blueprint.bin",
-            )
-        )
+        # Look for the blueprint in the exact same directory as this script
+        blueprint_path = os.path.join(script_dir, "light_blueprint.bin")
 
     print("=================================================================")
     print(" BLUEPRINT DIAGNOSTICS & VISUALIZATION")
@@ -168,7 +152,7 @@ def diagnose_blueprint(blueprint_path: Optional[str] = None) -> None:
         print(f"  Raw Enum {e:2d}: {c:8,} rays ({c/total_rays*100:6.2f}%)")
 
     print(
-        f"\n  [Config Current]: SOURCE_PLANE = {cfg.TERM_SOURCE_PLANE}, SPHERE = {cfg.TERM_SPHERE}"
+        f"\n  [Config Current]: SPHERE = {cfg.TERM_SPHERE}, SOURCE_PLANE = {cfg.TERM_SOURCE_PLANE}, FAIL_PT_BIG = {cfg.TERM_FAIL_PT_BIG}"
     )
     print(
         "  -> If your raw enums above do NOT match these, update config_and_types.py."
