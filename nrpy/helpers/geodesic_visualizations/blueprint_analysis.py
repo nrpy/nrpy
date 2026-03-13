@@ -40,8 +40,8 @@ def plot_heatmaps(data: Any) -> None:
 
     :param data: The structured NumPy array containing ray termination data.
     """
-    # pylint: disable=import-outside-toplevel
-    import matplotlib.pyplot as plt
+    # pylint: disable=import-outside-toplevel, import-error
+    import matplotlib.pyplot as plt  # type: ignore
     import numpy as np
 
     # --- Preamble: Descriptive Physical Variable Mapping ---

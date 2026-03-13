@@ -35,8 +35,8 @@ def plot_trajectory(
     :param r_horizon: The radial coordinate representing the event horizon.
     :param particle_type: String descriptor of the particle (e.g., 'Photon', 'Massive') for plot labels.
     """
-    # pylint: disable=import-outside-toplevel
-    import matplotlib.pyplot as plt
+    # pylint: disable=import-outside-toplevel, import-error
+    import matplotlib.pyplot as plt  # type: ignore
     import numpy as np
 
     # --- Preamble: Descriptive Physical Variable Mapping ---
