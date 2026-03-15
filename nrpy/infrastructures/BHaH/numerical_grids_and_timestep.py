@@ -614,9 +614,9 @@ def register_CFunction_numerical_grids_and_timestep(
     if gridding_approach == "independent grid(s)":
         body += r"""
   // Step 1.a: Set up independent grids.
-  {{
+  {
     int grid = 0;
-    int Nx[3] = {{ -1, -1, -1 }};
+    int Nx[3] = { -1, -1, -1 };
 
     // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx
     // based on grid_physical_size.
