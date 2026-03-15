@@ -616,15 +616,14 @@ def register_CFunction_numerical_grids_and_timestep(
     body = ""
     if gridding_approach == "independent grid(s)":
         body += rf"""
-  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
-  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
+  // Step 1.a: Set up independent grids.
   {{
-    // Independent grids
+    int grid = 0;
     int Nx[3] = {{ -1, -1, -1 }};
 
-    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx
+    // based on grid_physical_size.
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
-    int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(sorted(set_of_CoordSystems)):
             body += f"""
@@ -642,7 +641,12 @@ def register_CFunction_numerical_grids_and_timestep(
 #endif // __CUDACC__
     grid++;
 """
-        body += "} // END independent grid setup\n"
+        body += """
+    // Step 1.b: Now that all independent grids have been set up, record the
+    // runtime number of active grids.
+    commondata->NUMGRIDS = grid;
+  } // END independent grid setup
+"""
     elif gridding_approach == "multipatch":
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)
