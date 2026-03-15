@@ -78,8 +78,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", "All")
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
     list_of_grid_physical_sizes.append(grid_physical_size)
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
+num_cuda_streams = len(list_of_grid_physical_sizes)
 
 Nxx_dict = {
     "Spherical": [64, 2, 2],
@@ -102,7 +101,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
