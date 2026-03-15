@@ -20,6 +20,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -260,8 +261,6 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     ds_expr_list: List[sp.Expr] = []
     ds_str_list: List[str] = []
     if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
-
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
         # For fisheye GeneralRFM (generally non-orthogonal), this function still
@@ -363,8 +362,6 @@ def register_CFunction_ds_min_single_pt(
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
     if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
-
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
         # For fisheye GeneralRFM (generally non-orthogonal), this function still
@@ -615,7 +612,7 @@ def register_CFunction_numerical_grids_and_timestep(
     )
     body = ""
     if gridding_approach == "independent grid(s)":
-        body += rf"""
+        body += r"""
   // Step 1.a: Set up independent grids.
   {{
     int grid = 0;
