@@ -17,12 +17,8 @@ Physics Context:
 Author: Dalton J. Moone.
 """
 
-import argparse
-import logging
 import os
 import shutil
-import subprocess
-import sys
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -133,12 +129,12 @@ def main_c(spacetime: str, particle: str) -> None:
 
     // --- Step 3: Initial Conditions ---
     f[0] = 0.0;   // The coordinate time $t$.
-    f[1] = 10.0;  // The spatial coordinate $x$.
-    f[2] = 1.0;   // The spatial coordinate $y$.
-    f[3] = 1.0;   // The spatial coordinate $z$.
+    f[1] = 4.0123;  // The spatial coordinate $x$.
+    f[2] = 0.0;   // The spatial coordinate $y$.
+    f[3] = 0.0;   // The spatial coordinate $z$.
 
-    f[5] = -0.1;  // The spatial momentum $p_x$.
-    f[6] = 0.33;  // The spatial momentum $p_y$.
+    f[5] = -0.5641;  // The spatial momentum $p_x$.
+    f[6] = 0.7171;  // The spatial momentum $p_y$.
     f[7] = 0.0;   // The spatial momentum $p_z$.
     f[8] = 0.0;   // The auxiliary path length integral $L$.
 
@@ -263,283 +259,170 @@ def main_c(spacetime: str, particle: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Photon Geodesic Integrator Pipeline")
-    parser.add_argument(
-        "--run",
-        action="store_true",
-        help="Generate, compile, run, and visualize the C code.",
+    par.set_parval_from_str("Infrastructure", "BHaH")
+    par.set_parval_from_str("parallelization", "openmp")
+
+    project_name = "photon_geodesic_integrator"
+    project_dir = os.path.join("project", project_name)
+
+    SPACETIME = "KerrSchild_Cartesian"
+    PARTICLE = "photon"
+    GEO_KEY = f"{SPACETIME}_{PARTICLE}"
+    enable_parallel_codegen = True
+
+    if os.path.exists(project_dir):
+        shutil.rmtree(project_dir)
+    os.makedirs(project_dir, exist_ok=True)
+
+    print(f"Acquiring symbolic data for {GEO_KEY}...")
+    metric_data = Analytic_Spacetimes[SPACETIME]
+    geodesic_data = Geodesic_Equations[GEO_KEY]
+
+    print("Registering Split-Pipeline Physics Kernels...")
+    register_struct_definitions()
+
+    # 1. Fundamental Tensors
+    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
+    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
+    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+    normalization_constraint.normalization_constraint(
+        geodesic_data.norm_constraint_expr, PARTICLE
     )
-    args = parser.parse_args()
 
-    if args.run:
-        par.set_parval_from_str("Infrastructure", "BHaH")
-        par.set_parval_from_str("parallelization", "openmp")
+    # 2. Split-Pipeline Modular Kernels
+    p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
+    interpolation_kernel.interpolation_kernel(SPACETIME)
+    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
+        geodesic_data.geodesic_rhs, geodesic_data.xx
+    )
+    rkf45_stage_update.rkf45_stage_update()
+    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
 
-        project_name = "photon_geodesic_integrator"
-        project_dir = os.path.join("project", project_name)
+    # Execute the user-provided main_c implementation
+    main_c(SPACETIME, PARTICLE)
 
-        SPACETIME = "KerrSchild_Cartesian"
-        PARTICLE = "photon"
-        GEO_KEY = f"{SPACETIME}_{PARTICLE}"
-        enable_parallel_codegen = True
+    # Native NRPy Cleanup
+    for internal_func in [f"g4DD_metric_{SPACETIME}", f"connections_{SPACETIME}"]:
+        cfc.CFunction_dict.pop(internal_func, None)
 
-        if os.path.exists(project_dir):
-            shutil.rmtree(project_dir)
-        os.makedirs(project_dir, exist_ok=True)
+    # Set Relevent Code paramters
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
+    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
+    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
+    par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
+    par.glb_code_params_dict["rkf45_safety_factor"].defaultvalue = 0.9
+    # ---------------------------------------------------------
+    # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
+    # ---------------------------------------------------------
+    if enable_parallel_codegen:
+        pcg.do_parallel_codegen()
 
-        print(f"Acquiring symbolic data for {GEO_KEY}...")
-        metric_data = Analytic_Spacetimes[SPACETIME]
-        geodesic_data = Geodesic_Equations[GEO_KEY]
+    print("Generating header files and Makefile...")
 
-        print("Registering Split-Pipeline Physics Kernels...")
-        register_struct_definitions()
+    # A. CodeParameters Headers
+    CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
+    CPs.register_CFunctions_params_commondata_struct_set_to_default()
 
-        # 1. Fundamental Tensors
-        g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
-        connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-        conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
-        normalization_constraint.normalization_constraint(
-            geodesic_data.norm_constraint_expr, PARTICLE
-        )
+    # B. Parameter File Defaults (required by infrastructure, even if unused)
+    cmdline_input_and_parfiles.generate_default_parfile(
+        project_dir=project_dir, project_name=project_name
+    )
+    cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
+        project_name=project_name
+    )
 
-        # 2. Split-Pipeline Modular Kernels
-        p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
-        interpolation_kernel.interpolation_kernel(SPACETIME)
-        calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
-            geodesic_data.geodesic_rhs, geodesic_data.xx
-        )
-        rkf45_stage_update.rkf45_stage_update()
-        rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
+    # Required macros for Single-Ray CPU integration
+    macro_defs = """
+    #ifndef BUNDLE_CAPACITY
+    #define BUNDLE_CAPACITY 1
+    #endif
+    """
+    Bdefines_h.register_BHaH_defines("gpu_batch_macros", macro_defs)
 
-        # Execute the user-provided main_c implementation
-        main_c(SPACETIME, PARTICLE)
+    cpu_macros = {
+        "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))",
+        "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))",
+        "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)",
+        "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)",
+        "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))",
+        "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))",
+        "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))",
+        "FusedMulAddCUDA(a, b, c)": "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))",
+        "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)",
+        "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)",
+        "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)",
+        "BHAH_HD_FUNC": "#define BHAH_HD_FUNC",
+        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline",
+        "BHAH_WARP_ATOMIC_ADD(ptr, val)": '#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma("omp atomic") *(ptr) += (val)\n',
+        "GLOBAL_COMMONDATA_EXTERN": "// CPU passes commondata by reference, no global needed.",
+        "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)",
+    }
 
-        # Native NRPy Cleanup
-        for internal_func in [f"g4DD_metric_{SPACETIME}", f"connections_{SPACETIME}"]:
-            cfc.CFunction_dict.pop(internal_func, None)
+    # C. BHaH Defines (Includes GSL headers)
+    additional_includes = [
+        "gsl/gsl_vector.h",
+        "gsl/gsl_matrix.h",
+        "gsl/gsl_odeiv2.h",
+        "gsl/gsl_errno.h",
+        "gsl/gsl_math.h",
+    ]
 
-        # ---------------------------------------------------------
-        # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
-        # ---------------------------------------------------------
-        if enable_parallel_codegen:
-            pcg.do_parallel_codegen()
+    Bdefines_h.output_BHaH_defines_h(
+        project_dir=project_dir,
+        additional_includes=additional_includes,
+        enable_rfm_precompute=False,
+        supplemental_defines_dict=cpu_macros,
+    )
 
-        print("Generating header files and Makefile...")
+    # D. Makefile
+    addl_cflags = [
+        "$(shell gsl-config --cflags)",
+        "-fopenmp",
+        "-O3",
+        "-DDEBUG",
+        "-Wno-stringop-truncation",
+    ]
+    addl_libs = ["$(shell gsl-config --libs)", "-lm"]
 
-        # A. CodeParameters Headers
-        CPs.write_CodeParameters_h_files(
-            set_commondata_only=True, project_dir=project_dir
-        )
-        CPs.register_CFunctions_params_commondata_struct_set_to_default()
+    Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
+        project_dir=project_dir,
+        project_name=project_name,
+        exec_or_library_name=project_name,
+        compiler_opt_option="fast",
+        addl_CFLAGS=addl_cflags,
+        addl_libraries=addl_libs,
+        CC="gcc",
+        src_code_file_ext="c",
+    )
 
-        # B. Parameter File Defaults (required by infrastructure, even if unused)
-        cmdline_input_and_parfiles.generate_default_parfile(
-            project_dir=project_dir, project_name=project_name
-        )
-        cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-            project_name=project_name
-        )
+    # ---------------------------------------------------------
+    # PART 2: FINALIZE
+    # ---------------------------------------------------------
 
-        # Required macros for Single-Ray CPU integration
-        macro_defs = """
-        #ifndef BUNDLE_CAPACITY
-        #define BUNDLE_CAPACITY 1
-        #endif
-        """
-        Bdefines_h.register_BHaH_defines("gpu_batch_macros", macro_defs)
+    # Define the directory containing the visualization assets relative to the repository root
+    vis_dir = os.path.join("nrpy", "helpers", "geodesic_visualizations")
 
-        cpu_macros = {
-            "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))",
-            "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))",
-            "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)",
-            "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)",
-            "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))",
-            "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))",
-            "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))",
-            "FusedMulAddCUDA(a, b, c)": "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))",
-            "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)",
-            "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)",
-            "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)",
-            "BHAH_HD_FUNC": "#define BHAH_HD_FUNC",
-            "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline",
-            "BHAH_WARP_ATOMIC_ADD(ptr, val)": '#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma("omp atomic") *(ptr) += (val)\n',
-            "GLOBAL_COMMONDATA_EXTERN": "// CPU passes commondata by reference, no global needed.",
-            "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)",
-        }
+    # Locate the visualization script
+    vis_script_src = os.path.join(vis_dir, "visualize_trajectory.py")
 
-        # C. BHaH Defines (Includes GSL headers)
-        additional_includes = [
-            "gsl/gsl_vector.h",
-            "gsl/gsl_matrix.h",
-            "gsl/gsl_odeiv2.h",
-            "gsl/gsl_errno.h",
-            "gsl/gsl_math.h",
-        ]
-
-        Bdefines_h.output_BHaH_defines_h(
-            project_dir=project_dir,
-            additional_includes=additional_includes,
-            enable_rfm_precompute=False,
-            supplemental_defines_dict=cpu_macros,
-        )
-
-        # D. Makefile
-        addl_cflags = ["$(shell gsl-config --cflags)", "-fopenmp", "-O3", "-DDEBUG"]
-        addl_libs = ["$(shell gsl-config --libs)", "-lm"]
-
-        Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
-            project_dir=project_dir,
-            project_name=project_name,
-            exec_or_library_name=project_name,
-            compiler_opt_option="fast",
-            addl_CFLAGS=addl_cflags,
-            addl_libraries=addl_libs,
-            CC="gcc",
-            src_code_file_ext="c",
-        )
-
-        print(
-            f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-        )
-        print(f"    Parameter file can be found in {project_name}.par")
-
-        # ---------------------------------------------------------
-        # PART 2: PIPELINE EXECUTION (COMPILE, RUN, VISUALIZE)
-        # ---------------------------------------------------------
-        import matplotlib.pyplot as plt
-        import numpy as np
-
-        # Mute matplotlib's verbose font debugging output
-        logging.getLogger("matplotlib.font_manager").setLevel(logging.WARNING)
-        logging.getLogger("matplotlib").setLevel(logging.WARNING)
-        logging.getLogger("PIL").setLevel(logging.WARNING)
-
-        print("\n" + "=" * 50)
-        print("PIPELINE EXECUTION: COMPILE, RUN, VISUALIZE")
-        print("=" * 50)
-
-        print("\n--- PHASE 1: Compiling C Code ---")
-
-        # Use absolute path to prevent "Makefile not found" errors in subprocess
-        abs_project_dir = os.path.abspath(project_dir)
-        try:
-            subprocess.run(
-                ["make", "-j"], cwd=project_dir, check=True, stderr=subprocess.DEVNULL
-            )
-            print("Compilation successful.")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            print(f"Compilation failed: {e}")
-            print("Tip: Ensure 'make' is installed and the Makefile was generated.")
-            sys.exit(1)
-
-        print("\n--- PHASE 2: Running Ray-Tracer ---")
-
-        # Strictly Linux execution path without OS checks
-        exec_path = os.path.join(abs_project_dir, project_name)
-
-        try:
-            subprocess.run([exec_path], cwd=abs_project_dir, check=True)
-            print("Ray-tracing complete. Trajectory file generated.")
-        except subprocess.CalledProcessError:
-            print("C executable failed. Exiting pipeline.")
-            sys.exit(1)
-
-        print("\n--- PHASE 3: Visualizing Trajectory ---")
-
-        # Path to the text file containing the output ray-tracing state data
-        traj_file = os.path.join(abs_project_dir, "trajectory.txt")
-        if not os.path.exists(traj_file):
-            print(f"Error: {traj_file} not found.")
-            sys.exit(1)
-
-        # Path to the text file containing the output ray-tracing state data
-        traj_file = os.path.join(abs_project_dir, "trajectory.txt")
-        if not os.path.exists(traj_file):
-            print(f"Error: {traj_file} not found.")
-            sys.exit(1)
-
-        try:
-            # Parse the trajectory metrics into a 2D NumPy array
-            data = np.loadtxt(traj_file, comments="#")
-            x_pts = data[:, 2]
-            y_pts = data[:, 3]
-            z_pts = data[:, 4]
-
-            fig = plt.figure(figsize=(8, 8))
-            ax = fig.add_subplot(111, projection="3d")
-
-            # Plot the primary geodesic path
-            ax.plot(
-                x_pts,
-                y_pts,
-                z_pts,
-                label="Photon Trajectory",
-                color="blue",
-                linewidth=1.5,
-            )
-
-            # Drop markers for the simulation start and endpoints
-            ax.scatter(
-                x_pts[0],
-                y_pts[0],
-                z_pts[0],
-                color="green",
-                marker="o",
-                s=50,
-                label="Start",
-            )
-            ax.scatter(
-                x_pts[-1],
-                y_pts[-1],
-                z_pts[-1],
-                color="red",
-                marker="x",
-                s=50,
-                label="End (r < 2M)",
-            )
-
-            # Black Hole Horizon setup
-            M_scale = 1.0
-            r_horizon = 2.0 * M_scale
-
-            # Parameterize angles for generating the spherical horizon surface
-            u_val = np.linspace(0, 2 * np.pi, 20)
-            v_val = np.linspace(0, np.pi, 10)
-
-            # Create 2D meshes mapping the spherical coordinates
-            u, v = np.meshgrid(u_val, v_val, indexing="ij")
-
-            # Convert to Cartesian coordinates to plot the event horizon
-            xh = r_horizon * np.cos(u) * np.sin(v)
-            yh = r_horizon * np.sin(u) * np.sin(v)
-            zh = r_horizon * np.cos(v)
-            ax.plot_surface(xh, yh, zh, color="black", alpha=0.3, label="Horizon")
-
-            ax.set_xlabel("x (M)")
-            ax.set_ylabel("y (M)")
-            ax.set_zlabel("z (M)")
-            ax.set_title("Photon Geodesic in Kerr-Schild Cartesian Spacetime")
-            ax.legend()
-
-            # Location to save the rendered matplotlib figure
-            plot_path = os.path.join(abs_project_dir, "photon_trajectory.png")
-            plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-            print(f"Visualization successfully saved to: {plot_path}")
-
-            # Open the interactive UI
-            print("Opening plot window...")
-            plt.show()
-
-        except (RuntimeError, ValueError, OSError) as e:
-            print(f"Plotting failed: {e}")
-            sys.exit(1)
-
+    # Copy the visualization script into the generated project directory
+    if os.path.exists(vis_script_src):
+        shutil.copy(vis_script_src, project_dir)
     else:
-        import doctest
+        print(
+            f"Warning: Visualization script not found at {vis_script_src}. Please ensure it exists."
+        )
 
-        results = doctest.testmod()
-        if results.failed > 0:
-            print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-            sys.exit(1)
-        else:
-            print(f"Doctest passed: All {results.attempted} test(s) passed")
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    )
+    print(f"    Parameter file can be found in {project_name}.par\n")
+    print(
+        "    To generate the trajectory plot after running the C executable, ensure you have the required Python packages:"
+    )
+    print("    pip install matplotlib numpy\n")
+    print(
+        "    Then, execute the visualization script directly from the project directory:"
+    )
+    print("    python3 visualize_trajectory.py --particle_type Photon\n")

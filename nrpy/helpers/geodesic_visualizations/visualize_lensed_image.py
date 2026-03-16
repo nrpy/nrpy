@@ -21,48 +21,68 @@ except ImportError as e:
     sys.exit(1)
 
 
-def main():
-    """
-    Parses parameters and orchestrates the lensed image generation from the geodesic blueprint.
-
-    :raises SystemExit: Exits with code 1 if the light blueprint binary is missing from the designated path.
-    :raises SystemExit: Exits with code 1 if the background sphere texture is missing from the script directory.
-    """
-    # The absolute script directory ensures relative paths resolve independently of the execution context.
-    # Since the script is copied to the project directory, this is now the project directory itself.
+def main() -> None:
+    """Parse parameters and orchestrate the lensed image generation from the geodesic blueprint."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # The default blueprint path is now strictly local to the script's current directory.
+    # The default blueprint path is local to the script's current directory.
     default_blueprint_path = os.path.join(script_dir, "light_blueprint.bin")
 
     # The default output path is also strictly local.
     default_output_path = os.path.join(script_dir, "lensed_output.png")
 
     # The argument parser manages the visualization configuration and physical bounds.
-    parser = argparse.ArgumentParser(description="Generate a lensed image from a geodesic light blueprint.")
+    parser = argparse.ArgumentParser(
+        description="Generate a lensed image from a geodesic light blueprint."
+    )
 
     # The blueprint argument defaults to the local file.
     parser.add_argument(
-        "--blueprint", 
-        type=str, 
+        "--blueprint",
+        type=str,
         default=default_blueprint_path,
-        help="Path to the compiled light_blueprint.bin file."
+        help="Path to the compiled light_blueprint.bin file.",
     )
-    
+
     # The output argument defaults to the local file.
     parser.add_argument(
-        "--output", 
-        type=str, 
+        "--output",
+        type=str,
         default=default_output_path,
-        help="Path where the output PNG will be saved."
+        help="Path where the output PNG will be saved.",
     )
-    
+
     # Physical parameters govern the source accretion disk geometry and the camera window bounds.
-    parser.add_argument("--source_r_min", type=float, default=6.0, help="Inner physical radius $r_{min}$ of the source disk.")
-    parser.add_argument("--source_r_max", type=float, default=20.0, help="Outer physical radius $r_{max}$ of the source disk.")
-    parser.add_argument("--window_width", type=float, default=1.0, help="Camera window width $w$ in coordinate units.")
-    parser.add_argument("--window_height", type=float, default=1.0, help="Camera window height $h$ in coordinate units.")
-    parser.add_argument("--pixel_width", type=int, default=750, help="Pixel width of the final static output image.")
+    parser.add_argument(
+        "--source_r_min",
+        type=float,
+        default=6.0,
+        help="Inner physical radius $r_{min}$ of the source disk.",
+    )
+    parser.add_argument(
+        "--source_r_max",
+        type=float,
+        default=20.0,
+        help="Outer physical radius $r_{max}$ of the source disk.",
+    )
+    parser.add_argument(
+        "--window_width",
+        type=float,
+        default=1.0,
+        help="Camera window width $w$ in coordinate units.",
+    )
+    parser.add_argument(
+        "--window_height",
+        type=float,
+        default=1.0,
+        help="Camera window height $h$ in coordinate units.",
+    )
+    parser.add_argument(
+        "--pixel_width",
+        type=int,
+        default=750,
+        help="Pixel width of the final static output image.",
+    )
 
     # The parsed arguments struct contains all runtime configurations.
     args = parser.parse_args()
@@ -70,29 +90,29 @@ def main():
     # The existence check prevents reading from a missing or uncompiled blueprint payload.
     if not os.path.exists(args.blueprint):
         print(f"ERROR: Blueprint file not found at '{args.blueprint}'.")
-        sys.exit(1)
+        return
 
     print(f"Loading blueprint from: {args.blueprint}")
 
     # The absolute script directory ensures relative paths resolve independently of the execution context.
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    
+
     # The texture path locates the high-resolution background celestial sphere image.
     starmap_path = os.path.join(script_dir, cfg.SPHERE_TEXTURE_FILE)
-    
+
     # The existence check ensures the celestial texture asset is available for projection mapping.
     if not os.path.exists(starmap_path):
         print(f"ERROR: Sphere texture not found at '{starmap_path}'.")
-        sys.exit(1)
+        return
 
     # The maximum dimension bounds the geometric camera projection window.
     actual_window_width = max(args.window_width, args.window_height)
-    
+
     # The physical span encompasses the full mathematical diameter of the accretion disk geometry.
     source_physical_width = 2.0 * args.source_r_max
 
     print("Generating source disk array...")
-    
+
     # The texture array represents the generated equatorial source disk using the defined radii.
     disk_texture = rli.generate_source_disk_array(
         disk_physical_width=source_physical_width,
@@ -102,7 +122,7 @@ def main():
     )
 
     print(f"Rendering image to: {args.output}...")
-    
+
     # The static image generator merges the geodesic blueprint with the texture maps to yield the final visualization.
     rli.generate_static_lensed_image(
         output_filename=args.output,
@@ -113,20 +133,9 @@ def main():
         blueprint_filename=args.blueprint,
         window_width=actual_window_width,
     )
-    
+
     print("Visualization complete!")
 
 
 if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    # The main orchestrator is executed only after the internal doctests succeed.
     main()

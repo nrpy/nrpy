@@ -23,7 +23,7 @@ from nrpy.helpers.parallelization.utilities import (
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
     // Maximum number of photons processed per batch to fit within L1/L2 cache.
-    #define BUNDLE_CAPACITY 65536
+    #define BUNDLE_CAPACITY 524288
 
     // Defines the physical planes where a photon trajectory might terminate.
     typedef enum {
@@ -86,7 +86,7 @@ batch_structs_c_code = r"""
         double *window_event_f_intersect; // Interpolated 9-component state vector at the window intersection.
     } PhotonStateSoA;
 """
-Bdefines_h.register_BHaH_defines("photon_02_batch_structs", batch_structs_c_code)
+Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
 
 
 def set_initial_conditions_kernel(spacetime_name: str) -> None:

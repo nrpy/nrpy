@@ -17,8 +17,6 @@ Author: Dalton J. Moone.
 import argparse
 import os
 import shutil
-import subprocess
-import sys
 
 # NRPy core and helper modules for C code generation
 import nrpy.c_function as cfc
@@ -85,8 +83,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Step 2: Define strict project constants and simulation targets
-    project_name = "photon_geodesic_integrator"
-    exec_name = "photon_geodesic_integrator"
+    project_name = "photon_geodesic_batch_integrator"
+    exec_name = "photon_geodesic_batch_integrator"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
     blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
 
@@ -102,7 +100,7 @@ if __name__ == "__main__":
 
     # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
     par.set_parval_from_str("Infrastructure", "BHaH")
-    
+
     # Map the new boolean flag to the string values your pipeline expects
     parallelization_mode = "cuda" if args.cuda else "openmp"
     par.set_parval_from_str("parallelization", parallelization_mode)
@@ -191,7 +189,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 150.0
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 300.0
+    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 10.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
     par.glb_code_params_dict["t_integration_max"].defaultvalue = 10000.0
 
@@ -333,17 +331,21 @@ if __name__ == "__main__":
     # ##########################################################################
     # PART 2: FINALIZE
     # ##########################################################################
-    
+
     # Define the directory containing the visualization assets relative to the repository root
     vis_dir = os.path.join("nrpy", "helpers", "geodesic_visualizations")
-    
+
     # Locate the visualization script and the background texture
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
     starmap_src = os.path.join(vis_dir, "starmap_2020.png")
 
-    # Copy the visualization script and the background texture into the generated project directory
+    # Locate the blueprint analysis script
+    blueprint_analysis_src = os.path.join(vis_dir, "blueprint_analysis.py")
+
+    # Copy the scripts and background texture into the generated project directory
     shutil.copy(vis_script_src, project_dir)
     shutil.copy(starmap_src, project_dir)
+    shutil.copy(blueprint_analysis_src, project_dir)
 
     # The inner disk radius ensures the texture mapping aligns with the computed initial conditions.
     c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
@@ -366,9 +368,17 @@ if __name__ == "__main__":
         f"--window_height {c_window_height}"
     )
 
-    print(f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run.")
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run."
+    )
     print(f"    Parameter file can be found in {project_name}.par\n")
-    print("    To generate the lensed image after running the C executable, ensure you have the required Python packages:")
+    print(
+        "    To generate the lensed image after running the C executable, ensure you have the required Python packages:"
+    )
     print("    pip install matplotlib numpy\n")
-    print("    Then, execute the visualization script directly from the project directory:")
+    print(
+        "    Then, execute the visualization script directly from the project directory:"
+    )
     print(f"    {vis_command}\n")
+    print("    To run the blueprint diagnostic and visualization suite:")
+    print("    python3 blueprint_analysis.py\n")

@@ -63,8 +63,8 @@ def generate_source_disk_array(
     :param colormap: The Matplotlib colormap name used for temperature mapping.
     :return: A uint8 RGB NumPy array of the generated accretion disk texture.
     """
-    # pylint: disable=import-outside-toplevel
-    import matplotlib.pyplot as plt
+    # pylint: disable=import-outside-toplevel, import-error
+    import matplotlib.pyplot as plt  # type: ignore
 
     half_width = disk_physical_width / 2.0
     # Create coordinate grid representing the flat source plane
@@ -95,7 +95,7 @@ def generate_source_disk_array(
     colormap_func = plt.colormaps[colormap]
     colors = colormap_func(norm_temperature)
 
-    return (colors[:, :, :3] * 255).astype(np.uint8)
+    return (colors[:, :, :3] * 255).astype(np.uint8)  # type: ignore
 
 
 def generate_static_lensed_image(
