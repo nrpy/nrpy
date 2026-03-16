@@ -346,7 +346,7 @@ if __name__ == "__main__":
         supplemental_defines_dict=cpu_macros,
     )
 
-    addl_cflags = ["$(shell gsl-config --cflags)"]
+    addl_cflags = ["$(shell gsl-config --cflags)", "-Wno-stringop-truncation"]
     addl_libs = ["$(shell gsl-config --libs)"]
 
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(

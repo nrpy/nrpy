@@ -129,12 +129,12 @@ def main_c(spacetime: str, particle: str) -> None:
 
     // --- Step 3: Initial Conditions ---
     f[0] = 0.0;   // The coordinate time $t$.
-    f[1] = 10.0;  // The spatial coordinate $x$.
-    f[2] = 1.0;   // The spatial coordinate $y$.
-    f[3] = 1.0;   // The spatial coordinate $z$.
+    f[1] = 4.0123;  // The spatial coordinate $x$.
+    f[2] = 0.0;   // The spatial coordinate $y$.
+    f[3] = 0.0;   // The spatial coordinate $z$.
 
-    f[5] = -0.1;  // The spatial momentum $p_x$.
-    f[6] = 0.33;  // The spatial momentum $p_y$.
+    f[5] = -0.5641;  // The spatial momentum $p_x$.
+    f[6] = 0.7171;  // The spatial momentum $p_y$.
     f[7] = 0.0;   // The spatial momentum $p_z$.
     f[8] = 0.0;   // The auxiliary path length integral $L$.
 
@@ -305,6 +305,13 @@ if __name__ == "__main__":
     for internal_func in [f"g4DD_metric_{SPACETIME}", f"connections_{SPACETIME}"]:
         cfc.CFunction_dict.pop(internal_func, None)
 
+    # Set Relevent Code paramters
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
+    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
+    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
+    par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
+    par.glb_code_params_dict["rkf45_safety_factor"].defaultvalue = 0.9
     # ---------------------------------------------------------
     # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
     # ---------------------------------------------------------
@@ -369,7 +376,13 @@ if __name__ == "__main__":
     )
 
     # D. Makefile
-    addl_cflags = ["$(shell gsl-config --cflags)", "-fopenmp", "-O3", "-DDEBUG"]
+    addl_cflags = [
+        "$(shell gsl-config --cflags)",
+        "-fopenmp",
+        "-O3",
+        "-DDEBUG",
+        "-Wno-stringop-truncation",
+    ]
     addl_libs = ["$(shell gsl-config --libs)", "-lm"]
 
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(

@@ -507,6 +507,16 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         }}
     }}
 
+    // Hardware clock state marking the beginning of the active integration chunk.
+    struct timespec batch_start_time;
+    // Hardware clock state marking the conclusion of the active integration chunk.
+    struct timespec batch_end_time;
+    // Captures the initial hardware clock state prior to temporal loop execution.
+    clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
+
+    // Allocates vertical terminal space for the dynamic multi-line progress dashboard.
+    printf("\n\n\n\n\n\n\n");
+
     // --- 3. TEMPORAL LOOP (The Engine) ---
     // Integer tracking the global number of active photon trajectories to allow early loop termination.
     long int total_active_photons = num_rays;
@@ -776,9 +786,69 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                         total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                     }}
                 }}
-                active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
             }}
 
+            /* Algorithmic Step: Evaluate computational throughput and temporal progress to update the terminal dashboard.
+               Hardware Justification: Natively processing metrics on the Host prevents VRAM bottlenecks while providing real-time engine diagnostics. */
+            // --- PROGRESS DASHBOARD ---
+
+            // Captures the terminal hardware clock state for the current chunk.
+            clock_gettime(CLOCK_MONOTONIC, &batch_end_time);
+
+            // Evaluates the absolute wall-clock duration of the integration chunk in seconds.
+            double elapsed_sec = (batch_end_time.tv_sec - batch_start_time.tv_sec) + (batch_end_time.tv_nsec - batch_start_time.tv_nsec) / 1e9;
+
+            // Evaluates the raw integration steps per second to monitor pipeline throughput.
+            double steps_per_sec = (elapsed_sec > 0.0) ? ((double)active_chunks[current] / elapsed_sec) : 0.0;
+
+            // Evaluates the global completion ratio bounded between $0.0$ and $1.0$.
+            double percent_done = 100.0 * (1.0 - ((double)total_active_photons / (double)num_rays));
+
+            // Evaluates the physical coordinate time $t$ for the active temporal bin.
+            double current_t = commondata->slot_manager_t_min + slot_idx * commondata->slot_manager_delta_t;
+
+            // Defines the total character width of the dynamic loading bar visualization.
+            int bar_width = 20;
+            // Computes the integer index demarcating the active boundary within the loading bar.
+            int pos = (int)(bar_width * percent_done / 100.0);
+            // Character array storing the formatted loading bar string.
+            char bar[21];
+
+            // Loop iterator $bar_i$ constructing the ASCII loading bar visualizer.
+            for (int bar_i = 0; bar_i < bar_width; ++bar_i) {{
+                if (bar_i < pos) bar[bar_i] = '='; // Appends the completed progression character.
+                else if (bar_i == pos) bar[bar_i] = '>'; // Appends the active vanguard character.
+                else bar[bar_i] = ' '; // Appends the uncompleted progression character.
+            }}
+            bar[bar_width] = '\0'; // Terminates the loading bar character array to prevent buffer overruns.
+
+            // Accumulator tracking the total number of adaptive step size $h$ rejections in the active chunk.
+            long int batch_rejections = 0;
+
+            // Loop iterator $sum_i$ scanning the finalized physical state bridge for error tolerance failures.
+            for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
+                batch_rejections += retries_bridge[current][sum_i]; // Accumulates the localized step rejection tally.
+            }}
+
+            // Evaluates the relative frequency of adaptive step size $h$ rejections.
+            double reject_percent = (active_chunks[current] > 0) ? (100.0 * (double)batch_rejections / (double)active_chunks[current]) : 0.0;
+
+            // Restores the terminal cursor position vertically to overwrite the previous dashboard iteration.
+            printf("\033[7A");
+            printf("--------------------------------------------------\n"); // Prints the upper border of the diagnostic dashboard.
+            printf(" Progress:   [%s] %5.1f%% \033[K\n", bar, percent_done); // Prints the global completion loading bar and percentage.
+            printf(" Active:     %ld / %ld \033[K\n", total_active_photons, num_rays); // Prints the remaining active photon trajectories $x^\mu$.
+            printf(" Slot Time:  Slot %d (t = %.1f) \033[K\n", slot_idx, current_t); // Prints the current physical temporal bin coordinate $t$.
+            printf(" Speed:      %.2e integration steps/s \033[K\n", steps_per_sec); // Prints the pipeline execution throughput.
+            printf(" Rejects:    %ld (%.1f%%) \033[K\n", batch_rejections, reject_percent); // Prints the adaptive step size $h$ rejection frequency.
+            printf("--------------------------------------------------\n"); // Prints the lower border of the diagnostic dashboard.
+            fflush(stdout); // Flushes the standard output buffer to ensure instantaneous terminal rendering.
+
+            // Resets the hardware clock state for the upcoming integration chunk.
+            clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
+            // --------------------------
+            
+            active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
             int temp = current; // Temporary integer scalar storing the primary stream index for logical pointer swapping.
             current = next; // Shifts the primary execution tracker to the alternate stream index.
             next = temp; // Assigns the cleared stream index back to the upcoming payload queue.

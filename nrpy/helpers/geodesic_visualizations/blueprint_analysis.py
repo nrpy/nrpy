@@ -17,7 +17,7 @@ import os
 import sys
 from typing import Any, Optional
 
-import nrpy.helpers.geodesic_visualizations.config_and_types as cfg # type: ignore
+import nrpy.helpers.geodesic_visualizations.config_and_types as cfg
 
 # Temporarily add the script's directory to sys.path to ensure we can
 script_dir = os.path.dirname(os.path.abspath(__file__))

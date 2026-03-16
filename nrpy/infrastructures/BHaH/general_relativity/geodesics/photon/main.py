@@ -46,20 +46,60 @@ def main(spacetime_name: str) -> None:
 
     # 2. Build the C body with internal descriptive comments and the Preamble pattern
     body = f"""
-    // --- Step 1: Initialize Core Data Structures ---
+    // --- CORE STRUCTURE INITIALIZATION ---
+    // Populates the master structure with the base metric parameters.
     commondata_struct commondata; // Master parameter structure containing physical constants and simulation flags.
 
-    // --- Step 2: Set Default Parameters and Parse User Input ---
-    commondata_struct_set_to_default(&commondata);
-    cmdline_input_and_parfile_parser(&commondata, argc, argv);
+    // --- PARAMETER PARSING ---
+    // Sets default metric properties and overrides them based on host system input.
+    commondata_struct_set_to_default(&commondata); // Populates the data structure with default numerical values.
+    cmdline_input_and_parfile_parser(&commondata, argc, argv); // Overrides default structure values using standard input arguments.
 
-    // --- Step 3: Simulation Preamble & Telemetry ---
+    // --- TELEMETRY AND PARAMETER VERIFICATION ---
+    // Outputs core physical and architectural variables to the standard output.
     printf("=============================================\\n");
     printf("  Project Singularity-Axiom: Geodesic Engine  \\n");
     printf("=============================================\\n");
     printf("Spacetime Metric: {spacetime_name}\\n");
+    
+    printf("--- Analytic Spacetimes ---\\n");
+    printf("Mass Scale (M): %.3f\\n", commondata.M_scale);
     printf("Spin Parameter (a): %.3f\\n", commondata.a_spin);
-    printf("Grid Resolution: %d x %d\\n", commondata.scan_density, commondata.scan_density);
+
+    printf("--- Initial Conditions ---\\n");
+    printf("Scan Density: %d\\n", commondata.scan_density);
+    printf("Start Time (t_start): %.3f\\n", commondata.t_start);
+
+    printf("--- Batch Integrator Numerical ---\\n");
+    printf("Initial Step Size (h_initial): %.3f\\n", commondata.numerical_initial_h);
+    printf("Max Momentum (p_t,max): %.3f\\n", commondata.p_t_max);
+    printf("Conservation Check: %d\\n", commondata.perform_conservation_check);
+    printf("Escape Radius (r_escape): %.3f\\n", commondata.r_escape);
+    printf("Slot Delta t: %.3f\\n", commondata.slot_manager_delta_t);
+    printf("Slot Min t: %.3f\\n", commondata.slot_manager_t_min);
+    printf("Integration Max t: %.3f\\n", commondata.t_integration_max);
+
+    printf("--- RKF45 Control ---\\n");
+    printf("Absolute Tolerance: %e\\n", commondata.rkf45_absolute_error_tolerance);
+    printf("Relative Tolerance: %e\\n", commondata.rkf45_error_tolerance);
+    printf("Max Step (h_max): %.3f\\n", commondata.rkf45_h_max);
+    printf("Min Step (h_min): %e\\n", commondata.rkf45_h_min);
+    printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
+    printf("Safety Factor: %.3f\\n", commondata.rkf45_safety_factor);
+
+    printf("--- Source Plane ---\\n");
+    printf("Center (x, y, z): %.3f, %.3f, %.3f\\n", commondata.source_plane_center_x, commondata.source_plane_center_y, commondata.source_plane_center_z);
+    printf("Normal (x, y, z): %.3f, %.3f, %.3f\\n", commondata.source_plane_normal_x, commondata.source_plane_normal_y, commondata.source_plane_normal_z);
+    printf("Max Radius (r_max): %.3f\\n", commondata.source_r_max);
+    printf("Min Radius (r_min): %.3f\\n", commondata.source_r_min);
+    printf("Up Vector (x, y, z): %.3f, %.3f, %.3f\\n", commondata.source_up_vec_x, commondata.source_up_vec_y, commondata.source_up_vec_z);
+
+    printf("--- Window Plane ---\\n");
+    printf("Camera Pos (x, y, z): %.3f, %.3f, %.3f\\n", commondata.camera_pos_x, commondata.camera_pos_y, commondata.camera_pos_z);
+    printf("Window Center (x, y, z): %.3f, %.3f, %.3f\\n", commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
+    printf("Window Height: %.3f\\n", commondata.window_height);
+    printf("Window Width: %.3f\\n", commondata.window_width);
+    printf("Window Up Vec (x, y, z): %.3f, %.3f, %.3f\\n", commondata.window_up_vec_x, commondata.window_up_vec_y, commondata.window_up_vec_z);
 
     // --- Step 4: Resource Allocation ---
     const long int num_rays = (long int)commondata.scan_density * commondata.scan_density; // Total global photon count.
