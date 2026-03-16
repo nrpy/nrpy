@@ -169,7 +169,7 @@ class GeodesicEquations:
         uU = ixp.declarerank1("uU", dimension=4)
         pos_rhs = [uU[0], uU[1], uU[2], uU[3]]
 
-        Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
+        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, sym="sym12")
         vel_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
@@ -208,7 +208,7 @@ class GeodesicEquations:
         """
         uU = ixp.declarerank1("uU", dimension=4)
 
-        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
 
         # The constraint is g_4DD00 (u^0)^2 + 2 g_4DD0i u^0 u^i + g_4DDij u^i u^j = -1
         # This is a quadratic equation: A (u^0)^2 + B u^0 + C = 0
@@ -292,12 +292,12 @@ class GeodesicEquations:
         pU = ixp.declarerank1("pU", dimension=4)
         pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
-        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
 
         # We need the inverse metric g^UU to compute g^00 for the lapse function.
         g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
 
-        Gamma4UDD = ixp.declarerank3("conn->Gamma4UDD", dimension=4, sym="sym12")
+        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, sym="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
@@ -341,7 +341,7 @@ class GeodesicEquations:
         """
         pU = ixp.declarerank1("pU", dimension=4)
 
-        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
 
         # The constraint is g_00 (p^0)^2 + 2 g_0i p^0 p^i + g_ij p^i p^j = 0
         # This is a quadratic equation: A (p^0)^2 + B p^0 + C = 0
@@ -403,7 +403,7 @@ class GeodesicEquations:
         vU = ixp.declarerank1("vU", dimension=4)
 
         # Generic metric g_mu_nu
-        g4DD = ixp.declarerank2("metric->g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
 
         constraint = sp.sympify(0)
 
