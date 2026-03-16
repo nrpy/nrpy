@@ -165,8 +165,9 @@ to identify the apparent horizon with progressively refined grid resolutions.
       return commondata.error_flag;
     }
 
-    // Step 2.c: Allocate memory for griddata structure.
-    griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct));
+    // Step 2.c: Allocate memory for MAXNUMGRIDS griddata structures.
+    // bah_params_struct_set_to_default() initializes all MAXNUMGRIDS entries.
+    griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);
 
     // Step 2.d: Initialize griddata parameters to their default values.
     bah_params_struct_set_to_default(&commondata, griddata);

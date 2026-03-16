@@ -85,9 +85,7 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+num_cuda_streams = 1
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
