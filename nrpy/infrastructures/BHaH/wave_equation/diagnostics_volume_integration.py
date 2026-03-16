@@ -192,9 +192,9 @@ def register_CFunction_diagnostics_volume_integration() -> (
   // ========================= USER-EDIT: Capture results =========================
   // Execute all defined recipes and capture results
   {
-    REAL rms_relerror_uugf = NAN;
-    diags_integration_get_rms(&integration_results, "whole_domain", DIAG_RELERROR_UUGF, &rms_relerror_uugf);
-    printf("%e %e | time rms error of u\n", commondata->time, rms_relerror_uugf);
+    // Example retrieval for downstream use if desired:
+    // REAL rms_relerror_uugf = NAN;
+    // diags_integration_get_rms(&integration_results, "whole_domain", DIAG_RELERROR_UUGF, &rms_relerror_uugf);
   } // END USER-EDIT capture results block
   // ========================= End of user edits =========================
 """

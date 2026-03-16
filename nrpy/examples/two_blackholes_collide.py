@@ -108,9 +108,7 @@ boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
 basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
 
 BHaHAHA_subdir = "BHaHAHA"

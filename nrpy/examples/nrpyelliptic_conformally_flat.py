@@ -112,9 +112,7 @@ radiation_BC_fd_order = 6
 enable_parallel_codegen = True
 boundary_conditions_desc = "outgoing radiation"
 set_of_CoordSystems = {CoordSystem}
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+num_cuda_streams = 1
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 

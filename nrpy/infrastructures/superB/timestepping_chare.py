@@ -849,9 +849,11 @@ Timestepping::Timestepping(CommondataObject &&inData) {
     is_boundarychare = true;
   }
 
-  // Step 1.c: Allocate NUMGRIDS griddata arrays, each containing data specific to an individual grid.
-  griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
-  griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
+  // Step 1.c: Allocate MAXNUMGRIDS griddata arrays.
+  // params_struct_set_to_default() initializes all MAXNUMGRIDS entries before
+  // numerical_grids_and_timestep() determines the runtime NUMGRIDS.
+  griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);
+  griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * MAXNUMGRIDS);
 
   // Step 1.d: Set each CodeParameter in griddata.params to default.
   params_struct_set_to_default(&commondata, griddata);

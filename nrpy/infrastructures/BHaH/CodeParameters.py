@@ -49,7 +49,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
      */
     void params_struct_set_to_default(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
       // Loop over params structs:
-      for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+      for (int grid = 0; grid < MAXNUMGRIDS; grid++) {
         params_struct *restrict params = &griddata[grid].params;
         // Set params_struct variables to default
         params->BHaH_is_amazing = true;               // CodeParameters_c_files::BHaH_is_amazing
@@ -126,7 +126,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         body = ""
         if function_name == "params_struct":
             body += r"""// Loop over params structs:
-  for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  for(int grid=0; grid<MAXNUMGRIDS; grid++) {
     params_struct *restrict params = &griddata[grid].params;
     // Set params_struct variables to default
 """
