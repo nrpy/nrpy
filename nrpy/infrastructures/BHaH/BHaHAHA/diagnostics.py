@@ -114,6 +114,9 @@ calculations, norm evaluations, and detailed final iteration analyses.
         return;
     } // END BLOCK: Interpolation and grid size setup
 
+    // Solve approximate killing vector eigenproblem
+    bah_diagnostics_approx_killing_vector_spin(commondata, griddata);
+
     // Calculate area centroid and theta norms for the apparent horizon.
     bah_diagnostics_area_centroid_and_Theta_norms(commondata, griddata);
 

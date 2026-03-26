@@ -6,6 +6,7 @@ from . import (
     bcstruct_set_up,
     cfl_limited_timestep_based_on_h_equals_r,
     diagnostics,
+    diagnostics_approx_killing_vector_spin,
     diagnostics_area_centroid_and_Theta_norms,
     diagnostics_file_output,
     diagnostics_integration_weights,
