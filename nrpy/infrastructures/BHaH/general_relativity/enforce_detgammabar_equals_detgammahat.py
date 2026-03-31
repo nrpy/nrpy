@@ -89,28 +89,11 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     nrpyAbs = sp.Function("nrpyAbs")
     hprimeDD = ixp.zerorank2()
     detg_scale = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (sp.Rational(1, 3))
-    matrix_rescaling = CoordSystem.startswith("GeneralRFM")
-    if matrix_rescaling:
-        Rinv = (
-            rfm.ReDDinv
-            if getattr(rfm, "general_rfm_reddinv_matches_redd", False)
-            else ixp.generic_matrix_inverter3x3(rfm.ReDD)[0]
-        )
-        for i in range(3):
-            for j in range(3):
-                for m in range(3):
-                    for n in range(3):
-                        hprimeDD[i][j] += (
-                            Rinv[i][m]
-                            * (detg_scale * Bq.gammabarDD[m][n] - rfm.ghatDD[m][n])
-                            * Rinv[j][n]
-                        )
-    else:
-        for i in range(3):
-            for j in range(3):
-                hprimeDD[i][j] = (
-                    detg_scale * Bq.gammabarDD[i][j] - rfm.ghatDD[i][j]
-                ) / rfm.ReDD[i][j]
+    for i in range(3):
+        for j in range(3):
+            hprimeDD[i][j] = (
+                detg_scale * Bq.gammabarDD[i][j] - rfm.ghatDD[i][j]
+            ) / rfm.ReDD[i][j]
 
     hDD_access_gfs: List[str] = []
     hprimeDD_expr_list: List[sp.Expr] = []
