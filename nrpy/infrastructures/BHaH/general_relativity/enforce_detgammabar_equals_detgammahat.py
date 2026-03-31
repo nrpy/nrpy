@@ -88,12 +88,11 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     # Next apply the constraint enforcement equation above.
     nrpyAbs = sp.Function("nrpyAbs")
     hprimeDD = ixp.zerorank2()
-    detg_scale = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (sp.Rational(1, 3))
     for i in range(3):
         for j in range(3):
-            hprimeDD[i][j] = (
-                detg_scale * Bq.gammabarDD[i][j] - rfm.ghatDD[i][j]
-            ) / rfm.ReDD[i][j]
+            hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
+                sp.Rational(1, 3)
+            ) * (rfm.ghatDD[i][j] + Bq.hDD[i][j]) - rfm.ghatDD[i][j]
 
     hDD_access_gfs: List[str] = []
     hprimeDD_expr_list: List[sp.Expr] = []
