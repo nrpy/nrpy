@@ -287,9 +287,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
           const REAL xx1 = xx[1][i1];
           const REAL xx2 = xx[2][i2];
 """
-    body += (
-        expr_body
-        + r"""
+    body += expr_body + r"""
 
           compute_up_index_velocity_time_component_pointwise(
               commondata, params, &commondata->ghl_params,
@@ -317,10 +315,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
   // Step 2 of 2: Populate inner-boundary points from
   //              their mapped source points once the
   //              outer boundary data are available.
-""".replace(
-            "__METRIC_GFS__", metric_gf_array_name
-        )
-    )
+""".replace("__METRIC_GFS__", metric_gf_array_name)
 
     if evolving_neutrinos:
         body += r"""
