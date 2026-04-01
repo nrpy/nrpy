@@ -43,8 +43,8 @@ def _groovy_simplify(coord_system: str, expr: sp.Expr) -> sp.Expr:
     :return: Simplified expression.
     """
     if "Sinh" in coord_system:
-        return cast(sp.Expr, sp.together(expr))
-    return cast(sp.Expr, sp.simplify(expr))
+        return sp.together(expr)
+    return sp.simplify(expr)
 
 
 def register_CFunction_apply_copy_and_outflow_bcs(
@@ -175,7 +175,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
         if "Spherical" in CoordSystem:
             new_rescaledvU[i] = _groovy_simplify(CoordSystem, new_VU[i] / rfm.ReU[i])
         else:
-            new_rescaledvU[i] = cast(sp.Expr, sp.together(new_VU[i] / rfm.ReU[i]))
+            new_rescaledvU[i] = sp.together(new_VU[i] / rfm.ReU[i])
 
     # Step 6: Generate symbolic C code for the velocity update.
     output_vars = [new_rescaledvU[0], new_rescaledvU[1], new_rescaledvU[2]]
