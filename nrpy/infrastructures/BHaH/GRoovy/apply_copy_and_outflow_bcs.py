@@ -23,7 +23,7 @@ from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 
-def _assert_zero(expr: sp.Basic) -> None:
+def _assert_zero(expr: sp.Expr) -> None:
     """
     Assert that the given symbolic expression evaluates to zero.
 
@@ -34,7 +34,7 @@ def _assert_zero(expr: sp.Basic) -> None:
         raise AssertionError(f"Expression did not evaluate to zero: {expr}")
 
 
-def _groovy_simplify(coord_system: str, expr: sp.Basic) -> sp.Basic:
+def _groovy_simplify(coord_system: str, expr: sp.Expr) -> sp.Expr:
     """
     Apply the symbolic simplification strategy used by GRoovy.
 
@@ -43,8 +43,8 @@ def _groovy_simplify(coord_system: str, expr: sp.Basic) -> sp.Basic:
     :return: Simplified expression.
     """
     if "Sinh" in coord_system:
-        return sp.together(expr)
-    return sp.simplify(expr)
+        return cast(sp.Expr, sp.together(expr))
+    return cast(sp.Expr, sp.simplify(expr))
 
 
 def register_CFunction_apply_copy_and_outflow_bcs(
@@ -135,7 +135,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
         rhatU_Cart
     )
 
-    normalization = sp.sympify(0)
+    normalization = cast(sp.Expr, sp.sympify(0))
     for i in range(3):
         for j in range(3):
             normalization += _groovy_simplify(
@@ -145,7 +145,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
     for i in range(3):
         rhatU[i] /= sp.sqrt(normalization)
 
-    check_normalization = sp.sympify(0)
+    check_normalization = cast(sp.Expr, sp.sympify(0))
     for i in range(3):
         for j in range(3):
             check_normalization += _groovy_simplify(
@@ -160,7 +160,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
     for i in range(3):
         VU[i] = rescaledvU[i] * rfm.ReU[i]
 
-    vr = sp.sympify(0)
+    vr: sp.Expr = cast(sp.Expr, sp.sympify(0))
     for i in range(3):
         for j in range(3):
             vr += _groovy_simplify(CoordSystem, AitoB.gammaDD[i][j] * VU[i] * rhatU[j])
@@ -175,7 +175,7 @@ def register_CFunction_apply_copy_and_outflow_bcs(
         if "Spherical" in CoordSystem:
             new_rescaledvU[i] = _groovy_simplify(CoordSystem, new_VU[i] / rfm.ReU[i])
         else:
-            new_rescaledvU[i] = sp.together(new_VU[i] / rfm.ReU[i])
+            new_rescaledvU[i] = cast(sp.Expr, sp.together(new_VU[i] / rfm.ReU[i]))
 
     # Step 6: Generate symbolic C code for the velocity update.
     output_vars = [new_rescaledvU[0], new_rescaledvU[1], new_rescaledvU[2]]
@@ -287,7 +287,9 @@ def register_CFunction_apply_copy_and_outflow_bcs(
           const REAL xx1 = xx[1][i1];
           const REAL xx2 = xx[2][i2];
 """
-    body += expr_body + r"""
+    body += (
+        expr_body
+        + r"""
 
           compute_up_index_velocity_time_component_pointwise(
               commondata, params, &commondata->ghl_params,
@@ -315,7 +317,10 @@ def register_CFunction_apply_copy_and_outflow_bcs(
   // Step 2 of 2: Populate inner-boundary points from
   //              their mapped source points once the
   //              outer boundary data are available.
-""".replace("__METRIC_GFS__", metric_gf_array_name)
+""".replace(
+            "__METRIC_GFS__", metric_gf_array_name
+        )
+    )
 
     if evolving_neutrinos:
         body += r"""
