@@ -70,13 +70,15 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
     Jraw = akv.Jm_integrand
 
     akv_exprs = (
-        [Hraw[m][n] for m in range(3) for n in range(3)]
+        [BHaH.BHaHAHA.area.area3()]
+        + [Hraw[m][n] for m in range(3) for n in range(3)]
         + [Nraw[m][n] for m in range(3) for n in range(3)]
         + [Jraw[m] for m in range(3)]
     )
 
     akv_outvars = (
-        [f"const REAL akv_Hraw_{m}_{n}" for m in range(3) for n in range(3)]
+        ["const REAL sqrt_det_q_cb"]
+        + [f"const REAL akv_Hraw_{m}_{n}" for m in range(3) for n in range(3)]
         + [f"const REAL akv_Nraw_{m}_{n}" for m in range(3) for n in range(3)]
         + [f"const REAL akv_Jraw_{m}" for m in range(3)]
     )
@@ -717,9 +719,11 @@ static void akv_symmetrize_dense(AKV_REAL *M, int N) {
   }
 }
 
+#ifdef USE_LAPACKE
 static void akv_dense_add_diag(AKV_REAL *M, int N, AKV_REAL eps) {
   for (int i = 0; i < N; i++) M[i + (size_t)N*i] += eps;
 }
+#endif
 
 static void akv_dense_matvec(const AKV_REAL *M, int N, const AKV_REAL *x, AKV_REAL *y) {
   for (int i = 0; i < N; i++) {
@@ -747,6 +751,7 @@ static AKV_REAL akv_residual_ratio_dense_inplace(
   return (denom > 0) ? (nr / denom) : 0.0;
 }
 
+// Unused
 /*
 // Residual ratio using operator application (no dense matrices), with caller-provided scratch buffers of length N.
 static AKV_REAL akv_residual_ratio_apply_inplace(
@@ -1435,6 +1440,10 @@ static void bhahaha_akv_eval_l1_integrands_default_impl(
   const REAL xx1 = ctx->xx[1][i1];
   const REAL xx2 = ctx->xx[2][i2];
 
+  const REAL f0_of_xx0 = xx0;
+  const REAL f1_of_xx1 = sin(xx1);
+  const REAL f1_of_xx1__D1 = cos(xx1);
+
   // Human-readable SymPy expressions, CSE'd and FD-optimized by NRPy:
   """
         + akv_codegen
@@ -1567,7 +1576,9 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
     body = r"""
   const int grid = 0;
+#if defined(BHAHAHA_AKV_DIAGS_HAVE_PARAMS) || defined(BHAHAHA_AKV_DIAGS_HAVE_FIELDS)
   bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+#endif
   const params_struct *restrict params = &griddata[grid].params;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
   const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -1638,6 +1649,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
       const REAL wtheta = weights_1d[it_w];
       const REAL wphi   = weights_1d[ip_w];
 
+      const REAL xx1 = xx[1][i1];
 
 """
     body += area_codegen + r"""
