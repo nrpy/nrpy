@@ -49,8 +49,6 @@ def _groovy_simplify(coord_system: str, expr: sp.Expr) -> sp.Expr:
 
 def register_CFunction_apply_copy_and_outflow_bcs(
     CoordSystem: str,
-    enable_rfm_precompute: bool,
-    read_xxs: bool,
     enable_GoldenKernels: bool = False,
     evolving_temperature: bool = False,
     evolving_spacetime: bool = True,
@@ -65,34 +63,36 @@ def register_CFunction_apply_copy_and_outflow_bcs(
     boundary points are then populated from the precomputed parity map.
 
     :param CoordSystem: The coordinate system.
-    :param enable_rfm_precompute: Whether to enable reference metric precomputation.
-    :param read_xxs: Whether to read `xx` arrays when evaluating symbolic
-        coordinate-dependent expressions.
     :param enable_GoldenKernels: Boolean to enable Golden Kernels.
     :param evolving_temperature: Whether temperature is an evolved primitive.
     :param evolving_spacetime: Whether the spacetime metric is evolved in `in_gfs`.
     :param evolving_neutrinos: Whether NRPyLeakage variables are active.
     :param evolving_entropy: Whether entropy is an evolved primitive.
-
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If `read_xxs` is inconsistent with
-        `enable_rfm_precompute`.
+
+    Doctests:
+    >>> from nrpy.helpers.generic import validate_strings, clang_format
+    >>> import nrpy.c_function as cfc
+    >>> import nrpy.params as par
+    >>> supported_Parallelizations = ["openmp"]
+    >>> name = "apply_copy_and_outflow_bcs"
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_apply_copy_and_outflow_bcs("Spherical")
+    ...    generated_str = clang_format(cfc.CFunction_dict[f"{name}__rfm__Spherical"].full_function)
+    ...    validation_desc = f"{name}__{parallelization}__Spherical"
+    ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
+    Setting up BSSN_Quantities[Spherical]...
+    Setting up reference_metric[Spherical]...
+    Setting up basis_transforms[Spherical]...
     """
     # Step 1: Register the function with NRPy's parallel codegen infrastructure.
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    # Step 2: Validate coordinate-read configuration and set up the C signature.
-    if enable_rfm_precompute and read_xxs:
-        raise ValueError(
-            "read_xxs must be False when enable_rfm_precompute is enabled."
-        )
-    if not enable_rfm_precompute and not read_xxs:
-        raise ValueError(
-            "read_xxs must be True when enable_rfm_precompute is disabled."
-        )
-
+    # Step 2: Function skeleton
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     cfunc_type = "void"
     name = "apply_copy_and_outflow_bcs"
@@ -106,21 +106,14 @@ def register_CFunction_apply_copy_and_outflow_bcs(
         "const ghl_parameters *restrict ghl_params, "
         "const bc_struct *restrict bcstruct, "
         "REAL *restrict xx[3], "
-        "const REAL *restrict in_gfs, "
+        "REAL *restrict in_gfs, "
         "REAL *restrict auxevol_gfs"
     )
-    if enable_rfm_precompute:
-        params = params.replace(
-            "REAL *restrict xx[3]", "const rfm_struct *restrict rfmstruct"
-        )
 
     # Step 3: Initialize ADM quantities, basis transforms, and the reference metric.
-    rfm_key = CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-    AitoB = BSSN_to_ADM(
-        CoordSystem=CoordSystem, enable_rfm_precompute=enable_rfm_precompute
-    )
-    basis_transforms = bt.basis_transforms[rfm_key]
-    rfm = refmetric.reference_metric[rfm_key]
+    AitoB = BSSN_to_ADM(CoordSystem=CoordSystem)
+    basis_transforms = bt.basis_transforms[CoordSystem]
+    rfm = refmetric.reference_metric[CoordSystem]
 
     # Step 4: Construct the outward radial unit vector in the rfm basis.
     theta = rfm.xxSph[1]
@@ -281,11 +274,10 @@ def register_CFunction_apply_copy_and_outflow_bcs(
 
           // Update all velocity components together before recomputing u^t.
 """
-    if not enable_rfm_precompute:
-        body += r"""
-          const REAL xx0 = xx[0][i0];
-          const REAL xx1 = xx[1][i1];
-          const REAL xx2 = xx[2][i2];
+    body += r"""
+        const REAL xx0 = xx[0][i0];
+        const REAL xx1 = xx[1][i1];
+        const REAL xx2 = xx[2][i2];
 """
     body += expr_body + r"""
 
