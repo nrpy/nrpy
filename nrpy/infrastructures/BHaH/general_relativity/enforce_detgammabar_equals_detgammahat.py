@@ -92,7 +92,9 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         for j in range(3):
             hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
                 sp.Rational(1, 3)
-            ) * ((rfm.ghatDD[i][j]/rfm.ReDD[i][j]) + Bq.hDD[i][j]) - (rfm.ghatDD[i][j]/rfm.ReDD[i][j])
+            ) * ((rfm.ghatDD[i][j] / rfm.ReDD[i][j]) + Bq.hDD[i][j]) - (
+                rfm.ghatDD[i][j] / rfm.ReDD[i][j]
+            )
 
     hDD_access_gfs: List[str] = []
     hprimeDD_expr_list: List[sp.Expr] = []
