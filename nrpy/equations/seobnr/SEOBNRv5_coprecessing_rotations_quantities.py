@@ -48,8 +48,14 @@ class SEOBNRv5_Coprecessing_Rotations:
     def wigner_d_small_template(l: int, m1: int, m2: int) -> sp.Expr:
         """
         Return a cached Wigner small-d template in terms of `_WIGNER_BETA`.
-        This optimization prevents SymPy from recomputing factorials and trig
+
+        This optimization prevents SymPy from recomputing factorials and trigonometric
         expansions repeatedly, cutting generation time to milliseconds.
+
+        :param l: Degree index of the Wigner d-matrix element.
+        :param m1: First magnetic index.
+        :param m2: Second magnetic index.
+        :return: Symbolic template expression d^l_{m1,m2}(_WIGNER_BETA).
         """
         d_val = sp.sympify(0)
         k_min = max(0, m2 - m1)
@@ -86,7 +92,16 @@ class SEOBNRv5_Coprecessing_Rotations:
 
     @classmethod
     def wigner_d_small(cls, l: int, m1: int, m2: int, beta: sp.Expr) -> sp.Expr:
-        """Compute the Wigner small-d matrix element d^l_{m1, m2}(beta)."""
+        """
+        Compute the Wigner small-d matrix element d^l_{m1,m2}(beta).
+
+        :param l: Degree index of the Wigner d-matrix element.
+        :param m1: First magnetic index.
+        :param m2: Second magnetic index.
+        :param beta: Euler-angle argument used in the rotation.
+        :return: Symbolic value of d^l_{m1,m2}(beta).
+        :raises ValueError: If ``l < 0`` or if ``|m1| > l`` or ``|m2| > l``.
+        """
         if l < 0:
             raise ValueError(
                 f"Wigner-d matrix index l must be non-negative. Received l={l}"
@@ -106,7 +121,15 @@ class SEOBNRv5_Coprecessing_Rotations:
         gamma: sp.Expr,
         modes: List[Tuple[int, int]],
     ) -> Tuple[sp.Expr, sp.Expr]:
-        """Helper method to generate polarizations for a specific Euler angle branch."""
+        """
+        Generate polarizations for a specific Euler-angle branch.
+
+        :param alpha: First Euler angle for the inertial-frame rotation.
+        :param beta: Second Euler angle for the inertial-frame rotation.
+        :param gamma: Third Euler angle for the inertial-frame rotation.
+        :param modes: List of ``(l, m)`` co-precessing modes with ``m >= 0``.
+        :return: Tuple ``(h_plus_expr, h_cross_expr)`` of symbolic polarizations.
+        """
         h_plus_expr = sp.sympify(0)
         h_cross_expr = sp.sympify(0)
 
@@ -144,7 +167,13 @@ class SEOBNRv5_Coprecessing_Rotations:
         return h_plus_expr, h_cross_expr
 
     def __init__(self, modes: Optional[List[Tuple[int, int]]] = None) -> None:
-        """Compute the symbolic expressions for the SEOBNRv5 co-precessing rotations."""
+        """
+        Compute symbolic expressions for SEOBNRv5 co-precessing rotations.
+
+        :param modes: Optional list of ``(l, m)`` modes with nonnegative ``m``.
+            If ``None``, use the default mode set.
+        :raises ValueError: If ``modes`` is empty or contains any mode with ``m < 0``.
+        """
         if modes is None:
             modes = [(2, 2), (2, 1), (3, 3), (3, 2), (4, 4), (4, 3), (5, 5)]
 
