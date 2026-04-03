@@ -3,4 +3,3 @@ build/
 nrpy.egg-info/
 .mypy_cache/
 project/
-.github/single_file_static_analysis.sh
