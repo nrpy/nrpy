@@ -62,7 +62,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         k_max = min(l - m1, l + m2)
 
         for k in range(k_min, k_max + 1):
-            num = ((-1) ** k) * sp.sqrt(
+            num = ((-1) ** (k + m1 - m2)) * sp.sqrt(
                 sp.factorial(l + m1)
                 * sp.factorial(l - m1)
                 * sp.factorial(l + m2)
@@ -297,7 +297,8 @@ class SEOBNRv5_Coprecessing_Rotations:
             ]
         )
 
-        M_PI = R_obs * R_JI * R_z_alpha * R_y_beta * R_z_gamma
+        R_PJ = R_z_gamma.T * R_y_beta.T * R_z_alpha.T
+        M_PI = R_obs * R_JI * R_PJ
 
         # Store M33 so the C-infrastructure can generate the if/else pole branches
         self.M33 = M_PI[2, 2]

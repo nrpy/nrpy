@@ -143,7 +143,7 @@ to the co-precessing modes (h^P_lm) to compute h_+ and h_x in the observer's fra
 @param varphi_0 - The observer azimuthal angle.
 @param J_f_x, J_f_y, J_f_z - Cartesian components of the final angular momentum.
 @param alpha_JP_array, beta_JP_array, gamma_JP_array - Euler angles from J -> P frame.
-@param hP_l{l}m{m}_array - Arrays containing the complex co-precessing modes.
+@param hP_l*m*_array - Arrays containing the complex co-precessing modes for each requested (l,m).
 @param h_plus_I_array, h_cross_I_array - Output arrays for the inertial polarizations.
 """
 
