@@ -17,8 +17,9 @@ void calculate_all_source_terms__rfm__Spherical(const commondata_struct *restric
         MAYBE_UNUSED const REAL xx0 = xx[0][i0];
 
         ghl_primitive_quantities prims;
-        ghl_initialize_primitives(auxevol_gfs[IDX4(RHOBGF, i0, i1, i2)], auxevol_gfs[IDX4(PGF, i0, i1, i2)], NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN,
-                                  NAN, NAN, &prims);
+        ghl_initialize_primitives(auxevol_gfs[IDX4(RHOBGF, i0, i1, i2)], auxevol_gfs[IDX4(PGF, i0, i1, i2)], NAN, NAN, NAN, NAN, NAN, NAN, NAN,
+                                  auxevol_gfs[IDX4(SGF, i0, i1, i2)], auxevol_gfs[IDX4(YEGF, i0, i1, i2)],
+                                  auxevol_gfs[IDX4(TEMPERATUREGF, i0, i1, i2)], &prims);
 
         double h, cs2;
         ghl_compute_h_and_cs2(eos, &prims, &h, &cs2);
@@ -218,187 +219,190 @@ void calculate_all_source_terms__rfm__Spherical(const commondata_struct *restric
          */
         const REAL FDPart3tmp0 = (1.0 / (xx0));
         const REAL FDPart3tmp2 = pow(fabs(cf), -3.0);
-        const REAL FDPart3tmp5 = cos(xx1);
-        const REAL FDPart3tmp6 = sin(xx1);
-        const REAL FDPart3tmp10 = ((alpha) * (alpha));
-        const REAL FDPart3tmp29 = hDD00 + 1;
-        const REAL FDPart3tmp30 = (1.0 / 3.0) * trK;
-        const REAL FDPart3tmp34 = hDD22 + 1;
-        const REAL FDPart3tmp36 = hDD11 + 1;
-        const REAL FDPart3tmp55 = ((xx0) * (xx0));
-        const REAL FDPart3tmp77 = 2 * vetU2;
-        const REAL FDPart3tmp98 = ((cf) * (cf) * (cf));
-        const REAL FDPart3tmp105 = cf * xx0;
-        const REAL FDPart3tmp110 = 1.0 * cf_dD0 * xx0;
-        const REAL FDPart3tmp128 = 1.0 * cf;
-        const REAL FDPart3tmp142 = 1.0 * cf_dD1;
-        const REAL FDPart3tmp143 = 0.5 * cf;
-        const REAL FDPart3tmp150 = 1.0 * cf_dD2;
+        const REAL FDPart3tmp7 = cos(xx1);
+        const REAL FDPart3tmp8 = sin(xx1);
+        const REAL FDPart3tmp14 = ((alpha) * (alpha));
+        const REAL FDPart3tmp33 = hDD00 + 1;
+        const REAL FDPart3tmp34 = (1.0 / 3.0) * trK;
+        const REAL FDPart3tmp38 = hDD22 + 1;
+        const REAL FDPart3tmp40 = hDD11 + 1;
+        const REAL FDPart3tmp59 = ((xx0) * (xx0));
+        const REAL FDPart3tmp81 = 2 * vetU2;
+        const REAL FDPart3tmp102 = ((cf) * (cf) * (cf));
+        const REAL FDPart3tmp109 = cf * xx0;
+        const REAL FDPart3tmp114 = 1.0 * cf_dD0 * xx0;
+        const REAL FDPart3tmp132 = 1.0 * cf;
+        const REAL FDPart3tmp146 = 1.0 * cf_dD1;
+        const REAL FDPart3tmp147 = 0.5 * cf;
+        const REAL FDPart3tmp154 = 1.0 * cf_dD2;
         const REAL FDPart3tmp1 = 2 * FDPart3tmp0;
-        const REAL FDPart3tmp3 = FDPart3tmp2 * alpha * rhob * u4Ut;
-        const REAL FDPart3tmp7 = (1.0 / (FDPart3tmp6));
-        const REAL FDPart3tmp12 = FDPart3tmp10 * h * rhob * ((u4Ut) * (u4Ut));
-        const REAL FDPart3tmp17 = (1.0 / (FDPart3tmp10));
-        const REAL FDPart3tmp19 = FDPart3tmp10 * h * rhob * ((u4Ut) * (u4Ut)) - P;
-        const REAL FDPart3tmp28 = (1.0 / ((cf) * (cf)));
-        const REAL FDPart3tmp38 = FDPart3tmp29 * FDPart3tmp34 * FDPart3tmp36 - FDPart3tmp29 * ((hDD12) * (hDD12)) -
-                                  FDPart3tmp34 * ((hDD01) * (hDD01)) - FDPart3tmp36 * ((hDD02) * (hDD02)) + 2 * hDD01 * hDD02 * hDD12;
-        const REAL FDPart3tmp40 = FDPart3tmp10 * ((cf) * (cf));
-        const REAL FDPart3tmp57 = (1.0 / (FDPart3tmp55));
-        const REAL FDPart3tmp70 = FDPart3tmp6 * hDD12;
-        const REAL FDPart3tmp84 = FDPart3tmp36 * vetU1 + hDD01 * vetU0 + hDD12 * vetU2;
-        const REAL FDPart3tmp89 = FDPart3tmp6 * cf;
-        const REAL FDPart3tmp90 = FDPart3tmp34 * vetU2 + hDD02 * vetU0 + hDD12 * vetU1;
-        const REAL FDPart3tmp94 = FDPart3tmp29 * vetU0 + hDD01 * vetU1 + hDD02 * vetU2;
-        const REAL FDPart3tmp96 = FDPart3tmp5 * cf;
-        const REAL FDPart3tmp109 = 0.5 * FDPart3tmp105;
-        const REAL FDPart3tmp120 = 2 * cf_dD0 * xx0;
-        const REAL FDPart3tmp135 = FDPart3tmp5 * vetU2;
-        const REAL FDPart3tmp9 = FDPart3tmp0 * FDPart3tmp3 * rescaledvU1;
-        const REAL FDPart3tmp20 = FDPart3tmp17 * FDPart3tmp19;
-        const REAL FDPart3tmp23 = FDPart3tmp0 * FDPart3tmp7;
-        const REAL FDPart3tmp24 = FDPart3tmp12 * rescaledvU2 + P * vetU2;
-        const REAL FDPart3tmp26 = FDPart3tmp7 * vetU2;
-        const REAL FDPart3tmp31 = FDPart3tmp28 * FDPart3tmp30;
-        const REAL FDPart3tmp39 = FDPart3tmp12 * FDPart3tmp38;
-        const REAL FDPart3tmp41 = FDPart3tmp38 * ((vetU0) * (vetU0));
-        const REAL FDPart3tmp43 = (1.0 / (FDPart3tmp38));
-        const REAL FDPart3tmp45 = FDPart3tmp28 * xx0;
-        const REAL FDPart3tmp50 = FDPart3tmp38 * vetU0;
-        const REAL FDPart3tmp56 = FDPart3tmp28 * FDPart3tmp55;
-        const REAL FDPart3tmp62 = FDPart3tmp38 * ((vetU1) * (vetU1));
-        const REAL FDPart3tmp73 = FDPart3tmp38 * vetU1;
-        const REAL FDPart3tmp79 = FDPart3tmp55 * ((FDPart3tmp6) * (FDPart3tmp6));
-        const REAL FDPart3tmp80 = (1.0 / ((FDPart3tmp6) * (FDPart3tmp6)));
-        const REAL FDPart3tmp82 = FDPart3tmp38 * ((vetU2) * (vetU2));
-        const REAL FDPart3tmp99 = FDPart3tmp19 * FDPart3tmp38 * FDPart3tmp98 * alpha;
-        const REAL FDPart3tmp111 = FDPart3tmp109 * hDD_dD120 - FDPart3tmp110 * hDD12;
-        const REAL FDPart3tmp121 = 0.5 * FDPart3tmp105 * hDD_dD010 - 0.5 * FDPart3tmp120 * hDD01;
-        const REAL FDPart3tmp125 = 0.5 * FDPart3tmp105 * hDD_dD020 - 0.5 * FDPart3tmp120 * hDD02;
-        const REAL FDPart3tmp138 = -1.0 * FDPart3tmp70 * cf_dD1 + 0.5 * FDPart3tmp89 * hDD02 + 0.5 * FDPart3tmp89 * hDD_dD121;
-        const REAL FDPart3tmp140 = 0.5 * FDPart3tmp6 * cf * hDD_dD021 - 1.0 * FDPart3tmp6 * cf_dD1 * hDD02 - 0.5 * FDPart3tmp70 * cf;
-        const REAL FDPart3tmp147 = 0.5 * FDPart3tmp6 * (FDPart3tmp29 * cf - FDPart3tmp36 * cf + cf * hDD_dD011 - 2 * cf_dD1 * hDD01);
-        const REAL FDPart3tmp149 = 0.5 * cf * hDD_dD012 - 0.5 * cf * (FDPart3tmp5 * hDD02 + FDPart3tmp70) - 1.0 * cf_dD2 * hDD01;
-        const REAL FDPart3tmp151 = FDPart3tmp128 * FDPart3tmp6 * hDD02;
-        const REAL FDPart3tmp152 = FDPart3tmp128 * FDPart3tmp5 * hDD12;
-        const REAL FDPart3tmp154 = -0.5 * FDPart3tmp34 * FDPart3tmp96 + 0.5 * FDPart3tmp36 * FDPart3tmp5 * cf + 0.5 * FDPart3tmp89 * hDD01 +
+        const REAL FDPart3tmp3 = FDPart3tmp2 * alpha * u4Ut;
+        const REAL FDPart3tmp9 = (1.0 / (FDPart3tmp8));
+        const REAL FDPart3tmp16 = FDPart3tmp14 * h * rhob * ((u4Ut) * (u4Ut));
+        const REAL FDPart3tmp21 = (1.0 / (FDPart3tmp14));
+        const REAL FDPart3tmp23 = FDPart3tmp14 * h * rhob * ((u4Ut) * (u4Ut)) - P;
+        const REAL FDPart3tmp32 = (1.0 / ((cf) * (cf)));
+        const REAL FDPart3tmp42 = FDPart3tmp33 * FDPart3tmp38 * FDPart3tmp40 - FDPart3tmp33 * ((hDD12) * (hDD12)) -
+                                  FDPart3tmp38 * ((hDD01) * (hDD01)) - FDPart3tmp40 * ((hDD02) * (hDD02)) + 2 * hDD01 * hDD02 * hDD12;
+        const REAL FDPart3tmp44 = FDPart3tmp14 * ((cf) * (cf));
+        const REAL FDPart3tmp61 = (1.0 / (FDPart3tmp59));
+        const REAL FDPart3tmp74 = FDPart3tmp8 * hDD12;
+        const REAL FDPart3tmp88 = FDPart3tmp40 * vetU1 + hDD01 * vetU0 + hDD12 * vetU2;
+        const REAL FDPart3tmp93 = FDPart3tmp8 * cf;
+        const REAL FDPart3tmp94 = FDPart3tmp38 * vetU2 + hDD02 * vetU0 + hDD12 * vetU1;
+        const REAL FDPart3tmp98 = FDPart3tmp33 * vetU0 + hDD01 * vetU1 + hDD02 * vetU2;
+        const REAL FDPart3tmp100 = FDPart3tmp7 * cf;
+        const REAL FDPart3tmp113 = 0.5 * FDPart3tmp109;
+        const REAL FDPart3tmp124 = 2 * cf_dD0 * xx0;
+        const REAL FDPart3tmp139 = FDPart3tmp7 * vetU2;
+        const REAL FDPart3tmp10 = FDPart3tmp7 * FDPart3tmp9;
+        const REAL FDPart3tmp24 = FDPart3tmp21 * FDPart3tmp23;
+        const REAL FDPart3tmp27 = FDPart3tmp0 * FDPart3tmp9;
+        const REAL FDPart3tmp28 = FDPart3tmp16 * rescaledvU2 + P * vetU2;
+        const REAL FDPart3tmp30 = FDPart3tmp9 * vetU2;
+        const REAL FDPart3tmp35 = FDPart3tmp32 * FDPart3tmp34;
+        const REAL FDPart3tmp43 = FDPart3tmp16 * FDPart3tmp42;
+        const REAL FDPart3tmp45 = FDPart3tmp42 * ((vetU0) * (vetU0));
+        const REAL FDPart3tmp47 = (1.0 / (FDPart3tmp42));
+        const REAL FDPart3tmp49 = FDPart3tmp32 * xx0;
+        const REAL FDPart3tmp54 = FDPart3tmp42 * vetU0;
+        const REAL FDPart3tmp60 = FDPart3tmp32 * FDPart3tmp59;
+        const REAL FDPart3tmp66 = FDPart3tmp42 * ((vetU1) * (vetU1));
+        const REAL FDPart3tmp77 = FDPart3tmp42 * vetU1;
+        const REAL FDPart3tmp83 = FDPart3tmp59 * ((FDPart3tmp8) * (FDPart3tmp8));
+        const REAL FDPart3tmp84 = (1.0 / ((FDPart3tmp8) * (FDPart3tmp8)));
+        const REAL FDPart3tmp86 = FDPart3tmp42 * ((vetU2) * (vetU2));
+        const REAL FDPart3tmp103 = FDPart3tmp102 * FDPart3tmp23 * FDPart3tmp42 * alpha;
+        const REAL FDPart3tmp115 = FDPart3tmp113 * hDD_dD120 - FDPart3tmp114 * hDD12;
+        const REAL FDPart3tmp125 = 0.5 * FDPart3tmp109 * hDD_dD010 - 0.5 * FDPart3tmp124 * hDD01;
+        const REAL FDPart3tmp129 = 0.5 * FDPart3tmp109 * hDD_dD020 - 0.5 * FDPart3tmp124 * hDD02;
+        const REAL FDPart3tmp142 = -1.0 * FDPart3tmp74 * cf_dD1 + 0.5 * FDPart3tmp93 * hDD02 + 0.5 * FDPart3tmp93 * hDD_dD121;
+        const REAL FDPart3tmp144 = -0.5 * FDPart3tmp74 * cf + 0.5 * FDPart3tmp8 * cf * hDD_dD021 - 1.0 * FDPart3tmp8 * cf_dD1 * hDD02;
+        const REAL FDPart3tmp151 = 0.5 * FDPart3tmp8 * (FDPart3tmp33 * cf - FDPart3tmp40 * cf + cf * hDD_dD011 - 2 * cf_dD1 * hDD01);
+        const REAL FDPart3tmp153 = 0.5 * cf * hDD_dD012 - 0.5 * cf * (FDPart3tmp7 * hDD02 + FDPart3tmp74) - 1.0 * cf_dD2 * hDD01;
+        const REAL FDPart3tmp155 = FDPart3tmp132 * FDPart3tmp8 * hDD02;
+        const REAL FDPart3tmp156 = FDPart3tmp132 * FDPart3tmp7 * hDD12;
+        const REAL FDPart3tmp158 = -0.5 * FDPart3tmp100 * FDPart3tmp38 + 0.5 * FDPart3tmp40 * FDPart3tmp7 * cf + 0.5 * FDPart3tmp93 * hDD01 +
                                    0.5 * cf * hDD_dD122 - 1.0 * cf_dD2 * hDD12;
-        const REAL FDPart3tmp155 = 0.5 * FDPart3tmp29 * FDPart3tmp6 * cf - 0.5 * FDPart3tmp34 * FDPart3tmp89 + 0.5 * FDPart3tmp96 * hDD01 +
+        const REAL FDPart3tmp159 = 0.5 * FDPart3tmp100 * hDD01 + 0.5 * FDPart3tmp33 * FDPart3tmp8 * cf - 0.5 * FDPart3tmp38 * FDPart3tmp93 +
                                    0.5 * cf * hDD_dD022 - 1.0 * cf_dD2 * hDD02;
-        const REAL FDPart3tmp14 = FDPart3tmp12 * rescaledvU0 + P * vetU0;
-        const REAL FDPart3tmp16 = FDPart3tmp12 * rescaledvU1 + P * vetU1;
-        const REAL FDPart3tmp21 = FDPart3tmp20 * vetU0;
-        const REAL FDPart3tmp25 = FDPart3tmp17 * FDPart3tmp24;
-        const REAL FDPart3tmp42 =
-            FDPart3tmp39 * ((rescaledvU0) * (rescaledvU0)) + P * (FDPart3tmp40 * (FDPart3tmp34 * FDPart3tmp36 - ((hDD12) * (hDD12))) - FDPart3tmp41);
-        const REAL FDPart3tmp44 = FDPart3tmp17 * FDPart3tmp43;
-        const REAL FDPart3tmp46 = FDPart3tmp30 * FDPart3tmp45 * hDD01 + FDPart3tmp45 * aDD01;
-        const REAL FDPart3tmp49 = FDPart3tmp12 * FDPart3tmp38 * rescaledvU0;
-        const REAL FDPart3tmp61 = FDPart3tmp20 * FDPart3tmp57;
-        const REAL FDPart3tmp63 =
-            FDPart3tmp39 * ((rescaledvU1) * (rescaledvU1)) + P * (FDPart3tmp40 * (FDPart3tmp29 * FDPart3tmp34 - ((hDD02) * (hDD02))) - FDPart3tmp62);
-        const REAL FDPart3tmp71 = FDPart3tmp30 * FDPart3tmp56 * FDPart3tmp70 + FDPart3tmp56 * FDPart3tmp6 * aDD12;
-        const REAL FDPart3tmp83 =
-            FDPart3tmp39 * ((rescaledvU2) * (rescaledvU2)) + P * (FDPart3tmp40 * (FDPart3tmp29 * FDPart3tmp36 - ((hDD01) * (hDD01))) - FDPart3tmp82);
-        const REAL FDPart3tmp91 = FDPart3tmp24 * FDPart3tmp38;
-        const REAL FDPart3tmp112 = 2 * FDPart3tmp73;
-        const REAL FDPart3tmp116 = 2 * FDPart3tmp50;
-        const REAL FDPart3tmp133 = FDPart3tmp2 * FDPart3tmp23 * FDPart3tmp43 / (FDPart3tmp98 * alpha);
-        const REAL FDPart3tmp18 = FDPart3tmp14 * FDPart3tmp17;
-        const REAL FDPart3tmp52 = FDPart3tmp49 * rescaledvU1 + P * (FDPart3tmp40 * (-FDPart3tmp34 * hDD01 + hDD02 * hDD12) - FDPart3tmp50 * vetU1);
-        const REAL FDPart3tmp64 = FDPart3tmp44 * FDPart3tmp57;
-        const REAL FDPart3tmp66 = FDPart3tmp30 * FDPart3tmp45 * FDPart3tmp6 * hDD02 + FDPart3tmp45 * FDPart3tmp6 * aDD02;
-        const REAL FDPart3tmp68 = FDPart3tmp49 * rescaledvU2 + P * (FDPart3tmp40 * (-FDPart3tmp36 * hDD02 + hDD01 * hDD12) - FDPart3tmp50 * vetU2);
-        const REAL FDPart3tmp75 = FDPart3tmp12 * FDPart3tmp38 * rescaledvU1 * rescaledvU2 +
-                                  P * (FDPart3tmp40 * (-FDPart3tmp29 * hDD12 + hDD01 * hDD02) - FDPart3tmp73 * vetU2);
-        const REAL FDPart3tmp85 = FDPart3tmp16 * FDPart3tmp38;
-        const REAL FDPart3tmp97 = FDPart3tmp14 * FDPart3tmp38;
-        const REAL FDPart3tmp100 = FDPart3tmp14 * hDD01 + FDPart3tmp16 * FDPart3tmp36 + FDPart3tmp19 * FDPart3tmp84 + FDPart3tmp24 * hDD12;
-        const REAL FDPart3tmp102 = FDPart3tmp14 * hDD02 + FDPart3tmp16 * hDD12 + FDPart3tmp19 * FDPart3tmp90 + FDPart3tmp24 * FDPart3tmp34;
-        const REAL FDPart3tmp106 = FDPart3tmp14 * FDPart3tmp29 + FDPart3tmp16 * hDD01 + FDPart3tmp19 * FDPart3tmp94 + FDPart3tmp24 * hDD02;
-        const REAL FDPart3tmp127 = FDPart3tmp116 * FDPart3tmp14 + FDPart3tmp19 * FDPart3tmp41 + FDPart3tmp42;
-        const REAL FDPart3tmp131 = FDPart3tmp19 * FDPart3tmp82 + FDPart3tmp77 * FDPart3tmp91 + FDPart3tmp83;
-        const REAL FDPart3tmp132 = FDPart3tmp112 * FDPart3tmp16 + FDPart3tmp19 * FDPart3tmp62 + FDPart3tmp63;
-        const REAL FDPart3tmp53 = FDPart3tmp0 * FDPart3tmp21 * vetU1 + FDPart3tmp0 * FDPart3tmp44 * FDPart3tmp52;
-        const REAL FDPart3tmp58 = FDPart3tmp16 * FDPart3tmp17 * FDPart3tmp57;
-        const REAL FDPart3tmp69 = FDPart3tmp21 * FDPart3tmp23 * vetU2 + FDPart3tmp23 * FDPart3tmp44 * FDPart3tmp68;
-        const REAL FDPart3tmp76 = FDPart3tmp26 * FDPart3tmp61 * vetU1 + FDPart3tmp64 * FDPart3tmp7 * FDPart3tmp75;
-        const REAL FDPart3tmp95 = FDPart3tmp29 * FDPart3tmp52 + FDPart3tmp63 * hDD01 + FDPart3tmp75 * hDD02 + FDPart3tmp85 * FDPart3tmp94;
-        const REAL FDPart3tmp104 = FDPart3tmp102 * FDPart3tmp38 * cf;
-        const REAL FDPart3tmp113 = FDPart3tmp19 * FDPart3tmp73 * vetU2 + FDPart3tmp75;
-        const REAL FDPart3tmp117 = FDPart3tmp19 * FDPart3tmp50 * vetU1 + FDPart3tmp52;
-        const REAL FDPart3tmp123 = FDPart3tmp19 * FDPart3tmp50 * vetU2 + FDPart3tmp68;
-        const REAL FDPart3tmp88 = FDPart3tmp36 * FDPart3tmp63 + FDPart3tmp52 * hDD01 + FDPart3tmp75 * hDD12 + FDPart3tmp84 * FDPart3tmp85;
-        const REAL FDPart3tmp93 = FDPart3tmp34 * FDPart3tmp83 + FDPart3tmp68 * hDD02 + FDPart3tmp75 * hDD12 + FDPart3tmp90 * FDPart3tmp91;
-        const REAL FDPart3tmp108 = FDPart3tmp100 * FDPart3tmp38 * cf;
-        const REAL FDPart3tmp114 = FDPart3tmp112 * FDPart3tmp24 + FDPart3tmp113;
-        const REAL FDPart3tmp115 = FDPart3tmp113 + FDPart3tmp77 * FDPart3tmp85;
-        const REAL FDPart3tmp118 = FDPart3tmp116 * FDPart3tmp16 + FDPart3tmp117;
-        const REAL FDPart3tmp122 = FDPart3tmp112 * FDPart3tmp14 + FDPart3tmp117;
-        const REAL FDPart3tmp124 = FDPart3tmp116 * FDPart3tmp24 + FDPart3tmp123;
-        const REAL FDPart3tmp126 = FDPart3tmp123 + FDPart3tmp77 * FDPart3tmp97;
-        const REAL FDPart3tmp136 = FDPart3tmp106 * FDPart3tmp38 * FDPart3tmp89;
-        rhs_gfs[IDX4(RHO_STARGF, i0, i1, i2)] = -FDPart3tmp1 * FDPart3tmp3 * rescaledvU0 - FDPart3tmp5 * FDPart3tmp7 * FDPart3tmp9;
+        const REAL FDPart3tmp5 = FDPart3tmp3 * rescaledvU0 * rhob;
+        const REAL FDPart3tmp12 = FDPart3tmp0 * FDPart3tmp3 * rescaledvU1 * rhob;
+        const REAL FDPart3tmp18 = FDPart3tmp16 * rescaledvU0 + P * vetU0;
+        const REAL FDPart3tmp20 = FDPart3tmp16 * rescaledvU1 + P * vetU1;
+        const REAL FDPart3tmp25 = FDPart3tmp24 * vetU0;
+        const REAL FDPart3tmp29 = FDPart3tmp21 * FDPart3tmp28;
+        const REAL FDPart3tmp46 =
+            FDPart3tmp43 * ((rescaledvU0) * (rescaledvU0)) + P * (FDPart3tmp44 * (FDPart3tmp38 * FDPart3tmp40 - ((hDD12) * (hDD12))) - FDPart3tmp45);
+        const REAL FDPart3tmp48 = FDPart3tmp21 * FDPart3tmp47;
+        const REAL FDPart3tmp50 = FDPart3tmp34 * FDPart3tmp49 * hDD01 + FDPart3tmp49 * aDD01;
+        const REAL FDPart3tmp53 = FDPart3tmp16 * FDPart3tmp42 * rescaledvU0;
+        const REAL FDPart3tmp65 = FDPart3tmp24 * FDPart3tmp61;
+        const REAL FDPart3tmp67 =
+            FDPart3tmp43 * ((rescaledvU1) * (rescaledvU1)) + P * (FDPart3tmp44 * (FDPart3tmp33 * FDPart3tmp38 - ((hDD02) * (hDD02))) - FDPart3tmp66);
+        const REAL FDPart3tmp75 = FDPart3tmp34 * FDPart3tmp60 * FDPart3tmp74 + FDPart3tmp60 * FDPart3tmp8 * aDD12;
+        const REAL FDPart3tmp87 =
+            FDPart3tmp43 * ((rescaledvU2) * (rescaledvU2)) + P * (FDPart3tmp44 * (FDPart3tmp33 * FDPart3tmp40 - ((hDD01) * (hDD01))) - FDPart3tmp86);
+        const REAL FDPart3tmp95 = FDPart3tmp28 * FDPart3tmp42;
+        const REAL FDPart3tmp116 = 2 * FDPart3tmp77;
+        const REAL FDPart3tmp120 = 2 * FDPart3tmp54;
+        const REAL FDPart3tmp137 = FDPart3tmp2 * FDPart3tmp27 * FDPart3tmp47 / (FDPart3tmp102 * alpha);
+        const REAL FDPart3tmp22 = FDPart3tmp18 * FDPart3tmp21;
+        const REAL FDPart3tmp56 = FDPart3tmp53 * rescaledvU1 + P * (FDPart3tmp44 * (-FDPart3tmp38 * hDD01 + hDD02 * hDD12) - FDPart3tmp54 * vetU1);
+        const REAL FDPart3tmp68 = FDPart3tmp48 * FDPart3tmp61;
+        const REAL FDPart3tmp70 = FDPart3tmp34 * FDPart3tmp49 * FDPart3tmp8 * hDD02 + FDPart3tmp49 * FDPart3tmp8 * aDD02;
+        const REAL FDPart3tmp72 = FDPart3tmp53 * rescaledvU2 + P * (FDPart3tmp44 * (-FDPart3tmp40 * hDD02 + hDD01 * hDD12) - FDPart3tmp54 * vetU2);
+        const REAL FDPart3tmp79 = FDPart3tmp16 * FDPart3tmp42 * rescaledvU1 * rescaledvU2 +
+                                  P * (FDPart3tmp44 * (-FDPart3tmp33 * hDD12 + hDD01 * hDD02) - FDPart3tmp77 * vetU2);
+        const REAL FDPart3tmp89 = FDPart3tmp20 * FDPart3tmp42;
+        const REAL FDPart3tmp101 = FDPart3tmp18 * FDPart3tmp42;
+        const REAL FDPart3tmp104 = FDPart3tmp18 * hDD01 + FDPart3tmp20 * FDPart3tmp40 + FDPart3tmp23 * FDPart3tmp88 + FDPart3tmp28 * hDD12;
+        const REAL FDPart3tmp106 = FDPart3tmp18 * hDD02 + FDPart3tmp20 * hDD12 + FDPart3tmp23 * FDPart3tmp94 + FDPart3tmp28 * FDPart3tmp38;
+        const REAL FDPart3tmp110 = FDPart3tmp18 * FDPart3tmp33 + FDPart3tmp20 * hDD01 + FDPart3tmp23 * FDPart3tmp98 + FDPart3tmp28 * hDD02;
+        const REAL FDPart3tmp131 = FDPart3tmp120 * FDPart3tmp18 + FDPart3tmp23 * FDPart3tmp45 + FDPart3tmp46;
+        const REAL FDPart3tmp135 = FDPart3tmp23 * FDPart3tmp86 + FDPart3tmp81 * FDPart3tmp95 + FDPart3tmp87;
+        const REAL FDPart3tmp136 = FDPart3tmp116 * FDPart3tmp20 + FDPart3tmp23 * FDPart3tmp66 + FDPart3tmp67;
+        const REAL FDPart3tmp57 = FDPart3tmp0 * FDPart3tmp25 * vetU1 + FDPart3tmp0 * FDPart3tmp48 * FDPart3tmp56;
+        const REAL FDPart3tmp62 = FDPart3tmp20 * FDPart3tmp21 * FDPart3tmp61;
+        const REAL FDPart3tmp73 = FDPart3tmp25 * FDPart3tmp27 * vetU2 + FDPart3tmp27 * FDPart3tmp48 * FDPart3tmp72;
+        const REAL FDPart3tmp80 = FDPart3tmp30 * FDPart3tmp65 * vetU1 + FDPart3tmp68 * FDPart3tmp79 * FDPart3tmp9;
+        const REAL FDPart3tmp99 = FDPart3tmp33 * FDPart3tmp56 + FDPart3tmp67 * hDD01 + FDPart3tmp79 * hDD02 + FDPart3tmp89 * FDPart3tmp98;
+        const REAL FDPart3tmp108 = FDPart3tmp106 * FDPart3tmp42 * cf;
+        const REAL FDPart3tmp117 = FDPart3tmp23 * FDPart3tmp77 * vetU2 + FDPart3tmp79;
+        const REAL FDPart3tmp121 = FDPart3tmp23 * FDPart3tmp54 * vetU1 + FDPart3tmp56;
+        const REAL FDPart3tmp127 = FDPart3tmp23 * FDPart3tmp54 * vetU2 + FDPart3tmp72;
+        const REAL FDPart3tmp92 = FDPart3tmp40 * FDPart3tmp67 + FDPart3tmp56 * hDD01 + FDPart3tmp79 * hDD12 + FDPart3tmp88 * FDPart3tmp89;
+        const REAL FDPart3tmp97 = FDPart3tmp38 * FDPart3tmp87 + FDPart3tmp72 * hDD02 + FDPart3tmp79 * hDD12 + FDPart3tmp94 * FDPart3tmp95;
+        const REAL FDPart3tmp112 = FDPart3tmp104 * FDPart3tmp42 * cf;
+        const REAL FDPart3tmp118 = FDPart3tmp116 * FDPart3tmp28 + FDPart3tmp117;
+        const REAL FDPart3tmp119 = FDPart3tmp117 + FDPart3tmp81 * FDPart3tmp89;
+        const REAL FDPart3tmp122 = FDPart3tmp120 * FDPart3tmp20 + FDPart3tmp121;
+        const REAL FDPart3tmp126 = FDPart3tmp116 * FDPart3tmp18 + FDPart3tmp121;
+        const REAL FDPart3tmp128 = FDPart3tmp120 * FDPart3tmp28 + FDPart3tmp127;
+        const REAL FDPart3tmp130 = FDPart3tmp101 * FDPart3tmp81 + FDPart3tmp127;
+        const REAL FDPart3tmp140 = FDPart3tmp110 * FDPart3tmp42 * FDPart3tmp93;
+        rhs_gfs[IDX4(RHO_STARGF, i0, i1, i2)] = -FDPart3tmp1 * FDPart3tmp5 - FDPart3tmp10 * FDPart3tmp12;
         rhs_gfs[IDX4(TAU_TILDEGF, i0, i1, i2)] =
-            -FDPart3tmp1 * (FDPart3tmp14 * FDPart3tmp2 - FDPart3tmp3 * rescaledvU0) +
+            -FDPart3tmp1 * (FDPart3tmp18 * FDPart3tmp2 - FDPart3tmp5) - FDPart3tmp10 * (FDPart3tmp0 * FDPart3tmp2 * FDPart3tmp20 - FDPart3tmp12) +
             FDPart3tmp2 * alpha *
-                (FDPart3tmp46 * (FDPart3tmp1 * FDPart3tmp18 * vetU1 + FDPart3tmp53) +
-                 FDPart3tmp46 * (FDPart3tmp1 * FDPart3tmp16 * FDPart3tmp17 * vetU0 + FDPart3tmp53) +
-                 FDPart3tmp66 * (FDPart3tmp1 * FDPart3tmp18 * FDPart3tmp26 + FDPart3tmp69) +
-                 FDPart3tmp66 * (FDPart3tmp1 * FDPart3tmp25 * FDPart3tmp7 * vetU0 + FDPart3tmp69) +
-                 FDPart3tmp71 * (FDPart3tmp58 * FDPart3tmp7 * FDPart3tmp77 + FDPart3tmp76) +
-                 FDPart3tmp71 * (2 * FDPart3tmp25 * FDPart3tmp57 * FDPart3tmp7 * vetU1 + FDPart3tmp76) + alpha_dD0 * (-FDPart3tmp18 - FDPart3tmp21) +
-                 alpha_dD1 * (-FDPart3tmp0 * FDPart3tmp16 * FDPart3tmp17 - FDPart3tmp0 * FDPart3tmp20 * vetU1) +
-                 alpha_dD2 * (-FDPart3tmp0 * FDPart3tmp20 * FDPart3tmp26 - FDPart3tmp23 * FDPart3tmp25) +
-                 (FDPart3tmp28 * aDD00 + FDPart3tmp29 * FDPart3tmp31) *
-                     (2 * FDPart3tmp18 * vetU0 + FDPart3tmp20 * ((vetU0) * (vetU0)) + FDPart3tmp42 * FDPart3tmp44) +
-                 (FDPart3tmp31 * (FDPart3tmp55 * hDD11 + FDPart3tmp55) + FDPart3tmp56 * aDD11) *
-                     (2 * FDPart3tmp58 * vetU1 + FDPart3tmp61 * ((vetU1) * (vetU1)) + FDPart3tmp63 * FDPart3tmp64) +
-                 (FDPart3tmp28 * FDPart3tmp79 * aDD22 + FDPart3tmp31 * (FDPart3tmp79 * hDD22 + FDPart3tmp79)) *
-                     (FDPart3tmp25 * FDPart3tmp57 * FDPart3tmp77 * FDPart3tmp80 + FDPart3tmp61 * FDPart3tmp80 * ((vetU2) * (vetU2)) +
-                      FDPart3tmp64 * FDPart3tmp80 * FDPart3tmp83)) -
-            FDPart3tmp5 * FDPart3tmp7 * (FDPart3tmp0 * FDPart3tmp16 * FDPart3tmp2 - FDPart3tmp9);
+                (FDPart3tmp50 * (FDPart3tmp1 * FDPart3tmp22 * vetU1 + FDPart3tmp57) +
+                 FDPart3tmp50 * (FDPart3tmp1 * FDPart3tmp20 * FDPart3tmp21 * vetU0 + FDPart3tmp57) +
+                 FDPart3tmp70 * (FDPart3tmp1 * FDPart3tmp22 * FDPart3tmp30 + FDPart3tmp73) +
+                 FDPart3tmp70 * (FDPart3tmp1 * FDPart3tmp29 * FDPart3tmp9 * vetU0 + FDPart3tmp73) +
+                 FDPart3tmp75 * (FDPart3tmp62 * FDPart3tmp81 * FDPart3tmp9 + FDPart3tmp80) +
+                 FDPart3tmp75 * (2 * FDPart3tmp29 * FDPart3tmp61 * FDPart3tmp9 * vetU1 + FDPart3tmp80) + alpha_dD0 * (-FDPart3tmp22 - FDPart3tmp25) +
+                 alpha_dD1 * (-FDPart3tmp0 * FDPart3tmp20 * FDPart3tmp21 - FDPart3tmp0 * FDPart3tmp24 * vetU1) +
+                 alpha_dD2 * (-FDPart3tmp0 * FDPart3tmp24 * FDPart3tmp30 - FDPart3tmp27 * FDPart3tmp29) +
+                 (FDPart3tmp32 * aDD00 + FDPart3tmp33 * FDPart3tmp35) *
+                     (2 * FDPart3tmp22 * vetU0 + FDPart3tmp24 * ((vetU0) * (vetU0)) + FDPart3tmp46 * FDPart3tmp48) +
+                 (FDPart3tmp35 * (FDPart3tmp59 * hDD11 + FDPart3tmp59) + FDPart3tmp60 * aDD11) *
+                     (2 * FDPart3tmp62 * vetU1 + FDPart3tmp65 * ((vetU1) * (vetU1)) + FDPart3tmp67 * FDPart3tmp68) +
+                 (FDPart3tmp32 * FDPart3tmp83 * aDD22 + FDPart3tmp35 * (FDPart3tmp83 * hDD22 + FDPart3tmp83)) *
+                     (FDPart3tmp29 * FDPart3tmp61 * FDPart3tmp81 * FDPart3tmp84 + FDPart3tmp65 * FDPart3tmp84 * ((vetU2) * (vetU2)) +
+                      FDPart3tmp68 * FDPart3tmp84 * FDPart3tmp87));
         rhs_gfs[IDX4(RESCALEDSTILDED0GF, i0, i1, i2)] =
-            FDPart3tmp133 *
-            (FDPart3tmp6 * (FDPart3tmp100 * FDPart3tmp73 * cf + FDPart3tmp104 * vetU2 + FDPart3tmp104 * (-vetU2 + vetU_dD20 * xx0) +
-                            FDPart3tmp105 * FDPart3tmp106 * FDPart3tmp38 * vetU_dD00 + FDPart3tmp108 * (-vetU1 + vetU_dD10 * xx0) +
-                            FDPart3tmp111 * FDPart3tmp114 + FDPart3tmp111 * FDPart3tmp115 + FDPart3tmp118 * FDPart3tmp121 +
-                            FDPart3tmp121 * FDPart3tmp122 + FDPart3tmp124 * FDPart3tmp125 + FDPart3tmp125 * FDPart3tmp126 +
-                            0.5 * FDPart3tmp127 * xx0 * (-2 * FDPart3tmp29 * cf_dD0 + cf * hDD_dD000) +
-                            FDPart3tmp131 * (FDPart3tmp109 * hDD_dD220 - FDPart3tmp110 * FDPart3tmp34 - FDPart3tmp128 * FDPart3tmp34 +
-                                             FDPart3tmp128 * hDD22 + FDPart3tmp128) +
-                            FDPart3tmp132 * (FDPart3tmp109 * hDD_dD110 - FDPart3tmp110 * FDPart3tmp36 - FDPart3tmp128 * FDPart3tmp36 +
-                                             FDPart3tmp128 * hDD11 + FDPart3tmp128) -
-                            FDPart3tmp99 * alpha_dD0 * xx0) +
-             FDPart3tmp88 * FDPart3tmp89 + FDPart3tmp89 * FDPart3tmp93 -
-             2 * FDPart3tmp89 * (FDPart3tmp29 * FDPart3tmp42 + FDPart3tmp52 * hDD01 + FDPart3tmp68 * hDD02 + FDPart3tmp94 * FDPart3tmp97) -
-             FDPart3tmp95 * FDPart3tmp96);
+            FDPart3tmp137 *
+            (-FDPart3tmp100 * FDPart3tmp99 +
+             FDPart3tmp8 * (-FDPart3tmp103 * alpha_dD0 * xx0 + FDPart3tmp104 * FDPart3tmp77 * cf + FDPart3tmp108 * vetU2 +
+                            FDPart3tmp108 * (-vetU2 + vetU_dD20 * xx0) + FDPart3tmp109 * FDPart3tmp110 * FDPart3tmp42 * vetU_dD00 +
+                            FDPart3tmp112 * (-vetU1 + vetU_dD10 * xx0) + FDPart3tmp115 * FDPart3tmp118 + FDPart3tmp115 * FDPart3tmp119 +
+                            FDPart3tmp122 * FDPart3tmp125 + FDPart3tmp125 * FDPart3tmp126 + FDPart3tmp128 * FDPart3tmp129 +
+                            FDPart3tmp129 * FDPart3tmp130 + 0.5 * FDPart3tmp131 * xx0 * (-2 * FDPart3tmp33 * cf_dD0 + cf * hDD_dD000) +
+                            FDPart3tmp135 * (FDPart3tmp113 * hDD_dD220 - FDPart3tmp114 * FDPart3tmp38 - FDPart3tmp132 * FDPart3tmp38 +
+                                             FDPart3tmp132 * hDD22 + FDPart3tmp132) +
+                            FDPart3tmp136 * (FDPart3tmp113 * hDD_dD110 - FDPart3tmp114 * FDPart3tmp40 - FDPart3tmp132 * FDPart3tmp40 +
+                                             FDPart3tmp132 * hDD11 + FDPart3tmp132)) +
+             FDPart3tmp92 * FDPart3tmp93 + FDPart3tmp93 * FDPart3tmp97 -
+             2 * FDPart3tmp93 * (FDPart3tmp101 * FDPart3tmp98 + FDPart3tmp33 * FDPart3tmp46 + FDPart3tmp56 * hDD01 + FDPart3tmp72 * hDD02));
         rhs_gfs[IDX4(RESCALEDSTILDED1GF, i0, i1, i2)] =
-            FDPart3tmp133 *
-            (FDPart3tmp100 * FDPart3tmp38 * FDPart3tmp89 * vetU_dD11 + FDPart3tmp100 * FDPart3tmp50 * FDPart3tmp89 + FDPart3tmp104 * FDPart3tmp135 +
-             FDPart3tmp104 * (-FDPart3tmp135 + FDPart3tmp6 * vetU_dD21) - FDPart3tmp106 * FDPart3tmp73 * FDPart3tmp89 +
-             FDPart3tmp114 * FDPart3tmp138 + FDPart3tmp115 * FDPart3tmp138 + FDPart3tmp118 * FDPart3tmp147 + FDPart3tmp122 * FDPart3tmp147 +
-             FDPart3tmp124 * FDPart3tmp140 + FDPart3tmp126 * FDPart3tmp140 +
-             FDPart3tmp127 * FDPart3tmp6 * (-FDPart3tmp128 * hDD01 - FDPart3tmp142 * FDPart3tmp29 + 0.5 * cf * hDD_dD001) +
-             FDPart3tmp131 * (-FDPart3tmp128 * FDPart3tmp34 * FDPart3tmp5 + FDPart3tmp128 * FDPart3tmp5 * hDD22 + FDPart3tmp128 * FDPart3tmp5 -
-                              FDPart3tmp142 * FDPart3tmp34 * FDPart3tmp6 + 0.5 * FDPart3tmp89 * hDD_dD221) +
-             FDPart3tmp132 * FDPart3tmp6 * (FDPart3tmp128 * hDD01 - FDPart3tmp142 * FDPart3tmp36 + FDPart3tmp143 * hDD_dD111) +
-             FDPart3tmp136 * vetU_dD01 - FDPart3tmp6 * FDPart3tmp99 * alpha_dD1 - FDPart3tmp88 * FDPart3tmp96 - FDPart3tmp89 * FDPart3tmp95 -
-             FDPart3tmp89 * (FDPart3tmp36 * FDPart3tmp52 + FDPart3tmp42 * hDD01 + FDPart3tmp68 * hDD12 + FDPart3tmp84 * FDPart3tmp97) +
-             FDPart3tmp93 * FDPart3tmp96);
+            FDPart3tmp137 *
+            (-FDPart3tmp100 * FDPart3tmp92 + FDPart3tmp100 * FDPart3tmp97 - FDPart3tmp103 * FDPart3tmp8 * alpha_dD1 +
+             FDPart3tmp104 * FDPart3tmp42 * FDPart3tmp93 * vetU_dD11 + FDPart3tmp104 * FDPart3tmp54 * FDPart3tmp93 + FDPart3tmp108 * FDPart3tmp139 +
+             FDPart3tmp108 * (-FDPart3tmp139 + FDPart3tmp8 * vetU_dD21) - FDPart3tmp110 * FDPart3tmp77 * FDPart3tmp93 +
+             FDPart3tmp118 * FDPart3tmp142 + FDPart3tmp119 * FDPart3tmp142 + FDPart3tmp122 * FDPart3tmp151 + FDPart3tmp126 * FDPart3tmp151 +
+             FDPart3tmp128 * FDPart3tmp144 + FDPart3tmp130 * FDPart3tmp144 +
+             FDPart3tmp131 * FDPart3tmp8 * (-FDPart3tmp132 * hDD01 - FDPart3tmp146 * FDPart3tmp33 + 0.5 * cf * hDD_dD001) +
+             FDPart3tmp135 * (-FDPart3tmp132 * FDPart3tmp38 * FDPart3tmp7 + FDPart3tmp132 * FDPart3tmp7 * hDD22 + FDPart3tmp132 * FDPart3tmp7 -
+                              FDPart3tmp146 * FDPart3tmp38 * FDPart3tmp8 + 0.5 * FDPart3tmp93 * hDD_dD221) +
+             FDPart3tmp136 * FDPart3tmp8 * (FDPart3tmp132 * hDD01 - FDPart3tmp146 * FDPart3tmp40 + FDPart3tmp147 * hDD_dD111) +
+             FDPart3tmp140 * vetU_dD01 - FDPart3tmp93 * FDPart3tmp99 -
+             FDPart3tmp93 * (FDPart3tmp101 * FDPart3tmp88 + FDPart3tmp40 * FDPart3tmp56 + FDPart3tmp46 * hDD01 + FDPart3tmp72 * hDD12));
         rhs_gfs[IDX4(RESCALEDSTILDED2GF, i0, i1, i2)] =
-            FDPart3tmp133 *
-            (FDPart3tmp102 * FDPart3tmp50 * FDPart3tmp89 + FDPart3tmp102 * FDPart3tmp73 * FDPart3tmp96 + FDPart3tmp104 * vetU_dD22 +
-             FDPart3tmp106 * FDPart3tmp38 * cf * vetU_dD02 - FDPart3tmp108 * FDPart3tmp135 + FDPart3tmp108 * vetU_dD12 +
-             FDPart3tmp114 * FDPart3tmp154 + FDPart3tmp115 * FDPart3tmp154 + FDPart3tmp118 * FDPart3tmp149 + FDPart3tmp122 * FDPart3tmp149 +
-             FDPart3tmp124 * FDPart3tmp155 + FDPart3tmp126 * FDPart3tmp155 +
-             FDPart3tmp127 * (-FDPart3tmp150 * FDPart3tmp29 - FDPart3tmp151 + 0.5 * cf * hDD_dD002) +
-             FDPart3tmp131 * (FDPart3tmp143 * hDD_dD222 - FDPart3tmp150 * FDPart3tmp34 + FDPart3tmp151 + FDPart3tmp152) +
-             FDPart3tmp132 * (-FDPart3tmp150 * FDPart3tmp36 - FDPart3tmp152 + 0.5 * cf * hDD_dD112) - FDPart3tmp136 * vetU2 -
-             FDPart3tmp89 * (FDPart3tmp29 * FDPart3tmp68 + FDPart3tmp75 * hDD01 + FDPart3tmp83 * hDD02 + FDPart3tmp91 * FDPart3tmp94) -
-             FDPart3tmp89 * (FDPart3tmp34 * FDPart3tmp68 + FDPart3tmp42 * hDD02 + FDPart3tmp52 * hDD12 + FDPart3tmp90 * FDPart3tmp97) -
-             FDPart3tmp96 * (FDPart3tmp36 * FDPart3tmp75 + FDPart3tmp68 * hDD01 + FDPart3tmp83 * hDD12 + FDPart3tmp84 * FDPart3tmp91) -
-             FDPart3tmp99 * alpha_dD2);
+            FDPart3tmp137 *
+            (FDPart3tmp100 * FDPart3tmp106 * FDPart3tmp77 -
+             FDPart3tmp100 * (FDPart3tmp40 * FDPart3tmp79 + FDPart3tmp72 * hDD01 + FDPart3tmp87 * hDD12 + FDPart3tmp88 * FDPart3tmp95) -
+             FDPart3tmp103 * alpha_dD2 + FDPart3tmp106 * FDPart3tmp54 * FDPart3tmp93 + FDPart3tmp108 * vetU_dD22 +
+             FDPart3tmp110 * FDPart3tmp42 * cf * vetU_dD02 - FDPart3tmp112 * FDPart3tmp139 + FDPart3tmp112 * vetU_dD12 +
+             FDPart3tmp118 * FDPart3tmp158 + FDPart3tmp119 * FDPart3tmp158 + FDPart3tmp122 * FDPart3tmp153 + FDPart3tmp126 * FDPart3tmp153 +
+             FDPart3tmp128 * FDPart3tmp159 + FDPart3tmp130 * FDPart3tmp159 +
+             FDPart3tmp131 * (-FDPart3tmp154 * FDPart3tmp33 - FDPart3tmp155 + 0.5 * cf * hDD_dD002) +
+             FDPart3tmp135 * (FDPart3tmp147 * hDD_dD222 - FDPart3tmp154 * FDPart3tmp38 + FDPart3tmp155 + FDPart3tmp156) +
+             FDPart3tmp136 * (-FDPart3tmp154 * FDPart3tmp40 - FDPart3tmp156 + 0.5 * cf * hDD_dD112) - FDPart3tmp140 * vetU2 -
+             FDPart3tmp93 * (FDPart3tmp101 * FDPart3tmp94 + FDPart3tmp38 * FDPart3tmp72 + FDPart3tmp46 * hDD02 + FDPart3tmp56 * hDD12) -
+             FDPart3tmp93 * (FDPart3tmp33 * FDPart3tmp72 + FDPart3tmp79 * hDD01 + FDPart3tmp87 * hDD02 + FDPart3tmp95 * FDPart3tmp98));
+        rhs_gfs[IDX4(YE_STARGF, i0, i1, i2)] = -FDPart3tmp1 * FDPart3tmp5 * Ye - FDPart3tmp10 * FDPart3tmp12 * Ye;
+        rhs_gfs[IDX4(S_STARGF, i0, i1, i2)] =
+            -FDPart3tmp0 * FDPart3tmp10 * FDPart3tmp3 * S * rescaledvU1 - FDPart3tmp1 * FDPart3tmp3 * S * rescaledvU0;
 
       } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
     } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)

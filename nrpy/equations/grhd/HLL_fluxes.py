@@ -55,7 +55,7 @@ def calculate_GRHD_Tmunu_and_contractions(
     :return: Conserved quantities and fluxes in the requested direction.
 
     Note: Written in terms of rescaled quantities, the rescaled fluxes have the
-    same mathematical form as the unscaled Cartesian expressions.
+    same mathematical form as the Cartesian expressions.
     """
     # Step 1: Initialize the GRHD equations in Cartesian-equivalent form.
     grhd_eqs = GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
@@ -382,12 +382,12 @@ if __name__ == "__main__":
         beta_faceU_test,
         alpha_face_test,
         e6phi_face_test,
-        rho_b_l_test,
+        rho_b_r_test,
         Ye_r_test,
         S_r_test,
-        P_l_test,
+        P_r_test,
         h_r_test,
-        u4lU_test,
+        u4rU_test,
     )
 
     cmin_test, cmax_test = find_cmax_cmin(

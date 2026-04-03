@@ -17,7 +17,6 @@ import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
-import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
@@ -27,7 +26,6 @@ from nrpy.equations.grhd.HLL_fluxes import calculate_HLL_fluxes
 def register_CFunction_calculate_HLL_flux_dirn_i(
     flux_dirn: int,
     enable_intrinsics: bool,
-    OMP_collapse: int,
     enable_GoldenKernels: bool = False,
     evolving_temperature: bool = False,
     evolving_entropy: bool = False,
@@ -37,23 +35,35 @@ def register_CFunction_calculate_HLL_flux_dirn_i(
 
     :param flux_dirn: Flux direction.
     :param enable_intrinsics: Whether to enable SIMD.
-    :param OMP_collapse: Level of OpenMP loop collapsing.
     :param enable_GoldenKernels: Boolean to enable Golden Kernels.
     :param evolving_temperature: Whether temperature and electron fraction are
         evolved.
     :param evolving_entropy: Whether entropy is evolved.
     :return: None if in registration phase, else the updated NRPy environment.
 
+    Note: We do not take the coordinate system as input.
+    This is because in the reference metric formulation of
+    the GRHD equations, the symbolic expressions of
+    rescaled quantities in some non-Cartesian basis are
+    equivalent to the expressions in the Cartesian basis.
+    Therefore, we opt to avoid possible issues with scale-factor
+    cancellations by constructing all the expressions in the
+    Cartesian basis. Note also that we also ensure that the
+    coordinates xx0, xx1, xx2 are not defined in the resulting
+    C functions, since we don't need to compute scale factors
+
     Doctests:
     >>> from nrpy.helpers.generic import validate_strings, clang_format
     >>> import nrpy.c_function as cfc
     >>> import nrpy.params as par
     >>> supported_Parallelizations = ["openmp"]
-    >>> name = "calculate_HLL_fluxes_direction_0"
+    >>> name = "calculate_HLL_fluxes_direction_2"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
-    ...    _ = register_CFunction_calculate_HLL_flux_dirn_i(0, False, 1)
+    ...    _ = register_CFunction_calculate_HLL_flux_dirn_i(
+    ...        2, False, evolving_temperature=True, evolving_entropy=True
+    ...    )
     ...    generated_str = clang_format(cfc.CFunction_dict[name].full_function)
     ...    validation_desc = f"{name}__{parallelization}"
     ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
@@ -270,21 +280,20 @@ ghl_compute_h_and_cs2(eos, &prims_l, &h_l, &cs2_l);
         )
 
     # Step 6: Wrap the pointwise HLL solve in the BH@H loop.
-    body = lp.simple_loop(
-        loop_body=pre_body
-        + ccg.c_codegen(
-            output_vars,
-            vars_grid_access,
-            enable_fd_codegen=True,
-            enable_simd=enable_intrinsics,
-            enable_GoldenKernels=enable_GoldenKernels,
-        ),
-        loop_region="interior plus one upper",
-        enable_intrinsics=enable_intrinsics,
-        enable_rfm_precompute=False,
-        read_xxs=False,
-        OMP_collapse=OMP_collapse,
-    )
+    body = f"""
+   #pragma omp parallel for
+   LOOP_REGION(NGHOSTS, (Nxx_plus_2NGHOSTS0-NGHOSTS) + ({flux_dirn} == 0),
+               NGHOSTS, (Nxx_plus_2NGHOSTS1-NGHOSTS) + ({flux_dirn} == 1),
+               NGHOSTS, (Nxx_plus_2NGHOSTS2-NGHOSTS) + ({flux_dirn} == 2)) {{
+   {pre_body}{ccg.c_codegen(
+       output_vars,
+       vars_grid_access,
+       enable_fd_codegen=True,
+       enable_simd=enable_intrinsics,
+       enable_GoldenKernels=enable_GoldenKernels,
+   )}
+   }}
+   """
 
     # Step 7: Register the final C function.
     cfc.register_CFunction(

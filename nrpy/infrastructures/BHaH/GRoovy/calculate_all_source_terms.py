@@ -57,7 +57,7 @@ def register_CFunction_calculate_all_source_terms(
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
-    ...    _ = register_CFunction_calculate_all_source_terms("Spherical", False, False, 1)
+    ...    _ = register_CFunction_calculate_all_source_terms("Spherical", False, False, 1, evolving_temperature = True, evolving_entropy = True)
     ...    generated_str = clang_format(cfc.CFunction_dict[f"{name}__rfm__Spherical"].full_function)
     ...    validation_desc = f"{name}__{parallelization}__Spherical"
     ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
