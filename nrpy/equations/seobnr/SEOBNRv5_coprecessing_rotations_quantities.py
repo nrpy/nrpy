@@ -106,7 +106,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         gamma: sp.Expr,
         modes: List[Tuple[int, int]],
     ) -> Tuple[sp.Expr, sp.Expr]:
-        """Helper method to generate polarizations for a specific Euler angle branch. """
+        """Helper method to generate polarizations for a specific Euler angle branch."""
         h_plus_expr = sp.sympify(0)
         h_cross_expr = sp.sympify(0)
 
