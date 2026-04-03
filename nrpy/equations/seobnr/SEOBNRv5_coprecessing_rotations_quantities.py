@@ -22,8 +22,6 @@ https://arxiv.org/pdf/2303.18046.pdf (SEOBNRv5PHM paper).
 License: BSD 2-Clause
 """
 
-import os
-import sys
 from functools import lru_cache
 from typing import List, Optional, Tuple, cast
 
@@ -350,6 +348,8 @@ class SEOBNRv5_Coprecessing_Rotations:
 
 if __name__ == "__main__":
     import doctest
+    import os
+    import sys
 
     project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
     sys.path.append(project_root)
