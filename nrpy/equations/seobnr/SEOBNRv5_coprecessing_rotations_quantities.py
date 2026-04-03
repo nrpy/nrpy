@@ -25,7 +25,7 @@ License: BSD 2-Clause
 import os
 import sys
 from functools import lru_cache
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, cast
 
 import sympy as sp
 
@@ -112,7 +112,10 @@ class SEOBNRv5_Coprecessing_Rotations:
                 f"Received m1={m1}, m2={m2}, l={l}"
             )
 
-        return cls.wigner_d_small_template(l, m1, m2).xreplace({cls._WIGNER_BETA: beta})
+        return cast(
+            sp.Expr,
+            cls.wigner_d_small_template(l, m1, m2).xreplace({cls._WIGNER_BETA: beta}),
+        )
 
     def _polarizations_from_angles(
         self,
