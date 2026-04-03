@@ -86,9 +86,7 @@ class SEOBNRv5_Coprecessing_Rotations:
 
     @classmethod
     def wigner_d_small(cls, l: int, m1: int, m2: int, beta: sp.Expr) -> sp.Expr:
-        """
-        Computes the Wigner small-d matrix element d^l_{m1, m2}(beta).
-        """
+        """Compute the Wigner small-d matrix element d^l_{m1, m2}(beta)."""
         if l < 0:
             raise ValueError(
                 f"Wigner-d matrix index l must be non-negative. Received l={l}"
@@ -108,9 +106,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         gamma: sp.Expr,
         modes: List[Tuple[int, int]],
     ) -> Tuple[sp.Expr, sp.Expr]:
-        """
-        Helper method to generate polarizations for a specific Euler angle branch.
-        """
+        """Helper method to generate polarizations for a specific Euler angle branch. """
         h_plus_expr = sp.sympify(0)
         h_cross_expr = sp.sympify(0)
 
@@ -148,9 +144,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         return h_plus_expr, h_cross_expr
 
     def __init__(self, modes: Optional[List[Tuple[int, int]]] = None) -> None:
-        """
-        Compute the symbolic expressions for the SEOBNRv5 co-precessing rotations.
-        """
+        """Compute the symbolic expressions for the SEOBNRv5 co-precessing rotations."""
         if modes is None:
             modes = [(2, 2), (2, 1), (3, 3), (3, 2), (4, 4), (4, 3), (5, 5)]
 
