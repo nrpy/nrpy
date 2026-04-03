@@ -43,7 +43,7 @@ def register_CFunction_adjust_hydrodynamic_data(
         "const commondata_struct *restrict commondata, "
         "const params_struct *restrict params, "
         "REAL *restrict xx[3], "
-        "const REAL *restrict in_gfs, "
+        "REAL *restrict evol_gfs, "
         "REAL *restrict auxevol_gfs"
     )
 
@@ -56,7 +56,7 @@ def register_CFunction_adjust_hydrodynamic_data(
       // Rebuild GRHayL structs from the current gridfunction data.
       basis_transform_rfm_basis_to_Cartesian(
           commondata, params, &prims, &cons, &metric, i0, i1, i2, xx,
-          auxevol_gfs, in_gfs);
+          auxevol_gfs, evol_gfs);
 
       bool speed_limited;
       ghl_enforce_primitive_limits_and_compute_u0(
@@ -66,7 +66,7 @@ def register_CFunction_adjust_hydrodynamic_data(
       // Store the limited variables back in the native gridfunction basis.
       basis_transform_Cartesian_to_rfm_basis(
           commondata, params, &prims, &cons, i0, i1, i2, xx,
-          auxevol_gfs, in_gfs);
+          auxevol_gfs, evol_gfs);
 
       auxevol_gfs[IDX4(U4UTGF, i0, i1, i2)] = prims.u0;
 """
