@@ -190,9 +190,7 @@ class SEOBNRv5_Coprecessing_Rotations:
                     "Negative m symmetries are handled internally."
                 )
 
-        # ----------------------------------------------------------------------
         # Step 1: Inputs for J_f frame construction (Eq. 15)
-        # ----------------------------------------------------------------------
         Jfx, Jfy, Jfz = sp.symbols("J_f_x J_f_y J_f_z", real=True)
 
         J_norm = sp.sqrt(sp.Max(Jfx**2 + Jfy**2 + Jfz**2, sp.sympify("1e-30")))
@@ -200,7 +198,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         e3_J_y = Jfy / J_norm
         e3_J_z = Jfz / J_norm
 
-        # Continuous blending for Gram-Schmidt (prevents MCMC gradient discontinuities).
+        # Continuous blending for Gram-Schmidt.
         abs_e3_x = sp.Abs(e3_J_x)
         weight_x = sp.Max(
             sp.sympify(0),
@@ -211,17 +209,25 @@ class SEOBNRv5_Coprecessing_Rotations:
         )
         weight_y = sp.sympify(1) - weight_x
 
+        # Preserve J-frame continuity by flipping the fallback y-projection sign.
+        # We use an algebraic sign formulation (x / |x|) from throwing "undefined reference to 'sign'".
+        fallback_sign = -e3_J_x / sp.Max(abs_e3_x, sp.sympify("1e-30"))
+
         v_x_x = 1 - e3_J_x**2
         v_x_y = -e3_J_x * e3_J_y
         v_x_z = -e3_J_x * e3_J_z
 
-        v_y_x = -e3_J_y * e3_J_x
-        v_y_y = 1 - e3_J_y**2
-        v_y_z = -e3_J_y * e3_J_z
+        v_y_x = fallback_sign * (-e3_J_y * e3_J_x)
+        v_y_y = fallback_sign * (1 - e3_J_y**2)
+        v_y_z = fallback_sign * (-e3_J_y * e3_J_z)
 
-        e1_J_unnorm_x = weight_x * v_x_x + weight_y * v_y_x
-        e1_J_unnorm_y = weight_x * v_x_y + weight_y * v_y_y
-        e1_J_unnorm_z = weight_x * v_x_z + weight_y * v_y_z
+        # Normalize projections individually before blending
+        norm_vx = sp.sqrt(sp.Max(v_x_x**2 + v_x_y**2 + v_x_z**2, sp.sympify("1e-30")))
+        norm_vy = sp.sqrt(sp.Max(v_y_x**2 + v_y_y**2 + v_y_z**2, sp.sympify("1e-30")))
+
+        e1_J_unnorm_x = weight_x * v_x_x / norm_vx + weight_y * v_y_x / norm_vy
+        e1_J_unnorm_y = weight_x * v_x_y / norm_vx + weight_y * v_y_y / norm_vy
+        e1_J_unnorm_z = weight_x * v_x_z / norm_vx + weight_y * v_y_z / norm_vy
 
         norm_e1 = sp.sqrt(
             sp.Max(
@@ -250,9 +256,7 @@ class SEOBNRv5_Coprecessing_Rotations:
             for j in range(3):
                 setattr(self, f"R_Eq15_{i}{j}", R_Eq15[i, j])
 
-        # ----------------------------------------------------------------------
-        # Step 2: Combine matrices for the Inertial Euler Angles (Eqs. 17, 26)
-        # ----------------------------------------------------------------------
+        # Step 2: Combine matrices for the inertial Euler angles (Eqs. 17 and 26).
         alpha_JP, beta_JP, gamma_JP = sp.symbols("alpha_JP beta_JP gamma_JP", real=True)
         iota, phi0 = sp.symbols("iota varphi_0", real=True)
 
@@ -270,7 +274,7 @@ class SEOBNRv5_Coprecessing_Rotations:
                 [-sp.sin(iota), sp.sympify(0), sp.cos(iota)],
             ]
         )
-        R_obs = R_obs_z * R_obs_y
+        R_obs = R_obs_y * R_obs_z
         R_JI = R_Eq15.T
 
         R_z_alpha = sp.Matrix(
@@ -320,9 +324,7 @@ class SEOBNRv5_Coprecessing_Rotations:
         self.alpha_PI_pole_neg = sp.atan2(-M21, -M11)
         self.gamma_PI_pole_neg = sp.sympify(0)
 
-        # ----------------------------------------------------------------------
-        # Step 3: Project Co-Precessing modes to Inertial Polarizations (Eq. 28)
-        # ----------------------------------------------------------------------
+        # Step 3: Project co-precessing modes to inertial polarizations (Eq. 28).
         self.h_plus_I_generic, self.h_cross_I_generic = self._polarizations_from_angles(
             self.alpha_PI_generic, self.beta_PI, self.gamma_PI_generic, modes
         )
