@@ -34,7 +34,7 @@ def generate_CFunction_psi4_tetrad(
     parallelization = par.parval_from_str("parallelization")
     desc = f"Compute {tetrad} tetrad for psi4, with use_metric_to_construct_unit_normal={use_metric_to_construct_unit_normal}"
     name = "psi4_tetrad"
-    cfunc_type = "void"
+    cfunc_type = "static void"
     cfunc_decorators = "__device__" if parallelization == "cuda" else ""
 
     # Initialize psi4 tetrad
@@ -98,6 +98,7 @@ def generate_CFunction_psi4_tetrad(
         lhss,
         verbose=False,
         enable_cse=True,
+        cse_sorting="none",
         include_braces=False,
     )
 

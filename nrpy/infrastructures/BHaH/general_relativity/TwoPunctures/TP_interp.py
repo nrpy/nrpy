@@ -19,31 +19,94 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_Interp() -> None:
+def register_CFunction_TP_Interp(enable_xy_plane: bool = False) -> None:
     """
     Register C function TP_Interp().
 
-    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
+    Provides spectral interpolation at an arbitrary Cartesian point. By default the exported
+    tensor components follow the legacy startup ordering; with ``enable_xy_plane=True`` the
+    fixed-frame query point stays native and the output basis depends on whether the destination
+    grid is rotating.
     """
     includes = ["assert.h", "TP_utilities.h", "TwoPunctures.h"]
-    desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z} in the Cartesian basis."
+    desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z}."
     prefunc = f"// {desc}\n\n"
     prefunc += """
 //#define STANDALONE_UNIT_TEST
-
-/* Swap two variables */
-static inline void swap(REAL *restrict const a, REAL *restrict const b) {
-  REAL const t = *a;
-  *a = *b;
-  *b = t;
-}
-
-#undef SWAP
-#define SWAP(a, b) (swap(&(a), &(b)))
 """
     name = "TP_Interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
+    if enable_xy_plane:
+        coordinate_map_body = """  REAL xx, yy, zz;
+  {
+    xx = x - ID_persist->center_offset[0];
+    yy = y - ID_persist->center_offset[1];
+    zz = z - ID_persist->center_offset[2];
+  }
+"""
+        output_assignment_body = """  if (params->grid_rotates) {
+    // Query coordinates stay in the native fixed frame so the physical BBH remains
+    // in the standard xy orientation. Rotating startup grids, however, interpret
+    // Cartesian tensor components in their own startup basis, so we emit the
+    // legacy startup component ordering here. Fixed grids keep the native
+    // fixed-frame Cartesian ordering.
+    initial_data->gammaSphorCartDD22 = gxx_out;
+    initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+    initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
+    initial_data->gammaSphorCartDD00 = gyy_out;
+    initial_data->gammaSphorCartDD01 = gyz_out;
+    initial_data->gammaSphorCartDD11 = gzz_out;
+
+    initial_data->KSphorCartDD22 = Kxx_out;
+    initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+    initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
+    initial_data->KSphorCartDD00 = Kyy_out;
+    initial_data->KSphorCartDD01 = Kyz_out;
+    initial_data->KSphorCartDD11 = Kzz_out;
+  } else {
+    initial_data->gammaSphorCartDD00 = gxx_out;
+    initial_data->gammaSphorCartDD01 = gxy_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
+    initial_data->gammaSphorCartDD02 = gxz_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+    initial_data->gammaSphorCartDD11 = gyy_out;
+    initial_data->gammaSphorCartDD12 = gyz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
+    initial_data->gammaSphorCartDD22 = gzz_out;
+
+    initial_data->KSphorCartDD00 = Kxx_out;
+    initial_data->KSphorCartDD01 = Kxy_out;  // Technically KSphorCartDD10 = KSphorCartDD01
+    initial_data->KSphorCartDD02 = Kxz_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+    initial_data->KSphorCartDD11 = Kyy_out;
+    initial_data->KSphorCartDD12 = Kyz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
+    initial_data->KSphorCartDD22 = Kzz_out;
+  }
+"""
+    else:
+        coordinate_map_body = """  // Legacy export permutation: native TP (x,y,z) -> legacy startup ordering (z,x,y).
+  REAL xx, yy, zz;
+  {
+    const REAL x_dest = x - ID_persist->center_offset[0];
+    const REAL y_dest = y - ID_persist->center_offset[1];
+    const REAL z_dest = z - ID_persist->center_offset[2];
+    xx = z_dest;
+    yy = x_dest;
+    zz = y_dest;
+  }
+"""
+        output_assignment_body = """  // Legacy startup component ordering: (x,y,z) <- (y,z,x) from native TP output.
+  initial_data->gammaSphorCartDD22 = gxx_out;
+  initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+  initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
+  initial_data->gammaSphorCartDD00 = gyy_out;
+  initial_data->gammaSphorCartDD01 = gyz_out;
+  initial_data->gammaSphorCartDD11 = gzz_out;
+
+  initial_data->KSphorCartDD22 = Kxx_out;
+  initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+  initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
+  initial_data->KSphorCartDD00 = Kyy_out;
+  initial_data->KSphorCartDD01 = Kyz_out;
+  initial_data->KSphorCartDD11 = Kzz_out;
+"""
     body = r"""  const REAL mp = ID_persist->mp;
   const REAL mm = ID_persist->mm;
 
@@ -111,29 +174,9 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   REAL gxx_out, gxy_out, gxz_out, gyy_out, gyz_out, gzz_out;
   // REAL puncture_u_out;
   REAL Kxx_out, Kxy_out, Kxz_out, Kyy_out, Kyz_out, Kzz_out;
-
-  // rotate xy to zx via: x->z , y->x, z->y.
-  // z_dest = x_src; x_dest = y_src; y_dest = z_src
-  REAL xx, yy, zz;
-  {
-    const REAL x_dest = x - ID_persist->center_offset[0];
-    const REAL y_dest = y - ID_persist->center_offset[1];
-    const REAL z_dest = z - ID_persist->center_offset[2];
-    xx = z_dest;
-    yy = x_dest;
-    zz = y_dest;
-  }
-
-  // We implement swapping the x and z coordinates as follows.
-  //    The bulk of the code that performs the actual calculations
-  //    is unchanged.  This code looks only at local variables.
-  //    Before the bulk --i.e., here-- we swap all x and z tensor
-  //    components, and after the code --i.e., at the end of this
-  //    main loop-- we swap everything back.
-  if (ID_persist->swap_xz) {
-    // Swap the x and z coordinates
-    SWAP(xx, zz);
-  }
+"""
+    body += coordinate_map_body
+    body += r"""
 
   REAL r_plus = sqrt(pow(xx - ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
   REAL r_minus = sqrt(pow(xx + ID_persist->par_b, 2) + pow(yy, 2) + pow(zz, 2));
@@ -304,23 +347,6 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
   if (ID_persist->multiply_old_lapse)
     alp_out *= old_alp;
 
-  if (ID_persist->swap_xz) {
-    /*
-    // Swap the x and z components of all tensors
-    if (*conformal_state >= 2) {
-    SWAP (psix_out, psiz_out);
-    }
-    if (*conformal_state >= 3) {
-    SWAP (psixx_out, psizz_out);
-    SWAP (psixy_out, psiyz_out);
-    }
-    */
-    SWAP(gxx_out, gzz_out);
-    SWAP(gxy_out, gyz_out);
-    SWAP(Kxx_out, Kzz_out);
-    SWAP(Kxy_out, Kyz_out);
-  } /* if swap_xz */
-
   /* ZACH DISABLED: DO NOT USE MATTER SOURCE TERMS.
      if (ID_persist->use_sources && ID_persist->rescale_sources)
      {
@@ -337,22 +363,9 @@ static inline void swap(REAL *restrict const a, REAL *restrict const b) {
      }
      fclose(outascii_file);
   */
-  // New z = old x
-  // New x = old y
-  // New y = old z
-  initial_data->gammaSphorCartDD22 = gxx_out;
-  initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
-  initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
-  initial_data->gammaSphorCartDD00 = gyy_out;
-  initial_data->gammaSphorCartDD01 = gyz_out;
-  initial_data->gammaSphorCartDD11 = gzz_out;
-
-  initial_data->KSphorCartDD22 = Kxx_out;
-  initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
-  initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
-  initial_data->KSphorCartDD00 = Kyy_out;
-  initial_data->KSphorCartDD01 = Kyz_out;
-  initial_data->KSphorCartDD11 = Kzz_out;
+"""
+    body += output_assignment_body
+    body += r"""
 
   initial_data->alpha = alp_out;
   initial_data->betaSphorCartU0 = 0;

@@ -78,8 +78,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", "All")
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
     list_of_grid_physical_sizes.append(grid_physical_size)
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
+num_cuda_streams = len(list_of_grid_physical_sizes)
 
 Nxx_dict = {
     "Spherical": [64, 2, 2],
@@ -102,7 +101,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -181,13 +179,18 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
 )
-rhs_string = """rhs_eval(commondata, params, rfmstruct,  RK_INPUT_GFS, RK_OUTPUT_GFS);
+if enable_rfm_precompute:
+    rhs_string = """rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
   apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                      gridfunctions_wavespeed,gridfunctions_f_infinity,
                                      RK_INPUT_GFS, RK_OUTPUT_GFS);"""
-if not enable_rfm_precompute:
-    rhs_string = rhs_string.replace("rfmstruct", "xx")
+else:
+    rhs_string = """rhs_eval(commondata, params, xx, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                     RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,

@@ -143,8 +143,10 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
   // -={ END k2 substep }=-
 
   // Adding dt to commondata->time many times will induce roundoff error,
-  // so here we set time based on the iteration number:
-  commondata->time = (REAL)(commondata->nn + 1) * commondata->dt;
+  // so here we set time based on the iteration number.
+  // Note: t_0 and nn_0 are updated at regrid (when dt may change),
+  //       so that the time formula remains correct across dt changes.
+  commondata->time = commondata->t_0 + (REAL)(commondata->nn - commondata->nn_0 + 1) * commondata->dt;
 
   // Increment the timestep n:
   commondata->nn++;

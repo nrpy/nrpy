@@ -457,7 +457,7 @@ const int stride0 = blockDim.x * gridDim.x; \
     else:
         prefunc = r"""
 #define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
+_Pragma("omp parallel for simd") \
   for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
         if enable_intrinsics:
@@ -473,8 +473,10 @@ _Pragma("omp parallel for") \
 
     body += """
 // Adding dt to commondata->time many times will induce roundoff error,
-// so here we set time based on the iteration number:
-commondata->time = (REAL)(commondata->nn + 1) * commondata->dt;
+// so here we set time based on the iteration number.
+// Note: t_0 and nn_0 are updated at regrid (when dt may change),
+//       so that the time formula remains correct across dt changes.
+commondata->time = commondata->t_0 + (REAL)(commondata->nn - commondata->nn_0 + 1) * commondata->dt;
 
 // Increment the timestep n:
 commondata->nn++;

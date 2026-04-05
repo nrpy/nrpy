@@ -120,6 +120,105 @@ class SEOBNR_aligned_spin_constants:
         ).subs(
             sp.Function("nrpyAbs"), sp.Abs
         )
+        # strain NR fits at t_match
+        self.hNR = {}
+        modes = [(2, 2), (3, 3), (2, 1), (4, 4), (4, 3), (5, 5), (3, 2)]
+        for mode in modes:
+            l, m = mode
+            self.hNR.update({f"({l} , {m})": 0})
+        m1 = self.m1
+        m2 = self.m2
+        chi1 = self.chi1
+        chi2 = self.chi2
+        M = m1 + m2
+        nu = m1 * m2 / M**2
+        delta = (m1 - m2) / (m1 + m2)
+        chiS = (chi1 + chi2) / 2
+        chiA = (chi1 - chi2) / 2
+        chi21A = (chiS / (1 - 1.3 * nu)) * delta + chiA
+        chi33 = chiS * delta + chiA
+        chi44A = (1 - 5 * nu) * chiS + chiA * delta
+        chi = chiS + chiA * (delta / (1 - 2 * nu))
+
+        self.hNR["(2 , 2)"] = sp.Abs(
+            0.430147 * chi**3 * nu
+            - 0.084939 * chi**3
+            + 0.619889 * chi**2 * nu**2
+            - 0.020826 * chi**2
+            - 13.357614 * chi * nu**3
+            + 7.194264 * chi * nu**2
+            - 1.743135 * chi * nu
+            + 0.18694 * chi
+            + 71.979698 * nu**4
+            - 46.87586 * nu**3
+            + 12.440405 * nu**2
+            - 0.868289 * nu
+            + 1.467097
+        )
+
+        self.hNR["(3 , 3)"] = sp.Abs(
+            -0.088371 * chi**2 * delta * nu
+            + 0.036258 * chi33**2 * delta
+            + 1.057731 * chi33 * nu**2
+            - 0.466709 * chi33 * nu
+            + 0.99546 * chi33
+            + 1.96267 * delta * nu**2
+            + 0.027833 * delta * nu
+            + 0.558808 * delta
+        )
+
+        self.hNR["(2 , 1)"] = sp.Abs(
+            -0.033175 * chi21A**3 * delta
+            + 0.086356 * chi21A**2 * delta * nu
+            - 0.049897 * chi21A**2 * delta
+            + 0.012706 * chi21A * delta
+            + 0.168668 * chi21A * nu
+            - 0.285597 * chi21A
+            + 1.067921 * delta * nu**2
+            - 0.189346 * delta * nu
+            + 0.431426 * delta
+        )
+
+        self.hNR["(4 , 4)"] = sp.Abs(
+            0.031483 * chi44A**2
+            - 0.180165 * chi44A * nu
+            + 0.063931 * chi44A
+            + 6.239418 * nu**3
+            - 1.947473 * nu**2
+            - 0.615307 * nu
+            + 0.262533
+        )
+
+        self.hNR["(4 , 3)"] = sp.Abs(
+            -0.071554 * chi33**2 * delta * nu
+            + 0.021932 * chi33**2 * delta
+            - 1.738079 * chi33 * nu**2
+            + 0.436576 * chi33 * nu
+            - 0.020081 * chi33
+            + 0.809615 * delta * nu**2
+            - 0.273364 * delta * nu
+            + 0.07442 * delta
+        )
+
+        self.hNR["(3 , 2)"] = sp.Abs(
+            0.02259 * chi**2
+            + 0.307803 * chi * nu
+            - 0.020771 * chi
+            + 8.917771 * nu**3
+            - 2.194506 * nu**2
+            - 0.387911 * nu
+            + 0.155446
+        )
+
+        self.hNR["(5 , 5)"] = sp.Abs(
+            -7.402839 * chi33 * nu**3
+            + 3.965852 * chi33 * nu**2
+            - 0.762776 * chi33 * nu
+            + 0.062757 * chi33
+            + 1.093812 * delta * nu**2
+            - 0.462142 * delta * nu
+            + 0.125468 * delta
+        )
 
     def Kerr_ISCO_radius(self, a: sp.Expr) -> sp.Expr:
         """

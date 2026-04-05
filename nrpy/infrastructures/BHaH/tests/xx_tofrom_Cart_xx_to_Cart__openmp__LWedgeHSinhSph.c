@@ -11,9 +11,9 @@ void xx_to_Cart__rfm__LWedgeHSinhSph(const params_struct *restrict params, const
   const REAL xx2 = xx[2];
   /*
    *  Original SymPy expressions:
-   *  "[xCart[0] = params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*cos(xx1)/(exp(1/params->SINHW) - exp(-1/params->SINHW)) +
+   *  "[xCart[0] = -params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*cos(xx1)/(exp(1/params->SINHW) - exp(-1/params->SINHW)) +
    * params->Cart_originx]"
-   *  "[xCart[1] = params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*sin(xx1)*sin(xx2)/(exp(1/params->SINHW) - exp(-1/params->SINHW)) +
+   *  "[xCart[1] = -params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*sin(xx1)*sin(xx2)/(exp(1/params->SINHW) - exp(-1/params->SINHW)) +
    * params->Cart_originy]"
    *  "[xCart[2] = -params->AMPL*(exp(xx0/params->SINHW) - exp(-xx0/params->SINHW))*sin(xx1)*cos(xx2)/(exp(1/params->SINHW) - exp(-1/params->SINHW)) +
    * params->Cart_originz]"
@@ -22,8 +22,8 @@ void xx_to_Cart__rfm__LWedgeHSinhSph(const params_struct *restrict params, const
     const REAL tmp0 = (1.0 / (params->SINHW));
     const REAL tmp2 = params->AMPL * (exp(tmp0 * xx0) - exp(-tmp0 * xx0)) / (exp(tmp0) - exp(-tmp0));
     const REAL tmp3 = tmp2 * sin(xx1);
-    xCart[0] = params->Cart_originx + tmp2 * cos(xx1);
-    xCart[1] = params->Cart_originy + tmp3 * sin(xx2);
+    xCart[0] = params->Cart_originx - tmp2 * cos(xx1);
+    xCart[1] = params->Cart_originy - tmp3 * sin(xx2);
     xCart[2] = params->Cart_originz - tmp3 * cos(xx2);
   }
 } // END FUNCTION xx_to_Cart__rfm__LWedgeHSinhSph

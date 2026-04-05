@@ -8,12 +8,11 @@ identification of undesirable patterns, and perform post-processing on the
 the resulting replaced/reduced expressions after the CSE procedure was applied.
 
 Author: Ken Sible
-Email:  ksible *at* outlook *dot* com
+        ksible *at* outlook *dot* com
 """
 
-import sys  # Standard Python module for multiplatform OS-level functions
 from collections import OrderedDict
-from typing import Dict, List, Tuple, Union, cast
+from typing import Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -497,8 +496,131 @@ def cse_postprocess(
     return replaced, reduced
 
 
+def sort_cse_output_deterministically(
+    cse_output: Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]],
+    symbol_prefix: str = "",
+) -> Tuple[List[Tuple[sp.Symbol, sp.Expr]], List[sp.Expr]]:
+    """
+    Deterministically sort and rename SymPy CSE replacements after the fact.
+
+    This is intended for fast `sp.cse(..., order="none")` call sites where we
+    still want reproducible emitted code. It performs a deterministic topological
+    sort of the replacements after the fast unsorted CSE pass, orders each ready
+    set by replacement expression, and then renames temporaries to a stable
+    numbered-symbol sequence.
+
+    On large shared expressions, this post-sort is far faster than asking SymPy
+    to perform canonical CSE sorting up front.
+
+    :param cse_output: Output from SymPy CSE or `cse_postprocess()`.
+    :param symbol_prefix: Prefix used when renaming temporary symbols.
+    :return: CSE output with deterministically ordered and renamed replacements.
+    :raises ValueError: If the replacement graph contains a dependency cycle.
+
+    >>> x, y, z = sp.symbols("x y z")
+    >>> a0, a1, a2 = sp.symbols("a0 a1 a2")
+    >>> out0 = (
+    ...     [(a2, a0 + a1), (a0, x + y), (a1, x + z)],
+    ...     [a2 + a0],
+    ... )
+    >>> out1 = (
+    ...     [(a1, x + z), (a0, x + y), (a2, a0 + a1)],
+    ...     [a2 + a0],
+    ... )
+    >>> sort_cse_output_deterministically(out0, "psi4_") == sort_cse_output_deterministically(out1, "psi4_")
+    True
+    >>> sort_cse_output_deterministically(out0, "psi4_")
+    ([(psi4_tmp0, x + y), (psi4_tmp1, x + z), (psi4_tmp2, psi4_tmp0 + psi4_tmp1)], [psi4_tmp0 + psi4_tmp2])
+    >>> exprs = [((x + y)*(x + z))**2 + sp.sin((x + y)*(x + z)), x + y + sp.cos((x + y)*(x + z))]
+    >>> cse_output = cse_postprocess(sp.cse(exprs, order="none"))
+    >>> sorted_output = sort_cse_output_deterministically(cse_output, "psi4_")
+    >>> def fully_expand(cse_result):
+    ...     replaced, reduced = cse_result
+    ...     lookup = {sym: expr for sym, expr in replaced}
+    ...     cache = {}
+    ...     def expand(expr):
+    ...         if expr in cache:
+    ...             return cache[expr]
+    ...         if expr in lookup:
+    ...             cache[expr] = expand(lookup[expr])
+    ...             return cache[expr]
+    ...         if not expr.args:
+    ...             return expr
+    ...         return expr.func(*[expand(arg) for arg in expr.args])
+    ...     return [expand(expr) for expr in reduced]
+    >>> all(
+    ...     sp.simplify(orig_expr - sorted_expr) == 0
+    ...     for orig_expr, sorted_expr in zip(
+    ...         fully_expand(cse_output), fully_expand(sorted_output)
+    ...     )
+    ... )
+    True
+    >>> a0, a1, a2, a3 = sp.symbols("a0 a1 a2 a3")
+    >>> w, x, y, z, v = sp.symbols("w x y z v")
+    >>> out_a = (
+    ...     [(a0, x + y), (a1, z + w), (a2, a0 + v), (a3, a1 + v)],
+    ...     [a2 * a3],
+    ... )
+    >>> out_b = (
+    ...     [(a0, z + w), (a1, x + y), (a2, a0 + v), (a3, a1 + v)],
+    ...     [a2 * a3],
+    ... )
+    >>> sort_cse_output_deterministically(out_a, "t_") == sort_cse_output_deterministically(out_b, "t_")
+    True
+    """
+    replaced, reduced = cse_output
+    if not replaced:
+        return replaced, reduced
+
+    replaced_lookup = dict(replaced)
+    unresolved_dependencies: Dict[sp.Symbol, Set[sp.Symbol]] = {
+        sym: {
+            cast(sp.Symbol, free_sym)
+            for free_sym in expr.free_symbols
+            if free_sym in replaced_lookup
+        }
+        for sym, expr in replaced
+    }
+    ordered_symbols: List[sp.Symbol] = []
+    resolved_symbol_map: Dict[sp.Symbol, sp.Symbol] = {}
+    num_resolved_symbols = 0
+
+    while unresolved_dependencies:
+        ready_symbols = sorted(
+            (
+                sym
+                for sym, dependencies in unresolved_dependencies.items()
+                if not dependencies
+            ),
+            key=lambda sym: (
+                sp.count_ops(replaced_lookup[sym].xreplace(resolved_symbol_map)),
+                sp.srepr(replaced_lookup[sym].xreplace(resolved_symbol_map)),
+            ),
+        )
+        if not ready_symbols:
+            raise ValueError("CSE replacements contain a dependency cycle.")
+        for sym in ready_symbols:
+            ordered_symbols.append(sym)
+            resolved_symbol_map[sym] = sp.Symbol(
+                f"{symbol_prefix}tmp{num_resolved_symbols}"
+            )
+            num_resolved_symbols += 1
+            del unresolved_dependencies[sym]
+        for dependencies in unresolved_dependencies.values():
+            dependencies.difference_update(ready_symbols)
+
+    symbol_map = resolved_symbol_map
+    renamed_replaced = [
+        (symbol_map[sym], replaced_lookup[sym].xreplace(symbol_map))
+        for sym in ordered_symbols
+    ]
+    renamed_reduced = [expr.xreplace(symbol_map) for expr in reduced]
+    return renamed_replaced, renamed_reduced
+
+
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

@@ -15,7 +15,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
-import nrpy.helpers.jacobians as jac
+import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -24,6 +24,33 @@ from nrpy.infrastructures.BHaH import (
     BHaH_defines_h,
     griddata_commondata,
 )
+
+
+def register_CFunction_free_bhahaha_horizon_shape_data_all_horizons() -> None:
+    """Register the BHaHAHA horizon-shape teardown helper."""
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = """Free memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
+for all horizons."""
+    cfunc_type = "void"
+    name = "free_bhahaha_horizon_shape_data_all_horizons"
+    params = "commondata_struct *restrict commondata"
+    body = r"""
+  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
+    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
+    BHAH_FREE(current_horizon_params->prev_horizon_m1);
+    BHAH_FREE(current_horizon_params->prev_horizon_m2);
+    BHAH_FREE(current_horizon_params->prev_horizon_m3);
+  } // END LOOP: for h
+"""
+    cfc.register_CFunction(
+        includes=includes,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
 
 
 def string_for_step7e_to_g_main_loop_for_each_horizon(
@@ -543,34 +570,6 @@ const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
     return outstring
 
 
-def string_for_func_free_bhahaha_horizon_shape_data_all_horizons() -> str:
-    r"""
-    Generate the C string for function: free_bhahaha_horizon_shape_data_all_horizons.
-
-    :return: Raw C string.
-    """
-    outstring = r"""
-/**
- * Frees memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
- * for all horizons.
- *
- * @param commondata - Pointer to `commondata_struct` containing the BHaHAHA data.
- * @return - None (`void`).
- */
-void free_bhahaha_horizon_shape_data_all_horizons(commondata_struct *restrict commondata) {
-  for (int h = 0; h < commondata->bah_max_num_horizons; ++h) {
-    bhahaha_params_and_data_struct *current_horizon_params = &commondata->bhahaha_params_and_data[h];
-    if (current_horizon_params != NULL) {
-      BHAH_FREE(current_horizon_params->prev_horizon_m1);
-      BHAH_FREE(current_horizon_params->prev_horizon_m2);
-      BHAH_FREE(current_horizon_params->prev_horizon_m3);
-    } // END IF: current_horizon_params != NULL
-  } // END LOOP: for h
-} // END FUNCTION: free_bhahaha_horizon_shape_data_all_horizons
-"""
-    return outstring
-
-
 def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     r"""
     Generate the C code string for BSSN→ADM Cartesian transformation.
@@ -585,19 +584,28 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     :raises ValueError: If ``EvolvedConformalFactor_cf`` is unsupported.
     """
     rfm = refmetric.reference_metric[CoordSystem]
+    basis_transforms = bt.basis_transforms[CoordSystem]
     rfm_aDD = ixp.declarerank2("rfm_aDD", symmetry="sym01")
     rfm_hDD = ixp.declarerank2("rfm_hDD", symmetry="sym01")
+    ghatDD = rfm.ghatDD
+    if CoordSystem.startswith("GeneralRFM"):
+        provider = getattr(rfm, "general_rfm_provider", None)
+        if provider is None:
+            raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
+        ghatDD = provider.ghatDD
     rfm_gammabarDD = ixp.zerorank2()
     rfm_AbarDD = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
-            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
+            rfm_gammabarDD[i][j] = rfm_hDD[i][j] * rfm.ReDD[i][j] + ghatDD[i][j]
             rfm_AbarDD[i][j] = rfm_aDD[i][j] * rfm.ReDD[i][j]
-    Cart_gammabarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_gammabarDD
+    Cart_gammabarDD = (
+        basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+            rfm_gammabarDD
+        )
     )
-    Cart_AbarDD = jac.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
-        CoordSystem, rfm_AbarDD
+    Cart_AbarDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        rfm_AbarDD
     )
     exp4phi = sp.sympify(0)
     cf = sp.Symbol("cf", real=True)
@@ -928,8 +936,6 @@ def build_bhahaha_prefunc(
 
     prefunc += string_for_static_func_initialize_bhahaha_solver_params_and_shapes()
 
-    prefunc += string_for_func_free_bhahaha_horizon_shape_data_all_horizons()
-
     prefunc += r"""
 
 /**
@@ -1035,12 +1041,14 @@ def register_CFunction_bhahaha_find_horizons(
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
 
-    >>> env = register_CFunction_bhahaha_find_horizons()
+    >>> env = register_CFunction_bhahaha_find_horizons("GeneralRFM_fisheyeN1", max_horizons=3)  # doctest: +ELLIPSIS
+    Setting up reference_metric[GeneralRFM_fisheyeN1]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    register_CFunction_free_bhahaha_horizon_shape_data_all_horizons()
     register_bhahaha_commondata_and_params(max_horizons)
 
     includes = [

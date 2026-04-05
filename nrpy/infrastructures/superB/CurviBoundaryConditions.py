@@ -13,6 +13,9 @@ from typing import Set
 
 import nrpy.c_function as cfc
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
+    APPLY_PARITY_BRANCHLESS_PREFUNC,
+)
 
 
 def register_CFunction_apply_bcs_inner_only_nonlocal() -> None:
@@ -41,16 +44,22 @@ boundary points ("inner maps to outer").
   for (int which_chare = 0; which_chare < tot_num_src_chares; which_chare++) {
     const REAL *restrict tmpBuffer = tmpBuffer_innerbc_receiv[which_chare];
     for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
+      const int gf = gfs_to_sync[which_gf];
+      const int parity_idx = gf_parity_types[gf];
+      REAL *restrict gf_data = &gfs[IDX4pt(gf, 0)];
       for (int which_srcpt = 0; which_srcpt < num_srcpts_each_chare[which_chare]; which_srcpt++) {
         const int linear_id = map_srcchare_and_srcpt_id_to_linear_id[which_chare][which_srcpt];
-        const int dstpt = bcstruct->inner_bc_array_nonlocal[linear_id].dstpt;
+        const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array_nonlocal[linear_id];
         const int idx2 = IDX2NONLOCALINNERBC(which_gf, which_srcpt, num_srcpts_each_chare[which_chare]);
-        gfs[IDX4pt(gfs_to_sync[which_gf], dstpt)] = bcstruct->inner_bc_array_nonlocal[linear_id].parity[gf_parity_types[gfs_to_sync[which_gf]]] * tmpBuffer[idx2];
+        const REAL v = tmpBuffer[idx2];
+        const int8_t p = bc->parity[parity_idx];
+        gf_data[bc->dstpt] = apply_parity_branchless(v, p);
       }
     }
   }
 """
     cfc.register_CFunction(
+        prefunc=APPLY_PARITY_BRANCHLESS_PREFUNC,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

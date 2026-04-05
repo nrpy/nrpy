@@ -18,6 +18,7 @@ def register_CFunction_progress_indicator(
           1.0 / (double)commondata->dt, (double)(phys_time_per_sec * 3600.0),
           time_remaining__hrs, time_remaining__mins, time_remaining__secs);
   fflush(stderr);  // Flush the stderr buffer
+  if (commondata->time + commondata->dt > commondata->t_final) fprintf(stderr, "\n");
 """,
     compute_ETA: bool = True,
 ) -> None:
@@ -27,7 +28,8 @@ def register_CFunction_progress_indicator(
     This function updates the elapsed time and other metrics to give the user an
     idea of the progress being made in the computation.
 
-    :param progress_str: String representing the progress output format.
+    :param progress_str: Raw C snippet controlling progress output, typically a
+        triple-quoted `fprintf(...)` block with explicit `commondata->...` accesses.
     :param compute_ETA: Whether to compute the estimated time of arrival.
     """
     _ = par.register_CodeParameter(
@@ -82,7 +84,7 @@ def register_CFunction_progress_indicator(
     body += """
   // Proceed only if progress output is enabled (output_progress_every > 0)
   // and the current iteration (nn) is a multiple of the output frequency (output_progress_every)
-  if (! (commondata->output_progress_every >= 0 && (commondata->nn % commondata->output_progress_every == 0)) )
+  if (! (commondata->output_progress_every > 0 && (commondata->nn % commondata->output_progress_every == 0)) )
     return;"""
     if compute_ETA:
         body += """

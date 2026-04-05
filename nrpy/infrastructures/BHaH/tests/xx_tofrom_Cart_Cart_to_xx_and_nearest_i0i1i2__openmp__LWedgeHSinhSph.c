@@ -21,13 +21,13 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__LWedgeHSinhSph(const params_struct *res
     /*
      *  Original SymPy expressions:
      *  "[xx[0] = params->SINHW*asinh(sqrt(Cartx**2 + Carty**2 + Cartz**2)*sinh(1/params->SINHW)/params->AMPL)]"
-     *  "[xx[1] = acos(Cartx/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
-     *  "[xx[2] = atan2(Carty, -Cartz)]"
+     *  "[xx[1] = acos(-Cartx/sqrt(Cartx**2 + Carty**2 + Cartz**2))]"
+     *  "[xx[2] = atan2(-Carty, -Cartz)]"
      */
     const REAL tmp0 = sqrt(((Cartx) * (Cartx)) + ((Carty) * (Carty)) + ((Cartz) * (Cartz)));
     xx[0] = params->SINHW * asinh(tmp0 * sinh((1.0 / (params->SINHW))) / params->AMPL);
-    xx[1] = acos(Cartx / tmp0);
-    xx[2] = atan2(Carty, -Cartz);
+    xx[1] = acos(-Cartx / tmp0);
+    xx[2] = atan2(-Carty, -Cartz);
 
     // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
     // Assuming a cell-centered grid, which follows the pattern:

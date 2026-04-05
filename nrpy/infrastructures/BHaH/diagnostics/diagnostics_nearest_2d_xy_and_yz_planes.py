@@ -150,6 +150,8 @@ def get_coord_family(cs: str) -> str:
     :raises ValueError: If the coordinate system is not supported.
     :return: The coordinate family name.
     """
+    if cs.startswith("GeneralRFM_fisheye"):
+        return "Cartesian"
     plane_configs = bhah_plane_configs()
     for family in plane_configs["xy"]:
         if family in cs:
@@ -251,7 +253,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
     ]
     desc = f"""
  * @file diagnostics_nearest_2d_xy_and_yz_planes.c
- * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single {CoordSystem} grid.
+ * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single grid.
  *
  * Overview:
  * For the specified grid at the current time, this routine:
@@ -352,7 +354,6 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
   fclose(out_xy);
   fclose(out_yz);
 """
-
     cfc.register_CFunction(
         subdirectory="diagnostics",
         includes=includes,

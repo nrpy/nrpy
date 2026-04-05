@@ -18,7 +18,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Set, Tuple
+from typing import Iterable, List, Set, Tuple, cast
 
 import sympy as sp
 import sympy.codegen.ast as sp_ast
@@ -155,7 +155,10 @@ class ReferenceMetricPrecompute:
     def _get_sorted_precomputed_expressions(self) -> List[Tuple[sp.Expr, sp.Expr]]:
         if not self.rfm.freevars_uniq_xx_indep:
             return []
-        zipped_pairs = zip(self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals)
+        zipped_pairs = cast(
+            Iterable[Tuple[sp.Expr, sp.Expr]],
+            zip(self.rfm.freevars_uniq_xx_indep, self.rfm.freevars_uniq_vals),
+        )
         return sorted(zipped_pairs, key=lambda pair: str(pair[0]))
 
     # --------------------------- small helper ---------------------------

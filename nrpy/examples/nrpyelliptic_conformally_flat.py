@@ -112,9 +112,7 @@ radiation_BC_fd_order = 6
 enable_parallel_codegen = True
 boundary_conditions_desc = "outgoing radiation"
 set_of_CoordSystems = {CoordSystem}
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+num_cuda_streams = 1
 # fmt: off
 initial_data_type = "gw150914"  # choices are: "gw150914", "axisymmetric", and "single_puncture"
 
@@ -279,17 +277,15 @@ BHaH.checkpointing.register_CFunctions(
     default_checkpoint_every=default_checkpoint_every
 )
 
-# Define string with print statement for progress indicator
-progress_str = r"""
-  fprintf(stderr, "nn / nn_max = %d / %d ; log10(residual) / log10(residual_target) =  %.4f / %.4f \r",
-    commondata->nn,
-    commondata->nn_max,
-    commondata->log10_current_residual,
-    commondata->log10_residual_tolerance);
-  fflush(stderr); // Flush the stderr buffer
-"""
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator(
-    progress_str=progress_str, compute_ETA=False
+    progress_str=r"""
+  fprintf(stderr, "nn / nn_max = %d / %d ; log10(residual) / log10(residual_target) = %.4f / %.4f\r",
+          commondata->nn, commondata->nn_max, commondata->log10_current_residual,
+          commondata->log10_residual_tolerance);
+  fflush(stderr);
+  if (commondata->nn >= commondata->nn_max || commondata->time + commondata->dt > commondata->t_final) fprintf(stderr, "\n");
+""",
+    compute_ETA=False,
 )
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 

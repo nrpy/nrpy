@@ -219,7 +219,7 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
  * @return    The estimated spin parameter. Returns -10.0 if C_r is out of valid bounds or if convergence fails.
  *
  */
-REAL compute_spin(const REAL C_r) {
+static REAL compute_spin(const REAL C_r) {
   // Validate the input parameter. Return an error code if C_r exceeds the valid range.
   if (C_r > 1)
     return -10.0;

@@ -77,7 +77,7 @@ if (ringdown_phase == NULL){
 }
 for(i = 0; i < commondata->nsteps_inspiral; i++){
   times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
-  h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN)];
+  h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN22)];
   h22_amp_new[i] = cabs(h22);
   h22_wrapped_phase_new[i] = carg(h22);
 }
@@ -108,13 +108,13 @@ if (commondata->waveform_IMR == NULL){
 for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
-  commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
+  commondata->waveform_IMR[IDX_WF(i,STRAIN22)] = h22;
 }
 
 for(i = 0; i < nsteps_ringdown; i++){
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i] - commondata->t_attach;
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
-  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
+  commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN22)] = h22;
 }
 free(h22_amp_new);
 free(h22_phase_new);

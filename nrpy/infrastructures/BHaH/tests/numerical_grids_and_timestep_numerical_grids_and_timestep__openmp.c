@@ -5,15 +5,14 @@
  * Set up numerical grids and timestep.
  */
 void numerical_grids_and_timestep(commondata_struct *restrict commondata, griddata_struct *restrict griddata, bool calling_for_first_time) {
-  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
-  commondata->NUMGRIDS = 1;
+  // Step 1.a: Set up independent grids.
   {
-    // Independent grids
+    int grid = 0;
     int Nx[3] = {-1, -1, -1};
 
-    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx
+    // based on grid_physical_size.
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
-    int grid = 0;
 
     // In multipatch, gridname is a helpful alias indicating position of the patch. E.g., "lower Spherical patch"
     snprintf(griddata[grid].params.gridname, 100, "grid_Spherical");
@@ -28,6 +27,10 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
     griddata_host[grid].params.is_host = true;
 #endif // __CUDACC__
     grid++;
+
+    // Step 1.b: Now that all independent grids have been set up, record the
+    // runtime number of active grids.
+    commondata->NUMGRIDS = grid;
   } // END independent grid setup
 
   // This populates griddata_host->xx, which (if rfm_precompute is enabled) is needed for host-side rfm_precompute_defines.

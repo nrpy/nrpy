@@ -54,7 +54,9 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
       exit(1);
     } // END IF cp_file == NULL
+
     FWRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
+
     fprintf(stderr, "WRITING CHECKPOINT: cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
 
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
@@ -94,7 +96,7 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
           for (int gf = 0; gf < NUM_EVOL_GFS; gf++)
             compact_out_data[which_el * NUM_EVOL_GFS + gf] = griddata[grid].gridfuncs.y_n_gfs[ntot_grid * gf + i];
           which_el++;
-        } // END IF maskval >= +0
+        } // END IF selected checkpoint mask condition
       } // END LOOP over all gridpoints
 
       FWRITE(out_data_indices, sizeof(int), count, cp_file, "out_data_indices");

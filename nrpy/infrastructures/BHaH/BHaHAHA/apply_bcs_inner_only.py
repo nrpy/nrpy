@@ -8,6 +8,9 @@ Author: Zachariah B. Etienne
 import sys
 
 import nrpy.c_function as cfc
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
+    APPLY_PARITY_BRANCHLESS_PREFUNC,
+)
 
 
 # apply_bcs_inner_only(): Apply inner boundary conditions.
@@ -35,25 +38,28 @@ boundary points ("inner maps to outer").
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;
 
-  // collapse(2) results in a nice speedup here, esp in 2D. Two_BHs_collide goes from
-    //    5550 M/hr to 7264 M/hr on a Ryzen 9 5950X running on all 16 cores with core affinity.
-#pragma omp parallel for collapse(2)  // spawn threads and distribute across them
-  for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++) {
-    for(int pt=0;pt<bc_info->num_inner_boundary_points;pt++) {
-      const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
+#pragma omp parallel for schedule(static)
+  for (int which_gf = 0; which_gf < NUM_EVOL_GFS; ++which_gf) {
+    const int parity_idx = evol_gf_parity[which_gf];
+    REAL *restrict gf = &gfs[IDX4pt(which_gf, 0)];
+
+    for (int pt = 0; pt < bc_info->num_inner_boundary_points; ++pt) {
+      const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
+      const int dstpt = bc->dstpt;
       //  -> idx3 = i0 + Nx0*(i1 + Nx1*i2)
       //  -> i0 = mod(idx3, Nx0)
       // Only apply boundary condition if at the radial interior point (i0 == NGHOSTS).
       if (dstpt % Nxx_plus_2NGHOSTS0 != NGHOSTS)
         continue;
 
-      const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
-
-      gfs[IDX4pt(which_gf, dstpt)] = bcstruct->inner_bc_array[pt].parity[evol_gf_parity[which_gf]] * gfs[IDX4pt(which_gf, srcpt)];
+      const REAL v = gf[bc->srcpt];
+      const int8_t p = bc->parity[parity_idx];
+      gf[dstpt] = apply_parity_branchless(v, p);
     } // END for(int pt=0;pt<num_inner_pts;pt++)
   } // END for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++)
 """
     cfc.register_CFunction(
+        prefunc=APPLY_PARITY_BRANCHLESS_PREFUNC,
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,

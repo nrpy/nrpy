@@ -22,6 +22,32 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
+APPLY_PARITY_BRANCHLESS_PREFUNC = r"""
+static inline REAL apply_parity_branchless(const REAL v, const int8_t p) {
+#ifdef __cplusplus
+  static_assert(sizeof(REAL) == sizeof(uint32_t) || sizeof(REAL) == sizeof(uint64_t), "REAL must be float or double");
+#else
+  _Static_assert(sizeof(REAL) == sizeof(uint32_t) || sizeof(REAL) == sizeof(uint64_t), "REAL must be float or double");
+#endif
+
+  if (sizeof(REAL) == sizeof(uint64_t)) {
+    uint64_t bits;
+    REAL out;
+    memcpy(&bits, &v, sizeof(bits));
+    bits ^= (uint64_t)(p < 0) << 63;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+  } else {
+    uint32_t bits;
+    REAL out;
+    memcpy(&bits, &v, sizeof(bits));
+    bits ^= (uint32_t)(p < 0) << 31;
+    memcpy(&out, &bits, sizeof(out));
+    return out;
+  } // END IF 64 bits vs 32 bits
+} // END FUNCTION apply_parity_branchless
+"""
+
 
 def generate_apply_bcs_inner_only__kernel_body(
     loop_bounds: str = "NUM_EVOL_GFS",
@@ -51,25 +77,30 @@ for(int which_gf=0;which_gf<{loop_bounds};which_gf++) {{
 for (int pt = tid0; pt < num_inner_boundary_points; pt+=stride0) {{"""
         if parallelization == "cuda"
         else f"""
-  // collapse(2) results in a nice speedup here, esp in 2D. Two_BHs_collide goes from
-  //    5550 M/hr to 7264 M/hr on a Ryzen 9 5950X running on all 16 cores with core affinity.
-#pragma omp parallel for collapse(2)  // spawn threads and distribute across them
-  for(int which_gf=0;which_gf<{loop_bounds};which_gf++) {{
-    for(int pt=0;pt<num_inner_boundary_points;pt++) {{"""
+#pragma omp parallel for schedule(static)
+  for(int which_gf=0;which_gf<{loop_bounds};++which_gf) {{
+    const int parity_idx = {parity_ary}[{gf_index}];
+    REAL *restrict gf = &gfs[IDX4pt({gf_index}, 0)];
+
+    for(int pt=0;pt<num_inner_boundary_points;++pt) {{"""
     )
-    kernel_body += f"""
+    kernel_body += (
+        f"""
       const int dstpt = inner_bc_array[pt].dstpt;
       const int srcpt = inner_bc_array[pt].srcpt;
       gfs[IDX4pt({gf_index}, dstpt)] = inner_bc_array[pt].parity[{parity_ary}[{gf_index}]] * gfs[IDX4pt({gf_index}, srcpt)];
     }} // END for(int pt=0;pt<num_inner_pts;pt++)
   }} // END for(int which_gf=0;which_gf<{loop_bounds};which_gf++)
-""".replace(
-        f"{parity_ary}[{gf_index}]",
-        (
-            f"d_{parity_ary}[{gf_index}]"
-            if parallelization == "cuda"
-            else f"{parity_ary}[{gf_index}]"
-        ),
+""".replace(f"{parity_ary}[{gf_index}]", f"d_{parity_ary}[{gf_index}]")
+        if parallelization == "cuda"
+        else """
+      const innerpt_bc_struct *restrict bc = &inner_bc_array[pt];
+      const REAL v = gf[bc->srcpt];
+      const int8_t p = bc->parity[parity_idx];
+      gf[bc->dstpt] = apply_parity_branchless(v, p);
+    } // END for(int pt=0;pt<num_inner_pts;pt++)
+  } // END for(int which_gf=0;which_gf<loop_bounds;which_gf++)
+""".replace("loop_bounds", loop_bounds)
     )
     return kernel_body
 
@@ -136,6 +167,8 @@ boundary points ("inner maps to outer").
         },
         thread_tiling_macro_suffix="CURVIBC_INNER",
     )
+    if parallelization != "cuda":
+        prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + prefunc
     kernel_launch_body = rf"""
   // Unpack bc_info from bcstruct
   const bc_info_struct *bc_info = &bcstruct->bc_info;

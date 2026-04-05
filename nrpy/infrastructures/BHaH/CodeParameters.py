@@ -49,7 +49,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
      */
     void params_struct_set_to_default(commondata_struct *restrict commondata, griddata_struct *restrict griddata) {
       // Loop over params structs:
-      for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+      for (int grid = 0; grid < MAXNUMGRIDS; grid++) {
         params_struct *restrict params = &griddata[grid].params;
         // Set params_struct variables to default
         params->BHaH_is_amazing = true;               // CodeParameters_c_files::BHaH_is_amazing
@@ -64,6 +64,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
      * Set commondata_struct to default values specified within NRPy.
      */
     void commondata_struct_set_to_default(commondata_struct *restrict commondata) {
+      memset(commondata, 0, sizeof(*commondata));
       // Set commondata_struct variables to default
       commondata->a = 1;                   // CodeParameters_c_files::a
       commondata->blah_int = 1;            // CodeParameters_c_files::blah_int
@@ -125,14 +126,15 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         body = ""
         if function_name == "params_struct":
             body += r"""// Loop over params structs:
-  for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+  for(int grid=0; grid<MAXNUMGRIDS; grid++) {
     params_struct *restrict params = &griddata[grid].params;
     // Set params_struct variables to default
 """
             body += "".join(sorted(struct_list))
             body += "} // END LOOP over grids\n"
         else:
-            body += "\n// Set commondata_struct variables to default\n"
+            body += "\nmemset(commondata, 0, sizeof(*commondata));\n"
+            body += "// Set commondata_struct variables to default\n"
             body += "".join(sorted(struct_list))
 
         cfc.register_CFunction(
