@@ -353,7 +353,7 @@ if __name__ == "__main__":
     AitoB = BSSN_to_ADM(CoordSystem="Cartesian")
     Bq = BSSN_quantities["Cartesian"]
 
-    e6phi_face_test = ((Bq.exp_m4phi ** sp.Rational(1, 2)) ** (-3)).subs(Bq.cf, cf_face)
+    e6phi_face_test = (Bq.exp_m4phi ** sp.Rational(-3, 2)).subs(Bq.cf, cf_face)
 
     gamma_faceDD_test = ixp.zerorank2()
     for i in range(3):

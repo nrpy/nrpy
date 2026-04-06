@@ -69,48 +69,49 @@ void calculate_flux_divergences__rfm__Spherical(const int flux_dirn, const commo
         const REAL FDPart3tmp1 = cos(xx1);
         const REAL FDPart3tmp2 = (1.0 / (xx0));
         const REAL FDPart3tmp3 = (1.0 / ((xx0) * (xx0)));
-        const REAL FDPart3tmp10 = pow(fabs(cf), -3.0);
-        const REAL FDPart3tmp12 = alpha * u4Ut;
-        const REAL FDPart3tmp19 = hDD00 + 1;
-        const REAL FDPart3tmp22 = hDD22 + 1;
-        const REAL FDPart3tmp24 = hDD11 + 1;
+        const REAL FDPart3tmp11 = alpha * u4Ut;
+        const REAL FDPart3tmp17 = fabs(cf);
+        const REAL FDPart3tmp20 = hDD00 + 1;
+        const REAL FDPart3tmp23 = hDD22 + 1;
+        const REAL FDPart3tmp25 = hDD11 + 1;
         const REAL FDPart3tmp5 = (1.0 / (FDPart3tmp0));
         const REAL FDPart3tmp8 = FDPart3tmp1 / ((FDPart3tmp0) * (FDPart3tmp0));
-        const REAL FDPart3tmp13 = FDPart3tmp12 * rescaledvU0 * rhob;
-        const REAL FDPart3tmp15 = ((alpha) * (alpha)) * h * ((u4Ut) * (u4Ut));
-        const REAL FDPart3tmp20 = FDPart3tmp19 * vetU0 + hDD01 * vetU1 + hDD02 * vetU2;
-        const REAL FDPart3tmp26 = FDPart3tmp19 * FDPart3tmp22 * FDPart3tmp24 - FDPart3tmp19 * ((hDD12) * (hDD12)) -
-                                  FDPart3tmp22 * ((hDD01) * (hDD01)) - FDPart3tmp24 * ((hDD02) * (hDD02)) + 2 * hDD01 * hDD02 * hDD12;
+        const REAL FDPart3tmp12 = FDPart3tmp11 * rescaledvU0 * rhob;
+        const REAL FDPart3tmp14 = ((alpha) * (alpha)) * h * ((u4Ut) * (u4Ut));
+        const REAL FDPart3tmp18 = FDPart3tmp17 / ((cf) * (cf) * (cf) * (cf));
+        const REAL FDPart3tmp21 = FDPart3tmp20 * vetU0 + hDD01 * vetU1 + hDD02 * vetU2;
+        const REAL FDPart3tmp27 = FDPart3tmp20 * FDPart3tmp23 * FDPart3tmp25 - FDPart3tmp20 * ((hDD12) * (hDD12)) -
+                                  FDPart3tmp23 * ((hDD01) * (hDD01)) - FDPart3tmp25 * ((hDD02) * (hDD02)) + 2 * hDD01 * hDD02 * hDD12;
         const REAL FDPart3tmp30 = ((alpha) * (alpha)) * ((cf) * (cf));
-        const REAL FDPart3tmp40 = FDPart3tmp24 * vetU1 + hDD01 * vetU0 + hDD12 * vetU2;
-        const REAL FDPart3tmp41 = FDPart3tmp22 * vetU2 + hDD02 * vetU0 + hDD12 * vetU1;
-        const REAL FDPart3tmp56 = FDPart3tmp10 * FDPart3tmp12 * S;
+        const REAL FDPart3tmp40 = FDPart3tmp25 * vetU1 + hDD01 * vetU0 + hDD12 * vetU2;
+        const REAL FDPart3tmp41 = FDPart3tmp23 * vetU2 + hDD02 * vetU0 + hDD12 * vetU1;
         const REAL FDPart3tmp7 = -FDPart3tmp3 * FDPart3tmp5;
         const REAL FDPart3tmp9 = -FDPart3tmp2 * FDPart3tmp8;
-        const REAL FDPart3tmp16 = FDPart3tmp15 * rescaledvU0 * rhob;
-        const REAL FDPart3tmp36 = FDPart3tmp15 * rhob;
-        const REAL FDPart3tmp39 = FDPart3tmp10 / (FDPart3tmp26 * alpha * ((cf) * (cf)));
-        const REAL FDPart3tmp43 = FDPart3tmp12 * rescaledvU1 * rhob;
-        const REAL FDPart3tmp51 = FDPart3tmp12 * rescaledvU2 * rhob;
-        const REAL FDPart3tmp17 = FDPart3tmp16 + P * vetU0;
-        const REAL FDPart3tmp37 = FDPart3tmp26 * FDPart3tmp36;
+        const REAL FDPart3tmp15 = FDPart3tmp14 * rescaledvU0 * rhob;
+        const REAL FDPart3tmp36 = FDPart3tmp14 * rhob;
+        const REAL FDPart3tmp39 = FDPart3tmp17 / (FDPart3tmp27 * alpha * pow(cf, 6));
+        const REAL FDPart3tmp43 = FDPart3tmp11 * rescaledvU1 * rhob;
+        const REAL FDPart3tmp51 = FDPart3tmp11 * rescaledvU2 * rhob;
+        const REAL FDPart3tmp56 = FDPart3tmp11 * FDPart3tmp18 * S;
+        const REAL FDPart3tmp16 = FDPart3tmp15 + P * vetU0;
+        const REAL FDPart3tmp37 = FDPart3tmp27 * FDPart3tmp36;
         const REAL FDPart3tmp52 = FDPart3tmp36 * rescaledvU2 + P * vetU2;
-        const REAL FDPart3tmp27 = FDPart3tmp17 * FDPart3tmp26;
+        const REAL FDPart3tmp28 = FDPart3tmp16 * FDPart3tmp27;
         const REAL FDPart3tmp32 =
-            FDPart3tmp16 * FDPart3tmp26 * rescaledvU1 + P * (-FDPart3tmp26 * vetU0 * vetU1 + FDPart3tmp30 * (-FDPart3tmp22 * hDD01 + hDD02 * hDD12));
+            FDPart3tmp15 * FDPart3tmp27 * rescaledvU1 + P * (-FDPart3tmp27 * vetU0 * vetU1 + FDPart3tmp30 * (-FDPart3tmp23 * hDD01 + hDD02 * hDD12));
         const REAL FDPart3tmp34 =
-            FDPart3tmp16 * FDPart3tmp26 * rescaledvU2 + P * (-FDPart3tmp26 * vetU0 * vetU2 + FDPart3tmp30 * (-FDPart3tmp24 * hDD02 + hDD01 * hDD12));
+            FDPart3tmp15 * FDPart3tmp27 * rescaledvU2 + P * (-FDPart3tmp27 * vetU0 * vetU2 + FDPart3tmp30 * (-FDPart3tmp25 * hDD02 + hDD01 * hDD12));
         const REAL FDPart3tmp38 = FDPart3tmp37 * ((rescaledvU0) * (rescaledvU0)) +
-                                  P * (-FDPart3tmp26 * ((vetU0) * (vetU0)) + FDPart3tmp30 * (FDPart3tmp22 * FDPart3tmp24 - ((hDD12) * (hDD12))));
+                                  P * (-FDPart3tmp27 * ((vetU0) * (vetU0)) + FDPart3tmp30 * (FDPart3tmp23 * FDPart3tmp25 - ((hDD12) * (hDD12))));
         const REAL FDPart3tmp45 = FDPart3tmp36 * rescaledvU1 + P * vetU1;
-        const REAL FDPart3tmp48 = FDPart3tmp26 * FDPart3tmp36 * rescaledvU1 * rescaledvU2 +
-                                  P * (-FDPart3tmp26 * vetU1 * vetU2 + FDPart3tmp30 * (-FDPart3tmp19 * hDD12 + hDD01 * hDD02));
+        const REAL FDPart3tmp48 = FDPart3tmp27 * FDPart3tmp36 * rescaledvU1 * rescaledvU2 +
+                                  P * (-FDPart3tmp27 * vetU1 * vetU2 + FDPart3tmp30 * (-FDPart3tmp20 * hDD12 + hDD01 * hDD02));
         const REAL FDPart3tmp49 = FDPart3tmp37 * ((rescaledvU1) * (rescaledvU1)) +
-                                  P * (-FDPart3tmp26 * ((vetU1) * (vetU1)) + FDPart3tmp30 * (FDPart3tmp19 * FDPart3tmp22 - ((hDD02) * (hDD02))));
-        const REAL FDPart3tmp54 = FDPart3tmp26 * FDPart3tmp52;
+                                  P * (-FDPart3tmp27 * ((vetU1) * (vetU1)) + FDPart3tmp30 * (FDPart3tmp20 * FDPart3tmp23 - ((hDD02) * (hDD02))));
+        const REAL FDPart3tmp54 = FDPart3tmp27 * FDPart3tmp52;
         const REAL FDPart3tmp55 = FDPart3tmp37 * ((rescaledvU2) * (rescaledvU2)) +
-                                  P * (-FDPart3tmp26 * ((vetU2) * (vetU2)) + FDPart3tmp30 * (FDPart3tmp19 * FDPart3tmp24 - ((hDD01) * (hDD01))));
-        const REAL FDPart3tmp47 = FDPart3tmp26 * FDPart3tmp45;
+                                  P * (-FDPart3tmp27 * ((vetU2) * (vetU2)) + FDPart3tmp30 * (FDPart3tmp20 * FDPart3tmp25 - ((hDD01) * (hDD01))));
+        const REAL FDPart3tmp47 = FDPart3tmp27 * FDPart3tmp45;
         ReU[0] = 1;
         ReUdD[0][0] = 0;
         ReUD[0][0] = 1;
@@ -159,33 +160,33 @@ void calculate_flux_divergences__rfm__Spherical(const int flux_dirn, const commo
         ReUDdD[2][2][0] = 0;
         ReUDdD[2][2][1] = 0;
         ReUDdD[2][2][2] = 0;
-        rescaledtau_tildefluxU[0] = FDPart3tmp10 * (-FDPart3tmp13 + FDPart3tmp17);
-        rescaledrho_starfluxU[0] = FDPart3tmp10 * FDPart3tmp13;
+        rescaledtau_tildefluxU[0] = FDPart3tmp18 * (-FDPart3tmp12 + FDPart3tmp16);
+        rescaledrho_starfluxU[0] = FDPart3tmp12 * FDPart3tmp18;
         rescaledStildefluxUD[0][0] =
-            FDPart3tmp39 * (FDPart3tmp19 * FDPart3tmp38 + FDPart3tmp20 * FDPart3tmp27 + FDPart3tmp32 * hDD01 + FDPart3tmp34 * hDD02);
+            FDPart3tmp39 * (FDPart3tmp20 * FDPart3tmp38 + FDPart3tmp21 * FDPart3tmp28 + FDPart3tmp32 * hDD01 + FDPart3tmp34 * hDD02);
         rescaledStildefluxUD[0][1] =
-            FDPart3tmp39 * (FDPart3tmp24 * FDPart3tmp32 + FDPart3tmp27 * FDPart3tmp40 + FDPart3tmp34 * hDD12 + FDPart3tmp38 * hDD01);
+            FDPart3tmp39 * (FDPart3tmp25 * FDPart3tmp32 + FDPart3tmp28 * FDPart3tmp40 + FDPart3tmp34 * hDD12 + FDPart3tmp38 * hDD01);
         rescaledStildefluxUD[0][2] =
-            FDPart3tmp39 * (FDPart3tmp22 * FDPart3tmp34 + FDPart3tmp27 * FDPart3tmp41 + FDPart3tmp32 * hDD12 + FDPart3tmp38 * hDD02);
-        rescaledtau_tildefluxU[1] = FDPart3tmp10 * (-FDPart3tmp43 + FDPart3tmp45);
-        rescaledrho_starfluxU[1] = FDPart3tmp10 * FDPart3tmp43;
+            FDPart3tmp39 * (FDPart3tmp23 * FDPart3tmp34 + FDPart3tmp28 * FDPart3tmp41 + FDPart3tmp32 * hDD12 + FDPart3tmp38 * hDD02);
+        rescaledtau_tildefluxU[1] = FDPart3tmp18 * (-FDPart3tmp43 + FDPart3tmp45);
+        rescaledrho_starfluxU[1] = FDPart3tmp18 * FDPart3tmp43;
         rescaledStildefluxUD[1][0] =
-            FDPart3tmp39 * (FDPart3tmp19 * FDPart3tmp32 + FDPart3tmp20 * FDPart3tmp47 + FDPart3tmp48 * hDD02 + FDPart3tmp49 * hDD01);
+            FDPart3tmp39 * (FDPart3tmp20 * FDPart3tmp32 + FDPart3tmp21 * FDPart3tmp47 + FDPart3tmp48 * hDD02 + FDPart3tmp49 * hDD01);
         rescaledStildefluxUD[1][1] =
-            FDPart3tmp39 * (FDPart3tmp24 * FDPart3tmp49 + FDPart3tmp32 * hDD01 + FDPart3tmp40 * FDPart3tmp47 + FDPart3tmp48 * hDD12);
+            FDPart3tmp39 * (FDPart3tmp25 * FDPart3tmp49 + FDPart3tmp32 * hDD01 + FDPart3tmp40 * FDPart3tmp47 + FDPart3tmp48 * hDD12);
         rescaledStildefluxUD[1][2] =
-            FDPart3tmp39 * (FDPart3tmp22 * FDPart3tmp48 + FDPart3tmp32 * hDD02 + FDPart3tmp41 * FDPart3tmp47 + FDPart3tmp49 * hDD12);
-        rescaledtau_tildefluxU[2] = FDPart3tmp10 * (-FDPart3tmp51 + FDPart3tmp52);
-        rescaledrho_starfluxU[2] = FDPart3tmp10 * FDPart3tmp51;
+            FDPart3tmp39 * (FDPart3tmp23 * FDPart3tmp48 + FDPart3tmp32 * hDD02 + FDPart3tmp41 * FDPart3tmp47 + FDPart3tmp49 * hDD12);
+        rescaledtau_tildefluxU[2] = FDPart3tmp18 * (-FDPart3tmp51 + FDPart3tmp52);
+        rescaledrho_starfluxU[2] = FDPart3tmp18 * FDPart3tmp51;
         rescaledStildefluxUD[2][0] =
-            FDPart3tmp39 * (FDPart3tmp19 * FDPart3tmp34 + FDPart3tmp20 * FDPart3tmp54 + FDPart3tmp48 * hDD01 + FDPart3tmp55 * hDD02);
+            FDPart3tmp39 * (FDPart3tmp20 * FDPart3tmp34 + FDPart3tmp21 * FDPart3tmp54 + FDPart3tmp48 * hDD01 + FDPart3tmp55 * hDD02);
         rescaledStildefluxUD[2][1] =
-            FDPart3tmp39 * (FDPart3tmp24 * FDPart3tmp48 + FDPart3tmp34 * hDD01 + FDPart3tmp40 * FDPart3tmp54 + FDPart3tmp55 * hDD12);
+            FDPart3tmp39 * (FDPart3tmp25 * FDPart3tmp48 + FDPart3tmp34 * hDD01 + FDPart3tmp40 * FDPart3tmp54 + FDPart3tmp55 * hDD12);
         rescaledStildefluxUD[2][2] =
-            FDPart3tmp39 * (FDPart3tmp22 * FDPart3tmp55 + FDPart3tmp34 * hDD02 + FDPart3tmp41 * FDPart3tmp54 + FDPart3tmp48 * hDD12);
-        rescaledYe_starfluxU[0] = FDPart3tmp10 * FDPart3tmp13 * Ye;
-        rescaledYe_starfluxU[1] = FDPart3tmp10 * FDPart3tmp43 * Ye;
-        rescaledYe_starfluxU[2] = FDPart3tmp10 * FDPart3tmp51 * Ye;
+            FDPart3tmp39 * (FDPart3tmp23 * FDPart3tmp55 + FDPart3tmp34 * hDD02 + FDPart3tmp41 * FDPart3tmp54 + FDPart3tmp48 * hDD12);
+        rescaledYe_starfluxU[0] = FDPart3tmp12 * FDPart3tmp18 * Ye;
+        rescaledYe_starfluxU[1] = FDPart3tmp18 * FDPart3tmp43 * Ye;
+        rescaledYe_starfluxU[2] = FDPart3tmp18 * FDPart3tmp51 * Ye;
         rescaledS_starfluxU[0] = FDPart3tmp56 * rescaledvU0;
         rescaledS_starfluxU[1] = FDPart3tmp56 * rescaledvU1;
         rescaledS_starfluxU[2] = FDPart3tmp56 * rescaledvU2;

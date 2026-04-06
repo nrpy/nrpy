@@ -80,7 +80,7 @@ class GRHD_Equations:
         )
 
         self.gammaDD = self.AitoB.gammaDD
-        self.e6phi = (self.Bq.exp_m4phi ** (0.5)) ** (-3.0)
+        self.e6phi = self.Bq.exp_m4phi ** sp.Rational(-3, 2)
         self.KDD = self.AitoB.KDD
 
         for i in range(3):
