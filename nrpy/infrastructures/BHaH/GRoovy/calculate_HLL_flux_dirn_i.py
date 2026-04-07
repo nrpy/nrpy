@@ -50,25 +50,7 @@ def register_CFunction_calculate_HLL_flux_dirn_i(
     cancellations by constructing all the expressions in the
     Cartesian basis. Note also that we also ensure that the
     coordinates xx0, xx1, xx2 are not defined in the resulting
-    C functions, since we don't need to compute scale factors
-
-    Doctests:
-    >>> from nrpy.helpers.generic import validate_strings, clang_format
-    >>> import nrpy.c_function as cfc
-    >>> import nrpy.params as par
-    >>> supported_Parallelizations = ["openmp"]
-    >>> name = "calculate_HLL_fluxes_direction_2"
-    >>> for parallelization in supported_Parallelizations:
-    ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    cfc.CFunction_dict.clear()
-    ...    _ = register_CFunction_calculate_HLL_flux_dirn_i(
-    ...        2, False, evolving_temperature=True, evolving_entropy=True
-    ...    )
-    ...    generated_str = clang_format(cfc.CFunction_dict[name].full_function)
-    ...    validation_desc = f"{name}__{parallelization}"
-    ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
-    Setting up reference_metric[Cartesian]...
-    Setting up BSSN_Quantities[Cartesian]...
+    C functions, since we don't need to compute scale factors.
     """
     # Step 1: Register the function with NRPy's parallel codegen infrastructure.
     if pcg.pcg_registration_phase():

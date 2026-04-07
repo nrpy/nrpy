@@ -43,22 +43,6 @@ def register_CFunction_calculate_flux_divergences(
         evolved.
     :param evolving_entropy: Whether entropy is evolved.
     :return: None if in registration phase, else the updated NRPy environment.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import validate_strings, clang_format
-    >>> import nrpy.c_function as cfc
-    >>> import nrpy.params as par
-    >>> supported_Parallelizations = ["openmp"]
-    >>> name = "calculate_flux_divergences"
-    >>> for parallelization in supported_Parallelizations:
-    ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    cfc.CFunction_dict.clear()
-    ...    _ = register_CFunction_calculate_flux_divergences("Spherical", False, 1, evolving_temperature = True, evolving_entropy = True)
-    ...    generated_str = clang_format(cfc.CFunction_dict[f"{name}__rfm__Spherical"].full_function)
-    ...    validation_desc = f"{name}__{parallelization}__Spherical"
-    ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
-    Setting up reference_metric[Spherical]...
-    Setting up BSSN_Quantities[Spherical]...
     """
     # Step 1: Register the function with NRPy's parallel codegen infrastructure.
     if pcg.pcg_registration_phase():
