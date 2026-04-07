@@ -44,6 +44,7 @@ def generate_CFunction_psi4_metric_deriv_quantities(
 
     arg_dict_cuda = {
         "in_gfs": "const REAL *restrict",
+        "auxevol_gfs": "const REAL *restrict",
         "xx0": "const REAL",
         "xx1": "const REAL",
         "xx2": "const REAL",

@@ -60,9 +60,16 @@ def generate_CFunction_psi4_tetrad(
     list_of_metricvarnames = ["cf"] + [
         f"hDD{i}{j}" for i in range(3) for j in range(i, 3)
     ]
+    include_ghat_args = CoordSystem.startswith("GeneralRFM")
+    list_of_ghatvarnames = (
+        [f"ghatDD{i}{j}" for i in range(3) for j in range(i, 3)]
+        if include_ghat_args
+        else []
+    )
 
     arg_dict_cuda = {
         **{var: "const REAL" for var in list_of_metricvarnames},
+        **{var: "const REAL" for var in list_of_ghatvarnames},
         **{var.replace("*", ""): "REAL *" for var in list_of_vrnms},
         **{f"xx{i}": "const REAL" for i in range(3)},
     }
@@ -118,6 +125,11 @@ def generate_CFunction_psi4_tetrad(
         prefunc_launch = prefunc_launch.replace(
             var, f"in_gfs[IDX4pt({var.upper()}GF, idx3)]"
         )
+    if include_ghat_args:
+        for var in list_of_ghatvarnames:
+            prefunc_launch = prefunc_launch.replace(
+                var, f"auxevol_gfs[IDX4pt({var.upper()}GF, idx3)]"
+            )
     for pvar in list_of_vrnms:
         var = pvar.replace("*", "")
         prefunc_launch = prefunc_launch.replace(var, rf"&{var}")

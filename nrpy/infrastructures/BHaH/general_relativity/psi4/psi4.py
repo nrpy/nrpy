@@ -65,6 +65,7 @@ def register_CFunction_psi4(
         "x1": "const REAL *restrict",
         "x2": "const REAL *restrict",
         "in_gfs": "const REAL *restrict",
+        "auxevol_gfs": "const REAL *restrict",
         "diagnostic_gfs": "REAL *restrict",
     }
 
@@ -73,7 +74,7 @@ def register_CFunction_psi4(
         **arg_dict_cuda,
     }
 
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, REAL *restrict diagnostic_gfs"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3], const REAL *restrict in_gfs, const REAL *restrict auxevol_gfs, REAL *restrict diagnostic_gfs"
 
     psi4_class = psi4.Psi4(CoordSystem=CoordSystem, enable_rfm_precompute=False)
     body = r"""if(! (params->Cart_originx == 0 && params->Cart_originy == 0 && params->Cart_originz == 0) ) {
