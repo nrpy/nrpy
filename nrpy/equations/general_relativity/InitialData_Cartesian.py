@@ -44,6 +44,9 @@ class InitialData_Cartesian:
         if IDtype == "BrillLindquist":
             ID_defines_gauge_quantities = False
             self.gammaDD, self.KDD = self.BrillLindquist()
+        elif IDtype == "Kasner":
+            ID_defines_gauge_quantities = True
+            self.gammaDD, self.KDD, self.alpha, self.betaU, self.BU = self.Kasner()
         else:
             raise ValueError(f"IDtype = {IDtype} is not supported.")
 
@@ -106,6 +109,18 @@ class InitialData_Cartesian:
             gammaDD[i][i] = psi**4
 
         return gammaDD, KDD
+
+    def Kasner(
+        self,
+    ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
+        """
+        Set exact Kasner initial data in Cartesian coordinates.
+        """
+        from nrpy.infrastructures.BHaH.kasner_solution.initial_data import (
+            kasner_adm_initial_data,
+        )
+
+        return kasner_adm_initial_data()
     # fmt: on
 
 
