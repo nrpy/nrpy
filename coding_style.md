@@ -27,6 +27,7 @@ The project uses **Black** for automatic code formatting with the following conf
 - String quotes: Double quotes preferred
 
 Run `black .` before committing to ensure consistent formatting.
+For any modified Python file, also run `.github/single_file_static_analysis.sh <path-to-file.py>` before committing.
 
 ### Naming Conventions
 
@@ -150,6 +151,7 @@ Authors: Zachariah B. Etienne
 Rules:
 - Use singular `Author:` for exactly one author; plural `Authors:` for two or more.
 - In current NRPy Python files, single-author docstrings most often put the email on the next indented line, and multi-author docstrings often list contributors as stacked name/email lines.
+- The names shown in the examples above are illustrative, not prescriptive. Do not add Zachariah B. Etienne (or any other person) to a file's `Author:`/`Authors:` metadata unless that person is already an author of the file or is being intentionally credited for that file's content.
 - Author contact information may be included in whatever source-level format is most practical for the file; this style guide does not enforce a specific email layout or obfuscation pattern.
 - Email obfuscation is encouraged when publishing addresses in source code.
 
@@ -466,7 +468,7 @@ The singular `Doctest:` label also appears in a small number of older files; pre
 
 #### `validate_strings` pattern
 
-The standard doctest idiom for verifying generated C code is:
+The standard doctest idiom for verifying generated C code, when the emitted C text is stable enough for exact output comparison, is:
 
 ```python
 Doctests:
@@ -484,12 +486,14 @@ Key points:
 - `validate_strings` compares against a trusted file in `tests/` (auto-generated on first run).
 - Set `file_ext="cu"` when the generated code is CUDA, `"c"` otherwise.
 - Import `validate_strings` (and `clang_format` if needed) inside the doctest, not at module level.
+- **Exception — generated-kernel-dominated C functions**: Do **not** generate or check trusted output files for C functions whose bodies primarily consist of generated kernels, especially large kernels emitted from SymPy expressions. Such output is too sensitive to SymPy version and codegen details for exact string comparison to be a reliable unit-test signal.
+- For these generated-kernel-heavy functions, prefer validation at the symbolic-expression level or with cheaper structural/sanity checks instead of outputting a golden C file under `tests/`.
 
 #### Doctest placeholders
 
 Some functions include `Doctests:` blocks with `# FIXME` placeholders. Treat these as temporary scaffolding:
 - If you add doctests, keep them lightweight (no heavy code generation, no long numeric computations).
-- Prefer doctests that validate generated strings (e.g., via `validate_strings`) or cheap invariants.
+- Prefer doctests that validate generated strings (e.g., via `validate_strings`) or cheap invariants, but skip golden-output doctests for large generated kernels as described above.
 - If you see `# FIXME`, either complete it in a follow-up PR or remove the placeholder when the doctest is ready.
 
 **Doctest prohibition:** Do not write doctests whose primary purpose is to assert that a `CFunction` successfully registers (e.g., checking membership in `cfc.CFunction_dict` or that `register_CFunction_*()` returns without error). Such doctests provide low value and tend to be brittle.
@@ -875,6 +879,12 @@ static inline void diag_write_header(FILE *file_ptr, const char *coord_names, co
 
 The `.github/single_file_static_analysis.sh` script enforces the following checks:
 
+Run this script on every modified Python file before committing. This is the required pre-commit check for Python changes:
+
+```bash
+./.github/single_file_static_analysis.sh path/to/modified_file.py
+```
+
 | Tool | Purpose | Configuration |
 |------|---------|---------------|
 | **black** | Code formatting | `--check` mode |
@@ -908,6 +918,7 @@ This indicates the project enforces **very strict** coding standards with a near
 ## Additional Notes
 
 - All code contributions must pass the static analysis checks before being merged.
+- For Python changes, run `.github/single_file_static_analysis.sh` on each modified Python file, not just on a hand-picked subset.
 - When in doubt, follow the existing patterns in the codebase.
 - This style guide is a living document and may be updated as the project evolves.
 - **Author email formatting**: Source files may use any readable email formatting or obfuscation scheme. Obfuscation is encouraged, but this guide does not enforce one exact representation.

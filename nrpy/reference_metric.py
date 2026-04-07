@@ -260,7 +260,7 @@ class ReferenceMetric:
             self.ghatDDdDD = cast(
                 List[List[List[List[sp.Expr]]]],
                 gri.register_gridfunctions_for_single_rankN(
-                    "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+                    "ghatDDdDD", rank=4, symmetry="sym01_sym23", group="AUXEVOL"
                 ),
             )
         elif not enable_rfm_precompute:

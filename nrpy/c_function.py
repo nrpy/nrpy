@@ -379,9 +379,12 @@ def register_CFunction(
     :raises ValueError: If the name is already registered in CFunction_dict.
 
     DocTests:
+        >>> CFunction_dict.clear()
+        >>> _ = register_CFunction(name="test_func", desc="test", body="return;")
         >>> register_CFunction(name="test_func", desc="test", body="return;")
-        >>> "test_func" in CFunction_dict
-        True
+        Traceback (most recent call last):
+        ...
+        ValueError: Error: already registered test_func in CFunction_dict.
     """
     actual_subdirectory, actual_name = function_name_and_subdir_with_CoordSystem(
         subdirectory, name, CoordSystem_for_wrapper_func

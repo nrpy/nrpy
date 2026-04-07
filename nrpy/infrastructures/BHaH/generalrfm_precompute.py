@@ -118,7 +118,7 @@ def register_CFunction_generalrfm_precompute(
         )
     if "ghatDDdDD0000" not in gri.glb_gridfcs_dict:
         _ = gri.register_gridfunctions_for_single_rankN(
-            "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+            "ghatDDdDD", rank=4, symmetry="sym01_sym23", group="AUXEVOL"
         )
     assignments: List[Tuple[str, sp.Expr]] = []
 

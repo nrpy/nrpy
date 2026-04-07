@@ -14,6 +14,7 @@ from typing import (
     Dict,
     List,
     Optional,
+    Set,
     Tuple,
     Type,
     Union,
@@ -86,7 +87,7 @@ def _flatten_and_unique_str(nested_list: List[Any]) -> List[str]:
     :return: An order-preserved list containing unique string representations of the elements.
     """
     flat_list: List[str] = []
-    seen: set[str] = set()
+    seen: Set[str] = set()
 
     def recurse(sub_list: Any) -> None:
         """
