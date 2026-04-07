@@ -229,7 +229,13 @@ class GRHD_Equations:
         self.Ye_star = Ye * alpha * e6phi * rho_b * u4U[0]
 
     def compute_S_star(self) -> None:
-        """Compute densitized conserved entropy."""
+        """
+        Compute the GRHayL-compatible densitized entropy variable.
+
+        Note: This follows GRHayL's convention
+        S_star = alpha * sqrt(gamma) * S * u^0,
+        where S is the primitive entropy.
+        """
         alpha = self.alpha
         e6phi = self.e6phi
         S = self.S
