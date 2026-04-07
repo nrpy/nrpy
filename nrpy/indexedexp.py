@@ -7,8 +7,7 @@ Authors: Zachariah Etienne, Kenneth Sible, Steven Brandt
 
 # Step 1: Load needed modules
 import string
-import sys  # Standard Python module for multiplatform OS-level functions
-from typing import Any, List, Optional, Tuple, Union, cast
+from typing import Any, List, NoReturn, Optional, Tuple, Union, cast
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -103,6 +102,111 @@ def create_tensor_symbolic(
     return tensor
 
 
+_SYMMETRY_EXAMPLES = {
+    1: "'nosym'",
+    2: "'nosym' or a single token like 'sym01' or 'anti01'",
+    3: (
+        "'nosym' or underscore-separated tokens like 'sym01', 'sym12', "
+        "'anti02', or 'sym012'"
+    ),
+    4: (
+        "'nosym' or underscore-separated tokens like 'sym01', 'sym23', "
+        "'anti03', 'sym012', or 'sym01_sym23'"
+    ),
+}
+
+
+def _parse_symmetry_tokens(rank: int, symmetry: str) -> List[str]:
+    """
+    Validate and split a symmetry string into tokens.
+
+    :param rank: Rank of the indexed expression.
+    :param symmetry: Symmetry specification string.
+    :return: The validated component symmetry tokens.
+    :raises ValueError: If the symmetry string is malformed.
+    """
+    if not 1 <= rank <= 4:
+        raise ValueError(f"Unsupported rank: {rank}. Rank must be between 1 and 4.")
+
+    examples = _SYMMETRY_EXAMPLES[rank]
+    index_count = "2 digit indices" if rank == 2 else f"2 to {rank} digit indices"
+
+    def raise_malformed(problem: str, token: Optional[str] = None) -> NoReturn:
+        subject = f"token '{token}'" if token is not None else f"string '{symmetry}'"
+        hint = ""
+        if token is not None and ("sym" in token[1:] or "anti" in token[1:]):
+            hint = (
+                " It looks like multiple symmetry tokens were concatenated without underscores; "
+                "for example, write 'sym01_sym23' instead of 'sym01sym23'."
+            )
+        raise ValueError(
+            f"Malformed symmetry {subject} for rank-{rank} indexed expression: {problem}. "
+            f"Expected format is {examples}.{hint}"
+        )
+
+    if not isinstance(symmetry, str) or symmetry == "":
+        raise ValueError(
+            f"symmetry must be a non-empty string when provided. Expected format is {examples}."
+        )
+
+    tokens = symmetry.split("_")
+    if "nosym" in tokens and len(tokens) > 1:
+        raise_malformed("'nosym' must be used by itself")
+
+    for token in tokens:
+        if token == "nosym":
+            continue
+        if token.startswith("sym"):
+            prefix_len = 3
+        elif token.startswith("anti"):
+            prefix_len = 4
+        else:
+            raise_malformed(
+                f"tokens must start with 'sym' or 'anti' followed by {index_count}",
+                token,
+            )
+
+        indices = token[prefix_len:]
+        if "sym" in indices or "anti" in indices:
+            raise_malformed(
+                "multiple symmetry groups must be separated by underscores", token
+            )
+        if len(indices) < 2 or len(indices) > rank or not indices.isdigit():
+            raise_malformed(
+                f"tokens must include between 2 and {rank} digit indices after the prefix",
+                token,
+            )
+        if len(set(indices)) != len(indices) or "".join(sorted(indices)) != indices:
+            raise_malformed(
+                "indices must appear exactly once and in ascending order", token
+            )
+        if any(int(index) >= rank for index in indices):
+            raise_malformed(f"indices must lie in the range 0..{rank - 1}", token)
+
+    return tokens
+
+
+def _expanded_symmetry_tokens(rank: int, symmetry: str) -> List[str]:
+    """
+    Expand validated symmetry tokens into pairwise operations.
+
+    :param rank: Rank of the indexed expression.
+    :param symmetry: Symmetry specification string.
+    :return: Pairwise symmetry operations derived from the validated tokens.
+    """
+    expanded_tokens = []
+    for token in _parse_symmetry_tokens(rank, symmetry):
+        if token == "nosym":
+            expanded_tokens.append(token)
+            continue
+        prefix_len = 4 if token.startswith("anti") else 3
+        prefix = token[:prefix_len]
+        indices = token[prefix_len:]
+        for start in range(len(indices) - 1):
+            expanded_tokens.append(prefix + indices[start : start + 2])
+    return expanded_tokens
+
+
 def declare_indexedexp(
     idx_expr_basename: Union[str, None], **kwargs: Any
 ) -> _recur_symbol_type:
@@ -128,7 +232,7 @@ def declare_indexedexp(
     >>> try:
     ...     Merror = declare_indexedexp('M', rank=2, dimension=3, symmetry='01')
     ... except ValueError as e:
-    ...     assert str(e) == "Unsupported symmetry '01' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
+    ...     assert str(e) == "Malformed symmetry token '01' for rank-2 indexed expression: tokens must start with 'sym' or 'anti' followed by 2 digit indices. Expected format is 'nosym' or a single token like 'sym01' or 'anti01'."
 
     Doctest 3: convert a symmetric rank-3 tensor to a 1D list & find the number of unique indices.
     >>> ixp = declare_indexedexp('M', rank=3, dimension=3, symmetry='sym01')
@@ -256,11 +360,8 @@ def declare_indexedexp(
         character_zero_index=character_zero_index,
     )
     symmetry = kwargs.get("symmetry")
-    if symmetry:
-        if not symmetry.startswith(("sym", "anti", "nosym")):
-            raise ValueError(
-                f"Unsupported symmetry '{symmetry}' for indexed expression. Valid symmetry options must start with 'sym', 'anti', or 'nosym'"
-            )
+    if "symmetry" in kwargs and symmetry is not None:
+        _parse_symmetry_tokens(rank, symmetry)
         # We must cast explicitly to List[_recur_symbol_type] because List is invariant
         # and symmetrize expects the generic Union list but concrete implementations return specific lists.
         # However, `symmetrize` internally handles the specific casting, and `indexedexp` is updated.
@@ -287,7 +388,7 @@ def symmetrize_rank2(
     >>> print(symmetrize_rank2([[a, b], [c, d]], "sym01", 2))
     [[a, b], [b, d]]
     """
-    for sym in symmetry.split("_"):
+    for sym in _parse_symmetry_tokens(2, symmetry):
         sign = 1 if sym[:3] == "sym" else -1
         for i, j in func.product(range(dimension), repeat=2):
             if sym[-2:] == "01":
@@ -328,15 +429,7 @@ def symmetrize_rank3(
     ...             if rank3[i][j][k] - rank3[j][i][k]:
     ...                 raise ValueError("ERROR! symmetrize_rank3 didn't work.")
     """
-    symmetry_list = []
-    for sym in symmetry.split("_"):
-        index = 3 if sym[:3] == "sym" else 4
-        if len(sym[index:]) == 3:
-            prefix = sym[:index]
-            symmetry_list.append(prefix + sym[index : (index + 2)])
-            symmetry_list.append(prefix + sym[(index + 1) : (index + 3)])
-        else:
-            symmetry_list.append(sym)
+    symmetry_list = _expanded_symmetry_tokens(3, symmetry)
     for sym in (
         symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
     ):
@@ -388,17 +481,7 @@ def symmetrize_rank4(
     ...                 raise ValueError("ERROR! symmetrize_rank4 didn't work.")
 
     """
-    symmetry_list = []
-    for sym in symmetry.split("_"):
-        index = 3 if sym[:3] == "sym" else 4
-        if len(sym[index:]) in (3, 4):
-            prefix = sym[:index]
-            symmetry_list.append(prefix + sym[index : (index + 2)])
-            symmetry_list.append(prefix + sym[(index + 1) : (index + 3)])
-            if len(sym[index:]) == 4:
-                symmetry_list.append(prefix + sym[(index + 2) : (index + 4)])
-        else:
-            symmetry_list.append(sym)
+    symmetry_list = _expanded_symmetry_tokens(4, symmetry)
     for sym in (
         symmetry_list[k] for n in range(len(symmetry_list), 0, -1) for k in range(n)
     ):
@@ -1319,6 +1402,7 @@ def LeviCivitaTensorDDD_dim3_rank3(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

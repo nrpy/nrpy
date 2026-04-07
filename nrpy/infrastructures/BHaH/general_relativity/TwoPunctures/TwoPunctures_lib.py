@@ -18,6 +18,9 @@ def register_C_functions(enable_xy_plane: bool = False) -> None:
     orientation expected by NRPyPN/TwoPunctures. ``TP_Interp`` then emits native
     fixed-basis components for fixed grids and the legacy startup component ordering
     for rotating startup grids.
+
+    :param enable_xy_plane: Whether to keep the physical binary in the native fixed-frame
+        xy-plane orientation instead of using the legacy startup convention.
     """
     BHaH.general_relativity.TwoPunctures.ID_persist_struct.register_CFunction_initialize_ID_persist_struct(
         enable_xy_plane=enable_xy_plane

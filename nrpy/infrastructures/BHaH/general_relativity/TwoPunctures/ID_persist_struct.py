@@ -92,6 +92,9 @@ def register_CFunction_initialize_ID_persist_struct(
     Register C function initialize_ID_persist_struct().
 
     This function populates ID_persist_struct with defaults, and overrides defaults with commondata.
+
+    :param enable_xy_plane: Whether to keep the binary in the native xy-plane orientation
+        instead of rotating the exported initial data into the legacy startup convention.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if enable_xy_plane:
@@ -105,9 +108,7 @@ Initialize ID_persist_struct: populate some with defaults; set others with input
 set up initial_p_t and initial_p_r if not set in parfile.
 """
         center_offset_comment = "x"
-        center_offset_assignment = (
-            "  par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
-        )
+        center_offset_assignment = "  par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
     else:
         desc = """
 IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
@@ -119,9 +120,7 @@ Initialize ID_persist_struct: populate some with defaults; set others with input
 set up initial_p_t and initial_p_r if not set in parfile.
 """
         center_offset_comment = "z"
-        center_offset_assignment = (
-            "  par->center_offset[2] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
-        )
+        center_offset_assignment = "  par->center_offset[2] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
     cfunc_type = "void"
     name = "initialize_ID_persist_struct"
     params = "commondata_struct *restrict commondata, ID_persist_struct *restrict par"

@@ -1028,7 +1028,7 @@ def gridfunction_management_and_FD_codegen(
 """
 
         NRPy_FD_StepNumber = NRPy_FD_StepNumber + 1
-        # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
+        # We choose the CSE temporary variable prefix "FDPart1" for the finite difference coefficients:
         kwargs_FDPart1.update(
             {
                 "cse_varprefix": "FDPart1",
@@ -1133,7 +1133,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
         # Copy kwargs
         kwargs_FDPart2 = kwargs_FDPart1.copy()
         kwargs_FDPart2["symbol_to_Rational_dict"] = {}
-        # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
+        # We choose the CSE temporary variable prefix "FDPart2" for the finite difference coefficients:
         kwargs_FDPart2.update(
             {
                 "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
@@ -1183,7 +1183,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
 
     # Copy kwargs
     kwargs_FDPart3 = kwargs_FDPart2.copy()
-    # We choose the CSE temporary variable prefix "FDpart2" for the finite difference coefficients:
+    # We choose the CSE temporary variable prefix "FDPart3" for the finite difference coefficients:
     kwargs_FDPart3.update(
         {
             "cse_varprefix": "FDPart3",

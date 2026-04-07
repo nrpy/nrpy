@@ -27,6 +27,9 @@ def register_CFunction_TP_Interp(enable_xy_plane: bool = False) -> None:
     tensor components follow the legacy startup ordering; with ``enable_xy_plane=True`` the
     fixed-frame query point stays native and the output basis depends on whether the destination
     grid is rotating.
+
+    :param enable_xy_plane: Whether to keep the query point in the native xy-plane orientation
+        instead of applying the legacy startup permutation.
     """
     includes = ["assert.h", "TP_utilities.h", "TwoPunctures.h"]
     desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z}."
