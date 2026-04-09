@@ -201,7 +201,6 @@ static int compare_by_coord(const void *a, const void *b) {
  * @param[in]     which_gfs        Array of length NUM_GFS_NEAREST giving gridfunction indices.
  * @param[in]     diagnostic_gf_names  Array of length NUM_GFS_NEAREST giving column names.
  * @param[in]     gridfuncs_diags  Per-grid pointers to diagnostic data arrays.
- * @param[in]     charecommstruct  Chare communication metadata/mappings.
  * @param[in,out] diagnosticstruct Diagnostic bookkeeping for point indices and file offsets.
  * @param[in]     chare_index      3D chare index.
  * @param[in]     token            Ck::IO session token.
@@ -217,7 +216,6 @@ static int compare_by_coord(const void *a, const void *b) {
                 const REAL *restrict xx[3], const REAL *restrict xx_chare[3],
                 const int NUM_GFS_NEAREST, const int which_gfs[],
                 const char **diagnostic_gf_names, const REAL *restrict gridfuncs_diags[],
-                const charecomm_struct *restrict charecommstruct,
                 diagnostic_struct *restrict diagnosticstruct,
                 const int chare_index[3], Ck::IO::Session token,
                 const int which_diagnostics_part"""
@@ -231,6 +229,7 @@ static int compare_by_coord(const void *a, const void *b) {
       const int Nxx0chare = params_chare->Nxx0;
       const int Nxx1chare = params_chare->Nxx1;
       const int Nxx2chare = params_chare->Nxx2;
+      const int idx3_this_chare = IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]);
 
       // Build filename component with runtime coordinate system name and grid number
       char coordsys_with_grid[128];
@@ -297,8 +296,8 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+        if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
         }}
       }}
@@ -323,9 +322,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
-          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+        if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
+          int localidx3 = globalidx3pt_to_localidx3pt(
+              idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, params_chare->Nxx_plus_2NGHOSTS0,
+              params_chare->Nxx_plus_2NGHOSTS1, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2);
           diagnosticstruct->localidx3_diagnostic_1d_y_pt[which_diagnostics_chare] = localidx3;
           diagnosticstruct->locali0_diagnostic_1d_y_pt[which_diagnostics_chare] =
             MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
@@ -362,8 +363,8 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
+        if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
         }}
       }}
@@ -388,9 +389,11 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
         const int idx3 = IDX3(i0, i1, i2);
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
-            IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {{
-          int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];
+        if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                            commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
+          int localidx3 = globalidx3pt_to_localidx3pt(
+              idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, params_chare->Nxx_plus_2NGHOSTS0,
+              params_chare->Nxx_plus_2NGHOSTS1, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2);
           diagnosticstruct->localidx3_diagnostic_1d_z_pt[which_diagnostics_chare] = localidx3;
           diagnosticstruct->locali0_diagnostic_1d_z_pt[which_diagnostics_chare] =
             MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);

@@ -69,8 +69,8 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
         return code
 
     owned_check = (
-        "if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==\n"
-        "    IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]))"
+        "if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,\n"
+        "                                    commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare)"
     )
 
     # counting inner body
@@ -86,7 +86,9 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
     fill_inner = (
         "const int idx3 = IDX3P(params, i0, i1, i2);\n"
         f"{owned_check} {{\n"
-        "  const int localidx3 = charecommstruct->globalidx3pt_to_localidx3pt[idx3];\n"
+        "  const int localidx3 = globalidx3pt_to_localidx3pt(\n"
+        "      idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,\n"
+        "      params_chare->Nxx_plus_2NGHOSTS0, params_chare->Nxx_plus_2NGHOSTS1, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2);\n"
         f"  diagnosticstruct->localidx3_diagnostic_2d_{suf}_pt[which_diagnostics_chare] = localidx3;\n"
         f"  diagnosticstruct->locali0_diagnostic_2d_{suf}_pt[which_diagnostics_chare] =\n"
         "      MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);\n"
@@ -208,7 +210,6 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
  * @param[in]     which_gfs             Array of length NUM_GFS_NEAREST giving gridfunction indices.
  * @param[in]     diagnostic_gf_names   Array of length NUM_GFS_NEAREST giving column names.
  * @param[in]     gridfuncs_diags       Per-grid pointers to diagnostic data arrays.
- * @param[in]     charecommstruct       Chare communication metadata/mappings.
  * @param[in,out] diagnosticstruct      Diagnostic bookkeeping for point indices and file offsets.
  * @param[in]     chare_index           3D chare index.
  * @param[in]     token                Ck::IO session token.
@@ -223,13 +224,11 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
             const REAL *restrict xx[3], const REAL *restrict xx_chare[3],
             const int NUM_GFS_NEAREST, const int which_gfs[], const char **diagnostic_gf_names,
             const REAL *restrict gridfuncs_diags[],
-            const charecomm_struct *restrict charecommstruct, diagnostic_struct *restrict diagnosticstruct,
+            diagnostic_struct *restrict diagnosticstruct,
             const int chare_index[3], Ck::IO::Session token, const int which_diagnostics_part"""
 
     body = rf"""
 #include "set_CodeParameters.h"
-
-
   switch (which_diagnostics_part) {{
 
     case DIAGNOSTICS_SETUP_2D: {{
@@ -237,6 +236,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
       const int Nxx0chare = params_chare->Nxx0;
       const int Nxx1chare = params_chare->Nxx1;
       const int Nxx2chare = params_chare->Nxx2;
+      const int idx3_this_chare = IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]);
 
       // Build filename component with runtime coordinate system name and grid number
       char coordsys_with_grid[128];
