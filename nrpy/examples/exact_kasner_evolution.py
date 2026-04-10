@@ -80,34 +80,11 @@ grid_physical_size = args.grid_physical_size
 diagnostics_output_every = 0.05
 t_start = 1.0
 t_final = 1.1
-fisheye_param_defaults: dict[str, float] = {}
-if num_fisheye_transitions == 1:
-    fisheye_param_defaults = {
-        "fisheye_phys_a0": 1.0,
-        "fisheye_phys_a1": 4.0,
-        "fisheye_phys_L": grid_physical_size,
-        "fisheye_phys_r_trans1": 3.0,
-        "fisheye_phys_w_trans1": 1.0,
-    }
-elif num_fisheye_transitions == 2:
-    fisheye_param_defaults = {
-        "fisheye_phys_a0": 1.0,
-        "fisheye_phys_a1": 2.0,
-        "fisheye_phys_a2": 4.0,
-        "fisheye_phys_L": grid_physical_size,
-        "fisheye_phys_r_trans1": 1.5,
-        "fisheye_phys_w_trans1": 0.8,
-        "fisheye_phys_r_trans2": 4.5,
-        "fisheye_phys_w_trans2": 1.5,
-    }
 Nxx_dict = {
-    "Cartesian": [
-        int(round(32 * grid_physical_size / 3.0)),
-        int(round(16 * grid_physical_size / 3.0)),
-        int(round(16 * grid_physical_size / 3.0)),
-    ],
+    "Cartesian": [int(round(32 * grid_physical_size / 3.0)), int(round(16 * grid_physical_size / 3.0)), int(round(16 * grid_physical_size / 3.0))],
     "GeneralRFM_fisheyeN1": [int(round(16 * grid_physical_size / 3.0))] * 3,
 }
+# Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
