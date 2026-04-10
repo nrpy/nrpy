@@ -7,7 +7,7 @@ from typing import List, Sequence, Tuple
 import nrpy.c_codegen as ccg
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.kasner_solution.kasner_exact import (
+from nrpy.equations.general_relativity.kasner_exact import (
     kasner_exact_bssn_exprs,
 )
 

@@ -15,7 +15,6 @@ from . import (
     generalrfm_cart_to_xx,
     generalrfm_precompute,
     griddata_commondata,
-    kasner_solution,
     main_c,
     nrpyelliptic,
     numerical_grids_and_timestep,

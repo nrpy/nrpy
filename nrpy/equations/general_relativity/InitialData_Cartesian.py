@@ -116,7 +116,7 @@ class InitialData_Cartesian:
         """
         Set exact Kasner initial data in Cartesian coordinates.
         """
-        from nrpy.infrastructures.BHaH.kasner_solution.initial_data import (
+        from nrpy.equations.general_relativity.kasner_exact import (
             kasner_adm_initial_data,
         )
 
