@@ -1,4 +1,9 @@
-"""Kasner-specific diagnostics helpers for BHaH infrastructures."""
+"""
+Kasner-specific diagnostics helpers for BHaH infrastructures.
+
+Author: Nishita Jadoo
+        njadoo **at** uidaho **dot* com
+"""
 
 from __future__ import annotations
 

@@ -6,18 +6,20 @@ with BSSN. The solution is spatially homogeneous, so it is compatible with
 extrapolation boundary conditions and can be run in Cartesian or fisheye
 reference-metric coordinates.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
-        Nishita Jadoo
+Author: Nishita Jadoo
         njadoo **at** uidaho **dot* com
 """
 
 from __future__ import annotations
 
+#########################################################
+# STEP 1: Import needed Python modules, then set codegen
+#         and compile-time parameters.
 import argparse
 import os
 import shutil
 from pathlib import Path
+
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
@@ -34,25 +36,14 @@ parser.add_argument(
 parser.add_argument(
     "--floating_point_precision",
     type=str,
-    default="double",
     help="Floating point precision (e.g. float, double).",
-)
-parser.add_argument(
-    "--coordsystem",
-    type=str,
-    default="Cartesian",
-    choices=["Cartesian", "GeneralRFM_fisheyeN1"],
-    help="Coordinate system to generate the project for.",
-)
-parser.add_argument(
-    "--grid_physical_size",
-    type=float,
-    default=3.0,
-    help="Half-width of the computational grid in raw coordinates.",
+    default="double",
 )
 args = parser.parse_args()
 
+# Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
+# Default to openmp; override with cuda if --cuda is set
 parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
@@ -64,9 +55,9 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
 
+# Code-generation-time parameters:
 project_name = "exact_kasner_evolution"
-CoordSystem = args.coordsystem
-set_of_CoordSystems = {CoordSystem}
+CoordSystem = "Cartesian"
 IDtype = "Kasner"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -76,13 +67,13 @@ num_fisheye_transitions = (
 )
 LapseEvolutionOption = "Frozen"
 ShiftEvolutionOption = "Frozen"
-grid_physical_size = args.grid_physical_size
+grid_physical_size = 3.0
 diagnostics_output_every = 0.05
 t_start = 1.0
 t_final = 1.1
 Nxx_dict = {
-    "Cartesian": [int(round(32 * grid_physical_size / 3.0)), int(round(16 * grid_physical_size / 3.0)), int(round(16 * grid_physical_size / 3.0))],
-    "GeneralRFM_fisheyeN1": [int(round(16 * grid_physical_size / 3.0))] * 3,
+    "Cartesian": [32, 16, 16],
+    "GeneralRFM_fisheyeN1": [16, 16, 16],
 }
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
@@ -107,7 +98,6 @@ elif num_fisheye_transitions == 2:
     }
 MoL_method = "RK4"
 fd_order = 4
-radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
 enable_rfm_precompute = True
@@ -119,6 +109,14 @@ boundary_conditions_desc = "extrapolation"
 outer_bcs_type = "extrapolation"
 
 set_of_CoordSystems = {CoordSystem}
+OMP_collapse = 1
+if "Spherical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "2")
+    OMP_collapse = 2  # about 2x faster
+if "Cylindrical" in CoordSystem:
+    par.set_parval_from_str("symmetry_axes", "1")
+    OMP_collapse = 2  # might be slightly faster
+
 par.adjust_CodeParam_default("NUMGRIDS", len(set_of_CoordSystems))
 
 project_dir = os.path.join("project", project_name)
@@ -185,26 +183,26 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     enable_CAKO=enable_CAKO,
-    OMP_collapse=1,
+    OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
-        OMP_collapse=1,
+        OMP_collapse=OMP_collapse,
     )
 BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
-    OMP_collapse=1,
+    OMP_collapse=OMP_collapse,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
     enable_T4munu=False,
     enable_fd_functions=enable_fd_functions,
-    OMP_collapse=1,
+    OMP_collapse=OMP_collapse,
 )
 
 if __name__ == "__main__":
@@ -212,7 +210,6 @@ if __name__ == "__main__":
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
-    radiation_BC_fd_order=radiation_BC_fd_order,
 )
 
 par.adjust_CodeParam_default("outer_bc_type", outer_bcs_type)

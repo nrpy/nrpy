@@ -1,6 +1,9 @@
 """
 Exact Kasner expressions used by BHaH initial-data and diagnostics code.
 
+Author: Nishita Jadoo
+        njadoo **at** uidaho **dot* com
+
 Metric (synchronous coordinates):
   ds^2 = -dt^2 + t^(2 p1) dx^2 + t^(2 p2) dy^2 + t^(2 p3) dz^2
 
