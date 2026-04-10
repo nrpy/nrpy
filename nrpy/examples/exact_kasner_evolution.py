@@ -64,7 +64,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
 
-project_name = "BSSN_Kasner_solution"
+project_name = "exact_kasner_evolution"
 CoordSystem = args.coordsystem
 set_of_CoordSystems = {CoordSystem}
 IDtype = "Kasner"
