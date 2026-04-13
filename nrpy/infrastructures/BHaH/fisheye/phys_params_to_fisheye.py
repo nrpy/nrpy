@@ -8,7 +8,8 @@ N-transition fisheye (zoom factors a0 -> a1 -> ... -> aN).
 
 The physical parameters are registered as NRPy CodeParameters in commondata_struct.
 
-Physical parameter meanings (physical radius):
+Physical/input parameter meanings:
+- fisheye_phys_a{i}: user-specified fisheye relative plateau/stretch factor a_i.
 - fisheye_phys_L: outer physical boundary radius.
 - fisheye_phys_r_trans{i}: physical radius where transition i is centered.
 - fisheye_phys_w_trans{i}: physical width of transition i.
@@ -122,7 +123,7 @@ def build_post_params_struct_set_to_default_hook(
     return f"""for(int grid=0; grid<commondata.NUMGRIDS; grid++) {{
 {copy_a_lines}
   if (fisheye_params_from_physical_N{num_transitions}(&commondata, &{compute_griddata}[grid].params) != 0) {{
-    fprintf(stderr, "Error: fisheye_params_from_physical_N{num_transitions} failed for grid %d. Check fisheye_a* and fisheye_phys_* values.\\n", grid);
+    fprintf(stderr, "Error: fisheye_params_from_physical_N{num_transitions} failed for grid %d. Check fisheye_phys_a* and fisheye_phys_{{L,r_trans*,w_trans*}} values.\\n", grid);
     exit(1);
   }}
 }}\n"""
@@ -168,7 +169,8 @@ def register_CFunction_fisheye_params_from_physical_N(
 Compute fisheye internal parameters (R_i, s_i) and compute c from physical fisheye inputs
 (r_trans_i, w_trans_i, L) for an N-transition fisheye.
 
-Physical parameter meanings (physical radius):
+Physical/input parameter meanings:
+- fisheye_phys_a{i}: user-specified fisheye relative plateau/stretch factor a_i.
 - fisheye_phys_L: outer physical boundary radius.
 - fisheye_phys_r_trans{i}: physical radius where transition i is centered.
 - fisheye_phys_w_trans{i}: physical width of transition i.
