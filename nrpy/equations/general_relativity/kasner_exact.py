@@ -38,7 +38,7 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
-import nrpy.equations.basis_transforms.jacobians as jac
+from nrpy.equations.basis_transforms.jacobians import BasisTransforms
 import nrpy.reference_metric as refmetric
 
 
@@ -114,11 +114,12 @@ def kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, sp.Expr | List[List[s
         CoordSystem="Cartesian",
     )
 
-    gammabarDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        CoordSystem, adm2bssn.gammabarDD
+    basis_transforms = BasisTransforms(CoordSystem)
+    gammabarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        adm2bssn.gammabarDD
     )
-    AbarDD = jac.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
-        CoordSystem, adm2bssn.AbarDD
+    AbarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        adm2bssn.AbarDD
     )
 
     rfm = refmetric.reference_metric[CoordSystem]

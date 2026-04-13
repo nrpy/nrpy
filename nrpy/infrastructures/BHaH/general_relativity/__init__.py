@@ -8,7 +8,6 @@ from . import (
     cahdprefactor_gf,
     constraints_eval,
     diagnostic_gfs_set,
-    diagnostics_kasner,
     diagnostics_nearest,
     diagnostics_volume_integration,
     enforce_detgammabar_equals_detgammahat,

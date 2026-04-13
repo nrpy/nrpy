@@ -2,6 +2,7 @@ from . import (
     BHaH_defines_h,
     BHaH_device_defines_h,
     BHaHAHA,
+    Kasner,
     CodeParameters,
     CurviBoundaryConditions,
     Makefile_helpers,

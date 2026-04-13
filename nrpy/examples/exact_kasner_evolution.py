@@ -57,7 +57,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "exact_kasner_evolution"
-CoordSystem = "Cartesian"
+CoordSystem = "GeneralRFM_fisheyeN1"
 IDtype = "Kasner"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -72,6 +72,10 @@ diagnostics_output_every = 0.05
 t_start = 1.0
 t_final = 1.1
 Nxx_dict = {
+    "Spherical": [32, 8, 2],
+    "SinhSpherical": [32, 8, 2],
+    "Cylindrical": [32, 32, 2],
+    "SinhCylindrical": [32, 32, 2],
     "Cartesian": [32, 16, 16],
     "GeneralRFM_fisheyeN1": [16, 16, 16],
 }
@@ -79,17 +83,17 @@ Nxx_dict = {
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
-        "fisheye_phys_a0": 1.0,
-        "fisheye_phys_a1": 4.0,
+        "fisheye_a0": 1.0,
+        "fisheye_a1": 4.0,
         "fisheye_phys_L": grid_physical_size,
         "fisheye_phys_r_trans1": 3.0,
         "fisheye_phys_w_trans1": 1.0,
     }
 elif num_fisheye_transitions == 2:
     fisheye_param_defaults = {
-        "fisheye_phys_a0": 1.0,
-        "fisheye_phys_a1": 2.0,
-        "fisheye_phys_a2": 4.0,
+        "fisheye_a0": 1.0,
+        "fisheye_a1": 2.0,
+        "fisheye_a2": 4.0,
         "fisheye_phys_L": grid_physical_size,
         "fisheye_phys_r_trans1": 1.5,
         "fisheye_phys_w_trans1": 0.8,
@@ -105,8 +109,8 @@ enable_intrinsics = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = False
-boundary_conditions_desc = "extrapolation"
-outer_bcs_type = "extrapolation"
+boundary_conditions_desc = "exact Kasner"
+outer_bcs_type = "exact"
 
 set_of_CoordSystems = {CoordSystem}
 OMP_collapse = 1
@@ -116,6 +120,10 @@ if "Spherical" in CoordSystem:
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
     OMP_collapse = 2  # might be slightly faster
+if CoordSystem not in Nxx_dict:
+    raise ValueError(f"CoordSystem = {CoordSystem} not supported by Nxx_dict.")
+if parallelization == "cuda" and outer_bcs_type == "exact":
+    raise ValueError("outer_bc_type='exact' is currently supported only for openmp.")
 
 par.adjust_CodeParam_default("NUMGRIDS", len(set_of_CoordSystems))
 
@@ -163,11 +171,11 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
 )
-BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+BHaH.Kasner.diagnostics.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False,
     enable_psi4=False,
 )
-BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+BHaH.Kasner.diagnostics.register_CFunction_diagnostics_nearest()
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
@@ -211,6 +219,9 @@ if __name__ == "__main__":
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
 )
+BHaH.Kasner.apply_bcs_outerexact_and_inner.register_CFunction_apply_bcs_outerexact_kasner_and_inner(
+    CoordSystem=CoordSystem
+)
 
 par.adjust_CodeParam_default("outer_bc_type", outer_bcs_type)
 rhs_string = ""
@@ -227,6 +238,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, \"extrapolation\", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
+else if (strncmp(commondata->outer_bc_type, \"exact\", 50) == 0)
+  apply_bcs_outerexact_kasner_and_inner(commondata, params, (const REAL *restrict *)griddata[grid].xx, bcstruct, RK_OUTPUT_GFS, auxevol_gfs);
   enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,

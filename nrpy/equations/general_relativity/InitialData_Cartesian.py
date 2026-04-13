@@ -115,11 +115,20 @@ class InitialData_Cartesian:
     ) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
         """
         Set exact Kasner initial data in Cartesian coordinates.
-        """
-        from nrpy.equations.general_relativity.kasner_exact import (
-            kasner_adm_initial_data,
-        )
 
+        Doctest:
+        >>> ID = InitialData_Cartesian("Kasner")
+        >>> ID.alpha
+        1
+        >>> all(ID.gammaDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+        True
+        >>> all(ID.KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+        True
+        """
+        # Step 2.a: Import shared exact Kasner ADM expressions from equations layer.
+        from nrpy.equations.general_relativity.kasner_exact import kasner_adm_initial_data
+
+        # Step 2.b: Return all needed ADM variables in Cartesian coordinates.
         return kasner_adm_initial_data()
     # fmt: on
 

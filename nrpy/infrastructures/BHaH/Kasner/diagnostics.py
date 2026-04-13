@@ -7,11 +7,24 @@ Author: Nishita Jadoo
 
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+import re
+from typing import List, Sequence, Tuple, Union, cast
+from inspect import currentframe as cfr
+from types import FrameType as FT
+import sympy as sp
 
 import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
 import nrpy.grid as gri
+import nrpy.indexedexp as ixp
+import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
+from nrpy.equations.basis_transforms.jacobians import BasisTransforms
+from nrpy.infrastructures.BHaH.general_relativity import (
+    diagnostic_gfs_set as gr_diagnostic_gfs_set,
+    diagnostics_nearest as gr_diagnostics_nearest,
+)
+import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.kasner_exact import (
     kasner_exact_bssn_exprs,
 )
@@ -51,6 +64,17 @@ KASNER_DIAG_GRIDFUNCTIONS: Tuple[Tuple[str, str], ...] = (
     ("DIAG_EXACT_LAMBDAUX", "EXACT_lambdaU0"),
     ("DIAG_EXACT_LAMBDAUY", "EXACT_lambdaU1"),
     ("DIAG_EXACT_LAMBDAUZ", "EXACT_lambdaU2"),
+    ("DIAG_PX_RECOVERED", "p1_recovered"),
+    ("DIAG_PY_RECOVERED", "p2_recovered"),
+    ("DIAG_PZ_RECOVERED", "p3_recovered"),
+    ("DIAG_EXACT_PX", "EXACT_p1"),
+    ("DIAG_EXACT_PY", "EXACT_p2"),
+    ("DIAG_EXACT_PZ", "EXACT_p3"),
+    ("DIAG_PX_ERROR", "p1_error"),
+    ("DIAG_PY_ERROR", "p2_error"),
+    ("DIAG_PZ_ERROR", "p3_error"),
+    ("DIAG_PSUM_MINUS_ONE", "p1_plus_p2_plus_p3_minus_1"),
+    ("DIAG_PSQSUM_MINUS_ONE", "p1_sq_plus_p2_sq_plus_p3_sq_minus_1"),
 )
 
 KASNER_NEAREST_DIAG_GFS_BHAH: Tuple[str, ...] = tuple(f"{name}GF" for name, _ in KASNER_DIAG_GRIDFUNCTIONS)
@@ -109,6 +133,82 @@ def _kasner_exact_codegen_targets() -> Sequence[str]:
     )
 
 
+def _kasner_exponent_recovery_codegen_targets() -> Sequence[str]:
+    return (
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PX_RECOVEREDGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PY_RECOVEREDGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PZ_RECOVEREDGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PXGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PYGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PZGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PX_ERRORGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PY_ERRORGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PZ_ERRORGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PSUM_MINUS_ONEGF, idx3)]",
+        "diagnostic_gfs[grid][IDX4pt(DIAG_PSQSUM_MINUS_ONEGF, idx3)]",
+    )
+
+
+def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
+    hDD = ixp.declarerank2("hDD", symmetry="sym01")
+    aDD = ixp.declarerank2("aDD", symmetry="sym01")
+    cf = sp.Symbol("cf", real=True)
+    trK = sp.Symbol("trK", real=True)
+    cf_evolution = par.parval_from_str("EvolvedConformalFactor_cf")
+    if cf_evolution == "phi":
+        exp4phi = sp.exp(4 * cf)
+    elif cf_evolution == "chi":
+        exp4phi = 1 / cf
+    elif cf_evolution == "W":
+        exp4phi = 1 / cf**2
+    else:
+        raise ValueError(f"Unsupported EvolvedConformalFactor_cf = {cf_evolution}")
+
+    rfm = refmetric.reference_metric[CoordSystem]
+    gammabarDD = ixp.zerorank2()
+    AbarDD = ixp.zerorank2()
+    gammaDD = ixp.zerorank2()
+    KDD = ixp.zerorank2()
+    for i in range(3):
+        for j in range(3):
+            gammabarDD[i][j] = hDD[i][j] * rfm.ReDD[i][j] + rfm.ghatDD[i][j]
+            AbarDD[i][j] = aDD[i][j] * rfm.ReDD[i][j]
+            gammaDD[i][j] = exp4phi * gammabarDD[i][j]
+            KDD[i][j] = exp4phi * AbarDD[i][j] + sp.Rational(1, 3) * gammaDD[i][j] * trK
+
+    basis_transforms = BasisTransforms(CoordSystem)
+    gammaDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(gammaDD)
+    KDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(KDD)
+    gammaUU_cart, _ = ixp.symm_matrix_inverter3x3(gammaDD_cart)
+
+    KUD_cart = ixp.zerorank2()
+    for i in range(3):
+        for j in range(3):
+            for k in range(3):
+                KUD_cart[i][j] += gammaUU_cart[i][k] * KDD_cart[k][j]
+
+    t_phys = sp.Symbol("KASNER_t_phys", real=True)
+    p1_exact = sp.Symbol("KASNER_p1", real=True)
+    p2_exact = sp.Symbol("KASNER_p2", real=True)
+    p3_exact = sp.Symbol("KASNER_p3", real=True)
+    p_rec = [-t_phys * KUD_cart[i][i] for i in range(3)]
+    psum_minus1 = p_rec[0] + p_rec[1] + p_rec[2] - 1
+    psqsum_minus1 = p_rec[0] ** 2 + p_rec[1] ** 2 + p_rec[2] ** 2 - 1
+    return (
+        p_rec[0],
+        p_rec[1],
+        p_rec[2],
+        p1_exact,
+        p2_exact,
+        p3_exact,
+        p_rec[0] - p1_exact,
+        p_rec[1] - p2_exact,
+        p_rec[2] - p3_exact,
+        psum_minus1,
+        psqsum_minus1,
+    )
+
+
 def build_kasner_diagnostic_gfs_set_body() -> str:
     """Build the Kasner-specific C body appended to ``diagnostic_gfs_set``."""
     CoordSystem = par.parval_from_str("CoordSystem_to_register_CodeParameters")
@@ -116,6 +216,7 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     exact_AbarDD = exact_bssn["AbarDD"]
     exact_hDD = exact_bssn["hDD"]
     exact_lambdaU = exact_bssn["lambdaU"]
+    recovered_exponent_exprs = _kasner_recovered_exponent_exprs(CoordSystem)
 
     ghat_reads = ""
     if CoordSystem.startswith("GeneralRFM"):
@@ -147,7 +248,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
 """
 
     body = """
-    SET_NXX_PLUS_2NGHOSTS_VARS(grid);
     const REAL KASNER_t_phys = commondata->KASNER_t0 + commondata->time;
     const REAL KASNER_p1 = commondata->KASNER_p1;
     const REAL KASNER_p2 = commondata->KASNER_p2;
@@ -158,6 +258,20 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
       const REAL xx0 = griddata[grid].xx[0][i0];
       const REAL xx1 = griddata[grid].xx[1][i1];
       const REAL xx2 = griddata[grid].xx[2][i2];
+      const REAL hDD00 = y_n_gfs[IDX4pt(HDD00GF, idx3)];
+      const REAL hDD01 = y_n_gfs[IDX4pt(HDD01GF, idx3)];
+      const REAL hDD02 = y_n_gfs[IDX4pt(HDD02GF, idx3)];
+      const REAL hDD11 = y_n_gfs[IDX4pt(HDD11GF, idx3)];
+      const REAL hDD12 = y_n_gfs[IDX4pt(HDD12GF, idx3)];
+      const REAL hDD22 = y_n_gfs[IDX4pt(HDD22GF, idx3)];
+      const REAL aDD00 = y_n_gfs[IDX4pt(ADD00GF, idx3)];
+      const REAL aDD01 = y_n_gfs[IDX4pt(ADD01GF, idx3)];
+      const REAL aDD02 = y_n_gfs[IDX4pt(ADD02GF, idx3)];
+      const REAL aDD11 = y_n_gfs[IDX4pt(ADD11GF, idx3)];
+      const REAL aDD12 = y_n_gfs[IDX4pt(ADD12GF, idx3)];
+      const REAL aDD22 = y_n_gfs[IDX4pt(ADD22GF, idx3)];
+      const REAL cf = y_n_gfs[IDX4pt(CFGF, idx3)];
+      const REAL trK = y_n_gfs[IDX4pt(TRKGF, idx3)];
 #include "set_CodeParameters.h"
 """
     body += ghat_reads
@@ -179,7 +293,7 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
       diagnostic_gfs[grid][IDX4pt(DIAG_LAMBDAUYGF, idx3)] = y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_LAMBDAUZGF, idx3)] = y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)];
 """
-    body += "      " + ccg.c_codegen(
+    body += "      {\n      " + ccg.c_codegen(
         [
             exact_AbarDD[0][0],
             exact_AbarDD[0][1],
@@ -203,7 +317,79 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
         verbose=False,
         include_braces=False,
     ).replace("\n", "\n      ")
+    body += "\n      }\n"
+    body += "      {\n      " + ccg.c_codegen(
+        list(recovered_exponent_exprs),
+        list(_kasner_exponent_recovery_codegen_targets()),
+        verbose=False,
+        include_braces=False,
+    ).replace("\n", "\n      ")
+    body += "\n      }\n"
     body += """
     } // END LOOP over all gridpoints to set Kasner diagnostics
 """
     return body
+
+
+def _replace_cfunc_all(name: str, pattern: str, repl: str) -> None:
+    cfunc = cfc.CFunction_dict[name]
+    cfunc.body = re.sub(pattern, repl, cfunc.body, count=1)
+    cfunc.raw_function = re.sub(pattern, repl, cfunc.raw_function, count=1)
+    cfunc.full_function = re.sub(pattern, repl, cfunc.full_function, count=1)
+
+
+def _insert_before_marker_all(name: str, marker: str, insert_text: str) -> None:
+    cfunc = cfc.CFunction_dict[name]
+    cfunc.body = cfunc.body.replace(marker, insert_text + marker)
+    cfunc.raw_function = cfunc.raw_function.replace(marker, insert_text + marker)
+    cfunc.full_function = cfunc.full_function.replace(marker, insert_text + marker)
+
+
+def register_CFunction_diagnostic_gfs_set(
+    enable_interp_diagnostics: bool = False, enable_psi4: bool = False, enable_T4munu: bool = False
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register ``diagnostic_gfs_set`` and inject Kasner-specific diagnostic channels.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+    register_kasner_diag_gridfunctions()
+    gr_diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
+        enable_interp_diagnostics=enable_interp_diagnostics,
+        enable_psi4=enable_psi4,
+        enable_T4munu=enable_T4munu,
+    )
+    cfunc = cfc.CFunction_dict["diagnostic_gfs_set"]
+    kasner_body = build_kasner_diagnostic_gfs_set_body()
+    grid_loop_end = "  } // END LOOP over grids\n"
+    if kasner_body not in cfunc.body:
+        _insert_before_marker_all("diagnostic_gfs_set", grid_loop_end, kasner_body)
+    return pcg.NRPyEnv()
+
+
+def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register ``diagnostics_nearest`` with Kasner diagnostic channels in 0D/1D/2D output lists.
+    """
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+    gr_diagnostics_nearest.register_CFunction_diagnostics_nearest()
+    selected = ", ".join(kasner_nearest_diag_gf_names_bhah())
+    _replace_cfunc_all(
+        "diagnostics_nearest",
+        r"const int which_gfs_0d\[\] = \{[^;]*\};",
+        f"const int which_gfs_0d[] = {{{selected}}};",
+    )
+    _replace_cfunc_all(
+        "diagnostics_nearest",
+        r"const int which_gfs_1d\[\] = \{[^;]*\};",
+        f"const int which_gfs_1d[] = {{{selected}}};",
+    )
+    _replace_cfunc_all(
+        "diagnostics_nearest",
+        r"const int which_gfs_2d\[\] = \{[^;]*\};",
+        f"const int which_gfs_2d[] = {{{selected}}};",
+    )
+    return pcg.NRPyEnv()
