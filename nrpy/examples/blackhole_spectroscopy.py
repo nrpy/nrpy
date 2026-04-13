@@ -94,6 +94,7 @@ Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
     "GeneralRFM_fisheyeN1": [200, 200, 200],
+    "GeneralRFM_fisheyeN2": [200, 200, 200],
 }
 # Fisheye parameter defaults exposed via physical fisheye parameters in .par.
 fisheye_param_defaults: dict[str, float] = {}

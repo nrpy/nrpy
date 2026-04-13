@@ -53,6 +53,7 @@ Nxx_dict = {
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
+    "GeneralRFM_fisheyeN2": [128, 128, 128],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
