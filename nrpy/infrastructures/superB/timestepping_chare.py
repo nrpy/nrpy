@@ -263,7 +263,7 @@ void Timestepping::pup(PUP::er &p) {
     griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * commondata.NUMGRIDS);
   }
   for (int i = 0; i < commondata.NUMGRIDS; i++) {
-    pup_griddata_chare(p, griddata_chare[i], griddata[i].params, commondata);
+    pup_griddata_chare(p, griddata_chare[i], commondata);
   }
   p | is_boundarychare;
   p | time_start;

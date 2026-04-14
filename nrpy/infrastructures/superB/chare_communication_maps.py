@@ -1,5 +1,5 @@
 """
-C function for setting up chare communcation struct for maps between indices on the local chare grid and the global grid, converting idx3 of grid point to the idx3 of the chare evolving it, etc...
+C function for setting up chare communication data needed to map local chare indices to global indices; global owner/local lookups are computed on demand.
 
 Authors: Nishita Jadoo
          njadoo **at** uidaho **dot* edu
@@ -90,7 +90,7 @@ def chare_comm_register_C_functions(
     BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "charecomm_struct charecommstruct",
-        "maps that convert between index of a pt in chare's local grid to the index on the global grid, etc",
+        "local-to-global index map for this chare; global owner/local lookups are computed on demand",
     )
 
 

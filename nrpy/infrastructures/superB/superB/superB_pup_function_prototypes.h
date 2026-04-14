@@ -10,4 +10,4 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const int num_diag
 void pup_tmpBuffers_struct(PUP::er &p, tmpBuffers_struct &tmpBuffers, const params_struct &params, const nonlocalinnerbc_struct &nonlocalinnerbc);
 void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, const commondata_struct &commondata);
 void pup_griddata(PUP::er &p, griddata_struct &gd);
-void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata);
+void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct &commondata);

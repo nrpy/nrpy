@@ -409,7 +409,8 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     # PUP routine for griddata struct
     prefunc += """
 // PUP routine for struct griddata
-// During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
+// During time evolution, need params from griddata for xx used by diagnostics;
+// charecomm_struct now unpacks from gd.params within griddata_chare.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -426,7 +427,7 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
     prefunc += """
 // PUP routine for struct griddata_chare
 // For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
-void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
+void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
 
