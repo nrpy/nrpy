@@ -82,8 +82,21 @@ class Main : public CBase_Main {
   private:
     /// Member Variables (Object State) ///
     REAL start_time;
+"""
+    if enable_BHaHAHA:
+        file_output_str += """
+    bool timestepping_is_done;
+    bool horizon_finders_are_done;
+"""
+    file_output_str += """
 
     /// Private Member Functions ///
+"""
+    if enable_BHaHAHA:
+        file_output_str += """
+    void try_exit_if_ready();
+"""
+    file_output_str += """
 
  public:
 
@@ -98,6 +111,13 @@ class Main : public CBase_Main {
     file_output_str += r"""
   /// Entry Methods ///
   void done();
+"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  void timestepping_done();
+  void horizon_finder_done();
+"""
+    file_output_str += r"""
 };
 
 #endif //__MAIN_H__
@@ -203,6 +223,12 @@ Main::Main(CkArgMsg* msg) {
   start_time = CkWallTimer();
 
   mainProxy = thisProxy;
+"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+  timestepping_is_done = false;
+"""
+    file_output_str += r"""
 
   CommondataObject commondataObj; // commondataObj.commondata contains parameters common to all grids.
 
@@ -235,6 +261,7 @@ Main::Main(CkArgMsg* msg) {
   const int Nchare2 = commondataObj.commondata.Nchare2;
   const int Ncharetotal = Nchare0 * Nchare1 * Nchare2;
   const int numHorizons = commondataObj.commondata.bah_max_num_horizons;
+  horizon_finders_are_done = (numHorizons == 0);
 
   CkArrayOptions optsH(numHorizons);
   horizon_finderProxy = CProxy_Horizon_finder::ckNew(optsH);
@@ -274,11 +301,37 @@ void Main::done() {
   CkExit();
 }
 """
+    if enable_BHaHAHA:
+        file_output_str += r"""
+void Main::try_exit_if_ready() {
+  if (timestepping_is_done && horizon_finders_are_done) {
+    done();
+  }
+}
+
+void Main::timestepping_done() {
+  timestepping_is_done = true;
+  try_exit_if_ready();
+}
+
+void Main::horizon_finder_done() {
+  horizon_finders_are_done = true;
+  try_exit_if_ready();
+}
+"""
     if enable_charm_checkpointing:
         file_output_str += r"""
 // PUP routine for checkpointing
 void Main::pup(PUP::er &p) {
   CBase_Main::pup(p);
+  p | start_time;
+"""
+        if enable_BHaHAHA:
+            file_output_str += r"""
+  p | timestepping_is_done;
+  p | horizon_finders_are_done;
+"""
+        file_output_str += r"""
 }
 """
     file_output_str += r"""
@@ -329,6 +382,13 @@ def output_main_ci(
   mainchare Main {
     entry Main(CkArgMsg* msg);
     entry void done();
+"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+    entry void timestepping_done();
+    entry void horizon_finder_done();
+"""
+    file_output_str += r"""
   };"""
     if enable_BHaHAHA and not enable_charm_checkpointing:
         file_output_str += r"""

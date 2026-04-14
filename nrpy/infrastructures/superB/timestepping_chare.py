@@ -1973,6 +1973,12 @@ def output_timestepping_ci(
       serial{
         mainProxy.done();
       }"""
+    else:
+        file_output_str += r"""
+      serial {
+        CkCallback cb(CkReductionTarget(Timestepping, notify_timestepping_chare_completion), thisProxy[CkArrayIndex3D(0, 0, 0)]);
+        contribute(cb);
+      }"""
     file_output_str += r"""
     };
     entry void start_write_1d_y(Ck::IO::SessionReadyMsg *m);
@@ -2005,6 +2011,16 @@ def output_timestepping_ci(
     entry void top_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void bottom_ghost(int type_gfs, int len_tmpBuffer, REAL tmpBuffer[len_tmpBuffer]);
     entry void continue_timestepping();
+"""
+    if enable_BHaHAHA:
+        file_output_str += r"""
+    entry [reductiontarget] void notify_timestepping_chare_completion() {
+      serial {
+        mainProxy.timestepping_done();
+      }
+    }
+"""
+    file_output_str += r"""
     entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         Butcher_dict,
