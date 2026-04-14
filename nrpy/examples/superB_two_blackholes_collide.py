@@ -33,7 +33,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 
 # Code-generation-time parameters:
 project_name = "superB_two_blackholes_collide"
-CoordSystem = "GeneralRFM_fisheyeN1"
+CoordSystem = "Spherical"
 set_of_CoordSystems = {CoordSystem}
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
