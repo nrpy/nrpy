@@ -67,41 +67,39 @@ num_fisheye_transitions = (
 )
 LapseEvolutionOption = "Frozen"
 ShiftEvolutionOption = "Frozen"
-grid_physical_size = 3.0
+grid_physical_size = 12.0
 diagnostics_output_every = 0.05
-t_start = 1.0
-t_final = 1.1
+t_final = 10.0
 Nxx_dict = {
-    "Spherical": [32, 8, 2],
-    "SinhSpherical": [32, 8, 2],
-    "Cylindrical": [32, 32, 2],
-    "SinhCylindrical": [32, 32, 2],
-    "Cartesian": [32, 16, 16],
-    "GeneralRFM_fisheyeN1": [16, 16, 16],
+    "Spherical": [128, 128, 2],
+    "Cylindrical": [128, 128, 2],
+    "Cartesian": [32, 32, 32],
+    "GeneralRFM_fisheyeN1": [128, 128, 128],
 }
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
         "fisheye_a0": 1.0,
-        "fisheye_a1": 4.0,
+        "fisheye_a1": 2.0,
         "fisheye_phys_L": grid_physical_size,
-        "fisheye_phys_r_trans1": 1.5,
-        "fisheye_phys_w_trans1": 0.5,
+        "fisheye_phys_r_trans1": 3.0,
+        "fisheye_phys_w_trans1": 1.0,
     }
 elif num_fisheye_transitions == 2:
     fisheye_param_defaults = {
         "fisheye_a0": 1.0,
         "fisheye_a1": 2.0,
-        "fisheye_a2": 4.0,
+        "fisheye_a2": 3.0,
         "fisheye_phys_L": grid_physical_size,
-        "fisheye_phys_r_trans1": 1.5,
-        "fisheye_phys_w_trans1": 0.8,
-        "fisheye_phys_r_trans2": 4.5,
-        "fisheye_phys_w_trans2": 1.5,
+        "fisheye_phys_r_trans1": 3.0,
+        "fisheye_phys_w_trans1": 1.0,
+        "fisheye_phys_r_trans2": 5.0,
+        "fisheye_phys_w_trans2": 1.0,
     }
 MoL_method = "RK4"
 fd_order = 4
+radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
 enable_rfm_precompute = True
@@ -164,7 +162,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     default_diagnostics_out_every=diagnostics_output_every,
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
-    enable_volume_integration_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
 )
@@ -173,6 +171,7 @@ BHaH.Kasner.diagnostics.register_CFunction_diagnostic_gfs_set(
     enable_psi4=False,
 )
 BHaH.Kasner.diagnostics.register_CFunction_diagnostics_nearest()
+BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
@@ -215,6 +214,7 @@ if __name__ == "__main__":
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
+    radiation_BC_fd_order=radiation_BC_fd_order,
 )
 
 par.adjust_CodeParam_default("outer_bc_type", outer_bcs_type)
@@ -223,6 +223,10 @@ if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
+if (strncmp(commondata->outer_bc_type, "radiation", 50) == 0)
+  apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
+                                     gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                     RK_INPUT_GFS, RK_OUTPUT_GFS);
 """
 if not enable_rfm_precompute:
     rhs_string = rhs_string.replace("rfmstruct", "xx")
@@ -230,7 +234,8 @@ if not enable_rfm_precompute:
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
-    post_rhs_string="""apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
+    post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
+  apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
 enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
