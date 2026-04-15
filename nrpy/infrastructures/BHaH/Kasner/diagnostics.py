@@ -103,7 +103,7 @@ def register_kasner_diag_gridfunctions() -> None:
 
 def kasner_nearest_diag_gf_names_bhah() -> List[str]:
     """Return Kasner diagnostic GF enum names used by non-superB nearest diagnostics."""
-    return list(KASNER_NEAREST_DIAG_GFS_BHAH)
+    return ["DIAG_HAMILTONIANGF", "DIAG_MSQUAREDGF", *list(KASNER_NEAREST_DIAG_GFS_BHAH)]
 
 
 def kasner_nearest_diag_gf_names_superb() -> List[str]:
