@@ -76,17 +76,17 @@ Nxx_dict = {
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
-        "fisheye_a0": 1.0,
-        "fisheye_a1": 2.0,
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
         "fisheye_phys_L": grid_physical_size,
         "fisheye_phys_r_trans1": 3.0,
         "fisheye_phys_w_trans1": 1.0,
     }
 elif num_fisheye_transitions == 2:
     fisheye_param_defaults = {
-        "fisheye_a0": 1.0,
-        "fisheye_a1": 2.0,
-        "fisheye_a2": 3.0,
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_a2": 3.0,
         "fisheye_phys_L": grid_physical_size,
         "fisheye_phys_r_trans1": 3.0,
         "fisheye_phys_w_trans1": 1.0,
