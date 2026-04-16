@@ -72,7 +72,7 @@ def register_CFunction_exact_ADM_ID_function(
         )
         body += "MAYBE_UNUSED const REAL xx0=r, xx1=th, xx2=ph;\n"
     elif IDCoordSystem == "Cartesian":
-        body += r"""  const REAL x=xCart[0], y=xCart[1], z=xCart[2];
+        body += r"""  MAYBE_UNUSED const REAL x=xCart[0], y=xCart[1], z=xCart[2];
 """
     else:
         raise ValueError(

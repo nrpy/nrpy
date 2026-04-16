@@ -1,10 +1,8 @@
 """
-Kasner exact-solution example using the non-superB BHaH infrastructure.
+Kasner exact-solution example using the BHaH infrastructure.
 
 This generates a complete C project for evolving the vacuum Kasner spacetime
-with BSSN. The solution is spatially homogeneous, so it is compatible with
-extrapolation boundary conditions and can be run in Cartesian or fisheye
-reference-metric coordinates.
+with BSSN.
 
 Author: Nishita Jadoo
         njadoo **at** uidaho **dot* com
@@ -69,10 +67,8 @@ LapseEvolutionOption = "Frozen"
 ShiftEvolutionOption = "Frozen"
 grid_physical_size = 12.0
 diagnostics_output_every = 0.05
-t_final = 10.0
-Nxx_dict = {
-    "Spherical": [128, 128, 2],
-    "Cylindrical": [128, 128, 2],
+t_final = 7.0
+Nxx_dict = {    
     "Cartesian": [32, 32, 32],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
 }
@@ -112,12 +108,6 @@ outer_bcs_type = "extrapolation"
 
 set_of_CoordSystems = {CoordSystem}
 OMP_collapse = 1
-if "Spherical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "2")
-    OMP_collapse = 2  # about 2x faster
-if "Cylindrical" in CoordSystem:
-    par.set_parval_from_str("symmetry_axes", "1")
-    OMP_collapse = 2  # might be slightly faster
 if CoordSystem not in Nxx_dict:
     raise ValueError(f"CoordSystem = {CoordSystem} not supported by Nxx_dict.")
 par.adjust_CodeParam_default("NUMGRIDS", len(set_of_CoordSystems))

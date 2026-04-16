@@ -70,11 +70,6 @@ KASNER_DIAG_GRIDFUNCTIONS: Tuple[Tuple[str, str], ...] = (
     ("DIAG_EXACT_PX", "EXACT_p1"),
     ("DIAG_EXACT_PY", "EXACT_p2"),
     ("DIAG_EXACT_PZ", "EXACT_p3"),
-    ("DIAG_PX_ERROR", "p1_error"),
-    ("DIAG_PY_ERROR", "p2_error"),
-    ("DIAG_PZ_ERROR", "p3_error"),
-    ("DIAG_PSUM_MINUS_ONE", "p1_plus_p2_plus_p3_minus_1"),
-    ("DIAG_PSQSUM_MINUS_ONE", "p1_sq_plus_p2_sq_plus_p3_sq_minus_1"),
 )
 
 KASNER_NEAREST_DIAG_GFS_BHAH: Tuple[str, ...] = tuple(f"{name}GF" for name, _ in KASNER_DIAG_GRIDFUNCTIONS)
@@ -141,11 +136,6 @@ def _kasner_exponent_recovery_codegen_targets() -> Sequence[str]:
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PXGF, idx3)]",
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PYGF, idx3)]",
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_PZGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_PX_ERRORGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_PY_ERRORGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_PZ_ERRORGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_PSUM_MINUS_ONEGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_PSQSUM_MINUS_ONEGF, idx3)]",
     )
 
 
@@ -192,8 +182,6 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
     p2_exact = sp.Symbol("KASNER_p2", real=True)
     p3_exact = sp.Symbol("KASNER_p3", real=True)
     p_rec = [-t_phys * KUD_cart[i][i] for i in range(3)]
-    psum_minus1 = p_rec[0] + p_rec[1] + p_rec[2] - 1
-    psqsum_minus1 = p_rec[0] ** 2 + p_rec[1] ** 2 + p_rec[2] ** 2 - 1
     return (
         p_rec[0],
         p_rec[1],
@@ -201,11 +189,6 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
         p1_exact,
         p2_exact,
         p3_exact,
-        p_rec[0] - p1_exact,
-        p_rec[1] - p2_exact,
-        p_rec[2] - p3_exact,
-        psum_minus1,
-        psqsum_minus1,
     )
 
 
@@ -249,9 +232,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
 
     body = """
     const REAL KASNER_t_phys = commondata->KASNER_t0 + commondata->time;
-    const REAL KASNER_p1 = commondata->KASNER_p1;
-    const REAL KASNER_p2 = commondata->KASNER_p2;
-    const REAL KASNER_p3 = commondata->KASNER_p3;
 
     LOOP_OMP("omp parallel for", i0, 0, Nxx_plus_2NGHOSTS0, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       const int idx3 = IDX3(i0, i1, i2);
