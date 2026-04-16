@@ -14,7 +14,6 @@ Author: Nishita Jadoo
 import argparse
 import os
 import shutil
-from pathlib import Path
 from typing import Dict
 
 import nrpy.helpers.parallel_codegen as pcg

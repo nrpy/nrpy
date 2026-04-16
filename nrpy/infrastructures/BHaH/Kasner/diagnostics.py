@@ -94,7 +94,7 @@ KASNER_NEAREST_DIAG_GFS_SUPERB: Tuple[str, ...] = (
 def register_kasner_diag_gridfunctions() -> None:
     """Register all Kasner-specific diagnostic gridfunctions in the ``DIAG`` group."""
     for name, desc in KASNER_DIAG_GRIDFUNCTIONS:
-        gri.register_gridfunctions(names=name, desc=desc, group="DIAG")
+        gri.register_gridfunctions(names=[name], desc_list=[desc], group="DIAG")
 
 
 def kasner_nearest_diag_gf_names_bhah() -> List[str]:
@@ -152,7 +152,7 @@ def _kasner_exponent_recovery_codegen_targets() -> Sequence[str]:
     )
 
 
-def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
+def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[sp.Expr]:
     hDD = ixp.declarerank2("hDD", symmetry="sym01")
     aDD = ixp.declarerank2("aDD", symmetry="sym01")
     cf = sp.Symbol("cf", real=True)
@@ -324,7 +324,7 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     ).replace("\n", "\n      ")
     body += "\n      }\n"
     body += "      {\n      " + ccg.c_codegen(
-        cast(List[sp.Expr], list(recovered_exponent_exprs)),
+        list(recovered_exponent_exprs),
         list(_kasner_exponent_recovery_codegen_targets()),
         verbose=False,
         include_braces=False,
