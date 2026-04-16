@@ -53,6 +53,20 @@ def kasner_adm_quantities(
     :param p2: Kasner exponent along ``y``.
     :param p3: Kasner exponent along ``z``.
     :return: ``(gammaDD, KDD, alpha, betaU, BU)`` in Cartesian basis.
+
+    :Example:
+    >>> t, p1, p2, p3 = sp.symbols("t p1 p2 p3", real=True)
+    >>> gammaDD, KDD, alpha, betaU, BU = kasner_adm_quantities(t, p1, p2, p3)
+    >>> alpha
+    1
+    >>> gammaDD[0][0]
+    t**(2*p1)
+    >>> KDD[2][2]
+    -p3*t**(2*p3 - 1)
+    >>> all(gammaDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+    True
+    >>> all(KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+    True
     """
     gammaDD = ixp.zerorank2()
     gammaDD[0][0] = t_phys ** (2 * p1)
@@ -83,6 +97,15 @@ def kasner_adm_initial_data(
     CodeParameters, and evaluates the exact ADM fields at ``t = KASNER_t0``.
 
     :return: ``(gammaDD, KDD, alpha, betaU, BU)``.
+
+    :Example:
+    >>> gammaDD, KDD, alpha, betaU, BU = kasner_adm_initial_data()
+    >>> alpha
+    1
+    >>> all(gammaDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+    True
+    >>> all(KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
+    True
     """
     t0, p1, p2, p3 = par.register_CodeParameters(
         "REAL",
@@ -100,6 +123,16 @@ def kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, sp.Expr | List[List[s
 
     :param CoordSystem: Coordinate system used for the BSSN variables.
     :return: Dict with exact ``cf``, ``trK``, ``hDD``, ``AbarDD``, and ``lambdaU`` expressions.
+
+    :Example:
+    >>> exprs = kasner_exact_bssn_exprs("Cartesian")
+    Setting up reference_metric[Cartesian]...
+    >>> sorted(exprs.keys())
+    ['AbarDD', 'cf', 'hDD', 'lambdaU', 'trK']
+    >>> len(exprs["hDD"]) == 3 and len(exprs["hDD"][0]) == 3
+    True
+    >>> len(exprs["lambdaU"]) == 3
+    True
     """
     t_phys = sp.Symbol("KASNER_t_phys", real=True)
     p1 = sp.Symbol("KASNER_p1", real=True)
@@ -164,3 +197,15 @@ def kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, sp.Expr | List[List[s
         "AbarDD": AbarDD,
         "lambdaU": lambdaU,
     }
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
