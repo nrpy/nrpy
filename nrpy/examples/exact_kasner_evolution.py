@@ -162,10 +162,15 @@ if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
         set_of_CoordSystems=set_of_CoordSystems,
     )
+# Use separate Ricci only where that path is actually supported.
+use_separate_ricci = separate_Ricci_and_BSSN_RHS and not (
+    parallelization == "cuda" and CoordSystem.startswith("GeneralRFM")
+)
+
 BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_RbarDD_gridfunctions=use_separate_ricci,
     enable_T4munu=False,
     enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
@@ -175,12 +180,21 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     OMP_collapse=OMP_collapse,
 )
-if separate_Ricci_and_BSSN_RHS:
+if use_separate_ricci:
+    # GeneralRFM + CUDA does not support device-side Ricci_eval kernels.
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
         enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
+    )
+if parallelization == "cuda":
+    BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
+        CoordSystem=CoordSystem,
+        enable_intrinsics=enable_intrinsics,
+        enable_fd_functions=enable_fd_functions,
+        OMP_collapse=OMP_collapse,
+        host_only_version=True,
     )
 BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
@@ -205,7 +219,7 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 
 par.adjust_CodeParam_default("outer_bc_type", outer_bcs_type)
 rhs_string = ""
-if separate_Ricci_and_BSSN_RHS:
+if use_separate_ricci:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 rhs_string += """
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);

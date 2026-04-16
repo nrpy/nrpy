@@ -5,7 +5,6 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* com
 """
 
-import re
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import List, Sequence, Tuple, Union, cast
@@ -336,11 +335,17 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     return body
 
 
-def _replace_cfunc_all(name: str, pattern: str, repl: str) -> None:
+def _replace_cfunc_all(name: str, old: str, new: str) -> None:
     cfunc = cfc.CFunction_dict[name]
-    cfunc.body = re.sub(pattern, repl, cfunc.body, count=1)
-    cfunc.raw_function = re.sub(pattern, repl, cfunc.raw_function, count=1)
-    cfunc.full_function = re.sub(pattern, repl, cfunc.full_function, count=1)
+    if (
+        old not in cfunc.body
+        or old not in cfunc.raw_function
+        or old not in cfunc.full_function
+    ):
+        raise ValueError(f"Expected snippet not found in CFunction '{name}': {old}")
+    cfunc.body = cfunc.body.replace(old, new, 1)
+    cfunc.raw_function = cfunc.raw_function.replace(old, new, 1)
+    cfunc.full_function = cfunc.full_function.replace(old, new, 1)
 
 
 def _insert_before_marker_all(name: str, marker: str, insert_text: str) -> None:
@@ -393,17 +398,17 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
     selected = ", ".join(kasner_nearest_diag_gf_names_bhah())
     _replace_cfunc_all(
         "diagnostics_nearest",
-        r"const int which_gfs_0d\[\] = \{[^;]*\};",
+        "const int which_gfs_0d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};",
         f"const int which_gfs_0d[] = {{{selected}}};",
     )
     _replace_cfunc_all(
         "diagnostics_nearest",
-        r"const int which_gfs_1d\[\] = \{[^;]*\};",
+        "const int which_gfs_1d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};",
         f"const int which_gfs_1d[] = {{{selected}}};",
     )
     _replace_cfunc_all(
         "diagnostics_nearest",
-        r"const int which_gfs_2d\[\] = \{[^;]*\};",
+        "const int which_gfs_2d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};",
         f"const int which_gfs_2d[] = {{{selected}}};",
     )
     return pcg.NRPyEnv()

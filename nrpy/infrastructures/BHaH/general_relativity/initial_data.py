@@ -131,6 +131,17 @@ if( CHECKPOINT_READ_CALL ) {
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
+    if IDtype == "Kasner":
+        body += """
+const REAL kasner_sum_p = commondata->KASNER_p1 + commondata->KASNER_p2 + commondata->KASNER_p3;
+const REAL kasner_sum_p2 = commondata->KASNER_p1 * commondata->KASNER_p1 + commondata->KASNER_p2 * commondata->KASNER_p2 + commondata->KASNER_p3 * commondata->KASNER_p3;
+const REAL kasner_abs_sum_err = (kasner_sum_p > 1.0) ? (kasner_sum_p - 1.0) : (1.0 - kasner_sum_p);
+const REAL kasner_abs_sum2_err = (kasner_sum_p2 > 1.0) ? (kasner_sum_p2 - 1.0) : (1.0 - kasner_sum_p2);
+if (kasner_abs_sum_err > 1.0e-14 || kasner_abs_sum2_err > 1.0e-14) {
+  fprintf(stderr, "Error: KASNER_p1, KASNER_p2, KASNER_p3 must satisfy p1+p2+p3=1 and p1^2+p2^2+p3^2=1.\\n");
+  exit(1);
+}
+"""
     body += """
 for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:

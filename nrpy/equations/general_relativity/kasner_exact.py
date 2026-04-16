@@ -107,6 +107,8 @@ def kasner_adm_initial_data(
     :param p2_default: Default Kasner exponent along ``y``.
     :param p3_default: Default Kasner exponent along ``z``.
     :return: ``(gammaDD, KDD, alpha, betaU, BU)``.
+    :raises ValueError: If ``p1_default``, ``p2_default``, and ``p3_default`` do not satisfy
+        the Kasner constraints.
 
     :Example:
     >>> gammaDD, KDD, alpha, betaU, BU = kasner_adm_initial_data()
@@ -117,6 +119,17 @@ def kasner_adm_initial_data(
     >>> all(KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
     True
     """
+    kasner_sum = p1_default + p2_default + p3_default
+    kasner_sum_sq = (
+        p1_default * p1_default + p2_default * p2_default + p3_default * p3_default
+    )
+    tol = 1.0e-14
+    if abs(kasner_sum - 1.0) > tol or abs(kasner_sum_sq - 1.0) > tol:
+        raise ValueError(
+            "Kasner defaults must satisfy p1 + p2 + p3 = 1 and "
+            "p1^2 + p2^2 + p3^2 = 1."
+        )
+
     t0, p1, p2, p3 = par.register_CodeParameters(
         "REAL",
         __name__,
