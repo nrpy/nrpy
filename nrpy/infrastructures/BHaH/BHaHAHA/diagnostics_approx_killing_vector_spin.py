@@ -219,8 +219,8 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
 #include <omp.h>
 #endif
 
-#ifdef USE_LAPACKE
-#include <lapacke.h>
+#ifdef USE_PRIMME
+#include <primme.h>
 #endif
 
 // -----------------------------
@@ -276,7 +276,7 @@ typedef struct {
   // Quality flag bitfield (0 = OK):
   //   bit0: residual tolerance exceeded for any reported mode
   //   bit1: small eigenvalue gap (gridpoint method)
-  //   bit2: solver/library unavailable
+  //   bit2: solver/library/path unavailable
   //   bit3: B not SPD / regularization retry used / near-singular handling invoked
   int akv_quality_flag;
 
@@ -719,12 +719,6 @@ static void akv_symmetrize_dense(AKV_REAL *M, int N) {
   }
 }
 
-#ifdef USE_LAPACKE
-static void akv_dense_add_diag(AKV_REAL *M, int N, AKV_REAL eps) {
-  for (int i = 0; i < N; i++) M[i + (size_t)N*i] += eps;
-}
-#endif
-
 static void akv_dense_matvec(const AKV_REAL *M, int N, const AKV_REAL *x, AKV_REAL *y) {
   for (int i = 0; i < N; i++) {
     AKV_REAL s = 0.0;
@@ -1061,85 +1055,381 @@ static akv_error_t akv_full_assemble_dense_debug_apply(
 }
 
 // -----------------------------
-// Gridpoint dense generalized eigen solve with explicit SPD handling
+// Gridpoint generalized eigen solve with PRIMME on the mean-zero reduced space
 // -----------------------------
 
-#ifdef USE_LAPACKE
-static bool akv_try_cholesky_spd(const AKV_REAL *B, int N) {
-  AKV_REAL *tmp = (AKV_REAL*)malloc((size_t)N*(size_t)N*sizeof(AKV_REAL));
-  if (!tmp) return false;
-  memcpy(tmp, B, (size_t)N*(size_t)N*sizeof(AKV_REAL));
-  int info = LAPACKE_dpotrf(LAPACK_COL_MAJOR, 'U', N, tmp, N);
-  free(tmp);
-  return (info == 0);
+static inline void akv_mean0_project_transpose(
+    const akv_mean0_basis_t *b,
+    const AKV_REAL *y_full,
+    AKV_REAL *y_red) {
+
+  const int Nr = b->N_red;
+  const int r = b->ref;
+  const AKV_REAL yref = y_full[r];
+  for (int a = 0; a < Nr; a++) {
+    const int ia = b->map[a];
+    const AKV_REAL alpha_a = -b->w_dof[ia] / b->wref;
+    y_red[a] = y_full[ia] + alpha_a * yref;
+  }
+}
+
+static akv_error_t akv_full_apply_from_stencil_block(
+    const akv_horizon_grid_t *grid,
+    akv_eval_row_stencil_f eval_row,
+    const AKV_REAL *X, int ldx,
+    AKV_REAL *Y, int ldy,
+    int N_full, int blockSize,
+    bool use_K) {
+
+  if (!grid || !eval_row || !X || !Y || N_full <= 0 || blockSize <= 0) return AKV_ERR_NULLPTR;
+
+  const int max_entries = 512;
+  int *j_cols = (int*)malloc((size_t)max_entries * sizeof(int));
+  AKV_REAL *K_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
+  AKV_REAL *B_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
+  if (!j_cols || !K_vals || !B_vals) {
+    free(j_cols); free(K_vals); free(B_vals);
+    return AKV_ERR_ALLOC;
+  }
+
+  for (int b = 0; b < blockSize; b++) memset(&Y[(size_t)ldy * b], 0, (size_t)N_full * sizeof(AKV_REAL));
+
+  for (int i = 0; i < N_full; i++) {
+    int nnz = eval_row(i, grid, max_entries, j_cols, K_vals, B_vals);
+    if (nnz < 0) {
+      free(j_cols); free(K_vals); free(B_vals);
+      return AKV_ERR_BADPARAM;
+    }
+    if (nnz > max_entries) nnz = max_entries;
+
+    for (int e = 0; e < nnz; e++) {
+      const int j = j_cols[e];
+      if (j < 0 || j >= N_full) continue;
+      const AKV_REAL val = use_K ? K_vals[e] : B_vals[e];
+      if (val == 0.0) continue;
+      for (int b = 0; b < blockSize; b++) {
+        Y[i + (size_t)ldy * b] += val * X[j + (size_t)ldx * b];
+      }
+    }
+  }
+
+  free(j_cols); free(K_vals); free(B_vals);
+  return AKV_SUCCESS;
+}
+
+static akv_error_t akv_full_apply_debug_block(
+    const akv_horizon_grid_t *grid,
+    akv_apply_K_f applyK,
+    akv_apply_B_f applyB,
+    const AKV_REAL *X, int ldx,
+    AKV_REAL *Y, int ldy,
+    int N_full, int blockSize,
+    bool use_K) {
+
+  if (!grid || !X || !Y || N_full <= 0 || blockSize <= 0) return AKV_ERR_NULLPTR;
+  if ((use_K && !applyK) || (!use_K && !applyB)) return AKV_ERR_NULLPTR;
+
+  for (int b = 0; b < blockSize; b++) {
+    const AKV_REAL *xin = &X[(size_t)ldx * b];
+    AKV_REAL *yout = &Y[(size_t)ldy * b];
+    if (use_K) applyK(grid, xin, yout);
+    else applyB(grid, xin, yout);
+  }
+
+  return AKV_SUCCESS;
+}
+
+typedef struct {
+  const akv_horizon_grid_t *grid;
+  const akv_mean0_basis_t *basis;
+  akv_eval_row_stencil_f eval_row_stencil;
+  akv_apply_K_f applyK_debug;
+  akv_apply_B_f applyB_debug;
+  const akv_params_t *pars;
+} akv_primme_ctx_t;
+
+static akv_error_t akv_apply_reduced_block(
+    const akv_primme_ctx_t *ctx,
+    const AKV_REAL *Xred, int ldx,
+    AKV_REAL *Yred, int ldy,
+    int blockSize,
+    bool use_K) {
+
+  if (!ctx || !ctx->grid || !ctx->basis || !Xred || !Yred || blockSize <= 0) return AKV_ERR_NULLPTR;
+
+  const int N_full = ctx->basis->N_full;
+  const int Nr = ctx->basis->N_red;
+
+  AKV_REAL *Xfull = (AKV_REAL*)malloc((size_t)N_full * (size_t)blockSize * sizeof(AKV_REAL));
+  AKV_REAL *Yfull = (AKV_REAL*)malloc((size_t)N_full * (size_t)blockSize * sizeof(AKV_REAL));
+  if (!Xfull || !Yfull) {
+    free(Xfull); free(Yfull);
+    return AKV_ERR_ALLOC;
+  }
+
+  for (int b = 0; b < blockSize; b++) {
+    akv_mean0_lift_vector(ctx->basis, &Xred[(size_t)ldx * b], &Xfull[(size_t)N_full * b]);
+  }
+
+  akv_error_t err;
+  if (ctx->eval_row_stencil) {
+    err = akv_full_apply_from_stencil_block(ctx->grid, ctx->eval_row_stencil, Xfull, N_full, Yfull, N_full, N_full, blockSize, use_K);
+  }
+  else {
+    if (!ctx->pars || !ctx->pars->allow_debug_assembly) {
+      free(Xfull); free(Yfull);
+      return AKV_ERR_BADPARAM;
+    }
+    err = akv_full_apply_debug_block(ctx->grid, ctx->applyK_debug, ctx->applyB_debug, Xfull, N_full, Yfull, N_full, N_full, blockSize, use_K);
+  }
+  if (err != AKV_SUCCESS) {
+    free(Xfull); free(Yfull);
+    return err;
+  }
+
+  for (int b = 0; b < blockSize; b++) {
+    akv_mean0_project_transpose(ctx->basis, &Yfull[(size_t)N_full * b], &Yred[(size_t)ldy * b]);
+    if (!use_K && ctx->pars && ctx->pars->reg_eps > 0.0) {
+      for (int i = 0; i < Nr; i++) Yred[i + (size_t)ldy * b] += ctx->pars->reg_eps * Xred[i + (size_t)ldx * b];
+    }
+  }
+
+  free(Xfull); free(Yfull);
+  return AKV_SUCCESS;
+}
+
+#ifdef USE_PRIMME
+static void akv_primme_matrixMatvec(
+    void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy,
+    int *blockSize, primme_params *primme, int *ierr) {
+
+  const akv_primme_ctx_t *ctx = (const akv_primme_ctx_t*)primme->matrix;
+  *ierr = (int)akv_apply_reduced_block(ctx, (const AKV_REAL*)x, (int)(*ldx), (AKV_REAL*)y, (int)(*ldy), *blockSize, true);
+}
+
+static void akv_primme_massMatrixMatvec(
+    void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy,
+    int *blockSize, primme_params *primme, int *ierr) {
+
+  const akv_primme_ctx_t *ctx = (const akv_primme_ctx_t*)primme->massMatrix;
+  *ierr = (int)akv_apply_reduced_block(ctx, (const AKV_REAL*)x, (int)(*ldx), (AKV_REAL*)y, (int)(*ldy), *blockSize, false);
 }
 #endif
 
-static akv_error_t akv_full_solve_dense_generalized_reduced_spd_retry(
-    AKV_REAL *Kred, AKV_REAL *Bred, int Nr, int want_neigs,
+static void akv_b_gram_schmidt_apply_inplace(
+    AKV_REAL *V, int N, int k,
+    const akv_primme_ctx_t *ctx,
+    AKV_REAL *tmp) {
+
+  for (int a = 0; a < k; a++) {
+    AKV_REAL *va = &V[(size_t)N * a];
+
+    for (int b = 0; b < a; b++) {
+      AKV_REAL *vb = &V[(size_t)N * b];
+      if (akv_apply_reduced_block(ctx, vb, N, tmp, N, 1, false) != AKV_SUCCESS) continue;
+      const AKV_REAL proj = vecn_dot(va, tmp, N);
+      vecn_axpy(va, vb, N, -proj);
+    }
+
+    if (akv_apply_reduced_block(ctx, va, N, tmp, N, 1, false) != AKV_SUCCESS) continue;
+    const AKV_REAL n2 = vecn_dot(va, tmp, N);
+    if (n2 > 0.0) vecn_scale(va, N, 1.0 / sqrt(n2));
+  }
+}
+
+static AKV_REAL akv_residual_ratio_reduced_apply_inplace(
+    const akv_primme_ctx_t *ctx,
+    int N, const AKV_REAL *z, AKV_REAL lambda,
+    AKV_REAL *Kz, AKV_REAL *Bz, AKV_REAL *r) {
+
+  if (akv_apply_reduced_block(ctx, z, N, Kz, N, 1, true) != AKV_SUCCESS) return INFINITY;
+  if (akv_apply_reduced_block(ctx, z, N, Bz, N, 1, false) != AKV_SUCCESS) return INFINITY;
+
+  for (int i = 0; i < N; i++) r[i] = Kz[i] - lambda * Bz[i];
+
+  const AKV_REAL nr = vecn_norm2(r, N);
+  const AKV_REAL nK = vecn_norm2(Kz, N);
+  const AKV_REAL nB = vecn_norm2(Bz, N);
+  const AKV_REAL denom = nK + nB;
+  return (denom > 0.0) ? (nr / denom) : 0.0;
+}
+
+static bool akv_try_cholesky_dense(AKV_REAL *A, int N) {
+  if (!A || N <= 0) return false;
+  for (int j = 0; j < N; j++) {
+    AKV_REAL sum = A[j + (size_t)N * j];
+    for (int k = 0; k < j; k++) {
+      const AKV_REAL Ljk = A[j + (size_t)N * k];
+      sum -= Ljk * Ljk;
+    }
+    if (!(sum > 0.0)) return false;
+    A[j + (size_t)N * j] = sqrt(sum);
+    for (int i = j + 1; i < N; i++) {
+      AKV_REAL s = A[i + (size_t)N * j];
+      for (int k = 0; k < j; k++) s -= A[i + (size_t)N * k] * A[j + (size_t)N * k];
+      A[i + (size_t)N * j] = s / A[j + (size_t)N * j];
+    }
+  }
+  return true;
+}
+
+static akv_error_t akv_build_reduced_mass_matrix_dense(
+    const akv_primme_ctx_t *ctx,
+    int Nr,
+    AKV_REAL *Bred) {
+
+  if (!ctx || !Bred || Nr <= 0) return AKV_ERR_NULLPTR;
+
+  AKV_REAL *e = (AKV_REAL*)calloc((size_t)Nr, sizeof(AKV_REAL));
+  AKV_REAL *Be = (AKV_REAL*)calloc((size_t)Nr, sizeof(AKV_REAL));
+  if (!e || !Be) {
+    free(e); free(Be);
+    return AKV_ERR_ALLOC;
+  }
+
+  for (int j = 0; j < Nr; j++) {
+    memset(e, 0, (size_t)Nr * sizeof(AKV_REAL));
+    e[j] = 1.0;
+    const akv_error_t err = akv_apply_reduced_block(ctx, e, Nr, Be, Nr, 1, false);
+    if (err != AKV_SUCCESS) {
+      free(e); free(Be);
+      return err;
+    }
+    for (int i = 0; i < Nr; i++) Bred[i + (size_t)Nr * j] = Be[i];
+  }
+
+  akv_symmetrize_dense(Bred, Nr);
+  free(e); free(Be);
+  return AKV_SUCCESS;
+}
+
+static akv_error_t akv_full_solve_generalized_reduced_primme(
+    const akv_primme_ctx_t *ctx,
+    int Nr, int want_neigs,
     const akv_params_t *pars,
-    AKV_REAL *eval_out, AKV_REAL *evec_out,
+    AKV_REAL *eval_out, AKV_REAL *evec_out, AKV_REAL *res_out,
     int *quality_flag_io) {
 
-  if (!Kred || !Bred || !eval_out || !evec_out || !pars || !quality_flag_io) return AKV_ERR_NULLPTR;
+  if (!ctx || !pars || !eval_out || !evec_out || !res_out || !quality_flag_io) return AKV_ERR_NULLPTR;
   if (Nr <= 0 || want_neigs <= 0 || want_neigs > Nr) return AKV_ERR_BADPARAM;
 
-#ifndef USE_LAPACKE
-  (void)Kred; (void)Bred; (void)Nr; (void)want_neigs; (void)pars; (void)eval_out; (void)evec_out;
+#ifndef USE_PRIMME
+  (void)ctx; (void)Nr; (void)want_neigs; (void)pars; (void)eval_out; (void)evec_out; (void)res_out;
   *quality_flag_io |= (1<<2);
   return AKV_ERR_NOT_IMPLEMENTED;
 #else
   const int max_tries = (pars->reg_max_tries > 0) ? pars->reg_max_tries : 1;
-  AKV_REAL reg = (pars->reg_eps > 0) ? pars->reg_eps : 0.0;
+  AKV_REAL reg = (pars->reg_eps > 0.0) ? pars->reg_eps : 0.0;
   const AKV_REAL reg_max = (pars->reg_eps_max > reg) ? pars->reg_eps_max : reg;
+  bool reg_capped = false;
+  bool observed_b_conditioning_issue = false;
 
-  bool max_eps = false;
-  for (int attempt = 0; attempt < max_tries; attempt++) {
-    AKV_REAL *A = (AKV_REAL*)malloc((size_t)Nr*(size_t)Nr*sizeof(AKV_REAL));
-    AKV_REAL *B = (AKV_REAL*)malloc((size_t)Nr*(size_t)Nr*sizeof(AKV_REAL));
-    AKV_REAL *w = (AKV_REAL*)malloc((size_t)Nr*sizeof(AKV_REAL));
-    if (!A || !B || !w) { free(A); free(B); free(w); return AKV_ERR_ALLOC; }
-
-    memcpy(A, Kred, (size_t)Nr*(size_t)Nr*sizeof(AKV_REAL));
-    memcpy(B, Bred, (size_t)Nr*(size_t)Nr*sizeof(AKV_REAL));
-
-    if (reg > 0) {
-      akv_dense_add_diag(B, Nr, reg);
-      *quality_flag_io |= (1<<3);
-    }
-
-    // Explicit SPD probe (Cholesky). If it fails, increase reg and retry.
-    if (!akv_try_cholesky_spd(B, Nr)) {
-      free(A); free(B); free(w);
-      *quality_flag_io |= (1<<3);
-      if (attempt == max_tries - 1 || max_eps) return AKV_ERR_EIGEN_FAIL;
-      if (reg == 0.0) reg = 1e-14;
-      else reg *= 10.0;
-      if (reg_max > 0 && reg > reg_max) { reg = reg_max; max_eps = true; }
-      continue;
-    }
-    
-    // Solve A x = λ B x. LAPACKE_dsygvd overwrites A with eigenvectors.
-    int info = LAPACKE_dsygvd(LAPACK_COL_MAJOR, 1, 'V', 'U', Nr, A, Nr, B, Nr, w);
-    if (info != 0) {
-      free(A); free(B); free(w);
-      *quality_flag_io |= (1<<3);
-      if (attempt == max_tries - 1 || max_eps) return AKV_ERR_EIGEN_FAIL;
-      if (reg == 0.0) reg = 1e-14;
-      else reg *= 10.0;
-      if (reg_max > 0 && reg > reg_max) { reg = reg_max; max_eps = true; }
-      continue;
-    }
-
-    for (int i = 0; i < want_neigs; i++) {
-      eval_out[i] = w[i];
-      for (int r = 0; r < Nr; r++) evec_out[r + (size_t)Nr*i] = A[r + (size_t)Nr*i];
-    }
-
-    free(A); free(B); free(w);
-    return AKV_SUCCESS;
+  /* Reuse these buffers across retry attempts to avoid allocator churn in repeated
+   * SPD-probe / solve retries. They can be large for high-resolution reduced spaces.
+   */
+  AKV_REAL *Bprobe   = (AKV_REAL*)calloc((size_t)Nr * (size_t)Nr, sizeof(AKV_REAL));
+  AKV_REAL *Bchol    = (AKV_REAL*)malloc((size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
+  AKV_REAL *eval_tmp = (AKV_REAL*)malloc((size_t)want_neigs * sizeof(AKV_REAL));
+  AKV_REAL *evec_tmp = (AKV_REAL*)malloc((size_t)Nr * (size_t)want_neigs * sizeof(AKV_REAL));
+  AKV_REAL *res_tmp  = (AKV_REAL*)malloc((size_t)want_neigs * sizeof(AKV_REAL));
+  if (!Bprobe || !Bchol || !eval_tmp || !evec_tmp || !res_tmp) {
+    free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+    return AKV_ERR_ALLOC;
   }
 
+  for (int attempt = 0; attempt < max_tries; attempt++) {
+    memset(Bprobe, 0, (size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
+
+    akv_params_t pars_reg = *pars;
+    pars_reg.reg_eps = reg;
+    akv_primme_ctx_t ctx_reg = *ctx;
+    ctx_reg.pars = &pars_reg;
+
+    /* Deliberately expensive validation step: explicitly build the reduced mass matrix,
+     * symmetrize it, and attempt a dense Cholesky factorization before launching PRIMME.
+     * This gives reg_eps/reg_eps_max/reg_max_tries a concrete conditioning-repair role.
+     */
+    const akv_error_t berr = akv_build_reduced_mass_matrix_dense(&ctx_reg, Nr, Bprobe);
+    if (berr != AKV_SUCCESS) {
+      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      return berr;
+    }
+    memcpy(Bchol, Bprobe, (size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
+    if (!akv_try_cholesky_dense(Bchol, Nr)) {
+      observed_b_conditioning_issue = true;
+      *quality_flag_io |= (1<<3);
+      if (attempt == max_tries - 1 || reg_capped) {
+        free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+        return AKV_ERR_EIGEN_FAIL;
+      }
+      if (reg == 0.0) reg = 1e-14;
+      else reg *= 10.0;
+      if (reg_max > 0.0 && reg > reg_max) { reg = reg_max; reg_capped = true; }
+      continue;
+    }
+
+    primme_params primme;
+    primme_initialize(&primme);
+
+    primme.n = (PRIMME_INT)Nr;
+    primme.nLocal = (PRIMME_INT)Nr;
+    primme.numProcs = 1;
+    primme.procID = 0;
+    primme.numEvals = want_neigs;
+    primme.target = primme_smallest;
+    primme.eps = (pars->eig_tol > 0.0) ? pars->eig_tol : 1e-10;
+    primme.matrixMatvec = akv_primme_matrixMatvec;
+    primme.massMatrixMatvec = akv_primme_massMatrixMatvec;
+    primme.matrix = (void*)&ctx_reg;
+    primme.massMatrix = (void*)&ctx_reg;
+    primme.ldevecs = (PRIMME_INT)Nr;
+    primme.printLevel = 0;
+    primme.initSize = 0;
+
+    primme.maxBlockSize = (want_neigs >= 4) ? 4 : (want_neigs >= 2 ? 2 : 1);
+    primme.maxBasisSize = Nr < (6 * want_neigs + 8) ? Nr : (6 * want_neigs + 8);
+    if (primme.maxBasisSize < 15) primme.maxBasisSize = (Nr < 15 ? Nr : 15);
+    primme.minRestartSize = primme.maxBasisSize > primme.maxBlockSize + 2 ? primme.maxBasisSize - primme.maxBlockSize - 1 : primme.maxBlockSize + 1;
+
+    if (primme_set_method(PRIMME_JDQMR_ETol, &primme) != 0) {
+      primme_free(&primme);
+      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      *quality_flag_io |= (1<<2);
+      return AKV_ERR_EIGEN_FAIL;
+    }
+
+    const int info = dprimme(eval_tmp, evec_tmp, res_tmp, &primme);
+    const int nconv = (int)primme.initSize;
+    primme_free(&primme);
+
+    if (info == 0 && nconv >= want_neigs) {
+      memcpy(eval_out, eval_tmp, (size_t)want_neigs * sizeof(AKV_REAL));
+      memcpy(evec_out, evec_tmp, (size_t)Nr * (size_t)want_neigs * sizeof(AKV_REAL));
+      memcpy(res_out, res_tmp, (size_t)want_neigs * sizeof(AKV_REAL));
+      if (observed_b_conditioning_issue || reg > 0.0) *quality_flag_io |= (1<<3);
+      if (pars->eig_tol > 0.0) {
+        for (int i = 0; i < want_neigs; i++) if (res_tmp[i] > pars->eig_tol) *quality_flag_io |= (1<<0);
+      }
+      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      return AKV_SUCCESS;
+    }
+
+    /* PRIMME failed to converge all requested eigenpairs. This is not the same as
+     * "solver/library unavailable" (bit 2); preserve that bit for unavailable-path cases.
+     * If we retry with stronger regularization after a successful SPD probe, we still mark
+     * bit 3 because the solve required repair/escalation to proceed robustly.
+     */
+    *quality_flag_io |= (1<<3);
+    if (attempt == max_tries - 1 || reg_capped) {
+      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      return AKV_ERR_EIGEN_FAIL;
+    }
+    if (reg == 0.0) reg = 1e-14;
+    else reg *= 10.0;
+    if (reg_max > 0.0 && reg > reg_max) { reg = reg_max; reg_capped = true; }
+  }
+
+  free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
   return AKV_ERR_EIGEN_FAIL;
 #endif
 }
@@ -1167,81 +1457,50 @@ static akv_error_t akv_solve_gridpoint_basis(
   akv_error_t err = akv_mean0_basis_build(grid, &b);
   if (err != AKV_SUCCESS) return err;
 
+  akv_primme_ctx_t ctx;
+  memset(&ctx, 0, sizeof(ctx));
+  ctx.grid = grid;
+  ctx.basis = &b;
+  ctx.eval_row_stencil = eval_row_stencil;
+  ctx.applyK_debug = applyK_debug;
+  ctx.applyB_debug = applyB_debug;
+  ctx.pars = pars;
+
+  if (!ctx.eval_row_stencil && (!pars->allow_debug_assembly || !ctx.applyK_debug || !ctx.applyB_debug)) {
+    out->akv_quality_flag |= (1<<2);
+    akv_mean0_basis_free(&b);
+    return AKV_ERR_BADPARAM;
+  }
+
   const int Nr = b.N_red;
-
-  // Dense memory warning: two N_full^2 matrices may be large at typical resolutions.
-  AKV_REAL *Kfull = (AKV_REAL*)calloc((size_t)N_full*(size_t)N_full, sizeof(AKV_REAL));
-  AKV_REAL *Bfull = (AKV_REAL*)calloc((size_t)N_full*(size_t)N_full, sizeof(AKV_REAL));
-  if (!Kfull || !Bfull) {
-    free(Kfull); free(Bfull);
-    akv_mean0_basis_free(&b);
-    return AKV_ERR_ALLOC;
-  }
-
-  if (eval_row_stencil) {
-    err = akv_full_assemble_dense_from_stencil(grid, eval_row_stencil, Kfull, Bfull, N_full);
-    if (err != AKV_SUCCESS) {
-      free(Kfull); free(Bfull);
-      akv_mean0_basis_free(&b);
-      return err;
-    }
-  } else {
-    if (!pars->allow_debug_assembly || !applyK_debug || !applyB_debug) {
-      out->akv_quality_flag |= (1<<2);
-      free(Kfull); free(Bfull);
-      akv_mean0_basis_free(&b);
-      return AKV_ERR_BADPARAM;
-    }
-    err = akv_full_assemble_dense_debug_apply(grid, applyK_debug, applyB_debug, Kfull, Bfull, N_full);
-    if (err != AKV_SUCCESS) {
-      free(Kfull); free(Bfull);
-      akv_mean0_basis_free(&b);
-      return err;
-    }
-  }
-
-  AKV_REAL *Kred = (AKV_REAL*)calloc((size_t)Nr*(size_t)Nr, sizeof(AKV_REAL));
-  AKV_REAL *Bred = (AKV_REAL*)calloc((size_t)Nr*(size_t)Nr, sizeof(AKV_REAL));
-  if (!Kred || !Bred) {
-    free(Kfull); free(Bfull); free(Kred); free(Bred);
-    akv_mean0_basis_free(&b);
-    return AKV_ERR_ALLOC;
-  }
-
-  akv_mean0_transform_dense(&b, Kfull, N_full, Kred, Nr);
-  akv_mean0_transform_dense(&b, Bfull, N_full, Bred, Nr);
-  akv_symmetrize_dense(Kred, Nr);
-  akv_symmetrize_dense(Bred, Nr);
-
   int want = pars->full_num_eigs;
   if (want < 4) want = 4;
   if (want > Nr) want = Nr;
 
   AKV_REAL *eval = (AKV_REAL*)malloc((size_t)want * sizeof(AKV_REAL));
-  AKV_REAL *evec = (AKV_REAL*)malloc((size_t)Nr*(size_t)want * sizeof(AKV_REAL));
-  if (!eval || !evec) {
-    free(Kfull); free(Bfull); free(Kred); free(Bred); free(eval); free(evec);
+  AKV_REAL *evec = (AKV_REAL*)malloc((size_t)Nr * (size_t)want * sizeof(AKV_REAL));
+  AKV_REAL *res = (AKV_REAL*)malloc((size_t)want * sizeof(AKV_REAL));
+  if (!eval || !evec || !res) {
+    free(eval); free(evec); free(res);
     akv_mean0_basis_free(&b);
     return AKV_ERR_ALLOC;
   }
 
-  err = akv_full_solve_dense_generalized_reduced_spd_retry(Kred, Bred, Nr, want, pars, eval, evec, &out->akv_quality_flag);
+  err = akv_full_solve_generalized_reduced_primme(&ctx, Nr, want, pars, eval, evec, res, &out->akv_quality_flag);
   if (err != AKV_SUCCESS) {
     if (err == AKV_ERR_NOT_IMPLEMENTED) out->akv_quality_flag |= (1<<2);
-    free(Kfull); free(Bfull); free(Kred); free(Bred); free(eval); free(evec);
+    free(eval); free(evec); free(res);
     akv_mean0_basis_free(&b);
     return err;
   }
 
-  // B-orthonormalize first three modes using Bred.
   const int kmodes = (want >= 3) ? 3 : want;
-  akv_b_gram_schmidt_inplace(evec, Nr, kmodes, Bred, b.tmpN);
+  akv_b_gram_schmidt_apply_inplace(evec, Nr, kmodes, &ctx, b.tmpN);
 
-  // Gap diagnostic R_{3,4} = λ4/λ3 in mean-zero subspace.
   if (want >= 4 && eval[2] != 0.0) out->akv_eig_gap_43 = eval[3] / eval[2];
   else out->akv_eig_gap_43 = 0.0;
 
-  if (pars->gap_ratio_thresh > 0 && want >= 4 && out->akv_eig_gap_43 > 0 &&
+  if (pars->gap_ratio_thresh > 0.0 && want >= 4 && out->akv_eig_gap_43 > 0.0 &&
       out->akv_eig_gap_43 < pars->gap_ratio_thresh) {
     out->akv_quality_flag |= (1<<1);
   }
@@ -1250,15 +1509,12 @@ static akv_error_t akv_solve_gridpoint_basis(
   out->akv_lambda[1] = (want > 1 ? eval[1] : 0.0);
   out->akv_lambda[2] = (want > 2 ? eval[2] : 0.0);
 
-  // Residual ratios for first three modes using dense reduced matrices and reused buffers.
   for (int a = 0; a < 3; a++) {
     if (a >= want) { out->akv_eig_resid[a] = 0.0; continue; }
-    const AKV_REAL *za = &evec[(size_t)Nr * a];
-    out->akv_eig_resid[a] = akv_residual_ratio_dense_inplace(Kred, Bred, Nr, za, eval[a], b.tmpK, b.tmpN, b.tmpR);
-    if (pars->eig_tol > 0 && out->akv_eig_resid[a] > pars->eig_tol) out->akv_quality_flag |= (1<<0);
+    out->akv_eig_resid[a] = akv_residual_ratio_reduced_apply_inplace(&ctx, Nr, &evec[(size_t)Nr * a], eval[a], b.tmpK, b.tmpN, b.tmpR);
+    if (pars->eig_tol > 0.0 && out->akv_eig_resid[a] > pars->eig_tol) out->akv_quality_flag |= (1<<0);
   }
 
-  // Store full-space eigenvectors (interior DOF space) for downstream postprocessing.
   out->gp_N = N_full;
   for (int a = 0; a < 3; a++) {
     out->gp_z[a] = NULL;
@@ -1267,29 +1523,22 @@ static akv_error_t akv_solve_gridpoint_basis(
     if (!out->gp_z[a]) {
       for (int k = 0; k < a; k++) { free(out->gp_z[k]); out->gp_z[k] = NULL; }
       out->gp_N = 0;
-      free(Kfull); free(Bfull); free(Kred); free(Bred); free(eval); free(evec);
+      free(eval); free(evec); free(res);
       akv_mean0_basis_free(&b);
       return AKV_ERR_ALLOC;
     }
     akv_mean0_lift_vector(&b, &evec[(size_t)Nr * a], out->gp_z[a]);
   }
 
-  // Sign-fix in full space (if provided). Flip stored gp_z and the reduced eigenvector consistently.
   for (int a = 0; a < kmodes; a++) {
-    if (!out->gp_z[a]) continue;
-    if (!eval_sign_full) continue;
-
-    AKV_REAL sref = eval_sign_full(out->gp_z[a], N_full, grid);
-    if (sref < 0) {
-      // Flip reduced eigenvector
+    if (!out->gp_z[a] || !eval_sign_full) continue;
+    const AKV_REAL sref = eval_sign_full(out->gp_z[a], N_full, grid);
+    if (sref < 0.0) {
       for (int i = 0; i < Nr; i++) evec[i + (size_t)Nr * a] = -evec[i + (size_t)Nr * a];
-      // Re-lift
       akv_mean0_lift_vector(&b, &evec[(size_t)Nr * a], out->gp_z[a]);
     }
   }
 
-  // Loop scaffold for angular momentum integrals J[a] using per-mode z_full.
-  // J integrand callback must not include 1/(8π). This function applies weights and sums.
   for (int a = 0; a < 3; a++) out->akv_J[a] = 0.0;
   if (eval_J_full) {
     for (int a = 0; a < kmodes; a++) {
@@ -1298,27 +1547,23 @@ static akv_error_t akv_solve_gridpoint_basis(
 
       AKV_REAL sum = 0.0;
       for (int dof = 0; dof < N_full; dof++) {
-        int p = akv_dof_to_full_p(grid, dof);
-        AKV_REAL wp = grid->w[p];
-        AKV_REAL integrand = eval_J_full(p, grid, z, N_full);
+        const int p = akv_dof_to_full_p(grid, dof);
+        const AKV_REAL wp = grid->w[p];
+        const AKV_REAL integrand = eval_J_full(p, grid, z, N_full);
         sum += wp * integrand;
       }
       out->akv_J[a] = sum / (8.0 * (AKV_REAL)M_PI);
     }
   }
 
-  // Dimensionless spin components normalized by M_H^2.
   akv_compute_dimensionless_spins(out->akv_J, pars->horizon_area, out->akv_a);
 
   out->akv_spin_vec[0] = 0.0;
   out->akv_spin_vec[1] = 0.0;
   out->akv_spin_vec[2] = 0.0;
-
   out->method_used = AKV_METHOD_GRIDPOINT;
 
-  free(Kfull); free(Bfull);
-  free(Kred); free(Bred);
-  free(eval); free(evec);
+  free(eval); free(evec); free(res);
   akv_mean0_basis_free(&b);
   return AKV_SUCCESS;
 }
@@ -1743,7 +1988,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   }
 #endif
 
-#ifndef USE_LAPACKE
+#ifndef USE_PRIMME
   if (pars.method == AKV_METHOD_GRIDPOINT) {
 #ifdef BHAHAHA_AKV_DIAGS_HAVE_FIELDS
     bhahaha_diags->akv_quality_flag |= (1<<2);
