@@ -216,6 +216,10 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     CoordSystem = par.parval_from_str("CoordSystem_to_register_CodeParameters")
     exact_bssn = kasner_exact_bssn_exprs(CoordSystem)
     exact_AbarDD = cast(List[List[sp.Expr]], exact_bssn["AbarDD"])
+    rfm = refmetric.reference_metric[CoordSystem]
+    exact_aDD = [
+        [exact_AbarDD[i][j] / rfm.ReDD[i][j] for j in range(3)] for i in range(3)
+    ]
     exact_hDD = cast(List[List[sp.Expr]], exact_bssn["hDD"])
     exact_lambdaU = cast(List[sp.Expr], exact_bssn["lambdaU"])
     exact_cf = cast(sp.Expr, exact_bssn["cf"])
@@ -296,12 +300,12 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
 """
     body += "      {\n      " + ccg.c_codegen(
         [
-            exact_AbarDD[0][0],
-            exact_AbarDD[0][1],
-            exact_AbarDD[0][2],
-            exact_AbarDD[1][1],
-            exact_AbarDD[1][2],
-            exact_AbarDD[2][2],
+            exact_aDD[0][0],
+            exact_aDD[0][1],
+            exact_aDD[0][2],
+            exact_aDD[1][1],
+            exact_aDD[1][2],
+            exact_aDD[2][2],
             exact_cf,
             exact_trK,
             exact_hDD[0][0],
