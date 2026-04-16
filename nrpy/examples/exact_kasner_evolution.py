@@ -8,24 +8,21 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* com
 """
 
-from __future__ import annotations
-
 #########################################################
-# STEP 1: Import needed Python modules, then set codegen
+# Step 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import argparse
 import os
 import shutil
 from pathlib import Path
+from typing import Dict
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 
-parser = argparse.ArgumentParser(
-    description="Generate a BSSN Kasner benchmark project"
-)
+parser = argparse.ArgumentParser(description="Generate a BSSN Kasner benchmark project")
 parser.add_argument(
     "--cuda",
     action="store_true",
@@ -68,12 +65,12 @@ ShiftEvolutionOption = "Frozen"
 grid_physical_size = 12.0
 diagnostics_output_every = 0.05
 t_final = 7.0
-Nxx_dict = {    
+Nxx_dict = {
     "Cartesian": [32, 32, 32],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
 }
 # Fisheye parameters
-fisheye_param_defaults: dict[str, float] = {}
+fisheye_param_defaults: Dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
         "fisheye_phys_a0": 1.0,

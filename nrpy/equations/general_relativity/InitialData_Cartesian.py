@@ -17,6 +17,7 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+from nrpy.equations.general_relativity.kasner_exact import kasner_adm_initial_data
 
 
 class InitialData_Cartesian:
@@ -35,7 +36,7 @@ class InitialData_Cartesian:
 
         self.gammaDD = ixp.zerorank2()
         self.KDD = ixp.zerorank2()
-        self.alpha = sp.sympify(0)
+        self.alpha: sp.Expr = sp.sympify(0)
         self.betaU = ixp.zerorank1()
         self.BU = ixp.zerorank1()
 
@@ -116,6 +117,8 @@ class InitialData_Cartesian:
         """
         Set exact Kasner initial data in Cartesian coordinates.
 
+        :return: Tuple containing ``gammaDD``, ``KDD``, ``alpha``, ``betaU``, and ``BU``.
+
         Doctest:
         >>> ID = InitialData_Cartesian("Kasner")
         >>> ID.alpha
@@ -125,10 +128,7 @@ class InitialData_Cartesian:
         >>> all(ID.KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
         True
         """
-        # Step 2.a: Import shared exact Kasner ADM expressions from equations layer.
-        from nrpy.equations.general_relativity.kasner_exact import kasner_adm_initial_data
-
-        # Step 2.b: Return all needed ADM variables in Cartesian coordinates.
+        # Step 2.a: Return shared exact Kasner ADM expressions from equations layer.
         return kasner_adm_initial_data()
     # fmt: on
 

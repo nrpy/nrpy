@@ -29,22 +29,26 @@ BSSN construction pipeline:
   5) Compute Lambdabar^i from Christoffels and rescale to lambdaU.
 """
 
-from __future__ import annotations
-
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import sympy as sp
 
 import nrpy.indexedexp as ixp
 import nrpy.params as par
-from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
-from nrpy.equations.basis_transforms.jacobians import BasisTransforms
 import nrpy.reference_metric as refmetric
+from nrpy.equations.basis_transforms.jacobians import BasisTransforms
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+
+Rank1 = List[sp.Expr]
+Rank2 = List[List[sp.Expr]]
+BSSNExprDict = Dict[str, Union[sp.Expr, Rank1, Rank2]]
 
 
 def kasner_adm_quantities(
     t_phys: sp.Expr, p1: sp.Expr, p2: sp.Expr, p3: sp.Expr
-) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
+) -> Tuple[
+    List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]
+]:
     """
     Construct exact ADM fields for the Kasner metric.
 
@@ -89,13 +93,19 @@ def kasner_adm_initial_data(
     p1_default: float = -1.0 / 3.0,
     p2_default: float = 2.0 / 3.0,
     p3_default: float = 2.0 / 3.0,
-) -> Tuple[List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]]:
+) -> Tuple[
+    List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]
+]:
     """
     Construct exact Kasner ADM initial data in Cartesian coordinates.
 
     Registers ``KASNER_t0``, ``KASNER_p1``, ``KASNER_p2``, and ``KASNER_p3`` as commondata
     CodeParameters, and evaluates the exact ADM fields at ``t = KASNER_t0``.
 
+    :param t0_default: Default initial Kasner time.
+    :param p1_default: Default Kasner exponent along ``x``.
+    :param p2_default: Default Kasner exponent along ``y``.
+    :param p3_default: Default Kasner exponent along ``z``.
     :return: ``(gammaDD, KDD, alpha, betaU, BU)``.
 
     :Example:
@@ -117,7 +127,9 @@ def kasner_adm_initial_data(
     return kasner_adm_quantities(t0, p1, p2, p3)
 
 
-def kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, sp.Expr | List[List[sp.Expr]]]:
+def kasner_exact_bssn_exprs(
+    CoordSystem: str,
+) -> BSSNExprDict:
     """
     Build exact Kasner BSSN expressions in the raw reference-metric basis.
 
@@ -174,10 +186,14 @@ def kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, sp.Expr | List[List[s
         for j in range(3):
             for k in range(3):
                 for m in range(3):
-                    GammabarUDD[i][j][k] += sp.Rational(1, 2) * gammabarUU[i][m] * (
-                        gammabarDD_dD[m][j][k]
-                        + gammabarDD_dD[m][k][j]
-                        - gammabarDD_dD[j][k][m]
+                    GammabarUDD[i][j][k] += (
+                        sp.Rational(1, 2)
+                        * gammabarUU[i][m]
+                        * (
+                            gammabarDD_dD[m][j][k]
+                            + gammabarDD_dD[m][k][j]
+                            - gammabarDD_dD[j][k][m]
+                        )
                     )
 
     lambdaU = ixp.zerorank1()

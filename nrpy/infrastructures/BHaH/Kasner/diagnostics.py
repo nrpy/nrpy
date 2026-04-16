@@ -5,28 +5,27 @@ Author: Nishita Jadoo
         njadoo **at** uidaho **dot* com
 """
 
-from __future__ import annotations
-
 import re
-from typing import List, Sequence, Tuple, Union, cast
 from inspect import currentframe as cfr
 from types import FrameType as FT
+from typing import List, Sequence, Tuple, Union, cast
+
 import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
-import nrpy.indexedexp as ixp
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.indexedexp as ixp
 import nrpy.params as par
+import nrpy.reference_metric as refmetric
 from nrpy.equations.basis_transforms.jacobians import BasisTransforms
+from nrpy.equations.general_relativity.kasner_exact import kasner_exact_bssn_exprs
 from nrpy.infrastructures.BHaH.general_relativity import (
     diagnostic_gfs_set as gr_diagnostic_gfs_set,
-    diagnostics_nearest as gr_diagnostics_nearest,
 )
-import nrpy.reference_metric as refmetric
-from nrpy.equations.general_relativity.kasner_exact import (
-    kasner_exact_bssn_exprs,
+from nrpy.infrastructures.BHaH.general_relativity import (
+    diagnostics_nearest as gr_diagnostics_nearest,
 )
 
 # (gridfunction enum name, human-readable description)
@@ -72,7 +71,9 @@ KASNER_DIAG_GRIDFUNCTIONS: Tuple[Tuple[str, str], ...] = (
     ("DIAG_EXACT_PZ", "EXACT_p3"),
 )
 
-KASNER_NEAREST_DIAG_GFS_BHAH: Tuple[str, ...] = tuple(f"{name}GF" for name, _ in KASNER_DIAG_GRIDFUNCTIONS)
+KASNER_NEAREST_DIAG_GFS_BHAH: Tuple[str, ...] = tuple(
+    f"{name}GF" for name, _ in KASNER_DIAG_GRIDFUNCTIONS
+)
 KASNER_NEAREST_DIAG_GFS_SUPERB: Tuple[str, ...] = (
     "DIAG_ADDXXGF",
     "DIAG_ADDXYGF",
@@ -97,12 +98,24 @@ def register_kasner_diag_gridfunctions() -> None:
 
 
 def kasner_nearest_diag_gf_names_bhah() -> List[str]:
-    """Return Kasner diagnostic GF enum names used by non-superB nearest diagnostics."""
-    return ["DIAG_HAMILTONIANGF", "DIAG_MSQUAREDGF", *list(KASNER_NEAREST_DIAG_GFS_BHAH)]
+    """
+    Return Kasner diagnostic GF enum names used by non-superB nearest diagnostics.
+
+    :return: List of Kasner diagnostic gridfunction enum names.
+    """
+    return [
+        "DIAG_HAMILTONIANGF",
+        "DIAG_MSQUAREDGF",
+        *list(KASNER_NEAREST_DIAG_GFS_BHAH),
+    ]
 
 
 def kasner_nearest_diag_gf_names_superb() -> List[str]:
-    """Return Kasner diagnostic GF enum names used by superB nearest diagnostics."""
+    """
+    Return Kasner diagnostic GF enum names used by superB nearest diagnostics.
+
+    :return: List of Kasner diagnostic gridfunction enum names.
+    """
     return list(KASNER_NEAREST_DIAG_GFS_SUPERB)
 
 
@@ -167,7 +180,9 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
             KDD[i][j] = exp4phi * AbarDD[i][j] + sp.Rational(1, 3) * gammaDD[i][j] * trK
 
     basis_transforms = BasisTransforms(CoordSystem)
-    gammaDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(gammaDD)
+    gammaDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
+        gammaDD
+    )
     KDD_cart = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(KDD)
     gammaUU_cart, _ = ixp.symm_matrix_inverter3x3(gammaDD_cart)
 
@@ -193,12 +208,18 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[object]:
 
 
 def build_kasner_diagnostic_gfs_set_body() -> str:
-    """Build the Kasner-specific C body appended to ``diagnostic_gfs_set``."""
+    """
+    Build the Kasner-specific C body appended to ``diagnostic_gfs_set``.
+
+    :return: C-code body string injected into ``diagnostic_gfs_set``.
+    """
     CoordSystem = par.parval_from_str("CoordSystem_to_register_CodeParameters")
     exact_bssn = kasner_exact_bssn_exprs(CoordSystem)
-    exact_AbarDD = exact_bssn["AbarDD"]
-    exact_hDD = exact_bssn["hDD"]
-    exact_lambdaU = exact_bssn["lambdaU"]
+    exact_AbarDD = cast(List[List[sp.Expr]], exact_bssn["AbarDD"])
+    exact_hDD = cast(List[List[sp.Expr]], exact_bssn["hDD"])
+    exact_lambdaU = cast(List[sp.Expr], exact_bssn["lambdaU"])
+    exact_cf = cast(sp.Expr, exact_bssn["cf"])
+    exact_trK = cast(sp.Expr, exact_bssn["trK"])
     recovered_exponent_exprs = _kasner_recovered_exponent_exprs(CoordSystem)
 
     ghat_reads = ""
@@ -281,8 +302,8 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
             exact_AbarDD[1][1],
             exact_AbarDD[1][2],
             exact_AbarDD[2][2],
-            exact_bssn["cf"],
-            exact_bssn["trK"],
+            exact_cf,
+            exact_trK,
             exact_hDD[0][0],
             exact_hDD[0][1],
             exact_hDD[0][2],
@@ -299,7 +320,7 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     ).replace("\n", "\n      ")
     body += "\n      }\n"
     body += "      {\n      " + ccg.c_codegen(
-        list(recovered_exponent_exprs),
+        cast(List[sp.Expr], list(recovered_exponent_exprs)),
         list(_kasner_exponent_recovery_codegen_targets()),
         verbose=False,
         include_braces=False,
@@ -326,10 +347,17 @@ def _insert_before_marker_all(name: str, marker: str, insert_text: str) -> None:
 
 
 def register_CFunction_diagnostic_gfs_set(
-    enable_interp_diagnostics: bool = False, enable_psi4: bool = False, enable_T4munu: bool = False
+    enable_interp_diagnostics: bool = False,
+    enable_psi4: bool = False,
+    enable_T4munu: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register ``diagnostic_gfs_set`` and inject Kasner-specific diagnostic channels.
+
+    :param enable_interp_diagnostics: Whether interpolation diagnostics are enabled.
+    :param enable_psi4: Whether Psi4 diagnostics are enabled.
+    :param enable_T4munu: Whether stress-energy diagnostics are enabled.
+    :return: Parallel-codegen registration token or ``None`` during registration phase.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -351,6 +379,8 @@ def register_CFunction_diagnostic_gfs_set(
 def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
     """
     Register ``diagnostics_nearest`` with Kasner diagnostic channels in 0D/1D/2D output lists.
+
+    :return: Parallel-codegen registration token or ``None`` during registration phase.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
