@@ -17,7 +17,36 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
-from nrpy.equations.general_relativity.kasner_exact import kasner_adm_initial_data
+
+
+def kasner_adm_quantities(
+    t_phys: sp.Expr, p1: sp.Expr, p2: sp.Expr, p3: sp.Expr
+) -> Tuple[
+    List[List[sp.Expr]], List[List[sp.Expr]], sp.Expr, List[sp.Expr], List[sp.Expr]
+]:
+    """
+    Construct exact Kasner ADM fields in Cartesian basis.
+
+    :param t_phys: Physical Kasner time.
+    :param p1: Kasner exponent along ``x``.
+    :param p2: Kasner exponent along ``y``.
+    :param p3: Kasner exponent along ``z``.
+    :return: ``(gammaDD, KDD, alpha, betaU, BU)``.
+    """
+    gammaDD = ixp.zerorank2()
+    gammaDD[0][0] = t_phys ** (2 * p1)
+    gammaDD[1][1] = t_phys ** (2 * p2)
+    gammaDD[2][2] = t_phys ** (2 * p3)
+
+    KDD = ixp.zerorank2()
+    KDD[0][0] = -p1 * t_phys ** (2 * p1 - 1)
+    KDD[1][1] = -p2 * t_phys ** (2 * p2 - 1)
+    KDD[2][2] = -p3 * t_phys ** (2 * p3 - 1)
+
+    alpha = sp.sympify(1)
+    betaU = ixp.zerorank1()
+    BU = ixp.zerorank1()
+    return gammaDD, KDD, alpha, betaU, BU
 
 
 class InitialData_Cartesian:
@@ -128,8 +157,18 @@ class InitialData_Cartesian:
         >>> all(ID.KDD[i][j] == 0 for i in range(3) for j in range(3) if i != j)
         True
         """
-        # Step 2.a: Return shared exact Kasner ADM expressions from equations layer.
-        return kasner_adm_initial_data()
+        t0_default = 1.0
+        p1_default = -1.0 / 3.0
+        p2_default = 2.0 / 3.0
+        p3_default = 2.0 / 3.0
+        t0, p1, p2, p3 = par.register_CodeParameters(
+            "REAL",
+            __name__,
+            ["KASNER_t0", "KASNER_p1", "KASNER_p2", "KASNER_p3"],
+            [t0_default, p1_default, p2_default, p3_default],
+            commondata=True,
+        )
+        return kasner_adm_quantities(t0, p1, p2, p3)
     # fmt: on
 
 
@@ -149,6 +188,7 @@ if __name__ == "__main__":
 
     for ID_type in [
         "BrillLindquist",
+        "Kasner",
     ]:
         ID = InitialData_Cartesian(ID_type)
         results_dict = ve.process_dictionary_of_expressions(

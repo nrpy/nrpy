@@ -19,7 +19,10 @@ import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.basis_transforms.jacobians import BasisTransforms
-from nrpy.equations.general_relativity.kasner_exact import kasner_exact_bssn_exprs
+from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
+from nrpy.equations.general_relativity.InitialData_Cartesian import (
+    kasner_adm_quantities,
+)
 from nrpy.infrastructures.BHaH.general_relativity import (
     diagnostic_gfs_set as gr_diagnostic_gfs_set,
 )
@@ -42,9 +45,6 @@ KASNER_DIAG_GRIDFUNCTIONS: Tuple[Tuple[str, str], ...] = (
     ("DIAG_HDDYY", "HDD11"),
     ("DIAG_HDDYZ", "HDD12"),
     ("DIAG_HDDZZ", "HDD22"),
-    ("DIAG_LAMBDAUX", "lambdaU0"),
-    ("DIAG_LAMBDAUY", "lambdaU1"),
-    ("DIAG_LAMBDAUZ", "lambdaU2"),
     ("DIAG_EXACT_ADDXX", "EXACT_ADD00"),
     ("DIAG_EXACT_ADDXY", "EXACT_ADD01"),
     ("DIAG_EXACT_ADDXZ", "EXACT_ADD02"),
@@ -59,9 +59,6 @@ KASNER_DIAG_GRIDFUNCTIONS: Tuple[Tuple[str, str], ...] = (
     ("DIAG_EXACT_HDDYY", "EXACT_HDD11"),
     ("DIAG_EXACT_HDDYZ", "EXACT_HDD12"),
     ("DIAG_EXACT_HDDZZ", "EXACT_HDD22"),
-    ("DIAG_EXACT_LAMBDAUX", "EXACT_lambdaU0"),
-    ("DIAG_EXACT_LAMBDAUY", "EXACT_lambdaU1"),
-    ("DIAG_EXACT_LAMBDAUZ", "EXACT_lambdaU2"),
     ("DIAG_PX_RECOVERED", "p1_recovered"),
     ("DIAG_PY_RECOVERED", "p2_recovered"),
     ("DIAG_PZ_RECOVERED", "p3_recovered"),
@@ -134,9 +131,6 @@ def _kasner_exact_codegen_targets() -> Sequence[str]:
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_HDDYYGF, idx3)]",
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_HDDYZGF, idx3)]",
         "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_HDDZZGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_LAMBDAUXGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_LAMBDAUYGF, idx3)]",
-        "diagnostic_gfs[grid][IDX4pt(DIAG_EXACT_LAMBDAUZGF, idx3)]",
     )
 
 
@@ -206,6 +200,42 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[sp.Expr]:
     )
 
 
+def _kasner_exact_bssn_exprs(CoordSystem: str) -> dict[str, object]:
+    t_phys = sp.Symbol("KASNER_t_phys", real=True)
+    p1 = sp.Symbol("KASNER_p1", real=True)
+    p2 = sp.Symbol("KASNER_p2", real=True)
+    p3 = sp.Symbol("KASNER_p3", real=True)
+    gammaDD, KDD, _alpha, betaU, BU = kasner_adm_quantities(t_phys, p1, p2, p3)
+    adm2bssn = ADM_to_BSSN(
+        gammaDD=gammaDD,
+        KDD=KDD,
+        betaU=betaU,
+        BU=BU,
+        CoordSystem="Cartesian",
+    )
+
+    basis_transforms = BasisTransforms(CoordSystem)
+    gammabarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        adm2bssn.gammabarDD
+    )
+    AbarDD = basis_transforms.basis_transform_tensorDD_from_Cartesian_to_rfmbasis(
+        adm2bssn.AbarDD
+    )
+
+    rfm = refmetric.reference_metric[CoordSystem]
+    hDD = ixp.zerorank2()
+    for i in range(3):
+        for j in range(3):
+            hDD[i][j] = (gammabarDD[i][j] - rfm.ghatDD[i][j]) / rfm.ReDD[i][j]
+
+    return {
+        "cf": adm2bssn.cf,
+        "trK": adm2bssn.trK,
+        "hDD": hDD,
+        "AbarDD": AbarDD,
+    }
+
+
 def build_kasner_diagnostic_gfs_set_body() -> str:
     """
     Build the Kasner-specific C body appended to ``diagnostic_gfs_set``.
@@ -213,14 +243,13 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     :return: C-code body string injected into ``diagnostic_gfs_set``.
     """
     CoordSystem = par.parval_from_str("CoordSystem_to_register_CodeParameters")
-    exact_bssn = kasner_exact_bssn_exprs(CoordSystem)
+    exact_bssn = _kasner_exact_bssn_exprs(CoordSystem)
     exact_AbarDD = cast(List[List[sp.Expr]], exact_bssn["AbarDD"])
     rfm = refmetric.reference_metric[CoordSystem]
     exact_aDD = [
         [exact_AbarDD[i][j] / rfm.ReDD[i][j] for j in range(3)] for i in range(3)
     ]
     exact_hDD = cast(List[List[sp.Expr]], exact_bssn["hDD"])
-    exact_lambdaU = cast(List[sp.Expr], exact_bssn["lambdaU"])
     exact_cf = cast(sp.Expr, exact_bssn["cf"])
     exact_trK = cast(sp.Expr, exact_bssn["trK"])
     recovered_exponent_exprs = _kasner_recovered_exponent_exprs(CoordSystem)
@@ -293,9 +322,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
       diagnostic_gfs[grid][IDX4pt(DIAG_HDDYYGF, idx3)] = y_n_gfs[IDX4pt(HDD11GF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_HDDYZGF, idx3)] = y_n_gfs[IDX4pt(HDD12GF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_HDDZZGF, idx3)] = y_n_gfs[IDX4pt(HDD22GF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_LAMBDAUXGF, idx3)] = y_n_gfs[IDX4pt(LAMBDAU0GF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_LAMBDAUYGF, idx3)] = y_n_gfs[IDX4pt(LAMBDAU1GF, idx3)];
-      diagnostic_gfs[grid][IDX4pt(DIAG_LAMBDAUZGF, idx3)] = y_n_gfs[IDX4pt(LAMBDAU2GF, idx3)];
 """
     body += "      {\n      " + ccg.c_codegen(
         [
@@ -313,9 +339,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
             exact_hDD[1][1],
             exact_hDD[1][2],
             exact_hDD[2][2],
-            exact_lambdaU[0],
-            exact_lambdaU[1],
-            exact_lambdaU[2],
         ],
         list(_kasner_exact_codegen_targets()),
         verbose=False,
