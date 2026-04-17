@@ -7,7 +7,7 @@ Author: Nishita Jadoo
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Sequence, Tuple, Union, cast
+from typing import Dict, List, Sequence, Tuple, Union, cast
 
 import sympy as sp
 
@@ -200,7 +200,7 @@ def _kasner_recovered_exponent_exprs(CoordSystem: str) -> Sequence[sp.Expr]:
     )
 
 
-def _kasner_exact_bssn_exprs(CoordSystem: str) -> dict[str, object]:
+def _kasner_exact_bssn_exprs(CoordSystem: str) -> Dict[str, object]:
     t_phys = sp.Symbol("KASNER_t_phys", real=True)
     p1 = sp.Symbol("KASNER_p1", real=True)
     p2 = sp.Symbol("KASNER_p2", real=True)
