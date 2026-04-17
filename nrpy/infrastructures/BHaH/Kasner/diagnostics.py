@@ -253,36 +253,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
     exact_cf = cast(sp.Expr, exact_bssn["cf"])
     exact_trK = cast(sp.Expr, exact_bssn["trK"])
     recovered_exponent_exprs = _kasner_recovered_exponent_exprs(CoordSystem)
-
-    ghat_reads = ""
-    if CoordSystem.startswith("GeneralRFM"):
-        ghat_reads = """
-      const REAL ghatDD00 = auxevol_gfs[IDX4pt(GHATDD00GF, idx3)];
-      const REAL ghatDD01 = auxevol_gfs[IDX4pt(GHATDD01GF, idx3)];
-      const REAL ghatDD02 = auxevol_gfs[IDX4pt(GHATDD02GF, idx3)];
-      const REAL ghatDD11 = auxevol_gfs[IDX4pt(GHATDD11GF, idx3)];
-      const REAL ghatDD12 = auxevol_gfs[IDX4pt(GHATDD12GF, idx3)];
-      const REAL ghatDD22 = auxevol_gfs[IDX4pt(GHATDD22GF, idx3)];
-      const REAL ghatDDdD000 = auxevol_gfs[IDX4pt(GHATDDDD000GF, idx3)];
-      const REAL ghatDDdD001 = auxevol_gfs[IDX4pt(GHATDDDD001GF, idx3)];
-      const REAL ghatDDdD002 = auxevol_gfs[IDX4pt(GHATDDDD002GF, idx3)];
-      const REAL ghatDDdD010 = auxevol_gfs[IDX4pt(GHATDDDD010GF, idx3)];
-      const REAL ghatDDdD011 = auxevol_gfs[IDX4pt(GHATDDDD011GF, idx3)];
-      const REAL ghatDDdD012 = auxevol_gfs[IDX4pt(GHATDDDD012GF, idx3)];
-      const REAL ghatDDdD020 = auxevol_gfs[IDX4pt(GHATDDDD020GF, idx3)];
-      const REAL ghatDDdD021 = auxevol_gfs[IDX4pt(GHATDDDD021GF, idx3)];
-      const REAL ghatDDdD022 = auxevol_gfs[IDX4pt(GHATDDDD022GF, idx3)];
-      const REAL ghatDDdD110 = auxevol_gfs[IDX4pt(GHATDDDD110GF, idx3)];
-      const REAL ghatDDdD111 = auxevol_gfs[IDX4pt(GHATDDDD111GF, idx3)];
-      const REAL ghatDDdD112 = auxevol_gfs[IDX4pt(GHATDDDD112GF, idx3)];
-      const REAL ghatDDdD120 = auxevol_gfs[IDX4pt(GHATDDDD120GF, idx3)];
-      const REAL ghatDDdD121 = auxevol_gfs[IDX4pt(GHATDDDD121GF, idx3)];
-      const REAL ghatDDdD122 = auxevol_gfs[IDX4pt(GHATDDDD122GF, idx3)];
-      const REAL ghatDDdD220 = auxevol_gfs[IDX4pt(GHATDDDD220GF, idx3)];
-      const REAL ghatDDdD221 = auxevol_gfs[IDX4pt(GHATDDDD221GF, idx3)];
-      const REAL ghatDDdD222 = auxevol_gfs[IDX4pt(GHATDDDD222GF, idx3)];
-"""
-
     body = """
     const REAL KASNER_t_phys = commondata->KASNER_t0 + commondata->time;
 
@@ -307,7 +277,6 @@ def build_kasner_diagnostic_gfs_set_body() -> str:
       const REAL trK = y_n_gfs[IDX4pt(TRKGF, idx3)];
 #include "set_CodeParameters.h"
 """
-    body += ghat_reads
     body += """
       diagnostic_gfs[grid][IDX4pt(DIAG_ADDXXGF, idx3)] = y_n_gfs[IDX4pt(ADD00GF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_ADDXYGF, idx3)] = y_n_gfs[IDX4pt(ADD01GF, idx3)];
