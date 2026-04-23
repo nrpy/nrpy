@@ -121,9 +121,9 @@ def register_CFunction_shock_tests_initial_data(
     output_vars: List[sp.Expr] = [
         shock_test_data.rho,
         shock_test_data.press,
-        cast(sp.Expr, rescaledvU[0]),
-        cast(sp.Expr, rescaledvU[1]),
-        cast(sp.Expr, rescaledvU[2]),
+        rescaledvU[0],
+        rescaledvU[1],
+        rescaledvU[2],
     ]
     vars_grid_access: List[str] = [
         gri.BHaHGridFunction.access_gf("rhob", gf_array_name="auxevol_gfs"),
@@ -168,9 +168,9 @@ def register_CFunction_shock_tests_initial_data(
         adm_to_bssn.aDD[1][1],
         adm_to_bssn.aDD[1][2],
         adm_to_bssn.aDD[2][2],
-        cast(sp.Expr, betaU_Cart[0]),
-        cast(sp.Expr, betaU_Cart[1]),
-        cast(sp.Expr, betaU_Cart[2]),
+        betaU_Cart[0],
+        betaU_Cart[1],
+        betaU_Cart[2],
         alpha,
         adm_to_bssn.cf,
         adm_to_bssn.trK,
