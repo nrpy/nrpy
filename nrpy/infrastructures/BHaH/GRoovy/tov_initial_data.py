@@ -254,9 +254,9 @@ def register_CFunction_TOV_initial_data(
     hybrid_output_vars: List[sp.Expr] = [
         rho_baryon,
         press,
-        cast(sp.Expr, rescaledvU[0]),
-        cast(sp.Expr, rescaledvU[1]),
-        cast(sp.Expr, rescaledvU[2]),
+        rescaledvU[0],
+        rescaledvU[1],
+        rescaledvU[2],
     ]
     hybrid_grid_access: List[str] = [
         gri.BHaHGridFunction.access_gf("rhob", gf_array_name="auxevol_gfs"),
