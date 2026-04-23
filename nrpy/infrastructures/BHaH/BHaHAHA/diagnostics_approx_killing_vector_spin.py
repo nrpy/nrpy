@@ -93,6 +93,58 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
         enable_fd_functions=enable_fd_functions,
     )
 
+    KminusKg = [
+        [
+            akv._KDD[i][j] - akv._trK * akv._gammaDD[i][j]  # pylint: disable=protected-access
+            for j in range(3)
+        ]
+        for i in range(3)
+    ]
+
+    akv_gridpoint_geometry_exprs = (
+        [akv.sqrtq]
+        + [akv._qDD[A][B] for A in range(1, 3) for B in range(A, 3)]  # pylint: disable=protected-access
+        + [akv._qUU[A][B] for A in range(1, 3) for B in range(A, 3)]  # pylint: disable=protected-access
+        + [
+            akv._Gamma2D[A][B][C]  # pylint: disable=protected-access
+            for A in range(1, 3)
+            for B in range(1, 3)
+            for C in range(1, 3)
+        ]
+        + [
+            akv._pU_i_A[i][A]  # pylint: disable=protected-access
+            for i in range(3)
+            for A in range(1, 3)
+        ]
+        + [akv._sU[i] for i in range(3)]  # pylint: disable=protected-access
+        + [KminusKg[i][j] for i in range(3) for j in range(i, 3)]
+    )
+
+    akv_gridpoint_geometry_outvars = (
+        ["const REAL akv_sqrtq_gp"]
+        + [f"const REAL akv_qDD_{A}_{B}" for A in range(1, 3) for B in range(A, 3)]
+        + [f"const REAL akv_qUU_{A}_{B}" for A in range(1, 3) for B in range(A, 3)]
+        + [
+            f"const REAL akv_Gamma2D_{A}_{B}_{C}"
+            for A in range(1, 3)
+            for B in range(1, 3)
+            for C in range(1, 3)
+        ]
+        + [f"const REAL akv_pU_{i}_{A}" for i in range(3) for A in range(1, 3)]
+        + [f"const REAL akv_sU_{i}" for i in range(3)]
+        + [f"const REAL akv_KminusKg_{i}_{j}" for i in range(3) for j in range(i, 3)]
+    )
+
+    akv_gridpoint_geometry_codegen = ccg.c_codegen(
+        akv_gridpoint_geometry_exprs,
+        akv_gridpoint_geometry_outvars,
+        enable_cse=True,
+        include_braces=True,
+        verbose=False,
+        enable_fd_codegen=True,
+        enable_fd_functions=enable_fd_functions,
+    )
+
     prefunc = (
         r"""
 #include <stddef.h>
@@ -190,7 +242,7 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
  *
  * Compilable AKV diagnostic scaffold with two workflows:
  *   (A) L1-reduced AKV: assemble 3x3 generalized eigenproblem (H x = λ N x) and solve.
- *   (B) Gridpoint-basis AKV: assemble dense K,B from bilinear-form/stencil callbacks, enforce mean-zero
+ *   (B) Gridpoint-basis AKV: apply matrix-free K,B operators in the mean-zero reduced space, enforce mean-zero
  *       via an explicit (N-1) basis, solve generalized eigenproblem in that subspace, and postprocess.
  *
  * Geometric/equation content is intentionally excluded and must be supplied via callbacks.
@@ -201,18 +253,13 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
  *    - The per-point Jm integrand MUST NOT include the global 1/(8π) factor.
  *    - The callback returns integrands (no quadrature weight applied inside callback).
  *
- * 2) Gridpoint stencil/bilinear assembly callback:
- *    - i_row is an interior DOF index in [0, N_theta*N_phi).
+ * 2) Gridpoint operator callbacks:
+ *    - apply_K/apply_B act on interior-DOF vectors of length N_theta*N_phi.
  *    - DOF ordering is row-major over interior points:
- *        it = i_row / N_phi, ip = i_row % N_phi,
+ *        it = dof / N_phi, ip = dof % N_phi,
  *      where it=0..N_theta-1 and ip=0..N_phi-1 are interior indices.
  *    - A canonical mapping to full ghosted-grid indices is:
  *        it_full = it + NG_theta, ip_full = ip + NG_phi, p = it_full*N_phi_tot + ip_full.
- *    - Neighbor indices in j_cols must use the same interior DOF indexing as i_row.
- *    - For a given i_row, (i_row, j) pairs should be unique. If duplicates appear, they are summed.
- *
- * 3) Dense storage:
- *    - Dense matrices are stored column-major: M[i + N*j].
  */
 
 #ifdef _OPENMP
@@ -243,6 +290,14 @@ typedef enum {
   AKV_METHOD_GRIDPOINT  = 1
 } akv_method_t;
 
+#ifndef BHAHAHA_AKV_DEFAULT_METHOD
+#if BHAHAHA_AKV_ENABLE_GRIDPOINT
+#define BHAHAHA_AKV_DEFAULT_METHOD AKV_METHOD_GRIDPOINT
+#else
+#define BHAHAHA_AKV_DEFAULT_METHOD AKV_METHOD_L1_REDUCED
+#endif
+#endif
+
 // -----------------------------
 // Horizon grid description
 // -----------------------------
@@ -272,6 +327,9 @@ typedef struct {
   AKV_REAL akv_spin_vec[3];
   AKV_REAL akv_eig_gap_43;
   AKV_REAL akv_eig_resid[3];
+  AKV_REAL akv_trace_scale_B;
+  AKV_REAL akv_trace_scale_K;
+  AKV_REAL akv_prev_overlap[3][3];
 
   // Quality flag bitfield (0 = OK):
   //   bit0: residual tolerance exceeded for any reported mode
@@ -279,6 +337,8 @@ typedef struct {
   //   bit2: solver/library/path unavailable
   //   bit3: B not SPD / regularization retry used / near-singular handling invoked
   int akv_quality_flag;
+  int akv_J_ref_convention;
+  int akv_prev_alignment_applied;
 
   akv_method_t method_used;
 
@@ -315,6 +375,11 @@ typedef struct {
   int reg_max_tries;     // retry count for SPD failures
   AKV_REAL gap_ratio_thresh; // e.g., 1.5
   AKV_REAL horizon_area; // the area of the black hole horizon
+  bool enable_trace_rescaling;
+  bool enable_trace_rescaling_K;
+  bool enable_prev_mode_alignment;
+  int prev_gp_N;
+  const AKV_REAL *prev_gp_z[3];
 
   bool build_spin_vector;
 
@@ -351,15 +416,6 @@ typedef AKV_REAL (*akv_eval_sign_l1_f)(
 // Gridpoint operator hooks (optional debug-only assembly and/or residual checks without dense matrices).
 typedef void (*akv_apply_K_f)(const akv_horizon_grid_t *grid, const AKV_REAL *z_in, AKV_REAL *Kz_out);
 typedef void (*akv_apply_B_f)(const akv_horizon_grid_t *grid, const AKV_REAL *z_in, AKV_REAL *Bz_out);
-
-// Gridpoint-basis stencil/bilinear-form row evaluation for dense matrix assembly.
-typedef int (*akv_eval_row_stencil_f)(
-    int i_row,
-    const akv_horizon_grid_t *grid,
-    int max_entries,
-    int *j_cols,
-    AKV_REAL *K_vals,
-    AKV_REAL *B_vals);
 
 // Optional sign-fix evaluator for gridpoint modes, given the full-space mean-zero eigenvector z (interior DOF space).
 typedef AKV_REAL (*akv_eval_sign_full_f)(
@@ -654,37 +710,6 @@ static akv_error_t akv_mean0_basis_build(const akv_horizon_grid_t *grid, akv_mea
   return AKV_SUCCESS;
 }
 
-// Transform full-space dense matrix M_full (N_full x N_full) into reduced mean-zero matrix (N_red x N_red):
-// M_red = B^T M_full B, where basis columns are b_i = e_i - (w_i/w_ref) e_ref for i != ref.
-static void akv_mean0_transform_dense(
-    const akv_mean0_basis_t *b,
-    const AKV_REAL *M_full, int ld_full,
-    AKV_REAL *M_red, int ld_red) {
-
-  const int N = b->N_full;
-  const int Nr = b->N_red;
-  const int r = b->ref;
-
-  for (int a = 0; a < Nr; a++) {
-    const int ia = b->map[a];
-    const AKV_REAL alpha_a = -b->w_dof[ia] / b->wref;
-
-    for (int c = 0; c < Nr; c++) {
-      const int ic = b->map[c];
-      const AKV_REAL alpha_c = -b->w_dof[ic] / b->wref;
-
-      const AKV_REAL M_ia_ic = M_full[ia + (size_t)ld_full * ic];
-      const AKV_REAL M_ia_r  = M_full[ia + (size_t)ld_full * r];
-      const AKV_REAL M_r_ic  = M_full[r  + (size_t)ld_full * ic];
-      const AKV_REAL M_r_r   = M_full[r  + (size_t)ld_full * r];
-
-      (void)N;
-      M_red[a + (size_t)ld_red * c] =
-          M_ia_ic + alpha_c * M_ia_r + alpha_a * M_r_ic + (alpha_a * alpha_c) * M_r_r;
-    }
-  }
-}
-
 // Lift reduced vector x_red (Nr) to full mean-zero vector x_full (N_full) using the cached basis.
 static void akv_mean0_lift_vector(
     const akv_mean0_basis_t *b,
@@ -707,8 +732,9 @@ static void akv_mean0_lift_vector(
 }
 
 // -----------------------------
-// Dense helpers (column-major)
+// Dense helpers (column-major, PRIMME path)
 // -----------------------------
+#ifdef USE_PRIMME
 static void akv_symmetrize_dense(AKV_REAL *M, int N) {
   for (int i = 0; i < N; i++) {
     for (int j = i+1; j < N; j++) {
@@ -719,75 +745,14 @@ static void akv_symmetrize_dense(AKV_REAL *M, int N) {
   }
 }
 
-static void akv_dense_matvec(const AKV_REAL *M, int N, const AKV_REAL *x, AKV_REAL *y) {
-  for (int i = 0; i < N; i++) {
-    AKV_REAL s = 0.0;
-    const AKV_REAL *col = &M[i]; // M[i + N*j]
-    for (int j = 0; j < N; j++) s += col[(size_t)N*j] * x[j];
-    y[i] = s;
-  }
+static AKV_REAL akv_trace_mean_dense(const AKV_REAL *M, int N) {
+  if (!M || N <= 0) return 1.0;
+  AKV_REAL tr = 0.0;
+  for (int i = 0; i < N; i++) tr += M[i + (size_t)N * i];
+  if (!(tr > 0.0)) return 1.0;
+  return tr / (AKV_REAL)N;
 }
-
-// Residual ratio for dense matrices using caller-provided scratch buffers of length N.
-static AKV_REAL akv_residual_ratio_dense_inplace(
-    const AKV_REAL *K, const AKV_REAL *B, int N,
-    const AKV_REAL *z, AKV_REAL lambda,
-    AKV_REAL *Kz, AKV_REAL *Bz, AKV_REAL *r) {
-
-  akv_dense_matvec(K, N, z, Kz);
-  akv_dense_matvec(B, N, z, Bz);
-  for (int i = 0; i < N; i++) r[i] = Kz[i] - lambda * Bz[i];
-
-  AKV_REAL nr = vecn_norm2(r, N);
-  AKV_REAL nK = vecn_norm2(Kz, N);
-  AKV_REAL nB = vecn_norm2(Bz, N);
-  AKV_REAL denom = nK + nB;
-  return (denom > 0) ? (nr / denom) : 0.0;
-}
-
-// Unused
-/*
-// Residual ratio using operator application (no dense matrices), with caller-provided scratch buffers of length N.
-static AKV_REAL akv_residual_ratio_apply_inplace(
-    const akv_horizon_grid_t *grid,
-    akv_apply_K_f applyK,
-    akv_apply_B_f applyB,
-    int N,
-    const AKV_REAL *z,
-    AKV_REAL lambda,
-    AKV_REAL *Kz, AKV_REAL *Bz, AKV_REAL *r) {
-
-  applyK(grid, z, Kz);
-  applyB(grid, z, Bz);
-  for (int i = 0; i < N; i++) r[i] = Kz[i] - lambda * Bz[i];
-
-  AKV_REAL nr = vecn_norm2(r, N);
-  AKV_REAL nK = vecn_norm2(Kz, N);
-  AKV_REAL nB = vecn_norm2(Bz, N);
-  AKV_REAL denom = nK + nB;
-  return (denom > 0) ? (nr / denom) : 0.0;
-}
-*/
-
-// B-inner-product Gram–Schmidt on k vectors (columns) in V (N x k), using dense B (N x N).
-// Reuses tmp buffer of length N.
-static void akv_b_gram_schmidt_inplace(AKV_REAL *V, int N, int k, const AKV_REAL *B, AKV_REAL *tmp) {
-  for (int a = 0; a < k; a++) {
-    AKV_REAL *va = &V[(size_t)N * a];
-
-    for (int b = 0; b < a; b++) {
-      AKV_REAL *vb = &V[(size_t)N * b];
-
-      akv_dense_matvec(B, N, vb, tmp);
-      AKV_REAL proj = vecn_dot(va, tmp, N); // <va,vb>_B
-      vecn_axpy(va, vb, N, -proj);
-    }
-
-    akv_dense_matvec(B, N, va, tmp);
-    AKV_REAL n2 = vecn_dot(va, tmp, N);
-    if (n2 > 0) vecn_scale(va, N, 1.0 / sqrt(n2));
-  }
-}
+#endif
 
 // -----------------------------
 // L1-reduced assembly + solve + postprocess
@@ -919,6 +884,9 @@ static akv_error_t akv_solve_l1_reduced(
     out->akv_J[k] = vec3_dot(x, Jm) / (8.0 * (AKV_REAL)M_PI);
   }
   akv_compute_dimensionless_spins(out->akv_J, pars->horizon_area, out->akv_a);
+  out->akv_J_ref_convention = BHAHAHA_AKV_JREF_CONVENTION_NORM_J123;
+  out->akv_trace_scale_B = 1.0;
+  out->akv_trace_scale_K = 1.0;
 
   if (pars->build_spin_vector && map_to_spinvec) {
     int k = pars->l1_choose_index;
@@ -933,124 +901,9 @@ static akv_error_t akv_solve_l1_reduced(
   }
 
   out->akv_eig_gap_43 = 0.0;
+  out->akv_prev_alignment_applied = 0;
   out->method_used = AKV_METHOD_L1_REDUCED;
 
-  return AKV_SUCCESS;
-}
-
-// -----------------------------
-// Gridpoint dense assembly
-// -----------------------------
-
-typedef struct {
-  int j;
-  AKV_REAL Kv;
-  AKV_REAL Bv;
-} akv_triplet_t;
-
-static int cmp_triplet_j(const void *a, const void *b) {
-  const akv_triplet_t *x = (const akv_triplet_t*)a;
-  const akv_triplet_t *y = (const akv_triplet_t*)b;
-  return (x->j < y->j) ? -1 : (x->j > y->j);
-}
-
-// Assemble dense matrices from stencil/bilinear-form callback.
-// For each row i, the callback provides (i,j,K,B) entries; duplicates in j are summed.
-static akv_error_t akv_full_assemble_dense_from_stencil(
-    const akv_horizon_grid_t *grid,
-    akv_eval_row_stencil_f eval_row,
-    AKV_REAL *Kmat, AKV_REAL *Bmat, int N_full) {
-
-  if (!grid || !eval_row || !Kmat || !Bmat) return AKV_ERR_NULLPTR;
-
-  const int max_entries = 512;
-  int *j_cols = (int*)malloc((size_t)max_entries * sizeof(int));
-  AKV_REAL *K_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
-  AKV_REAL *B_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
-  akv_triplet_t *t = (akv_triplet_t*)malloc((size_t)max_entries * sizeof(akv_triplet_t));
-  if (!j_cols || !K_vals || !B_vals || !t) {
-    free(j_cols); free(K_vals); free(B_vals); free(t);
-    return AKV_ERR_ALLOC;
-  }
-
-  for (int i = 0; i < N_full; i++) {
-    int nnz = eval_row(i, grid, max_entries, j_cols, K_vals, B_vals);
-    if (nnz < 0) { free(j_cols); free(K_vals); free(B_vals); free(t); return AKV_ERR_BADPARAM; }
-    if (nnz > max_entries) nnz = max_entries;
-
-    int m = 0;
-    for (int e = 0; e < nnz; e++) {
-      int j = j_cols[e];
-      if (j < 0 || j >= N_full) continue;
-      t[m].j = j;
-      t[m].Kv = K_vals[e];
-      t[m].Bv = B_vals[e];
-      m++;
-    }
-
-    if (m == 0) continue;
-
-    qsort(t, (size_t)m, sizeof(akv_triplet_t), cmp_triplet_j);
-
-    int curj = t[0].j;
-    AKV_REAL sumK = t[0].Kv;
-    AKV_REAL sumB = t[0].Bv;
-
-    for (int e = 1; e < m; e++) {
-      if (t[e].j == curj) {
-        sumK += t[e].Kv;
-        sumB += t[e].Bv;
-      } else {
-        Kmat[i + (size_t)N_full * curj] = sumK;
-        Bmat[i + (size_t)N_full * curj] = sumB;
-        curj = t[e].j;
-        sumK = t[e].Kv;
-        sumB = t[e].Bv;
-      }
-    }
-    Kmat[i + (size_t)N_full * curj] = sumK;
-    Bmat[i + (size_t)N_full * curj] = sumB;
-  }
-
-  free(j_cols); free(K_vals); free(B_vals); free(t);
-
-  akv_symmetrize_dense(Kmat, N_full);
-  akv_symmetrize_dense(Bmat, N_full);
-  return AKV_SUCCESS;
-}
-
-// Debug-only dense assembly by applying operator to basis vectors (O(N^3) operator work).
-static akv_error_t akv_full_assemble_dense_debug_apply(
-    const akv_horizon_grid_t *grid,
-    akv_apply_K_f applyK,
-    akv_apply_B_f applyB,
-    AKV_REAL *Kmat, AKV_REAL *Bmat, int N_full) {
-
-  if (!grid || !applyK || !applyB || !Kmat || !Bmat) return AKV_ERR_NULLPTR;
-
-  AKV_REAL *e = (AKV_REAL*)calloc((size_t)N_full, sizeof(AKV_REAL));
-  AKV_REAL *Kz = (AKV_REAL*)calloc((size_t)N_full, sizeof(AKV_REAL));
-  AKV_REAL *Bz = (AKV_REAL*)calloc((size_t)N_full, sizeof(AKV_REAL));
-  if (!e || !Kz || !Bz) {
-    free(e); free(Kz); free(Bz);
-    return AKV_ERR_ALLOC;
-  }
-
-  for (int n = 0; n < N_full; n++) {
-    memset(e, 0, (size_t)N_full * sizeof(AKV_REAL));
-    e[n] = 1.0;
-    applyK(grid, e, Kz);
-    applyB(grid, e, Bz);
-    for (int m = 0; m < N_full; m++) {
-      Kmat[m + (size_t)N_full * n] = Kz[m];
-      Bmat[m + (size_t)N_full * n] = Bz[m];
-    }
-  }
-
-  akv_symmetrize_dense(Kmat, N_full);
-  akv_symmetrize_dense(Bmat, N_full);
-
-  free(e); free(Kz); free(Bz);
   return AKV_SUCCESS;
 }
 
@@ -1071,50 +924,6 @@ static inline void akv_mean0_project_transpose(
     const AKV_REAL alpha_a = -b->w_dof[ia] / b->wref;
     y_red[a] = y_full[ia] + alpha_a * yref;
   }
-}
-
-static akv_error_t akv_full_apply_from_stencil_block(
-    const akv_horizon_grid_t *grid,
-    akv_eval_row_stencil_f eval_row,
-    const AKV_REAL *X, int ldx,
-    AKV_REAL *Y, int ldy,
-    int N_full, int blockSize,
-    bool use_K) {
-
-  if (!grid || !eval_row || !X || !Y || N_full <= 0 || blockSize <= 0) return AKV_ERR_NULLPTR;
-
-  const int max_entries = 512;
-  int *j_cols = (int*)malloc((size_t)max_entries * sizeof(int));
-  AKV_REAL *K_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
-  AKV_REAL *B_vals = (AKV_REAL*)malloc((size_t)max_entries * sizeof(AKV_REAL));
-  if (!j_cols || !K_vals || !B_vals) {
-    free(j_cols); free(K_vals); free(B_vals);
-    return AKV_ERR_ALLOC;
-  }
-
-  for (int b = 0; b < blockSize; b++) memset(&Y[(size_t)ldy * b], 0, (size_t)N_full * sizeof(AKV_REAL));
-
-  for (int i = 0; i < N_full; i++) {
-    int nnz = eval_row(i, grid, max_entries, j_cols, K_vals, B_vals);
-    if (nnz < 0) {
-      free(j_cols); free(K_vals); free(B_vals);
-      return AKV_ERR_BADPARAM;
-    }
-    if (nnz > max_entries) nnz = max_entries;
-
-    for (int e = 0; e < nnz; e++) {
-      const int j = j_cols[e];
-      if (j < 0 || j >= N_full) continue;
-      const AKV_REAL val = use_K ? K_vals[e] : B_vals[e];
-      if (val == 0.0) continue;
-      for (int b = 0; b < blockSize; b++) {
-        Y[i + (size_t)ldy * b] += val * X[j + (size_t)ldx * b];
-      }
-    }
-  }
-
-  free(j_cols); free(K_vals); free(B_vals);
-  return AKV_SUCCESS;
 }
 
 static akv_error_t akv_full_apply_debug_block(
@@ -1142,10 +951,11 @@ static akv_error_t akv_full_apply_debug_block(
 typedef struct {
   const akv_horizon_grid_t *grid;
   const akv_mean0_basis_t *basis;
-  akv_eval_row_stencil_f eval_row_stencil;
   akv_apply_K_f applyK_debug;
   akv_apply_B_f applyB_debug;
   const akv_params_t *pars;
+  AKV_REAL K_trace_scale_inv;
+  AKV_REAL B_trace_scale_inv;
 } akv_primme_ctx_t;
 
 static akv_error_t akv_apply_reduced_block(
@@ -1171,17 +981,12 @@ static akv_error_t akv_apply_reduced_block(
     akv_mean0_lift_vector(ctx->basis, &Xred[(size_t)ldx * b], &Xfull[(size_t)N_full * b]);
   }
 
-  akv_error_t err;
-  if (ctx->eval_row_stencil) {
-    err = akv_full_apply_from_stencil_block(ctx->grid, ctx->eval_row_stencil, Xfull, N_full, Yfull, N_full, N_full, blockSize, use_K);
+  if (!ctx->pars || !ctx->pars->allow_debug_assembly) {
+    free(Xfull); free(Yfull);
+    return AKV_ERR_BADPARAM;
   }
-  else {
-    if (!ctx->pars || !ctx->pars->allow_debug_assembly) {
-      free(Xfull); free(Yfull);
-      return AKV_ERR_BADPARAM;
-    }
-    err = akv_full_apply_debug_block(ctx->grid, ctx->applyK_debug, ctx->applyB_debug, Xfull, N_full, Yfull, N_full, N_full, blockSize, use_K);
-  }
+  const akv_error_t err =
+      akv_full_apply_debug_block(ctx->grid, ctx->applyK_debug, ctx->applyB_debug, Xfull, N_full, Yfull, N_full, N_full, blockSize, use_K);
   if (err != AKV_SUCCESS) {
     free(Xfull); free(Yfull);
     return err;
@@ -1189,6 +994,10 @@ static akv_error_t akv_apply_reduced_block(
 
   for (int b = 0; b < blockSize; b++) {
     akv_mean0_project_transpose(ctx->basis, &Yfull[(size_t)N_full * b], &Yred[(size_t)ldy * b]);
+    const AKV_REAL trace_scale_inv = use_K ? ctx->K_trace_scale_inv : ctx->B_trace_scale_inv;
+    if (trace_scale_inv > 0.0 && trace_scale_inv != 1.0) {
+      for (int i = 0; i < Nr; i++) Yred[i + (size_t)ldy * b] *= trace_scale_inv;
+    }
     if (!use_K && ctx->pars && ctx->pars->reg_eps > 0.0) {
       for (int i = 0; i < Nr; i++) Yred[i + (size_t)ldy * b] += ctx->pars->reg_eps * Xred[i + (size_t)ldx * b];
     }
@@ -1254,6 +1063,101 @@ static AKV_REAL akv_residual_ratio_reduced_apply_inplace(
   return (denom > 0.0) ? (nr / denom) : 0.0;
 }
 
+static AKV_REAL akv_b_inner_product_full(
+    const akv_horizon_grid_t *grid,
+    akv_apply_B_f applyB,
+    const AKV_REAL *za,
+    const AKV_REAL *zb,
+    int N,
+    AKV_REAL *tmpB) {
+
+  if (!grid || !applyB || !za || !zb || !tmpB || N <= 0) return 0.0;
+  applyB(grid, zb, tmpB);
+  return vecn_dot(za, tmpB, N);
+}
+
+static void akv_align_gridpoint_modes_to_previous(
+    const akv_horizon_grid_t *grid,
+    akv_apply_B_f applyB,
+    AKV_REAL *eval,
+    AKV_REAL *evec,
+    int Nr,
+    int kmodes,
+    int want,
+    akv_diagnostics_t *out,
+    const akv_params_t *pars) {
+
+  if (!grid || !applyB || !eval || !evec || !out || !pars) return;
+  if (!pars->enable_prev_mode_alignment || kmodes < 3) return;
+  if (pars->prev_gp_N != out->gp_N || pars->prev_gp_N <= 0) return;
+  if (!pars->prev_gp_z[0] || !pars->prev_gp_z[1] || !pars->prev_gp_z[2]) return;
+
+  AKV_REAL *tmpB = (AKV_REAL*)malloc((size_t)out->gp_N * sizeof(AKV_REAL));
+  if (!tmpB) return;
+
+  for (int a = 0; a < 3; a++) {
+    for (int b = 0; b < 3; b++) {
+      out->akv_prev_overlap[a][b] = akv_b_inner_product_full(grid, applyB, out->gp_z[a], pars->prev_gp_z[b], out->gp_N, tmpB);
+    }
+  }
+
+  static const int perms[6][3] = {
+      {0, 1, 2}, {0, 2, 1}, {1, 0, 2},
+      {1, 2, 0}, {2, 0, 1}, {2, 1, 0}
+  };
+  int best_perm = 0;
+  AKV_REAL best_score = -1.0;
+  for (int p = 0; p < 6; p++) {
+    AKV_REAL score = 0.0;
+    for (int a = 0; a < 3; a++) score += fabs(out->akv_prev_overlap[perms[p][a]][a]);
+    if (score > best_score) {
+      best_score = score;
+      best_perm = p;
+    }
+  }
+
+  AKV_REAL eval_old[3], res_old[3], J_old[3], a_old[3], spin_old[3];
+  AKV_REAL *gp_old[3];
+  AKV_REAL *evec_copy = (AKV_REAL*)malloc((size_t)Nr * (size_t)3 * sizeof(AKV_REAL));
+  if (!evec_copy) {
+    free(tmpB);
+    return;
+  }
+
+  for (int a = 0; a < 3; a++) {
+    eval_old[a] = eval[a];
+    res_old[a] = out->akv_eig_resid[a];
+    J_old[a] = out->akv_J[a];
+    a_old[a] = out->akv_a[a];
+    spin_old[a] = out->akv_spin_vec[a];
+    gp_old[a] = out->gp_z[a];
+    memcpy(&evec_copy[(size_t)Nr * a], &evec[(size_t)Nr * a], (size_t)Nr * sizeof(AKV_REAL));
+  }
+
+  for (int a = 0; a < 3; a++) {
+    const int src = perms[best_perm][a];
+    const AKV_REAL sgn = (out->akv_prev_overlap[src][a] >= 0.0) ? 1.0 : -1.0;
+    eval[a] = eval_old[src];
+    out->akv_eig_resid[a] = res_old[src];
+    out->akv_J[a] = sgn * J_old[src];
+    out->akv_a[a] = sgn * a_old[src];
+    out->akv_spin_vec[a] = sgn * spin_old[src];
+    out->gp_z[a] = gp_old[src];
+    for (int i = 0; i < Nr; i++) evec[i + (size_t)Nr * a] = sgn * evec_copy[i + (size_t)Nr * src];
+    for (int i = 0; i < out->gp_N; i++) out->gp_z[a][i] *= sgn;
+  }
+  if (want > 0) {
+    out->akv_lambda[0] = eval[0];
+    if (want > 1) out->akv_lambda[1] = eval[1];
+    if (want > 2) out->akv_lambda[2] = eval[2];
+  }
+  out->akv_prev_alignment_applied = 1;
+
+  free(evec_copy);
+  free(tmpB);
+}
+
+#ifdef USE_PRIMME
 static bool akv_try_cholesky_dense(AKV_REAL *A, int N) {
   if (!A || N <= 0) return false;
   for (int j = 0; j < N; j++) {
@@ -1303,18 +1207,55 @@ static akv_error_t akv_build_reduced_mass_matrix_dense(
   return AKV_SUCCESS;
 }
 
+static akv_error_t akv_build_reduced_stiffness_matrix_dense(
+    const akv_primme_ctx_t *ctx,
+    int Nr,
+    AKV_REAL *Kred) {
+
+  if (!ctx || !Kred || Nr <= 0) return AKV_ERR_NULLPTR;
+
+  AKV_REAL *e = (AKV_REAL*)calloc((size_t)Nr, sizeof(AKV_REAL));
+  AKV_REAL *Ke = (AKV_REAL*)calloc((size_t)Nr, sizeof(AKV_REAL));
+  if (!e || !Ke) {
+    free(e); free(Ke);
+    return AKV_ERR_ALLOC;
+  }
+
+  for (int j = 0; j < Nr; j++) {
+    memset(e, 0, (size_t)Nr * sizeof(AKV_REAL));
+    e[j] = 1.0;
+    const akv_error_t err = akv_apply_reduced_block(ctx, e, Nr, Ke, Nr, 1, true);
+    if (err != AKV_SUCCESS) {
+      free(e); free(Ke);
+      return err;
+    }
+    for (int i = 0; i < Nr; i++) Kred[i + (size_t)Nr * j] = Ke[i];
+  }
+
+  akv_symmetrize_dense(Kred, Nr);
+  free(e); free(Ke);
+  return AKV_SUCCESS;
+}
+#endif
+
 static akv_error_t akv_full_solve_generalized_reduced_primme(
     const akv_primme_ctx_t *ctx,
     int Nr, int want_neigs,
     const akv_params_t *pars,
     AKV_REAL *eval_out, AKV_REAL *evec_out, AKV_REAL *res_out,
-    int *quality_flag_io) {
+    int *quality_flag_io,
+    AKV_REAL *trace_scale_B_out,
+    AKV_REAL *trace_scale_K_out) {
 
-  if (!ctx || !pars || !eval_out || !evec_out || !res_out || !quality_flag_io) return AKV_ERR_NULLPTR;
+  if (!ctx || !pars || !eval_out || !evec_out || !res_out || !quality_flag_io || !trace_scale_B_out || !trace_scale_K_out) return AKV_ERR_NULLPTR;
   if (Nr <= 0 || want_neigs <= 0 || want_neigs > Nr) return AKV_ERR_BADPARAM;
+  *trace_scale_B_out = 1.0;
+  *trace_scale_K_out = 1.0;
 
 #ifndef USE_PRIMME
   (void)ctx; (void)Nr; (void)want_neigs; (void)pars; (void)eval_out; (void)evec_out; (void)res_out;
+  *trace_scale_B_out = 1.0;
+  *trace_scale_K_out = 1.0;
   *quality_flag_io |= (1<<2);
   return AKV_ERR_NOT_IMPLEMENTED;
 #else
@@ -1328,38 +1269,68 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
    * SPD-probe / solve retries. They can be large for high-resolution reduced spaces.
    */
   AKV_REAL *Bprobe   = (AKV_REAL*)calloc((size_t)Nr * (size_t)Nr, sizeof(AKV_REAL));
+  AKV_REAL *Kprobe   = (AKV_REAL*)malloc((size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
   AKV_REAL *Bchol    = (AKV_REAL*)malloc((size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
   AKV_REAL *eval_tmp = (AKV_REAL*)malloc((size_t)want_neigs * sizeof(AKV_REAL));
   AKV_REAL *evec_tmp = (AKV_REAL*)malloc((size_t)Nr * (size_t)want_neigs * sizeof(AKV_REAL));
   AKV_REAL *res_tmp  = (AKV_REAL*)malloc((size_t)want_neigs * sizeof(AKV_REAL));
-  if (!Bprobe || !Bchol || !eval_tmp || !evec_tmp || !res_tmp) {
-    free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+  if (!Bprobe || !Kprobe || !Bchol || !eval_tmp || !evec_tmp || !res_tmp) {
+    free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
     return AKV_ERR_ALLOC;
   }
 
   for (int attempt = 0; attempt < max_tries; attempt++) {
     memset(Bprobe, 0, (size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
+    memset(Kprobe, 0, (size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
 
     akv_params_t pars_reg = *pars;
     pars_reg.reg_eps = reg;
+    akv_params_t pars_probe = *pars;
+    pars_probe.reg_eps = 0.0;
+    akv_primme_ctx_t ctx_probe = *ctx;
+    ctx_probe.pars = &pars_probe;
+    ctx_probe.K_trace_scale_inv = 1.0;
+    ctx_probe.B_trace_scale_inv = 1.0;
     akv_primme_ctx_t ctx_reg = *ctx;
     ctx_reg.pars = &pars_reg;
+    ctx_reg.K_trace_scale_inv = 1.0;
+    ctx_reg.B_trace_scale_inv = 1.0;
 
     /* Deliberately expensive validation step: explicitly build the reduced mass matrix,
      * symmetrize it, and attempt a dense Cholesky factorization before launching PRIMME.
      * This gives reg_eps/reg_eps_max/reg_max_tries a concrete conditioning-repair role.
      */
-    const akv_error_t berr = akv_build_reduced_mass_matrix_dense(&ctx_reg, Nr, Bprobe);
+    const akv_error_t berr = akv_build_reduced_mass_matrix_dense(&ctx_probe, Nr, Bprobe);
     if (berr != AKV_SUCCESS) {
-      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
       return berr;
     }
-    memcpy(Bchol, Bprobe, (size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
+    AKV_REAL Btrace_scale = 1.0;
+    if (pars->enable_trace_rescaling) Btrace_scale = akv_trace_mean_dense(Bprobe, Nr);
+    if (!(Btrace_scale > 0.0)) Btrace_scale = 1.0;
+
+    AKV_REAL Ktrace_scale = 1.0;
+    if (pars->enable_trace_rescaling_K) {
+      const akv_error_t kerr = akv_build_reduced_stiffness_matrix_dense(&ctx_probe, Nr, Kprobe);
+      if (kerr != AKV_SUCCESS) {
+        free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+        return kerr;
+      }
+      Ktrace_scale = akv_trace_mean_dense(Kprobe, Nr);
+      if (!(Ktrace_scale > 0.0)) Ktrace_scale = 1.0;
+    }
+    ctx_reg.B_trace_scale_inv = 1.0 / Btrace_scale;
+    ctx_reg.K_trace_scale_inv = 1.0 / Ktrace_scale;
+
+    for (int j = 0; j < Nr; j++) {
+      for (int i = 0; i < Nr; i++) Bchol[i + (size_t)Nr * j] = Bprobe[i + (size_t)Nr * j] * ctx_reg.B_trace_scale_inv;
+      Bchol[j + (size_t)Nr * j] += reg;
+    }
     if (!akv_try_cholesky_dense(Bchol, Nr)) {
       observed_b_conditioning_issue = true;
       *quality_flag_io |= (1<<3);
       if (attempt == max_tries - 1 || reg_capped) {
-        free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+        free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
         return AKV_ERR_EIGEN_FAIL;
       }
       if (reg == 0.0) reg = 1e-14;
@@ -1393,7 +1364,7 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
 
     if (primme_set_method(PRIMME_JDQMR_ETol, &primme) != 0) {
       primme_free(&primme);
-      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
       *quality_flag_io |= (1<<2);
       return AKV_ERR_EIGEN_FAIL;
     }
@@ -1403,14 +1374,17 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
     primme_free(&primme);
 
     if (info == 0 && nconv >= want_neigs) {
-      memcpy(eval_out, eval_tmp, (size_t)want_neigs * sizeof(AKV_REAL));
+      const AKV_REAL lambda_rescale = Ktrace_scale / Btrace_scale;
+      for (int i = 0; i < want_neigs; i++) eval_out[i] = eval_tmp[i] * lambda_rescale;
       memcpy(evec_out, evec_tmp, (size_t)Nr * (size_t)want_neigs * sizeof(AKV_REAL));
       memcpy(res_out, res_tmp, (size_t)want_neigs * sizeof(AKV_REAL));
+      *trace_scale_B_out = Btrace_scale;
+      *trace_scale_K_out = Ktrace_scale;
       if (observed_b_conditioning_issue || reg > 0.0) *quality_flag_io |= (1<<3);
       if (pars->eig_tol > 0.0) {
         for (int i = 0; i < want_neigs; i++) if (res_tmp[i] > pars->eig_tol) *quality_flag_io |= (1<<0);
       }
-      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
       return AKV_SUCCESS;
     }
 
@@ -1421,7 +1395,7 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
      */
     *quality_flag_io |= (1<<3);
     if (attempt == max_tries - 1 || reg_capped) {
-      free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+      free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
       return AKV_ERR_EIGEN_FAIL;
     }
     if (reg == 0.0) reg = 1e-14;
@@ -1429,7 +1403,7 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
     if (reg_max > 0.0 && reg > reg_max) { reg = reg_max; reg_capped = true; }
   }
 
-  free(Bprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
+  free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
   return AKV_ERR_EIGEN_FAIL;
 #endif
 }
@@ -1440,7 +1414,6 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
 static akv_error_t akv_solve_gridpoint_basis(
     const akv_horizon_grid_t *grid,
     const akv_params_t *pars,
-    akv_eval_row_stencil_f eval_row_stencil,
     akv_apply_K_f applyK_debug,
     akv_apply_B_f applyB_debug,
     akv_eval_sign_full_f eval_sign_full,
@@ -1461,12 +1434,13 @@ static akv_error_t akv_solve_gridpoint_basis(
   memset(&ctx, 0, sizeof(ctx));
   ctx.grid = grid;
   ctx.basis = &b;
-  ctx.eval_row_stencil = eval_row_stencil;
   ctx.applyK_debug = applyK_debug;
   ctx.applyB_debug = applyB_debug;
   ctx.pars = pars;
+  ctx.K_trace_scale_inv = 1.0;
+  ctx.B_trace_scale_inv = 1.0;
 
-  if (!ctx.eval_row_stencil && (!pars->allow_debug_assembly || !ctx.applyK_debug || !ctx.applyB_debug)) {
+  if (!pars->allow_debug_assembly || !ctx.applyK_debug || !ctx.applyB_debug) {
     out->akv_quality_flag |= (1<<2);
     akv_mean0_basis_free(&b);
     return AKV_ERR_BADPARAM;
@@ -1486,7 +1460,8 @@ static akv_error_t akv_solve_gridpoint_basis(
     return AKV_ERR_ALLOC;
   }
 
-  err = akv_full_solve_generalized_reduced_primme(&ctx, Nr, want, pars, eval, evec, res, &out->akv_quality_flag);
+  err = akv_full_solve_generalized_reduced_primme(&ctx, Nr, want, pars, eval, evec, res, &out->akv_quality_flag,
+                                                  &out->akv_trace_scale_B, &out->akv_trace_scale_K);
   if (err != AKV_SUCCESS) {
     if (err == AKV_ERR_NOT_IMPLEMENTED) out->akv_quality_flag |= (1<<2);
     free(eval); free(evec); free(res);
@@ -1557,6 +1532,9 @@ static akv_error_t akv_solve_gridpoint_basis(
   }
 
   akv_compute_dimensionless_spins(out->akv_J, pars->horizon_area, out->akv_a);
+  out->akv_J_ref_convention = BHAHAHA_AKV_JREF_CONVENTION_NORM_J123;
+
+  akv_align_gridpoint_modes_to_previous(grid, applyB_debug, eval, evec, Nr, kmodes, want, out, pars);
 
   out->akv_spin_vec[0] = 0.0;
   out->akv_spin_vec[1] = 0.0;
@@ -1579,7 +1557,6 @@ akv_error_t akv_compute(
     akv_eval_sign_l1_f eval_sign_l1,
     akv_map_to_spinvec_f map_to_spinvec,
     // Gridpoint callbacks
-    akv_eval_row_stencil_f eval_row_stencil,
     akv_apply_K_f applyK_debug,
     akv_apply_B_f applyB_debug,
     akv_eval_sign_full_f eval_sign_full,
@@ -1593,8 +1570,7 @@ akv_error_t akv_compute(
     case AKV_METHOD_L1_REDUCED:
       return akv_solve_l1_reduced(grid, pars, eval_l1, eval_sign_l1, map_to_spinvec, out);
     case AKV_METHOD_GRIDPOINT:
-      return akv_solve_gridpoint_basis(grid, pars, eval_row_stencil, applyK_debug, applyB_debug,
-                                       eval_sign_full, eval_J_full, out);
+      return akv_solve_gridpoint_basis(grid, pars, applyK_debug, applyB_debug, eval_sign_full, eval_J_full, out);
     default:
       return AKV_ERR_BADPARAM;
   }
@@ -1624,7 +1600,6 @@ akv_error_t akv_compute(
 #define BHAHAHA_AKV_STUB_USED_SIGN_FULL     (UINT32_C(1) << 2)
 #define BHAHAHA_AKV_STUB_USED_J_FULL        (UINT32_C(1) << 3)
 #define BHAHAHA_AKV_STUB_USED_MAP_SPINVEC   (UINT32_C(1) << 4)
-#define BHAHAHA_AKV_STUB_USED_ROW_STENCIL   (UINT32_C(1) << 5)
 #define BHAHAHA_AKV_STUB_USED_APPLYK        (UINT32_C(1) << 6)
 #define BHAHAHA_AKV_STUB_USED_APPLYB        (UINT32_C(1) << 7)
 
@@ -1684,7 +1659,6 @@ static void bhahaha_akv_eval_l1_integrands_default_impl(
   const REAL xx0 = ctx->xx[0][i0];
   const REAL xx1 = ctx->xx[1][i1];
   const REAL xx2 = ctx->xx[2][i2];
-
   const REAL f0_of_xx0 = xx0;
   const REAL f1_of_xx1 = sin(xx1);
   const REAL f1_of_xx1__D1 = cos(xx1);
@@ -1738,6 +1712,351 @@ static void bhahaha_akv_eval_l1_integrands_default_impl(
   (void)commondata; // available for future extensions
 }
 
+static void bhahaha_akv_eval_point_geometry(
+    int p, const akv_horizon_grid_t *grid,
+    AKV_REAL *restrict sqrtq,
+    AKV_REAL qDD[3][3],
+    AKV_REAL qUU[3][3],
+    AKV_REAL Gamma2D[3][3][3],
+    AKV_REAL pU_i_A[3][3],
+    AKV_REAL sU[3],
+    AKV_REAL KminusKg[3][3]) {
+  if (!grid || !grid->geom || !sqrtq || !qDD || !qUU || !Gamma2D || !pU_i_A || !sU || !KminusKg) return;
+
+  const bhahaha_akv_context_t *ctx = (const bhahaha_akv_context_t*)grid->geom;
+  const commondata_struct *restrict commondata = ctx->commondata;
+  const params_struct *restrict params = ctx->params;
+  REAL *restrict auxevol_gfs = ctx->auxevol_gfs;
+  const REAL *restrict in_gfs = ctx->in_gfs;
+
+  #include "set_CodeParameters.h"
+
+  const int N_phi_tot = grid->N_phi_tot;
+  const int ip_full = p % N_phi_tot;
+  const int it_full = (p - ip_full) / N_phi_tot;
+  const int i2 = ip_full;
+  const int i1 = it_full;
+  const int i0 = BHAHAHA_AKV_AH_SLAB_I0;
+
+  const REAL xx0 = ctx->xx[0][i0];
+  const REAL xx1 = ctx->xx[1][i1];
+  const REAL xx2 = ctx->xx[2][i2];
+
+  const REAL f0_of_xx0 = xx0;
+  const REAL f1_of_xx1 = sin(xx1);
+  const REAL f1_of_xx1__D1 = cos(xx1);
+  (void)xx2;
+
+  memset(qDD, 0, 9 * sizeof(*qDD[0]));
+  memset(qUU, 0, 9 * sizeof(*qUU[0]));
+  memset(Gamma2D, 0, 27 * sizeof(*Gamma2D[0][0]));
+  memset(pU_i_A, 0, 9 * sizeof(*pU_i_A[0]));
+  memset(sU, 0, 3 * sizeof(*sU));
+  memset(KminusKg, 0, 9 * sizeof(*KminusKg[0]));
+
+  // Human-readable SymPy expressions, CSE'd and FD-optimized by NRPy:
+  """
+        + akv_gridpoint_geometry_codegen
+        + r"""
+
+  *sqrtq = akv_sqrtq_gp;
+
+  qDD[1][1] = akv_qDD_1_1;
+  qDD[1][2] = akv_qDD_1_2;
+  qDD[2][1] = akv_qDD_1_2;
+  qDD[2][2] = akv_qDD_2_2;
+
+  qUU[1][1] = akv_qUU_1_1;
+  qUU[1][2] = akv_qUU_1_2;
+  qUU[2][1] = akv_qUU_1_2;
+  qUU[2][2] = akv_qUU_2_2;
+
+  Gamma2D[1][1][1] = akv_Gamma2D_1_1_1;
+  Gamma2D[1][1][2] = akv_Gamma2D_1_1_2;
+  Gamma2D[1][2][1] = akv_Gamma2D_1_2_1;
+  Gamma2D[1][2][2] = akv_Gamma2D_1_2_2;
+  Gamma2D[2][1][1] = akv_Gamma2D_2_1_1;
+  Gamma2D[2][1][2] = akv_Gamma2D_2_1_2;
+  Gamma2D[2][2][1] = akv_Gamma2D_2_2_1;
+  Gamma2D[2][2][2] = akv_Gamma2D_2_2_2;
+
+  pU_i_A[0][1] = akv_pU_0_1;
+  pU_i_A[0][2] = akv_pU_0_2;
+  pU_i_A[1][1] = akv_pU_1_1;
+  pU_i_A[1][2] = akv_pU_1_2;
+  pU_i_A[2][1] = akv_pU_2_1;
+  pU_i_A[2][2] = akv_pU_2_2;
+
+  sU[0] = akv_sU_0;
+  sU[1] = akv_sU_1;
+  sU[2] = akv_sU_2;
+
+  KminusKg[0][0] = akv_KminusKg_0_0;
+  KminusKg[0][1] = akv_KminusKg_0_1;
+  KminusKg[1][0] = akv_KminusKg_0_1;
+  KminusKg[0][2] = akv_KminusKg_0_2;
+  KminusKg[2][0] = akv_KminusKg_0_2;
+  KminusKg[1][1] = akv_KminusKg_1_1;
+  KminusKg[1][2] = akv_KminusKg_1_2;
+  KminusKg[2][1] = akv_KminusKg_1_2;
+  KminusKg[2][2] = akv_KminusKg_2_2;
+
+  (void)commondata;
+}
+
+static inline int bhahaha_akv_mod_int(int a, int n) {
+  const int r = a % n;
+  return (r < 0) ? (r + n) : r;
+}
+
+static inline void bhahaha_akv_map_full_indices_to_interior(
+    const akv_horizon_grid_t *grid, int it_full, int ip_full, int *it, int *ip) {
+  int it_log = it_full - grid->NG_theta;
+  int ip_log = ip_full - grid->NG_phi;
+
+  while (it_log < 0 || it_log >= grid->N_theta) {
+    if (it_log < 0) it_log = -it_log - 1;
+    else it_log = 2 * grid->N_theta - it_log - 1;
+    ip_log += grid->N_phi / 2;
+  }
+
+  *it = it_log;
+  *ip = bhahaha_akv_mod_int(ip_log, grid->N_phi);
+}
+
+static inline AKV_REAL bhahaha_akv_scalar_at_from_interior(
+    const akv_horizon_grid_t *grid, const AKV_REAL *z_in, int it_full, int ip_full) {
+  int it, ip;
+  bhahaha_akv_map_full_indices_to_interior(grid, it_full, ip_full, &it, &ip);
+  return z_in[akv_it_ip_to_dof(grid, it, ip)];
+}
+
+static inline int bhahaha_akv_fd_radius(int ng) {
+  return (ng >= 3) ? 3 : ((ng >= 2) ? 2 : 1);
+}
+
+static inline AKV_REAL bhahaha_akv_centered_diff1_from_interior(
+    const akv_horizon_grid_t *grid, const AKV_REAL *z_in,
+    int it_full, int ip_full, int axis) {
+  const AKV_REAL h = (axis == 1) ? grid->dtheta : grid->dphi;
+  const int radius = bhahaha_akv_fd_radius((axis == 1) ? grid->NG_theta : grid->NG_phi);
+  if (!(h > 0.0)) return 0.0;
+
+  switch (radius) {
+    case 3:
+      if (axis == 1) {
+        return (
+            -bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 3, ip_full)
+            + 9.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 2, ip_full)
+            - 45.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 1, ip_full)
+            + 45.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 1, ip_full)
+            - 9.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 2, ip_full)
+            + bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 3, ip_full)) / (60.0 * h);
+      }
+      return (
+          -bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 3)
+          + 9.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 2)
+          - 45.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 1)
+          + 45.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 1)
+          - 9.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 2)
+          + bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 3)) / (60.0 * h);
+    case 2:
+      if (axis == 1) {
+        return (
+            bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 2, ip_full)
+            - 8.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 1, ip_full)
+            + 8.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 1, ip_full)
+            - bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 2, ip_full)) / (12.0 * h);
+      }
+      return (
+          bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 2)
+          - 8.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 1)
+          + 8.0 * bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 1)
+          - bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 2)) / (12.0 * h);
+    default:
+      if (axis == 1) {
+        return (
+            -bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full - 1, ip_full)
+            + bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full + 1, ip_full)) / (2.0 * h);
+      }
+      return (
+          -bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full - 1)
+          + bhahaha_akv_scalar_at_from_interior(grid, z_in, it_full, ip_full + 1)) / (2.0 * h);
+  }
+}
+
+static inline void bhahaha_akv_centered_diff1_transpose_add_to_interior(
+    const akv_horizon_grid_t *grid, int it_full, int ip_full, int axis,
+    AKV_REAL coeff, AKV_REAL *restrict out_in) {
+  if (!out_in || coeff == 0.0) return;
+
+  const AKV_REAL h = (axis == 1) ? grid->dtheta : grid->dphi;
+  const int radius = bhahaha_akv_fd_radius((axis == 1) ? grid->NG_theta : grid->NG_phi);
+  if (!(h > 0.0)) return;
+
+  int offsets[7] = {0};
+  AKV_REAL weights[7] = {0.0};
+  int nweights = 0;
+
+  switch (radius) {
+    case 3:
+      offsets[0] = -3; weights[0] = -1.0 / (60.0 * h);
+      offsets[1] = -2; weights[1] = 9.0 / (60.0 * h);
+      offsets[2] = -1; weights[2] = -45.0 / (60.0 * h);
+      offsets[3] = 1;  weights[3] = 45.0 / (60.0 * h);
+      offsets[4] = 2;  weights[4] = -9.0 / (60.0 * h);
+      offsets[5] = 3;  weights[5] = 1.0 / (60.0 * h);
+      nweights = 6;
+      break;
+    case 2:
+      offsets[0] = -2; weights[0] = 1.0 / (12.0 * h);
+      offsets[1] = -1; weights[1] = -8.0 / (12.0 * h);
+      offsets[2] = 1;  weights[2] = 8.0 / (12.0 * h);
+      offsets[3] = 2;  weights[3] = -1.0 / (12.0 * h);
+      nweights = 4;
+      break;
+    default:
+      offsets[0] = -1; weights[0] = -1.0 / (2.0 * h);
+      offsets[1] = 1;  weights[1] = 1.0 / (2.0 * h);
+      nweights = 2;
+      break;
+  }
+
+  for (int n = 0; n < nweights; n++) {
+    const int it_src = (axis == 1) ? (it_full + offsets[n]) : it_full;
+    const int ip_src = (axis == 2) ? (ip_full + offsets[n]) : ip_full;
+    int it, ip;
+    bhahaha_akv_map_full_indices_to_interior(grid, it_src, ip_src, &it, &ip);
+    out_in[akv_it_ip_to_dof(grid, it, ip)] += coeff * weights[n];
+  }
+}
+
+static inline AKV_REAL bhahaha_akv_centered_diff1_full_at(
+    const akv_horizon_grid_t *grid, const AKV_REAL *f_full,
+    int it_full, int ip_full, int axis) {
+  if (!grid || !f_full) return 0.0;
+  const AKV_REAL h = (axis == 1) ? grid->dtheta : grid->dphi;
+  const int radius = bhahaha_akv_fd_radius((axis == 1) ? grid->NG_theta : grid->NG_phi);
+  if (!(h > 0.0)) return 0.0;
+
+  switch (radius) {
+    case 3:
+      if (axis == 1) {
+        return (
+            -f_full[akv_idx2_full(grid, it_full - 3, ip_full)]
+            + 9.0 * f_full[akv_idx2_full(grid, it_full - 2, ip_full)]
+            - 45.0 * f_full[akv_idx2_full(grid, it_full - 1, ip_full)]
+            + 45.0 * f_full[akv_idx2_full(grid, it_full + 1, ip_full)]
+            - 9.0 * f_full[akv_idx2_full(grid, it_full + 2, ip_full)]
+            + f_full[akv_idx2_full(grid, it_full + 3, ip_full)]) / (60.0 * h);
+      }
+      return (
+          -f_full[akv_idx2_full(grid, it_full, ip_full - 3)]
+          + 9.0 * f_full[akv_idx2_full(grid, it_full, ip_full - 2)]
+          - 45.0 * f_full[akv_idx2_full(grid, it_full, ip_full - 1)]
+          + 45.0 * f_full[akv_idx2_full(grid, it_full, ip_full + 1)]
+          - 9.0 * f_full[akv_idx2_full(grid, it_full, ip_full + 2)]
+          + f_full[akv_idx2_full(grid, it_full, ip_full + 3)]) / (60.0 * h);
+    case 2:
+      if (axis == 1) {
+        return (
+            f_full[akv_idx2_full(grid, it_full - 2, ip_full)]
+            - 8.0 * f_full[akv_idx2_full(grid, it_full - 1, ip_full)]
+            + 8.0 * f_full[akv_idx2_full(grid, it_full + 1, ip_full)]
+            - f_full[akv_idx2_full(grid, it_full + 2, ip_full)]) / (12.0 * h);
+      }
+      return (
+          f_full[akv_idx2_full(grid, it_full, ip_full - 2)]
+          - 8.0 * f_full[akv_idx2_full(grid, it_full, ip_full - 1)]
+          + 8.0 * f_full[akv_idx2_full(grid, it_full, ip_full + 1)]
+          - f_full[akv_idx2_full(grid, it_full, ip_full + 2)]) / (12.0 * h);
+    default:
+      if (axis == 1) {
+        return (
+            -f_full[akv_idx2_full(grid, it_full - 1, ip_full)]
+            + f_full[akv_idx2_full(grid, it_full + 1, ip_full)]) / (2.0 * h);
+      }
+      return (
+          -f_full[akv_idx2_full(grid, it_full, ip_full - 1)]
+          + f_full[akv_idx2_full(grid, it_full, ip_full + 1)]) / (2.0 * h);
+  }
+}
+
+static inline void bhahaha_akv_centered_diff1_full_transpose_add(
+    const akv_horizon_grid_t *grid, int it_full, int ip_full, int axis,
+    AKV_REAL coeff, AKV_REAL *restrict out_full) {
+  if (!out_full || coeff == 0.0) return;
+
+  const AKV_REAL h = (axis == 1) ? grid->dtheta : grid->dphi;
+  const int radius = bhahaha_akv_fd_radius((axis == 1) ? grid->NG_theta : grid->NG_phi);
+  if (!(h > 0.0)) return;
+
+  int offsets[7] = {0};
+  AKV_REAL weights[7] = {0.0};
+  int nweights = 0;
+
+  switch (radius) {
+    case 3:
+      offsets[0] = -3; weights[0] = -1.0 / (60.0 * h);
+      offsets[1] = -2; weights[1] = 9.0 / (60.0 * h);
+      offsets[2] = -1; weights[2] = -45.0 / (60.0 * h);
+      offsets[3] = 1;  weights[3] = 45.0 / (60.0 * h);
+      offsets[4] = 2;  weights[4] = -9.0 / (60.0 * h);
+      offsets[5] = 3;  weights[5] = 1.0 / (60.0 * h);
+      nweights = 6;
+      break;
+    case 2:
+      offsets[0] = -2; weights[0] = 1.0 / (12.0 * h);
+      offsets[1] = -1; weights[1] = -8.0 / (12.0 * h);
+      offsets[2] = 1;  weights[2] = 8.0 / (12.0 * h);
+      offsets[3] = 2;  weights[3] = -1.0 / (12.0 * h);
+      nweights = 4;
+      break;
+    default:
+      offsets[0] = -1; weights[0] = -1.0 / (2.0 * h);
+      offsets[1] = 1;  weights[1] = 1.0 / (2.0 * h);
+      nweights = 2;
+      break;
+  }
+
+  for (int n = 0; n < nweights; n++) {
+    const int it_dst = (axis == 1) ? (it_full + offsets[n]) : it_full;
+    const int ip_dst = (axis == 2) ? (ip_full + offsets[n]) : ip_full;
+    out_full[akv_idx2_full(grid, it_dst, ip_dst)] += coeff * weights[n];
+  }
+}
+
+static inline AKV_REAL bhahaha_akv_eval_J_integrand_from_mode_at_point(
+    int p, const akv_horizon_grid_t *grid, const AKV_REAL *z_mode) {
+  AKV_REAL sqrtq = 0.0;
+  AKV_REAL qDD[3][3], qUU[3][3], Gamma2D[3][3][3], pU_i_A[3][3], sU[3], KminusKg[3][3];
+  bhahaha_akv_eval_point_geometry(p, grid, &sqrtq, qDD, qUU, Gamma2D, pU_i_A, sU, KminusKg);
+  if (!(sqrtq > 0.0)) return 0.0;
+
+  const int N_phi_tot = grid->N_phi_tot;
+  const int ip_full = p % N_phi_tot;
+  const int it_full = (p - ip_full) / N_phi_tot;
+
+  const AKV_REAL dz_theta = bhahaha_akv_centered_diff1_from_interior(grid, z_mode, it_full, ip_full, 1);
+  const AKV_REAL dz_phi = bhahaha_akv_centered_diff1_from_interior(grid, z_mode, it_full, ip_full, 2);
+
+  const AKV_REAL phiU_theta = dz_phi / sqrtq;
+  const AKV_REAL phiU_phi = -dz_theta / sqrtq;
+
+  AKV_REAL phi_spatial[3] = {0.0, 0.0, 0.0};
+  for (int i = 0; i < 3; i++) {
+    phi_spatial[i] = pU_i_A[i][1] * phiU_theta + pU_i_A[i][2] * phiU_phi;
+  }
+
+  AKV_REAL integrand = 0.0;
+  for (int i = 0; i < 3; i++) {
+    for (int j = 0; j < 3; j++) {
+      integrand += KminusKg[i][j] * phi_spatial[i] * sU[j];
+    }
+  }
+  return integrand;
+}
+
 AKV_WEAK void bhahaha_akv_eval_l1_integrands(
     int p, const akv_horizon_grid_t *grid,
     AKV_REAL Hmn[3][3], AKV_REAL Nmn[3][3], AKV_REAL Jm[3]) {
@@ -1762,51 +2081,181 @@ AKV_WEAK void bhahaha_akv_map_to_spinvec(
   S_out[0] = 0.0; S_out[1] = 0.0; S_out[2] = 0.0;
 }
 
-AKV_WEAK int bhahaha_akv_eval_row_stencil(
-    int i_row, const akv_horizon_grid_t *grid, int max_entries,
-    int *j_cols, AKV_REAL *K_vals, AKV_REAL *B_vals) {
-  (void)grid;
-  bhahaha_akv_mark_stub(grid, BHAHAHA_AKV_STUB_USED_ROW_STENCIL);
-  /* Gridpoint method is not implemented in this wrapper. Returning -1 entries makes failure
-   * mode more obvious than silently emitting an identity row.
-   */
-  (void)i_row;
-  (void)max_entries;
-  (void)j_cols;
-  (void)K_vals;
-  (void)B_vals;
-  return -1;
-}
-
 /* IMPORTANT CONTRACT (AKV scaffold): apply_K/apply_B act on interior-DOF vectors of length N_theta*N_phi. */
 AKV_WEAK void bhahaha_akv_apply_K(const akv_horizon_grid_t *grid, const AKV_REAL *z_in, AKV_REAL *Kz_out) {
-  (void)z_in;
-  bhahaha_akv_mark_stub(grid, BHAHAHA_AKV_STUB_USED_APPLYK);
-  if (!grid || !Kz_out) return;
-  const int N_full = grid->N_theta * grid->N_phi;
-  memset(Kz_out, 0, (size_t)N_full * sizeof(AKV_REAL));
+  if (!grid || !z_in || !Kz_out) return;
+
+  const int N_dof = grid->N_theta * grid->N_phi;
+  const int N_tot = grid->N_tot;
+  memset(Kz_out, 0, (size_t)N_dof * sizeof(AKV_REAL));
+
+  AKV_REAL *phi_theta = (AKV_REAL*)calloc((size_t)N_tot, sizeof(AKV_REAL));
+  AKV_REAL *phi_phi = (AKV_REAL*)calloc((size_t)N_tot, sizeof(AKV_REAL));
+  AKV_REAL *adj_phi_theta = (AKV_REAL*)calloc((size_t)N_tot, sizeof(AKV_REAL));
+  AKV_REAL *adj_phi_phi = (AKV_REAL*)calloc((size_t)N_tot, sizeof(AKV_REAL));
+  if (!phi_theta || !phi_phi || !adj_phi_theta || !adj_phi_phi) {
+    free(phi_theta);
+    free(phi_phi);
+    free(adj_phi_theta);
+    free(adj_phi_phi);
+    return;
+  }
+
+  for (int it_full = 0; it_full < grid->N_theta_tot; it_full++) {
+    for (int ip_full = 0; ip_full < grid->N_phi_tot; ip_full++) {
+      const int p = akv_idx2_full(grid, it_full, ip_full);
+      AKV_REAL sqrtq = 0.0;
+      AKV_REAL qDD[3][3], qUU[3][3], Gamma2D[3][3][3], pU_i_A[3][3], sU[3], KminusKg[3][3];
+      bhahaha_akv_eval_point_geometry(p, grid, &sqrtq, qDD, qUU, Gamma2D, pU_i_A, sU, KminusKg);
+      if (!(sqrtq > 0.0)) continue;
+
+      const AKV_REAL dz_theta = bhahaha_akv_centered_diff1_from_interior(grid, z_in, it_full, ip_full, 1);
+      const AKV_REAL dz_phi = bhahaha_akv_centered_diff1_from_interior(grid, z_in, it_full, ip_full, 2);
+      const AKV_REAL phiU_theta = dz_phi / sqrtq;
+      const AKV_REAL phiU_phi = -dz_theta / sqrtq;
+
+      phi_theta[p] = qDD[1][1] * phiU_theta + qDD[1][2] * phiU_phi;
+      phi_phi[p] = qDD[2][1] * phiU_theta + qDD[2][2] * phiU_phi;
+    }
+  }
+
+  for (int it_full = grid->NG_theta; it_full < grid->NG_theta + grid->N_theta; it_full++) {
+    for (int ip_full = grid->NG_phi; ip_full < grid->NG_phi + grid->N_phi; ip_full++) {
+      const int p = akv_idx2_full(grid, it_full, ip_full);
+      AKV_REAL sqrtq = 0.0;
+      AKV_REAL qDD[3][3], qUU[3][3], Gamma2D[3][3][3], pU_i_A[3][3], sU[3], KminusKg[3][3];
+      bhahaha_akv_eval_point_geometry(p, grid, &sqrtq, qDD, qUU, Gamma2D, pU_i_A, sU, KminusKg);
+      if (!(sqrtq > 0.0)) continue;
+
+      const AKV_REAL dphi_theta_theta = bhahaha_akv_centered_diff1_full_at(grid, phi_theta, it_full, ip_full, 1);
+      const AKV_REAL dphi_theta_phi = bhahaha_akv_centered_diff1_full_at(grid, phi_phi, it_full, ip_full, 1);
+      const AKV_REAL dphi_phi_theta = bhahaha_akv_centered_diff1_full_at(grid, phi_theta, it_full, ip_full, 2);
+      const AKV_REAL dphi_phi_phi = bhahaha_akv_centered_diff1_full_at(grid, phi_phi, it_full, ip_full, 2);
+
+      const AKV_REAL phi_theta_p = phi_theta[p];
+      const AKV_REAL phi_phi_p = phi_phi[p];
+
+      const AKV_REAL Dphi_theta_theta = dphi_theta_theta - Gamma2D[1][1][1] * phi_theta_p - Gamma2D[1][1][2] * phi_phi_p;
+      const AKV_REAL Dphi_theta_phi = dphi_theta_phi - Gamma2D[1][2][1] * phi_theta_p - Gamma2D[1][2][2] * phi_phi_p;
+      const AKV_REAL Dphi_phi_theta = dphi_phi_theta - Gamma2D[2][1][1] * phi_theta_p - Gamma2D[2][1][2] * phi_phi_p;
+      const AKV_REAL Dphi_phi_phi = dphi_phi_phi - Gamma2D[2][2][1] * phi_theta_p - Gamma2D[2][2][2] * phi_phi_p;
+
+      const AKV_REAL divphi =
+          qUU[1][1] * Dphi_theta_theta + qUU[1][2] * Dphi_theta_phi
+          + qUU[2][1] * Dphi_phi_theta + qUU[2][2] * Dphi_phi_phi;
+
+      AKV_REAL L[3][3];
+      memset(L, 0, sizeof(L));
+      L[1][1] = 2.0 * Dphi_theta_theta - qDD[1][1] * divphi;
+      L[1][2] = Dphi_theta_phi + Dphi_phi_theta - qDD[1][2] * divphi;
+      L[2][1] = L[1][2];
+      L[2][2] = 2.0 * Dphi_phi_phi - qDD[2][2] * divphi;
+
+      AKV_REAL G[3][3];
+      memset(G, 0, sizeof(G));
+      for (int A = 1; A <= 2; A++) {
+        for (int B = 1; B <= 2; B++) {
+          for (int C = 1; C <= 2; C++) {
+            for (int D = 1; D <= 2; D++) {
+              G[A][B] += grid->w[p] * qUU[A][C] * qUU[B][D] * L[C][D];
+            }
+          }
+        }
+      }
+
+      const AKV_REAL traceG = qDD[1][1] * G[1][1] + qDD[1][2] * G[1][2] + qDD[2][1] * G[2][1] + qDD[2][2] * G[2][2];
+
+      const AKV_REAL adj_Dphi_theta_theta = G[1][1] + G[1][1] - qUU[1][1] * traceG;
+      const AKV_REAL adj_Dphi_theta_phi = G[1][2] + G[2][1] - qUU[1][2] * traceG;
+      const AKV_REAL adj_Dphi_phi_theta = G[2][1] + G[1][2] - qUU[2][1] * traceG;
+      const AKV_REAL adj_Dphi_phi_phi = G[2][2] + G[2][2] - qUU[2][2] * traceG;
+
+      bhahaha_akv_centered_diff1_full_transpose_add(grid, it_full, ip_full, 1, adj_Dphi_theta_theta, adj_phi_theta);
+      bhahaha_akv_centered_diff1_full_transpose_add(grid, it_full, ip_full, 1, adj_Dphi_theta_phi, adj_phi_phi);
+      bhahaha_akv_centered_diff1_full_transpose_add(grid, it_full, ip_full, 2, adj_Dphi_phi_theta, adj_phi_theta);
+      bhahaha_akv_centered_diff1_full_transpose_add(grid, it_full, ip_full, 2, adj_Dphi_phi_phi, adj_phi_phi);
+
+      adj_phi_theta[p] += -(
+          adj_Dphi_theta_theta * Gamma2D[1][1][1] +
+          adj_Dphi_theta_phi * Gamma2D[1][2][1] +
+          adj_Dphi_phi_theta * Gamma2D[2][1][1] +
+          adj_Dphi_phi_phi * Gamma2D[2][2][1]);
+      adj_phi_phi[p] += -(
+          adj_Dphi_theta_theta * Gamma2D[1][1][2] +
+          adj_Dphi_theta_phi * Gamma2D[1][2][2] +
+          adj_Dphi_phi_theta * Gamma2D[2][1][2] +
+          adj_Dphi_phi_phi * Gamma2D[2][2][2]);
+    }
+  }
+
+  for (int it_full = 0; it_full < grid->N_theta_tot; it_full++) {
+    for (int ip_full = 0; ip_full < grid->N_phi_tot; ip_full++) {
+      const int p = akv_idx2_full(grid, it_full, ip_full);
+      const AKV_REAL a_phi_theta = adj_phi_theta[p];
+      const AKV_REAL a_phi_phi = adj_phi_phi[p];
+      if (a_phi_theta == 0.0 && a_phi_phi == 0.0) continue;
+
+      AKV_REAL sqrtq = 0.0;
+      AKV_REAL qDD[3][3], qUU[3][3], Gamma2D[3][3][3], pU_i_A[3][3], sU[3], KminusKg[3][3];
+      bhahaha_akv_eval_point_geometry(p, grid, &sqrtq, qDD, qUU, Gamma2D, pU_i_A, sU, KminusKg);
+      if (!(sqrtq > 0.0)) continue;
+
+      const AKV_REAL adj_phiU_theta = qDD[1][1] * a_phi_theta + qDD[2][1] * a_phi_phi;
+      const AKV_REAL adj_phiU_phi = qDD[1][2] * a_phi_theta + qDD[2][2] * a_phi_phi;
+      const AKV_REAL adj_dz_theta = -adj_phiU_phi / sqrtq;
+      const AKV_REAL adj_dz_phi = adj_phiU_theta / sqrtq;
+
+      bhahaha_akv_centered_diff1_transpose_add_to_interior(grid, it_full, ip_full, 1, adj_dz_theta, Kz_out);
+      bhahaha_akv_centered_diff1_transpose_add_to_interior(grid, it_full, ip_full, 2, adj_dz_phi, Kz_out);
+    }
+  }
+
+  free(phi_theta);
+  free(phi_phi);
+  free(adj_phi_theta);
+  free(adj_phi_phi);
 }
 
 AKV_WEAK void bhahaha_akv_apply_B(const akv_horizon_grid_t *grid, const AKV_REAL *z_in, AKV_REAL *Bz_out) {
-  (void)z_in;
-  bhahaha_akv_mark_stub(grid, BHAHAHA_AKV_STUB_USED_APPLYB);
-  if (!grid || !Bz_out) return;
-  const int N_full = grid->N_theta * grid->N_phi;
-  memset(Bz_out, 0, (size_t)N_full * sizeof(AKV_REAL));
+  if (!grid || !z_in || !Bz_out) return;
+
+  const int N_dof = grid->N_theta * grid->N_phi;
+  memset(Bz_out, 0, (size_t)N_dof * sizeof(AKV_REAL));
+
+  for (int it_full = grid->NG_theta; it_full < grid->NG_theta + grid->N_theta; it_full++) {
+    for (int ip_full = grid->NG_phi; ip_full < grid->NG_phi + grid->N_phi; ip_full++) {
+      const int p = akv_idx2_full(grid, it_full, ip_full);
+      AKV_REAL sqrtq = 0.0;
+      AKV_REAL qDD[3][3], qUU[3][3], Gamma2D[3][3][3], pU_i_A[3][3], sU[3], KminusKg[3][3];
+      bhahaha_akv_eval_point_geometry(p, grid, &sqrtq, qDD, qUU, Gamma2D, pU_i_A, sU, KminusKg);
+
+      const AKV_REAL dz_theta = bhahaha_akv_centered_diff1_from_interior(grid, z_in, it_full, ip_full, 1);
+      const AKV_REAL dz_phi = bhahaha_akv_centered_diff1_from_interior(grid, z_in, it_full, ip_full, 2);
+
+      const AKV_REAL coeff_theta = grid->w[p] * (qUU[1][1] * dz_theta + qUU[1][2] * dz_phi);
+      const AKV_REAL coeff_phi = grid->w[p] * (qUU[2][1] * dz_theta + qUU[2][2] * dz_phi);
+
+      bhahaha_akv_centered_diff1_transpose_add_to_interior(grid, it_full, ip_full, 1, coeff_theta, Bz_out);
+      bhahaha_akv_centered_diff1_transpose_add_to_interior(grid, it_full, ip_full, 2, coeff_phi, Bz_out);
+    }
+  }
 }
 
 AKV_WEAK AKV_REAL bhahaha_akv_eval_sign_full(
     const AKV_REAL *z_full, int N_full, const akv_horizon_grid_t *grid) {
-  (void)z_full; (void)N_full;
-  bhahaha_akv_mark_stub(grid, BHAHAHA_AKV_STUB_USED_SIGN_FULL);
-  return 1.0;
+  if (!grid || !z_full || N_full != grid->N_theta * grid->N_phi) return 1.0;
+  AKV_REAL sign_ref = 0.0;
+  for (int dof = 0; dof < N_full; dof++) {
+    const int p = akv_dof_to_full_p(grid, dof);
+    sign_ref += grid->w[p] * bhahaha_akv_eval_J_integrand_from_mode_at_point(p, grid, z_full);
+  }
+  return sign_ref;
 }
 
 AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
     int p, const akv_horizon_grid_t *grid, const AKV_REAL *z_full, int N_full) {
-  (void)p; (void)z_full; (void)N_full;
-  bhahaha_akv_mark_stub(grid, BHAHAHA_AKV_STUB_USED_J_FULL);
-  return 0.0;
+  if (!grid || !z_full || N_full != grid->N_theta * grid->N_phi) return 0.0;
+  return bhahaha_akv_eval_J_integrand_from_mode_at_point(p, grid, z_full);
 }
 """
     )
@@ -1821,9 +2270,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
     body = r"""
   const int grid = 0;
-#if defined(BHAHAHA_AKV_DIAGS_HAVE_PARAMS) || defined(BHAHAHA_AKV_DIAGS_HAVE_FIELDS)
   bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
-#endif
   const params_struct *restrict params = &griddata[grid].params;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
   const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
@@ -1842,7 +2289,29 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
    * for the canonical usage pattern: weights_1d[i % weight_stencil_size].
    * The returned coefficients are dimensionless; multiply by coordinate spacings separately if desired.
    */
-  if (weight_stencil_size <= 0 || weights_1d == NULL) return (int)AKV_ERR_BADPARAM;
+  bhahaha_diags->akv_status = (int)AKV_SUCCESS;
+  bhahaha_diags->akv_eig_gap_43 = NAN;
+  bhahaha_diags->akv_quality_flag = 0;
+  bhahaha_diags->akv_method_used = -1;
+  bhahaha_diags->akv_J_ref_convention = BHAHAHA_AKV_JREF_CONVENTION_UNKNOWN;
+  bhahaha_diags->akv_prev_alignment_applied = 0;
+  bhahaha_diags->akv_trace_scale_B = NAN;
+  bhahaha_diags->akv_trace_scale_K = NAN;
+  for (int a = 0; a < 3; a++) {
+    bhahaha_diags->akv_lambda[a] = NAN;
+    bhahaha_diags->akv_J[a] = NAN;
+    bhahaha_diags->akv_a[a] = NAN;
+    bhahaha_diags->akv_spin_vec[a] = NAN;
+    bhahaha_diags->akv_eig_resid[a] = NAN;
+    for (int b = 0; b < 3; b++) {
+      bhahaha_diags->akv_prev_overlap[a][b] = NAN;
+      bhahaha_diags->akv_l1_evecs[a][b] = NAN;
+    }
+  }
+  if (weight_stencil_size <= 0 || weights_1d == NULL) {
+    bhahaha_diags->akv_status = (int)AKV_ERR_BADPARAM;
+    return (int)AKV_ERR_BADPARAM;
+  }
 
   const int NGt = NGHOSTS;
   const int NGp = NGHOSTS;
@@ -1859,7 +2328,10 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   static BHAHAHA_TLS size_t w2d_cache_len = 0;
   if (w2d_cache_len < (size_t)N_tot_2d) {
     REAL *newptr = (REAL*)realloc(w2d_cache, sizeof(REAL) * (size_t)N_tot_2d);
-    if (!newptr) return (int)AKV_ERR_ALLOC;
+    if (!newptr) {
+      bhahaha_diags->akv_status = (int)AKV_ERR_ALLOC;
+      return (int)AKV_ERR_ALLOC;
+    }
     w2d_cache = newptr;
     w2d_cache_len = (size_t)N_tot_2d;
   }
@@ -1867,7 +2339,10 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 #else
   /* No TLS: disable caching to avoid shared static pointer races. */
   w2d = (REAL*)malloc(sizeof(REAL) * (size_t)N_tot_2d);
-  if (!w2d) return (int)AKV_ERR_ALLOC;
+  if (!w2d) {
+    bhahaha_diags->akv_status = (int)AKV_ERR_ALLOC;
+    return (int)AKV_ERR_ALLOC;
+  }
 #endif
 
   for (int p = 0; p < N_tot_2d; p++) w2d[p] = 0.0;
@@ -1949,7 +2424,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
   akv_params_t pars;
   memset(&pars, 0, sizeof(pars));
-  pars.method = AKV_METHOD_L1_REDUCED;
+  pars.method = BHAHAHA_AKV_DEFAULT_METHOD;
   pars.l1_choose_index = 0;
   pars.full_num_eigs = 8;
   pars.eig_tol = 1e-10;
@@ -1958,29 +2433,26 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   pars.reg_max_tries = 6;
   pars.gap_ratio_thresh = 1.5;
   pars.horizon_area = (AKV_REAL)A_H;
+  pars.enable_trace_rescaling = (pars.method == AKV_METHOD_GRIDPOINT);
+  pars.enable_trace_rescaling_K = (pars.method == AKV_METHOD_GRIDPOINT);
+  pars.enable_prev_mode_alignment =
+      (pars.method == AKV_METHOD_GRIDPOINT &&
+       commondata->bhahaha_params_and_data->prev_akv_gp_valid_m1 &&
+       commondata->bhahaha_params_and_data->prev_akv_gp_Ntheta_m1 == N_theta &&
+       commondata->bhahaha_params_and_data->prev_akv_gp_Nphi_m1 == N_phi);
+  pars.prev_gp_N = N_theta * N_phi;
+  pars.prev_gp_z[0] = commondata->bhahaha_params_and_data->prev_akv_gp_z0_m1;
+  pars.prev_gp_z[1] = commondata->bhahaha_params_and_data->prev_akv_gp_z1_m1;
+  pars.prev_gp_z[2] = commondata->bhahaha_params_and_data->prev_akv_gp_z2_m1;
   pars.build_spin_vector = (BHAHAHA_AKV_ENABLE_SPIN_VECTOR ? true : false);
-  pars.allow_debug_assembly = false;
-
-#ifdef BHAHAHA_AKV_DIAGS_HAVE_PARAMS
-  pars.method = (akv_method_t)bhahaha_diags->akv_method;
-  pars.l1_choose_index = bhahaha_diags->akv_l1_choose_index;
-  pars.full_num_eigs = bhahaha_diags->akv_full_num_eigs;
-  pars.eig_tol = bhahaha_diags->akv_eig_tol;
-  pars.reg_eps = bhahaha_diags->akv_reg_eps;
-  pars.reg_eps_max = bhahaha_diags->akv_reg_eps_max;
-  pars.reg_max_tries = bhahaha_diags->akv_reg_max_tries;
-  pars.gap_ratio_thresh = bhahaha_diags->akv_gap_ratio_thresh;
-  pars.build_spin_vector = (BHAHAHA_AKV_ENABLE_SPIN_VECTOR ? true : false);
-  pars.allow_debug_assembly = (bhahaha_diags->akv_allow_debug_assembly != 0);
-#endif
-
+  pars.allow_debug_assembly = (pars.method == AKV_METHOD_GRIDPOINT);
+  bhahaha_diags->akv_method_used = (int)pars.method;
 
 #if !BHAHAHA_AKV_ENABLE_GRIDPOINT
   if (pars.method == AKV_METHOD_GRIDPOINT) {
-#ifdef BHAHAHA_AKV_DIAGS_HAVE_FIELDS
     bhahaha_diags->akv_quality_flag |= (1<<2);
     bhahaha_diags->akv_method_used = (int)AKV_METHOD_GRIDPOINT;
-#endif
+    bhahaha_diags->akv_status = (int)AKV_ERR_NOT_IMPLEMENTED;
 #if !BHAHAHA_HAVE_TLS
     free(w2d);
 #endif
@@ -1990,10 +2462,9 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 
 #ifndef USE_PRIMME
   if (pars.method == AKV_METHOD_GRIDPOINT) {
-#ifdef BHAHAHA_AKV_DIAGS_HAVE_FIELDS
     bhahaha_diags->akv_quality_flag |= (1<<2);
     bhahaha_diags->akv_method_used = (int)AKV_METHOD_GRIDPOINT;
-#endif
+    bhahaha_diags->akv_status = (int)AKV_ERR_NOT_IMPLEMENTED;
 #if !BHAHAHA_HAVE_TLS
     free(w2d);
 #endif
@@ -2002,11 +2473,12 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
 #endif
 
   akv_diagnostics_t out;
+  memset(&out, 0, sizeof(out));
+  out.method_used = pars.method;
   const akv_error_t err = akv_compute(&g, &pars,
                                       bhahaha_akv_eval_l1_integrands,
                                       bhahaha_akv_eval_sign_l1,
                                       (BHAHAHA_AKV_ENABLE_SPIN_VECTOR ? bhahaha_akv_map_to_spinvec : NULL),
-                                      (BHAHAHA_AKV_ENABLE_GRIDPOINT ? bhahaha_akv_eval_row_stencil : NULL),
                                       (BHAHAHA_AKV_ENABLE_GRIDPOINT ? bhahaha_akv_apply_K : NULL),
                                       (BHAHAHA_AKV_ENABLE_GRIDPOINT ? bhahaha_akv_apply_B : NULL),
                                       (BHAHAHA_AKV_ENABLE_GRIDPOINT ? bhahaha_akv_eval_sign_full : NULL),
@@ -2029,22 +2501,42 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   (void)stub_flags;
 #endif
 
-#ifdef BHAHAHA_AKV_DIAGS_HAVE_FIELDS
-  for (int a = 0; a < 3; a++) {
-    bhahaha_diags->akv_lambda[a] = out.akv_lambda[a];
-    bhahaha_diags->akv_J[a]      = out.akv_J[a];
-    bhahaha_diags->akv_a[a]      = out.akv_a[a];
-    bhahaha_diags->akv_spin_vec[a] = out.akv_spin_vec[a];
-    bhahaha_diags->akv_eig_resid[a] = out.akv_eig_resid[a];
-  }
-  bhahaha_diags->akv_eig_gap_43 = out.akv_eig_gap_43;
+  bhahaha_diags->akv_status = (int)err;
   bhahaha_diags->akv_quality_flag = out.akv_quality_flag;
   bhahaha_diags->akv_method_used = (int)out.method_used;
-
-  for (int i = 0; i < 3; i++)
-    for (int j = 0; j < 3; j++)
-      bhahaha_diags->akv_l1_evecs[i][j] = out.akv_l1_evecs[i][j];
-#endif
+  bhahaha_diags->akv_J_ref_convention = out.akv_J_ref_convention;
+  bhahaha_diags->akv_prev_alignment_applied = out.akv_prev_alignment_applied;
+  bhahaha_diags->akv_trace_scale_B = out.akv_trace_scale_B;
+  bhahaha_diags->akv_trace_scale_K = out.akv_trace_scale_K;
+  if (err == AKV_SUCCESS) {
+    for (int a = 0; a < 3; a++) {
+      bhahaha_diags->akv_lambda[a] = out.akv_lambda[a];
+      bhahaha_diags->akv_J[a] = out.akv_J[a];
+      bhahaha_diags->akv_a[a] = out.akv_a[a];
+      bhahaha_diags->akv_spin_vec[a] = out.akv_spin_vec[a];
+      bhahaha_diags->akv_eig_resid[a] = out.akv_eig_resid[a];
+      for (int b = 0; b < 3; b++) {
+        bhahaha_diags->akv_prev_overlap[a][b] = out.akv_prev_overlap[a][b];
+      }
+    }
+    bhahaha_diags->akv_eig_gap_43 = out.akv_eig_gap_43;
+    for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+        bhahaha_diags->akv_l1_evecs[i][j] = out.akv_l1_evecs[i][j];
+      }
+    }
+    if (out.method_used == AKV_METHOD_GRIDPOINT && out.gp_N == N_theta * N_phi &&
+        commondata->bhahaha_params_and_data->prev_akv_gp_z0_m1 &&
+        commondata->bhahaha_params_and_data->prev_akv_gp_z1_m1 &&
+        commondata->bhahaha_params_and_data->prev_akv_gp_z2_m1) {
+      memcpy(commondata->bhahaha_params_and_data->prev_akv_gp_z0_m1, out.gp_z[0], (size_t)out.gp_N * sizeof(AKV_REAL));
+      memcpy(commondata->bhahaha_params_and_data->prev_akv_gp_z1_m1, out.gp_z[1], (size_t)out.gp_N * sizeof(AKV_REAL));
+      memcpy(commondata->bhahaha_params_and_data->prev_akv_gp_z2_m1, out.gp_z[2], (size_t)out.gp_N * sizeof(AKV_REAL));
+      commondata->bhahaha_params_and_data->prev_akv_gp_Ntheta_m1 = N_theta;
+      commondata->bhahaha_params_and_data->prev_akv_gp_Nphi_m1 = N_phi;
+      commondata->bhahaha_params_and_data->prev_akv_gp_valid_m1 = 1;
+    }
+  }
 
   akv_diagnostics_free(&out);
 
@@ -2071,3 +2563,16 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
         body=body,
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

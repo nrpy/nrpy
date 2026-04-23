@@ -34,6 +34,61 @@ static REAL timeval_to_milliseconds(struct timeval start, struct timeval end) {
 }
 
 /**
+ * Ensure the standalone bhahaha_params_and_data_struct carries allocated AKV
+ * previous-mode buffers in a safe state for temporal mode alignment.
+ *
+ * @param params Pointer to the caller-owned BHaHAHA parameter/data struct.
+ * @param ntheta_max Maximum theta resolution used by this horizon.
+ * @param nphi_max Maximum phi resolution used by this horizon.
+ * @return BHAHAHA_SUCCESS on success, otherwise an allocation error code.
+ */
+static int ensure_prev_akv_mode_buffers(bhahaha_params_and_data_struct *restrict params, const int ntheta_max, const int nphi_max) {
+  if (!params || ntheta_max <= 0 || nphi_max <= 0) {
+    return FIND_HORIZON_AKV_CACHE_MALLOC_ERROR;
+  }
+
+  const int has_z0 = (params->prev_akv_gp_z0_m1 != NULL);
+  const int has_z1 = (params->prev_akv_gp_z1_m1 != NULL);
+  const int has_z2 = (params->prev_akv_gp_z2_m1 != NULL);
+  const int any_buf = has_z0 || has_z1 || has_z2;
+  const int all_buf = has_z0 && has_z1 && has_z2;
+  if (all_buf) {
+    return BHAHAHA_SUCCESS;
+  }
+
+  if (any_buf) {
+    free(params->prev_akv_gp_z0_m1);
+    free(params->prev_akv_gp_z1_m1);
+    free(params->prev_akv_gp_z2_m1);
+    params->prev_akv_gp_z0_m1 = NULL;
+    params->prev_akv_gp_z1_m1 = NULL;
+    params->prev_akv_gp_z2_m1 = NULL;
+  }
+
+  const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
+  params->prev_akv_gp_z0_m1 = (REAL *)malloc(npts * sizeof(REAL));
+  params->prev_akv_gp_z1_m1 = (REAL *)malloc(npts * sizeof(REAL));
+  params->prev_akv_gp_z2_m1 = (REAL *)malloc(npts * sizeof(REAL));
+  if (!params->prev_akv_gp_z0_m1 || !params->prev_akv_gp_z1_m1 || !params->prev_akv_gp_z2_m1) {
+    free(params->prev_akv_gp_z0_m1);
+    free(params->prev_akv_gp_z1_m1);
+    free(params->prev_akv_gp_z2_m1);
+    params->prev_akv_gp_z0_m1 = NULL;
+    params->prev_akv_gp_z1_m1 = NULL;
+    params->prev_akv_gp_z2_m1 = NULL;
+    params->prev_akv_gp_valid_m1 = 0;
+    params->prev_akv_gp_Ntheta_m1 = 0;
+    params->prev_akv_gp_Nphi_m1 = 0;
+    return FIND_HORIZON_AKV_CACHE_MALLOC_ERROR;
+  }
+
+  params->prev_akv_gp_valid_m1 = 0;
+  params->prev_akv_gp_Ntheta_m1 = 0;
+  params->prev_akv_gp_Nphi_m1 = 0;
+  return BHAHAHA_SUCCESS;
+}
+
+/**
  * Frees all dynamically allocated memory associated with griddata,
  * except for external input grid functions.
  *
@@ -127,6 +182,10 @@ to identify the apparent horizon with progressively refined grid resolutions.
   int Ntheta[MAX_RESOLUTIONS], Nphi[MAX_RESOLUTIONS];
   memcpy(Ntheta, bhahaha_params_and_data->Ntheta_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
   memcpy(Nphi, bhahaha_params_and_data->Nphi_array_multigrid, sizeof(int) * MAX_RESOLUTIONS);
+  commondata.error_flag = ensure_prev_akv_mode_buffers(bhahaha_params_and_data, Ntheta[n_resolutions - 1], Nphi[n_resolutions - 1]);
+  if (commondata.error_flag != BHAHAHA_SUCCESS) {
+    return commondata.error_flag;
+  }
 
   // Step 1.d: Set up external input grids by adding inner ghost zones and applying boundary conditions.
   commondata.external_input_gfs_Cart_basis_no_gzs = bhahaha_params_and_data->input_metric_data;

@@ -60,6 +60,12 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
     commondata->bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
     commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
     commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_z0_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_z1_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_z2_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_valid_m1 = 0;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_Ntheta_m1 = 0;
+    commondata->bhahaha_params_and_data[i].prev_akv_gp_Nphi_m1 = 0;
   } // END LOOP over horizons
 } // END FUNCTION sanitize_checkpoint_commondata_pointers
 
@@ -133,6 +139,36 @@ loading the full checkpoint payload."""
       FREAD(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m2");
       FREAD(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m3");
     } // END IF has_prev_horizon_shapes
+
+    uint8_t has_prev_akv_buffers = 0;
+    FREAD(&has_prev_akv_buffers, sizeof(uint8_t), 1, cp_file, filename, "has_prev_akv_buffers");
+    if (has_prev_akv_buffers != (uint8_t)0) {
+      const int n = commondata->bah_num_resolutions_multigrid - 1;
+      const int ntheta_max = commondata->bah_Ntheta_array_multigrid[n];
+      const int nphi_max = commondata->bah_Nphi_array_multigrid[n];
+      const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
+      if (n < 0 || ntheta_max <= 0 || nphi_max <= 0) {
+        fprintf(stderr,
+                "read_checkpoint: FATAL: invalid AKV-cache dimensions in commondata for horizon %d: (%d,%d).\n",
+                i, ntheta_max, nphi_max);
+        exit(EXIT_FAILURE);
+      } // END IF invalid dimensions
+
+      BHAH_MALLOC(horizon_params->prev_akv_gp_z0_m1, sizeof(REAL) * npts);
+      BHAH_MALLOC(horizon_params->prev_akv_gp_z1_m1, sizeof(REAL) * npts);
+      BHAH_MALLOC(horizon_params->prev_akv_gp_z2_m1, sizeof(REAL) * npts);
+
+      uint8_t prev_akv_valid = 0;
+      FREAD(&prev_akv_valid, sizeof(uint8_t), 1, cp_file, filename, "prev_akv_valid");
+      FREAD(&horizon_params->prev_akv_gp_Ntheta_m1, sizeof(int), 1, cp_file, filename, "prev_akv_gp_Ntheta_m1");
+      FREAD(&horizon_params->prev_akv_gp_Nphi_m1, sizeof(int), 1, cp_file, filename, "prev_akv_gp_Nphi_m1");
+      horizon_params->prev_akv_gp_valid_m1 = (prev_akv_valid != (uint8_t)0);
+      if (prev_akv_valid != (uint8_t)0) {
+        FREAD(horizon_params->prev_akv_gp_z0_m1, sizeof(REAL), npts, cp_file, filename, "prev_akv_gp_z0_m1");
+        FREAD(horizon_params->prev_akv_gp_z1_m1, sizeof(REAL), npts, cp_file, filename, "prev_akv_gp_z1_m1");
+        FREAD(horizon_params->prev_akv_gp_z2_m1, sizeof(REAL), npts, cp_file, filename, "prev_akv_gp_z2_m1");
+      }
+    } // END IF has_prev_akv_buffers
   } // END LOOP over horizons
 """
 
@@ -332,6 +368,9 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z0_m1 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z1_m1 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z2_m1 = NULL;
     } // END LOOP over all apparent horizons in sanitized commondata copy
 """
     body += r"""
@@ -356,12 +395,23 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
       const int has_m3 = horizon_params->prev_horizon_m3 != NULL;
       const int any_prev_horizon_shapes = has_m1 || has_m2 || has_m3;
       const int all_prev_horizon_shapes = has_m1 && has_m2 && has_m3;
+      const int has_akv_z0 = horizon_params->prev_akv_gp_z0_m1 != NULL;
+      const int has_akv_z1 = horizon_params->prev_akv_gp_z1_m1 != NULL;
+      const int has_akv_z2 = horizon_params->prev_akv_gp_z2_m1 != NULL;
+      const int any_prev_akv_buffers = has_akv_z0 || has_akv_z1 || has_akv_z2;
+      const int all_prev_akv_buffers = has_akv_z0 && has_akv_z1 && has_akv_z2;
       if (any_prev_horizon_shapes && !all_prev_horizon_shapes) {
         fprintf(stderr,
                 "write_checkpoint: FATAL: inconsistent BHaHAHA horizon-shape allocation state for horizon %d.\n",
                 i);
         exit(EXIT_FAILURE);
       } // END IF inconsistent allocation state
+      if (any_prev_akv_buffers && !all_prev_akv_buffers) {
+        fprintf(stderr,
+                "write_checkpoint: FATAL: inconsistent BHaHAHA AKV-cache allocation state for horizon %d.\n",
+                i);
+        exit(EXIT_FAILURE);
+      } // END IF inconsistent AKV-cache allocation state
 
       const uint8_t has_prev_horizon_shapes = all_prev_horizon_shapes ? (uint8_t)1 : (uint8_t)0;
       FWRITE(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, "has_prev_horizon_shapes");
@@ -378,6 +428,24 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
         FWRITE(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, "bhahaha_prev_horizon_m2");
         FWRITE(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, "bhahaha_prev_horizon_m3");
       } // END IF has_prev_horizon_shapes
+
+      const uint8_t has_prev_akv_buffers = all_prev_akv_buffers ? (uint8_t)1 : (uint8_t)0;
+      FWRITE(&has_prev_akv_buffers, sizeof(uint8_t), 1, cp_file, "has_prev_akv_buffers");
+      if (has_prev_akv_buffers != (uint8_t)0) {
+        const uint8_t prev_akv_valid = horizon_params->prev_akv_gp_valid_m1 ? (uint8_t)1 : (uint8_t)0;
+        FWRITE(&prev_akv_valid, sizeof(uint8_t), 1, cp_file, "prev_akv_valid");
+        FWRITE(&horizon_params->prev_akv_gp_Ntheta_m1, sizeof(int), 1, cp_file, "prev_akv_gp_Ntheta_m1");
+        FWRITE(&horizon_params->prev_akv_gp_Nphi_m1, sizeof(int), 1, cp_file, "prev_akv_gp_Nphi_m1");
+        if (prev_akv_valid != (uint8_t)0) {
+          const int n = commondata->bah_num_resolutions_multigrid - 1;
+          const int ntheta_max = commondata->bah_Ntheta_array_multigrid[n];
+          const int nphi_max = commondata->bah_Nphi_array_multigrid[n];
+          const size_t npts = (size_t)ntheta_max * (size_t)nphi_max;
+          FWRITE(horizon_params->prev_akv_gp_z0_m1, sizeof(REAL), npts, cp_file, "bhahaha_prev_akv_gp_z0_m1");
+          FWRITE(horizon_params->prev_akv_gp_z1_m1, sizeof(REAL), npts, cp_file, "bhahaha_prev_akv_gp_z1_m1");
+          FWRITE(horizon_params->prev_akv_gp_z2_m1, sizeof(REAL), npts, cp_file, "bhahaha_prev_akv_gp_z2_m1");
+        }
+      } // END IF has_prev_akv_buffers
     } // END LOOP over all apparent horizons
 """
     body += r"""

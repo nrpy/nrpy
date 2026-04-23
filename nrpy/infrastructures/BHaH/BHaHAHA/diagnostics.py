@@ -114,8 +114,11 @@ calculations, norm evaluations, and detailed final iteration analyses.
         return;
     } // END BLOCK: Interpolation and grid size setup
 
-    // Solve approximate killing vector eigenproblem
-    bah_diagnostics_approx_killing_vector_spin(commondata, griddata);
+    // Solve approximate Killing vector eigenproblem as a best-effort diagnostic.
+    const int akv_status = bah_diagnostics_approx_killing_vector_spin(commondata, griddata);
+    if (akv_status != 0 && commondata->bhahaha_params_and_data->verbosity_level > 1) {
+      printf("#WARNING: AKV diagnostic failed with status %d; continuing with remaining diagnostics.\n", akv_status);
+    }
 
     // Calculate area centroid and theta norms for the apparent horizon.
     bah_diagnostics_area_centroid_and_Theta_norms(commondata, griddata);
@@ -224,6 +227,29 @@ calculations, norm evaluations, and detailed final iteration analyses.
           // Display spin_z based on (xz/xy, yz/xy) ratios
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
+
+          if (bhahaha_diags->akv_status == 0) {
+            printf("#AKV status=%d method=%d quality=%d gap43=%5.5e\n", bhahaha_diags->akv_status, bhahaha_diags->akv_method_used,
+                   bhahaha_diags->akv_quality_flag, bhahaha_diags->akv_eig_gap_43);
+            printf("#AKV lambda=(%+4.4e, %+4.4e, %+4.4e) J=(%+4.4e, %+4.4e, %+4.4e)\n", bhahaha_diags->akv_lambda[0],
+                   bhahaha_diags->akv_lambda[1], bhahaha_diags->akv_lambda[2], bhahaha_diags->akv_J[0], bhahaha_diags->akv_J[1],
+                   bhahaha_diags->akv_J[2]);
+            printf("#AKV a=(%+4.4e, %+4.4e, %+4.4e) eig_resid=(%+4.4e, %+4.4e, %+4.4e)\n", bhahaha_diags->akv_a[0],
+                   bhahaha_diags->akv_a[1], bhahaha_diags->akv_a[2], bhahaha_diags->akv_eig_resid[0], bhahaha_diags->akv_eig_resid[1],
+                   bhahaha_diags->akv_eig_resid[2]);
+            printf("#AKV J_ref_convention=%d trace_scales=(B=%+4.4e, K=%+4.4e) prev_alignment=%d\n",
+                   bhahaha_diags->akv_J_ref_convention, bhahaha_diags->akv_trace_scale_B, bhahaha_diags->akv_trace_scale_K,
+                   bhahaha_diags->akv_prev_alignment_applied);
+            printf("#AKV prev_overlap=[[ %+4.4e %+4.4e %+4.4e ][ %+4.4e %+4.4e %+4.4e ][ %+4.4e %+4.4e %+4.4e ]]\n",
+                   bhahaha_diags->akv_prev_overlap[0][0], bhahaha_diags->akv_prev_overlap[0][1], bhahaha_diags->akv_prev_overlap[0][2],
+                   bhahaha_diags->akv_prev_overlap[1][0], bhahaha_diags->akv_prev_overlap[1][1], bhahaha_diags->akv_prev_overlap[1][2],
+                   bhahaha_diags->akv_prev_overlap[2][0], bhahaha_diags->akv_prev_overlap[2][1], bhahaha_diags->akv_prev_overlap[2][2]);
+            printf("#AKV spin_vec=(%+4.4e, %+4.4e, %+4.4e)\n", bhahaha_diags->akv_spin_vec[0], bhahaha_diags->akv_spin_vec[1],
+                   bhahaha_diags->akv_spin_vec[2]);
+          } else {
+            printf("#AKV status=%d method=%d quality=%d (diagnostic unavailable)\n", bhahaha_diags->akv_status,
+                   bhahaha_diags->akv_method_used, bhahaha_diags->akv_quality_flag);
+          }
         } // END IF verbosity level > 0
       } // END compute, store, and (optionally) print final diagnostics
     } // END IF final iteration
