@@ -79,13 +79,14 @@ def _build_constant_entropy_prefunc() -> str:
  */
 static double (*eos_slice_file(const char *filename, int num_rows))[3] {
   FILE *file_ptr = NULL;
-  double (*data_array)[3] = malloc(num_rows * sizeof(double[3]));
   char line_buffer[256];
 
   if (num_rows <= 0) {
     fprintf(stderr, "Error: Number of rows must be positive.\n");
     return NULL;
   } // END IF: invalid row count
+
+  double (*data_array)[3] = malloc(num_rows * sizeof(double[3]));
   if (data_array == NULL) {
     fprintf(stderr, "Error: Could not allocate memory for %d rows.\n", num_rows);
     return NULL;
@@ -300,6 +301,10 @@ def register_CFunction_TOV_initial_data(
   const char *eos_slice_filename = "{entropy_slice_filename_escaped}";
   double (*constant_ent_Beq_slice)[3] =
       eos_slice_file(eos_slice_filename, commondata->eos.N_rho);
+  if (constant_ent_Beq_slice == NULL) {{
+    fprintf(stderr, "Error: failed to read EOS entropy slice.\n");
+    return;
+  }} // END IF: EOS entropy-slice read failed
 
   commondata->eos.lp_of_lr =
       (double *)malloc(sizeof(double) * commondata->eos.N_rho);
@@ -307,6 +312,18 @@ def register_CFunction_TOV_initial_data(
       (double *)malloc(sizeof(double) * commondata->eos.N_rho);
   commondata->eos.Ye_of_lr =
       (double *)malloc(sizeof(double) * commondata->eos.N_rho);
+  if (commondata->eos.lp_of_lr == NULL || commondata->eos.le_of_lr == NULL ||
+      commondata->eos.Ye_of_lr == NULL) {{
+    fprintf(stderr, "Error: failed to allocate fixed-entropy EOS arrays.\n");
+    free(constant_ent_Beq_slice);
+    free(commondata->eos.lp_of_lr);
+    free(commondata->eos.le_of_lr);
+    free(commondata->eos.Ye_of_lr);
+    commondata->eos.lp_of_lr = NULL;
+    commondata->eos.le_of_lr = NULL;
+    commondata->eos.Ye_of_lr = NULL;
+    return;
+  }} // END IF: EOS entropy-slice allocation failed
 
   for (int i = 0; i < commondata->eos.N_rho; ++i) {{
     commondata->eos.Ye_of_lr[i] = constant_ent_Beq_slice[i][0];

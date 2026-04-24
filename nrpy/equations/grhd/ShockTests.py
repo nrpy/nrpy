@@ -98,6 +98,10 @@ def TMM(
     """
     Construct the TMM angular shock profile.
 
+    This follows Baumgarte, Montero, and Mueller, arXiv:1501.05259,
+    Eq. (44), which specifies the initial states for theta < pi/2 and
+    theta > pi/2.
+
     :param theta: Polar angle used to locate the discontinuity.
     :param bound: Position of the angular interface.
     :param kappa: Polytropic constant used to set the pressure.
