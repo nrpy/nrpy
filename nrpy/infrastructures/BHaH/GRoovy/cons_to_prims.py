@@ -177,18 +177,11 @@ cons_avg.SD[0] = wfac * cons_neigh_avg.SD[0] * inv_n_avg + cfac * cons_orig.SD[0
 cons_avg.SD[1] = wfac * cons_neigh_avg.SD[1] * inv_n_avg + cfac * cons_orig.SD[1];
 cons_avg.SD[2] = wfac * cons_neigh_avg.SD[2] * inv_n_avg + cfac * cons_orig.SD[2];
 """
-    avg_divide = r"""
-cons_avg.rho /= (REAL)n_avg;
-cons_avg.tau /= (REAL)n_avg;
-cons_avg.SD[0] /= (REAL)n_avg;
-cons_avg.SD[1] /= (REAL)n_avg;
-cons_avg.SD[2] /= (REAL)n_avg;
-"""
+
     if evolving_temperature:
         neighbor_init += "cons_neigh_avg.Y_e = 0.0;\n"
         neighbor_add += "cons_neigh_avg.Y_e += cons_avg_loop.Y_e;\n"
         avg_mix += "cons_avg.Y_e = wfac * cons_neigh_avg.Y_e * inv_n_avg + cfac * cons_orig.Y_e;\n"
-        avg_divide += "cons_avg.Y_e /= (REAL)n_avg;\n"
     if evolving_entropy:
         neighbor_init += "cons_neigh_avg.entropy = 0.0;\n"
         neighbor_add += "cons_neigh_avg.entropy += cons_avg_loop.entropy;\n"
@@ -196,7 +189,6 @@ cons_avg.SD[2] /= (REAL)n_avg;
             "cons_avg.entropy = wfac * cons_neigh_avg.entropy * inv_n_avg + "
             "cfac * cons_orig.entropy;\n"
         )
-        avg_divide += "cons_avg.entropy /= (REAL)n_avg;\n"
 
     # Step 2: Specialize the recovery call and hybrid-only fallbacks.
     if mode in ("Hybrid", "HybridEntropy"):
@@ -271,11 +263,10 @@ if (error != ghl_success) {
         if (index_avg == index)
           continue;
 
-        ghl_primitive_quantities prims_avg_loop;
         ghl_conservative_quantities cons_avg_loop;
         ghl_metric_quantities ADM_metric_avg;
-        basis_transform_rfm_basis_to_Cartesian(
-            commondata, params, &prims_avg_loop, &cons_avg_loop, &ADM_metric_avg,
+        basis_transform_rfm_basis_to_Cartesian__read_cons_only(
+            commondata, params, &cons_avg_loop, &ADM_metric_avg,
             iavg, javg, kavg, xx, auxevol_gfs, evol_gfs);
 """
     block += _indent_block(neighbor_add, 8)
@@ -287,13 +278,11 @@ if (error != ghl_success) {
 
   int avg_weight = 1;
   while (error != ghl_success && avg_weight < 5) {
-    n_avg += (avg_weight != 4);
     const REAL wfac = ((REAL)avg_weight) / 4.0;
     const REAL cfac = 1.0 - wfac;
     const REAL inv_n_avg = 1.0 / (REAL)n_avg;
 """
     block += _indent_block(avg_mix, 4)
-    block += _indent_block(avg_divide, 4)
     block += r"""
     ghl_undensitize_conservatives(
         ADM_metric.sqrt_detgamma, &cons_avg, &cons_undens);
@@ -435,10 +424,6 @@ if (cons.rho > 0.0) {
     best_method_index = 4;
   } // END IF: Newman entropy gives a smaller mismatch
 
-  // Here we implement an averaging loop. Note that we are in an OMP region, so a thread that writes prims to auxevol_gfs will
-  // technically have a race condition with the basis_transform_rfm_basis_to_Cartesian call below, which reads prims from auxevol_gfs.
-  // However, no grid function data are written in this averaging loop, so we're safe for now. In other words, introducing any writing of
-  // grid functions here will introduce true race conditions and undefined behavior.
   if (best_method_index == 0) {
     pointcount_avg++;
     ghl_conservative_quantities cons_neigh_avg, cons_avg;
@@ -465,11 +450,10 @@ if (cons.rho > 0.0) {
           if (index_avg == index)
             continue;
 
-          ghl_primitive_quantities prims_avg_loop;
           ghl_conservative_quantities cons_avg_loop;
           ghl_metric_quantities ADM_metric_avg;
-          basis_transform_rfm_basis_to_Cartesian(
-              commondata, params, &prims_avg_loop, &cons_avg_loop, &ADM_metric_avg,
+          basis_transform_rfm_basis_to_Cartesian__read_cons_only(
+              commondata, params, &cons_avg_loop, &ADM_metric_avg,
               iavg, javg, kavg, xx, auxevol_gfs, evol_gfs);
           cons_neigh_avg.rho += cons_avg_loop.rho;
           cons_neigh_avg.tau += cons_avg_loop.tau;
@@ -487,15 +471,14 @@ if (cons.rho > 0.0) {
       const REAL w_neigh = ((REAL)avg_weight) / 4.0;
       const REAL w_self = 1.0 - w_neigh;
       const REAL inv_n_avg = 1.0 / (REAL)n_avg;
-      //const int n_total = n_avg + 1;
 
-      cons_avg.rho = (w_neigh * cons_neigh_avg.rho * inv_n_avg + w_self * cons_orig.rho) / (REAL)n_total;
-      cons_avg.tau = (w_neigh * cons_neigh_avg.tau * inv_n_avg + w_self * cons_orig.tau) / (REAL)n_total;
-      cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] * inv_n_avg + w_self * cons_orig.SD[0]) / (REAL)n_total;
-      cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] * inv_n_avg + w_self * cons_orig.SD[1]) / (REAL)n_total;
-      cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] * inv_n_avg + w_self * cons_orig.SD[2]) / (REAL)n_total;
-      cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy * inv_n_avg + w_self * cons_orig.entropy) / (REAL)n_total;
-      cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e * inv_n_avg + w_self * cons_orig.Y_e) / (REAL)n_total;
+      cons_avg.rho = (w_neigh * cons_neigh_avg.rho * inv_n_avg + w_self * cons_orig.rho);
+      cons_avg.tau = (w_neigh * cons_neigh_avg.tau * inv_n_avg + w_self * cons_orig.tau);
+      cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] * inv_n_avg + w_self * cons_orig.SD[0]);
+      cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] * inv_n_avg + w_self * cons_orig.SD[1]);
+      cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] * inv_n_avg + w_self * cons_orig.SD[2]);
+      cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy * inv_n_avg + w_self * cons_orig.entropy);
+      cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e * inv_n_avg + w_self * cons_orig.Y_e);
 
       prims1 = prims;
       prims2 = prims;
@@ -1055,12 +1038,21 @@ def register_CFunction_cons_to_prims(
     mode = _select_recovery_mode(evolving_temperature, evolving_entropy)
     desc = (
         "Recover primitive variables from conservative GRHD variables using the "
-        f"{mode} GRHayLHD strategy"
+        f"{mode} GRHayLHD strategy.\n\n"
+        "@param[in] commondata Common simulation data and diagnostics settings.\n"
+        "@param[in] params Grid-local runtime parameters.\n"
+        "@param[in] ghl_params GRHayL hydrodynamics parameters.\n"
+        "@param[in] eos GRHayL equation-of-state parameters.\n"
+        "@param[in] xx Reference-metric coordinate arrays.\n"
+        "@param[in,out] evol_gfs Conservative gridfunctions.\n"
+        "@param[in,out] auxevol_gfs Primitive and auxiliary gridfunctions."
     )
     if tabulated_entropy_robust:
-        desc += " with the robust tabulated-entropy fallback."
-    else:
-        desc += "."
+        desc = desc.replace(
+            "strategy.",
+            "strategy with the robust tabulated-entropy fallback.",
+            1,
+        )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     body = _build_cons_to_prims_body(
