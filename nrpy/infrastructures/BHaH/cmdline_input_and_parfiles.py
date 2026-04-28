@@ -165,7 +165,7 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     safe_copy(param_name, param_str, PARAM_SIZE);
     *array_size = 0;
   } // END IF (bracket_start != NULL): Distinguish between array and scalar parameter
-} // END FUNCTION parse_param
+} // END FUNCTION: parse_param
 """
 
 _C_PARSE_VALUE_FUNC = r"""
@@ -206,7 +206,7 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     safe_copy(values[0], trimmed, PARAM_SIZE);
     *value_count = 1;
   } // END IF (value_str[0] == '{'): Handle array and scalar values
-} // END FUNCTION parse_value
+} // END FUNCTION: parse_value
 """
 
 _C_READ_INTEGER_FUNC = r"""
@@ -222,7 +222,7 @@ static void read_integer(const char *value, int *result, const char *param_name)
   } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate integer conversion and check for errors
 
   *result = (int)int_val;
-} // END FUNCTION read_integer
+} // END FUNCTION: read_integer
 """
 
 _C_READ_REAL_FUNC = r"""
@@ -238,7 +238,7 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
   } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate double conversion and check for errors
 
   *result = (REAL)double_val;
-} // END FUNCTION read_REAL
+} // END FUNCTION: read_REAL
 """
 
 _C_READ_CHARARRAY_FUNC = r"""
@@ -263,7 +263,7 @@ static void read_chararray(const char *value, char *result, const char *param_na
     exit(1);
   } // END IF (strlen(trimmed_value) >= size): Check for buffer overflow after trimming
   safe_copy(result, trimmed_value, size);
-} // END FUNCTION read_chararray
+} // END FUNCTION: read_chararray
 """
 
 _C_READ_BOOLEAN_FUNC = r"""
@@ -304,7 +304,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
 
   // Free the allocated memory for the lowercase copy of the value
   free(lower_value);
-} // END FUNCTION read_boolean
+} // END FUNCTION: read_boolean
 """
 
 # endregion

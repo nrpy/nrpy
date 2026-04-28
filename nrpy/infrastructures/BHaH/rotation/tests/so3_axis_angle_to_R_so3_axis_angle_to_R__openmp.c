@@ -53,4 +53,4 @@ void so3_axis_angle_to_R(const REAL nU[3], const REAL dphi, REAL R[3][3]) {
     R[2][1] = 0.0;
     R[2][2] = 1.0;
   } // END IF: degenerate axis-angle input
-} // END FUNCTION so3_axis_angle_to_R
+} // END FUNCTION: so3_axis_angle_to_R

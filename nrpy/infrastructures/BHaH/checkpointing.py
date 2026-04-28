@@ -61,7 +61,7 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
     commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
     commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
   } // END LOOP over horizons
-} // END FUNCTION sanitize_checkpoint_commondata_pointers
+} // END FUNCTION: sanitize_checkpoint_commondata_pointers
 
 """
 
@@ -300,7 +300,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     // Fatal: checkpoint output must not silently continue on partial write.
     exit(1);
   } // END IF wrote != nmemb
-} // END FUNCTION BHAH_safe_write_impl()
+} // END FUNCTION: BHAH_safe_write_impl()
 
 #define FWRITE(ptr, size, nmemb, fp, what)                                                                                                  \
   BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)

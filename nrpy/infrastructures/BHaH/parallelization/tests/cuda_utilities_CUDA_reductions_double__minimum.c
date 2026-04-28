@@ -116,4 +116,4 @@ REAL find_global__minimum(REAL *data, uint const data_length) {
   REAL res = *((REAL *)h_reduced);
   free(h_reduced);
   return res;
-} // END FUNCTION find_global__minimum
+} // END FUNCTION: find_global__minimum

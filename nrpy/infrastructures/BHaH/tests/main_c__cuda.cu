@@ -108,4 +108,4 @@ int main(int argc, const char *argv[]) {
   BHAH_DEVICE_SYNC();
   cudaDeviceReset();
   return 0;
-} // END FUNCTION main
+} // END FUNCTION: main

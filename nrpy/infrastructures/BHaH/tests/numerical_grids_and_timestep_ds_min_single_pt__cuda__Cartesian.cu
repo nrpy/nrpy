@@ -19,4 +19,4 @@ __host__ __device__ void ds_min_single_pt__rfm__Cartesian(const params_struct *r
   const REAL ds1 = fabs(dxx1);
   const REAL ds2 = fabs(dxx2);
   *ds_min = MIN(ds0, MIN(ds1, ds2));
-} // END FUNCTION ds_min_single_pt__rfm__Cartesian
+} // END FUNCTION: ds_min_single_pt__rfm__Cartesian

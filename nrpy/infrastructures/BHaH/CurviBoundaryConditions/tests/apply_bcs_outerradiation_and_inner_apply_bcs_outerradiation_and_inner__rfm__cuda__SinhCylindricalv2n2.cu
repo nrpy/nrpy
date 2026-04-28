@@ -45,7 +45,7 @@ __device__ static inline REAL FD1_arbitrary_upwind_x0_dirn(const size_t streamid
   }
   }
   return 0.0 / 0.0; // poison output if offset computed incorrectly
-} // END FUNCTION FD1_arbitrary_upwind_x0_dirn
+} // END FUNCTION: FD1_arbitrary_upwind_x0_dirn
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */
@@ -90,7 +90,7 @@ __device__ static inline REAL FD1_arbitrary_upwind_x2_dirn(const size_t streamid
   }
   }
   return 0.0 / 0.0; // poison output if offset computed incorrectly
-} // END FUNCTION FD1_arbitrary_upwind_x2_dirn
+} // END FUNCTION: FD1_arbitrary_upwind_x2_dirn
 /**
  * Compute r(xx0,xx1,xx2) and partial_r x^i.
  */
@@ -135,7 +135,7 @@ __device__ static inline void r_and_partial_xi_partial_r_derivs(const size_t str
   *partial_x0_partial_r = tmp29 * tmp30;
   *partial_x1_partial_r = 0;
   *partial_x2_partial_r = tmp17 * tmp24 * tmp25 * tmp28 * tmp30;
-} // END FUNCTION r_and_partial_xi_partial_r_derivs
+} // END FUNCTION: r_and_partial_xi_partial_r_derivs
 /**
  * Compute \partial_r f
  */
@@ -195,7 +195,7 @@ __device__ static inline REAL compute_partial_r_f(const size_t streamid, REAL *r
     i2_offset = (Nxx_plus_2NGHOSTS2 - FD1_stencil_radius - 1) - dest_i2;
   const REAL partial_x2_f = FD1_arbitrary_upwind_x2_dirn(streamid, &gfs[which_gf * ntot], dest_i0, dest_i1, dest_i2, i2_offset);
   return partial_x0_partial_r * partial_x0_f + partial_x1_partial_r * partial_x1_f + partial_x2_partial_r * partial_x2_f;
-} // END FUNCTION compute_partial_r_f
+} // END FUNCTION: compute_partial_r_f
 
 /**
  * *** Apply radiation BCs to all outer boundaries. ***
@@ -249,7 +249,7 @@ __device__ static inline REAL radiation_bcs(const size_t streamid, REAL *restric
   const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * rinv);
 
   return partial_t_f_outgoing_wave + k * rinv * rinv * rinv;
-} // END FUNCTION radiation_bcs
+} // END FUNCTION: radiation_bcs
 /**
  * Kernel: apply_bcs_pure_only_gpu.
  * Apply BCs to pure points.
@@ -288,7 +288,7 @@ __global__ static void apply_bcs_pure_only_gpu(const size_t streamid, const int 
                                                       d_gridfunctions_f_infinity[which_gf], i0, i1, i2, FACEX0, FACEX1, FACEX2);
     }
   }
-} // END FUNCTION apply_bcs_pure_only_gpu
+} // END FUNCTION: apply_bcs_pure_only_gpu
 /**
  * Kernel: apply_bcs_pure_only.
  * Apply BCs to pure boundary points
@@ -319,7 +319,7 @@ static void apply_bcs_pure_only(const params_struct *restrict params, const bc_s
       }
     }
   }
-} // END FUNCTION apply_bcs_pure_only
+} // END FUNCTION: apply_bcs_pure_only
 
 /**
  * This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
@@ -359,4 +359,4 @@ void apply_bcs_outerradiation_and_inner__rfm__SinhCylindricalv2n2(const commonda
   //              populated first; hence this being
   //              STEP 2 OF 2.
   apply_bcs_inner_only(commondata, params, bcstruct, rhs_gfs); // <- apply inner BCs to RHS gfs only
-} // END FUNCTION apply_bcs_outerradiation_and_inner__rfm__SinhCylindricalv2n2
+} // END FUNCTION: apply_bcs_outerradiation_and_inner__rfm__SinhCylindricalv2n2

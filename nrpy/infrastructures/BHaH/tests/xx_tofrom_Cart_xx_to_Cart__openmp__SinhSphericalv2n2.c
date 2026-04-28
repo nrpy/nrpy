@@ -27,4 +27,4 @@ void xx_to_Cart__rfm__SinhSphericalv2n2(const params_struct *restrict params, co
     xCart[1] = params->Cart_originy + tmp3 * sin(xx2);
     xCart[2] = params->Cart_originz + tmp2 * cos(xx1);
   }
-} // END FUNCTION xx_to_Cart__rfm__SinhSphericalv2n2
+} // END FUNCTION: xx_to_Cart__rfm__SinhSphericalv2n2
