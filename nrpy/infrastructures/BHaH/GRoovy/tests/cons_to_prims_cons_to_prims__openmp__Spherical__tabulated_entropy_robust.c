@@ -140,6 +140,10 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
             best_method_index = 4;
           } // END IF: Newman entropy gives a smaller mismatch
 
+          // Here we implement an averaging loop. Note that we are in an OMP region, so a thread that writes prims to auxevol_gfs will
+          // technically have a race condition with the basis_transform_rfm_basis_to_Cartesian call below, which reads prims from auxevol_gfs.
+          // However, no grid function data are written in this averaging loop, so we're safe for now. In other words, introducing any writing of
+          // grid functions here will introduce true race conditions and undefined behavior.
           if (best_method_index == 0) {
             pointcount_avg++;
             ghl_conservative_quantities cons_neigh_avg, cons_avg;
@@ -169,8 +173,8 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
                   ghl_primitive_quantities prims_avg_loop;
                   ghl_conservative_quantities cons_avg_loop;
                   ghl_metric_quantities ADM_metric_avg;
-                  BSSN_src_basis_to_ADM_Cartesian_fill_prims_cons_structs(commondata, params, &prims_avg_loop, &cons_avg_loop, &ADM_metric_avg, iavg,
-                                                                          javg, kavg, xx, auxevol_gfs, evol_gfs);
+                  basis_transform_rfm_basis_to_Cartesian(commondata, params, &prims_avg_loop, &cons_avg_loop, &ADM_metric_avg, iavg, javg, kavg, xx,
+                                                         auxevol_gfs, evol_gfs);
                   cons_neigh_avg.rho += cons_avg_loop.rho;
                   cons_neigh_avg.tau += cons_avg_loop.tau;
                   cons_neigh_avg.SD[0] += cons_avg_loop.SD[0];
@@ -186,15 +190,16 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
             for (int avg_weight = 1; avg_weight <= 4 && best_method_index == 0; avg_weight++) {
               const REAL w_neigh = ((REAL)avg_weight) / 4.0;
               const REAL w_self = 1.0 - w_neigh;
-              const int n_total = n_avg + 1;
+              const REAL inv_n_avg = 1.0 / (REAL)n_avg;
+              // const int n_total = n_avg + 1;
 
-              cons_avg.rho = (w_neigh * cons_neigh_avg.rho + w_self * cons_orig.rho) / (REAL)n_total;
-              cons_avg.tau = (w_neigh * cons_neigh_avg.tau + w_self * cons_orig.tau) / (REAL)n_total;
-              cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] + w_self * cons_orig.SD[0]) / (REAL)n_total;
-              cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] + w_self * cons_orig.SD[1]) / (REAL)n_total;
-              cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] + w_self * cons_orig.SD[2]) / (REAL)n_total;
-              cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy + w_self * cons_orig.entropy) / (REAL)n_total;
-              cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e + w_self * cons_orig.Y_e) / (REAL)n_total;
+              cons_avg.rho = (w_neigh * cons_neigh_avg.rho * inv_n_avg + w_self * cons_orig.rho) / (REAL)n_total;
+              cons_avg.tau = (w_neigh * cons_neigh_avg.tau * inv_n_avg + w_self * cons_orig.tau) / (REAL)n_total;
+              cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] * inv_n_avg + w_self * cons_orig.SD[0]) / (REAL)n_total;
+              cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] * inv_n_avg + w_self * cons_orig.SD[1]) / (REAL)n_total;
+              cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] * inv_n_avg + w_self * cons_orig.SD[2]) / (REAL)n_total;
+              cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy * inv_n_avg + w_self * cons_orig.entropy) / (REAL)n_total;
+              cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e * inv_n_avg + w_self * cons_orig.Y_e) / (REAL)n_total;
 
               prims1 = prims;
               prims2 = prims;
@@ -416,7 +421,7 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
   } // END LOOP: for k over interior z indices
 
   // Step 3: Emit periodic conservative-to-primitive diagnostics.
-  if (commondata->C2P_diagnostics_every >= 0 && (commondata->nn % commondata->C2P_diagnostics_every == 0)) {
+  if (commondata->C2P_diagnostics_every > 0 && (commondata->nn % commondata->C2P_diagnostics_every == 0)) {
     const REAL rho_error = (error_rho_denom == 0.0) ? error_rho_numer : error_rho_numer / error_rho_denom;
     const REAL tau_error = (error_tau_denom == 0.0) ? error_tau_numer : error_tau_numer / error_tau_denom;
     const REAL Sx_error = (error_Sx_denom == 0.0) ? error_Sx_numer : error_Sx_numer / error_Sx_denom;
@@ -446,4 +451,4 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
 
            Sx_error, error_Sx_denom, Sy_error, error_Sy_denom, Sz_error, error_Sz_denom);
   } // END IF: conservative-to-primitive diagnostics are enabled this timestep
-} // END FUNCTION cons_to_prims__rfm__Spherical
+} // END FUNCTION: cons_to_prims__rfm__Spherical

@@ -2,7 +2,7 @@
 C function registration for GRHayLHD conservative-to-primitive recovery in GRoovy.
 
 Author: Terrence Pierre Jacques
-        terrencepierrej **at** gmail **dot* com
+        terrencepierrej **at** gmail **dot** com
 """
 
 import textwrap
@@ -18,7 +18,18 @@ import nrpy.c_function as cfc
 import nrpy.equations.basis_transforms.jacobians as bt
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
+import nrpy.params as par
 import nrpy.reference_metric as refmetric
+
+# How often to output C2P diagnostics
+_ = par.register_CodeParameter(
+    "int",
+    __name__,
+    "C2P_diagnostics_every",
+    2,
+    commondata=True,
+    add_to_parfile=True,
+)
 
 
 def _indent_block(block: str, spaces: int) -> str:
@@ -160,11 +171,11 @@ cons_neigh_avg.SD[1] += cons_avg_loop.SD[1];
 cons_neigh_avg.SD[2] += cons_avg_loop.SD[2];
 """
     avg_mix = r"""
-cons_avg.rho = wfac * cons_neigh_avg.rho + cfac * cons_orig.rho;
-cons_avg.tau = wfac * cons_neigh_avg.tau + cfac * cons_orig.tau;
-cons_avg.SD[0] = wfac * cons_neigh_avg.SD[0] + cfac * cons_orig.SD[0];
-cons_avg.SD[1] = wfac * cons_neigh_avg.SD[1] + cfac * cons_orig.SD[1];
-cons_avg.SD[2] = wfac * cons_neigh_avg.SD[2] + cfac * cons_orig.SD[2];
+cons_avg.rho = wfac * cons_neigh_avg.rho * inv_n_avg + cfac * cons_orig.rho;
+cons_avg.tau = wfac * cons_neigh_avg.tau * inv_n_avg + cfac * cons_orig.tau;
+cons_avg.SD[0] = wfac * cons_neigh_avg.SD[0] * inv_n_avg + cfac * cons_orig.SD[0];
+cons_avg.SD[1] = wfac * cons_neigh_avg.SD[1] * inv_n_avg + cfac * cons_orig.SD[1];
+cons_avg.SD[2] = wfac * cons_neigh_avg.SD[2] * inv_n_avg + cfac * cons_orig.SD[2];
 """
     avg_divide = r"""
 cons_avg.rho /= (REAL)n_avg;
@@ -176,13 +187,13 @@ cons_avg.SD[2] /= (REAL)n_avg;
     if evolving_temperature:
         neighbor_init += "cons_neigh_avg.Y_e = 0.0;\n"
         neighbor_add += "cons_neigh_avg.Y_e += cons_avg_loop.Y_e;\n"
-        avg_mix += "cons_avg.Y_e = wfac * cons_neigh_avg.Y_e + cfac * cons_orig.Y_e;\n"
+        avg_mix += "cons_avg.Y_e = wfac * cons_neigh_avg.Y_e * inv_n_avg + cfac * cons_orig.Y_e;\n"
         avg_divide += "cons_avg.Y_e /= (REAL)n_avg;\n"
     if evolving_entropy:
         neighbor_init += "cons_neigh_avg.entropy = 0.0;\n"
         neighbor_add += "cons_neigh_avg.entropy += cons_avg_loop.entropy;\n"
         avg_mix += (
-            "cons_avg.entropy = wfac * cons_neigh_avg.entropy + "
+            "cons_avg.entropy = wfac * cons_neigh_avg.entropy * inv_n_avg + "
             "cfac * cons_orig.entropy;\n"
         )
         avg_divide += "cons_avg.entropy /= (REAL)n_avg;\n"
@@ -279,6 +290,7 @@ if (error != ghl_success) {
     n_avg += (avg_weight != 4);
     const REAL wfac = ((REAL)avg_weight) / 4.0;
     const REAL cfac = 1.0 - wfac;
+    const REAL inv_n_avg = 1.0 / (REAL)n_avg;
 """
     block += _indent_block(avg_mix, 4)
     block += _indent_block(avg_divide, 4)
@@ -423,6 +435,10 @@ if (cons.rho > 0.0) {
     best_method_index = 4;
   } // END IF: Newman entropy gives a smaller mismatch
 
+  // Here we implement an averaging loop. Note that we are in an OMP region, so a thread that writes prims to auxevol_gfs will
+  // technically have a race condition with the basis_transform_rfm_basis_to_Cartesian call below, which reads prims from auxevol_gfs.
+  // However, no grid function data are written in this averaging loop, so we're safe for now. In other words, introducing any writing of
+  // grid functions here will introduce true race conditions and undefined behavior.
   if (best_method_index == 0) {
     pointcount_avg++;
     ghl_conservative_quantities cons_neigh_avg, cons_avg;
@@ -452,7 +468,7 @@ if (cons.rho > 0.0) {
           ghl_primitive_quantities prims_avg_loop;
           ghl_conservative_quantities cons_avg_loop;
           ghl_metric_quantities ADM_metric_avg;
-          BSSN_src_basis_to_ADM_Cartesian_fill_prims_cons_structs(
+          basis_transform_rfm_basis_to_Cartesian(
               commondata, params, &prims_avg_loop, &cons_avg_loop, &ADM_metric_avg,
               iavg, javg, kavg, xx, auxevol_gfs, evol_gfs);
           cons_neigh_avg.rho += cons_avg_loop.rho;
@@ -470,15 +486,16 @@ if (cons.rho > 0.0) {
     for (int avg_weight = 1; avg_weight <= 4 && best_method_index == 0; avg_weight++) {
       const REAL w_neigh = ((REAL)avg_weight) / 4.0;
       const REAL w_self = 1.0 - w_neigh;
-      const int n_total = n_avg + 1;
+      const REAL inv_n_avg = 1.0 / (REAL)n_avg;
+      //const int n_total = n_avg + 1;
 
-      cons_avg.rho = (w_neigh * cons_neigh_avg.rho + w_self * cons_orig.rho) / (REAL)n_total;
-      cons_avg.tau = (w_neigh * cons_neigh_avg.tau + w_self * cons_orig.tau) / (REAL)n_total;
-      cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] + w_self * cons_orig.SD[0]) / (REAL)n_total;
-      cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] + w_self * cons_orig.SD[1]) / (REAL)n_total;
-      cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] + w_self * cons_orig.SD[2]) / (REAL)n_total;
-      cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy + w_self * cons_orig.entropy) / (REAL)n_total;
-      cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e + w_self * cons_orig.Y_e) / (REAL)n_total;
+      cons_avg.rho = (w_neigh * cons_neigh_avg.rho * inv_n_avg + w_self * cons_orig.rho) / (REAL)n_total;
+      cons_avg.tau = (w_neigh * cons_neigh_avg.tau * inv_n_avg + w_self * cons_orig.tau) / (REAL)n_total;
+      cons_avg.SD[0] = (w_neigh * cons_neigh_avg.SD[0] * inv_n_avg + w_self * cons_orig.SD[0]) / (REAL)n_total;
+      cons_avg.SD[1] = (w_neigh * cons_neigh_avg.SD[1] * inv_n_avg + w_self * cons_orig.SD[1]) / (REAL)n_total;
+      cons_avg.SD[2] = (w_neigh * cons_neigh_avg.SD[2] * inv_n_avg + w_self * cons_orig.SD[2]) / (REAL)n_total;
+      cons_avg.entropy = (w_neigh * cons_neigh_avg.entropy * inv_n_avg + w_self * cons_orig.entropy) / (REAL)n_total;
+      cons_avg.Y_e = (w_neigh * cons_neigh_avg.Y_e * inv_n_avg + w_self * cons_orig.Y_e) / (REAL)n_total;
 
       prims1 = prims;
       prims2 = prims;
@@ -908,7 +925,7 @@ ghl_tabulated_compute_eps_T_from_P(
   } // END LOOP: for k over interior z indices
 
   // Step 3: Emit periodic conservative-to-primitive diagnostics.
-  if (commondata->C2P_diagnostics_every >= 0
+  if (commondata->C2P_diagnostics_every > 0
       && (commondata->nn % commondata->C2P_diagnostics_every == 0)) {
     const REAL rho_error = (error_rho_denom == 0.0)
                                ? error_rho_numer
