@@ -101,7 +101,13 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
           REAL err4 = 1e300;
           bool speed_limited_dummy = false;
 
-          if (error1 == ghl_success) {
+          /* Note that in the following lines we compare the conserved energy and electron fraction between routines.
+             However, we do not include the entropy, since it is not conserved at shocks.
+             We also ignore the output and diagnostic from ghl_enforce_primitive_limits_and_compute_u0, since it's unlikely for
+          */
+          routine to succeed while enforcing limits fails.
+
+              if (error1 == ghl_success) {
             ghl_conservative_quantities cons_temp;
             ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims1, &speed_limited_dummy);
             ghl_compute_conservs(&ADM_metric, &metric_aux, &prims1, &cons_temp);
@@ -301,12 +307,12 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
           rho_star_fix_applied++;
         } // END IF: conservative density is positive
 
-        error = ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
+        ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         if (error != ghl_success) {
           ghl_set_prims_to_constant_atm(eos, &prims);
           failures++;
           failures_inhoriz += in_horizon;
-          (void)ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
+          ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         } // END IF: primitive post-processing failed and atmosphere fallback was applied
 
         if (diagnostics.speed_limited)

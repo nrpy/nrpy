@@ -52,6 +52,7 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian__read_cons_only(
     #     includes += [str(Path("simd") / "simd_intrinsics.h")]
     cfunc_type = "void"
     desc = f"""Convert conservative GRHD variables and ADM metric quantities from {CoordSystem} coordinates to Cartesian coordinates for GRHayL.
+
         @param[in] commondata Common simulation data.
         @param[in] params Grid-local runtime parameters.
         @param[out] cons Conservative variables in Cartesian basis.

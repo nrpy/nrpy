@@ -374,6 +374,11 @@ if (cons.rho > 0.0) {
   REAL err4 = 1e300;
   bool speed_limited_dummy = false;
 
+  /* Note that in the following lines we compare the conserved energy and electron fraction between routines.
+     However, we do not include the entropy, since it is not conserved at shocks.
+     We also ignore the output and diagnostic from ghl_enforce_primitive_limits_and_compute_u0, since it's unlikely for 
+  */ routine to succeed while enforcing limits fails.
+
   if (error1 == ghl_success) {
     ghl_conservative_quantities cons_temp;
     ghl_enforce_primitive_limits_and_compute_u0(
@@ -853,13 +858,12 @@ ghl_tabulated_compute_eps_T_from_P(
 """
     body += _indent_block(recovery_block, 8)
     body += r"""
-        error = ghl_enforce_primitive_limits_and_compute_u0(
-            ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
+        ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         if (error != ghl_success) {
           ghl_set_prims_to_constant_atm(eos, &prims);
           failures++;
           failures_inhoriz += in_horizon;
-          (void)ghl_enforce_primitive_limits_and_compute_u0(
+          ghl_enforce_primitive_limits_and_compute_u0(
               ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         } // END IF: primitive post-processing failed and atmosphere fallback was applied
 
@@ -1039,23 +1043,20 @@ def register_CFunction_cons_to_prims(
 
     # Step 3: Build the mode-specific C function body.
     mode = _select_recovery_mode(evolving_temperature, evolving_entropy)
-    desc = (
-        "Recover primitive variables from conservative GRHD variables using the "
-        f"{mode} GRHayLHD strategy.\n\n"
-        "@param[in] commondata Common simulation data and diagnostics settings.\n"
-        "@param[in] params Grid-local runtime parameters.\n"
-        "@param[in] ghl_params GRHayL hydrodynamics parameters.\n"
-        "@param[in] eos GRHayL equation-of-state parameters.\n"
-        "@param[in] xx Reference-metric coordinate arrays.\n"
-        "@param[in,out] evol_gfs Conservative gridfunctions.\n"
-        "@param[in,out] auxevol_gfs Primitive and auxiliary gridfunctions."
+    strategy_desc = (
+        "strategy with the robust tabulated-entropy fallback"
+        if tabulated_entropy_robust
+        else "strategy"
     )
-    if tabulated_entropy_robust:
-        desc = desc.replace(
-            "strategy.",
-            "strategy with the robust tabulated-entropy fallback.",
-            1,
-        )
+    desc = f"""Recover primitive variables from conservative GRHD variables using the {mode} GRHayLHD {strategy_desc}.
+
+@param[in] commondata Common simulation data and diagnostics settings.
+@param[in] params Grid-local runtime parameters.
+@param[in] ghl_params GRHayL hydrodynamics parameters.
+@param[in] eos GRHayL equation-of-state parameters.
+@param[in] xx Reference-metric coordinate arrays.
+@param[in,out] evol_gfs Conservative gridfunctions.
+@param[in,out] auxevol_gfs Primitive and auxiliary gridfunctions."""
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     body = _build_cons_to_prims_body(
