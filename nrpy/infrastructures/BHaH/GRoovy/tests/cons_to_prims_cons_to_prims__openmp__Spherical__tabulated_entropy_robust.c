@@ -295,7 +295,7 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
             ghl_set_prims_to_constant_atm(eos, &prims);
             failures++;
             failures_inhoriz += in_horizon;
-          } // END IF: one of the robust tabulated-entropy methods succeeded
+          } // END IF: robust tabulated-entropy method selection completed
         } else {
           ghl_set_prims_to_constant_atm(eos, &prims);
           rho_star_fix_applied++;
@@ -304,8 +304,10 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
         error = ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         if (error != ghl_success) {
           ghl_set_prims_to_constant_atm(eos, &prims);
+          failures++;
+          failures_inhoriz += in_horizon;
           (void)ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
-        } // END IF: recovered primitives violated post-processing limits
+        } // END IF: primitive post-processing failed and atmosphere fallback was applied
 
         if (diagnostics.speed_limited)
           vel_limited_ptcount++;

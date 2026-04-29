@@ -590,7 +590,7 @@ if (cons.rho > 0.0) {
     ghl_set_prims_to_constant_atm(eos, &prims);
     failures++;
     failures_inhoriz += in_horizon;
-  } // END IF: one of the robust tabulated-entropy methods succeeded
+  } // END IF: robust tabulated-entropy method selection completed
 } else {
   ghl_set_prims_to_constant_atm(eos, &prims);
   rho_star_fix_applied++;
@@ -857,9 +857,11 @@ ghl_tabulated_compute_eps_T_from_P(
             ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         if (error != ghl_success) {
           ghl_set_prims_to_constant_atm(eos, &prims);
+          failures++;
+          failures_inhoriz += in_horizon;
           (void)ghl_enforce_primitive_limits_and_compute_u0(
               ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
-        } // END IF: recovered primitives violated post-processing limits
+        } // END IF: primitive post-processing failed and atmosphere fallback was applied
 
         if (diagnostics.speed_limited)
           vel_limited_ptcount++;
@@ -1063,22 +1065,26 @@ def register_CFunction_cons_to_prims(
     )
 
     # Step 4: Register the final C function.
+    cfunc_type = "void"
+    name = "cons_to_prims"
+    params = (
+        "const commondata_struct *restrict commondata, "
+        "const params_struct *restrict params, "
+        "const ghl_parameters *restrict ghl_params, "
+        "const ghl_eos_parameters *restrict eos, "
+        "REAL *restrict xx[3], "
+        "REAL *restrict evol_gfs, "
+        "REAL *restrict auxevol_gfs"
+    )
+
     cfc.register_CFunction(
         include_CodeParameters_h=True,
         includes=includes,
         desc=desc,
-        cfunc_type="void",
+        cfunc_type=cfunc_type,
         CoordSystem_for_wrapper_func=CoordSystem,
-        name="cons_to_prims",
-        params=(
-            "const commondata_struct *restrict commondata, "
-            "const params_struct *restrict params, "
-            "const ghl_parameters *restrict ghl_params, "
-            "const ghl_eos_parameters *restrict eos, "
-            "REAL *restrict xx[3], "
-            "REAL *restrict evol_gfs, "
-            "REAL *restrict auxevol_gfs"
-        ),
+        name=name,
+        params=params,
         body=body,
     )
     return pcg.NRPyEnv()

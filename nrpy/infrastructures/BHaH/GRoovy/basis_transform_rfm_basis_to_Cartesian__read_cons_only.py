@@ -51,20 +51,18 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian__read_cons_only(
     # if enable_intrinsics:
     #     includes += [str(Path("simd") / "simd_intrinsics.h")]
     cfunc_type = "void"
-    desc = (
-        "Convert conservative GRHD variables and ADM metric quantities from "
-        f"{CoordSystem} coordinates to Cartesian coordinates for GRHayL.\\n\\n"
-        "@param[in] commondata Common simulation data.\\n"
-        "@param[in] params Grid-local runtime parameters.\\n"
-        "@param[out] cons Conservative variables in Cartesian basis.\\n"
-        "@param[out] metric ADM metric quantities in Cartesian basis.\\n"
-        "@param[in] i0 x0 grid index.\\n"
-        "@param[in] i1 x1 grid index.\\n"
-        "@param[in] i2 x2 grid index.\\n"
-        "@param[in] xx Reference-metric coordinate arrays.\\n"
-        "@param[in] auxevol_gfs Auxiliary/evolved primitive gridfunctions.\\n"
-        "@param[in] in_gfs Conservative gridfunctions."
-    )
+    desc = f"""Convert conservative GRHD variables and ADM metric quantities from {CoordSystem} coordinates to Cartesian coordinates for GRHayL.
+        @param[in] commondata Common simulation data.
+        @param[in] params Grid-local runtime parameters.
+        @param[out] cons Conservative variables in Cartesian basis.
+        @param[out] metric ADM metric quantities in Cartesian basis.
+        @param[in] i0 x0 grid index.
+        @param[in] i1 x1 grid index.
+        @param[in] i2 x2 grid index.
+        @param[in] xx Reference-metric coordinate arrays.
+        @param[in] auxevol_gfs Auxiliary/evolved primitive gridfunctions.
+        @param[in] in_gfs Conservative gridfunctions.
+        """
 
     name = "basis_transform_rfm_basis_to_Cartesian__read_cons_only"
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, "
