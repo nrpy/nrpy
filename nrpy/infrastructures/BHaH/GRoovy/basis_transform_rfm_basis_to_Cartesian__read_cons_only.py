@@ -52,12 +52,18 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian__read_cons_only(
     #     includes += [str(Path("simd") / "simd_intrinsics.h")]
     cfunc_type = "void"
     desc = (
-        """
-    Convert BSSN quantities in """
-        + CoordSystem
-        + """
-    coordinates to ADM quantities in Cartesian coordinates, to be used by GRHayL,
-    as well as fluid momentum."""
+        "Convert conservative GRHD variables and ADM metric quantities from "
+        f"{CoordSystem} coordinates to Cartesian coordinates for GRHayL.\\n\\n"
+        "@param[in] commondata Common simulation data.\\n"
+        "@param[in] params Grid-local runtime parameters.\\n"
+        "@param[out] cons Conservative variables in Cartesian basis.\\n"
+        "@param[out] metric ADM metric quantities in Cartesian basis.\\n"
+        "@param[in] i0 x0 grid index.\\n"
+        "@param[in] i1 x1 grid index.\\n"
+        "@param[in] i2 x2 grid index.\\n"
+        "@param[in] xx Reference-metric coordinate arrays.\\n"
+        "@param[in] auxevol_gfs Auxiliary/evolved primitive gridfunctions.\\n"
+        "@param[in] in_gfs Conservative gridfunctions."
     )
 
     name = "basis_transform_rfm_basis_to_Cartesian__read_cons_only"
@@ -194,7 +200,7 @@ def register_CFunction_basis_transform_rfm_basis_to_Cartesian__read_cons_only(
     )
 
     # Step 9: Finalize Struct Initialization
-    # Add C calls to ghl_initialize_metric to ensure
+    # Add a C call to ghl_initialize_metric so derived metric fields remain consistent
     post_body = r"""
 
        ghl_initialize_metric(

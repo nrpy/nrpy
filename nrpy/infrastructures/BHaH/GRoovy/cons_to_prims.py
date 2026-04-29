@@ -136,6 +136,7 @@ const REAL vz = prims.vU[2];
         lhs,
         enable_simd=False,
         enable_fd_codegen=False,
+        include_braces=True,
     )
 
 
