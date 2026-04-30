@@ -261,11 +261,7 @@ if use_cpp:
         "#endif\n\n"
         "#define restrict __restrict__\n\n"
     )
-    cpp_compatibility_epilogue = (
-        "\n#ifdef __cplusplus\n"
-        "}\n"
-        "#endif"
-    )
+    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
     # Convert fixed-size parameter to pointer

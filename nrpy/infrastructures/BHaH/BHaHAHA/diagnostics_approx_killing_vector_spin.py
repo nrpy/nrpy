@@ -20,7 +20,7 @@ import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.general_relativity.bhahaha.approx_killing_vector_spin import (
     ApproxKillingSpinClass,
 )
-from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.BHaHAHA import area as bhahaha_area
 
 
 def register_CFunction_diagnostics_approx_killing_vector_spin(
@@ -47,10 +47,10 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    # Robustly generate C for sqrt(det q) from area3() across NRPy versions.
+    # Generate C for sqrt(det q) using the shared BHaHAHA surface-area helper.
     # Some versions accept a single outvar string; others require a list-of-lvalues.
     area_codegen = ccg.c_codegen(
-        BHaH.BHaHAHA.area.area3(),
+        bhahaha_area.area3(),
         "const REAL sqrt_det_q",
         enable_fd_codegen=True,
         enable_fd_functions=enable_fd_functions,
@@ -70,7 +70,7 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
     Jraw = akv.Jm_integrand
 
     akv_exprs = (
-        [BHaH.BHaHAHA.area.area3()]
+        [akv.sqrtq]
         + [Hraw[m][n] for m in range(3) for n in range(3)]
         + [Nraw[m][n] for m in range(3) for n in range(3)]
         + [Jraw[m] for m in range(3)]
@@ -95,7 +95,8 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
 
     KminusKg = [
         [
-            akv._KDD[i][j] - akv._trK * akv._gammaDD[i][j]  # pylint: disable=protected-access
+            akv._KDD[i][j]
+            - akv._trK * akv._gammaDD[i][j]  # pylint: disable=protected-access
             for j in range(3)
         ]
         for i in range(3)
@@ -103,8 +104,12 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
 
     akv_gridpoint_geometry_exprs = (
         [akv.sqrtq]
-        + [akv._qDD[A][B] for A in range(1, 3) for B in range(A, 3)]  # pylint: disable=protected-access
-        + [akv._qUU[A][B] for A in range(1, 3) for B in range(A, 3)]  # pylint: disable=protected-access
+        + [
+            akv._qDD[A][B] for A in range(1, 3) for B in range(A, 3)
+        ]  # pylint: disable=protected-access
+        + [
+            akv._qUU[A][B] for A in range(1, 3) for B in range(A, 3)
+        ]  # pylint: disable=protected-access
         + [
             akv._Gamma2D[A][B][C]  # pylint: disable=protected-access
             for A in range(1, 3)

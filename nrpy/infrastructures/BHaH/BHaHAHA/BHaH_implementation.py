@@ -40,7 +40,7 @@ buffers for all horizons."""
     current_horizon_params->prev_akv_gp_valid_m1 = 0;
     current_horizon_params->prev_akv_gp_Ntheta_m1 = 0;
     current_horizon_params->prev_akv_gp_Nphi_m1 = 0;
-  } // END LOOP: for h
+  } // END LOOP: for h over all horizons
 """
     cfc.register_CFunction(
         includes=includes,
