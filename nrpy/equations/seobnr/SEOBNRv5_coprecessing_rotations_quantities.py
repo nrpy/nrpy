@@ -1,12 +1,10 @@
 """
 Construct the co-precessing frame transformations and inertial GW polarizations for SEOBNRv5PHM.
 
-Authors:
-Suchindram Dasgupta
-sd00113 at mix dot wvu dot edu
-
-Zachariah B. Etienne
-zachetie at gmail *dot com
+Authors: Suchindram Dasgupta
+         sd00113 at mix dot wvu dot edu
+         Zachariah B. Etienne
+         zachetie at gmail *dot com
 
 This module implements the transformation from the co-precessing frame to the
 inertial observer frame, computing the final GW polarizations (h_+, h_x).
@@ -18,8 +16,6 @@ It encapsulates:
 
 This implementation is based on Equations 15, 17, and 26-28 of
 https://arxiv.org/pdf/2303.18046.pdf (SEOBNRv5PHM paper).
-
-License: BSD 2-Clause
 """
 
 from functools import lru_cache
@@ -350,20 +346,7 @@ class SEOBNRv5_Coprecessing_Rotations:
 
 if __name__ == "__main__":
     import doctest
-    import os
     import sys
-
-    project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
-    sys.path.append(project_root)
-
-    try:
-        import nrpy.validate_expressions.validate_expressions as ve
-    except ImportError as exc:
-        raise ImportError(
-            "Could not import NRPy validation module. Please ensure "
-            "the script is in the correct directory structure "
-            "and __init__.py files are present."
-        ) from exc
 
     results = doctest.testmod()
     if results.failed > 0:
@@ -371,6 +354,10 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    import os
+
+    import nrpy.validate_expressions.validate_expressions as ve
 
     print("Running NRPy expression validation...")
 

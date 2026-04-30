@@ -16,8 +16,6 @@ canonical variables (r, phi, prstar, pphi), and Hamiltonian quantities (Hreal, O
 (see Equations 25-35 and Appendix B of https://arxiv.org/pdf/2303.18039 for the full list of terms).
 It is also used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
 "Spinning Effective-to-Backwards-One Body".
-
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
@@ -55,8 +53,6 @@ class SEOBNRv5_aligned_spin_waveform_quantities:
                         (For now, only the (l=2,m=2) mode is computed)
                         (Equation 25-34 of https://arxiv.org/pdf/2303.18039).
 
-        Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1', 'chi2', 'Hreal', 'Omega' and 'Omega_circ'
-        Outputs: 'flux' and 'hlms'
         :param apply_special_amplitude_coefficients: Flag to enable/disable the computation of special amplitude coefficients.
         """
         (
