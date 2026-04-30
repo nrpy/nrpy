@@ -247,10 +247,10 @@ calculations, norm evaluations, and detailed final iteration analyses.
             printf("#AKV status=%d method=%d quality=%d (diagnostic unavailable)\n", bhahaha_diags->akv_status,
                    bhahaha_diags->akv_method_used, bhahaha_diags->akv_quality_flag);
           }
-        } // END IF verbosity level > 0
-      } // END compute, store, and (optionally) print final diagnostics
-    } // END IF final iteration
-  } // END IF output diagnostics
+        } // END IF: verbosity level > 0
+      } // END BLOCK: compute, store, and optionally print final diagnostics
+    } // END IF: final iteration
+  } // END IF: output diagnostics
 """
     cfc.register_CFunction(
         subdirectory="",

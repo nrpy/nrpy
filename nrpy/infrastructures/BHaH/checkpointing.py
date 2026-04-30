@@ -51,23 +51,86 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     }                                                                                                        \
   } while (0)
 
+#define BHAH_CHECKPOINT_MAGIC UINT64_C(0x42484148434B5054)
+#define BHAH_CHECKPOINT_VERSION_LEGACY 0U
+#define BHAH_CHECKPOINT_VERSION_BASE 1U
+#define BHAH_CHECKPOINT_VERSION_AKV_CACHE 2U
+#define BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE 3U
+
 """
     if enable_bhahaha:
         prefunc += r"""
+static void sanitize_checkpoint_bhahaha_params_entry(bhahaha_params_and_data_struct *restrict params) {
+  if (!params) {
+    return;
+  } // END IF params is NULL
+
+  params->input_metric_data = NULL;
+  params->prev_horizon_m1 = NULL;
+  params->prev_horizon_m2 = NULL;
+  params->prev_horizon_m3 = NULL;
+  params->prev_akv_gp_z0_m1 = NULL;
+  params->prev_akv_gp_z1_m1 = NULL;
+  params->prev_akv_gp_z2_m1 = NULL;
+  params->prev_akv_gp_valid_m1 = 0;
+  params->prev_akv_gp_Ntheta_m1 = 0;
+  params->prev_akv_gp_Nphi_m1 = 0;
+} // END FUNCTION: sanitize_checkpoint_bhahaha_params_entry
+
 static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict commondata) {
-  for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
-    commondata->bhahaha_params_and_data[i].input_metric_data = NULL;
-    commondata->bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_z0_m1 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_z1_m1 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_z2_m1 = NULL;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_valid_m1 = 0;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_Ntheta_m1 = 0;
-    commondata->bhahaha_params_and_data[i].prev_akv_gp_Nphi_m1 = 0;
-  } // END LOOP over horizons
+  if (!commondata) {
+    return;
+  } // END IF commondata is NULL
+
+  commondata->bhahaha_params_and_data = NULL;
+  commondata->bhahaha_diagnostics = NULL;
 } // END FUNCTION: sanitize_checkpoint_commondata_pointers
+
+static void restore_checkpoint_commondata_pointers(
+    commondata_struct *restrict commondata,
+    bhahaha_params_and_data_struct *restrict saved_bhahaha_params_and_data,
+    bhahaha_diagnostics_struct *restrict saved_bhahaha_diagnostics) {
+  if (!commondata) {
+    return;
+  } // END IF commondata is NULL
+
+  commondata->bhahaha_params_and_data = saved_bhahaha_params_and_data;
+  commondata->bhahaha_diagnostics = saved_bhahaha_diagnostics;
+} // END FUNCTION: restore_checkpoint_commondata_pointers
+
+static void ensure_checkpoint_commondata_storage(
+    commondata_struct *restrict commondata,
+    bhahaha_params_and_data_struct *restrict saved_bhahaha_params_and_data,
+    bhahaha_diagnostics_struct *restrict saved_bhahaha_diagnostics) {
+  if (!commondata) {
+    return;
+  } // END IF commondata is NULL
+
+  commondata->bhahaha_params_and_data = saved_bhahaha_params_and_data;
+  commondata->bhahaha_diagnostics = saved_bhahaha_diagnostics;
+
+  if (commondata->bah_max_num_horizons <= 0) {
+    return;
+  } // END IF no horizons
+
+  if (commondata->bhahaha_params_and_data == NULL) {
+    const size_t num_horizons = (size_t)commondata->bah_max_num_horizons;
+    commondata->bhahaha_params_and_data = (bhahaha_params_and_data_struct *)calloc(num_horizons, sizeof(bhahaha_params_and_data_struct));
+    if (commondata->bhahaha_params_and_data == NULL) {
+      fprintf(stderr, "read_checkpoint: FATAL: unable to allocate BHaHAHA parameter storage for %zu horizons.\n", num_horizons);
+      exit(EXIT_FAILURE);
+    } // END IF allocation failed
+  } // END IF params storage missing
+
+  if (commondata->bhahaha_diagnostics == NULL) {
+    const size_t num_horizons = (size_t)commondata->bah_max_num_horizons;
+    commondata->bhahaha_diagnostics = (bhahaha_diagnostics_struct *)calloc(num_horizons, sizeof(bhahaha_diagnostics_struct));
+    if (commondata->bhahaha_diagnostics == NULL) {
+      fprintf(stderr, "read_checkpoint: FATAL: unable to allocate BHaHAHA diagnostics storage for %zu horizons.\n", num_horizons);
+      exit(EXIT_FAILURE);
+    } // END IF allocation failed
+  } // END IF diagnostics storage missing
+} // END FUNCTION: ensure_checkpoint_commondata_storage
 
 """
 
@@ -100,11 +163,30 @@ loading the full checkpoint payload."""
     exit(EXIT_FAILURE);
   } // END IF fopen failed
 
+"""
+    if enable_bhahaha:
+        body += r"""
+  bhahaha_params_and_data_struct *restrict saved_bhahaha_params_and_data = commondata->bhahaha_params_and_data;
+  bhahaha_diagnostics_struct *restrict saved_bhahaha_diagnostics = commondata->bhahaha_diagnostics;
+"""
+    body += r"""
+
+  uint32_t checkpoint_format_version = BHAH_CHECKPOINT_VERSION_LEGACY;
+  {
+    uint64_t checkpoint_magic = 0;
+    const size_t got_magic = fread(&checkpoint_magic, sizeof(uint64_t), 1, cp_file);
+    if (got_magic == 1 && checkpoint_magic == BHAH_CHECKPOINT_MAGIC) {
+      FREAD(&checkpoint_format_version, sizeof(uint32_t), 1, cp_file, filename, "checkpoint_format_version");
+    } else {
+      rewind(cp_file);
+    }
+  } // END BLOCK: detect checkpoint format version
+
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
 """
     if enable_bhahaha:
         body += r"""
-  sanitize_checkpoint_commondata_pointers(commondata);
+  restore_checkpoint_commondata_pointers(commondata, saved_bhahaha_params_and_data, saved_bhahaha_diagnostics);
 """
     body += r"""
   fprintf(stderr, "cd struct size = %zu time=%e\n", sizeof(commondata_struct), commondata->time);
@@ -115,8 +197,39 @@ loading the full checkpoint payload."""
 """
     if enable_bhahaha:
         body += r"""
+  ensure_checkpoint_commondata_storage(commondata, saved_bhahaha_params_and_data, saved_bhahaha_diagnostics);
+
   for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
     bhahaha_params_and_data_struct *restrict horizon_params = &commondata->bhahaha_params_and_data[i];
+    if (checkpoint_format_version >= BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE) {
+      bhahaha_params_and_data_struct checkpoint_horizon_params;
+      FREAD(&checkpoint_horizon_params, sizeof(bhahaha_params_and_data_struct), 1, cp_file, filename, "bhahaha_params_and_data_struct");
+
+      REAL *restrict saved_input_metric_data = horizon_params->input_metric_data;
+      REAL *restrict saved_prev_horizon_m1 = horizon_params->prev_horizon_m1;
+      REAL *restrict saved_prev_horizon_m2 = horizon_params->prev_horizon_m2;
+      REAL *restrict saved_prev_horizon_m3 = horizon_params->prev_horizon_m3;
+      REAL *restrict saved_prev_akv_gp_z0_m1 = horizon_params->prev_akv_gp_z0_m1;
+      REAL *restrict saved_prev_akv_gp_z1_m1 = horizon_params->prev_akv_gp_z1_m1;
+      REAL *restrict saved_prev_akv_gp_z2_m1 = horizon_params->prev_akv_gp_z2_m1;
+
+      *horizon_params = checkpoint_horizon_params;
+      horizon_params->input_metric_data = saved_input_metric_data;
+      horizon_params->prev_horizon_m1 = saved_prev_horizon_m1;
+      horizon_params->prev_horizon_m2 = saved_prev_horizon_m2;
+      horizon_params->prev_horizon_m3 = saved_prev_horizon_m3;
+      horizon_params->prev_akv_gp_z0_m1 = saved_prev_akv_gp_z0_m1;
+      horizon_params->prev_akv_gp_z1_m1 = saved_prev_akv_gp_z1_m1;
+      horizon_params->prev_akv_gp_z2_m1 = saved_prev_akv_gp_z2_m1;
+      horizon_params->prev_akv_gp_valid_m1 = 0;
+      horizon_params->prev_akv_gp_Ntheta_m1 = 0;
+      horizon_params->prev_akv_gp_Nphi_m1 = 0;
+    } else {
+      horizon_params->input_metric_data = NULL;
+      horizon_params->prev_akv_gp_valid_m1 = 0;
+      horizon_params->prev_akv_gp_Ntheta_m1 = 0;
+      horizon_params->prev_akv_gp_Nphi_m1 = 0;
+    } // END IF/ELSE checkpoint format stores per-horizon scalar state
 
     uint8_t has_prev_horizon_shapes = 0;
     FREAD(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, filename, "has_prev_horizon_shapes");
@@ -132,6 +245,12 @@ loading the full checkpoint payload."""
         exit(EXIT_FAILURE);
       } // END IF invalid dimensions
 
+      free(horizon_params->prev_horizon_m1);
+      free(horizon_params->prev_horizon_m2);
+      free(horizon_params->prev_horizon_m3);
+      horizon_params->prev_horizon_m1 = NULL;
+      horizon_params->prev_horizon_m2 = NULL;
+      horizon_params->prev_horizon_m3 = NULL;
       BHAH_MALLOC(horizon_params->prev_horizon_m1, sizeof(REAL) * npts);
       BHAH_MALLOC(horizon_params->prev_horizon_m2, sizeof(REAL) * npts);
       BHAH_MALLOC(horizon_params->prev_horizon_m3, sizeof(REAL) * npts);
@@ -141,7 +260,9 @@ loading the full checkpoint payload."""
     } // END IF has_prev_horizon_shapes
 
     uint8_t has_prev_akv_buffers = 0;
-    FREAD(&has_prev_akv_buffers, sizeof(uint8_t), 1, cp_file, filename, "has_prev_akv_buffers");
+    if (checkpoint_format_version >= BHAH_CHECKPOINT_VERSION_AKV_CACHE) {
+      FREAD(&has_prev_akv_buffers, sizeof(uint8_t), 1, cp_file, filename, "has_prev_akv_buffers");
+    }
     if (has_prev_akv_buffers != (uint8_t)0) {
       const int n = commondata->bah_num_resolutions_multigrid - 1;
       const int ntheta_max = commondata->bah_Ntheta_array_multigrid[n];
@@ -154,9 +275,23 @@ loading the full checkpoint payload."""
         exit(EXIT_FAILURE);
       } // END IF invalid dimensions
 
-      BHAH_MALLOC(horizon_params->prev_akv_gp_z0_m1, sizeof(REAL) * npts);
-      BHAH_MALLOC(horizon_params->prev_akv_gp_z1_m1, sizeof(REAL) * npts);
-      BHAH_MALLOC(horizon_params->prev_akv_gp_z2_m1, sizeof(REAL) * npts);
+      const int matching_shape =
+          horizon_params->prev_akv_gp_z0_m1 &&
+          horizon_params->prev_akv_gp_z1_m1 &&
+          horizon_params->prev_akv_gp_z2_m1 &&
+          horizon_params->prev_akv_gp_Ntheta_m1 == ntheta_max &&
+          horizon_params->prev_akv_gp_Nphi_m1 == nphi_max;
+      if (!matching_shape) {
+        free(horizon_params->prev_akv_gp_z0_m1);
+        free(horizon_params->prev_akv_gp_z1_m1);
+        free(horizon_params->prev_akv_gp_z2_m1);
+        horizon_params->prev_akv_gp_z0_m1 = NULL;
+        horizon_params->prev_akv_gp_z1_m1 = NULL;
+        horizon_params->prev_akv_gp_z2_m1 = NULL;
+        BHAH_MALLOC(horizon_params->prev_akv_gp_z0_m1, sizeof(REAL) * npts);
+        BHAH_MALLOC(horizon_params->prev_akv_gp_z1_m1, sizeof(REAL) * npts);
+        BHAH_MALLOC(horizon_params->prev_akv_gp_z2_m1, sizeof(REAL) * npts);
+      } // END IF AKV buffers need allocation
 
       uint8_t prev_akv_valid = 0;
       FREAD(&prev_akv_valid, sizeof(uint8_t), 1, cp_file, filename, "prev_akv_valid");
@@ -341,8 +476,18 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 #define FWRITE(ptr, size, nmemb, fp, what)                                                                                                  \
   BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
 
+#define BHAH_CHECKPOINT_MAGIC UINT64_C(0x42484148434B5054)
+#define BHAH_CHECKPOINT_VERSION_BASE 1U
+#define BHAH_CHECKPOINT_VERSION_AKV_CACHE 2U
+#define BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE 3U
+
 """
 
+    checkpoint_version = (
+        "BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE"
+        if enable_bhahaha
+        else "BHAH_CHECKPOINT_VERSION_BASE"
+    )
     body = r"""
   char filename[256];
   snprintf(filename, 256, "checkpoint-conv_factor%.2f.dat", commondata->convergence_factor);
@@ -363,15 +508,15 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     if enable_bhahaha:
         body += r"""
     commondata_struct checkpoint_commondata = *commondata;
-    for (int i = 0; i < checkpoint_commondata.bah_max_num_horizons; i++) {
-      checkpoint_commondata.bhahaha_params_and_data[i].input_metric_data = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z0_m1 = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z1_m1 = NULL;
-      checkpoint_commondata.bhahaha_params_and_data[i].prev_akv_gp_z2_m1 = NULL;
-    } // END LOOP over all apparent horizons in sanitized commondata copy
+    sanitize_checkpoint_commondata_pointers(&checkpoint_commondata);
+"""
+    body += rf"""
+    {{
+      const uint64_t checkpoint_magic = BHAH_CHECKPOINT_MAGIC;
+      const uint32_t checkpoint_format_version = {checkpoint_version};
+      FWRITE(&checkpoint_magic, sizeof(uint64_t), 1, cp_file, "checkpoint_magic");
+      FWRITE(&checkpoint_format_version, sizeof(uint32_t), 1, cp_file, "checkpoint_format_version");
+    }} // END BLOCK: write checkpoint header
 """
     body += r"""
 """
@@ -390,6 +535,8 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
         body += r"""
     for (int i = 0; i < commondata->bah_max_num_horizons; i++) {
       const bhahaha_params_and_data_struct *restrict horizon_params = &commondata->bhahaha_params_and_data[i];
+      bhahaha_params_and_data_struct checkpoint_horizon_params = *horizon_params;
+      sanitize_checkpoint_bhahaha_params_entry(&checkpoint_horizon_params);
       const int has_m1 = horizon_params->prev_horizon_m1 != NULL;
       const int has_m2 = horizon_params->prev_horizon_m2 != NULL;
       const int has_m3 = horizon_params->prev_horizon_m3 != NULL;
@@ -412,6 +559,8 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
                 i);
         exit(EXIT_FAILURE);
       } // END IF inconsistent AKV-cache allocation state
+
+      FWRITE(&checkpoint_horizon_params, sizeof(bhahaha_params_and_data_struct), 1, cp_file, "bhahaha_params_and_data_struct");
 
       const uint8_t has_prev_horizon_shapes = all_prev_horizon_shapes ? (uint8_t)1 : (uint8_t)0;
       FWRITE(&has_prev_horizon_shapes, sizeof(uint8_t), 1, cp_file, "has_prev_horizon_shapes");

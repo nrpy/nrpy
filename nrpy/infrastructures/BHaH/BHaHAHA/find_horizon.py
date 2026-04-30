@@ -52,7 +52,10 @@ static int ensure_prev_akv_mode_buffers(bhahaha_params_and_data_struct *restrict
   const int has_z2 = (params->prev_akv_gp_z2_m1 != NULL);
   const int any_buf = has_z0 || has_z1 || has_z2;
   const int all_buf = has_z0 && has_z1 && has_z2;
-  if (all_buf) {
+  const int matching_shape =
+      params->prev_akv_gp_Ntheta_m1 == ntheta_max &&
+      params->prev_akv_gp_Nphi_m1 == nphi_max;
+  if (all_buf && matching_shape) {
     return BHAHAHA_SUCCESS;
   }
 
@@ -83,8 +86,8 @@ static int ensure_prev_akv_mode_buffers(bhahaha_params_and_data_struct *restrict
   }
 
   params->prev_akv_gp_valid_m1 = 0;
-  params->prev_akv_gp_Ntheta_m1 = 0;
-  params->prev_akv_gp_Nphi_m1 = 0;
+  params->prev_akv_gp_Ntheta_m1 = ntheta_max;
+  params->prev_akv_gp_Nphi_m1 = nphi_max;
   return BHAHAHA_SUCCESS;
 }
 

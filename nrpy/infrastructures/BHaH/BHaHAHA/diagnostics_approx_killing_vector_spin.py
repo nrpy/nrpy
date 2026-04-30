@@ -1,9 +1,9 @@
 """
-Scaffold registration and implementation module.
+Register the BHaHAHA approximate Killing vector spin diagnostic.
 
-This code registers the AKV C scaffold implements the equations
-through SymPy to generate efficient C code,
-referencing the callbacks defined in the scaffold.
+This module generates the AKV C scaffold together with the SymPy-derived
+surface-geometry and integrand expressions used by the BHaHAHA apparent-horizon
+diagnostics.
 
 Author: Wesley Inselman
 """
@@ -16,11 +16,11 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.equations.general_relativity.bhahaha.approx_killing_vector_spin import (
     ApproxKillingSpinClass,
 )
-from nrpy.infrastructures.BHaH.BHaHAHA import area as bhahaha_area
 
 
 def register_CFunction_diagnostics_approx_killing_vector_spin(
@@ -494,6 +494,13 @@ static inline void vecn_axpy(AKV_REAL *y, const AKV_REAL *x, int n, AKV_REAL alp
   for (int i = 0; i < n; i++) y[i] += alpha * x[i];
 }
 
+/**
+ * Compute dimensionless spin components from angular-momentum components.
+ *
+ * @param[in] J Angular-momentum components.
+ * @param[in] horizon_area Apparent-horizon area.
+ * @param[out] a_out Dimensionless spin components.
+ */
 static void akv_compute_dimensionless_spins(const AKV_REAL J[3], AKV_REAL horizon_area, AKV_REAL a_out[3]) {
   a_out[0] = 0.0;
   a_out[1] = 0.0;
@@ -513,15 +520,29 @@ static void akv_compute_dimensionless_spins(const AKV_REAL J[3], AKV_REAL horizo
   a_out[0] = J[0] * inv_M_H2;
   a_out[1] = J[1] * inv_M_H2;
   a_out[2] = J[2] * inv_M_H2;
-}
+} // END FUNCTION: akv_compute_dimensionless_spins
 
+/**
+ * Multiply a 3x3 matrix by a 3-vector.
+ *
+ * @param[in] A Input matrix.
+ * @param[in] x Input vector.
+ * @param[out] y Product vector.
+ */
 static void mat3_mul_vec(const AKV_REAL A[3][3], const AKV_REAL x[3], AKV_REAL y[3]) {
   for (int i = 0; i < 3; i++) {
     y[i] = 0;
     for (int j = 0; j < 3; j++) y[i] += A[i][j] * x[j];
   }
-}
+} // END FUNCTION: mat3_mul_vec
 
+/**
+ * Compute the Cholesky factorization of a symmetric positive-definite 3x3 matrix.
+ *
+ * @param[in] N Input matrix.
+ * @param[out] L Lower-triangular factor satisfying N = L L^T.
+ * @return True if the factorization succeeds, otherwise false.
+ */
 static bool chol3_lower(const AKV_REAL N[3][3], AKV_REAL L[3][3]) {
   mat3_zero(L);
   AKV_REAL a00 = N[0][0];
@@ -542,19 +563,41 @@ static bool chol3_lower(const AKV_REAL N[3][3], AKV_REAL L[3][3]) {
   L[2][2] = sqrt(a22);
 
   return true;
-}
+} // END FUNCTION: chol3_lower
 
+/**
+ * Solve a 3x3 lower-triangular linear system.
+ *
+ * @param[in] L Lower-triangular matrix.
+ * @param[in] b Right-hand-side vector.
+ * @param[out] y Solution vector.
+ */
 static void tri3_solve_lower(const AKV_REAL L[3][3], const AKV_REAL b[3], AKV_REAL y[3]) {
   y[0] = b[0] / L[0][0];
   y[1] = (b[1] - L[1][0]*y[0]) / L[1][1];
   y[2] = (b[2] - L[2][0]*y[0] - L[2][1]*y[1]) / L[2][2];
-}
+} // END FUNCTION: tri3_solve_lower
+
+/**
+ * Solve a 3x3 upper-triangular system defined by the transpose of a lower factor.
+ *
+ * @param[in] L Lower-triangular factor whose transpose defines the system.
+ * @param[in] y Right-hand-side vector.
+ * @param[out] x Solution vector.
+ */
 static void tri3_solve_upper_from_lowerT(const AKV_REAL L[3][3], const AKV_REAL y[3], AKV_REAL x[3]) {
   x[2] = y[2] / L[2][2];
   x[1] = (y[1] - L[2][1]*x[2]) / L[1][1];
   x[0] = (y[0] - L[1][0]*x[1] - L[2][0]*x[2]) / L[0][0];
-}
+} // END FUNCTION: tri3_solve_upper_from_lowerT
 
+/**
+ * Transform a 3x3 generalized symmetric eigenproblem into standard form.
+ *
+ * @param[in] H Symmetric stiffness matrix.
+ * @param[in] L Lower-triangular Cholesky factor of the mass matrix.
+ * @param[out] C Standard-form symmetric matrix L^{-1} H L^{-T}.
+ */
 static void generalized_to_standard3(const AKV_REAL H[3][3], const AKV_REAL L[3][3], AKV_REAL C[3][3]) {
   AKV_REAL A[3][3];
 
@@ -577,8 +620,15 @@ static void generalized_to_standard3(const AKV_REAL H[3][3], const AKV_REAL L[3]
     AKV_REAL s = (C[i][j] + C[j][i])/2;
     C[i][j] = s; C[j][i] = s;
   }
-}
+} // END FUNCTION: generalized_to_standard3
 
+/**
+ * Solve a 3x3 symmetric eigenproblem with Jacobi sweeps.
+ *
+ * @param[in] A_in Input symmetric matrix.
+ * @param[out] eval Eigenvalues.
+ * @param[out] V Eigenvectors stored by column.
+ */
 static void jacobi_eig_sym3(const AKV_REAL A_in[3][3], AKV_REAL eval[3], AKV_REAL V[3][3]) {
   AKV_REAL A[3][3];
   memcpy(A, A_in, 9*sizeof(AKV_REAL));
@@ -628,8 +678,14 @@ static void jacobi_eig_sym3(const AKV_REAL A_in[3][3], AKV_REAL eval[3], AKV_REA
   eval[0] = A[0][0];
   eval[1] = A[1][1];
   eval[2] = A[2][2];
-}
+} // END FUNCTION: jacobi_eig_sym3
 
+/**
+ * Sort a 3x3 eigensystem in ascending eigenvalue order.
+ *
+ * @param[in,out] eval Eigenvalues.
+ * @param[in,out] V Eigenvectors stored by column.
+ */
 static void sort_eigs3(AKV_REAL eval[3], AKV_REAL V[3][3]) {
   for (int i = 0; i < 3; i++) {
     int k = i;
@@ -641,8 +697,14 @@ static void sort_eigs3(AKV_REAL eval[3], AKV_REAL V[3][3]) {
       }
     }
   }
-}
+} // END FUNCTION: sort_eigs3
 
+/**
+ * Normalize a generalized eigenvector with respect to the mass matrix.
+ *
+ * @param[in] N Symmetric positive-definite mass matrix.
+ * @param[in,out] x Eigenvector to normalize in place.
+ */
 static void normalize_gen_evec3(const AKV_REAL N[3][3], AKV_REAL x[3]) {
   AKV_REAL Nx[3];
   mat3_mul_vec(N, x, Nx);
@@ -651,7 +713,7 @@ static void normalize_gen_evec3(const AKV_REAL N[3][3], AKV_REAL x[3]) {
     AKV_REAL inv = 1.0 / sqrt(nrm2);
     x[0] *= inv; x[1] *= inv; x[2] *= inv;
   }
-}
+} // END FUNCTION: normalize_gen_evec3
 
 // -----------------------------
 // Gridpoint mean-zero basis utilities with cached map and buffers
@@ -1270,9 +1332,8 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
   bool reg_capped = false;
   bool observed_b_conditioning_issue = false;
 
-  /* Reuse these buffers across retry attempts to avoid allocator churn in repeated
-   * SPD-probe / solve retries. They can be large for high-resolution reduced spaces.
-   */
+  // Reuse these buffers across retry attempts to avoid allocator churn in repeated
+  // SPD-probe / solve retries. They can be large for high-resolution reduced spaces.
   AKV_REAL *Bprobe   = (AKV_REAL*)calloc((size_t)Nr * (size_t)Nr, sizeof(AKV_REAL));
   AKV_REAL *Kprobe   = (AKV_REAL*)malloc((size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
   AKV_REAL *Bchol    = (AKV_REAL*)malloc((size_t)Nr * (size_t)Nr * sizeof(AKV_REAL));
@@ -1301,10 +1362,9 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
     ctx_reg.K_trace_scale_inv = 1.0;
     ctx_reg.B_trace_scale_inv = 1.0;
 
-    /* Deliberately expensive validation step: explicitly build the reduced mass matrix,
-     * symmetrize it, and attempt a dense Cholesky factorization before launching PRIMME.
-     * This gives reg_eps/reg_eps_max/reg_max_tries a concrete conditioning-repair role.
-     */
+    // Deliberately expensive validation step: explicitly build the reduced mass matrix,
+    // symmetrize it, and attempt a dense Cholesky factorization before launching PRIMME.
+    // This gives reg_eps/reg_eps_max/reg_max_tries a concrete conditioning-repair role.
     const akv_error_t berr = akv_build_reduced_mass_matrix_dense(&ctx_probe, Nr, Bprobe);
     if (berr != AKV_SUCCESS) {
       free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
@@ -1393,11 +1453,10 @@ static akv_error_t akv_full_solve_generalized_reduced_primme(
       return AKV_SUCCESS;
     }
 
-    /* PRIMME failed to converge all requested eigenpairs. This is not the same as
-     * "solver/library unavailable" (bit 2); preserve that bit for unavailable-path cases.
-     * If we retry with stronger regularization after a successful SPD probe, we still mark
-     * bit 3 because the solve required repair/escalation to proceed robustly.
-     */
+    // PRIMME failed to converge all requested eigenpairs. This is not the same as
+    // "solver/library unavailable" (bit 2); preserve that bit for unavailable-path cases.
+    // If we retry with stronger regularization after a successful SPD probe, we still mark
+    // bit 3 because the solve required repair/escalation to proceed robustly.
     *quality_flag_io |= (1<<3);
     if (attempt == max_tries - 1 || reg_capped) {
       free(Bprobe); free(Kprobe); free(Bchol); free(eval_tmp); free(evec_tmp); free(res_tmp);
@@ -1619,13 +1678,13 @@ typedef struct {
   REAL *restrict auxevol_gfs;
   const REAL *restrict in_gfs;
 
-  uint32_t *stub_flags_ptr; /* per-call flags sink */
+  uint32_t *stub_flags_ptr; // per-call flags sink
 } bhahaha_akv_context_t;
 
 static inline void bhahaha_akv_mark_stub(const akv_horizon_grid_t *grid, uint32_t bit) {
-  /* Prefer per-call accumulation via ctx->stub_flags_ptr. We intentionally do not use
-     any global/TLS fallback here to keep the behavior unambiguous and race-free.
-     NOTE: stub tracking therefore requires g.geom to be set to a valid ctx. */
+  // Prefer per-call accumulation via ctx->stub_flags_ptr. We intentionally do not use
+  // any global/TLS fallback here to keep the behavior unambiguous and race-free.
+  // NOTE: stub tracking therefore requires g.geom to be set to a valid ctx.
   if (!grid || !grid->geom) { (void)bit; return; }
   const bhahaha_akv_context_t *ctx = (const bhahaha_akv_context_t*)grid->geom;
   if (!ctx || !ctx->stub_flags_ptr) { (void)bit; return; }
@@ -2086,7 +2145,7 @@ AKV_WEAK void bhahaha_akv_map_to_spinvec(
   S_out[0] = 0.0; S_out[1] = 0.0; S_out[2] = 0.0;
 }
 
-/* IMPORTANT CONTRACT (AKV scaffold): apply_K/apply_B act on interior-DOF vectors of length N_theta*N_phi. */
+// IMPORTANT CONTRACT (AKV scaffold): apply_K/apply_B act on interior-DOF vectors of length N_theta*N_phi.
 AKV_WEAK void bhahaha_akv_apply_K(const akv_horizon_grid_t *grid, const AKV_REAL *z_in, AKV_REAL *Kz_out) {
   if (!grid || !z_in || !Kz_out) return;
 
@@ -2288,12 +2347,11 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   const REAL *restrict weights_1d;
   int weight_stencil_size;
   bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights_1d, &weight_stencil_size);
-  /* NOTE: bah_diagnostics_integration_weights() returns a single 1D repeating stencil table
-   * (length = weight_stencil_size) intended to be tiled across BOTH horizon-grid directions.
-   * See bah_diagnostics_integration_weights.c and existing diagnostics (e.g., proper circumferences)
-   * for the canonical usage pattern: weights_1d[i % weight_stencil_size].
-   * The returned coefficients are dimensionless; multiply by coordinate spacings separately if desired.
-   */
+  // NOTE: bah_diagnostics_integration_weights() returns a single 1D repeating stencil table
+  // (length = weight_stencil_size) intended to be tiled across BOTH horizon-grid directions.
+  // See bah_diagnostics_integration_weights.c and existing diagnostics (e.g., proper circumferences)
+  // for the canonical usage pattern: weights_1d[i % weight_stencil_size].
+  // The returned coefficients are dimensionless; multiply by coordinate spacings separately if desired.
   bhahaha_diags->akv_status = (int)AKV_SUCCESS;
   bhahaha_diags->akv_eig_gap_43 = NAN;
   bhahaha_diags->akv_quality_flag = 0;
@@ -2342,7 +2400,7 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
   }
   w2d = w2d_cache;
 #else
-  /* No TLS: disable caching to avoid shared static pointer races. */
+  // No TLS: disable caching to avoid shared static pointer races.
   w2d = (REAL*)malloc(sizeof(REAL) * (size_t)N_tot_2d);
   if (!w2d) {
     bhahaha_diags->akv_status = (int)AKV_ERR_ALLOC;
@@ -2491,9 +2549,8 @@ AKV_WEAK AKV_REAL bhahaha_akv_eval_J_integrand_full(
                                       &out);
 
 #if BHAHAHA_AKV_ENABLE_QUALITY_EXTENSION
-  /* Pack an 8-bit stub mask (excluding the always-present L1-integrands bit) so the
-   * "any stub used" indicator is not permanently set in normal runs.
-   */
+  // Pack an 8-bit stub mask (excluding the always-present L1-integrands bit) so the
+  // "any stub used" indicator is not permanently set in normal runs.
   const uint32_t stub_mask8_all = (stub_flags & UINT32_C(0xFF));
   const uint32_t stub_mask8 = (stub_mask8_all & ~BHAHAHA_AKV_STUB_USED_L1_INTEGRANDS);
   if (stub_mask8) {
