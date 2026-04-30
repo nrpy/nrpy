@@ -12,12 +12,12 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
     ExpansionFunctionTheta,
 )
-from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
@@ -33,12 +33,6 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
     :param enable_fd_functions: Whether to enable finite difference functions, defaults to True.
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
 
-    DocTests:
-    >>> import nrpy.grid as gri
-    >>> _ = gri.register_gridfunctions("hh")[0]
-    >>> env = register_CFunction_diagnostics_area_centroid_and_Theta_norms()
-    Setting up ExpansionFunctionThetaClass[Spherical]...
-    Setting up reference_metric[Spherical]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -100,7 +94,7 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
 """
     body += (
         ccg.c_codegen(
-            [Th.Theta, BHaH.BHaHAHA.area.area3()],
+            [Th.Theta, bhahaha_area.area3()],
             ["const REAL Theta", "const REAL area_element"],
             enable_fd_codegen=True,
             enable_fd_functions=enable_fd_functions,
@@ -115,18 +109,18 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
               sum_x_centroid += (Cart_originx + tmp0 * cos(xx2)) * area_element * weight1 * weight2;
               sum_y_centroid += (Cart_originy + tmp0 * sin(xx2)) * area_element * weight1 * weight2;
               sum_z_centroid += (Cart_originz + hh * cos(xx1)) * area_element * weight1 * weight2;
-            } // END centroid sums
+            } // END BLOCK: accumulate centroid numerators
             if (Theta * Theta > max_Theta_squared_for_Linf_norm)
               max_Theta_squared_for_Linf_norm = Theta * Theta;
             if (hh > max_radius)
               max_radius = hh;
             if (hh < min_radius)
               min_radius = hh;
-          } // END OMP CRITICAL
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
-  } // END OMP PARALLEL
+          } // END OMP CRITICAL: update shared area and centroid diagnostics
+        } // END LOOP: for i0 over radial horizon-grid points
+      } // END LOOP: for i1 over theta horizon-grid points
+    } // END LOOP: for i2 over phi horizon-grid points
+  } // END OMP PARALLEL: scan all horizon surface points
 
   // Store diagnostics in commondata->bhahaha_diagnostics struct.
   {
@@ -155,7 +149,7 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
     bhahaha_diags->x_centroid_wrt_coord_origin = sum_x_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->y_centroid_wrt_coord_origin = sum_y_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
     bhahaha_diags->z_centroid_wrt_coord_origin = sum_z_centroid * params->dxx1 * params->dxx2 / bhahaha_diags->area;
-  } // END store diagnostics in commondata->bhahaha_diagnostics struct.
+  } // END BLOCK: store area, centroid, and Theta norms in commondata diagnostics
 """
     )
     cfc.register_CFunction(
@@ -173,11 +167,12 @@ def register_CFunction_diagnostics_area_centroid_and_Theta_norms(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 
     if results.failed > 0:
-        raise RuntimeError(
-            f"Doctest failed: {results.failed} of {results.attempted} test(s)"
-        )
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

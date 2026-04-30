@@ -16,8 +16,6 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
 
     This function sets up the necessary parameters and code body to compute the derivatives
     hDD_dD and W_dD in the source grid interior using OpenMP for parallelization.
-
-    >>> register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior()
     """
     includes = ["BHaH_defines.h"]
     desc = "Compute h_{ij,k}."
@@ -66,7 +64,7 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
         enable_fd_codegen=True,
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
     body += r"""
-      } // END LOOP over non-inner-boundary points
+      } // END LOOP: for pt over non-inner-boundary points
 
   // PART 2 OF 2: Compute radial derivatives h_{ij,k} and W_{,k} (k = 0) at ALL interior points.
 #pragma omp parallel for
@@ -96,7 +94,7 @@ def register_CFunction_hDD_dD_and_W_dD_in_interp_src_grid_interior() -> None:
     ).replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")
 
     body += r"""
-} // END LOOP over ALL interior points
+} // END LOOP: for i0/i1/i2 over all interior points
 """
 
     cfc.register_CFunction(

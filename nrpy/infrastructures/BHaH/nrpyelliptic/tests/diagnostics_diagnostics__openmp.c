@@ -74,4 +74,4 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
 
   if (commondata->time + commondata->dt > commondata->t_final)
     printf("\n");
-} // END FUNCTION diagnostics
+} // END FUNCTION: diagnostics

@@ -85,8 +85,7 @@ set_of_CoordSystems = {CoordSystem}
 list_of_grid_physical_sizes = []
 for CoordSystem in set_of_CoordSystems:
     list_of_grid_physical_sizes.append(grid_physical_size)
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
+num_cuda_streams = len(list_of_grid_physical_sizes)
 # symmetry_axes will be set on any i such that Nxx[i] = 2 below.
 Nxx_dict = {
     "Spherical": [64, 2, 2],
@@ -98,20 +97,25 @@ Nxx_dict = {
     "GeneralRFM_fisheyeN2": [64, 64, 64],
 }
 fisheye_param_defaults: dict[str, float] = {}
-if num_fisheye_transitions is not None:
-    for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
-    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
 if num_fisheye_transitions == 1:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 1.5,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 4.0,
-            "fisheye_phys_w_trans1": 2.0,
-        }
-    )
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 1.5,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 4.0,
+        "fisheye_phys_w_trans1": 2.0,
+    }
+elif num_fisheye_transitions == 2:
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_a2": 4.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 2.0,
+        "fisheye_phys_w_trans1": 1.0,
+        "fisheye_phys_r_trans2": 6.0,
+        "fisheye_phys_w_trans2": 2.0,
+    }
 OMP_collapse = 1
 if (
     "Spherical" in CoordSystem
@@ -142,7 +146,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to

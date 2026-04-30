@@ -110,7 +110,7 @@ REAL dsmin0, dsmin1, dsmin2;
             arg_dict_host,
             parallelization=parallelization,
             comments=desc,
-            cfunc_type="void",
+            cfunc_type="static void",
             launchblock_with_braces=False,
             thread_tiling_macro_suffix="CAHD",
         )

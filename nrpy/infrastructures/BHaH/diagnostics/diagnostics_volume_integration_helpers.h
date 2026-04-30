@@ -142,7 +142,7 @@ static inline bool diags_integration_point_is_excluded_prefix(const REAL xx, con
     } // END ELSE for exclude_inside
   } // END LOOP over rules
   return false;
-} // END FUNCTION diags_integration_point_is_excluded_prefix
+} // END FUNCTION: diags_integration_point_is_excluded_prefix
 
 // ======================== File I/O helpers ========================
 
@@ -163,7 +163,7 @@ static inline FILE *diags_integration_open_output_file(const int nn, const char 
     exit(1);
   } // END IF file pointer is NULL
   return file_ptr;
-} // END FUNCTION diags_integration_open_output_file
+} // END FUNCTION: diags_integration_open_output_file
 
 /**
  * @brief Write a per-recipe header describing column mappings, rules, and integrands.
@@ -315,7 +315,7 @@ static inline void diags_integration_write_header(FILE *file_ptr, int recipe_ind
   fprintf(file_ptr, "%s\n", legacy_columns);  // "# time ..."
 
   // Footer delimiter lines with dashes are intentionally omitted.
-} // END FUNCTION diags_integration_write_header
+} // END FUNCTION: diags_integration_write_header
 
 /**
  * @brief Writes one data row for a specific recipe prefix at a given time.
@@ -341,7 +341,7 @@ static inline void diags_integration_write_row(FILE *file_ptr, double time, doub
     } // END IF is_squared
   } // END LOOP over specs
   fprintf(file_ptr, "\n");
-} // END FUNCTION diags_integration_write_row
+} // END FUNCTION: diags_integration_write_row
 
 /**
  * @brief Apply a prefix of spherical rules and integrate requested integrands.
@@ -478,7 +478,7 @@ static void diagnostics_integration_apply_rules(const commondata_struct *restric
   *proper_volume_out = volume_sum;
   for (int k0 = 0; k0 < num_integrands; k0++)
     integrals_out[k0] = integrals_sum[k0];
-} // END FUNCTION diagnostics_integration_apply_rules
+} // END FUNCTION: diagnostics_integration_apply_rules
 
 /**
  * @brief Initializes an array of recipes to a default empty state.
@@ -502,7 +502,7 @@ static inline void diags_integration_initialize_recipes(diags_integration_recipe
       recipes[recipe].rules[rule].exclude_inside = 0;
     } // END LOOP over rules
   } // END LOOP over recipes
-} // END FUNCTION diags_integration_initialize_recipes
+} // END FUNCTION: diags_integration_initialize_recipes
 
 // ======================== Result query functions ========================
 
@@ -532,7 +532,7 @@ static inline int diags_integration_get_recipe_result(const diags_integration_re
     } // END IF recipe found
   } // END LOOP over recipe results
   return 0;
-} // END FUNCTION diags_integration_get_recipe_result
+} // END FUNCTION: diags_integration_get_recipe_result
 
 /**
  * @brief Find an integrand result within a recipe by GF index.
@@ -556,7 +556,7 @@ static inline int diags_integration_get_integrand_result(const diags_integration
     } // END IF integrand found
   } // END LOOP over integrand results
   return 0;
-} // END FUNCTION diags_integration_get_integrand_result
+} // END FUNCTION: diags_integration_get_integrand_result
 
 /**
  * @brief Extract a specific calculated value from the results.
@@ -623,7 +623,7 @@ static inline int diags_integration_query(const diags_integration_results_t *res
   default:
     return 0; // Unknown extraction type
   } // END SWITCH on extraction_type
-} // END FUNCTION diags_integration_query
+} // END FUNCTION: diags_integration_query
 
 // Helpful diags_integration_query() macros
 #define diags_integration_get_rms(results, recipe_name, gf_index, out_ptr)                                                                           \
@@ -653,7 +653,7 @@ static inline int diags_integration_result_exists(const diags_integration_result
 
   const diags_integration_integrand_result_t *integrand_result;
   return diags_integration_get_integrand_result(recipe_result, gf_index, &integrand_result);
-} // END FUNCTION diags_integration_result_exists
+} // END FUNCTION: diags_integration_result_exists
 
 /**
  * @brief Print all available results for debugging.
@@ -691,7 +691,7 @@ static inline void diags_integration_print_all_results(const diags_integration_r
     fprintf(file_ptr, "\n");
   } // END LOOP over recipe results
   fprintf(file_ptr, "======================================\n\n");
-} // END FUNCTION diags_integration_print_all_results
+} // END FUNCTION: diags_integration_print_all_results
 
 /**
  * @brief Executes a list of recipes, writes results to files, and optionally populates a results structure.
@@ -814,6 +814,6 @@ static inline void diags_integration_execute_recipes(commondata_struct *restrict
 
     fclose(file_ptr);
   } // END LOOP over recipes
-} // END FUNCTION diags_integration_execute_recipes
+} // END FUNCTION: diags_integration_execute_recipes
 
 #endif // DIAGNOSTICS_VOLUME_INTEGRATION_HELPERS_H

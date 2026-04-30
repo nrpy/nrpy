@@ -19,8 +19,6 @@ from typing import Any, cast
 import sympy as sp
 from appdirs import user_cache_dir  # type: ignore
 
-import nrpy.params as par
-
 
 def get_hash(unique_id: str) -> str:
     """
@@ -50,19 +48,6 @@ def cache_file(unique_id: str) -> Path:
     if not Path(user_cache_dir("nrpy")).exists():
         Path(user_cache_dir("nrpy")).mkdir(parents=True, exist_ok=True)
     return Path(user_cache_dir("nrpy")) / f"{get_hash(unique_id)}.nrpycache"
-
-
-def NRPy_params_checksum() -> str:
-    """
-    Generate a checksum of NRPy parameters stored in par.glb_params_dict.
-
-    :return: The checksum string.
-
-    DocTests:
-    >>> isinstance(NRPy_params_checksum(), str)
-    True
-    """
-    return get_hash(str(pickle.dumps(dict(sorted(par.glb_params_dict.items())))))
 
 
 def is_cached(unique_id: str) -> bool:

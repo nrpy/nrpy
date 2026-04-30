@@ -30,7 +30,7 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
     // Fatal: checkpoint output must not silently continue on partial write.
     exit(1);
   } // END IF wrote != nmemb
-} // END FUNCTION BHAH_safe_write_impl()
+} // END FUNCTION: BHAH_safe_write_impl()
 
 #define FWRITE(ptr, size, nmemb, fp, what) BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
 
@@ -110,4 +110,4 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
     fclose(cp_file);
     fprintf(stderr, "FINISHED WRITING CHECKPOINT\n");
   } // END IF ready to write checkpoint
-} // END FUNCTION write_checkpoint
+} // END FUNCTION: write_checkpoint

@@ -477,7 +477,7 @@ IFCUDARUN({{
         desc_dict = {
             "malloc": """
  * @file rfm_precompute_malloc.c
- * @brief Allocates memory for precomputed reference metric quantities.
+ * Allocates memory for precomputed reference metric quantities.
  *
  * - When params->is_host==true, perform HOST allocation.
  * - When params->is_host==false, perform DEVICE allocation.
@@ -485,12 +485,10 @@ IFCUDARUN({{
  * @param[in]  commondata  Global simulation metadata (unused).
  * @param[in]  params      Grid parameters (is_host, dims).
  * @param[out] rfmstruct   Destination struct for allocated pointers.
- *
- * @return void.
  """,
             "defines": """
  * @file rfm_precompute_defines.c
- * @brief Computes and populates arrays with precomputed reference metric quantities.
+ * Computes and populates arrays with precomputed reference metric quantities.
  *
  * - params->is_host==true: rfmstruct & xx[] are HOST; run CPU loops.
  * - params->is_host==false: rfmstruct & xx[] are DEVICE/UVM; launch CUDA kernels.
@@ -499,12 +497,10 @@ IFCUDARUN({{
  * @param[in]  params      Grid parameters and dimensions.
  * @param[out] rfmstruct   Struct containing arrays to populate.
  * @param[in]  xx          Pointers to 1D coordinate arrays.
- *
- * @return void.
  """,
             "free": """
  * @file rfm_precompute_free.c
- * @brief Frees memory for precomputed reference metric quantities.
+ * Frees memory for precomputed reference metric quantities.
  *
  * - params->is_host==true: free HOST memory.
  * - params->is_host==false: free DEVICE memory.
@@ -512,8 +508,6 @@ IFCUDARUN({{
  * @param[in]  commondata  Global simulation metadata (unused).
  * @param[in]  params      Grid parameters.
  * @param[out] rfmstruct   Struct whose members will be freed.
- *
- * @return void.
  """,
         }
 

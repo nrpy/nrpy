@@ -9,7 +9,7 @@ the following improvements over the current SEBOBv1:
 []    1.b. Merger-ringdown modes (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5)
 []    1.c. NQCs for higher modes
 []    1.d. Computing mode-mixing coefficients for higher modes
-[]    1.e. Transformation from co-precessing to inertial frame
+[x]    1.e. Transformation from co-precessing to inertial frame
 []2. Improved inspiral dynamics, including precession
 [x]    2.a. Decoupled PN spin evolution equations
 []    2.b. Decoupled Quasi-precessing EOB Hamiltonian
@@ -205,6 +205,7 @@ BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.registe
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
+BHaH.seobnr.SEOBNRv5_coprecessing_rotations.register_CFunction_SEOBNRv5_coprecessing_rotations()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
 par.register_CodeParameters(

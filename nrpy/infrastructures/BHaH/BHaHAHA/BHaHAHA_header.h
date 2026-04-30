@@ -42,8 +42,8 @@ enum {
 //   for (int itheta = 0; itheta < NUM_THETA; itheta++) {
 //     const double theta = ((double)itheta + 0.5) * M_PI / ((double)NUM_THETA);
 //     printf("%e %e %e\n", theta, phi, horizon_guess[IDX2(itheta, iphi)]);
-//   } // END LOOP over theta (inner loop)
-// } // END LOOP over phi (outer loop)
+//   } // END LOOP: for itheta over theta (inner loop)
+// } // END LOOP: for iphi over phi (outer loop)
 // Macro definition:
 #define IDX2(itheta, iphi) ((itheta) + NUM_THETA * (iphi))
 #define MAX_RESOLUTIONS 16

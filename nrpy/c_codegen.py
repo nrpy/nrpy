@@ -6,7 +6,6 @@ Authors: Zachariah B. Etienne; zachetie **at** gmail **dot* com
          Ken Sible; ksible **at** outlook **dot* com
 """
 
-import sys
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union, cast
 
 import sympy as sp
@@ -18,6 +17,7 @@ import nrpy.params as par
 from nrpy.helpers.cse_preprocess_postprocess import (  # NRPy: CSE preprocessing and postprocessing
     cse_postprocess,
     cse_preprocess,
+    sort_cse_output_deterministically,
 )
 from nrpy.helpers.custom_c_codegen_functions import custom_functions_for_SymPy_ccode
 from nrpy.helpers.generic import (
@@ -580,6 +580,11 @@ def c_codegen(
                     order=CCGParams.cse_sorting,
                 )
             )
+        if CCGParams.cse_sorting == "none":
+            cse_results = sort_cse_output_deterministically(
+                cse_results,
+                symbol_prefix=CCGParams.cse_varprefix,
+            )
 
         # Important: cse_postprocess() has just removed SCALAR_TMPs from the sympyexprs_SCALAR_TMPs_are_sp_Eq.
 
@@ -1023,7 +1028,7 @@ def gridfunction_management_and_FD_codegen(
 """
 
         NRPy_FD_StepNumber = NRPy_FD_StepNumber + 1
-        # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
+        # We choose the CSE temporary variable prefix "FDPart1" for the finite difference coefficients:
         kwargs_FDPart1.update(
             {
                 "cse_varprefix": "FDPart1",
@@ -1128,7 +1133,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
         # Copy kwargs
         kwargs_FDPart2 = kwargs_FDPart1.copy()
         kwargs_FDPart2["symbol_to_Rational_dict"] = {}
-        # We choose the CSE temporary variable prefix "FDpart1" for the finite difference coefficients:
+        # We choose the CSE temporary variable prefix "FDPart2" for the finite difference coefficients:
         kwargs_FDPart2.update(
             {
                 "enable_cse_preprocess": CCGParams.enable_cse_preprocess,
@@ -1178,7 +1183,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
 
     # Copy kwargs
     kwargs_FDPart3 = kwargs_FDPart2.copy()
-    # We choose the CSE temporary variable prefix "FDpart2" for the finite difference coefficients:
+    # We choose the CSE temporary variable prefix "FDPart3" for the finite difference coefficients:
     kwargs_FDPart3.update(
         {
             "cse_varprefix": "FDPart3",
@@ -1198,6 +1203,7 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

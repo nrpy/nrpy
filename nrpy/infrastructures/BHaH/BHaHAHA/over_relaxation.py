@@ -35,8 +35,8 @@ which defines the apparent horizon.
 After over-relaxation, the time derivative v(theta, phi) (denoted by VVGF) is reset to stabilize the dynamics
 by enforcing partial_t h = 0.
 
-@param commondata - Pointer to the common data structure containing global and diagnostic information.
-@param griddata - Pointer to the grid data structure containing grid-level parameters and functions.
+@param[in,out] commondata Pointer to the common data structure containing global and diagnostic information.
+@param[in,out] griddata Pointer to the grid data structure containing grid-level parameters and functions.
 @note This function uses OpenMP for parallelization and incorporates grid-level diagnostics for monitoring and adjustments.
 """
     cfunc_type = "void"
@@ -62,7 +62,7 @@ by enforcing partial_t h = 0.
       commondata->h_p[IDX3(i0, i1, i2)] = 0.0; //
     }
     commondata->time_of_h_p = 0.0; // Initialize the time for h_p.
-  } // END initialization of h_p and t_p.
+  } // END IF: initialization of h_p and t_p
 
   const int iterations_per_M_scale = commondata->bhahaha_params_and_data->M_scale / commondata->dt;
   const int relax_every_nn = 0.25 * M_PI * iterations_per_M_scale;
@@ -90,7 +90,7 @@ by enforcing partial_t h = 0.
         const REAL t_prev = commondata->time_of_h_p, t_curr = commondata->time;
         const REAL dst_time = t_prev + overstep * (t_curr - t_prev);
         in_gfs[IDX4pt(HHGF, idx3)] = y_curr + (y_prev - y_curr) * (dst_time - t_curr) / (t_prev - t_curr);
-      } // END LOOP: Apply overstep to gridpoints.
+      } // END LOOP: for i0/i1/i2 over overstep gridpoints
 
       // Recompute diagnostics after applying the overstep.
       commondata->error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
@@ -105,7 +105,7 @@ by enforcing partial_t h = 0.
 
       LOOP_OMP("omp parallel for", i0, NGHOSTS, NGHOSTS + 1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
         in_gfs[IDX4(HHGF, i0, i1, i2)] = in_gfs[IDX4(HHGF, i0 + 1, i1, i2)]; // Revert horizon values to their original state.
-      } // END LOOP: Revert horizon values to their original state.
+      } // END LOOP: for i0/i1/i2 over reverted horizon values
 
       // Update the best overstep if diagnostics improve significantly.
       if (bhahaha_diags->Theta_Linf_times_M < min_Theta_Linf_times_M) {
@@ -116,8 +116,8 @@ by enforcing partial_t h = 0.
                  fabs(M_irr_orig - min_Theta_Linf_times_M) / M_irr_orig);
       } else {
         break; // Exit loop early if no further improvement is found.
-      } // END IF: overstep resulted in a reduced error.
-    } // END LOOP: Iterate over oversteps.
+      } // END IF: overstep resulted in a reduced error
+    } // END LOOP: for overstep_idx over candidate oversteps
 
     // Apply the best overstep if it significantly improves convergence.
     if (best_overstep != 0.0 && fabs(M_irr_orig - min_Theta_Linf_times_M) / M_irr_orig > 5e-5) {
@@ -131,8 +131,8 @@ by enforcing partial_t h = 0.
 
         // Update v(theta, phi) to reset time dynamics.
         in_gfs[IDX4(VVGF, i0, i1, i2)] = commondata->eta_damping * in_gfs[IDX4(HHGF, i0, i1, i2)];
-      } // END LOOP over grid interior.
-    } // END LOOP: Apply the optimal overstep.
+      } // END LOOP: for i0/i1/i2 over grid interior
+    } // END LOOP: for i0/i1/i2 over optimal overstep
 
     // Since over-relaxation was successful, we need to update the surface on which the metric
     //    is interpolated, and the CFL-limited timestep.
@@ -148,15 +148,15 @@ by enforcing partial_t h = 0.
     }
     commondata->time_of_h_p = 0.0; // Reset time for h_p.
     return;
-  } // END IF: Overstep logic.
+  } // END IF: Overstep logic
 
   // Update the stored horizon guess h_p every relax_every_nn iterations.
   if (commondata->nn % relax_every_nn == 0) {
     LOOP_OMP("omp parallel for", i0, NGHOSTS, NGHOSTS + 1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
       commondata->h_p[IDX3(i0, i1, i2)] = in_gfs[IDX4pt(HHGF, IDX3(i0, i1, i2))];
-    } // END LOOP over all gridpoints
+    } // END LOOP: for i0/i1/i2 over all gridpoints
     commondata->time_of_h_p = commondata->time; // Update time for h_p.
-  } // END IF nn % relax_every_nn == 0
+  } // END IF: nn % relax_every_nn == 0
 """
     cfc.register_CFunction(
         subdirectory="",

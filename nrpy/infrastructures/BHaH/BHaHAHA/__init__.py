@@ -2,7 +2,6 @@ from . import (
     BHaH_implementation,
     apply_bcs_inner_only,
     apply_bcs_r_maxmin_partial_r_hDD_upwinding,
-    area,
     bcstruct_set_up,
     cfl_limited_timestep_based_on_h_equals_r,
     diagnostics,

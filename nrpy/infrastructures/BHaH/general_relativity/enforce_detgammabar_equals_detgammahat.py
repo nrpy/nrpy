@@ -82,11 +82,6 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
-    # First define the Kronecker delta:
-    KroneckerDeltaDD = ixp.zerorank2()
-    for i in range(3):
-        KroneckerDeltaDD[i][i] = sp.sympify(1)
-
     # The detgammabar in BSSN_RHSs is set to detgammahat when BSSN_RHSs::detgbarOverdetghat_equals_one=True (default),
     #    so we manually compute it here:
     dummygammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
@@ -98,7 +93,9 @@ def register_CFunction_enforce_detgammabar_equals_detgammahat(
         for j in range(3):
             hprimeDD[i][j] = (nrpyAbs(rfm.detgammahat) / detgammabar) ** (
                 sp.Rational(1, 3)
-            ) * (KroneckerDeltaDD[i][j] + Bq.hDD[i][j]) - KroneckerDeltaDD[i][j]
+            ) * ((rfm.ghatDD[i][j] / rfm.ReDD[i][j]) + Bq.hDD[i][j]) - (
+                rfm.ghatDD[i][j] / rfm.ReDD[i][j]
+            )
 
     hDD_access_gfs: List[str] = []
     hprimeDD_expr_list: List[sp.Expr] = []

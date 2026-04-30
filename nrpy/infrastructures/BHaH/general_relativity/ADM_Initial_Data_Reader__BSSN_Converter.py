@@ -72,7 +72,7 @@ def register_CFunction_exact_ADM_ID_function(
         )
         body += "MAYBE_UNUSED const REAL xx0=r, xx1=th, xx2=ph;\n"
     elif IDCoordSystem == "Cartesian":
-        body += r"""  const REAL x=xCart[0], y=xCart[1], z=xCart[2];
+        body += r"""  MAYBE_UNUSED const REAL x=xCart[0], y=xCart[1], z=xCart[2];
 """
     else:
         raise ValueError(
@@ -763,7 +763,10 @@ def setup_ADM_initial_data_reader(
     return includes, prefunc, lambdaU_launch
 
 
-def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
+def build_initial_data_conversion_loop(
+    enable_T4munu: bool,
+    post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
+) -> str:
     """
     Generate the string for the initial data conversion loop.
 
@@ -776,6 +779,9 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
          (if enable_T4munu) T4UU fields into auxevol_gfs.
 
     :param enable_T4munu: whether to include the stress‐energy (T4UU) fields
+    :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
+        ``ADM_Cart_to_BSSN_Cart(...)`` and before
+        ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     :returns: a raw string containing the entire loop + assignments
     """
     header = r"""
@@ -804,6 +810,10 @@ def build_initial_data_conversion_loop(enable_T4munu: bool) -> str:
 
     BSSN_Cart_basis_struct BSSN_Cart_basis;
     ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
+"""
+    if post_ADM_Cart_to_BSSN_Cart_hook_str:
+        header += "\n" + post_ADM_Cart_to_BSSN_Cart_hook_str.rstrip() + "\n"
+    header += r"""
 
     rescaled_BSSN_rfm_basis_struct rescaled_BSSN_rfm_basis;
     BSSN_Cart_to_rescaled_BSSN_rfm(commondata, params,
@@ -887,6 +897,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     enable_T4munu: bool = False,
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
+    post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
 ) -> None:
     """
     Register the CFunction for converting initial ADM data to BSSN variables.
@@ -897,6 +908,9 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
+    :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
+        ``ADM_Cart_to_BSSN_Cart(...)`` and before
+        ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     """
     parallelization = par.parval_from_str("parallelization")
 
@@ -933,7 +947,10 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         ),
     )
 
-    body = build_initial_data_conversion_loop(enable_T4munu)
+    body = build_initial_data_conversion_loop(
+        enable_T4munu,
+        post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
+    )
 
     post_initial_data_call: str = ""
     if parallelization in ["cuda"]:
@@ -981,6 +998,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     enable_T4munu: bool = False,
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
+    post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
 ) -> None:
     """
     Register ADM->BSSN converters for multiple coordinate systems.
@@ -994,6 +1012,9 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param enable_T4munu: Whether to include stress-energy tensor components.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :param ID_persist_struct_str: String for persistent ID structure.
+    :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
+        ``ADM_Cart_to_BSSN_Cart(...)`` and before
+        ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     """
     for CoordSystem in sorted(set_of_CoordSystems):
         register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -1003,6 +1024,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
             enable_T4munu=enable_T4munu,
             enable_fd_functions=enable_fd_functions,
             ID_persist_struct_str=ID_persist_struct_str,
+            post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
         )
 
 

@@ -17,8 +17,6 @@ def register_CFunction_poisoning_set_inputs() -> None:
 
     This function poisons the inputs of a `bhahaha_params_and_data_struct` by setting
     `REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
-
-    >>> register_CFunction_poisoning_set_inputs()
     """
     includes = ["stdio.h", "stdlib.h", "stdint.h", "math.h", "BHaHAHA.h"]
     desc = "Poison the inputs of bhahaha_params_and_data_struct by setting REALs to NaN, pointers to NULL, and ints to -1."

@@ -30,7 +30,7 @@ static void compute_ds_min_host(const params_struct *restrict params, REAL *rest
   } // END LOOP: for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++)
 
   *ds_min_result = ds_min;
-} // END FUNCTION compute_ds_min_host
+} // END FUNCTION: compute_ds_min_host
 
 /**
  * Compute minimum timestep dt = CFL_FACTOR * ds_min.
@@ -40,4 +40,4 @@ void cfl_limited_timestep(commondata_struct *restrict commondata, params_struct 
   compute_ds_min_host(params, xx[0], xx[1], xx[2], &ds_min);
 
   commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
-} // END FUNCTION cfl_limited_timestep
+} // END FUNCTION: cfl_limited_timestep

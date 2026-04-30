@@ -1,148 +1,202 @@
 [![Python CI](https://github.com/nrpy/nrpy/actions/workflows/main.yml/badge.svg)](https://github.com/nrpy/nrpy/actions/workflows/main.yml)
 
-# NRPy 2: Python/SymPy-Based Code Generation for Numerical Relativity... and Beyond!
+# NRPy
 
-## Quick start, Step 1:
+NRPy is a Python/SymPy-based symbolic code generation toolkit for numerical relativity and relativistic astrophysics. It uses symbolic equation modules to generate standalone C/CUDA applications, Einstein Toolkit thorns, Charm++ projects, and JAX/Python workflows. In its current public form, NRPy provides the core infrastructure for single-patch BlackHoles@Home (BH@H) numerical relativity simulations in Cartesian, curvilinear, and singular coordinate systems.
 
+At a high level:
+
+- `nrpy/examples` contains runnable project generators.
+- `nrpy/equations`, `nrpy/infrastructures`, and `nrpy/helpers` contain the symbolic physics, backend-specific code generation, and shared support code that those generators use.
+
+## Citation
+
+NRPy is the product of many scientists' work. [Please cite the relevant NRPy papers in your publications](CITATION.md); these citations go a long way toward proper acknowledgement of these efforts and support many junior scientists' careers.
+
+## Installation
+
+For end users who want to generate projects from the published package:
+
+```bash
+python -m pip install nrpy
 ```
-pip install nrpy
-```
 
-## Quick start, Step 2: Choose a project to build.
+For contributors working from a clone of this repository:
 
-### BlackHoles@Home infrastructure (standalone): Choose a project, run the provided command, then follow the instructions for compiling & running the generated C code.
-
-* **Wave equation solver**
-  - **Cartesian coordinates**:
-    ```
-    python3 -m nrpy.examples.wave_equation_cartesian
-    ```
-  - **Curvilinear coordinates**:
-    ```
-    python3 -m nrpy.examples.wave_equation_curvilinear
-    ```
-* **General relativity**
-  - **Two black holes collide**:
-    ```
-    python3 -m nrpy.examples.two_blackholes_collide
-    ```
-  - **Black hole spectroscopy**:
-    ```
-    python3 -m nrpy.examples.blackhole_spectroscopy
-    ```
-  - **Spinning black hole**:
-    ```
-    python3 -m nrpy.examples.spinning_blackhole
-    ```
-  - **Binary black hole initial data, courtesy NRPyElliptic**:
-    ```
-    python3 -m nrpy.examples.nrpyelliptic_conformally_flat
-    ```
-
-### Einstein Toolkit infrastructure: Choose a project to build, run the provided command. Check the `examples/et_*` directory for a ThornList and parameter file. Thorns will be output to `project/`
-
-* **Wave equation solver**
-  - **Cartesian coordinates, with Carpet AMR infrastructure**:
-    ```
-    python3 -m nrpy.examples.carpet_wavetoy_thorns
-    ```
-* **General relativity: Generate Baikal and BaikalVacuum thorns**
-  - **Cartesian coordinates, with Carpet AMR infrastructure**:
-    ```
-    python3 -m nrpy.examples.carpet_baikal_thorns
-    ```
-### superB infrastructure: Choose a project, run the provided command, then follow the instructions for installing Charm++, compiling and running the generated C++ code.
-
-* **General relativity**
-  - **Two black holes collide**:
-    ```
-    python3 -m nrpy.examples.superB_two_blackholes_collide
-    ```
-  - **Black hole spectroscopy**:
-    ```
-    python3 -m nrpy.examples.superB_blackhole_spectroscopy
-    ```
-  - **Binary black hole initial data, courtesy NRPyElliptic**:
-    ```
-    python3 -m nrpy.examples.superB_nrpyelliptic_conformally_flat
-    ```
-
-## Quick Start, Step 3
-
-1. If working with a BlackHoles@Home project: follow the directions at the end of the code generation, starting with "Now go into `[directory name]` and type `make` to build, then `[executable]` to run. Parameter file can be found in `[parameter filename]`."
-  1. Parameter files are text files, making it easy to adjust simulation parameters.
-  1. In addition, parameters can be set at the command line. For example, `wavetoy` has a parameter `convergence_factor` that increases the resolution (technically `Nx=Ny=Nz`) by this factor. To output at twice the resolution, simply run `./wavetoy 2.0`, and a new file will be output `out0d-conv_factor2.00.txt`, which contains data at 2x the resolution.
-  1. Analyze the output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` in e.g., `gnuplot`.
-1. If working with an Einstein Toolkit project, the output will be Einstein Toolkit modules (thorns). You'll want to either copy or link them to an arrangement in `arrangements/[subdirectory]/`, then add the thorns to your `ThornList`, and compile.
-1. If working with a superB project: install Charm++ following the instructions in [Charm++ documentation](https://charm.readthedocs.io/en/latest/charm++/manual.html#installing-charm). Then, follow the directions at the end of the code generation, starting with "Now go into `[directory name]` and type `make` to build, then `[executable]` to run. Parameter file can be found in `[parameter filename]`." As in a BlackHoles@Home project parameters can be changed and output from `out0d-conv_factor1.00.txt` and `out0d-conv_factor2.00.txt` can be analyzed using e.g., `gnuplot`.
-
-# Contributing to NRPy 2 and running locally
-
-Want to contribute to NRPy 2? Great! First clone the NRPy 2.0 repo:
-```
+```bash
 git clone https://github.com/nrpy/nrpy.git
-```
-
-Next, you'll want to make sure your development environment is consistent with what GitHub Actions expects:
-```
 cd nrpy
-pip install -U -r requirements-dev.txt
+python -m pip install -U -r requirements-dev.txt
+python -m pip install -e .
 ```
 
-Finally, to run anything in the NRPy repo, you'll need to set your `PYTHONPATH` appropriately. If you're using bash, attach the following line to the bottom of your `.bashrc` file:
+After an editable install, you can run generators from the repository root with `python -m nrpy.examples.<example_name>`.
+
+## Prerequisites by Workflow
+
+`python -m pip install nrpy` installs the Python package, but many generated projects also need external tools:
+
+- Standalone BHaH examples: a C compiler and `make`; some also link against GSL
+- Waveform and geodesic examples: a C compiler, `make`, and GSL
+- Einstein Toolkit / Carpet / CarpetX generators: the Python package install is enough to generate thorns; an existing Einstein Toolkit environment is needed to build and run the generated thorns
+- `superB` examples: a Charm++ toolchain; some also link against GSL
+- JAX example generation: Python tooling for the generated project, plus JAX in that generated environment as needed
+
+If you are new to NRPy, start with one of the standalone BHaH examples below that does not require GSL. Those examples are the closest path to the current public single-patch BH@H workflow.
+
+## First Successful Run
+
+This is the safest first workflow because it only requires Python, a C compiler, and `make`.
+
+### 1. Generate a standalone project
+
+```bash
+python -m nrpy.examples.wave_equation_cartesian
 ```
-export PYTHONPATH=$PYTHONPATH:.
+
+This writes a buildable project to `project/wave_equation_cartesian/`.
+
+### 2. Build it
+
+```bash
+cd project/wave_equation_cartesian
+make
 ```
 
-Once this is set up, you can run any Python script in the NRPy 2 repo from the repository's root directory. For example,
+### 3. Run it
+
+```bash
+./wave_equation_cartesian
 ```
-python3 nrpy/helpers/cse_preprocess_postprocess.py
+
+The generator also creates a parameter file named `wave_equation_cartesian.par`. Many standalone BHaH examples accept command-line overrides as well; for this example, `convergence_factor` is one supported input.
+
+### 4. Inspect the outputs
+
+Expect generated diagnostics and data products in the project directory. The exact filenames vary by example, but the important milestone is:
+
+- generation succeeds
+- `make` succeeds
+- the executable runs without further manual project editing
+
+For this example, one simple command-line override is `convergence_factor`. For example:
+
+```bash
+./wave_equation_cartesian 2.0
 ```
-will run all the doctests in that file.
 
-# Key Improvements over `nrpytutorial` version of NRPy (NRPy 1):
+This reruns the example at higher resolution and writes output files such as `out0d-conv_factor2.00.txt`.
 
-## Easy Installation
-- NRPy has been transformed into a proper Python project and can now be installed via pip! Use the command `pip install nrpy` to get started.
-- Visit our [PyPI page](https://pypi.org/project/nrpy) for more information.
-  - With pip, it's easier than ever to build your own projects based on NRPy.
-  - You can now generate a complete C project from start to finish without the need for running a Jupyter notebook.
-    - For instance, running `pip install nrpy && python3 -m nrpy.examples.two_blackholes_collide` will generate a C code project that evolves Brill-Lindquist forward in time using the BSSN formulation.
-  - Check out [GitHub README](https://github.com/nrpy/nrpy/blob/main/README.md) for instructions on generating other pre-baked example codes... or use them to generate your own codes!
+## Lightweight Single-Patch BH@H Example
 
-## Python 3.6+ Features
-- NRPy now makes use of Python features introduced in version 3.6 and above, such as f-strings.
-- The code is now more Pythonic and incorporates objects where useful. Global variables are now a thing of the past!
+If you want the closest public example of the single-patch BH@H numerical relativity workflow, use:
 
-## User-friendly
-- It's much simpler to work with NRPy now; you no longer have to read the source code of each function you call.
-  - Facilitating this, you'll find:
-    - Docstrings for all functions, classes, and modules.
-    - Type hints across all modules; `mypy --strict` passes.
-    - Numerous doctests.
-    - Code formatted with Black.
-    - Stricter linting.
+```bash
+python -m nrpy.examples.two_blackholes_collide
+```
 
-## Improved Continuous Integration
-- GitHub Actions now checks all files within the repo and will fail if any of the following conditions are met:
-  - Doctest failure
-  - pylint score less than 9.5
-  - Black needs to reformat any `.py` file
-  - `mypy --strict` fails on any `.py` file
-  - Generating and compiling all examples from the pip-installed NRPy fresh from the latest git commit fails.
+This example:
 
-## More Extensible
-- The "SENR" infrastructure has been replaced with "BHaH" (BlackHoles@Home). All BHaH-specific functionality is located in `nrpy/infrastructures/BHaH/`.
-  - While BHaH currently only supports single grids, multi-patch support will be added soon.
-  - You'll notice the old paramstruct has been broken into commondata_struct (data shared by all grids) and griddata (contains data specific to a particular grid).
-    - Adding multi-patch support is a matter of setting commondata.NUMGRIDS > 1 and all the special algorithms.
-  - There is a common but slightly customizable `main.c` file used by all BHaH codes, see `nrpy/infrastructures/BHaH/main_c.py`. This should greatly minimize code duplication in BHaH codes.
-  - Parameter files are now supported, as well as advanced command-line input.
-  - The `infrastructures/` directory includes helper functions for specific infrastructures. It currently contains BHaH and CarpetX subdirectories, with more to come.
-  - `Cparameters` has been renamed to `CodeParameters`, allowing for future extensions of NRPy to output kernels in Python, Fortran, etc.
-  - Rewritten expression validation infrastructure, to make it easier to validate newly added sympy expressions -- regardless of how complex they are.
+- evolves Brill-Lindquist binary black hole initial data
+- uses a single-patch curvilinear spherical-coordinate setup
+- serves as a compact public example of the single-patch BH@H workflow
+- is intentionally lightweight: it is cheap enough to run in seconds even on very modest hardware
 
-## Plans for Old nrpytutorial Code
-- We'll migrate the Jupyter notebooks to [a new nrpytutorial GitHub repo](https://github.com/nrpy/nrpytutorial) as they are updated to NRPy 2.
-- All the core `.py` files from nrpytutorial have been modernized & ported to NRPy 2.
-- What `.py` files remain in nrpytutorial will be ported to NRPy 2.
+## Good Next Examples
+
+Once the first standalone workflow works, these are reasonable next steps:
+
+- Single-patch BH@H NR example: `python -m nrpy.examples.two_blackholes_collide`
+- Lightweight elliptic initial-data workflow: `python -m nrpy.examples.nrpyelliptic_conformally_flat`
+- Waveform generation, requires GSL: `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob`
+- Einstein Toolkit / CarpetX thorn generation; building the generated thorns requires an ET environment: `python -m nrpy.examples.carpetx_wavetoy_thorns`
+
+## Project Families and Example Generators
+
+### Standalone BHaH Generators
+
+BHaH is NRPy's standalone application infrastructure. In this public repository, it provides the core capabilities for single-patch numerical relativity evolutions in Cartesian, curvilinear, and singular coordinate systems, and these generators typically produce buildable C or CUDA-ready projects under `project/<name>/`.
+
+- Wave equation solvers: `python -m nrpy.examples.wave_equation_cartesian`, `python -m nrpy.examples.wave_equation_curvilinear`, `python -m nrpy.examples.wave_equation_multicoordinates`
+- Black hole evolution and diagnostics: `python -m nrpy.examples.two_blackholes_collide`, `python -m nrpy.examples.blackhole_spectroscopy` (requires GSL), `python -m nrpy.examples.spinning_blackhole`
+- Elliptic / initial-data workflows: `python -m nrpy.examples.nrpyelliptic_conformally_flat`
+
+### Einstein Toolkit and CarpetX Generators
+
+These generators target the Einstein Toolkit rather than producing standalone executables. ETLegacy refers to the classic Einstein Toolkit / Carpet-style target; CarpetX targets the newer CarpetX driver stack.
+
+- ETLegacy / Carpet workflows: `python -m nrpy.examples.carpet_wavetoy_thorns`, `python -m nrpy.examples.carpet_baikal_thorns`
+- CarpetX workflows: `python -m nrpy.examples.carpetx_wavetoy_thorns`, `python -m nrpy.examples.carpetx_baikal_thorns`
+
+These generators write thorn directories under `project/<name>/`. You only need an Einstein Toolkit checkout when you want to compile or run those generated thorns.
+
+### superB / Charm++ Generators
+
+These generators target `superB`, NRPy's Charm++-based infrastructure for distributed-memory workflows and a scalable extension of single-patch BH@H-generated code.
+
+- GR evolution and spectroscopy: `python -m nrpy.examples.superB_two_blackholes_collide`, `python -m nrpy.examples.superB_blackhole_spectroscopy`
+- Elliptic initial data: `python -m nrpy.examples.superB_nrpyelliptic_conformally_flat`
+
+### Compact-Object and Waveform Generators
+
+These generators focus on compact-binary dynamics, inspiral, and waveform modeling.
+
+- SEOBNRv5 / BOB waveform projects: `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_bob`, `python -m nrpy.examples.seobnrv5_aligned_spin_inspiral -seobnrv5_nrpy`
+- SEBOBv2 standalone project, requires GSL: `python -m nrpy.examples.sebobv2`
+- JAX project generation: `python -m nrpy.examples.sebobv1_jax`
+- Post-Newtonian utility: `python -m nrpy.examples.nrpypn_quasicircular_momenta`
+
+### Additional Physics Generators
+
+These generators cover additional relativistic physics applications beyond the main PDE and thorn-generation workflows.
+
+- Neutron-star and matter-related workflows: `python -m nrpy.examples.tovola_neutron_star` (requires GSL), `python -m nrpy.examples.hydro_without_hydro` (requires GSL)
+- Geodesic integration: `python -m nrpy.examples.mass_geodesic_integrator`, `python -m nrpy.examples.photon_geodesic_integrator`
+
+### Specialized Utilities
+
+- Apparent horizon library generation: `python -m nrpy.examples.bhahaha`
+
+## What Gets Generated?
+
+- Standalone BHaH examples usually generate a project directory with C source, headers, a Makefile, a parameter file, and a runnable executable target for single-patch Cartesian or curvilinear-coordinate workflows.
+- Waveform and geodesic generators also produce standalone projects, but they typically require GSL at build time.
+- Some additional standalone physics examples, including `blackhole_spectroscopy`, `hydro_without_hydro`, `tovola_neutron_star`, and `sebobv2`, also require GSL at build time.
+- Einstein Toolkit and CarpetX generators produce thorn directories that you copy or link into an Einstein Toolkit checkout; an ET environment is needed for the subsequent build/run step, not for thorn generation itself.
+- `superB` generators produce Charm++ projects rather than plain standalone executables, and some of them also require GSL.
+- `sebobv1_jax` generates a Python/JAX project instead of a C executable.
+
+Most generators print project-specific next steps when they finish, but the exact instructions vary by example.
+
+## Repository Map
+
+- `nrpy/examples`: runnable generators and project entry points
+- `nrpy/infrastructures`: backend-specific code generation layers, including BHaH, ETLegacy, CarpetX, `superB`, and JAX
+- `nrpy/equations`: symbolic physics and equation modules
+- `nrpy/helpers`: shared code generation and utility helpers
+- `nrpy/tests`: reference-metric validation modules
+- `bin/nrpyinline.py`: advanced utility for extracting and running embedded NRPy snippets from text or source files
+
+## Contributor Setup
+
+The recommended local workflow is:
+
+```bash
+python -m pip install -U -r requirements-dev.txt
+python -m pip install -e .
+```
+
+You do not need to modify `PYTHONPATH` if you install the repository in editable mode.
+
+Useful local sanity checks include:
+
+```bash
+python -m nrpy.examples.wave_equation_cartesian
+python -m nrpy.examples.sebobv1_jax
+```
+
+For broader validation, see `.github/workflows/main.yml`, which exercises static analysis, standalone project generation/builds, Einstein Toolkit validation, Charm++ / `superB` workflows, and SEOB consistency checks.
+
+## Legacy Note
+
+Older notebook-centered NRPy+ (NRPy 1.0) material lives in the separate [`nrpytutorial`](https://github.com/zachetienne/nrpytutorial) repository. This repository focuses on the current package and generator-based workflow.

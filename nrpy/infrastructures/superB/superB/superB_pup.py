@@ -238,16 +238,11 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     # PUP routine for charecomm_struct
     prefunc += """
 // PUP routine for struct charecomm_struct
-void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
-  const int ntot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
+void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params_chare) {
   const int ntotchare = params_chare.Nxx_plus_2NGHOSTS0 * params_chare.Nxx_plus_2NGHOSTS1 * params_chare.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
-    cc.globalidx3pt_to_chareidx3 = (int *restrict)malloc(sizeof(int) * ntot);
-    cc.globalidx3pt_to_localidx3pt = (int *restrict)malloc(sizeof(int) * ntot);
     cc.localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
   }
-  PUParray(p, cc.globalidx3pt_to_chareidx3, ntot);
-  PUParray(p, cc.globalidx3pt_to_localidx3pt, ntot);
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
 
@@ -414,7 +409,8 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     # PUP routine for griddata struct
     prefunc += """
 // PUP routine for struct griddata
-// During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
+// During time evolution, need params from griddata for xx used by diagnostics;
+// charecomm_struct now unpacks from gd.params within griddata_chare.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -431,7 +427,7 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
     prefunc += """
 // PUP routine for struct griddata_chare
 // For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
-void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
+void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
 
@@ -446,7 +442,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);
 
-  pup_charecomm_struct(p, gd.charecommstruct, params, gd.params);
+  pup_charecomm_struct(p, gd.charecommstruct, gd.params);
 
   pup_bc_struct(p, gd.bcstruct);
 

@@ -74,6 +74,9 @@ def register_CFunctions_CoordSystem_wrapper_funcs() -> None:
         params = base_CFunc.params.replace("\n", "")
         # Remove multiple spaces to tidy up the line a little.
         params = " ".join(params.split())
+        # Regex is needed here because we must strip arbitrary C function-parameter
+        # argument lists and fixed-size array extents from heterogeneous parameter
+        # strings; plain .replace() cannot do this robustly.
         # Case: functions passed to function.
         # Remove all function arguments. E.g., void f(REAL x) -> void f.
         params = re.sub("\\(.*\\)", "", params)

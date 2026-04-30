@@ -41,4 +41,4 @@ void xx_to_Cart__rfm__GeneralRFM_fisheyeN2(const params_struct *restrict params,
     xCart[1] = lam * xx1 + params->Cart_originy;
     xCart[2] = lam * xx2 + params->Cart_originz;
   }
-} // END FUNCTION xx_to_Cart__rfm__GeneralRFM_fisheyeN2
+} // END FUNCTION: xx_to_Cart__rfm__GeneralRFM_fisheyeN2

@@ -26,4 +26,4 @@ void ds_min_single_pt__rfm__HoleySinhSpherical(const params_struct *restrict par
   const REAL ds1 = fabs(dxx1 * tmp5);
   const REAL ds2 = fabs(dxx2 * tmp5 * sin(xx1));
   *ds_min = MIN(ds0, MIN(ds1, ds2));
-} // END FUNCTION ds_min_single_pt__rfm__HoleySinhSpherical
+} // END FUNCTION: ds_min_single_pt__rfm__HoleySinhSpherical

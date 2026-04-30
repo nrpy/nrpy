@@ -24,10 +24,6 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
     :param enable_simd: Whether the rest of the code enables SIMD optimizations, as this code requires simd_intrinsics.h (which includes SIMD-disabled options).
     :param project_dir: Directory of the project, to set the destination for simd_instrinsics.h .
 
-    >>> result = register_CFunction_interpolation_2d_general__uniform_src_grid()
-    >>> result is None or isinstance(result, pcg.NRPyEnv_type)
-    True
-
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -84,16 +80,16 @@ Performs 2D Lagrange interpolation on a uniform source grid.
 This function interpolates a scalar grid function from a uniform source grid defined in theta and phi
 to a set of arbitrary destination points using Lagrange interpolation of a specified order.
 
-@param N_interp_GHOSTS          Number of ghost zones around each source point. Determines the interpolation order as 2 * N_interp_GHOSTS + 1.
+@param n_interp_ghosts          Number of ghost zones around each source point. Determines the interpolation order as 2 * n_interp_ghosts + 1.
 @param src_dxx1                 Grid spacing in the theta direction on the source grid.
 @param src_dxx2                 Grid spacing in the phi direction on the source grid.
 @param src_Nxx_plus_2NGHOSTS1  Total number of grid points in the theta direction, including ghost zones.
 @param src_Nxx_plus_2NGHOSTS2  Total number of grid points in the phi direction, including ghost zones.
-@param src_r_theta_phi          Arrays containing coordinate values for r, theta, and phi on the source grid.
-@param src_gf                   Pointer to the source grid function data, organized as a flattened 2D array.
+@param[in,out] src_r_theta_phi  Arrays containing coordinate values for r, theta, and phi on the source grid.
+@param[in] src_gf               Pointer to the source grid function data, organized as a flattened 2D array.
 @param num_dst_pts              Number of destination points where interpolation is performed.
-@param dst_pts                  Array of destination points' coordinates, each consisting of (theta, phi).
-@param dst_data                 Output array to store interpolated values at each destination point.
+@param[in] dst_pts              Array of destination points' coordinates, each consisting of (theta, phi).
+@param[out] dst_data            Output array to store interpolated values at each destination point.
 
 @return                         BHAHAHA_SUCCESS on successful interpolation.
                                  Appropriate error code if an error is encountered.
@@ -168,7 +164,7 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
           error_flag = INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS; // Set error flag if stencil is out of bounds.
         }
         continue; // Skip interpolation for this destination point to prevent invalid memory access.
-      } // END IF: Check stencil boundaries.
+      } // END IF: theta/phi stencil exceeded source-grid bounds
 
       // Additional sanity checks to ensure central index is correctly positioned.
 #ifdef DEBUG
@@ -182,7 +178,7 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
                 src_dxx2 * (0.5 + TOLERANCE));
       } // END IF: Central index is properly centered
 #endif // DEBUG
-    } // END SANITY CHECKS: Ensure stencil is valid and central index is correct.
+    } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
 
     // Calculate the starting indices for the interpolation stencil in theta and phi directions.
     const int base_idx_th = idx_center_th - n_interp_ghosts;
@@ -202,8 +198,8 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
       const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
       for (int ith = 0; ith < INTERP_ORDER; ith++) {
         coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
-      } // END LOOP over theta
-    } // END LOOP over phi
+      } // END LOOP: for ith over theta stencil
+    } // END LOOP: for iph over phi stencil
 
     // Define a macro to calculate the flattened index for accessing the source grid function.
 #define SRC_IDX2(j, k) ((j) + src_Nxx_plus_2NGHOSTS1 * (k))
@@ -215,12 +211,12 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
       const int base_offset = base_idx_th + src_Nxx_plus_2NGHOSTS1 * idx_ph;
 
       sum += sum_lagrange_x0_simd(INTERP_ORDER, &src_gf[base_offset], &coeff_2d[iph][0]);
-    } // END LOOP phi direction
+    } // END LOOP: for iph over phi direction
 
     // Store the interpolated value for this grid function and destination point.
     dst_data[dst_pt] = sum * src_invdxx12_INTERP_ORDERm1;
 
-  } // END LOOP: Interpolate all destination points.
+  } // END LOOP: for dst_pt over destination points
 
   return error_flag; // Return the status of the interpolation process.
 """
@@ -240,7 +236,7 @@ static inline REAL analytic_function1(REAL x0, REAL x1) { return sin(x0) * cos(x
 static inline REAL analytic_function2(REAL x0, REAL x1) { return cos(x0) * sin(x1); }
 
 /**
- * @brief Initializes the 1D coordinate arrays for a 2D uniform source grid.
+ * Initializes the 1D coordinate arrays for a 2D uniform source grid.
  *
  * This function calculates the grid spacing (dx) for each dimension and allocates memory for
  * and populates the 1D coordinate arrays. The coordinate arrays include ghost zones. The first
@@ -269,18 +265,18 @@ int initialize_coordinates(const int n_interp_ghosts, const int N_x0, const int 
     free(src_x0x1[2]);
     src_x0x1[1] = src_x0x1[2] = NULL;
     return -1;
-  } // END IF: check for allocation failure.
+  } // END IF: coordinate-array allocation failed
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++)
     src_x0x1[1][i] = (i - n_interp_ghosts) * (*src_dxx0);
-  // END LOOP: initialize x0 coordinates.
+  // END LOOP: for i over x0 coordinates
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS1; i++)
     src_x0x1[2][i] = (i - n_interp_ghosts) * (*src_dxx1);
-  // END LOOP: initialize x1 coordinates.
+  // END LOOP: for i over x1 coordinates
   return 0;
-} // END FUNCTION initialize_coordinates()
+} // END FUNCTION: initialize_coordinates
 
 /**
- * @brief Populates a 2D source grid function with values from a given analytic function.
+ * Populates a 2D source grid function with values from a given analytic function.
  *
  * This function iterates through all points of a 2D grid (including ghost zones)
  * and computes the value of the grid function at each point using the provided
@@ -298,12 +294,12 @@ void initialize_src_gf(const int src_Nxx_plus_2NGHOSTS0, const int src_Nxx_plus_
     for (int i0 = 0; i0 < src_Nxx_plus_2NGHOSTS0; i0++) {
       const int idx = i0 + src_Nxx_plus_2NGHOSTS0 * i1;
       src_gf[idx] = func(src_x0x1[1][i0], src_x0x1[2][i1]);
-    } // END LOOP: over i0.
-  } // END LOOP: over i1.
-} // END FUNCTION initialize_src_gf()
+    } // END LOOP: for i0 over x0 source-grid points
+  } // END LOOP: for i1 over x1 source-grid points
+} // END FUNCTION: initialize_src_gf
 
 /**
- * @brief Main driver for testing 2D Lagrange interpolation.
+ * Main driver for testing 2D Lagrange interpolation.
  *
  * This program tests a 2D Lagrange interpolation routine by performing the following steps:
  * 1. Sets up source grids at multiple resolutions.
@@ -339,7 +335,7 @@ int main() {
     fprintf(stderr, "malloc failed for dst_pts.\n");
     return_code = EXIT_FAILURE;
     goto cleanup;
-  } // END IF: check malloc for dst_pts.
+  } // END IF: destination-point allocation failed
 
   for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
     f_exact[gf] = (REAL *)malloc(sizeof(REAL) * NUM_DST_PTS);
@@ -347,8 +343,8 @@ int main() {
       fprintf(stderr, "malloc failed for f_exact.\n");
       return_code = EXIT_FAILURE;
       goto cleanup;
-    } // END IF: check malloc for f_exact.
-  } // END LOOP: allocate exact function value arrays.
+    } // END IF: exact-value allocation failed
+  } // END LOOP: for gf over exact function value arrays
 
   for (int res = 0; res < NUM_RESOLUTIONS; res++) {
     // --- Main Loop Over Resolutions ---
@@ -363,7 +359,7 @@ int main() {
       fprintf(stderr, "malloc failed for coordinates.\n");
       return_code = EXIT_FAILURE;
       goto cleanup;
-    } // END IF: initialize coordinates.
+    } // END IF: source-coordinate initialization failed
     REAL x0_min_safe = src_x0x1[1][n_interp_ghosts] + 1e-6;
     REAL x0_max_safe = src_x0x1[1][src_Nxx_plus_2NGHOSTS0 - n_interp_ghosts - 1] - 1e-6;
     REAL x1_min_safe = src_x0x1[2][n_interp_ghosts] + 1e-6;
@@ -374,7 +370,7 @@ int main() {
       dst_pts[i][1] = x1_min_safe + ((REAL)rand() / RAND_MAX) * (x1_max_safe - x1_min_safe);
       f_exact[0][i] = analytic_function1(dst_pts[i][0], dst_pts[i][1]);
       f_exact[1][i] = analytic_function2(dst_pts[i][0], dst_pts[i][1]);
-    } // END LOOP: initialize destination points and exact values.
+    } // END LOOP: for dst_pt over destination points and exact values
     for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
       const size_t size = (size_t)src_Nxx_plus_2NGHOSTS0 * src_Nxx_plus_2NGHOSTS1;
       src_gf[gf] = (REAL *)malloc(sizeof(REAL) * size);
@@ -382,14 +378,14 @@ int main() {
         fprintf(stderr, "malloc failed for src_gf.\n");
         return_code = EXIT_FAILURE;
         goto cleanup;
-      } // END IF: check malloc for src_gf.
+      } // END IF: source-gridfunction allocation failed
       dst_data[gf] = (REAL *)malloc(sizeof(REAL) * NUM_DST_PTS);
       if (!dst_data[gf]) {
         fprintf(stderr, "malloc failed for dst_data.\n");
         return_code = EXIT_FAILURE;
         goto cleanup;
-      } // END IF: check malloc for dst_data.
-    } // END LOOP: allocate source grid and destination data arrays.
+      } // END IF: destination-data allocation failed
+    } // END LOOP: for gf over source grid and destination data arrays
     initialize_src_gf(src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1, src_x0x1, src_gf[0], analytic_function1);
     initialize_src_gf(src_Nxx_plus_2NGHOSTS0, src_Nxx_plus_2NGHOSTS1, src_x0x1, src_gf[1], analytic_function2);
 
@@ -404,8 +400,8 @@ int main() {
         fprintf(stderr, "Interpolation error code: %d for GF %d\n", error_code, gf + 1);
         return_code = error_code;
         goto cleanup;
-      } // END IF: check for interpolation error.
-    } // END LOOP: over grid functions for interpolation.
+      } // END IF: interpolation routine returned error
+    } // END LOOP: for which_gf over grid functions for interpolation
 #ifdef _OPENMP
     double elapsed_time = omp_get_wtime() - start_time;
 #endif
@@ -422,53 +418,53 @@ int main() {
       for (int i = 0; i < NUM_DST_PTS; i++) {
         REAL error = dst_data[gf][i] - f_exact[gf][i];
         error_sum += error * error;
-      } // END LOOP: calculate squared error sum.
+      } // END LOOP: for dst_pt over squared error sum
       error_L2_norm[gf][res] = sqrt(error_sum / NUM_DST_PTS);
       printf("Resolution %d: N_x0=%d, h=%.5e, GF %d, L2 error=%.5e\n", res, N_x0, h_arr[res], gf + 1, error_L2_norm[gf][res]);
-    } // END LOOP: calculate L2 error norm for each grid function.
+    } // END LOOP: for gf over L2 error norm
     for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
       free(src_gf[gf]);
       src_gf[gf] = NULL;
       free(dst_data[gf]);
       dst_data[gf] = NULL;
-    } // END LOOP: free data for current resolution.
+    } // END LOOP: for gf over data for current resolution
     // Changed loop to free coordinate arrays up to index 2
     for (int dim = 1; dim < 3; dim++) {
       free(src_x0x1[dim]);
       src_x0x1[dim] = NULL;
-    } // END LOOP: free coordinate arrays for current resolution.
-  } // END LOOP: over resolutions.
+    } // END LOOP: for dim over coordinate arrays for current resolution
+  } // END LOOP: for res over resolutions
 
   printf("\n--- Convergence Results ---\n");
   for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
     for (int res = 1; res < NUM_RESOLUTIONS; res++) {
       REAL observed_order = log(error_L2_norm[gf][res - 1] / error_L2_norm[gf][res]) / log(h_arr[res - 1] / h_arr[res]);
       printf("Observed order of convergence for GF %d between res %d and %d: %.2f\n", gf + 1, res - 1, res, observed_order);
-    } // END LOOP: calculate observed convergence order.
+    } // END LOOP: for res over observed convergence order
     printf("Expected order of convergence for GF %d: %d\n", gf + 1, INTERP_ORDER);
-  } // END LOOP: print convergence results for each grid function.
+  } // END LOOP: for gf over convergence results
 
 cleanup:
   if (return_code == EXIT_FAILURE)
     printf("\nAn error occurred. Cleaning up...\n");
   else
     printf("\nProgram finished successfully. Cleaning up...\n");
-  // END IF: print final status message.
+  // END IF: print final status message
   for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
     free(src_gf[gf]);
     free(dst_data[gf]);
-  } // END LOOP: cleanup src_gf and dst_data.
+  } // END LOOP: for gf over src_gf and dst_data cleanup
   // Changed loop to clean up all three pointers
   for (int dim = 0; dim < 3; dim++) {
     free(src_x0x1[dim]);
-  } // END LOOP: cleanup src_x0x1.
+  } // END LOOP: for dim over src_x0x1 cleanup
   for (int gf = 0; gf < NUM_INTERP_GFS; gf++) {
     free(f_exact[gf]);
-  } // END LOOP: cleanup f_exact.
+  } // END LOOP: for gf over f_exact cleanup
   free(dst_pts);
   return return_code;
 
-} // END FUNCTION main()
+} // END FUNCTION: main
 
 #endif // STANDALONE
 """

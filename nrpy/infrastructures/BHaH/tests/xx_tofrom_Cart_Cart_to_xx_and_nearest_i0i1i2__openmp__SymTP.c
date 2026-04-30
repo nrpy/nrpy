@@ -51,4 +51,4 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__SymTP(const params_struct *restrict par
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
   }
-} // END FUNCTION Cart_to_xx_and_nearest_i0i1i2__rfm__SymTP
+} // END FUNCTION: Cart_to_xx_and_nearest_i0i1i2__rfm__SymTP

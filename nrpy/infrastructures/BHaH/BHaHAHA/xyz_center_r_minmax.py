@@ -24,14 +24,13 @@ based on the number of available data points:
 After extrapolation, the function adjusts the minimum and maximum radii to ensure appropriate search
 volume adjustments based on specific conditions.
 
-@param pars     Pointer to a structure containing time points, center coordinates,
+@param[in] pars Pointer to a structure containing time points, center coordinates,
                 and radius values for previous observations and the target time.
-@param x_center Pointer to the variable where the extrapolated x-coordinate center will be stored.
-@param y_center Pointer to the variable where the extrapolated y-coordinate center will be stored.
-@param z_center Pointer to the variable where the extrapolated z-coordinate center will be stored.
-@param r_min    Pointer to the variable where the extrapolated minimum radius will be stored.
-@param r_max    Pointer to the variable where the extrapolated maximum radius will be stored.
-@return         This function does not return a value but updates the provided variables with the extrapolated values.
+@param[out] x_center Pointer to the variable where the extrapolated x-coordinate center will be stored.
+@param[out] y_center Pointer to the variable where the extrapolated y-coordinate center will be stored.
+@param[out] z_center Pointer to the variable where the extrapolated z-coordinate center will be stored.
+@param[out] r_min Pointer to the variable where the extrapolated minimum radius will be stored.
+@param[out] r_max Pointer to the variable where the extrapolated maximum radius will be stored.
 
 @note This function uses adaptive extrapolation methods to predict values at the current simulation time
 using known data from up to the most recent three horizon finds. It adjusts the extrapolation order
@@ -68,7 +67,7 @@ based on the number of available data points to ensure flexibility and accuracy.
     // Adjust radii to expand search volume when the third horizon find is missing.
     *r_min *= 0.8;
     *r_max *= 1.2;
-  } // END IF: checking if the horizon has not been found three times in a row.
+  } // END IF: horizon remained unfound for three consecutive searches
   else {
     if ((pars->r_max_m1 - pars->r_max_m3) > 0.05 * (*r_max)) {
       // Increase r_max by 20% if the maximum radius is growing rapidly.

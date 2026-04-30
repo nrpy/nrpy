@@ -6,7 +6,7 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com
 """
 
-# Step Import needed modules:
+# Step 1.a: import all needed modules from NRPy:
 from typing import Any, Dict, List, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
@@ -24,17 +24,17 @@ def find_cp_cm(
     """
     Compute the in-going and out-going characteristic speeds c_+ and c_-.
 
-    :param flux_dirn: direction for flux calculation (int)
+    :param flux_dirn: Direction for flux calculation.
     :param g4UU: contravariant form of the four-dimensional spacetime tensor g^{mu nu}
     :param u4U: four-velocity u^mu
     :param cs2: sound speed squared
 
     :return: symbolic expressions of characteristic speeds c_+ and c_-, cminus and cplus
 
-    ::note: Here we actually need to ensure that we're using rescaled quantities
-    for the speeds and spatial metric. However, as discussed in the fluxes module,
-    a successful rescaling amounts to the same symbolic expressions as just using
-    Cartesian coordinates.
+    Note: Here we actually need to ensure that we're using rescaled quantities
+    for the speeds and spatial metric. However, as discussed in the fluxes
+    module, a successful rescaling amounts to the same symbolic expressions as
+    just using Cartesian coordinates.
 
     """
     v02 = cs2
@@ -77,7 +77,7 @@ def find_cmax_cmin(
     """
     Compute the maximum and minimum characteristic speeds c_max and c_min.
 
-    :param flux_dirn: direction for flux calculation (int)
+    :param flux_dirn: Direction for flux calculation.
     :param gamma_faceDD: spatial metric at the cell interface.
     :param beta_faceU: shift vector at cell interface
     :param alpha_face: lapse function at cell interface
@@ -89,8 +89,8 @@ def find_cmax_cmin(
     :return: symbolic expressions of the maximum and minimum
              characteristic speeds c_max and c_min
 
-    ::note: Note that we do not distinguish metric quantites between left and right
-            interfaces. This is because these quantities are usually smooth.
+    Note: We do not distinguish metric quantites between left and right
+    interfaces. This is because these quantities are usually smooth.
 
     """
     # First, we need to find the characteristic speeds on each face

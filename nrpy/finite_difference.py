@@ -6,7 +6,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import sys  # Standard Python module for multiplatform OS-level functions
 from operator import itemgetter
 from typing import Any, Dict, List, Tuple, Union, cast
 
@@ -330,7 +329,7 @@ def compute_fdcoeffs_fdstencl(
 
 
 #####################################
-# STEP 0: DECLARE FD HELPER FUNCTIONS
+# Step 0: Declare FD helper functions
 def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
     """
     Determine the type of a given variable.
@@ -376,8 +375,8 @@ def symbol_is_gridfunction_Cparameter_or_other(var: sp.Basic) -> str:
 
 
 #########################################
-# STEP 1: EXTRACT DERIVATIVES TO COMPUTE
-#         FROM LIST OF SYMPY EXPRESSIONS
+# Step 1: Extract derivatives to compute
+#         from list of SymPy expressions
 def extract_list_of_deriv_var_strings_from_sympyexpr_list(
     list_of_free_symbols: List[sp.Basic],
     upwind_control_vec: Union[List[sp.Basic], sp.Basic],
@@ -433,9 +432,9 @@ def extract_list_of_deriv_var_strings_from_sympyexpr_list(
 
 
 ########################################
-# STEP 2: EXTRACT BASE GRIDFUNCTIONS AND
-#         DERIVATIVE OPERATORS FROM LIST
-#         OF DERIVATIVES
+# Step 2: Extract base gridfunctions and
+#         derivative operators from list
+#         of derivatives
 def fd_temp_variable_name(
     gf_basename: str,
     i0_offset: int,
@@ -1101,6 +1100,7 @@ def proto_FD_operators_to_sympy_expressions(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

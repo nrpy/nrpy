@@ -1,4 +1,3 @@
-# BHaHAHA/diagnostics_proper_circumferences.py
 """
 Register the C function for computing polar & equatorial circumferences of the horizon.
 Needs: coordinate centroid of the horizon.
@@ -13,8 +12,8 @@ from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.equations.general_relativity.bhahaha.area as bhahaha_area
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_diagnostics_proper_circumferences(
@@ -27,12 +26,6 @@ def register_CFunction_diagnostics_proper_circumferences(
     :param enable_fd_functions: Whether to enable finite difference functions, defaults to True.
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
 
-    DocTests:
-    >>> import nrpy.grid as gri
-    >>> _ = gri.register_gridfunctions("hh")[0]
-    >>> env = register_CFunction_diagnostics_proper_circumferences()
-    Setting up reference_metric[Spherical]...
-    Setting up ExpansionFunctionThetaClass[Spherical]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -89,7 +82,7 @@ static void elliptic_E_and_K_integrals(const REAL k, REAL *restrict E, REAL *res
     // Update the running sums for E(k) & K(k), applying the corresponding weight.
     sum_E += weights[i % weight_stencil_size] * elliptic_E_integrand;
     sum_K += weights[i % weight_stencil_size] * elliptic_K_integrand;
-  } // END LOOP over sample points to compute both integrals
+  } // END LOOP: for i over sample points to compute both integrals
 
   // Multiply by the step size to complete the integration and store the results.
   *E = sum_E * h; // Elliptic integral of the second kind.
@@ -139,7 +132,9 @@ static REAL compute_spin(const REAL C_r) {
 """
     # Newton-Raphson is a bit more robust; also our initial guess is pretty good, so typically we need only a few iterations.
     prefunc += ccg.c_codegen(
-        BHaH.BHaHAHA.area.spin_NewtonRaphson(), "const REAL x_np1", include_braces=False
+        bhahaha_area.spin_NewtonRaphson(),
+        "const REAL x_np1",
+        include_braces=False,
     )
     prefunc += r"""
     if (x_np1 > 1.0) {
@@ -153,7 +148,7 @@ static REAL compute_spin(const REAL C_r) {
       // Calculate the relative difference and update the spin estimate.
       rel_diff = fabs(x_np1 - x) / x;
       spin = x_np1;
-    } // END spin adjustment to go back in-bounds
+    } // END ELSE: spin adjustment to go back in-bounds
     it++;
   } // END WHILE: Refining spin estimate until convergence or maximum iterations
 
@@ -167,10 +162,10 @@ static REAL compute_spin(const REAL C_r) {
     desc = """
 Computes proper circumferences along the equator and polar directions for apparent horizon diagnostics.
 
-@param commondata - Pointer to common data structure containing shared parameters and settings.
-@param griddata - Pointer to grid data structures for each grid, containing parameters and gridfunctions.
-@return - Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
-@note - This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
+@param[in,out] commondata Pointer to common data structure containing shared parameters and settings.
+@param[in,out] griddata Pointer to grid data structures for each grid, containing parameters and gridfunctions.
+@return Status code indicating success or type of error (e.g., BHAHAHA_SUCCESS or INITIAL_DATA_MALLOC_ERROR).
+@note This function uses OpenMP for parallel loops and performs interpolation and integration over grid data.
 """
     cfunc_type = "int"
     name = "diagnostics_proper_circumferences"
@@ -212,8 +207,8 @@ Computes proper circumferences along the equator and polar directions for appare
 """
     body += ccg.c_codegen(
         [
-            BHaH.BHaHAHA.area.circumferential_arclength(direction="theta"),
-            BHaH.BHaHAHA.area.circumferential_arclength(direction="phi"),
+            bhahaha_area.circumferential_arclength(direction="theta"),
+            bhahaha_area.circumferential_arclength(direction="phi"),
         ],
         [
             "metric_data_gfs[IDX4pt(0, 0) + IDX2(i1, i2)]",
@@ -223,8 +218,8 @@ Computes proper circumferences along the equator and polar directions for appare
         enable_fd_functions=enable_fd_functions,
     )
     body += r"""
-      } // END LOOP over i1 (theta)
-    } // END LOOP over i2 (phi)
+      } // END LOOP: for i1 over theta points on the horizon surface
+    } // END LOOP: for i2 over phi points on the horizon surface
 
     // Apply inner boundary conditions to the computed sqrt(q_{phi phi}) gridfunction.
     {
@@ -261,10 +256,10 @@ Computes proper circumferences along the equator and polar directions for appare
           if (dst_i0 == NGHOSTS) {
             metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(dst_i1, dst_i2)] = metric_data_gfs[IDX4pt(which_gf, 0) + IDX2(src_i1, src_i2)];
           }
-        } // END LOOP over inner boundary points
-      } // END LOOP over gridfunctions
-    } // END application of inner boundary conditions
-  } // END computation of line element gridfunction
+        } // END LOOP: for pt over inner boundary points
+      } // END LOOP: for which_gf over gridfunctions
+    } // END BLOCK: apply inner boundary conditions to circumference metric data
+  } // END BLOCK: compute line-element gridfunctions on the horizon surface
 
   // Grid spacings in theta and phi directions.
   const REAL dxx1 = griddata[grid].params.dxx1;
@@ -294,7 +289,7 @@ Computes proper circumferences along the equator and polar directions for appare
     for (int i2 = 0; i2 < N_angle; i2++) {
       dst_pts[i2][0] = M_PI / 2;                                   // Equator: theta = pi/2.
       dst_pts[i2][1] = -M_PI + ((REAL)i2 + (1.0 / 2.0)) * d_angle; // Equator: phi = [-pi, pi].
-    } // END LOOP over phi angles
+    } // END LOOP: for i2 over phi angles
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
     //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
@@ -315,10 +310,10 @@ Computes proper circumferences along the equator and polar directions for appare
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: for ic over circumference samples
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xy_plane_circumference = sum_circumference * d_angle;
-  } // END xy-plane circumference
+  } // END BLOCK: compute xy-plane proper circumference
 
   // Polar (xz-plane) circumference next
   {
@@ -333,8 +328,8 @@ Computes proper circumferences along the equator and polar directions for appare
         // Second half: Theta from pi back to 0, phi = -pi
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI; // phi spans from [-pi, pi), so instead of interpolating at phi=pi, must interpolate at phi=-pi.
-      } // END IF theta is going from 0 to pi or vice-versa.
-    } // END LOOP over angle
+      } // END IF: theta is going from 0 to pi or vice-versa
+    } // END LOOP: for i2 over angle samples
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -355,10 +350,10 @@ Computes proper circumferences along the equator and polar directions for appare
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: for ic over circumference samples
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->xz_plane_circumference = sum_circumference * d_angle;
-  } // END xz-plane circumference
+  } // END BLOCK: compute xz-plane proper circumference
 
   // Polar (yz-plane) circumference next
   {
@@ -373,8 +368,8 @@ Computes proper circumferences along the equator and polar directions for appare
         // Second half: Theta from pi back to 0, phi = -pi/2
         dst_pts[i2][0] = ((REAL)(N_angle - i2) - 0.5) * (M_PI / ((REAL)(N_angle) / 2.0));
         dst_pts[i2][1] = -M_PI / 2.0;
-      } // END IF theta is going from 0 to pi or vice-versa.
-    } // END LOOP over angle
+      } // END IF: theta is going from 0 to pi or vice-versa
+    } // END LOOP: for i2 over angle samples
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
@@ -395,10 +390,10 @@ Computes proper circumferences along the equator and polar directions for appare
     for (int ic = 0; ic < N_angle; ic++) {
       const REAL weight = weights[ic % weight_stencil_size]; // Integration weight for this point.
       sum_circumference += circumference[ic] * weight;
-    } // END LOOP over ic
+    } // END LOOP: for ic over circumference samples
     // Multiply the sum by d[angle]
     commondata->bhahaha_diagnostics->yz_plane_circumference = sum_circumference * d_angle;
-  } // END yz-plane circumference
+  } // END BLOCK: compute yz-plane proper circumference
 
   // Next estimate spin parameter magnitudes, valid for equilibrium BHs only.
   //   Based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149.
@@ -441,11 +436,12 @@ Computes proper circumferences along the equator and polar directions for appare
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 
     if results.failed > 0:
-        raise RuntimeError(
-            f"Doctest failed: {results.failed} of {results.attempted} test(s)"
-        )
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

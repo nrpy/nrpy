@@ -97,18 +97,6 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 
-thismodule = __name__
-
-__all__ = ["GeneralRFMFisheye", "build_fisheye"]
-
-_KRONECKER_DELTA_3D: Tuple[
-    Tuple[int, int, int], Tuple[int, int, int], Tuple[int, int, int]
-] = (
-    (1, 0, 0),
-    (0, 1, 0),
-    (0, 0, 1),
-)
-
 
 class GeneralRFMFisheye:
     """
@@ -170,6 +158,7 @@ class GeneralRFMFisheye:
 
         # Step 1: Register fisheye CodeParameters
         # - a0..aN, R1..RN, s1..sN, c
+        thismodule = __name__
         self.a_list = par.register_CodeParameters(
             "REAL",
             thismodule,
@@ -289,44 +278,55 @@ class GeneralRFMFisheye:
         # Precompute xx products: xx_prod[i][j] = xx[i] * xx[j]
         xx = self.xx
         xx_prod = [[xx[i] * xx[j] for j in range(3)] for i in range(3)]
-        delta = _KRONECKER_DELTA_3D
+        kronecker_delta = (
+            (1, 0, 0),
+            (0, 1, 0),
+            (0, 0, 1),
+        )
 
         # Forward map:
         # Cart[i] = lam(r(xx)) * xx[i]
         self.xx_to_CartU = [lam * xx[i] for i in range(3)]
 
         # Jacobian:
-        # dCart[mu]/dxx[j] = lam * delta[mu][j] + (dlam/dr)/r * xx[mu] * xx[j]
+        # dCart[mu]/dxx[j] = lam * kronecker_delta[mu][j] + (dlam/dr)/r * xx[mu] * xx[j]
         self.dCart_dxxUD = [
-            [lam * delta[mu][j] + dlam_over_r * xx_prod[mu][j] for j in range(3)]
+            [
+                lam * kronecker_delta[mu][j] + dlam_over_r * xx_prod[mu][j]
+                for j in range(3)
+            ]
             for mu in range(3)
         ]
 
         # Metric decomposition:
-        # ghat_ij = A(r) * delta_ij + B(r) * xx[i] * xx[j]
+        # ghat_ij = A(r) * kronecker_delta_ij + B(r) * xx[i] * xx[j]
         self.ghatDD = ixp.zerorank2(dimension=3)
         for i in range(3):
             for j in range(3):
-                self.ghatDD[i][j] = A * delta[i][j] + B * xx_prod[i][j]
+                self.ghatDD[i][j] = A * kronecker_delta[i][j] + B * xx_prod[i][j]
 
         # First derivatives:
         # d_k ghat_ij =
-        #   (A'(r)/r) * xx[k] * delta_ij
+        #   (A'(r)/r) * xx[k] * kronecker_delta_ij
         # + (B'(r)/r) * xx[k] * xx[i] * xx[j]
-        # + B(r) * (delta[i][k] * xx[j] + xx[i] * delta[j][k])
+        # + B(r) * (kronecker_delta[i][k] * xx[j] + xx[i] * kronecker_delta[j][k])
         self.ghatDDdD = ixp.zerorank3(dimension=3)
         for i in range(3):
             for j in range(3):
                 for k in range(3):
                     self.ghatDDdD[i][j][k] = (
-                        A1_over_r * xx[k] * delta[i][j]
+                        A1_over_r * xx[k] * kronecker_delta[i][j]
                         + B1_over_r * xx[k] * xx_prod[i][j]
-                        + B * (delta[i][k] * xx[j] + xx[i] * delta[j][k])
+                        + B
+                        * (
+                            kronecker_delta[i][k] * xx[j]
+                            + xx[i] * kronecker_delta[j][k]
+                        )
                     )
 
         # Second derivatives:
         # This is the result of differentiating the first-derivative expression and using:
-        # d_l (xx[k]/r) = delta[k][l]/r - xx[k]*xx[l]/r**3
+        # d_l (xx[k]/r) = kronecker_delta[k][l]/r - xx[k]*xx[l]/r**3
         # The implementation uses coeff_A and coeff_B, where:
         # coeff_A = A''/r**2 - A'/r**3
         # coeff_B = B''/r**2 - B'/r**3
@@ -336,20 +336,28 @@ class GeneralRFMFisheye:
                 for k in range(3):
                     for l in range(3):
                         # termA corresponds to the part from differentiating the A term
-                        termA = (coeff_A * xx_prod[k][l] + A1_over_r * delta[k][l]) * (
-                            delta[i][j]
-                        )
+                        termA = (
+                            coeff_A * xx_prod[k][l] + A1_over_r * kronecker_delta[k][l]
+                        ) * (kronecker_delta[i][j])
 
                         # termB corresponds to the part from differentiating the B prefactor
                         termB = coeff_B * xx_prod[k][l] * xx_prod[i][j] + B1_over_r * (
-                            delta[k][l] * xx_prod[i][j]
-                            + xx[k] * (delta[i][l] * xx[j] + xx[i] * delta[j][l])
+                            kronecker_delta[k][l] * xx_prod[i][j]
+                            + xx[k]
+                            * (
+                                kronecker_delta[i][l] * xx[j]
+                                + xx[i] * kronecker_delta[j][l]
+                            )
                         )
 
-                        # termC corresponds to differentiating the explicit xx factors in B * (delta*x + x*delta)
+                        # termC corresponds to differentiating the explicit xx factors in B * (kronecker_delta*x + x*kronecker_delta)
                         termC = B1_over_r * xx[l] * (
-                            delta[i][k] * xx[j] + xx[i] * delta[j][k]
-                        ) + B * (delta[i][k] * delta[j][l] + delta[i][l] * delta[j][k])
+                            kronecker_delta[i][k] * xx[j]
+                            + xx[i] * kronecker_delta[j][k]
+                        ) + B * (
+                            kronecker_delta[i][k] * kronecker_delta[j][l]
+                            + kronecker_delta[i][l] * kronecker_delta[j][k]
+                        )
 
                         self.ghatDDdDD[i][j][k][l] = termA + termB + termC
 

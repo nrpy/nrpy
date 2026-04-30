@@ -28,4 +28,4 @@ void xx_to_Cart__rfm__SinhCylindricalv2n2(const params_struct *restrict params, 
     xCart[2] = params->Cart_originz + params->z_slope * xx2 +
                ((xx2) * (xx2)) * (params->AMPLZ - params->z_slope) * (exp(tmp3 * xx2) - exp(-tmp3 * xx2)) / (exp(tmp3) - exp(-tmp3));
   }
-} // END FUNCTION xx_to_Cart__rfm__SinhCylindricalv2n2
+} // END FUNCTION: xx_to_Cart__rfm__SinhCylindricalv2n2

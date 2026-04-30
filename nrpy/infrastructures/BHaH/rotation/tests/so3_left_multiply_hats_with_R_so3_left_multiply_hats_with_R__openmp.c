@@ -32,4 +32,4 @@ void so3_left_multiply_hats_with_R(REAL xhatU[3], REAL yhatU[3], REAL zhatU[3], 
   zhatU[0] = DeltaR[0][0] * zhat_in[0] + DeltaR[0][1] * zhat_in[1] + DeltaR[0][2] * zhat_in[2];
   zhatU[1] = DeltaR[1][0] * zhat_in[0] + DeltaR[1][1] * zhat_in[1] + DeltaR[1][2] * zhat_in[2];
   zhatU[2] = DeltaR[2][0] * zhat_in[0] + DeltaR[2][1] * zhat_in[1] + DeltaR[2][2] * zhat_in[2];
-} // END FUNCTION so3_left_multiply_hats_with_R
+} // END FUNCTION: so3_left_multiply_hats_with_R

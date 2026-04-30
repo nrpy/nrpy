@@ -231,11 +231,19 @@ module horizon_finder {
           commondata.nn++;
         }
       }
-      serial { mainProxy.done(); }
+      serial {
+        CkCallback cb(CkReductionTarget(Horizon_finder, notify_horizon_finder_completion), thisProxy[CkArrayIndex1D(0)]);
+        contribute(cb);
+      }
     };
     entry void report_interpolation_results(InterpBufMsg *msg);
     entry void ready_for_interpolation();
     entry void horizon_finding_complete();
+    entry [reductiontarget] void notify_horizon_finder_completion() {
+      serial {
+        mainProxy.horizon_finder_done();
+      }
+    }
    };
 };
 """

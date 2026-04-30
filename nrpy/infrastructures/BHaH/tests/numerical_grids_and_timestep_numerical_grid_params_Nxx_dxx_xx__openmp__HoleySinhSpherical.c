@@ -12,21 +12,21 @@
  */
 static void initialize_grid_xx0_host(const params_struct *restrict params, REAL *restrict xx0) {
   SET_XX_CELL_CENTERED_COORDS(0);
-} // END FUNCTION initialize_grid_xx0_host
+} // END FUNCTION: initialize_grid_xx0_host
 /**
  * Kernel: initialize_grid_xx1_host.
  * Kernel to compute xx1 coordinates.
  */
 static void initialize_grid_xx1_host(const params_struct *restrict params, REAL *restrict xx1) {
   SET_XX_CELL_CENTERED_COORDS(1);
-} // END FUNCTION initialize_grid_xx1_host
+} // END FUNCTION: initialize_grid_xx1_host
 /**
  * Kernel: initialize_grid_xx2_host.
  * Kernel to compute xx2 coordinates.
  */
 static void initialize_grid_xx2_host(const params_struct *restrict params, REAL *restrict xx2) {
   SET_XX_CELL_CENTERED_COORDS(2);
-} // END FUNCTION initialize_grid_xx2_host
+} // END FUNCTION: initialize_grid_xx2_host
 
 /**
  * Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
@@ -117,4 +117,4 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__HoleySinhSpherical(const commondata_
   initialize_grid_xx0_host(params, xx[0]);
   initialize_grid_xx1_host(params, xx[1]);
   initialize_grid_xx2_host(params, xx[2]);
-} // END FUNCTION numerical_grid_params_Nxx_dxx_xx__rfm__HoleySinhSpherical
+} // END FUNCTION: numerical_grid_params_Nxx_dxx_xx__rfm__HoleySinhSpherical

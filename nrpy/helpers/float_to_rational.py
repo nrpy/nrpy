@@ -47,3 +47,16 @@ def f2r(
 
     # Append 60 zeros after the decimal of the floating point number to increase precision
     return cast(sp.Rational, sp.Rational(float_as_string + "0" * zpad))
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
