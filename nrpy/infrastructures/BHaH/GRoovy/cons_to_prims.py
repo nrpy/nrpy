@@ -374,10 +374,11 @@ if (cons.rho > 0.0) {
   REAL err4 = 1e300;
   bool speed_limited_dummy = false;
 
-  /* Note that in the following lines we compare the conserved energy and electron fraction between routines.
-     However, we do not include the entropy, since it is not conserved at shocks.
-     We also ignore the output and diagnostic from ghl_enforce_primitive_limits_and_compute_u0, since it's unlikely for 
-  */ routine to succeed while enforcing limits fails.
+  // Note: in the following lines we compare the conserved energy and electron
+  // fraction between routines. We do not include entropy, since it is not
+  // conserved at shocks. We ignore the diagnostic from
+  // ghl_enforce_primitive_limits_and_compute_u0 here; a candidate that fails
+  // primitive limiting is unlikely to be selected.
 
   if (error1 == ghl_success) {
     ghl_conservative_quantities cons_temp;
