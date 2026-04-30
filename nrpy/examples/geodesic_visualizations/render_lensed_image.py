@@ -13,16 +13,18 @@ Author: Dalton J. Moone
 import os
 import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from typing import List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, TypeVar, Union
 
 try:
     import numba as nb  # type: ignore # pylint: disable=import-error
 except ImportError:
 
+    _F = TypeVar("_F", bound=Callable[..., object])
+
     class _DummyNumba:
         """Dummy."""
 
-        def njit(self, *_args, **_kwargs):  # type: ignore
+        def njit(self, *_args: object, **_kwargs: object) -> Callable[[_F], _F]:
             """
             Return a decorator that returns the unmodified function.
 
@@ -31,7 +33,7 @@ except ImportError:
             :return: A pass-through decorator.
             """
 
-            def decorator(func):  # type: ignore
+            def decorator(func: _F) -> _F:
                 return func
 
             return decorator

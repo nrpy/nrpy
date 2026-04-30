@@ -334,7 +334,7 @@ if __name__ == "__main__":
     for internal_func in [f"g4DD_metric_{SPACETIME}", f"connections_{SPACETIME}"]:
         cfc.CFunction_dict.pop(internal_func, None)
 
-    # Set Relevent Code paramters
+    # Set relevent Code paramters
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
