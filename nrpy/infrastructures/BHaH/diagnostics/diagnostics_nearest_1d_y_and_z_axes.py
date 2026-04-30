@@ -355,7 +355,7 @@ static int compare_by_coord(const void *a, const void *b) {
   const REAL lv = ((const data_point_1d_struct *)a)->coord;
   const REAL rv = ((const data_point_1d_struct *)b)->coord;
   return (lv > rv) - (lv < rv);
-} // END FUNCTION compare_by_coord
+} // END FUNCTION: compare_by_coord
 """
 
     includes = [

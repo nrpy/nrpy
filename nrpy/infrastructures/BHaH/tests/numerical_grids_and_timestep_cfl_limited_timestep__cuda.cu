@@ -32,7 +32,7 @@ __global__ static void compute_ds_min_gpu(const size_t streamid, const params_st
       } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
     } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
   } // END LOOP: for (int i2 = tid2; i2 < Nxx_plus_2NGHOSTS2; i2 += stride2)
-} // END FUNCTION compute_ds_min_gpu
+} // END FUNCTION: compute_ds_min_gpu
 
 /**
  * Compute minimum timestep dt = CFL_FACTOR * ds_min.
@@ -61,4 +61,4 @@ void cfl_limited_timestep(commondata_struct *restrict commondata, params_struct 
   REAL ds_min = find_global__minimum(ds_min_device, Nxx_tot);
   commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
   BHAH_FREE_DEVICE(ds_min_device);
-} // END FUNCTION cfl_limited_timestep
+} // END FUNCTION: cfl_limited_timestep

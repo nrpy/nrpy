@@ -20,7 +20,7 @@ static void rk_substep_1_host(params_struct *restrict params, REAL *restrict k_o
     y_nplus1_running_total_gfs[i] = RK_Rational_1_6 * dt * k_odd_gfsL;
     k_odd_gfs[i] = RK_Rational_1_2 * dt * k_odd_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_1_host
+} // END FUNCTION: rk_substep_1_host
 
 /**
  * Runge-Kutta function for substep 1.
@@ -28,7 +28,7 @@ static void rk_substep_1_host(params_struct *restrict params, REAL *restrict k_o
 static void rk_substep_1__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_n_gfs,
                                    REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
   rk_substep_1_host(params, k_odd_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
-} // END FUNCTION rk_substep_1__launcher
+} // END FUNCTION: rk_substep_1__launcher
 
 /**
  * Kernel: rk_substep_2_host.
@@ -45,7 +45,7 @@ static void rk_substep_2_host(params_struct *restrict params, REAL *restrict k_e
     y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_even_gfsL + y_nplus1_running_total_gfsL;
     k_even_gfs[i] = RK_Rational_1_2 * dt * k_even_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_2_host
+} // END FUNCTION: rk_substep_2_host
 
 /**
  * Runge-Kutta function for substep 2.
@@ -53,7 +53,7 @@ static void rk_substep_2_host(params_struct *restrict params, REAL *restrict k_e
 static void rk_substep_2__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                    REAL *restrict y_n_gfs, const REAL dt) {
   rk_substep_2_host(params, k_even_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
-} // END FUNCTION rk_substep_2__launcher
+} // END FUNCTION: rk_substep_2__launcher
 
 /**
  * Kernel: rk_substep_3_host.
@@ -69,7 +69,7 @@ static void rk_substep_3_host(params_struct *restrict params, REAL *restrict k_o
     y_nplus1_running_total_gfs[i] = RK_Rational_1_3 * dt * k_odd_gfsL + y_nplus1_running_total_gfsL;
     k_odd_gfs[i] = dt * k_odd_gfsL + y_n_gfsL;
   }
-} // END FUNCTION rk_substep_3_host
+} // END FUNCTION: rk_substep_3_host
 
 /**
  * Runge-Kutta function for substep 3.
@@ -77,7 +77,7 @@ static void rk_substep_3_host(params_struct *restrict params, REAL *restrict k_o
 static void rk_substep_3__launcher(params_struct *restrict params, REAL *restrict k_odd_gfs, REAL *restrict y_nplus1_running_total_gfs,
                                    REAL *restrict y_n_gfs, const REAL dt) {
   rk_substep_3_host(params, k_odd_gfs, y_nplus1_running_total_gfs, y_n_gfs, dt);
-} // END FUNCTION rk_substep_3__launcher
+} // END FUNCTION: rk_substep_3__launcher
 
 /**
  * Kernel: rk_substep_4_host.
@@ -92,7 +92,7 @@ static void rk_substep_4_host(params_struct *restrict params, REAL *restrict k_e
     const REAL RK_Rational_1_6 = 1.0 / 6.0;
     y_n_gfs[i] = RK_Rational_1_6 * dt * k_even_gfsL + y_n_gfsL + y_nplus1_running_total_gfsL;
   }
-} // END FUNCTION rk_substep_4_host
+} // END FUNCTION: rk_substep_4_host
 
 /**
  * Runge-Kutta function for substep 4.
@@ -100,7 +100,7 @@ static void rk_substep_4_host(params_struct *restrict params, REAL *restrict k_e
 static void rk_substep_4__launcher(params_struct *restrict params, REAL *restrict k_even_gfs, REAL *restrict y_n_gfs,
                                    REAL *restrict y_nplus1_running_total_gfs, const REAL dt) {
   rk_substep_4_host(params, k_even_gfs, y_n_gfs, y_nplus1_running_total_gfs, dt);
-} // END FUNCTION rk_substep_4__launcher
+} // END FUNCTION: rk_substep_4__launcher
 
 /**
  * Method of Lines (MoL) for "RK4" method: Step forward one full timestep.
@@ -202,4 +202,4 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // Increment the timestep n:
   commondata->nn++;
-} // END FUNCTION MoL_step_forward_in_time
+} // END FUNCTION: MoL_step_forward_in_time

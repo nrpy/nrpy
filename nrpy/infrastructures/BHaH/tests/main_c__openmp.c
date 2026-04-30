@@ -98,4 +98,4 @@ int main(int argc, const char *argv[]) {
     griddata_free(&commondata, griddata, free_non_y_n_gfs_and_core_griddata_pointers);
   }
   return 0;
-} // END FUNCTION main
+} // END FUNCTION: main

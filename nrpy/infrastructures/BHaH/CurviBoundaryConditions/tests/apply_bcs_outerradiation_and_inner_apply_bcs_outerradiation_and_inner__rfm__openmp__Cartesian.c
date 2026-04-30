@@ -37,7 +37,7 @@ static inline REAL FD1_arbitrary_upwind_x0_dirn(const params_struct *restrict pa
   }
   }
   return 0.0 / 0.0; // poison output if offset computed incorrectly
-} // END FUNCTION FD1_arbitrary_upwind_x0_dirn
+} // END FUNCTION: FD1_arbitrary_upwind_x0_dirn
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */
@@ -74,7 +74,7 @@ static inline REAL FD1_arbitrary_upwind_x1_dirn(const params_struct *restrict pa
   }
   }
   return 0.0 / 0.0; // poison output if offset computed incorrectly
-} // END FUNCTION FD1_arbitrary_upwind_x1_dirn
+} // END FUNCTION: FD1_arbitrary_upwind_x1_dirn
 /**
  * Compute 1st derivative finite-difference derivative with arbitrary upwind
  */
@@ -111,7 +111,7 @@ static inline REAL FD1_arbitrary_upwind_x2_dirn(const params_struct *restrict pa
   }
   }
   return 0.0 / 0.0; // poison output if offset computed incorrectly
-} // END FUNCTION FD1_arbitrary_upwind_x2_dirn
+} // END FUNCTION: FD1_arbitrary_upwind_x2_dirn
 /**
  * Compute r(xx0,xx1,xx2) and partial_r x^i.
  */
@@ -134,7 +134,7 @@ static inline void r_and_partial_xi_partial_r_derivs(const params_struct *restri
   *partial_x0_partial_r = tmp15 * xx0;
   *partial_x1_partial_r = tmp15 * xx1;
   *partial_x2_partial_r = tmp14 * (tmp11 * tmp7 * xx2 + tmp11 * tmp9 * xx2);
-} // END FUNCTION r_and_partial_xi_partial_r_derivs
+} // END FUNCTION: r_and_partial_xi_partial_r_derivs
 /**
  * Compute \partial_r f
  */
@@ -191,7 +191,7 @@ static inline REAL compute_partial_r_f(const params_struct *restrict params, REA
     i2_offset = (Nxx_plus_2NGHOSTS2 - FD1_stencil_radius - 1) - dest_i2;
   const REAL partial_x2_f = FD1_arbitrary_upwind_x2_dirn(params, &gfs[which_gf * ntot], dest_i0, dest_i1, dest_i2, i2_offset);
   return partial_x0_partial_r * partial_x0_f + partial_x1_partial_r * partial_x1_f + partial_x2_partial_r * partial_x2_f;
-} // END FUNCTION compute_partial_r_f
+} // END FUNCTION: compute_partial_r_f
 
 /**
  * *** Apply radiation BCs to all outer boundaries. ***
@@ -237,7 +237,7 @@ static inline REAL radiation_bcs(const params_struct *restrict params, REAL *res
   const REAL partial_t_f_outgoing_wave = -c * (partial_r_f + (f - f_infinity) * rinv);
 
   return partial_t_f_outgoing_wave + k * rinv * rinv * rinv;
-} // END FUNCTION radiation_bcs
+} // END FUNCTION: radiation_bcs
 /**
  * Kernel: apply_bcs_pure_only_host.
  * Apply BCs to pure points.
@@ -270,7 +270,7 @@ static void apply_bcs_pure_only_host(const params_struct *restrict params, const
                                                       i1, i2, FACEX0, FACEX1, FACEX2);
     }
   }
-} // END FUNCTION apply_bcs_pure_only_host
+} // END FUNCTION: apply_bcs_pure_only_host
 /**
  * Kernel: apply_bcs_pure_only.
  * Apply BCs to pure boundary points
@@ -292,7 +292,7 @@ static void apply_bcs_pure_only(const params_struct *restrict params, const bc_s
       }
     }
   }
-} // END FUNCTION apply_bcs_pure_only
+} // END FUNCTION: apply_bcs_pure_only
 
 /**
  * This function is responsible for applying boundary conditions (BCs) to both pure outer and inner
@@ -325,4 +325,4 @@ void apply_bcs_outerradiation_and_inner__rfm__Cartesian(const commondata_struct 
   //              populated first; hence this being
   //              STEP 2 OF 2.
   apply_bcs_inner_only(commondata, params, bcstruct, rhs_gfs); // <- apply inner BCs to RHS gfs only
-} // END FUNCTION apply_bcs_outerradiation_and_inner__rfm__Cartesian
+} // END FUNCTION: apply_bcs_outerradiation_and_inner__rfm__Cartesian

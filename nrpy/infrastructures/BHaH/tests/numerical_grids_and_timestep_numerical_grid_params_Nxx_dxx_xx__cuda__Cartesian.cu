@@ -14,21 +14,21 @@
  */
 __global__ static void initialize_grid_xx0_gpu(const size_t streamid, REAL *restrict xx0) {
   SET_XX_CELL_CENTERED_COORDS(0);
-} // END FUNCTION initialize_grid_xx0_gpu
+} // END FUNCTION: initialize_grid_xx0_gpu
 /**
  * Kernel: initialize_grid_xx1_gpu.
  * Kernel to compute xx1 coordinates.
  */
 __global__ static void initialize_grid_xx1_gpu(const size_t streamid, REAL *restrict xx1) {
   SET_XX_CELL_CENTERED_COORDS(1);
-} // END FUNCTION initialize_grid_xx1_gpu
+} // END FUNCTION: initialize_grid_xx1_gpu
 /**
  * Kernel: initialize_grid_xx2_gpu.
  * Kernel to compute xx2 coordinates.
  */
 __global__ static void initialize_grid_xx2_gpu(const size_t streamid, REAL *restrict xx2) {
   SET_XX_CELL_CENTERED_COORDS(2);
-} // END FUNCTION initialize_grid_xx2_gpu
+} // END FUNCTION: initialize_grid_xx2_gpu
 
 /**
  * Initializes a cell-centered grid in the local coordinate system based on physical dimensions (grid_physical_size).
@@ -149,4 +149,4 @@ void numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian(const commondata_struct *r
     initialize_grid_xx2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, xx[2]);
     cudaCheckErrors(cudaKernel, "initialize_grid_xx2_gpu failure");
   }
-} // END FUNCTION numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian
+} // END FUNCTION: numerical_grid_params_Nxx_dxx_xx__rfm__Cartesian

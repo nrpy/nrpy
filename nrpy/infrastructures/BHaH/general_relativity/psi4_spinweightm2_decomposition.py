@@ -157,7 +157,7 @@ static void lowlevel_decompose_psi4_into_swm2_modes(const REAL dtheta, const REA
     fprintf(outfile, "\n");
     fclose(outfile);
   } // END LOOP over l modes
-} // END FUNCTION lowlevel_decompose_psi4_into_swm2_modes()
+} // END FUNCTION: lowlevel_decompose_psi4_into_swm2_modes()
 """
 
     desc = """

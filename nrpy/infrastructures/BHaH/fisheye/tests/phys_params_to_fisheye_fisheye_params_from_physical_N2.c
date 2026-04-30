@@ -296,7 +296,7 @@ int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata
   }
   params->fisheye_c = c;
   return 0;
-} // END FUNCTION fisheye_params_from_physical_N2
+} // END FUNCTION: fisheye_params_from_physical_N2
 
 #ifdef STANDALONE
 

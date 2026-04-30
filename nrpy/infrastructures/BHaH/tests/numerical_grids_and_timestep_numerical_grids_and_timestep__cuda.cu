@@ -79,4 +79,4 @@ void numerical_grids_and_timestep(commondata_struct *restrict commondata, gridda
   for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
     griddata[grid].params.grid_idx = grid;
   }
-} // END FUNCTION numerical_grids_and_timestep
+} // END FUNCTION: numerical_grids_and_timestep

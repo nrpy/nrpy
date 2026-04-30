@@ -41,7 +41,7 @@ __global__ static void apply_bcs_outerextrap_and_inner_only_gpu(const size_t str
           +3.0 * gfs[IDX4pt(which_gf, idx_offset1)] - 3.0 * gfs[IDX4pt(which_gf, idx_offset2)] + 1.0 * gfs[IDX4pt(which_gf, idx_offset3)];
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_gpu
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only_gpu
 /**
  * Apply BCs to pure boundary points
  */
@@ -68,7 +68,7 @@ static void apply_bcs_outerextrap_and_inner_only__launcher(const params_struct *
       }
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only__launcher
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only__launcher
 
 /**
  * Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
@@ -105,4 +105,4 @@ void apply_bcs_outerextrap_and_inner(const commondata_struct *restrict commondat
   //              populated first; hence this being
   //              STEP 2 OF 2.
   apply_bcs_inner_only(commondata, params, bcstruct, gfs);
-} // END FUNCTION apply_bcs_outerextrap_and_inner
+} // END FUNCTION: apply_bcs_outerextrap_and_inner

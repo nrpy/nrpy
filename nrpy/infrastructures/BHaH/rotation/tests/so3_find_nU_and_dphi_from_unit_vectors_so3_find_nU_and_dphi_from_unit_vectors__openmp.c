@@ -67,4 +67,4 @@ void so3_find_nU_and_dphi_from_unit_vectors(const REAL aU[3], const REAL bU[3], 
   nU[1] = crossU[1] / cross_norm;
   nU[2] = crossU[2] / cross_norm;
   *dphi = acos(dot);
-} // END FUNCTION so3_find_nU_and_dphi_from_unit_vectors
+} // END FUNCTION: so3_find_nU_and_dphi_from_unit_vectors
