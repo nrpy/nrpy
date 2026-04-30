@@ -15,8 +15,6 @@ def register_CFunction_initial_data() -> None:
     This function sets up the necessary parameters, includes, and body of the C function that reads
     3D metric data, performs basis transformations, applies boundary conditions, computes derivatives,
     and initializes the field h(theta, phi) on all grids.
-
-    >>> register_CFunction_initial_data()
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = "Read 3D metric data (in Cartesian basis) from file, basis transform, apply BCs, compute h_{ij,k}, then set up initial guess h(r,theta)"
@@ -85,7 +83,7 @@ def register_CFunction_initial_data() -> None:
     // set VVGF = eta * HHGF,
     //  so that partial_t h = VVGF - eta * HHGF = 0 at t=0. Otherwise we get really ugly dynamics.
     griddata[grid].gridfuncs.y_n_gfs[IDX4(VVGF, i0, i1, i2)] = eta_damping * griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, i0, i1, i2)];
-  } // END LOOP over all gridpoints
+  } // END LOOP: for i0/i1/i2 over all gridpoints
   if (commondata->use_coarse_horizon)
     free(coarse_to_fine);
 

@@ -50,13 +50,15 @@ Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
         "xx0_inbounds xx1_inbounds xx2_inbounds", real=True
     )
+    inbounds_replacements = {
+        sp.Symbol("xx0"): xx0_inbounds,
+        sp.Symbol("xx1"): xx1_inbounds,
+        sp.Symbol("xx2"): xx2_inbounds,
+    }
     for i in range(3):
         for j in range(3):
-            UnitVectors_inner[i][j] = (
-                rfm.UnitVectors[i][j]
-                .subs(rfm.xx[0], xx0_inbounds)
-                .subs(rfm.xx[1], xx1_inbounds)
-                .subs(rfm.xx[2], xx2_inbounds)
+            UnitVectors_inner[i][j] = rfm.UnitVectors[i][j].xreplace(
+                inbounds_replacements
             )
     # Type 0: scalar
     parity[0] = sp.sympify(1)
@@ -499,7 +501,7 @@ REAL REAL_parity_array[28];
         }}
         innerpt_bc_arr[idx].parity[whichparity] = 1;
         if(REAL_parity_array[whichparity] < 0) innerpt_bc_arr[idx].parity[whichparity] = -1;
-    }} // END for(int whichparity=0;whichparity<28;whichparity++)
+    }} // END LOOP: for whichparity over parity directions
   return BHAHAHA_SUCCESS;
 #undef EPS_REL
 """
@@ -800,7 +802,7 @@ typedef struct {
     }
     face++;
     ////////////////////////
-  } // END LOOP over ghostzones
+  } // END LOOP: for which_gz over ghost zones
 
   for (int which_gz = 0; which_gz < NGHOSTS; which_gz++)
     for (int dirn = 0; dirn < 3; dirn++) {
@@ -831,7 +833,7 @@ typedef struct {
             idx2d++;
           }
         }
-      } // END LOOP over lower faces
+      } // END BLOCK: lower face boundary points
       // UPPER FACE: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
       {
         const int face = dirn * 2 + 1;
@@ -856,9 +858,9 @@ typedef struct {
             idx2d++;
           }
         }
-      } // END LOOP over upper faces
+      } // END BLOCK: upper face boundary points
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
-    } // END LOOPS over directions and ghost zone layers.
+    } // END LOOP: for dirn over directions and which_gz over ghost zone layers
 
   return BHAHAHA_SUCCESS;
 """

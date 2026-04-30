@@ -224,4 +224,4 @@ void unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame(const commondata_s
   nU_part2[1] = 0.0;
   nU_part2[2] = 0.0;
   *dphi_part2 = 0.0;
-} // END FUNCTION unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame
+} // END FUNCTION: unrotate_find_two_nUs_and_dphis_to_return_to_fixed_frame

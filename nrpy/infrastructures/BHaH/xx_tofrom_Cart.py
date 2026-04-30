@@ -269,7 +269,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       }}
       r = r_np1;
       iter++;
-    }}
+    }} // END WHILE: Newton iteration until tolerance or iteration cap
 
     if(iter >= ITER_MAX || !tolerance_has_been_met) {{
 #ifdef __CUDA_ARCH__
@@ -281,17 +281,17 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
               (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
       exit(1);
 #endif
-    }}
+    }} // END IF: Newton-Raphson did not converge
 
     const REAL scale = r / rCart;
     xx[0] = scale * Cartx;
     xx[1] = scale * Carty;
     xx[2] = scale * Cartz;
-  }}
+  }} // END ELSE: invert fisheye radius away from the origin
 """)
 
     elif rfm_obj.requires_NewtonRaphson_for_Cart_to_xx:
-        # Part 2a: Handle mixed analytical and Newton-Raphson inversions.
+        # Step 2.a: Handle mixed analytical and Newton-Raphson inversions.
         analytic_exprs: List[sp.Expr] = []
         analytic_names: List[str] = []
         for i in range(3):
@@ -372,7 +372,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   }}
 """)
     else:
-        # Part 2b: Handle purely analytical inversions.
+        # Step 2.b: Handle purely analytical inversions.
         processed_exprs = _prepare_sympy_exprs_for_codegen(
             list(rfm_obj.Cart_to_xx), local_C_vars
         )
@@ -384,7 +384,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             )
         )
 
-    # Part 2c: Add logic to find the nearest grid point index.
+    # Step 2.c: Add logic to find the nearest grid point index.
     core_body_list.append("""
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:

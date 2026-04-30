@@ -5,10 +5,10 @@ NRPy Loop Generation.
 The following script generates a single or nested loop of arbitrary
 dimension in C, and has support for cache blocking (loop tiling).
 
-Author: Zachariah B. Etienne
-Email: zachetie **at** gmail **dot* com
-Contributor: Ken Sible
-Email: ksible *at* outlook *dot* com
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Ken Sible
+         ksible *at* outlook *dot* com
 """
 
 from typing import List, Tuple, Union

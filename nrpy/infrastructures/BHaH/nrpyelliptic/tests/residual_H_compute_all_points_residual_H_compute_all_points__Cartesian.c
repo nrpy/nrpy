@@ -102,4 +102,4 @@ void residual_H_compute_all_points__rfm__Cartesian(const commondata_struct *rest
       } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += simd_width)
     } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
   } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
-} // END FUNCTION residual_H_compute_all_points__rfm__Cartesian
+} // END FUNCTION: residual_H_compute_all_points__rfm__Cartesian

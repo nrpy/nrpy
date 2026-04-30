@@ -121,17 +121,6 @@ class Psi4Tetrads:
         omegaDD = ixp.zerorank2()
         gammaDD = BtoA.gammaDD
 
-        def v_vectorDU(
-            v1U: List[sp.Expr], v2U: List[sp.Expr], v3U: List[sp.Expr], i: int, a: int
-        ) -> sp.Expr:
-            if i == 0:
-                return v1U[a]
-            if i == 1:
-                return v2U[a]
-            if i == 2:
-                return v3U[a]
-            raise ValueError("ERROR: unknown vector!")
-
         def update_omega(
             omegaDD: List[List[sp.Expr]],
             i: int,
@@ -142,13 +131,11 @@ class Psi4Tetrads:
             gammaDD: List[List[sp.Expr]],
         ) -> None:
             omegaDD[i][j] = sp.sympify(0)
+            viU = [v1U, v2U, v3U][i]
+            vjU = [v1U, v2U, v3U][j]
             for a in range(3):
                 for b in range(3):
-                    omegaDD[i][j] += (
-                        v_vectorDU(v1U, v2U, v3U, i, a)
-                        * v_vectorDU(v1U, v2U, v3U, j, b)
-                        * gammaDD[a][b]
-                    )
+                    omegaDD[i][j] += viU[a] * vjU[b] * gammaDD[a][b]
 
         # Step 2.i: Define e^a_i. Note that:
         #           omegaDD[0][0] = \omega_{11} above;

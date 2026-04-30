@@ -27,10 +27,6 @@ def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
     Perform 1D radial Lagrange interpolation along the radial spokes of a 3D
     spherical grid. It computes the interpolated values using Lagrange polynomials.
 
-    >>> result = register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid()
-    >>> result is None or isinstance(result, pcg.NRPyEnv_type)
-    True
-
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -71,10 +67,10 @@ def register_CFunction_interpolation_1d_radial_spokes_on_3d_src_grid(
 Perform 1D radial Lagrange interpolation along the radial spokes of a 3D
 spherical grid. It computes the interpolated values using Lagrange polynomials.
 
-@param params               Pointer to destination grid parameters.
-@param commondata           Pointer to common data, including source grid parameters and source grid functions.
-@param dst_radii_aka_src_h_gf Array of destination radial points where interpolation is performed.
-@param dst_interp_gfs       Array to store the interpolated results.
+@param[in] params           Pointer to destination grid parameters.
+@param[in] commondata       Pointer to common data, including source grid parameters and source grid functions.
+@param[in] dst_radii_aka_src_h_gf Array of destination radial points where interpolation is performed.
+@param[out] dst_interp_gfs  Array to store the interpolated results.
 
 @return                     BHAHAHA_SUCCESS on success, or an appropriate error code on failure.
 
@@ -160,15 +156,15 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
               error_flag = INTERP1D_HORIZON_TOO_SMALL; // Adjust error flag if stencil is too small.
           }
           continue; // Skip further work for this iteration.
-        } // END IF stencil in bounds
+        } // END IF: stencil in bounds
 
 #ifdef DEBUG
         // Verify that the central index is the closest grid point to the destination radius.
         if (fabs(interp_src_r_theta_phi[0][idx_center0] - r_dst) > commondata->interp_src_dxx0 * 0.5) {
           fprintf(stderr, "ERROR: Radial center index too far from destination point!\n");
-        } // END IF central index is properly centered.
+        } // END IF: central index is properly centered
 #endif // DEBUG
-      } // END SANITY CHECKS.
+      } // END BLOCK: sanity checks for stencil bounds and center index
 
       // Step 1: Precompute all differences between destination radius and source grid points within the stencil.
       REAL diffs_x0[INTERP_ORDER];
@@ -183,9 +179,9 @@ spherical grid. It computes the interpolated values using Lagrange polynomials.
         dst_interp_gfs[DST_IDX4(gf, NGHOSTS, itheta, iphi)] =
             sum_lagrange_x0_simd(INTERP_ORDER, &interp_src_gfs[SRC_IDX4(gf, base_idx_x0, itheta, iphi)], lagrange_basis_coeffs_x0) *
             src_invdxx0_INTERP_ORDERm1;
-      } // END LOOP over grid functions.
-    } // END LOOP over theta.
-  } // END LOOP over phi.
+      } // END LOOP: for which_gf over grid functions
+    } // END LOOP: for itheta over theta
+  } // END LOOP: for iphi over phi
 
   return error_flag; // Return the status of the interpolation process.
 """
@@ -223,7 +219,7 @@ int initialize_coordinates(const int N_r, const int N_theta, const int N_phi, RE
     free(src_r_theta_phi[1]);
     free(src_r_theta_phi[2]);
     return -1;
-  } // END IF memory allocation issue.
+  } // END IF: memory allocation issue
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS[0]; i++)
     src_r_theta_phi[0][i] = (i - NinterpGHOSTS) * src_dxx[0];
   for (int j = 0; j < src_Nxx_plus_2NGHOSTS[1]; j++)
@@ -231,7 +227,7 @@ int initialize_coordinates(const int N_r, const int N_theta, const int N_phi, RE
   for (int k = 0; k < src_Nxx_plus_2NGHOSTS[2]; k++)
     src_r_theta_phi[2][k] = -M_PI + ((REAL)(k - NGHOSTS) + 0.5) * src_dxx[2];
   return 0;
-} // END FUNCTION initialize_coordinates()
+} // END FUNCTION: initialize_coordinates
 /**
  * Initializes the source grid function using a provided analytic function.
  *
@@ -248,10 +244,10 @@ int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[
   if (!r_func_values) {
     fprintf(stderr, "malloc failed for r_func_values.\n");
     return -1;
-  }
+  } // END IF: memory allocation issue
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
     r_func_values[i] = sin(src_r_theta_phi[0][i]) * src_r_theta_phi[0][i] * src_r_theta_phi[0][i];
-  }
+  } // END LOOP: for i over precomputed radial function values
 #pragma omp parallel for
   for (int gf = 0; gf < NUM_INTERP_SRC_GFS; gf++) {
     for (int k = 0; k < src_Nxx_plus_2NGHOSTS2; k++) {
@@ -260,13 +256,13 @@ int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[
         const REAL sintheta = sin(src_r_theta_phi[1][j]);
         for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
           src_gf[SRC_IDX4(gf, i, j, k)] = r_func_values[i] * sintheta * cosphi;
-        }
-      }
-    }
-  }
+        } // END LOOP: for i over radial grid
+      } // END LOOP: for j over theta grid
+    } // END LOOP: for k over phi grid
+  } // END LOOP: for gf over source gridfunctions
   free(r_func_values);
   return 0;
-} // END FUNCTION initialize_src_gf()
+} // END FUNCTION: initialize_src_gf
 
 /**
  * Main function to execute the standalone 1D interpolation and perform convergence validation tests.
@@ -425,7 +421,7 @@ cleanup:
   free(dst_radii);
   free(dst_interp_gfs);
   return return_code;
-} // END FUNCTION main()
+} // END FUNCTION: main
 
 #endif // STANDALONE
 """

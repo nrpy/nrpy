@@ -11,8 +11,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import os
-import sys
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import List, Tuple, Union, cast
@@ -36,25 +34,6 @@ def register_CFunction_numgrid__external_input_set_up() -> (
     Register the C function for reading original source metric data.
 
     :return: None if in registration phase, else the updated NRPy environment.
-
-    DocTests:
-    >>> env = register_CFunction_numgrid__external_input_set_up()
-    Grid function "external_spherical_aDD00" with rank 2 has parity type 4.
-    Grid function "external_spherical_aDD01" with rank 2 has parity type 5.
-    Grid function "external_spherical_aDD02" with rank 2 has parity type 6.
-    Grid function "external_spherical_aDD11" with rank 2 has parity type 7.
-    Grid function "external_spherical_aDD12" with rank 2 has parity type 8.
-    Grid function "external_spherical_aDD22" with rank 2 has parity type 9.
-    Grid function "external_spherical_hDD00" with rank 2 has parity type 4.
-    Grid function "external_spherical_hDD01" with rank 2 has parity type 5.
-    Grid function "external_spherical_hDD02" with rank 2 has parity type 6.
-    Grid function "external_spherical_hDD11" with rank 2 has parity type 7.
-    Grid function "external_spherical_hDD12" with rank 2 has parity type 8.
-    Grid function "external_spherical_hDD22" with rank 2 has parity type 9.
-    Grid function "external_spherical_trK" with rank 0 has parity type 0.
-    Grid function "external_spherical_WW" with rank 0 has parity type 0.
-    Setting up basis_transforms[Spherical]...
-    Setting up reference_metric[Spherical]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -142,10 +121,10 @@ This function performs the following steps:
 6. Transforms the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates, including necessary rescaling.
 7. Sets up boundary condition structures and applies inner boundary conditions, including parity corrections for all gridfunctions.
 
-@param commondata - Pointer to the common data structure containing simulation parameters and data.
-@param n_resolutions - Number of angular resolutions.
-@param Ntheta - Array containing the number of theta points for each resolution.
-@param Nphi - Array containing the number of phi points for each resolution.
+@param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
+@param n_resolutions Number of angular resolutions.
+@param[in] Ntheta Array containing the number of theta points for each resolution.
+@param[in] Nphi Array containing the number of phi points for each resolution.
 
 @return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
 """
@@ -203,7 +182,7 @@ This function performs the following steps:
   REAL *restrict external_input_gfs = (REAL *)malloc(NUM_EXT_INPUT_CONFORMAL_GFS * total_elements_incl_gzs * sizeof(REAL));
   if (external_input_gfs == NULL) {
     return NUMGRID_EXTERN_MALLOC_ERROR_GFS;
-  } // END IF memory allocation for external_input_gfs failed
+  } // END IF: memory allocation for external_input_gfs failed
 
   // Step 3: Assign the allocated array to commondata for use outside this function.
   commondata->external_input_gfs = external_input_gfs;
@@ -217,7 +196,7 @@ This function performs the following steps:
     for (int gf = 0; gf < NUM_EXT_INPUT_CARTESIAN_GFS; gf++) {
       external_input_gfs[EX_IDX4(gf, i0 + i0_min_shift, i1 + NGHOSTS, i2 + NGHOSTS)] = external_input_gfs_no_gzs[EX_NOGZ_IDX4(gf, i0, i1, i2)];
     }
-  } // END LOOP: iterating through the external input grid points
+  } // END LOOP: for idx over external input grid points
 
   // Step 5: Set up coordinate arrays for a uniform, cell-centered spherical grid.
   {
@@ -233,7 +212,7 @@ This function performs the following steps:
         commondata->external_input_r_theta_phi[2] == NULL) {
       free(external_input_gfs);
       return NUMGRID_EXTERN_MALLOC_ERROR_RTHETAPHI;
-    } // END IF memory allocation for external_input_r_theta_phi arrays failed
+    } // END IF: memory allocation for external_input_r_theta_phi arrays failed
 
     // Step 5.b: Initialize coordinate arrays for a uniform, cell-centered spherical grid.
     // The coordinates are centered within each cell by adding 0.5 to the index before scaling.
@@ -247,7 +226,7 @@ This function performs the following steps:
       commondata->external_input_r_theta_phi[1][j] = xxmin1 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx1;
     for (int j = 0; j < Nxx_plus_2NGHOSTS2; j++)
       commondata->external_input_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->external_input_dxx2;
-  } // END BLOCK: setting up coordinate arrays
+  } // END BLOCK: Step 5 set up external-input coordinate arrays
 
   // Step 6: Transform the metric components (gamma_{ij}, K_{ij}) from Cartesian to spherical coordinates,
   // including necessary rescaling.
@@ -365,10 +344,10 @@ This function performs the following steps:
         include_braces=False,
     )
     body += """
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
-  } // END BLOCK: transformation and rescaling
+        } // END LOOP: for i0 over radial points in the external-input grid
+      } // END LOOP: for i1 over theta points in the external-input grid
+    } // END LOOP: for i2 over phi points in the external-input grid
+  } // END BLOCK: Step 6 transform Cartesian input data to rescaled spherical BSSN fields
 
   // Step 7: Set up boundary condition structures and apply inner boundary conditions.
   {
@@ -405,14 +384,14 @@ This function performs the following steps:
         commondata->external_input_gfs[IDX4pt(which_gf, dstpt)] =
             external_input_bcstruct.inner_bc_array[pt].parity[external_input_gf_parity[which_gf]] *
             commondata->external_input_gfs[IDX4pt(which_gf, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END LOOP over gridfunctions
+      } // END LOOP: for pt over inner boundary points
+    } // END LOOP: for which_gf over gridfunctions
 
     // Step 7.c: Free allocated memory for boundary condition structures to prevent memory leaks.
     free(external_input_bcstruct.inner_bc_array);
     for (int ng = 0; ng < NGHOSTS * 3; ng++)
       free(external_input_bcstruct.pure_outer_bc_array[ng]);
-  } // END BLOCK: applying boundary conditions
+  } // END BLOCK: Step 7 apply external-input inner boundary conditions
 
   return BHAHAHA_SUCCESS;
 """
@@ -432,6 +411,7 @@ This function performs the following steps:
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

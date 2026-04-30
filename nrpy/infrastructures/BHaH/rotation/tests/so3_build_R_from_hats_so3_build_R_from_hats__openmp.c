@@ -24,4 +24,4 @@ void so3_build_R_from_hats(const REAL xhatU[3], const REAL yhatU[3], const REAL 
   R[2][0] = xhatU[2];
   R[2][1] = yhatU[2];
   R[2][2] = zhatU[2];
-} // END FUNCTION so3_build_R_from_hats
+} // END FUNCTION: so3_build_R_from_hats

@@ -132,7 +132,6 @@ def register_CFunction_diagnostics_nearest(
     const params_struct *restrict params = &griddata[grid].params;
     const params_struct *restrict params_chare = &griddata_chare[grid].params;
     diagnostic_struct *restrict diagnosticstruct = &griddata_chare[grid].diagnosticstruct;
-    charecomm_struct *restrict charecommstruct = &griddata_chare[grid].charecommstruct;
 
 #include "set_CodeParameters.h"
 
@@ -147,7 +146,7 @@ def register_CFunction_diagnostics_nearest(
         const int NUM_nearest_GFS_1d = (int)(sizeof which_gfs_1d / sizeof which_gfs_1d[0]);
         diagnostics_nearest_1d_y_and_z_axes(commondata, grid, params, params_chare, xx, xx_chare,
                                             NUM_nearest_GFS_1d, which_gfs_1d, diagnostic_gf_names,
-                                            NULL, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
+                                            NULL, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
         break;
       }
@@ -158,7 +157,7 @@ def register_CFunction_diagnostics_nearest(
         const int NUM_nearest_GFS_2d = (int)(sizeof which_gfs_2d / sizeof which_gfs_2d[0]);
         diagnostics_nearest_2d_xy_and_yz_planes(commondata, grid, params, params_chare, xx, xx_chare,
                                                 NUM_nearest_GFS_2d, which_gfs_2d, diagnostic_gf_names,
-                                                NULL, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
+                                                NULL, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
         break;
       }
@@ -175,7 +174,8 @@ def register_CFunction_diagnostics_nearest(
     body += r"""
         const int idx3 = IDX3(i0_center, i1_center, i2_center);
 
-        if (charecommstruct->globalidx3pt_to_chareidx3[idx3] ==
+        if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params_chare->Nxx0, params_chare->Nxx1,
+                                            params_chare->Nxx2, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) ==
             IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])) {
 
           const int NUM_nearest_GFS_0d = (int)(sizeof which_gfs_0d / sizeof which_gfs_0d[0]);
@@ -195,7 +195,7 @@ def register_CFunction_diagnostics_nearest(
         const int NUM_nearest_GFS_1d = (int)(sizeof which_gfs_1d / sizeof which_gfs_1d[0]);
         diagnostics_nearest_1d_y_and_z_axes(commondata, grid, params, params_chare, xx, xx_chare,
                                             NUM_nearest_GFS_1d, which_gfs_1d, diagnostic_gf_names,
-                                            gridfuncs_diags, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
+                                            gridfuncs_diags, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
         break;
       }
@@ -207,7 +207,7 @@ def register_CFunction_diagnostics_nearest(
         const int NUM_nearest_GFS_2d = (int)(sizeof which_gfs_2d / sizeof which_gfs_2d[0]);
         diagnostics_nearest_2d_xy_and_yz_planes(commondata, grid, params, params_chare, xx, xx_chare,
                                                 NUM_nearest_GFS_2d, which_gfs_2d, diagnostic_gf_names,
-                                                gridfuncs_diags, charecommstruct, diagnosticstruct, chare_index, token, which_diagnostics_part);
+                                                gridfuncs_diags, diagnosticstruct, chare_index, token, which_diagnostics_part);
 
         break;
       }

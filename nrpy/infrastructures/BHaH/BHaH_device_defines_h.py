@@ -90,7 +90,7 @@ def generate_declaration_str(
                       and the value is a dictionary with 'type',
                       'array_size' (optional), and 'comment' (optional).
     :param prefix: An optional prefix for each declaration (e.g., 'extern').
-    :returns: A string containing formatted C declarations.
+    :return: A string containing formatted C declarations.
     """
     if not decl_dict:
         return ""
@@ -179,7 +179,7 @@ class CUDA_BHaH_device_defines_h:
 
         :param set_parity_on_aux: Flag to set parity on auxiliary variables.
         :param set_parity_on_auxevol: Flag to set parity on auxevol variables.
-        :returns: A dictionary of standard C-style declarations.
+        :return: A dictionary of standard C-style declarations.
         """
         standard_decl_dict: Dict[str, Dict[str, str]] = {
             "d_params": {
@@ -309,7 +309,7 @@ class BHaH_CUDA_global_init_h:
         Assemble the complete content for the initialization file.
 
         :param declarations_dict: Dictionary storing all declaration dictionaries.
-        :returns: A string containing the complete, formatted file content.
+        :return: A string containing the complete, formatted file content.
         """
         file_content = _FILE_BANNER + "\n\n"
         file_content += """
@@ -375,7 +375,7 @@ class BHaH_CUDA_global_defines_h:
         Assemble the complete content for the global definitions file.
 
         :param declarations_dict: Dictionary storing all declaration dictionaries.
-        :returns: A string containing the complete, formatted file content.
+        :return: A string containing the complete, formatted file content.
         """
         file_content = f"""{_FILE_BANNER}\n\n
 #ifndef __BHAH_GLOBAL_DEVICE_DEFINES_H__
@@ -411,7 +411,7 @@ def output_device_headers(
     :param nghosts: FD stencil radius
     :param set_parity_on_aux: Flag to set parity on auxiliary variables. Default is False.
     :param set_parity_on_auxevol: Flag to set parity on auxevol variables. Default is False.
-    :returns: header filename
+    :return: Header filename.
     """
     parallelization = par.parval_from_str("parallelization")
     if parallelization != "cuda":

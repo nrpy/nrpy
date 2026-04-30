@@ -11,6 +11,21 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 
+def _validate_tp_orientation(tp_orientation: str) -> None:
+    """
+    Validate the requested shared TwoPunctures orientation.
+
+    :param tp_orientation: Requested shared TwoPunctures orientation.
+    :raises ValueError: If the orientation is unsupported.
+    """
+    valid_orientations = {"legacy_swap_xz", "native_cartesian_xy_plane"}
+    if tp_orientation not in valid_orientations:
+        raise ValueError(
+            f"Unsupported tp_orientation='{tp_orientation}'. "
+            f"Expected one of {sorted(valid_orientations)}."
+        )
+
+
 def ID_persist_str() -> str:
     """
     Return contents of ID_persist_struct for TwoPunctures initial data.
@@ -72,7 +87,6 @@ def ID_persist_str() -> str:
   bool verbose; //Print screen output while solving
   bool keep_u_around; //Keep the variable u around after solving
   bool give_bare_mass; //User provides bare masses rather than target ADM masses
-  bool swap_xz; //Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
   bool use_sources; //Use sources?
   bool rescale_sources; //If sources are used - rescale them after solving?
   //bool use_external_initial_guess; //Set initial guess by external function?
@@ -86,22 +100,50 @@ def ID_persist_str() -> str:
 """
 
 
-def register_CFunction_initialize_ID_persist_struct() -> None:
+def register_CFunction_initialize_ID_persist_struct(
+    enable_xy_plane: bool = False,
+    tp_orientation: str = "",
+) -> None:
     """
     Register C function initialize_ID_persist_struct().
 
     This function populates ID_persist_struct with defaults, and overrides defaults with commondata.
+
+    :param enable_xy_plane: Whether to keep the binary in the native xy-plane orientation
+        instead of using the legacy ``swap_xz`` convention.
+    :param tp_orientation: Explicit shared TwoPunctures orientation, either
+        ``"native_cartesian_xy_plane"`` or ``"legacy_swap_xz"``. If empty, infer from
+        ``enable_xy_plane`` for backward compatibility.
     """
+    if not tp_orientation:
+        tp_orientation = (
+            "native_cartesian_xy_plane" if enable_xy_plane else "legacy_swap_xz"
+        )
+    _validate_tp_orientation(tp_orientation)
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """
+    if tp_orientation == "native_cartesian_xy_plane":
+        desc = """
 IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
            as that is what TwoPunctures was designed to do in the Toolkit, AND this is what NRPyPN
-           assumes. Also the "swap_xz" option in TwoPunctures results in a non-right-handed
-           coordinate system. So we set up initial data in xy, then ***at the end*** we simply
-           rotate xy to zx via: x->z , y->x, z->y.
+           assumes. With native_cartesian_xy_plane, the physical binary stays in that fixed-frame
+           xy orientation, and TP_Interp exports native Cartesian tensor components.
 Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
 set up initial_p_t and initial_p_r if not set in parfile.
 """
+        center_offset_comment = "x"
+        center_offset_assignment = "  par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
+    else:  # tp_orientation == "legacy_swap_xz"
+        desc = """
+IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
+           as that is what TwoPunctures was designed to do in the Toolkit, AND this is what NRPyPN
+           assumes. With legacy_swap_xz, TP_Interp applies the old x<->z compatibility
+           convention. This convention flips handedness; it is not a proper rotation.
+Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
+set up initial_p_t and initial_p_r if not set in parfile.
+"""
+        center_offset_comment = "z"
+        center_offset_assignment = "  par->center_offset[2] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
     cfunc_type = "void"
     name = "initialize_ID_persist_struct"
     params = "commondata_struct *restrict commondata, ID_persist_struct *restrict par"
@@ -127,7 +169,6 @@ set up initial_p_t and initial_p_r if not set in parfile.
 
   par->verbose = true;         // Print screen output while solving
   par->keep_u_around = false;  // Keep the variable u around after solving
-  par->swap_xz = false;         // Swap x and z coordinates when interpolating, so that the black holes are separated in the z direction
   par->use_sources = false;    // Use sources?
   par->rescale_sources = true; // If sources are used - rescale them after solving?
   // par->use_external_initial_guess; // Set initial guess by external function?
@@ -171,7 +212,12 @@ set up initial_p_t and initial_p_r if not set in parfile.
     //   the xy plane. So does NRPyPN:
     NRPyPN_quasicircular_momenta(commondata);
 
-    fprintf(stderr, "NRPyPN: Found |p_t|, |p_r| = %.8f %.8f\n", fabs(commondata->initial_p_t), fabs(commondata->initial_p_r));
+    // For q=1, spins=0, diameter_of_separation=4.0, p_r can be negative.
+    // Fix that here:
+    if (commondata->initial_p_r < 0.0)
+      commondata->initial_p_r *= -1.0;
+
+    fprintf(stderr, "NRPyPN: Found p_t, p_r = %.8f %.8f\n", commondata->initial_p_t, commondata->initial_p_r);
   }
 
   // UNIVERSAL PARAMETERS:
@@ -201,22 +247,26 @@ set up initial_p_t and initial_p_r if not set in parfile.
       par->par_m_minus = 0.9 * par->target_M_minus;
     }
 
-    par->par_b = 0.5 * commondata->initial_sep; // z coordinate of the m+ puncture *on TwoPunctures grid*
+    par->par_b = 0.5 * commondata->initial_sep; // x coordinate of the m+ puncture on the native TwoPunctures grid
     const REAL grid_dist_from_origin_BH_m = commondata->initial_sep * par->target_M_plus;
     const REAL grid_dist_from_origin_BH_M = commondata->initial_sep * par->target_M_minus;
-    //   Initialize center_offset to zero before setting z component
-    for (int ii = 0; ii < 3; ii++)
-      par->center_offset[ii] = 0.0;
-    par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;
+"""
+    body += (
+        f"    //   Initialize center_offset to zero before setting {center_offset_comment} component\n"
+        "    for (int ii = 0; ii < 3; ii++)\n"
+        "      par->center_offset[ii] = 0.0;\n"
+        f"{center_offset_assignment}\n\n"
+    )
+    body += r"""
 
     //   Initialize linear momenta to zero before setting initial radial and tangential momenta
     for (int ii = 0; ii < 3; ii++)
       par->par_P_plus[ii] = par->par_P_minus[ii] = 0.0;
-    par->par_P_plus[0] = -fabs(p_r);  // momentum of the m+ puncture
-    par->par_P_minus[0] = +fabs(p_r); // momentum of the m- puncture
+    par->par_P_plus[0] = -p_r;  // momentum of the m+ puncture
+    par->par_P_minus[0] = +p_r; // momentum of the m- puncture
 
-    par->par_P_plus[1] = +fabs(p_t);  // momentum of the m+ puncture
-    par->par_P_minus[1] = -fabs(p_t); // momentum of the m- puncture
+    par->par_P_plus[1] = +p_t;  // momentum of the m+ puncture
+    par->par_P_minus[1] = -p_t; // momentum of the m- puncture
     for (int ii = 0; ii < 3; ii++) {
       const REAL bbhxy_BH_m_chi[3] = {commondata->bbhxy_BH_m_chix, commondata->bbhxy_BH_m_chiy, commondata->bbhxy_BH_m_chiz };
       const REAL bbhxy_BH_M_chi[3] = {commondata->bbhxy_BH_M_chix, commondata->bbhxy_BH_M_chiy, commondata->bbhxy_BH_M_chiz };
@@ -233,7 +283,7 @@ set up initial_p_t and initial_p_r if not set in parfile.
   fprintf(stderr, "d_initial/M = %.15f, q = %.15f\n", commondata->initial_sep, commondata->mass_ratio);
   fprintf(stderr, "bbhxy_BH_m_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_m_chix, commondata->bbhxy_BH_m_chiy, commondata->bbhxy_BH_m_chiz);
   fprintf(stderr, "bbhxy_BH_M_chi = %.15f %.15f %.15f\n", commondata->bbhxy_BH_M_chix, commondata->bbhxy_BH_M_chiy, commondata->bbhxy_BH_M_chiz);
-  fprintf(stderr, "|p_t| = %.15f, |p_r| = %.15f\n", fabs(commondata->initial_p_t), fabs(commondata->initial_p_r));
+  fprintf(stderr, "p_t = %.15f, p_r = %.15f\n", commondata->initial_p_t, commondata->initial_p_r);
   fprintf(stderr, "TP resolution: %d  %d  %d\n", par->npoints_A, par->npoints_B, par->npoints_phi);
   fprintf(stderr, "#################################\n");
 """

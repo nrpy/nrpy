@@ -126,7 +126,8 @@ static inline int solve_linear_system(const int n, const REAL *A_in, const REAL 
  * Compute fisheye internal parameters (R_i, s_i) and compute c from physical fisheye inputs
  * (r_trans_i, w_trans_i, L) for an N-transition fisheye.
  *
- * Physical parameter meanings (physical radius):
+ * Physical/input parameter meanings:
+ * - fisheye_phys_a{i}: user-specified fisheye relative plateau/stretch factor a_i.
  * - fisheye_phys_L: outer physical boundary radius.
  * - fisheye_phys_r_trans{i}: physical radius where transition i is centered.
  * - fisheye_phys_w_trans{i}: physical width of transition i.
@@ -295,7 +296,7 @@ int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata
   }
   params->fisheye_c = c;
   return 0;
-} // END FUNCTION fisheye_params_from_physical_N2
+} // END FUNCTION: fisheye_params_from_physical_N2
 
 #ifdef STANDALONE
 

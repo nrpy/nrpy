@@ -131,7 +131,7 @@ def register_CFunction_generalrfm_Cart_to_xx(
     xx0 -= dxx0;
     xx1 -= dxx1;
     xx2 -= dxx2;
-  }}
+  }} // END LOOP: for iter over Newton iterations
 
   if (!converged) {{
     return 1;

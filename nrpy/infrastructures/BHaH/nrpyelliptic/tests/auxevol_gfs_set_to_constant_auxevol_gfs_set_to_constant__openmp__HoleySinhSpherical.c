@@ -112,7 +112,7 @@ static void auxevol_gfs_single_point_host(const commondata_struct *restrict comm
                         (-1.0 / 4.0 * P0_y * tmp16 * tmp18 - 7.0 / 4.0 * P0_y * tmp55 + P0_z * tmp18 * tmp73 - 1.0 / 4.0 * P1_y * tmp19 * tmp7 -
                          7.0 / 4.0 * P1_y * tmp57 + P1_z * tmp19 * tmp73 - tmp16 * tmp40 * tmp71 + tmp21 * tmp34 * tmp63 + tmp21 * tmp39 * tmp66 -
                          tmp23 * tmp60 * tmp71 + tmp25 * tmp63 - tmp27 * tmp65 * tmp71 + tmp28 * tmp66 - tmp35 * tmp7 * tmp71 + tmp83));
-} // END FUNCTION auxevol_gfs_single_point_host
+} // END FUNCTION: auxevol_gfs_single_point_host
 
 /**
  * Kernel: auxevol_gfs_all_points_host.
@@ -142,7 +142,7 @@ static void auxevol_gfs_all_points_host(const commondata_struct *restrict common
       } // END LOOP: for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++)
     } // END LOOP: for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++)
   } // END LOOP: for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++)
-} // END FUNCTION auxevol_gfs_all_points_host
+} // END FUNCTION: auxevol_gfs_all_points_host
 
 /**
  * Kernel: variable_wavespeed_gfs_all_points_host.
@@ -192,7 +192,7 @@ static void variable_wavespeed_gfs_all_points_host(const params_struct *restrict
       } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
     } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
   } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
-} // END FUNCTION variable_wavespeed_gfs_all_points_host
+} // END FUNCTION: variable_wavespeed_gfs_all_points_host
 
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
@@ -211,4 +211,4 @@ void auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical(commondata_struct *res
   // Set up all other AUXEVOL gridfunctions
   auxevol_gfs_all_points_host(commondata, params, x0, x1, x2, auxevol_gfs);
 
-} // END FUNCTION auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical
+} // END FUNCTION: auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical

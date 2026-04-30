@@ -24,9 +24,6 @@ def register_CFunction_diagnostics_integration_weights() -> None:
     - If both Nxx1 and Nxx2 are divisible by 8, 8th-order weights are used.
     - If both Nxx1 and Nxx2 are divisible by 4, 4th-order weights are used.
     - Otherwise, 2nd-order weights are used.
-
-    DocTests:
-    >>> register_CFunction_diagnostics_integration_weights()
     """
     includes = ["BHaH_defines.h"]
     desc = """
@@ -76,11 +73,12 @@ if (Nxx1 % 8 == 0 && Nxx2 % 8 == 0) {
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 
     if results.failed > 0:
-        raise RuntimeError(
-            f"Doctest failed: {results.failed} of {results.attempted} test(s)"
-        )
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

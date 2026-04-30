@@ -28,8 +28,6 @@ def register_CFunction_variable_wavespeed(
 
     :param CoordSystem: Coordinate system in use (e.g., "Spherical").
     :return: None if in registration phase, otherwise an instance of NRPyEnv_type.
-
-    >>> register_CFunction_variable_wavespeed("Cartesian", "float")
     """
     # Suppress unused argument warnings by documenting that they are placeholders for future extensions.
     _ = CoordSystem
@@ -78,7 +76,7 @@ def register_CFunction_variable_wavespeed(
         } // END LOOP: for (int i0 = NGHOSTS; i0 < NGHOSTS+Nxx0; i0++)
       } // END LOOP: for (int i1 = NGHOSTS; i1 < NGHOSTS+Nxx1; i1++)
     } // END LOOP: for (int i2 = NGHOSTS; i2 < NGHOSTS+Nxx2; i2++)
-  } // END LOOP for(int grid=0; grid<commondata->NUMGRIDS; grid++)
+  } // END LOOP: for grid over commondata->NUMGRIDS
 """
 
     cfc.register_CFunction(

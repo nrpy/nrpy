@@ -20,4 +20,4 @@ void xx_to_Cart__rfm__Cylindrical(const params_struct *restrict params, const RE
     xCart[1] = params->Cart_originy + xx0 * sin(xx1);
     xCart[2] = params->Cart_originz + xx2;
   }
-} // END FUNCTION xx_to_Cart__rfm__Cylindrical
+} // END FUNCTION: xx_to_Cart__rfm__Cylindrical

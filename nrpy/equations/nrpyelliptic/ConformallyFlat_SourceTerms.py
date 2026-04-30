@@ -13,11 +13,9 @@ It calculates:
 
 Author: Thiago Assumpção
         assumpcaothiago **at** gmail **dot* com
-
-License: BSD 2-Clause
 """
 
-# Step Import needed modules:
+# Step P1: Import needed modules.
 from typing import List, Tuple, Union, cast
 
 import sympy as sp  # For symbolic computations
@@ -157,24 +155,6 @@ def VU_cart_two_punctures(
     # Set spatial dimension
     dimension = 3
 
-    def dot(
-        vec1: Union[List[sp.Symbol], List[sp.Expr]],
-        vec2: Union[List[sp.Symbol], List[sp.Expr]],
-    ) -> sp.Expr:
-        """
-        Compute the Euclidean dot product of two vectors.
-
-        vec(v)_1 . vec(v)_2 = sum_{i=1}^3 v_1^i v_2^i
-
-        :param vec1: First 3D vector.
-        :param vec2: Second 3D vector.
-        :return: Scalar dot product as a sympy expression.
-        """
-        vec1_dot_vec2 = sp.sympify(0)
-        for i in range(dimension):
-            vec1_dot_vec2 += vec1[i] * vec2[i]
-        return cast(sp.Expr, vec1_dot_vec2)
-
     def cross(
         vec1: Union[List[sp.Symbol], List[sp.Expr]],
         vec2: Union[List[sp.Symbol], List[sp.Expr]],
@@ -217,10 +197,13 @@ def VU_cart_two_punctures(
         r = sp.sqrt(r)
 
         VU_cart = ixp.zerorank1()
+        x_dot_P = sp.sympify(0)
+        for j in range(dimension):
+            x_dot_P += xU[j] * PU[j]
         for i in range(dimension):
             VU_cart[i] += (
                 sp.Rational(-7, 4) * PU[i] / r
-                + sp.Rational(-1, 4) * dot(xU, PU) * xU[i] / sp.Pow(r, 3)
+                + sp.Rational(-1, 4) * x_dot_P * xU[i] / sp.Pow(r, 3)
                 + cross(xU, SU)[i] / sp.Pow(r, 3)
             )
         return VU_cart
@@ -273,26 +256,15 @@ def ADD_conf_cartesian(
     for i in range(dimension):
         V_cart_div += VD_cart_dD[i][i]
 
-    # Define Kronecker delta symbol as a function
-    def kronecker_delta(i: int, j: int) -> sp.Expr:
-        """
-        Compute the Kronecker delta symbol delta_{ij}.
-
-        :param i: The first index.
-        :param j: The second index.
-        :return: 1 if i == j, else 0.
-        """
-        delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
-        return cast(sp.Expr, delta_ij)
-
     #  Compute the components of the conformal extrinsic curvature
     ADD_conf_cart = ixp.zerorank2()
     for i in range(dimension):
         for j in range(dimension):
+            delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
             ADD_conf_cart[i][j] = (
                 VD_cart_dD[i][j]
                 + VD_cart_dD[j][i]
-                - sp.Rational(2, 3) * kronecker_delta(i, j) * V_cart_div
+                - sp.Rational(2, 3) * delta_ij * V_cart_div
             )
     return ADD_conf_cart
 

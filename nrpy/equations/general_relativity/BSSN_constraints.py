@@ -38,7 +38,7 @@ class BSSNconstraints:
 
         :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
         :param enable_rfm_precompute: Whether to enable reference-metric precomputation, defaults to False.
-        :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
+        :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions, defaults to False.
         :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
         """
         register_MU_gridfunctions = par.parval_from_str("register_MU_gridfunctions")

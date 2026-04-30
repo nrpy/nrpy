@@ -25,7 +25,6 @@ set_of_CoordSystems = {
     "Spherical",
     # "SinhCylindrical",
 }
-NUMGRIDS = len(set_of_CoordSystems)
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
@@ -60,7 +59,6 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
 BHaH.checkpointing.register_CFunctions(
     default_checkpoint_every=default_checkpoint_every
 )

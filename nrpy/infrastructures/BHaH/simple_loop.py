@@ -2,12 +2,12 @@
 """
 Simple loop generation for use within the BHaH infrastructure.
 
-Author: Zachariah B. Etienne
-Email: zachetie **at** gmail **dot* com
-Contributor: Ken Sible
-Email: ksible *at* outlook *dot* com
-Contributor: Samuel D. Tootle
-Email: sdtootle **at** gmail **dot* com
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Ken Sible
+         ksible *at* outlook *dot* com
+         Samuel D. Tootle
+         sdtootle **at** gmail **dot* com
 """
 
 from typing import List, Tuple, Union
@@ -23,7 +23,7 @@ def implemented_loop_regions_err(loop_region: str) -> str:
     Generate the string that is printed when a loop_region is not defined.
 
     :param loop_region: string denoting the intended loop region
-    :returns: the error message describing the loop_region was not found
+    :return: The error message describing the loop_region was not found.
     """
     regions = [f'"{region}"' for region in implemented_loop_regions]
     regions[-1] = f" or {regions[-1]}"
@@ -39,7 +39,7 @@ def get_loop_region_ranges(
 
     :param loop_region: Loop region.
     :param min_idx_prefix: String that specifies the starting value prefix (GPU specific).
-    :returns: A tuple of two lists: loop minimums and loop maximums.
+    :return: A tuple of two lists: loop minimums and loop maximums.
     """
     # Define base components for ranges
     if min_idx_prefix:

@@ -94,23 +94,29 @@ Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200],
     "GeneralRFM_fisheyeN1": [200, 200, 200],
+    "GeneralRFM_fisheyeN2": [200, 200, 200],
 }
-# Fisheye parameter defaults (all in params_struct, set here in the example).
+# Fisheye parameter defaults exposed via physical fisheye parameters in .par.
 fisheye_param_defaults: dict[str, float] = {}
-if num_fisheye_transitions is not None:
-    for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
-    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
 if num_fisheye_transitions == 1:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 50.0,
-            "fisheye_phys_w_trans1": 10.0,
-        }
-    )
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 50.0,
+        "fisheye_phys_w_trans1": 10.0,
+    }
+elif num_fisheye_transitions == 2:
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_a2": 4.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 50.0,
+        "fisheye_phys_w_trans1": 10.0,
+        "fisheye_phys_r_trans2": 150.0,
+        "fisheye_phys_w_trans2": 20.0,
+    }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25
 default_BH2_z_posn = -0.25
@@ -125,9 +131,7 @@ enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
-NUMGRIDS = len(set_of_CoordSystems)
-num_cuda_streams = NUMGRIDS
-par.adjust_CodeParam_default("NUMGRIDS", NUMGRIDS)
+num_cuda_streams = 1
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -350,8 +354,10 @@ par.adjust_CodeParam_default("initial_p_r", initial_p_r)
 par.adjust_CodeParam_default("TP_npoints_A", TP_npoints_A)
 par.adjust_CodeParam_default("TP_npoints_B", TP_npoints_B)
 par.adjust_CodeParam_default("TP_npoints_phi", TP_npoints_phi)
-par.adjust_CodeParam_default("TP_bare_mass_m", 1.0 / (1.0 + mass_ratio))
-par.adjust_CodeParam_default("TP_bare_mass_M", mass_ratio / (1.0 + mass_ratio))
+# Leave TwoPunctures bare masses unset by default so it solves for them
+# to match target ADM masses, as in the original, NRPy1 workflow.
+par.adjust_CodeParam_default("TP_bare_mass_m", -1.0)
+par.adjust_CodeParam_default("TP_bare_mass_M", -1.0)
 # Evolution / diagnostics parameters
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 if enable_psi4_diagnostics:

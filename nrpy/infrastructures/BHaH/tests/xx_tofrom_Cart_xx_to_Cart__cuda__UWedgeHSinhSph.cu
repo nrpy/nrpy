@@ -26,4 +26,4 @@ __host__ __device__ void xx_to_Cart__rfm__UWedgeHSinhSph(const params_struct *re
     xCart[1] = params->Cart_originy + tmp3 * sin(xx2);
     xCart[2] = params->Cart_originz + tmp3 * cos(xx2);
   }
-} // END FUNCTION xx_to_Cart__rfm__UWedgeHSinhSph
+} // END FUNCTION: xx_to_Cart__rfm__UWedgeHSinhSph

@@ -457,7 +457,7 @@ const int stride0 = blockDim.x * gridDim.x; \
     else:
         prefunc = r"""
 #define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
+_Pragma("omp parallel for simd") \
   for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
         if enable_intrinsics:

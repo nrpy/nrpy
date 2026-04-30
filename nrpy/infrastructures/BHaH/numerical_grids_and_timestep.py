@@ -20,6 +20,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -260,8 +261,6 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     ds_expr_list: List[sp.Expr] = []
     ds_str_list: List[str] = []
     if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
-
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
         # For fisheye GeneralRFM (generally non-orthogonal), this function still
@@ -363,8 +362,6 @@ def register_CFunction_ds_min_single_pt(
     # These are set in CodeParameters.h
     dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
     if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        from nrpy.equations.generalrfm import fisheye as generalrfm_fisheye
-
         num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
         fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
         # For fisheye GeneralRFM (generally non-orthogonal), this function still
@@ -615,16 +612,15 @@ def register_CFunction_numerical_grids_and_timestep(
     )
     body = ""
     if gridding_approach == "independent grid(s)":
-        body += rf"""
-  // Step 1.a: Set up independent grids: first set NUMGRIDS == number of unique CoordSystems we have.
-  commondata->NUMGRIDS = {len(set_of_CoordSystems)};
-  {{
-    // Independent grids
-    int Nx[3] = {{ -1, -1, -1 }};
+        body += r"""
+  // Step 1.a: Set up independent grids.
+  {
+    int grid = 0;
+    int Nx[3] = { -1, -1, -1 };
 
-    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx based on grid_physical_size
+    // For each grid, set Nxx & Nxx_plus_2NGHOSTS, as well as dxx, invdxx, & xx
+    // based on grid_physical_size.
     const bool apply_convergence_factor_and_set_xxminmax_defaults = true;
-    int grid=0;
 """
         for which_CoordSystem, CoordSystem in enumerate(sorted(set_of_CoordSystems)):
             body += f"""
@@ -642,7 +638,12 @@ def register_CFunction_numerical_grids_and_timestep(
 #endif // __CUDACC__
     grid++;
 """
-        body += "} // END independent grid setup\n"
+        body += """
+    // Step 1.b: Now that all independent grids have been set up, record the
+    // runtime number of active grids.
+    commondata->NUMGRIDS = grid;
+  } // END independent grid setup
+"""
     elif gridding_approach == "multipatch":
         # fmt: off
         _ = par.CodeParameter("char[200]", __name__, "multipatch_choice", "", commondata=True, add_to_parfile=True)

@@ -24,7 +24,7 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_2, MulCUDA(k1_gfsL, dt), y_n_gfsL);
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_1_gpu
+} // END FUNCTION: rk_substep_1_gpu
 
 /**
  * Runge-Kutta function for substep 1.
@@ -45,7 +45,7 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, y_n_gfs, next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
-} // END FUNCTION rk_substep_1__launcher
+} // END FUNCTION: rk_substep_1__launcher
 
 /**
  * Kernel: rk_substep_2_gpu.
@@ -66,7 +66,7 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(_Integer_2, MulCUDA(k2_gfsL, dt), NegFusedMulAddCUDA(k1_gfsL, dt, y_n_gfsL));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_2_gpu
+} // END FUNCTION: rk_substep_2_gpu
 
 /**
  * Runge-Kutta function for substep 2.
@@ -87,7 +87,7 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, y_n_gfs, next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
-} // END FUNCTION rk_substep_2__launcher
+} // END FUNCTION: rk_substep_2__launcher
 
 /**
  * Kernel: rk_substep_3_gpu.
@@ -110,7 +110,7 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1
                                                        FusedMulAddCUDA(RK_Rational_2_3, MulCUDA(k2_gfsL, dt), y_n_gfsL));
     WriteCUDA(&y_n_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_3_gpu
+} // END FUNCTION: rk_substep_3_gpu
 
 /**
  * Runge-Kutta function for substep 3.
@@ -131,7 +131,7 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, y_n_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
-} // END FUNCTION rk_substep_3__launcher
+} // END FUNCTION: rk_substep_3__launcher
 
 /**
  * Method of Lines (MoL) for "RK3" method: Step forward one full timestep.
@@ -221,4 +221,4 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // Increment the timestep n:
   commondata->nn++;
-} // END FUNCTION MoL_step_forward_in_time
+} // END FUNCTION: MoL_step_forward_in_time

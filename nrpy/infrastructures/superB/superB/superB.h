@@ -50,6 +50,46 @@
 #define MAP_GLOBAL_TO_LOCAL_IDX1(chareidx1, global_idx1, Nxx1chare) (global_idx1 - (chareidx1 * Nxx1chare))// Assumes gridpoint lies within local grid of chare
 #define MAP_GLOBAL_TO_LOCAL_IDX2(chareidx2, global_idx2, Nxx2chare) (global_idx2 - (chareidx2 * Nxx2chare))// Assumes gridpoint point lies within local grid of chare
 
+// Compute owner chare index for one axis from a global index.
+static inline int global_idx_1d_to_chare_idx_1d(const int global_idx, const int Nxx_chare, const int Nchare, const int ghost_offset) {
+  int chare_idx = (global_idx - ghost_offset) / Nxx_chare;
+  if (chare_idx < 0)
+    chare_idx = 0;
+  if (chare_idx > Nchare - 1)
+    chare_idx = Nchare - 1;
+  return chare_idx;
+}
+
+// On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_chareidx3 map.
+static inline int globalidx3pt_to_chareidx3(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                            const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare, const int Nchare0,
+                                            const int Nchare1, const int Nchare2) {
+  int globali, globalj, globalk;
+  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
+  const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
+  const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
+  const int charek = global_idx_1d_to_chare_idx_1d(globalk, Nxx2_chare, Nchare2, ghost_offset);
+  return charei + Nchare0 * (charej + Nchare1 * charek);
+}
+
+// On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_localidx3pt map.
+static inline int globalidx3pt_to_localidx3pt(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                              const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare,
+                                              const int Nxx_plus_2NGHOSTS0_chare, const int Nxx_plus_2NGHOSTS1_chare,
+                                              const int Nchare0, const int Nchare1, const int Nchare2) {
+  int globali, globalj, globalk;
+  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
+  const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
+  const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
+  const int charek = global_idx_1d_to_chare_idx_1d(globalk, Nxx2_chare, Nchare2, ghost_offset);
+  const int locali = globali - charei * Nxx0_chare;
+  const int localj = globalj - charej * Nxx1_chare;
+  const int localk = globalk - charek * Nxx2_chare;
+  return IDX3GENERAL(locali, localj, localk, Nxx_plus_2NGHOSTS0_chare, Nxx_plus_2NGHOSTS1_chare);
+}
+
 #define IDXFACES0(g, inner, j, k) ((j) + Nxx_plus_2NGHOSTS1 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES1(g, inner, i, k) ((i) + Nxx_plus_2NGHOSTS0 * ((k) + Nxx_plus_2NGHOSTS2 * ((inner) + NGHOSTS * (g))))
 #define IDXFACES2(g, inner, i, j) ((i) + Nxx_plus_2NGHOSTS0 * ((j) + Nxx_plus_2NGHOSTS1 * ((inner) + NGHOSTS * (g))))
@@ -119,8 +159,6 @@ void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commond
 int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]);
 
 typedef struct __charecomm_struct__ {
-  int *globalidx3pt_to_chareidx3;    // which chare is evolving or applying bcs to grid point
-  int *globalidx3pt_to_localidx3pt;  // local index of grid point on chare that is evolving or setting bcs for gridpoint
   int *localidx3pt_to_globalidx3pt;  // local to this chare
 } charecomm_struct;
 

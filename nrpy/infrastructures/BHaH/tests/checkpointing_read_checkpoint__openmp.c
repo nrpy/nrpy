@@ -120,4 +120,4 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
   IFCUDARUN(BHAH_DEVICE_SYNC());
 
   return 1;
-} // END FUNCTION read_checkpoint
+} // END FUNCTION: read_checkpoint

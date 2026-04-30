@@ -16,7 +16,7 @@ License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import cast
+from typing import Any, Dict, cast
 
 import sympy as sp
 
@@ -121,7 +121,7 @@ class SEOBNR_aligned_spin_constants:
             sp.Function("nrpyAbs"), sp.Abs
         )
         # strain NR fits at t_match
-        self.hNR = {}
+        self.hNR: Dict[str, Any] = {}
         modes = [(2, 2), (3, 3), (2, 1), (4, 4), (4, 3), (5, 5), (3, 2)]
         for mode in modes:
             l, m = mode
@@ -462,9 +462,23 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
+    obj = SEOBNR_aligned_spin_constants()
+    test_dict = obj.__dict__.copy()
+    if "hNR" in test_dict:
+        del test_dict["hNR"]
+    test_dict.update(
+        {
+            "hNR_22": obj.hNR["(2 , 2)"],
+            "hNR_33": obj.hNR["(3 , 3)"],
+            "hNR_21": obj.hNR["(2 , 1)"],
+            "hNR_44": obj.hNR["(4 , 4)"],
+            "hNR_43": obj.hNR["(4 , 3)"],
+            "hNR_55": obj.hNR["(5 , 5)"],
+            "hNR_32": obj.hNR["(3 , 2)"],
+        }
+    )
     results_dict = ve.process_dictionary_of_expressions(
-        SEOBNR_aligned_spin_constants().__dict__,
+        test_dict,
         fixed_mpfs_for_free_symbols=True,
     )
     ve.compare_or_generate_trusted_results(
