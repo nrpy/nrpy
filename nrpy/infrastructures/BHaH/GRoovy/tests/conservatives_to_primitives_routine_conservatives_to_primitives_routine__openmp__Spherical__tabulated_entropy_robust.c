@@ -13,9 +13,9 @@
  * @param[in,out] evol_gfs Conservative gridfunctions.
  * @param[in,out] auxevol_gfs Primitive and auxiliary gridfunctions.
  */
-void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata, const params_struct *restrict params,
-                                   const ghl_parameters *restrict ghl_params, const ghl_eos_parameters *restrict eos, REAL *restrict xx[3],
-                                   REAL *restrict evol_gfs, REAL *restrict auxevol_gfs) {
+void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct *restrict commondata, const params_struct *restrict params,
+                                                         const ghl_parameters *restrict ghl_params, const ghl_eos_parameters *restrict eos,
+                                                         REAL *restrict xx[3], REAL *restrict evol_gfs, REAL *restrict auxevol_gfs) {
 #include "set_CodeParameters.h"
   // Step 1: Set up the interior-loop bounds and recovery diagnostics.
   const int imin = NGHOSTS;
@@ -461,4 +461,4 @@ void cons_to_prims__rfm__Spherical(const commondata_struct *restrict commondata,
 
            Sx_error, error_Sx_denom, Sy_error, error_Sy_denom, Sz_error, error_Sz_denom);
   } // END IF: conservative-to-primitive diagnostics are enabled this timestep
-} // END FUNCTION: cons_to_prims__rfm__Spherical
+} // END FUNCTION: conservatives_to_primitives_routine__rfm__Spherical

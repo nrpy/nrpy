@@ -605,7 +605,7 @@ if (cons.rho > 0.0) {
     )
 
 
-def _build_cons_to_prims_body(
+def _build_conservatives_to_primitives_routine_body(
     CoordSystem: str,
     mode: Literal["Hybrid", "HybridEntropy", "Tabulated", "TabulatedEntropy"],
     tabulated_entropy_robust: bool,
@@ -979,7 +979,7 @@ ghl_tabulated_compute_eps_T_from_P(
     return body
 
 
-def register_CFunction_cons_to_prims(
+def register_CFunction_conservatives_to_primitives_routine(
     CoordSystem: str,
     evolving_temperature: bool = False,
     evolving_entropy: bool = False,
@@ -1015,18 +1015,18 @@ def register_CFunction_cons_to_prims(
     >>> par.set_parval_from_str("parallelization", "openmp")
     >>> cfc.CFunction_dict.clear()
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     _ = register_CFunction_cons_to_prims(
+    ...     _ = register_CFunction_conservatives_to_primitives_routine(
     ...         "Spherical",
     ...         evolving_temperature=True,
     ...         evolving_entropy=True,
     ...         tabulated_entropy_robust=True,
     ...     )
     >>> generated_str = clang_format(
-    ...     cfc.CFunction_dict["cons_to_prims__rfm__Spherical"].full_function
+    ...     cfc.CFunction_dict["conservatives_to_primitives_routine__rfm__Spherical"].full_function
     ... )
     >>> _ = validate_strings(
     ...     generated_str,
-    ...     "cons_to_prims__openmp__Spherical__tabulated_entropy_robust",
+    ...     "conservatives_to_primitives_routine__openmp__Spherical__tabulated_entropy_robust",
     ...     file_ext="c",
     ... )
     """
@@ -1060,7 +1060,7 @@ def register_CFunction_cons_to_prims(
 @param[in,out] auxevol_gfs Primitive and auxiliary gridfunctions."""
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    body = _build_cons_to_prims_body(
+    body = _build_conservatives_to_primitives_routine_body(
         CoordSystem,
         mode,
         tabulated_entropy_robust,
@@ -1068,7 +1068,7 @@ def register_CFunction_cons_to_prims(
 
     # Step 4: Register the final C function.
     cfunc_type = "void"
-    name = "cons_to_prims"
+    name = "conservatives_to_primitives_routine"
     params = (
         "const commondata_struct *restrict commondata, "
         "const params_struct *restrict params, "
