@@ -95,7 +95,7 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
 
     KminusKg = [
         [
-            akv._KDD[i][j]
+            akv._KDD[i][j]  # pylint: disable=protected-access
             - akv._trK * akv._gammaDD[i][j]  # pylint: disable=protected-access
             for j in range(3)
         ]
@@ -105,11 +105,15 @@ def register_CFunction_diagnostics_approx_killing_vector_spin(
     akv_gridpoint_geometry_exprs = (
         [akv.sqrtq]
         + [
-            akv._qDD[A][B] for A in range(1, 3) for B in range(A, 3)
-        ]  # pylint: disable=protected-access
+            akv._qDD[A][B]  # pylint: disable=protected-access
+            for A in range(1, 3)
+            for B in range(A, 3)
+        ]
         + [
-            akv._qUU[A][B] for A in range(1, 3) for B in range(A, 3)
-        ]  # pylint: disable=protected-access
+            akv._qUU[A][B]  # pylint: disable=protected-access
+            for A in range(1, 3)
+            for B in range(A, 3)
+        ]
         + [
             akv._Gamma2D[A][B][C]  # pylint: disable=protected-access
             for A in range(1, 3)
