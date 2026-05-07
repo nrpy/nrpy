@@ -18,6 +18,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH.GRoovy import diagnostics_nearest
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", "openmp")
@@ -320,7 +321,10 @@ BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set
     enable_psi4=False,
     enable_T4munu=True,
 )
-BHaH.general_relativity.diagnostics_nearest.register_CFunction_diagnostics_nearest()
+diagnostics_nearest.register_CFunction_diagnostics_nearest(
+    set_of_CoordSystems=set_of_CoordSystems,
+    evolving_temperature=evolving_temperature,
+)
 BHaH.general_relativity.diagnostics_volume_integration.register_CFunction_diagnostics_volume_integration()
 BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
     set_of_CoordSystems=set_of_CoordSystems,
