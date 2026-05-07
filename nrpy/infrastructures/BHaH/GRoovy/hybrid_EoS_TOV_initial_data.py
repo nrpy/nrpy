@@ -80,7 +80,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
-  initial_data_reader__convert_ADM_Spherical_to_BSSN(commondata, params, xx, bcstruct,
+  initial_data_reader__convert_ADM_Spherical_to_BSSN(commondata, params, (const REAL *restrict *)xx, bcstruct,
                                                        &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
 """
 
@@ -92,7 +92,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 """
         + ccg.c_codegen(
             rfm.xxSph[0],
-            "r_iso",
+            "const REAL r_iso",
             include_braces=False,
             enable_simd=False,
             enable_GoldenKernels=enable_GoldenKernels,
@@ -101,9 +101,9 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
   // Perform pointwise interpolation to radius r using ID_persist data
   REAL rho_energy_val, rho_baryon_val, P_val, M_val, expnu_val, exp4phi_val;
-  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr, ID_persist->r_Schw_arr,
-                            ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr, ID_persist->M_arr, ID_persist->expnu_arr,
-                            ID_persist->exp4phi_arr, ID_persist->r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val, &expnu_val,
+  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist.numpoints_arr, ID_persist.r_Schw_arr,
+                            ID_persist.rho_energy_arr, ID_persist.rho_baryon_arr, ID_persist.P_arr, ID_persist.M_arr, ID_persist.expnu_arr,
+                            ID_persist.exp4phi_arr, ID_persist.r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val, &expnu_val,
                             &exp4phi_val);
 
  """

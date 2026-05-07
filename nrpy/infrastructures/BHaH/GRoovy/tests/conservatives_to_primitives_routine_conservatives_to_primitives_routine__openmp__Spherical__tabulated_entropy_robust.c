@@ -156,7 +156,7 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
 
           if (best_method_index == 0) {
             pointcount_avg++;
-            ghl_conservative_quantities cons_neigh_avg, cons_avg;
+            ghl_conservative_quantities cons_neigh_avg, cons_avg, cons_undens;
             cons_neigh_avg.rho = 0.0;
             cons_neigh_avg.tau = 0.0;
             cons_neigh_avg.SD[0] = 0.0;

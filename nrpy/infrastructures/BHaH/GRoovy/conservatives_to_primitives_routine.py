@@ -157,7 +157,7 @@ def _build_standard_recovery_block(
     """
     # Step 1: Build shared averaging fragments for the optional channels.
     neighbor_init = r"""
-ghl_conservative_quantities cons_neigh_avg, cons_avg;
+ghl_conservative_quantities cons_neigh_avg, cons_avg, cons_undens;
 cons_neigh_avg.rho = 0.0;
 cons_neigh_avg.tau = 0.0;
 cons_neigh_avg.SD[0] = 0.0;
@@ -433,7 +433,7 @@ if (cons.rho > 0.0) {
 
   if (best_method_index == 0) {
     pointcount_avg++;
-    ghl_conservative_quantities cons_neigh_avg, cons_avg;
+    ghl_conservative_quantities cons_neigh_avg, cons_avg, cons_undens;
     cons_neigh_avg.rho = 0.0;
     cons_neigh_avg.tau = 0.0;
     cons_neigh_avg.SD[0] = 0.0;

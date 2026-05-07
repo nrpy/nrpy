@@ -12,14 +12,18 @@ Authors: David Boyer
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TOVola_interp() -> None:
+def register_CFunction_TOVola_TOV_interpolate_1D() -> None:
     """
-    Register C function TOVola_interp().
+    Register C function TOVola_TOV_interpolate_1D().
 
-    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
+    :return: None.
     """
+    name = "TOVola_TOV_interpolate_1D"
+    if name in cfc.CFunction_dict:
+        return
+
     includes = ["BHaH_defines.h"]
-    desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
+    desc = "Interpolate one-dimensional TOVola radial data at an isotropic radius."
     prefunc = r"""
 /* Bisection index finder using binary search */
 static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_arr, const REAL *restrict r_iso_arr) {
@@ -55,14 +59,14 @@ static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_ar
           r_iso_arr[numpoints_arr - 1]);
   exit(EXIT_FAILURE);
 }
-
-/* Interpolation Function using Lagrange Polynomial */
-static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *restrict commondata,
-                                      const int interpolation_stencil_size, const int numpoints_arr, const REAL *restrict r_Schw_arr,
-                                      const REAL *restrict rho_energy_arr, const REAL *restrict rho_baryon_arr, const REAL *restrict P_arr,
-                                      const REAL *restrict M_arr, const REAL *restrict expnu_arr, const REAL *restrict exp4phi_arr,
-                                      const REAL *restrict r_iso_arr, REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P,
-                                      REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi) {
+"""
+    params = """REAL rr_iso, const commondata_struct *restrict commondata,
+const int interpolation_stencil_size, const int numpoints_arr, const REAL *restrict r_Schw_arr,
+const REAL *restrict rho_energy_arr, const REAL *restrict rho_baryon_arr, const REAL *restrict P_arr,
+const REAL *restrict M_arr, const REAL *restrict expnu_arr, const REAL *restrict exp4phi_arr,
+const REAL *restrict r_iso_arr, REAL *restrict rho_energy, REAL *restrict rho_baryon, REAL *restrict P,
+REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
+    body = r"""
   const int R_idx = numpoints_arr - 1;
   const REAL M_star = M_arr[R_idx];
   const REAL r_iso_max_inside_star = r_iso_arr[R_idx];
@@ -139,8 +143,28 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
     *exp4phi = (r_Schw * r_Schw) / (rr_iso * rr_iso);
   }
   //printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e hhhh\n", rr_iso, r_Schw, *rho_energy, *rho_baryon, *P, *M, *expnu, *exp4phi);
-}
 """
+
+    cfc.register_CFunction(
+        subdirectory="TOVola",
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc,
+        name=name,
+        params=params,
+        body=body,
+    )
+
+
+def register_CFunction_TOVola_interp() -> None:
+    """
+    Register C function TOVola_interp().
+
+    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
+    """
+    register_CFunction_TOVola_TOV_interpolate_1D()
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
     name = "TOVola_interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
@@ -201,7 +225,6 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
     cfc.register_CFunction(
         subdirectory="TOVola",
         includes=includes,
-        prefunc=prefunc,
         desc=desc,
         name=name,
         params=params,

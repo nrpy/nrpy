@@ -12,7 +12,6 @@ from . import (
     compute_up_index_velocity_time_component_pointwise,
     conservatives_to_primitives_routine,
     grhd_rhs_eval,
-    groovy_NRPyLeakage_C_codegen_library,
     hybrid_EoS_TOV_initial_data,
     interpolate_metric_gfs_to_cell_faces,
     primitives_to_conservatives_routine,

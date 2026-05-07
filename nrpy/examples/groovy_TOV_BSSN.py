@@ -55,7 +55,7 @@ MoL_method = "SSPRK54"
 fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
-parallel_codegen_enable = True
+enable_parallel_codegen = True
 enable_fd_functions = True
 
 enable_KreissOliger_dissipation = True
@@ -82,11 +82,9 @@ project_dir = os.path.join("project", project_name)
 # First clean the project directory, if it exists.
 shutil.rmtree(project_dir, ignore_errors=True)
 
-par.set_parval_from_str("parallel_codegen_enable", parallel_codegen_enable)
+par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
-par.adjust_CodeParam_default("t_final", t_final)
-par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -109,7 +107,6 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
-        enable_rfm_precompute=True,
         enable_intrinsics=True,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
@@ -128,7 +125,7 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
 )
 
 # Register all GRHD grid functions needed for evolution
-BHaH.GRoovy.register_all_grhd_gridfunctions(
+BHaH.GRoovy.register_all_grhd_gridfunctions.register_all_grhd_gridfunctions(
     CoordSystem=CoordSystem, evolving_spacetime=evolving_spacetime
 )
 
@@ -250,7 +247,6 @@ BHaH.GRoovy.primitives_to_conservatives_routine.register_CFunction_primitives_to
 
 BHaH.GRoovy.conservatives_to_primitives_routine.register_CFunction_conservatives_to_primitives_routine(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=False,
 )
 
 BHaH.GRoovy.basis_transform_Cartesian_to_rfm_basis.register_CFunction_basis_transform_Cartesian_to_rfm_basis(
@@ -258,6 +254,10 @@ BHaH.GRoovy.basis_transform_Cartesian_to_rfm_basis.register_CFunction_basis_tran
 )
 
 BHaH.GRoovy.basis_transform_rfm_basis_to_Cartesian.register_CFunction_basis_transform_rfm_basis_to_Cartesian(
+    CoordSystem=CoordSystem,
+)
+
+BHaH.GRoovy.basis_transform_rfm_basis_to_Cartesian__read_cons_only.register_CFunction_basis_transform_rfm_basis_to_Cartesian__read_cons_only(
     CoordSystem=CoordSystem,
 )
 
@@ -327,12 +327,13 @@ BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
 )
 
 
-if __name__ == "__main__" and parallel_codegen_enable:
+if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
 BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
+    set_parity_on_auxevol=True,
 )
 
 rhs_string = """
@@ -349,7 +350,7 @@ apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].
 """
 
 post_RHS_string = r"""
-enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS);
+enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);
 conservatives_to_primitives_routine(commondata, params, &commondata->ghl_params, &commondata->eos, xx, RK_OUTPUT_GFS, auxevol_gfs);
 apply_copy_and_outflow_bcs(commondata, params, &commondata->ghl_params, bcstruct, xx, RK_OUTPUT_GFS, auxevol_gfs);
 compute_stress_energy_tensor(commondata, params, xx, &commondata->eos, RK_OUTPUT_GFS, auxevol_gfs);
@@ -376,6 +377,7 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
+par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
 
@@ -445,7 +447,7 @@ for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
 
     apply_bcs_outerextrap_and_inner(&commondata, params, bcstruct, in_gfs);
 
-    enforce_detgammabar_equals_detgammahat(params, rfmstruct, in_gfs);
+    enforce_detgammabar_equals_detgammahat(params, rfmstruct, in_gfs, auxevol_gfs);
     
     primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
     conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);
@@ -456,7 +458,6 @@ BHaH.main_c.register_CFunction_main_c(
     MoL_method=MoL_method,
     set_initial_data_after_auxevol_malloc=True,
     # pre_MoL_step_forward_in_time="write_checkpoint(&commondata, griddata);\n",
-    MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
     post_non_y_n_auxevol_mallocs=post_initial,
 )
@@ -465,7 +466,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 )
 
 # Set GRHayL directory
-ghl_INC_FLAG = "GRHayL/include/grhayl/"
+ghl_INC_FLAG = "GRHayL/include/ghl/"
 ghl_LIB_FLAG = "-LGRHayL/lib"
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
@@ -474,7 +475,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     # compiler_opt_option="fast",
     compiler_opt_option="debug",
     include_dirs=[ghl_INC_FLAG],
-    addl_libraries=[ghl_LIB_FLAG + " -lgrhayl", "$(shell gsl-config --libs)"],
+    addl_libraries=[ghl_LIB_FLAG + " -lghl", "$(shell gsl-config --libs)"],
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
 
