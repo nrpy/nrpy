@@ -131,16 +131,16 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
     apply_grhayl_limits_str = r"""
 
-      ghl_primitive_quantities prims;
-      ghl_metric_quantities metric;
-      ghl_conservative_quantities cons;
+      ghl_primitive_quantities prims = {0};
+      ghl_metric_quantities metric = {0};
+      ghl_conservative_quantities cons = {0};
 
       basis_transform_rfm_basis_to_Cartesian(commondata, params, 
                                              &prims, &cons, &metric,
                                              i0, i1, i2, xx,
                                              auxevol_gfs, in_gfs);
 
-      bool speed_limited;
+      bool speed_limited = false;
       ghl_enforce_primitive_limits_and_compute_u0(
           &commondata->ghl_params, &commondata->eos, &metric, &prims, &speed_limited);
 
