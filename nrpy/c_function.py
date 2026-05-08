@@ -40,7 +40,7 @@ class CFunction:
     /**
      * just a test... testing 1,2,3
      */
-    void main() { return 0; } // END FUNCTION main
+    void main() { return 0; } // END FUNCTION: main
     <BLANKLINE>
     >>> print(func.function_prototype)
     void main();
@@ -299,7 +299,7 @@ class CFunction:
         )
         # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
         newline = "\n"  # Need to use newline variable due to Python <= 3.8 being unable to handle backslashes in f-strings.
-        complete_func += f"{function_prototype.replace(';', '')} {{{newline}{include_Cparams_str}{self.body.strip(newline) + newline}}} // END FUNCTION {self.name}{newline}"
+        complete_func += f"{function_prototype.replace(';', '')} {{{newline}{include_Cparams_str}{self.body.strip(newline) + newline}}} // END FUNCTION: {self.name}{newline}"
         # self.postfunc: Strip leading & trailing newlines, then add newlines at start and end.
         complete_func += "\n" + self.postfunc.strip("\n") + "\n"
 

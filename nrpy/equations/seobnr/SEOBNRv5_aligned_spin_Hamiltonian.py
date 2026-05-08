@@ -16,7 +16,6 @@ canonical variable (r, phi, pr, pphi). This implementation is based on
 the SEOBNRv5HM model (see Section II.C of https://arxiv.org/pdf/2303.18143 for the full list of terms)
 and is used in the SEBOB formalism described in Mahesh, McWilliams, and Etienne,
 "Spinning Effective-to-Backwards-One Body".
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
@@ -54,8 +53,6 @@ class SEOBNRv5_aligned_spin_Hamiltonian_quantities:
                         needed for waveform and flux calculations.
 
 
-        Inputs: 'm1', 'm2', 'r', 'prstar', 'pphi', 'chi1', 'chi2', 'a6', and 'dSO'
-        Outputs: 'xi' and 'Hreal'
         """
         m1, m2, self.r, self.prstar, self.pphi, chi1, chi2, a6, dSO = sp.symbols(
             "m1 m2 r prstar pphi chi1 chi2 a6 dSO", real=True

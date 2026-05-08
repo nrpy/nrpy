@@ -366,7 +366,7 @@ This function performs the following steps:
 
     // Initialize the boundary condition structure for external input data.
     bc_struct external_input_bcstruct;
-    bah_bcstruct_set_up(commondata, commondata->external_input_r_theta_phi, &external_input_bcstruct);
+    bah_bcstruct_set_up(commondata, NULL, commondata->external_input_r_theta_phi, &external_input_bcstruct);
 
     // Step 7.a: Unpack boundary condition information from the boundary condition structure.
     const bc_info_struct *restrict bc_info = &external_input_bcstruct.bc_info;

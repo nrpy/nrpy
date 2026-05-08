@@ -13,7 +13,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Tuple, Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -80,6 +80,50 @@ enum {{
         list_of_gf_names_ranks=list_of_interp_src_gf_names_ranks,
         verbose=True,
     )
+
+    interp_src_gf_index: Dict[str, int] = {
+        name: idx for idx, (name, _) in enumerate(list_of_interp_src_gf_names_ranks)
+    }
+    interp_src_deriv_dst_dirn: List[int] = []
+    interp_src_deriv_src_gf: List[List[int]] = []
+    for name, _ in list_of_interp_src_gf_names_ranks:
+        if name.startswith("src_partial_D_WW"):
+            interp_src_deriv_dst_dirn.append(int(name[-1]))
+            interp_src_deriv_src_gf.append(
+                [
+                    interp_src_gf_index[f"src_partial_D_WW{src_dirn}"]
+                    for src_dirn in range(3)
+                ]
+            )
+        elif name.startswith("src_partial_D_hDD"):
+            interp_src_deriv_dst_dirn.append(int(name[-3]))
+            interp_src_deriv_src_gf.append(
+                [
+                    interp_src_gf_index[
+                        f"src_partial_D_hDD{src_dirn}{name[-2]}{name[-1]}"
+                    ]
+                    for src_dirn in range(3)
+                ]
+            )
+        else:
+            interp_src_deriv_dst_dirn.append(-1)
+            interp_src_deriv_src_gf.append([-1, -1, -1])
+
+    BHaH_defines_contrib += """// DERIVATIVE METADATA FOR INTERP_SRC GRID GRIDFUNCTIONS.
+// interp_src_gf_parity stores base-field parity for stored coordinate derivatives.
+// Values 0..2 in interp_src_gf_deriv_dst_dirn select the destination derivative direction;
+// -1 marks non-derivative fields. interp_src_gf_deriv_src_gf maps each derivative
+// family to the sibling source gridfunction for each mapped source derivative direction.
+"""
+    deriv_dst_dirn_values = ", ".join(map(str, interp_src_deriv_dst_dirn))
+    deriv_src_gf_rows = ",\n  ".join(
+        "{ " + ", ".join(map(str, row)) + " }" for row in interp_src_deriv_src_gf
+    )
+    BHaH_defines_contrib += rf"""static const int8_t interp_src_gf_deriv_dst_dirn[{len(list_of_interp_src_gf_names_ranks)}] = {{ {deriv_dst_dirn_values} }};
+static const int16_t interp_src_gf_deriv_src_gf[{len(list_of_interp_src_gf_names_ranks)}][3] = {{
+  {deriv_src_gf_rows}
+}};
+"""
 
     BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
@@ -245,7 +289,7 @@ and computes necessary spatial derivatives.
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
 
     // Set up boundary conditions based on the initialized grid.
-    bah_bcstruct_set_up(commondata, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
+    bah_bcstruct_set_up(commondata, NULL, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
   } // END BLOCK: Step 5 initialize the interpolation-source boundary-condition structure
 
   // Step 6: Apply inner boundary conditions to specific grid functions to ensure smoothness.
@@ -268,10 +312,12 @@ and computes necessary spatial derivatives.
         for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
           const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
           const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
+          const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
+          const int base_sign = bc->parity[interp_src_gf_parity[which_gf]];
 
-          // Apply boundary condition by copying and adjusting with parity.
+          // Apply boundary condition by copying and adjusting with base-field parity.
           commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
-              interp_src_bcstruct.inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+              (REAL)base_sign * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
         } // END LOOP: for pt over inner boundary points
         break;
       } // END BLOCK: selected gridfunction case with inner boundary updates
@@ -299,12 +345,32 @@ and computes necessary spatial derivatives.
 #pragma omp parallel for collapse(2)
     for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
       for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+        const int deriv_dst_dirn = interp_src_gf_deriv_dst_dirn[which_gf];
+        const bool gf_is_derivative = deriv_dst_dirn >= 0;
+        const int base_parity = interp_src_gf_parity[which_gf];
         const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
         const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
 
-        // Apply boundary condition with parity correction for derivative calculations.
-        commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
-            interp_src_bcstruct.inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+        const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
+        const int base_sign = bc->parity[base_parity];
+
+        if (!gf_is_derivative) {
+          const REAL src_val = commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * src_val;
+        } // END IF: gridfunction is not a stored coordinate derivative
+        else {
+          // Stored coordinate derivatives transform as the base field times the
+          // coordinate-map Jacobian parity:
+          //   partial_dst(ghost) = base_sign * sum_src deriv_jacobian[dst][src] * partial_src(inbounds).
+          REAL deriv_sum = 0.0;
+          for (int src_dirn = 0; src_dirn < 3; src_dirn++) {
+            const int src_gf = interp_src_gf_deriv_src_gf[which_gf][src_dirn];
+            const int jac_sign = bc->deriv_jacobian[deriv_dst_dirn][src_dirn];
+            if (src_gf >= 0 && jac_sign != 0)
+              deriv_sum += (REAL)jac_sign * commondata->interp_src_gfs[IDX4pt(src_gf, srcpt)];
+          } // END LOOP: for src_dirn over source derivative directions
+          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * deriv_sum;
+        } // END ELSE: gridfunction is a stored coordinate derivative
       } // END LOOP: for pt over inner boundary points
     } // END LOOP: for which_gf over gridfunctions
   } // END BLOCK: Step 9 enforce boundary conditions on all interpolation-source gridfunctions

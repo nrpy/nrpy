@@ -138,7 +138,7 @@ static inline void diag_write_row(FILE *file_ptr, const int NUM_COLS, const REAL
     fprintf(file_ptr, " %.15e", data[i0]);
   } // END LOOP over columns
   fprintf(file_ptr, "\n");
-} // END FUNCTION diag_write_row
+} // END FUNCTION: diag_write_row
 
 
 /**
@@ -206,7 +206,7 @@ static inline FILE *open_outfile(const char *prefix, const char *coordsys, const
   } // END IF !file_ptr
 
   return file_ptr;
-} // END FUNCTION open_outfile
+} // END FUNCTION: open_outfile
 
 #ifdef __cplusplus
 } // END extern "C"

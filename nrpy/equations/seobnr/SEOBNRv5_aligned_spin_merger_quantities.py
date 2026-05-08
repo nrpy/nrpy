@@ -24,7 +24,6 @@ and initial conditions derived from the inspiral waveform (t_0, h_0, hdot_0, phi
 These are used for documenting the native SEOBNRv5 model in NRPy
 and as part of the analysis of the SEBOB formalism  described in Mahesh, McWilliams, and Etienne,
 "Spinning Effective-to-Backwards-One Body".
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:

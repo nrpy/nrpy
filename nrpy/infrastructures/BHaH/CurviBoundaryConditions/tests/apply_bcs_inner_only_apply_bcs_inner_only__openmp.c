@@ -22,7 +22,7 @@ static inline REAL apply_parity_branchless(const REAL v, const int8_t p) {
     memcpy(&out, &bits, sizeof(out));
     return out;
   } // END IF 64 bits vs 32 bits
-} // END FUNCTION apply_parity_branchless
+} // END FUNCTION: apply_parity_branchless
 /**
  * Kernel: apply_bcs_inner_only_host.
  * Apply BCs to inner boundary points only.
@@ -50,7 +50,7 @@ static void apply_bcs_inner_only_host(const params_struct *restrict params, cons
       gf[bc->dstpt] = apply_parity_branchless(v, p);
     } // END for(int pt=0;pt<num_inner_pts;pt++)
   } // END for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++)
-} // END FUNCTION apply_bcs_inner_only_host
+} // END FUNCTION: apply_bcs_inner_only_host
 
 /**
  * Apply BCs to inner boundary points only,
@@ -67,4 +67,4 @@ void apply_bcs_inner_only(const commondata_struct *restrict commondata, const pa
   const innerpt_bc_struct *restrict inner_bc_array = bcstruct->inner_bc_array;
   const int num_inner_boundary_points = bc_info->num_inner_boundary_points;
   apply_bcs_inner_only_host(params, num_inner_boundary_points, inner_bc_array, gfs);
-} // END FUNCTION apply_bcs_inner_only
+} // END FUNCTION: apply_bcs_inner_only

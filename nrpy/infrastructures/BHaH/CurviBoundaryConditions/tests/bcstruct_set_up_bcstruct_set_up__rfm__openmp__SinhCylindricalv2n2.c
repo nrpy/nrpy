@@ -188,7 +188,7 @@ static void EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(const comm
   i0i1i2_inbounds[0] = i0_inbounds;
   i0i1i2_inbounds[1] = i1_inbounds;
   i0i1i2_inbounds[2] = i2_inbounds;
-} // END FUNCTION EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt
+} // END FUNCTION: EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt
 /**
  * set_parity_for_inner_boundary_single_pt():
  * Given (x0,x1,x2)=(xx0,xx1,xx2) and
@@ -262,7 +262,7 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
     }
   } // END for(int whichparity=0;whichparity<10;whichparity++)
 #undef EPS_REL
-} // END FUNCTION set_parity_for_inner_boundary_single_pt
+} // END FUNCTION: set_parity_for_inner_boundary_single_pt
 
 /**
  * At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
@@ -514,4 +514,4 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
     } // END LOOP over three directions
   } // END LOOP over NGHOSTS ghost zones, from innermost to outermost ghost zones
-} // END FUNCTION bcstruct_set_up__rfm__SinhCylindricalv2n2
+} // END FUNCTION: bcstruct_set_up__rfm__SinhCylindricalv2n2

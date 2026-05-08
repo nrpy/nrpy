@@ -128,6 +128,14 @@ def _format_c_offset_str(var: str, offset: int) -> str:
     """
 ```
 
+### Python String Literal Style
+
+- Multiline Python string literals must use **triple double-quotes** (`"""..."""`) whenever possible, not only for docstrings. This applies to `desc`, `body`, `prefunc`, `postfunc`, generated-code snippets, long messages, and validation strings.
+- Use raw triple-quoted strings (`r"""..."""`) for multiline embedded C or other text where backslashes should be preserved literally.
+- Use raw f-triple-quoted strings (`rf"""...{name}..."""`) only when interpolation is needed. Keep f-string expressions Python-3.7-friendly and easy to read: interpolate variables, attributes, or simple calls when clear. Assign complex expressions to local variables first, and do not use Python 3.12-only f-string features.
+- Do not replace a clear triple-quoted multiline literal with parenthesized adjacent string fragments or `"\n".join(...)` when the text is static and readable as one block.
+- Single-line ordinary strings should remain normal double-quoted strings unless a triple-quoted form materially improves readability.
+
 ### Module Docstring Format
 
 Every non-`__init__.py` file must have a module docstring at the top following this exact structure:
@@ -489,6 +497,16 @@ Some functions include `Doctests:` blocks with `# FIXME` placeholders. Treat the
 
 **Doctest prohibition:** Do not write trivial doctests that appear to exist only to check a box. In particular, forbid doctests whose primary purpose is merely to show that Python-based C/C++ generation ran, that a `CFunction` successfully registered, that `register_CFunction_*()` returned without error, or that an object/function can be called with no meaningful assertion. Such doctests provide low value and tend to be brittle.
 
+Do not require a doctest merely because a new infrastructure registration function exists. A missing doctest is not itself a style violation when the only practical doctest would spot-check generated C text from processed symbolic expressions.
+
+Doctests for generated C should assert a meaningful contract:
+- Stable public registration behavior
+- A small hand-written emitted-code invariant
+- An error path
+- A nontrivial symbolic or semantic property
+
+Do not add doctests whose value is limited to checking that generated C contains a few expected assignment strings, especially when those strings come from SymPy/codegen output rather than hand-written control logic. Prefer symbolic validation or no doctest over brittle generated-text spot checks.
+
 ### Parallel Codegen Phase Detection
 
 Registration functions that support parallel code generation use a standard early-return pattern:
@@ -549,6 +567,7 @@ C code embedded in Python registration functions follows these conventions:
 
 - **Raw strings** (`r"""..."""`) are used for C code bodies to avoid escape character issues.
 - **f-strings with doubled braces** (`rf"""...{var}..."""`) are used when Python variable interpolation is needed. Braces in C code (e.g., struct initializers, loop bodies) must be doubled: `{{`, `}}`.
+- Interpolated expressions in `rf"""..."""` strings must be Python 3.7-compatible and easy to read. Variables, attributes, and simple calls are acceptable; compute complex expressions on preceding lines before interpolation.
 - **C code indentation** inside raw strings uses 2 spaces (matching the C style guide), regardless of the Python indentation level.
 
 For readability, embedded C inside raw strings should use 2-space indentation when practical, but do not churn indentation across modules that are already valid.
@@ -865,6 +884,7 @@ Every closing brace that ends a non-trivial block must carry a `// END ...` comm
 
 - Keyword is ALL-CAPS after `// ` (with one space).
 - A colon follows the keyword in all cases.
+- Single-statement control-flow bodies must not use curly braces in new code. Write the statement directly under the control-flow header instead of introducing a one-statement braced block.
 - Every end-curly-brace comment includes a brief description; there are no block-type exceptions.
 - Primary goal: let the reader identify at a glance exactly what the brace is closing.
 - Use the keyword to identify the syntactic construct being closed; use the description to preserve the highest-signal semantic context.
@@ -909,7 +929,22 @@ Prefer:
 - `} // END LOOP: for i1 over theta points on the horizon surface`
 - `} // END BLOCK: theta/phi stencil bounds and center-index sanity checks`
 
-Omit end comments only when the block body is fewer than 5 lines and the opening brace is visible without scrolling.
+Do not write one-statement braced blocks such as:
+
+```c
+for (int h = 0; h < max_num_horizons; h++) {
+  bah_horizon_active[h] = 1; // Activate all horizons.
+} // END LOOP: activating all horizons outside BBH mode
+```
+
+Instead, write the same one-statement body without braces:
+
+```c
+for (int h = 0; h < max_num_horizons; h++)
+  bah_horizon_active[h] = 1; // Activate all horizons.
+```
+
+Omit end comments only when a multi-statement block body is fewer than 5 lines and the opening brace is visible without scrolling. This exception does not permit one-statement braced blocks.
 
 ### 11. Function Documentation (Doxygen)
 
@@ -931,7 +966,7 @@ If a function is both declared (in a header) and defined (in a `.c` file), the c
 - For functions returning integer error codes, enumerate the outcomes: e.g. `@return 0 on success, -1 on allocation failure`, or reference the specific enum values.
 - Use `@note` for important usage constraints, `@warning` for correctness hazards, `@pre` for preconditions.
 
-**`desc=` strings in `register_CFunction()` calls** follow the same tag conventions — no dash, no `@brief`, correct directional qualifiers, no `@return` for void. The `/**`/` */` delimiters are emitted by the framework and must not appear in the `desc=` string itself.
+**`desc=` strings in `register_CFunction()` calls** follow the same tag conventions — no dash, no `@brief`, correct directional qualifiers, no `@return` for void. The `/**`/` */` delimiters are emitted by the framework and must not appear in the `desc=` string itself. Multiline `desc` strings must use triple double-quotes whenever possible; use `rf"""..."""` only when interpolation is necessary. Keep interpolated expressions Python 3.7-compatible and compute complex expressions on preceding lines before interpolation.
 
 ```c
 /**

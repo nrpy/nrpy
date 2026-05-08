@@ -45,7 +45,7 @@ static inline REAL apply_parity_branchless(const REAL v, const int8_t p) {
     memcpy(&out, &bits, sizeof(out));
     return out;
   } // END IF 64 bits vs 32 bits
-} // END FUNCTION apply_parity_branchless
+} // END FUNCTION: apply_parity_branchless
 """
 
 

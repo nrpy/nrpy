@@ -1,13 +1,10 @@
 """
 Construct quantities for the SEOBNRv5 merger-ringdown model.
 
-Authors:
-
-Suchindram Dasgupta
-sd00113 at mix dot wvu dot edu
-
-Zachariah B. Etienne
-zachetie at gmail *dot com
+Authors: Suchindram Dasgupta
+         sd00113 at mix dot wvu dot edu
+         Zachariah B. Etienne
+         zachetie at gmail *dot com
 
 This module implements the key quantities needed to construct the
 merger-ringdown waveform in a precessing binary black hole system. It provides:
@@ -19,8 +16,6 @@ merger-ringdown waveform in a precessing binary black hole system. It provides:
 This implementation is based on Equations 18-22 of
 https://arxiv.org/pdf/2303.18046.pdf (SEOBNRv5PHM paper), with the list
 of generated modes constrained to match the available NRPy inspiral implementation.
-
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
@@ -44,24 +39,7 @@ class SEOBNRv5_MergerRingdown_Quantities:
     """
 
     def __init__(self) -> None:
-        """
-        Compute the symbolic expressions for the SEOBNRv5 merger-ringdown.
-
-        Inputs (as symbolic variables):
-        -----------------------------
-        - chi_f_x, chi_f_y, chi_f_z: Cartesian components of the remnant spin vector.
-        - L_f_x, L_f_y, L_f_z: Cartesian components of the remnant orbital angular momentum.
-        - alpha_match, beta_match, gamma_match: Euler angles at the matching time.
-        - t, t_match: Symbolic time and the matching time.
-
-        Outputs (as class attributes):
-        ------------------------------
-        - self.chi_f_dot_L_f: Symbolic dot product of remnant spin and orbital angular momentum.
-        - self.omega_QNM_J_...: Input symbols for all J-frame QNM frequencies (e.g., self.omega_QNM_J_l2_m2).
-        - self.omega_prec: Precession frequency of the co-precessing frame (Eq. 21).
-        - self.alpha_merger_RD, self.beta_merger_RD, self.gamma_merger_RD: Post-merger angles (Eqs. 18-20).
-        - self.omega_QNM_P_...: Output expressions for co-precessing frequencies (e.g., self.omega_QNM_P_l2_m2) (Eq. 22).
-        """
+        """Compute the symbolic expressions for the SEOBNRv5 merger-ringdown."""
         # Step 1: Define fundamental input symbols
         chi_f_x, chi_f_y, chi_f_z = sp.symbols("chi_f_x chi_f_y chi_f_z", real=True)
         L_f_x, L_f_y, L_f_z = sp.symbols("L_f_x L_f_y L_f_z", real=True)
@@ -123,20 +101,7 @@ class SEOBNRv5_MergerRingdown_Quantities:
 
 if __name__ == "__main__":
     import doctest
-    import os
     import sys
-
-    project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
-    sys.path.append(project_root)
-
-    try:
-        import nrpy.validate_expressions.validate_expressions as ve
-    except ImportError as exc:
-        raise ImportError(
-            "Could not import NRPy validation module. Please ensure "
-            "the script is in the correct directory structure "
-            "and __init__.py files are present."
-        ) from exc
 
     results = doctest.testmod()
     if results.failed > 0:
@@ -144,6 +109,10 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    import os
+
+    import nrpy.validate_expressions.validate_expressions as ve
 
     print("Running NRPy expression validation...")
     results_dict = ve.process_dictionary_of_expressions(

@@ -12,11 +12,10 @@ The Backwards-One Body (BOB) formalism relies on the properties of the remnant b
 for the merger-ringdown waveform and NQC corrections.
 The NR constants are expressed in terms of the binary masses (m1, m2), and spins (chi1, chi2).
 
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
-from typing import Any, Dict, cast
+from typing import Dict, cast
 
 import sympy as sp
 
@@ -121,11 +120,11 @@ class SEOBNR_aligned_spin_constants:
             sp.Function("nrpyAbs"), sp.Abs
         )
         # strain NR fits at t_match
-        self.hNR: Dict[str, Any] = {}
+        self.hNR: Dict[str, sp.Expr] = {}
         modes = [(2, 2), (3, 3), (2, 1), (4, 4), (4, 3), (5, 5), (3, 2)]
         for mode in modes:
             l, m = mode
-            self.hNR.update({f"({l} , {m})": 0})
+            self.hNR.update({f"({l} , {m})": sp.sympify(0)})
         m1 = self.m1
         m2 = self.m2
         chi1 = self.chi1

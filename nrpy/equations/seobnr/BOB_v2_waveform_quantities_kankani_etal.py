@@ -17,8 +17,6 @@ and the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm).
 
 We implement an uncalibrated version of the BOBv2 waveform. Because the peak of the BOB strain will not match the NR peak strain time (usually off by 1-2M),
 calibrations are required to determine the ideal attachment point.
-
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:

@@ -112,7 +112,7 @@ __device__ static void auxevol_gfs_single_point_gpu(const size_t streamid, const
                         (-1.0 / 4.0 * P0_y * tmp16 * tmp18 - 7.0 / 4.0 * P0_y * tmp55 + P0_z * tmp18 * tmp73 - 1.0 / 4.0 * P1_y * tmp19 * tmp7 -
                          7.0 / 4.0 * P1_y * tmp57 + P1_z * tmp19 * tmp73 - tmp16 * tmp40 * tmp71 + tmp21 * tmp34 * tmp63 + tmp21 * tmp39 * tmp66 -
                          tmp23 * tmp60 * tmp71 + tmp25 * tmp63 - tmp27 * tmp65 * tmp71 + tmp28 * tmp66 - tmp35 * tmp7 * tmp71 + tmp83));
-} // END FUNCTION auxevol_gfs_single_point_gpu
+} // END FUNCTION: auxevol_gfs_single_point_gpu
 
 /**
  * Kernel: auxevol_gfs_all_points_gpu.
@@ -149,7 +149,7 @@ __global__ static void auxevol_gfs_all_points_gpu(const size_t streamid, const R
       } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
     } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
   } // END LOOP: for (int i2 = tid2; i2 < Nxx_plus_2NGHOSTS2; i2 += stride2)
-} // END FUNCTION auxevol_gfs_all_points_gpu
+} // END FUNCTION: auxevol_gfs_all_points_gpu
 
 /**
  * Kernel: variable_wavespeed_gfs_all_points_gpu.
@@ -206,7 +206,7 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
       } // END LOOP: for (int i0 = tid0+NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0)
     } // END LOOP: for (int i1 = tid1+NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1)
   } // END LOOP: for (int i2 = tid2+NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2)
-} // END FUNCTION variable_wavespeed_gfs_all_points_gpu
+} // END FUNCTION: variable_wavespeed_gfs_all_points_gpu
 
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
@@ -252,4 +252,4 @@ void auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical(commondata_struct *res
     cudaCheckErrors(cudaKernel, "auxevol_gfs_all_points_gpu failure");
   }
 
-} // END FUNCTION auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical
+} // END FUNCTION: auxevol_gfs_set_to_constant__rfm__HoleySinhSpherical
