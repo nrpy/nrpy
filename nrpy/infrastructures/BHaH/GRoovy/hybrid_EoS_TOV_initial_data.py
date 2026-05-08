@@ -1,5 +1,6 @@
 """
 Function for TOV initial data, for use by GRoovy.
+
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
@@ -28,10 +29,10 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
     """
     Register function to initialize grid functions with TOV initial data.
 
-    :param grhayl_setup_str: string to set up grhayl eos and parameters
+    :param grhayl_setup_str: GRHayL EOS and parameter setup code.
     :param CoordSystem: The coordinate system.
     :param OMP_collapse: Level of OpenMP loop collapsing.
-    :param enable_GoldenKernels: Boolean to enable Golden Kernels.
+    :param enable_GoldenKernels: Enable Golden Kernels.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -48,7 +49,8 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
-    body = grhayl_setup_str + r"""
+    body = grhayl_setup_str
+    body += r"""
 
 // We're going to solve the TOV live, so we need to set some parameters.
 
@@ -60,13 +62,13 @@ commondata->max_step_size = 1.0;                      // TOVola::max_step_size
 commondata->min_step_size = 1e-20;                    // TOVola::min_step_size
 commondata->ode_error_limit = 1e-06;                  // TOVola::ode_error_limit
 commondata->ode_max_steps = 5000000;                  // TOVola::ode_max_steps
-commondata->poly_eos_Gamma = 2.0;                     // TOVola::poly_eos_Gamma
+commondata->poly_eos_Gamma = 2.0;                       // TOVola::poly_eos_Gamma
 commondata->poly_eos_K = 100.0;                         // TOVola::poly_eos_K
-        
+
 ID_persist_struct ID_persist;
 TOVola_solve(commondata, &ID_persist);
 
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
   bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
@@ -80,8 +82,9 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
-  initial_data_reader__convert_ADM_Spherical_to_BSSN(commondata, params, (const REAL *restrict *)xx, bcstruct,
-                                                       &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
+  initial_data_reader__convert_ADM_Spherical_to_BSSN(
+      commondata, params, (const REAL *restrict *)xx, bcstruct,
+      &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
 """
 
     rfm = refmetric.reference_metric[CoordSystem]

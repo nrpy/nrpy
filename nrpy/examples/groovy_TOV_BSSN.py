@@ -8,10 +8,6 @@ Author: Terrence Pierre Jacques
 import multiprocessing
 import os
 import shutil
-
-#########################################################
-# STEP 1: Import needed Python modules, then set codegen
-#         and compile-time parameters.
 import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
@@ -19,6 +15,10 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.GRoovy import diagnostics_nearest
+
+#########################################################
+# Step 1: Import needed Python modules, then set codegen
+#         and compile-time parameters.
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", "openmp")
@@ -37,9 +37,9 @@ grid_physical_size = 20.0
 diagnostics_output_every = 0.25
 default_checkpoint_every = 2.0
 t_final = 2300.0
-CFL_FACTOR = 0.8
+CFL_FACTOR = 0.2
 default_diagnostics_output_every = 2.0  # 0.25
-default_checkpoint_every = 50.0
+default_checkpoint_every = 5000000.0
 # symmetry_axes will be set on any i such that Nxx[i] = 2 below.
 Nxx_dict = {
     "Spherical": [100, 2, 2],
@@ -51,7 +51,7 @@ Nxx_dict = {
 
 enable_rfm_precompute = False
 enable_intrinsics = False
-MoL_method = "SSPRK54"
+MoL_method = "RK4"
 # PPM requires at least 3 ghost zones
 fd_order = 4
 radiation_BC_fd_order = 4
@@ -88,7 +88,7 @@ par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 #########################################################
-# STEP 2: Declare core C functions & register each to
+# Step 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
 BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
@@ -136,11 +136,11 @@ Gamma_poly_tab = 2
 # rho_poly_tab = 0.0
 K_poly_tab0 = 100
 
-grhayl_setup_str = f"""
+grhayl_setup_str = rf"""
 
-/* ################################################
-                Beginning of Initialize GRHayL
- ################################################ */
+//========================================================
+// Beginning of Initialize GRHayL
+//========================================================
 
   // This section sets up the initial parameters that would normally
   // be provided by the simulation.
@@ -164,8 +164,8 @@ grhayl_setup_str = f"""
 
   ghl_initialize_params(Noble2D,
                       backup_routine,
-                      false /*evolve entropy*/,
-                      false /*evolve temperature*/,
+                      false, // evolve entropy
+                      false, // evolve temperature
                       calc_prims_guess,
                       Psi6threshold,
                       W_max,
@@ -177,9 +177,9 @@ grhayl_setup_str = f"""
                                              neos, rho_ppoly, Gamma_ppoly,
                                              k_ppoly0, Gamma_th, &commondata->eos);
 
-/* ################################################
-                    End of Initialize GRHayL
-    ################################################ */
+//========================================================
+// End of Initialize GRHayL
+//========================================================
 """
 
 BHaH.GRoovy.hybrid_EoS_TOV_initial_data.register_CFunction_hybrid_EoS_TOV_initial_data(
@@ -376,7 +376,7 @@ BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
-# STEP 3: Generate header files, register C functions and
+# Step 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
@@ -438,24 +438,24 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 
 post_initial = r"""
 for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
-    const params_struct *restrict params = &griddata[grid].params;
-    const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
-   const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
+  const params_struct *restrict params = &griddata[grid].params;
+  const bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
+  const rfm_struct *restrict rfmstruct = griddata[grid].rfmstruct;
 
-    REAL *restrict xx[3];
-    for (int ww = 0; ww < 3; ww++)
-      xx[ww] = griddata[grid].xx[ww];
+  REAL *restrict xx[3];
+  for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
 
-    REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
-    REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+  REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
+  REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
-    apply_bcs_outerextrap_and_inner(&commondata, params, bcstruct, in_gfs);
+  apply_bcs_outerextrap_and_inner(&commondata, params, bcstruct, in_gfs);
 
-    enforce_detgammabar_equals_detgammahat(params, rfmstruct, in_gfs, auxevol_gfs);
-    
-    primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
-    conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);
-  }
+  enforce_detgammabar_equals_detgammahat(params, rfmstruct, in_gfs, auxevol_gfs);
+
+  primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
+  conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);
+} // END LOOP: for grid over all numerical grids
 """
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDType,
@@ -494,7 +494,9 @@ codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
 os.chdir(codes_root_dir)
 
 # Clone the repository
-result = subprocess.run(["git", "clone", repo_url], capture_output=True, text=True)
+result = subprocess.run(
+    ["git", "clone", repo_url], capture_output=True, text=True, check=True
+)
 print(result.stdout)
 
 # Change to the repository directory
@@ -506,16 +508,18 @@ configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
 # configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
 #                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
 #                       '--prefix=./', '--buildtype=opt']
-result = subprocess.run(configure_options, capture_output=True, text=True)
+result = subprocess.run(configure_options, capture_output=True, text=True, check=True)
 print(result.stdout)
 
 # Get the number of CPU cores
 cpus = str(multiprocessing.cpu_count())
 
 # Build and install
-result = subprocess.run(["make", "-j" + cpus], capture_output=True, text=True)
+result = subprocess.run(
+    ["make", "-j" + cpus], capture_output=True, text=True, check=True
+)
 print(result.stdout)
-result = subprocess.run(["make", "install"], capture_output=True, text=True)
+result = subprocess.run(["make", "install"], capture_output=True, text=True, check=True)
 print(result.stdout)
 
 # Change to the project directory
