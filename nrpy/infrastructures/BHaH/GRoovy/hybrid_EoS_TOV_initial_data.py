@@ -99,7 +99,7 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
  """
     )
 
-    rho_baryon_val, P_val = sp.symbols(["rho_baryon_val", "P_val"])
+    rho_baryon_val, P_val = sp.symbols("rho_baryon_val P_val", real=True)
 
     rescaledvU = ixp.zerorank1()
 
