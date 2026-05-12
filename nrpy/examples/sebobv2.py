@@ -29,6 +29,8 @@ Authors:
         aak00009 **at** mix **dot** wvu **dot** edu
         Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
+        Suchindram Dasgupta
+        sd00113 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -61,14 +63,15 @@ shutil.rmtree(project_dir, ignore_errors=True)
 
 par.set_parval_from_str("enable_parallel_codegen", enable_parallel_codegen)
 
-# Development flags (NOT command-line-tunable)
-# Flag to output the commondata struct to a file.
-# Useful for fine-grained debugging.
+# Development flags (NOT command-line-tunable).
+# Output the commondata struct to commondata.bin for low-level debugging.
 output_commondata_flag = False
-# Flag to output the SEOBNRv5 waveform using a print statement like lalsimulation does.
-# (set to False for performance checks)
+# Print the final IMR waveform to stdout. Set to False for performance checks.
 output_waveform_flag = True
-# Removed all command line flags since we do not have multiple usage options currently.
+# Enable the optional inspiral-only coprecessing-rotation sandbox.
+validate_sandbox_flag = False
+# Write sandbox diagnostics. This only has an effect when validate_sandbox_flag is also True.
+enable_sandbox_diagnostics_flag = False
 
 #########################################################
 # STEP 2: Declare core C functions & register each to
@@ -78,13 +81,17 @@ output_waveform_flag = True
 #  Note: Removing step numbers for now.
 def register_CFunction_main_c(
     output_waveform: bool = True,
-    output_commondata: bool = False,
+    output_commondata: bool = True,
+    validate_sandbox: bool = False,
+    enable_sandbox_diagnostics: bool = False,
 ) -> None:
     """
     Generate a simplified C main() function for computing the SEBOB waveform.
 
     :param output_waveform: Flag to enable/disable printing the waveform
-    :param output_commondata: Flag to enable/disable outputting the commondata struct to a binary file
+    :param output_commondata: Flag to enable/disable outputting commondata to a binary file.
+    :param validate_sandbox: Whether to run the isolated coprecessing-rotation sandbox.
+    :param enable_sandbox_diagnostics: Whether to write sandbox diagnostic sidecar files.
     """
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """-={ main() function }=-
@@ -111,19 +118,150 @@ SEOBNRv5_aligned_spin_pa_integration(&commondata);
 SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
+"""
+
+    if validate_sandbox:
+        sandbox_diagnostics_flag = "1" if enable_sandbox_diagnostics else "0"
+        body += r"""
+// Optional validation sandbox: inspiral-only coprecessing rotations.
+// This block exercises the J->P Euler-angle construction of Sec. III A,
+// Eqs. (15)-(17), and the direct polarization rotation of Sec. III C,
+// Eqs. (26)-(28), for fixed observer angles. It does not implement the
+// merger-ringdown angle extension of Eqs. (18)-(20), and it does not alter
+// the IMR waveform pipeline.
+{
+    const size_t n_low = commondata.nsteps_low;
+    const size_t n_fine = commondata.nsteps_fine;
+    const size_t n_insp = n_low + n_fine;
+    const int enable_sandbox_diagnostics = __SANDBOX_DIAGNOSTICS_FLAG__;
+    const REAL sandbox_iota = 0.9;
+    const REAL sandbox_varphi_0 = 0.3;
+
+    if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
+        fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
+        fprintf(stderr,
+            "Warning: the optional coprecessing-rotation sandbox uses "
+            "chi1_x/y/z and chi2_x/y/z, while the current aligned-spin IMR "
+            "path uses chi1 and chi2. For a self-consistent sandbox "
+            "validation, set chi1=chi1_z and chi2=chi2_z.\n");
+        fflush(stderr);
+    } // END IF: scalar and vector spin parameters differ for sandbox validation
+
+    REAL *real_buffers = (REAL *)calloc(2 * n_insp, sizeof(REAL));
+    COMPLEX *complex_buffers = (COMPLEX *)calloc(7 * n_insp, sizeof(COMPLEX));
+
+    if (real_buffers != NULL && complex_buffers != NULL) {
+        // Partition sandbox work buffers.
+        REAL *h_plus_I  = real_buffers + 0 * n_insp;
+        REAL *h_cross_I = real_buffers + 1 * n_insp;
+
+        COMPLEX *hP_22 = complex_buffers + 0 * n_insp;
+        COMPLEX *hP_21 = complex_buffers + 1 * n_insp;
+        COMPLEX *hP_33 = complex_buffers + 2 * n_insp;
+        COMPLEX *hP_32 = complex_buffers + 3 * n_insp;
+        COMPLEX *hP_44 = complex_buffers + 4 * n_insp;
+        COMPLEX *hP_43 = complex_buffers + 5 * n_insp;
+        COMPLEX *hP_55 = complex_buffers + 6 * n_insp;
+
+        // Splice and unpack all seven positive-m coprecessing inspiral modes.
+        for(size_t i = 0; i < n_low; i++) {
+            hP_22[i] = commondata.waveform_low[IDX_WF(i, STRAIN22)];
+            hP_21[i] = commondata.waveform_low[IDX_WF(i, STRAIN21)];
+            hP_33[i] = commondata.waveform_low[IDX_WF(i, STRAIN33)];
+            hP_32[i] = commondata.waveform_low[IDX_WF(i, STRAIN32)];
+            hP_44[i] = commondata.waveform_low[IDX_WF(i, STRAIN44)];
+            hP_43[i] = commondata.waveform_low[IDX_WF(i, STRAIN43)];
+            hP_55[i] = commondata.waveform_low[IDX_WF(i, STRAIN55)];
+        } // END LOOP: for i over low-frequency inspiral modes
+        for(size_t i = 0; i < n_fine; i++) {
+            size_t dest_idx = i + n_low;
+            hP_22[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN22)];
+            hP_21[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN21)];
+            hP_33[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN33)];
+            hP_32[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN32)];
+            hP_44[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN44)];
+            hP_43[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN43)];
+            hP_55[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN55)];
+        } // END LOOP: for i over fine-frequency inspiral modes
+
+        // Generate physical J->P Euler angles from the precessing dynamics.
+        SEOBNRv5_coprecessing_angles(&commondata);
+
+        // Execute the physical coprecessing-to-observer rotation.
+        SEOBNRv5_coprecessing_rotations(
+            n_insp, sandbox_iota, sandbox_varphi_0,
+            commondata.J_f_x, commondata.J_f_y, commondata.J_f_z,
+            commondata.alpha_JP, commondata.beta_JP, commondata.gamma_JP,
+            hP_22, hP_21, hP_33, hP_32, hP_44, hP_43, hP_55,
+            h_plus_I, h_cross_I
+        );
+
+        // Optionally dump raw modes, physical Euler angles, and rotated polarizations.
+        FILE *fp = enable_sandbox_diagnostics ? fopen("validation_waveform.txt", "w") : NULL;
+        if (fp != NULL) {
+            fprintf(fp, "# Physical coprecessing-rotation validation: iota=%.15e varphi_0=%.15e J_f=(%.15e, %.15e, %.15e)\n",
+                    sandbox_iota, sandbox_varphi_0, commondata.J_f_x, commondata.J_f_y, commondata.J_f_z);
+            fprintf(fp, "# Time | alpha_JP | beta_JP | gamma_JP | Re(hP_22) | Im(hP_22) | Re(hP_21) | Im(hP_21) | Re(hP_33) | Im(hP_33) | Re(hP_32) | Im(hP_32) | Re(hP_44) | Im(hP_44) | Re(hP_43) | Im(hP_43) | Re(hP_55) | Im(hP_55) | h_plus_I | h_cross_I\n");
+            for(size_t i = 0; i < n_low; i++) {
+                fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+                        commondata.dynamics_low[IDX(i, TIME)],
+                        commondata.alpha_JP[i], commondata.beta_JP[i], commondata.gamma_JP[i],
+                        creal(hP_22[i]), cimag(hP_22[i]),
+                        creal(hP_21[i]), cimag(hP_21[i]),
+                        creal(hP_33[i]), cimag(hP_33[i]),
+                        creal(hP_32[i]), cimag(hP_32[i]),
+                        creal(hP_44[i]), cimag(hP_44[i]),
+                        creal(hP_43[i]), cimag(hP_43[i]),
+                        creal(hP_55[i]), cimag(hP_55[i]),
+                        h_plus_I[i], h_cross_I[i]);
+            } // END LOOP: for i over low-frequency validation waveform samples
+            for(size_t i = 0; i < n_fine; i++) {
+                size_t dest_idx = i + n_low;
+                fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+                        commondata.dynamics_fine[IDX(i, TIME)],
+                        commondata.alpha_JP[dest_idx], commondata.beta_JP[dest_idx], commondata.gamma_JP[dest_idx],
+                        creal(hP_22[dest_idx]), cimag(hP_22[dest_idx]),
+                        creal(hP_21[dest_idx]), cimag(hP_21[dest_idx]),
+                        creal(hP_33[dest_idx]), cimag(hP_33[dest_idx]),
+                        creal(hP_32[dest_idx]), cimag(hP_32[dest_idx]),
+                        creal(hP_44[dest_idx]), cimag(hP_44[dest_idx]),
+                        creal(hP_43[dest_idx]), cimag(hP_43[dest_idx]),
+                        creal(hP_55[dest_idx]), cimag(hP_55[dest_idx]),
+                        h_plus_I[dest_idx], h_cross_I[dest_idx]);
+            } // END LOOP: for i over fine-frequency validation waveform samples
+            fclose(fp);
+        } else if (enable_sandbox_diagnostics) {
+            fprintf(stderr, "Warning: Could not open validation_waveform.txt for writing.\n");
+            fflush(stderr);
+        } // END ELSE IF: validation waveform requested but file open failed
+    } else {
+        if (enable_sandbox_diagnostics) {
+            fprintf(stderr, "Warning: Validation memory allocation failed. Skipping sandbox diagnostics.\n");
+            fflush(stderr);
+        } // END IF: sandbox diagnostics enabled after allocation failure
+    } // END ELSE: sandbox work-buffer allocation failed
+
+    // Free sandbox work buffers immediately.
+    free(real_buffers);
+    free(complex_buffers);
+} // END BLOCK: optional inspiral-only coprecessing-rotation sandbox
+""".replace("__SANDBOX_DIAGNOSTICS_FLAG__", sandbox_diagnostics_flag)
+    body += r"""
 // Step TBD: Compute and apply the NQC corrections
 SEBOBv2_NQC_corrections(&commondata);
 // Step TBD: Compute the IMR waveform
 SEBOBv2_IMR_waveform(&commondata);
 """
+
     if output_waveform:
         body += r"""
-// Step TBD: Print the resulting waveform.
+// Step TBD: Print the resulting IMR waveform to stdout.
 for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
     printf("%.15e %.15e %.15e\n", creal(commondata.waveform_IMR[IDX_WF(i,TIME)])
     , creal(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]), cimag(commondata.waveform_IMR[IDX_WF(i,STRAIN22)]));
 }
 """
+
     if output_commondata:
         body += r"""
 commondata_io(&commondata, "commondata.bin");
@@ -136,6 +274,9 @@ free(commondata.waveform_low);
 free(commondata.waveform_fine);
 free(commondata.waveform_inspiral);
 free(commondata.waveform_IMR);
+free(commondata.alpha_JP);
+free(commondata.beta_JP);
+free(commondata.gamma_JP);
 return 0;
 """
     cfc.register_CFunction(
@@ -205,6 +346,9 @@ BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_waveform_higher_mode.registe
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rholm()
 BHaH.seobnr.inspiral_waveform.SEOBNRv5_aligned_spin_special_amplitude_coefficients.register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
 BHaH.seobnr.dynamics.SEOBNRv5_aligned_spin_flux.register_CFunction_SEOBNRv5_aligned_spin_flux()
+BHaH.seobnr.SEOBNRv5_coprecessing_angles.register_CFunction_SEOBNRv5_coprecessing_angles(
+    enable_forensic_diagnostics=enable_sandbox_diagnostics_flag,
+)
 BHaH.seobnr.SEOBNRv5_coprecessing_rotations.register_CFunction_SEOBNRv5_coprecessing_rotations()
 
 # register additional commondata parameters needed for SEBOBv2 (but not needed for SEOBNR)
@@ -336,6 +480,8 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 register_CFunction_main_c(
     output_waveform_flag,
     output_commondata_flag,
+    validate_sandbox_flag,
+    enable_sandbox_diagnostics_flag,
 )
 
 addl_cflags = ["$(shell gsl-config --cflags)"]

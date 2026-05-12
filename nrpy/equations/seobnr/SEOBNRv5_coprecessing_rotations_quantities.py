@@ -1,12 +1,10 @@
 """
 Construct the co-precessing frame transformations and inertial GW polarizations for SEOBNRv5PHM.
 
-Authors:
-Suchindram Dasgupta
-sd00113 at mix dot wvu dot edu
-
-Zachariah B. Etienne
-zachetie at gmail *dot com
+Authors: Suchindram Dasgupta
+         sd00113 at mix dot wvu dot edu
+         Zachariah B. Etienne
+         zachetie at gmail *dot com
 
 This module implements the transformation from the co-precessing frame to the
 inertial observer frame, computing the final GW polarizations (h_+, h_x).
@@ -18,8 +16,6 @@ It encapsulates:
 
 This implementation is based on Equations 15, 17, and 26-28 of
 https://arxiv.org/pdf/2303.18046.pdf (SEOBNRv5PHM paper).
-
-License: BSD 2-Clause
 """
 
 from functools import lru_cache
@@ -142,7 +138,8 @@ class SEOBNRv5_Coprecessing_Rotations:
 
             d_mat_pos = self.wigner_d_small(l, m, 2, beta)
             A_pos = pref * d_mat_pos
-            phase_pos = 2 * alpha + m * gamma
+            # Match pyseobnr's custom_swsh(beta, alpha) projection followed by exp(2i*gamma).
+            phase_pos = m * alpha + 2 * gamma
 
             Re_Cp = A_pos * (hR * sp.cos(phase_pos) - hI * sp.sin(phase_pos))
             Im_Cp = A_pos * (hR * sp.sin(phase_pos) + hI * sp.cos(phase_pos))
@@ -157,7 +154,7 @@ class SEOBNRv5_Coprecessing_Rotations:
 
             d_mat_neg = self.wigner_d_small(l, -m, 2, beta)
             A_neg = pref * d_mat_neg
-            phase_neg = 2 * alpha - m * gamma
+            phase_neg = -m * alpha + 2 * gamma
 
             Re_Cm = A_neg * (hR_neg * sp.cos(phase_neg) - hI_neg * sp.sin(phase_neg))
             Im_Cm = A_neg * (hR_neg * sp.sin(phase_neg) + hI_neg * sp.cos(phase_neg))
@@ -350,20 +347,7 @@ class SEOBNRv5_Coprecessing_Rotations:
 
 if __name__ == "__main__":
     import doctest
-    import os
     import sys
-
-    project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
-    sys.path.append(project_root)
-
-    try:
-        import nrpy.validate_expressions.validate_expressions as ve
-    except ImportError as exc:
-        raise ImportError(
-            "Could not import NRPy validation module. Please ensure "
-            "the script is in the correct directory structure "
-            "and __init__.py files are present."
-        ) from exc
 
     results = doctest.testmod()
     if results.failed > 0:
@@ -371,6 +355,10 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    import os
+
+    import nrpy.validate_expressions.validate_expressions as ve
 
     print("Running NRPy expression validation...")
 

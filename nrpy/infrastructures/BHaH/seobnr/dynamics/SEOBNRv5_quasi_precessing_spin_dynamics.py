@@ -3,6 +3,8 @@ Register CFunction for evolve the SEOBNRv5 spins and angular momenta using GSL.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
+        Suchindram Dasgupta
+        sd00113 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -37,6 +39,12 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_dynamics() -> (
             "chi2_lnhat",
             "chi1_l",
             "chi2_l",
+            "chi1_x_spline",
+            "chi1_y_spline",
+            "chi1_z_spline",
+            "chi2_x_spline",
+            "chi2_y_spline",
+            "chi2_z_spline",
             "lnhat_x",
             "lnhat_y",
             "lnhat_z",
@@ -97,6 +105,12 @@ REAL *chi1_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *chi2_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *chi1_l = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *chi2_l = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi1_x = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi1_y = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi1_z = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi2_x = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi2_y = (REAL *)malloc(bufferlength * sizeof(REAL));
+REAL *chi2_z = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *lnhat_x = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *lnhat_y = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *lnhat_z = (REAL *)malloc(bufferlength * sizeof(REAL));
@@ -104,7 +118,7 @@ REAL *L_x = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *L_y = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *L_z = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *omega = (REAL *)malloc(bufferlength * sizeof(REAL));
-if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
+if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || chi1_x == NULL || chi1_y == NULL || chi1_z == NULL || chi2_x == NULL || chi2_y == NULL || chi2_z == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), malloc() failed for spin_dynamics\\n");
   exit(1);
 }
@@ -117,6 +131,12 @@ status = SEOBNRv5_quasi_precessing_spin_equations(t, z, dzdt, commondata);
 chi2_lnhat[nsteps] = z[LN_X]*z[CHI2_X] + z[LN_Y]*z[CHI2_Y] + z[LN_Z]*z[CHI2_Z];
 chi1_l[nsteps] = (z[CHI1_X]*L[0] + z[CHI1_Y]*L[1] + z[CHI1_Z]*L[2])*L_mod_inv;
 chi2_l[nsteps] = (z[CHI2_X]*L[0] + z[CHI2_Y]*L[1] + z[CHI2_Z]*L[2])*L_mod_inv;
+chi1_x[nsteps] = z[CHI1_X];
+chi1_y[nsteps] = z[CHI1_Y];
+chi1_z[nsteps] = z[CHI1_Z];
+chi2_x[nsteps] = z[CHI2_X];
+chi2_y[nsteps] = z[CHI2_Y];
+chi2_z[nsteps] = z[CHI2_Z];
 REAL ln_mod_inv = 1./sqrt(z[LN_X]*z[LN_X] + z[LN_Y]*z[LN_Y] + z[LN_Z]*z[LN_Z]);
 lnhat_x[nsteps] = z[LN_X]*ln_mod_inv;
 lnhat_y[nsteps] = z[LN_Y]*ln_mod_inv;
@@ -142,6 +162,12 @@ if (nsteps >= bufferlength) {
     chi2_lnhat = (REAL *)realloc(chi2_lnhat, bufferlength * sizeof(REAL));
     chi1_l = (REAL *)realloc(chi1_l, bufferlength * sizeof(REAL));
     chi2_l = (REAL *)realloc(chi2_l, bufferlength * sizeof(REAL));
+    chi1_x = (REAL *)realloc(chi1_x, bufferlength * sizeof(REAL));
+    chi1_y = (REAL *)realloc(chi1_y, bufferlength * sizeof(REAL));
+    chi1_z = (REAL *)realloc(chi1_z, bufferlength * sizeof(REAL));
+    chi2_x = (REAL *)realloc(chi2_x, bufferlength * sizeof(REAL));
+    chi2_y = (REAL *)realloc(chi2_y, bufferlength * sizeof(REAL));
+    chi2_z = (REAL *)realloc(chi2_z, bufferlength * sizeof(REAL));
     lnhat_x = (REAL *)realloc(lnhat_x, bufferlength * sizeof(REAL));
     lnhat_y = (REAL *)realloc(lnhat_y, bufferlength * sizeof(REAL));
     lnhat_z = (REAL *)realloc(lnhat_z, bufferlength * sizeof(REAL));
@@ -149,7 +175,7 @@ if (nsteps >= bufferlength) {
     L_y = (REAL *)realloc(L_y, bufferlength * sizeof(REAL));
     L_z = (REAL *)realloc(L_z, bufferlength * sizeof(REAL));
     omega = (REAL *)realloc(omega, bufferlength * sizeof(REAL));
-    if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
+    if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || chi1_x == NULL || chi1_y == NULL || chi1_z == NULL || chi2_x == NULL || chi2_y == NULL || chi2_z == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
       fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), realloc() failed for spin_dynamics\\n");
       exit(1);
     }
@@ -170,6 +196,12 @@ if (nsteps >= bufferlength) {
   chi2_lnhat[nsteps] = lnhat_x[nsteps]*z[CHI2_X] + lnhat_y[nsteps]*z[CHI2_Y] + lnhat_z[nsteps]*z[CHI2_Z];
   chi1_l[nsteps] = (z[CHI1_X]*L[0] + z[CHI1_Y]*L[1] + z[CHI1_Z]*L[2])*L_mod_inv;
   chi2_l[nsteps] = (z[CHI2_X]*L[0] + z[CHI2_Y]*L[1] + z[CHI2_Z]*L[2])*L_mod_inv;
+  chi1_x[nsteps] = z[CHI1_X];
+  chi1_y[nsteps] = z[CHI1_Y];
+  chi1_z[nsteps] = z[CHI1_Z];
+  chi2_x[nsteps] = z[CHI2_X];
+  chi2_y[nsteps] = z[CHI2_Y];
+  chi2_z[nsteps] = z[CHI2_Z];
   omega[nsteps] = z[OMEGA_PN];
   nsteps++;
 
@@ -207,6 +239,9 @@ if (stop == OMEGA_PN || dt_last < 1e-12){
   nsteps--;
 }
 
+commondata->omega_spin_min = nsteps > 0 ? omega[0] : commondata->initial_omega;
+commondata->omega_spin_max = nsteps > 0 ? omega[nsteps - 1] : commondata->initial_omega;
+
 // create the splines
 commondata->chi1_lnhat.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_lnhat.acc = gsl_interp_accel_alloc();
@@ -223,6 +258,30 @@ gsl_spline_init(commondata->chi1_l.spline, omega, chi1_l, nsteps);
 commondata->chi2_l.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_l.acc = gsl_interp_accel_alloc();
 gsl_spline_init(commondata->chi2_l.spline, omega, chi2_l, nsteps);
+
+commondata->chi1_x_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi1_x_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi1_x_spline.spline, omega, chi1_x, nsteps);
+
+commondata->chi1_y_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi1_y_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi1_y_spline.spline, omega, chi1_y, nsteps);
+
+commondata->chi1_z_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi1_z_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi1_z_spline.spline, omega, chi1_z, nsteps);
+
+commondata->chi2_x_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi2_x_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi2_x_spline.spline, omega, chi2_x, nsteps);
+
+commondata->chi2_y_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi2_y_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi2_y_spline.spline, omega, chi2_y, nsteps);
+
+commondata->chi2_z_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
+commondata->chi2_z_spline.acc = gsl_interp_accel_alloc();
+gsl_spline_init(commondata->chi2_z_spline.spline, omega, chi2_z, nsteps);
 
 commondata->lnhat_x.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->lnhat_x.acc = gsl_interp_accel_alloc();
@@ -253,6 +312,12 @@ free(chi1_lnhat);
 free(chi2_lnhat);
 free(chi1_l);
 free(chi2_l);
+free(chi1_x);
+free(chi1_y);
+free(chi1_z);
+free(chi2_x);
+free(chi2_y);
+free(chi2_z);
 free(lnhat_x);
 free(lnhat_y);
 free(lnhat_z);
