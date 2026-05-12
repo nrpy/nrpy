@@ -38,8 +38,6 @@ diagnostics_output_every = 0.25
 default_checkpoint_every = 2.0
 t_final = 2300.0
 CFL_FACTOR = 0.2
-default_diagnostics_output_every = 2.0  # 0.25
-default_checkpoint_every = 5000000.0
 # symmetry_axes will be set on any i such that Nxx[i] = 2 below.
 Nxx_dict = {
     "Spherical": [100, 2, 2],
@@ -197,6 +195,11 @@ BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFuncti
     enable_fd_functions=False,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
 )
+
+# Set parameters for TOV ID solve by TOVola
+par.adjust_CodeParam_default("initial_central_density", rho_baryon_central)
+par.adjust_CodeParam_default("poly_eos_Gamma", Gamma_poly_tab)
+par.adjust_CodeParam_default("poly_eos_K", K_poly_tab0)
 
 # grhayl calls currently incompatible with SIMD
 BHaH.GRoovy.calculate_all_source_terms.register_CFunction_calculate_all_source_terms(
@@ -482,48 +485,52 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_libraries=[ghl_LIB_FLAG + " -lghl", "$(shell gsl-config --libs)"],
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
+if __name__ == "__main__":
+    print("Cloning and compiling GRHayL...")
 
-print("Cloning and compiling GRHayL...")
+    # Define the repository URL and directory
+    repo_url = "https://github.com/GRHayL/GRHayL.git"
+    repo_dir = "GRHayL"
+    codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
 
-# Define the repository URL and directory
-repo_url = "https://github.com/GRHayL/GRHayL.git"
-repo_dir = "GRHayL"
-codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
+    # Change to the codes root directory
+    os.chdir(codes_root_dir)
 
-# Change to the codes root directory
-os.chdir(codes_root_dir)
+    # Clone the repository
+    result = subprocess.run(
+        ["git", "clone", repo_url], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
 
-# Clone the repository
-result = subprocess.run(
-    ["git", "clone", repo_url], capture_output=True, text=True, check=True
-)
-print(result.stdout)
+    # Change to the repository directory
+    os.chdir(repo_dir)
 
-# Change to the repository directory
-os.chdir(repo_dir)
+    # Configure the build
+    configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
+    # For Terrence's laptop, uncomment the following lines and comment out the above line
+    # configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
+    #                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
+    #                       '--prefix=./', '--buildtype=opt']
+    result = subprocess.run(
+        configure_options, capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
 
-# Configure the build
-configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
-# For Terrence's laptop, uncomment the following lines and comment out the above line
-# configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
-#                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
-#                       '--prefix=./', '--buildtype=opt']
-result = subprocess.run(configure_options, capture_output=True, text=True, check=True)
-print(result.stdout)
+    # Get the number of CPU cores
+    cpus = str(multiprocessing.cpu_count())
 
-# Get the number of CPU cores
-cpus = str(multiprocessing.cpu_count())
+    # Build and install
+    result = subprocess.run(
+        ["make", "-j" + cpus], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
+    result = subprocess.run(
+        ["make", "install"], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
 
-# Build and install
-result = subprocess.run(
-    ["make", "-j" + cpus], capture_output=True, text=True, check=True
-)
-print(result.stdout)
-result = subprocess.run(["make", "install"], capture_output=True, text=True, check=True)
-print(result.stdout)
-
-# Change to the project directory
-os.chdir("../")
+    # Change to the project directory
+    os.chdir("../")
 
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

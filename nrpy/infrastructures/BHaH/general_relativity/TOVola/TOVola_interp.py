@@ -23,7 +23,18 @@ def register_CFunction_TOVola_TOV_interpolate_1D() -> None:
         return
 
     includes = ["BHaH_defines.h"]
-    desc = "Interpolate one-dimensional TOVola radial data at an isotropic radius."
+    desc = """Interpolate one-dimensional TOVola radial data at an isotropic radius.
+
+    @param[in,out] rr_iso Isotropic radius at which data are requested.
+    @param[in] commondata Global TOVola interpolation parameters.
+    @param[in] interpolation_stencil_size Number of radial points in the interpolation stencil.
+    @param[in] numpoints_arr Number of radial TOVola sample points.
+    @param[out] rho_energy Interpolated energy density.
+    @param[out] rho_baryon Interpolated baryon density.
+    @param[out] P Interpolated pressure.
+    @param[out] M Interpolated enclosed mass.
+    @param[out] expnu Interpolated lapse-squared factor.
+    @param[out] exp4phi Interpolated conformal factor."""
     prefunc = r"""
 /* Bisection index finder using binary search */
 static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_arr, const REAL *restrict r_iso_arr) {
@@ -88,7 +99,7 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
     idxmin = MIN(idxmin, R_idx - commondata->interpolation_stencil_size + 1);
 
     // Ensure that commondata->interpolation_stencil_size does not exceed the maximum
-    if (commondata->interpolation_stencil_size > commondata->max_interpolation_stencil_size) {
+    if (commondata->interpolation_stencil_size > commondata->interpolation_stencil_size) {
       fprintf(stderr, "Interpolation stencil size exceeds maximum allowed.\n");
       exit(EXIT_FAILURE);
     }
@@ -96,12 +107,12 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
     // Now perform the Lagrange polynomial interpolation:
 
     // First compute the interpolation coefficients:
-    REAL r_iso_sample[commondata->max_interpolation_stencil_size];
+    REAL r_iso_sample[commondata->interpolation_stencil_size];
     for (int i = idxmin; i < idxmin + commondata->interpolation_stencil_size; i++) {
       //if(i < 0 || i >= R_idx-1) { fprintf(stderr, "ERROR!\n"); exit(1); }
       r_iso_sample[i - idxmin] = r_iso_arr[i];
     }
-    REAL l_i_of_r[commondata->max_interpolation_stencil_size];
+    REAL l_i_of_r[commondata->interpolation_stencil_size];
     for (int i = 0; i < commondata->interpolation_stencil_size; i++) {
       REAL numer = 1.0;
       REAL denom = 1.0;
@@ -141,7 +152,7 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
     *M = M_star;
     *expnu = 1. - 2.0 * (M_star) / r_Schw;
     *exp4phi = (r_Schw * r_Schw) / (rr_iso * rr_iso);
-  }
+  } // END IF: interpolate inside the star or use exterior Schwarzschild data
   //printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e hhhh\n", rr_iso, r_Schw, *rho_energy, *rho_baryon, *P, *M, *expnu, *exp4phi);
 """
 
@@ -178,7 +189,7 @@ def register_CFunction_TOVola_interp() -> None:
 
   // Perform pointwise interpolation to radius r using ID_persist data
   REAL rho_energy_val, rho_baryon_val, P_val, M_val, expnu_val, exp4phi_val;
-  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist->numpoints_arr, ID_persist->r_Schw_arr,
+  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->interpolation_stencil_size, ID_persist->numpoints_arr, ID_persist->r_Schw_arr,
                             ID_persist->rho_energy_arr, ID_persist->rho_baryon_arr, ID_persist->P_arr, ID_persist->M_arr, ID_persist->expnu_arr,
                             ID_persist->exp4phi_arr, ID_persist->r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val, &expnu_val,
                             &exp4phi_val);
