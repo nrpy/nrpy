@@ -818,4 +818,4 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   if (fp_dbg != NULL) {
     fclose(fp_dbg);
   }
-} // END FUNCTION SEOBNRv5_coprecessing_angles
+} // END FUNCTION: SEOBNRv5_coprecessing_angles
