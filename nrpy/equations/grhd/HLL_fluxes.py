@@ -1,11 +1,10 @@
 """
-Construct fluxes from the HLL approximate Riemann solver, at the right and left interfaces.
+Construct fluxes from the HLL approximate Riemann solver at cell interfaces.
 
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot* com
 """
 
-# Step Import needed modules:
 from typing import Any, Dict, List, Tuple, cast
 
 import sympy as sp
@@ -23,6 +22,7 @@ def calculate_GRHD_Tmunu_and_contractions(
     e6phi: sp.Expr,
     rho_b: sp.Expr,
     Ye: sp.Expr,
+    S: sp.Expr,
     P: sp.Expr,
     h: sp.Expr,
     u4U: List[sp.Expr],
@@ -33,34 +33,31 @@ def calculate_GRHD_Tmunu_and_contractions(
     sp.Expr,
     sp.Expr,
     sp.Expr,
+    sp.Expr,
+    sp.Expr,
     List[sp.Expr],
     List[sp.Expr],
 ]:
     """
-    Compute the maximum and minimum characteristic speeds c_max and c_min.
+    Compute conserved quantities and fluxes entering the HLL solver.
 
-    :param flux_dirn: direction for flux calculation
-    :param gammaDD: spatial metric
-    :param betaU: shift vector
-    :param alpha: lapse function
-    :param e6phi: exp{6*conformal exponent phi}
-    :param rho_b: baryon density
-    :param Ye: electron fraction
-    :param P: pressure
-    :param h: specific enthalpy
-    :param u4U: four-velocity
+    :param flux_dirn: Flux direction.
+    :param gammaDD: Spatial metric.
+    :param betaU: Shift vector.
+    :param alpha: Lapse function.
+    :param e6phi: Exponential conformal factor.
+    :param rho_b: Baryon density.
+    :param Ye: Electron fraction.
+    :param S: Specific entropy.
+    :param P: Pressure.
+    :param h: Specific enthalpy.
+    :param u4U: Four-velocity.
+    :return: Conserved quantities and fluxes in the requested direction.
 
-    :return: symbolic expressions of the conserved quantities and fluxes in a single
-             direction, to be used in our HLL calculation
-
-    ::note: Written in terms of rescaled quantities, the rescaled fluxes have the exact same
-            mathematical form as the unscaled fluxes in Cartesian coordinates.
-
-            E.g. consider the unscaled density flux: alpha*e6phi*rho_b*u^i,
-            in Cartesian coordinates this is still written in terms of rescaled velocities.
-            In spherical coordinates, doing the rescaling correctly, the rescaled density flux
-            is the same as alpha*e6phi*rho_b*u^i, symbolically.
+    Note: Written in terms of rescaled quantities, the rescaled fluxes have the
+    same mathematical form as the Cartesian expressions.
     """
+    # Step 1: Initialize the GRHD equations in Cartesian-equivalent form.
     grhd_eqs = GRHD_Equations(CoordSystem="Cartesian", enable_rfm_precompute=False)
 
     grhd_eqs.gammaDD = gammaDD.copy()
@@ -70,26 +67,27 @@ def calculate_GRHD_Tmunu_and_contractions(
     grhd_eqs.e6phi = e6phi
     grhd_eqs.rho_b = rho_b
     grhd_eqs.Ye = Ye
+    grhd_eqs.S = S
     grhd_eqs.P = P
     grhd_eqs.h = h
 
+    # Step 2: Recover the Valencia velocity and stress-energy tensor pieces.
     grhd_eqs.compute_vU_from_u4U__no_speed_limit()
-
     grhd_eqs.VU = grhd_eqs.VU_from_u4U
-
-    # First compute stress-energy tensor T4UU and T4UD:
     grhd_eqs.compute_T4UU()
     grhd_eqs.compute_T4UD()
 
-    # Compute conservative variables in terms of primitive variables
+    # Step 3: Compute conserved variables.
     grhd_eqs.compute_rho_star()
     grhd_eqs.compute_Ye_star()
+    grhd_eqs.compute_S_star()
     grhd_eqs.compute_tau_tilde()
     grhd_eqs.compute_S_tildeD()
 
-    # Next compute fluxes of conservative variables
+    # Step 4: Compute their fluxes.
     grhd_eqs.compute_rho_star_fluxU()
     grhd_eqs.compute_Ye_star_fluxU()
+    grhd_eqs.compute_S_star_fluxU()
     grhd_eqs.compute_tau_tilde_fluxU()
     grhd_eqs.compute_S_tilde_fluxUD()
 
@@ -98,6 +96,9 @@ def calculate_GRHD_Tmunu_and_contractions(
 
     U_Ye_star = grhd_eqs.Ye_star
     F_Ye_star = grhd_eqs.Ye_star_fluxU[flux_dirn]
+
+    U_S_star = grhd_eqs.S_star
+    F_S_star = grhd_eqs.S_star_fluxU[flux_dirn]
 
     U_tau_tilde = grhd_eqs.tau_tilde
     F_tau_tilde = grhd_eqs.tau_tilde_fluxU[flux_dirn]
@@ -110,6 +111,8 @@ def calculate_GRHD_Tmunu_and_contractions(
         F_rho_star,
         U_Ye_star,
         F_Ye_star,
+        U_S_star,
+        F_S_star,
         U_tau_tilde,
         F_tau_tilde,
         U_S_tildeD,
@@ -126,15 +129,15 @@ def HLL_solver(
     Ul: sp.Expr,
 ) -> sp.Expr:
     """
-    Approximately solves the Riemann problem along some flux direction, using the HLL algorithm.
+    Solve the one-dimensional Riemann problem using the HLL algorithm.
 
-    :param cmax: maximum characteristic speed
-    :param cmin: minimum characteristic speed
-    :param Fr: hydrodynamic flux at right interface
-    :param Fl: hydrodynamic flux at left interface
-    :param Ur: conserved quantity at right interface
-    :param Ul: conserved quantity at left interface
-    :return: HLL flux at an interface
+    :param cmax: Maximum characteristic speed.
+    :param cmin: Minimum characteristic speed.
+    :param Fr: Hydrodynamic flux at the right state.
+    :param Fl: Hydrodynamic flux at the left state.
+    :param Ur: Conserved variable at the right state.
+    :param Ul: Conserved variable at the left state.
+    :return: HLL flux at the interface.
     """
     return cast(
         sp.Expr, (cmin * Fr + cmax * Fl - cmin * cmax * (Ur - Ul)) / (cmax + cmin)
@@ -153,47 +156,48 @@ def calculate_HLL_fluxes(
     rho_b_l: sp.Expr,
     Ye_r: sp.Expr,
     Ye_l: sp.Expr,
+    S_r: sp.Expr,
+    S_l: sp.Expr,
     P_r: sp.Expr,
     P_l: sp.Expr,
     h_r: sp.Expr,
     h_l: sp.Expr,
     cs2_r: sp.Expr,
     cs2_l: sp.Expr,
-) -> Tuple[sp.Expr, sp.Expr, sp.Expr, List[sp.Expr]]:
+) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr, List[sp.Expr]]:
     """
-    Calculate symbolic expressions for the hydrodynamic fluxes using the HLL approximate Riemann solver.
+    Calculate symbolic HLL fluxes for the GRHD evolution system.
 
-    :param flux_dirn: flux direction
-    :param alpha_face: lapse function on a cell face
-    :param gamma_faceDD: spatial metric on a cell face
-    :param beta_faceU: shift vector on a cell face
-    :param e6phi_face: exp{6*conformal exponent phi}, evaluated on the
-        cell face
-    :param u4rU: four-velocity, reconstructed to the right interface
-    :param u4lU: four-velocity, reconstructed to the left interface
-    :param rho_b_r: density, reconstructed to the right interface
-    :param rho_b_l: density, reconstructed to the left interface
-    :param Ye_r: electron fraction, reconstructed to the right
-        interface
-    :param Ye_l: electron fraction, reconstructed to the left interface
-    :param P_r: pressure, reconstructed to the right interface
-    :param P_l: pressure, reconstructed to the left interface
-    :param h_r: specific enthalpy, computed at the right interface, by
-        GRHayL
-    :param h_l: specific enthalpy, computed at the left interface, by
-        GRHayL
-    :param cs2_r: sound speed squared, computed at the right interface,
-        by GRHayL
-    :param cs2_l: sound speed squared, computed at the left interface,
-        by GRHayL
-    :return: The fluxes at cell interfaces, for denisty, electron
-        fraction, energy, and momentum, along the given flux direction
+    :param flux_dirn: Flux direction.
+    :param alpha_face: Lapse on the cell face.
+    :param gamma_faceDD: Spatial metric on the cell face.
+    :param beta_faceU: Shift vector on the cell face.
+    :param e6phi_face: Exponential conformal factor on the cell face.
+    :param u4rU: Four-velocity reconstructed to the right side.
+    :param u4lU: Four-velocity reconstructed to the left side.
+    :param rho_b_r: Density on the right side.
+    :param rho_b_l: Density on the left side.
+    :param Ye_r: Electron fraction on the right side.
+    :param Ye_l: Electron fraction on the left side.
+    :param S_r: Specific entropy on the right side.
+    :param S_l: Specific entropy on the left side.
+    :param P_r: Pressure on the right side.
+    :param P_l: Pressure on the left side.
+    :param h_r: Specific enthalpy on the right side.
+    :param h_l: Specific enthalpy on the left side.
+    :param cs2_r: Sound speed squared on the right side.
+    :param cs2_l: Sound speed squared on the left side.
+    :return: HLL fluxes for density, electron fraction, entropy, energy, and
+        momentum.
     """
+    # Step 1: Compute the conserved variables and physical fluxes on each side.
     (
         U_rho_star_r,
         F_rho_star_r,
         U_Ye_star_r,
         F_Ye_star_r,
+        U_S_star_r,
+        F_S_star_r,
         U_tau_tilde_r,
         F_tau_tilde_r,
         U_S_tilde_rD,
@@ -206,6 +210,7 @@ def calculate_HLL_fluxes(
         e6phi_face,
         rho_b_r,
         Ye_r,
+        S_r,
         P_r,
         h_r,
         u4rU,
@@ -216,6 +221,8 @@ def calculate_HLL_fluxes(
         F_rho_star_l,
         U_Ye_star_l,
         F_Ye_star_l,
+        U_S_star_l,
+        F_S_star_l,
         U_tau_tilde_l,
         F_tau_tilde_l,
         U_S_tilde_lD,
@@ -228,22 +235,28 @@ def calculate_HLL_fluxes(
         e6phi_face,
         rho_b_l,
         Ye_l,
+        S_l,
         P_l,
         h_l,
         u4lU,
     )
 
+    # Step 2: Compute the fastest left- and right-going signal speeds.
     cmin, cmax = find_cmax_cmin(
         flux_dirn, gamma_faceDD, beta_faceU, alpha_face, u4rU, u4lU, cs2_r, cs2_l
     )
 
-    # now calculate HLL derived fluxes
+    # Step 3: Assemble the HLL fluxes.
     rho_star_HLL_flux = HLL_solver(
         cmax, cmin, F_rho_star_r, F_rho_star_l, U_rho_star_r, U_rho_star_l
     )
 
     Ye_star_HLL_flux = HLL_solver(
         cmax, cmin, F_Ye_star_r, F_Ye_star_l, U_Ye_star_r, U_Ye_star_l
+    )
+
+    S_star_HLL_flux = HLL_solver(
+        cmax, cmin, F_S_star_r, F_S_star_l, U_S_star_r, U_S_star_l
     )
 
     tau_tilde_HLL_flux = HLL_solver(
@@ -261,7 +274,13 @@ def calculate_HLL_fluxes(
             U_S_tilde_lD[mom_comp],
         )
 
-    return (rho_star_HLL_flux, Ye_star_HLL_flux, tau_tilde_HLL_flux, Stilde_flux_HLLD)
+    return (
+        rho_star_HLL_flux,
+        Ye_star_HLL_flux,
+        S_star_HLL_flux,
+        tau_tilde_HLL_flux,
+        Stilde_flux_HLLD,
+    )
 
 
 if __name__ == "__main__":
@@ -269,7 +288,7 @@ if __name__ == "__main__":
     import os
     import sys
 
-    import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
+    import nrpy.reference_metric as refmetric
     import nrpy.validate_expressions.validate_expressions as ve
     from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
     from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
@@ -290,8 +309,7 @@ if __name__ == "__main__":
     h_faceDD = ixp.declarerank2("h_faceDD", symmetry="sym01", dimension=3)
     vet_faceU = ixp.declarerank1("vet_faceU", dimension=3)
 
-    # We'll need some more gridfunctions, now, to represent the reconstructions of BU and ValenciavU
-    # on the right and left faces
+    # Step 1: Define symbolic right and left interface states.
     rescaledvrU = ixp.declarerank1("rescaledvrU", dimension=3)
     rescaledvlU = ixp.declarerank1("rescaledvlU", dimension=3)
 
@@ -319,6 +337,9 @@ if __name__ == "__main__":
     Ye_r_test = sp.symbols("Ye_r", real=True)
     Ye_l_test = sp.symbols("Ye_l", real=True)
 
+    S_r_test = sp.symbols("S_r", real=True)
+    S_l_test = sp.symbols("S_l", real=True)
+
     P_r_test = sp.symbols("P_r", real=True)
     P_l_test = sp.symbols("P_l", real=True)
 
@@ -328,12 +349,11 @@ if __name__ == "__main__":
     cs2_r_test = sp.symbols("cs2_r", real=True)
     cs2_l_test = sp.symbols("cs2_l", real=True)
 
-    # ADM in terms of BSSN
+    # Step 2: Build face-centered metric quantities in Cartesian form.
     AitoB = BSSN_to_ADM(CoordSystem="Cartesian")
-
     Bq = BSSN_quantities["Cartesian"]
 
-    e6phi_face_test = ((Bq.exp_m4phi ** (0.5)) ** (-3.0)).subs(Bq.cf, cf_face)
+    e6phi_face_test = (Bq.exp_m4phi ** sp.Rational(-3, 2)).subs(Bq.cf, cf_face)
 
     gamma_faceDD_test = ixp.zerorank2()
     for i in range(3):
@@ -344,11 +364,14 @@ if __name__ == "__main__":
                 .subs(Bq.cf, cf_face)
             )
 
+    # Step 3: Evaluate conserved variables and fluxes symbolically.
     (
         exprs_dict["U_rho_star"],
         exprs_dict["F_rho_star"],
         exprs_dict["U_Ye_star"],
         exprs_dict["F_Ye_star"],
+        exprs_dict["U_S_star"],
+        exprs_dict["F_S_star"],
         exprs_dict["U_tau_tilde"],
         exprs_dict["F_tau_tilde"],
         exprs_dict["U_S_tildeD"],
@@ -359,11 +382,12 @@ if __name__ == "__main__":
         beta_faceU_test,
         alpha_face_test,
         e6phi_face_test,
-        rho_b_l_test,
+        rho_b_r_test,
         Ye_r_test,
-        P_l_test,
+        S_r_test,
+        P_r_test,
         h_r_test,
-        u4lU_test,
+        u4rU_test,
     )
 
     cmin_test, cmax_test = find_cmax_cmin(
@@ -389,9 +413,11 @@ if __name__ == "__main__":
         exprs_dict["U_Ye_star"],
     )
 
+    # Step 4: Evaluate the final HLL flux expressions.
     (
         exprs_dict["rho_star_HLL_flux"],
         exprs_dict["Ye_star_HLL_flux"],
+        exprs_dict["S_star_HLL_flux"],
         exprs_dict["tau_tilde_HLL_flux"],
         exprs_dict["Stilde_flux_HLLD"],
     ) = calculate_HLL_fluxes(
@@ -406,6 +432,8 @@ if __name__ == "__main__":
         rho_b_l_test,
         Ye_r_test,
         Ye_l_test,
+        S_r_test,
+        S_l_test,
         P_r_test,
         P_l_test,
         h_r_test,
@@ -418,6 +446,9 @@ if __name__ == "__main__":
         sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["Ye_star_HLL_flux"] = exprs_dict["Ye_star_HLL_flux"].subs(
+        sp.Function("nrpyAbs"), sp.Abs
+    )
+    exprs_dict["S_star_HLL_flux"] = exprs_dict["S_star_HLL_flux"].subs(
         sp.Function("nrpyAbs"), sp.Abs
     )
     exprs_dict["tau_tilde_HLL_flux"] = exprs_dict["tau_tilde_HLL_flux"].subs(
@@ -439,8 +470,6 @@ if __name__ == "__main__":
     ve.compare_or_generate_trusted_results(
         os.path.abspath(__file__),
         os.getcwd(),
-        # File basename. If this is set to "trusted_module_test1", then
-        #   trusted results_dict will be stored in tests/trusted_module_test1.py
         f"{os.path.splitext(os.path.basename(__file__))[0]}",
         results_dict,
     )

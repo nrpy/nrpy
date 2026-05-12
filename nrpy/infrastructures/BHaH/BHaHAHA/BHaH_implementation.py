@@ -34,7 +34,7 @@ for all horizons."""
     BHAH_FREE(current_horizon_params->prev_horizon_m1);
     BHAH_FREE(current_horizon_params->prev_horizon_m2);
     BHAH_FREE(current_horizon_params->prev_horizon_m3);
-  } // END LOOP: for h
+  } // END LOOP: for h over all horizons
 """
     cfc.register_CFunction(
         includes=includes,
@@ -55,9 +55,6 @@ def register_CFunction_bhahaha_find_horizons(
 
     :param max_horizons: Maximum number of horizons to search for.
     :return: None if in registration phase, else the updated NRPy environment.
-
-    >>> env = register_CFunction_bhahaha_find_horizons(max_horizons=1)  # doctest: +ELLIPSIS
-    Setting up BSSN_Quantities[Cartesian]...
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -293,9 +290,9 @@ const int bhahaha_gf_interp_indices[BHAHAHA_NUM_INTERP_GFS] = {
 /**
  * Calculates the time difference in seconds between two `struct timeval` instances.
  *
- * @param start - The starting `struct timeval`.
- * @param end - The ending `struct timeval`.
- * @return - The time difference in seconds as a REAL.
+ * @param start The starting `struct timeval`.
+ * @param end The ending `struct timeval`.
+ * @return The time difference in seconds as a REAL.
  */
 static REAL timeval_to_seconds(struct timeval start, struct timeval end) {
   const REAL start_seconds = start.tv_sec + start.tv_usec / 1.0e6;
@@ -309,8 +306,7 @@ static REAL timeval_to_seconds(struct timeval start, struct timeval end) {
  * `bah_Ntheta_array_multigrid` and `bah_Nphi_array_multigrid` entries are positive.
  * If validation fails, prints an error and exits.
  *
- * @param commondata - Pointer to `commondata_struct` containing multigrid settings.
- * @return - None (`void`).
+ * @param[in] commondata Pointer to `commondata_struct` containing multigrid settings.
  */
 static void check_multigrid_resolution_inputs(const commondata_struct *restrict commondata) {
   int trigger_error = 0;
@@ -322,7 +318,7 @@ static void check_multigrid_resolution_inputs(const commondata_struct *restrict 
         trigger_error = 1;
         break;
       } // END IF: invalid resolution
-    } // END LOOP: for res
+    } // END LOOP: for res over multigrid resolution entries
   } // END ELSE: num_resolutions_multigrid > 0
   if (trigger_error) {
     fprintf(stderr, "ERROR: BHaHAHA multigrid resolutions are unset or invalid. Please specify "
@@ -349,11 +345,10 @@ static void check_multigrid_resolution_inputs(const commondata_struct *restrict 
  *    to the `current_horizon_params`.
  * 4. Sets `current_horizon_params->input_metric_data` to NULL.
  *
- * @param commondata - Pointer to `commondata_struct` containing global settings and the
- *                     `bhahaha_params_and_data` array.
- * @param h - Index of the horizon to initialize.
- * @param is_first_call_for_shapes - True if shape history arrays need allocation, false otherwise.
- * @return - None (`void`).
+ * @param[in,out] commondata Pointer to `commondata_struct` containing global settings and the
+ *                           `bhahaha_params_and_data` array.
+ * @param h Index of the horizon to initialize.
+ * @param is_first_call_for_shapes True if shape history arrays need allocation, false otherwise.
  */
 static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restrict commondata, int h, bool is_first_call_for_shapes) {
   // STEP 1: Get a pointer to the current horizon's `bhahaha_params_and_data_struct`.
@@ -418,18 +413,17 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
  *    in the flat layout expected by BHaHAHA.
  * 10. Frees allocated temporary memory (`dst_x0x1x2_interp` and `dst_data_ptrs_bssn`).
  *
- * @param commondata - Pointer to `commondata_struct`.
- * @param params - Pointer to `params_struct` for the source Cartesian grid.
- * @param xx - Array of pointers to source Cartesian grid coordinate arrays.
- * @param y_n_gfs - Pointer to the array of all gridfunctions on the source grid.
- * @param current_horizon_params - Pointer to `bhahaha_params_and_data_struct` for the current horizon,
- *                                 providing spherical grid resolution and radial point count.
- * @param x_center - X-coordinate for the center of the spherical interpolation grid.
- * @param y_center - Y-coordinate for the center of the spherical interpolation grid.
- * @param z_center - Z-coordinate for the center of the
- * @param radii - Array of radial distances for the spherical interpolation grid shells.
- * @param input_metric_data_target_array - Target array for the final ADM metric components.
- * @return - None (`void`).
+ * @param[in] commondata Pointer to `commondata_struct`.
+ * @param[in] params Pointer to `params_struct` for the source Cartesian grid.
+ * @param[in,out] xx Array of pointers to source Cartesian grid coordinate arrays.
+ * @param[in] y_n_gfs Pointer to the array of all gridfunctions on the source grid.
+ * @param[in,out] current_horizon_params Pointer to `bhahaha_params_and_data_struct` for the current horizon,
+ *                                       providing spherical grid resolution and radial point count.
+ * @param x_center X-coordinate for the center of the spherical interpolation grid.
+ * @param y_center Y-coordinate for the center of the spherical interpolation grid.
+ * @param z_center Z-coordinate for the center of the spherical interpolation grid.
+ * @param[in] radii Array of radial distances for the spherical interpolation grid shells.
+ * @param[out] input_metric_data_target_array Target array for the final ADM metric components.
  */
 static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restrict commondata, const params_struct *restrict params,
                                                  REAL *restrict xx[3], const REAL *restrict y_n_gfs,
@@ -477,7 +471,7 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
         Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_x0x1x2_interp[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
       } // END LOOP: for ir (spherical grid setup)
     } // END LOOP: for itheta (spherical grid setup)
-  } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)
+  } // END LOOP: for iphi over spherical interpolation grid setup
 
   // STEP 5: Initialize source gridfunction pointers.
   const REAL *restrict src_gf_ptrs[BHAHAHA_NUM_INTERP_GFS];
@@ -557,8 +551,8 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
     prefunc += r"""
         } // END LOOP: for ir (BSSN to ADM transformation)
       } // END LOOP: for itheta (BSSN to ADM transformation)
-    } // END LOOP: for iphi (#pragma omp parallel for, BSSN to ADM transformation)
-  } // End of BSSN to ADM transformation block
+    } // END LOOP: for iphi over BSSN-to-ADM transformation angles
+  } // END BLOCK: BSSN-to-ADM transformation
 
   // STEP 10: Free allocated temporary memory.
   BHAH_FREE(dst_x0x1x2_interp);
@@ -633,12 +627,11 @@ and result updates for multiple horizons.
 -    g. Frees the allocated `input_metric_data` buffer for the current horizon.
 - 8. Prints total elapsed time for the entire horizon finding process if verbosity is enabled.
 
-@param commondata - Pointer to `commondata_struct` holding global BHaHAHA settings,
-                    persistent horizon data, simulation state, and BBH mode flags.
-                    This struct is extensively read from and modified.
-@param griddata - Pointer to `griddata_struct` containing simulation grid information
-                  and gridfunctions for metric data interpolation.
-@return - None (`void`).
+@param[in,out] commondata Pointer to `commondata_struct` holding global BHaHAHA settings,
+                          persistent horizon data, simulation state, and BBH mode flags.
+                          This struct is extensively read from and modified.
+@param[in,out] griddata Pointer to `griddata_struct` containing simulation grid information
+                        and gridfunctions for metric data interpolation.
 """
 
     cfunc_type = "void"
@@ -764,7 +757,7 @@ and result updates for multiple horizons.
         if (commondata->bah_verbosity_level > 0) {
           printf("NRPy BBH Trigger (Iter %d, CommonH_idx %d): sep=%.3f, rmax1(H%d)=%.3f, rmax2(H%d)=%.3f. Sum_dist+radii=%.3f <= Thr_diam=%.3f?\n",
                  commondata->nn, com_idx, dist_centers, bh1_idx, rmax1, bh2_idx, rmax2, (dist_centers + rmax1 + rmax2), threshold_diam);
-        } // END IF: verbosity for trigger check
+        } // END IF: print BBH common-horizon trigger diagnostics
 
         if (dist_centers + rmax1 + rmax2 <= threshold_diam) {   // Trigger condition met.
           commondata->bah_BBH_mode_horizon_active[com_idx] = 1; // Activate common horizon search.
@@ -796,7 +789,7 @@ and result updates for multiple horizons.
           } // END IF: verbosity for common activation
         } // END IF: trigger condition met
       } // END IF: both inspiral BHs found previously
-    } // END IF: check for activating common horizon
+    } // END IF: common-horizon activation test in BBH mode
   } // END IF: bah_enable_BBH_mode (BBH Mode Logic)
 
   // STEP 6: Apply robustness improvements and extrapolate horizon guesses.

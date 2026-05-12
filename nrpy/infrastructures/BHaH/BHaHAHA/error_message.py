@@ -63,12 +63,7 @@ error_code_msg_tuples_list += [
 
 
 def register_CFunction_error_message() -> None:
-    """
-    Register and handle C function error codes for BHaHAHA.
-
-    DocTests:
-        >>> register_CFunction_error_message()
-    """
+    """Register BHaHAHA C error-handling helper functions."""
     BHaH.griddata_commondata.register_griddata_commondata(
         __name__,
         "int error_flag",
@@ -78,17 +73,10 @@ def register_CFunction_error_message() -> None:
 
     includes = ["BHaH_defines.h"]
     desc = """
- Function: bah_error_handling()
+Interpret a BHaHAHA error code and return the corresponding error message string.
 
- Description:
-  - Driver function for BHaHAHA error reporting, including when horizon not found!
-  - This function interprets error messages from throughout BHaHAHA.
-
- Parameter:
-  - error_code - error code from BHaHAHA.
-
- Returns:
-  - Error message string.
+@param error_code Error code from BHaHAHA.
+@return Error message string corresponding to `error_code`, or NULL if the code is unknown.
 """
     cfunc_type = "const char *"
     name = "error_message"

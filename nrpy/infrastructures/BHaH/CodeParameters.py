@@ -55,7 +55,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         params->BHaH_is_amazing = true;               // CodeParameters_c_files::BHaH_is_amazing
         snprintf(params->some_string, 100, "cheese"); // CodeParameters_c_files::some_string
       } // END LOOP over grids
-    } // END FUNCTION params_struct_set_to_default
+    } // END FUNCTION: params_struct_set_to_default
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["commondata_struct_set_to_default"].full_function)
     #include "BHaH_defines.h"
@@ -77,7 +77,7 @@ def register_CFunctions_params_commondata_struct_set_to_default() -> None:
         int temp_val_array[] = {4, 2};
         memcpy(commondata->int_array, temp_val_array, sizeof(temp_val_array));
       } // CodeParameters_c_files::int_array
-    } // END FUNCTION commondata_struct_set_to_default
+    } // END FUNCTION: commondata_struct_set_to_default
     <BLANKLINE>
     """
     for function_name in ["commondata_struct", "params_struct"]:

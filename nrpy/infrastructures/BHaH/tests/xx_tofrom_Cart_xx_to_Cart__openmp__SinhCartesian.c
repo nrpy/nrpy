@@ -25,4 +25,4 @@ void xx_to_Cart__rfm__SinhCartesian(const params_struct *restrict params, const 
     xCart[1] = params->Cart_originy + tmp2 * (exp(tmp0 * xx1) - exp(-tmp0 * xx1));
     xCart[2] = params->Cart_originz + tmp2 * (exp(tmp0 * xx2) - exp(-tmp0 * xx2));
   }
-} // END FUNCTION xx_to_Cart__rfm__SinhCartesian
+} // END FUNCTION: xx_to_Cart__rfm__SinhCartesian

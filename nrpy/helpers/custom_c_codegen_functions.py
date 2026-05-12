@@ -10,10 +10,10 @@ double complex via the C99 complex math functions (e.g., csqrt, cpow, cabs).
 Note: there is no standard complex cbrt in C99, so cube roots of complex values
 fall back to cpow.
 
-Author(s):  Zachariah B. Etienne
-            zachetie **at** gmail **dot* com
-            Samuel D. Tootle
-            sdtootle **at** gmail **dot* com
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Samuel D. Tootle
+         sdtootle **at** gmail **dot* com
 """
 
 import sympy as sp

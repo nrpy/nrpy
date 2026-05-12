@@ -67,7 +67,7 @@ def register_CFunction_generalrfm_precompute(
 
     :param CoordSystem: Coordinate system name. Must be a supported GeneralRFM
         system.
-    :returns: `None` during the parallel-codegen registration phase; otherwise
+    :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     :raises ValueError: If CUDA parallelization is requested, if CoordSystem is
         not a GeneralRFM coordinate system, or if the associated GeneralRFM
@@ -174,9 +174,9 @@ for (int i2 = 0; i2 < params->Nxx_plus_2NGHOSTS2; i2++) {{
       const REAL xx1 = xx[1][i1];
       const REAL xx2 = xx[2][i2];
 {ccode}
-    }}
-  }}
-}}
+    }} // END LOOP: for i0 over all x0 points including ghost zones
+  }} // END LOOP: for i1 over all x1 points including ghost zones
+}} // END LOOP: for i2 over all x2 points including ghost zones
 """
 
     name = "generalrfm_precompute"
@@ -201,7 +201,7 @@ def register_CFunctions_generalrfm_support(
 
     :param CoordSystem: Coordinate system name for which GeneralRFM support
         functions should be registered.
-    :returns: `None` during the parallel-codegen registration phase; otherwise
+    :return: `None` during the parallel-codegen registration phase; otherwise
         the current NRPy environment.
     """
     if pcg.pcg_registration_phase():

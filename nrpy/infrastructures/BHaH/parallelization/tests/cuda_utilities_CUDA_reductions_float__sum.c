@@ -106,4 +106,4 @@ REAL find_global__sum(REAL *data, uint const data_length) {
   REAL res = *((REAL *)h_reduced);
   free(h_reduced);
   return res;
-} // END FUNCTION find_global__sum
+} // END FUNCTION: find_global__sum

@@ -3,7 +3,7 @@
 Utilities for Parsing or manipulating symbolic expressions.
 
 Author: Samuel Tootle
-Email:  sdtootle *at* gmail *dot* com
+        sdtootle *at* gmail *dot* com
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions

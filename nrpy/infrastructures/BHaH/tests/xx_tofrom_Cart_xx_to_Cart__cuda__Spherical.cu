@@ -21,4 +21,4 @@ __host__ __device__ void xx_to_Cart__rfm__Spherical(const params_struct *restric
     xCart[1] = params->Cart_originy + tmp0 * sin(xx2);
     xCart[2] = params->Cart_originz + xx0 * cos(xx1);
   }
-} // END FUNCTION xx_to_Cart__rfm__Spherical
+} // END FUNCTION: xx_to_Cart__rfm__Spherical

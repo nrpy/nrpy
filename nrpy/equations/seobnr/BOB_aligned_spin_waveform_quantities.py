@@ -21,8 +21,6 @@ The modes are expressed in terms of the binary masses (m1, m2), spins (chi1, chi
 the quasi-normal modes of the remnant black hole (omega_qnm, tau_qnm), and NQC attachment time (t_0)
 (see Equations 24-31 of Mahesh, McWilliams, and Etienne, "Spinning Effective-to-Backwards-One Body"
 for the full list of terms).
-
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:

@@ -11,10 +11,9 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import sys
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Tuple, Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -27,44 +26,6 @@ def register_CFunction_numgrid__interp_src_set_up() -> Union[None, pcg.NRPyEnv_t
     Register the C function for reading original source metric data.
 
     :return: None if in registration phase, else the updated NRPy environment.
-
-    DocTests:
-    >>> env = register_CFunction_numgrid__interp_src_set_up()
-    Grid function "src_aDD00" with rank 2 has parity type 4.
-    Grid function "src_aDD01" with rank 2 has parity type 5.
-    Grid function "src_aDD02" with rank 2 has parity type 6.
-    Grid function "src_aDD11" with rank 2 has parity type 7.
-    Grid function "src_aDD12" with rank 2 has parity type 8.
-    Grid function "src_aDD22" with rank 2 has parity type 9.
-    Grid function "src_hDD00" with rank 2 has parity type 4.
-    Grid function "src_hDD01" with rank 2 has parity type 5.
-    Grid function "src_hDD02" with rank 2 has parity type 6.
-    Grid function "src_hDD11" with rank 2 has parity type 7.
-    Grid function "src_hDD12" with rank 2 has parity type 8.
-    Grid function "src_hDD22" with rank 2 has parity type 9.
-    Grid function "src_partial_D_hDD000" with rank 3 has parity type 10.
-    Grid function "src_partial_D_hDD001" with rank 3 has parity type 11.
-    Grid function "src_partial_D_hDD002" with rank 3 has parity type 12.
-    Grid function "src_partial_D_hDD011" with rank 3 has parity type 13.
-    Grid function "src_partial_D_hDD012" with rank 3 has parity type 14.
-    Grid function "src_partial_D_hDD022" with rank 3 has parity type 15.
-    Grid function "src_partial_D_hDD100" with rank 3 has parity type 16.
-    Grid function "src_partial_D_hDD101" with rank 3 has parity type 17.
-    Grid function "src_partial_D_hDD102" with rank 3 has parity type 18.
-    Grid function "src_partial_D_hDD111" with rank 3 has parity type 19.
-    Grid function "src_partial_D_hDD112" with rank 3 has parity type 20.
-    Grid function "src_partial_D_hDD122" with rank 3 has parity type 21.
-    Grid function "src_partial_D_hDD200" with rank 3 has parity type 22.
-    Grid function "src_partial_D_hDD201" with rank 3 has parity type 23.
-    Grid function "src_partial_D_hDD202" with rank 3 has parity type 24.
-    Grid function "src_partial_D_hDD211" with rank 3 has parity type 25.
-    Grid function "src_partial_D_hDD212" with rank 3 has parity type 26.
-    Grid function "src_partial_D_hDD222" with rank 3 has parity type 27.
-    Grid function "src_partial_D_WW0" with rank 1 has parity type 1.
-    Grid function "src_partial_D_WW1" with rank 1 has parity type 2.
-    Grid function "src_partial_D_WW2" with rank 1 has parity type 3.
-    Grid function "src_trK" with rank 0 has parity type 0.
-    Grid function "src_WW" with rank 0 has parity type 0.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -120,6 +81,50 @@ enum {{
         verbose=True,
     )
 
+    interp_src_gf_index: Dict[str, int] = {
+        name: idx for idx, (name, _) in enumerate(list_of_interp_src_gf_names_ranks)
+    }
+    interp_src_deriv_dst_dirn: List[int] = []
+    interp_src_deriv_src_gf: List[List[int]] = []
+    for name, _ in list_of_interp_src_gf_names_ranks:
+        if name.startswith("src_partial_D_WW"):
+            interp_src_deriv_dst_dirn.append(int(name[-1]))
+            interp_src_deriv_src_gf.append(
+                [
+                    interp_src_gf_index[f"src_partial_D_WW{src_dirn}"]
+                    for src_dirn in range(3)
+                ]
+            )
+        elif name.startswith("src_partial_D_hDD"):
+            interp_src_deriv_dst_dirn.append(int(name[-3]))
+            interp_src_deriv_src_gf.append(
+                [
+                    interp_src_gf_index[
+                        f"src_partial_D_hDD{src_dirn}{name[-2]}{name[-1]}"
+                    ]
+                    for src_dirn in range(3)
+                ]
+            )
+        else:
+            interp_src_deriv_dst_dirn.append(-1)
+            interp_src_deriv_src_gf.append([-1, -1, -1])
+
+    BHaH_defines_contrib += """// DERIVATIVE METADATA FOR INTERP_SRC GRID GRIDFUNCTIONS.
+// interp_src_gf_parity stores base-field parity for stored coordinate derivatives.
+// Values 0..2 in interp_src_gf_deriv_dst_dirn select the destination derivative direction;
+// -1 marks non-derivative fields. interp_src_gf_deriv_src_gf maps each derivative
+// family to the sibling source gridfunction for each mapped source derivative direction.
+"""
+    deriv_dst_dirn_values = ", ".join(map(str, interp_src_deriv_dst_dirn))
+    deriv_src_gf_rows = ",\n  ".join(
+        "{ " + ", ".join(map(str, row)) + " }" for row in interp_src_deriv_src_gf
+    )
+    BHaH_defines_contrib += rf"""static const int8_t interp_src_gf_deriv_dst_dirn[{len(list_of_interp_src_gf_names_ranks)}] = {{ {deriv_dst_dirn_values} }};
+static const int16_t interp_src_gf_deriv_src_gf[{len(list_of_interp_src_gf_names_ranks)}][3] = {{
+  {deriv_src_gf_rows}
+}};
+"""
+
     BHaH.BHaH_defines_h.register_BHaH_defines(__name__, BHaH_defines_contrib)
 
     BHaH.griddata_commondata.register_griddata_commondata(
@@ -146,8 +151,8 @@ on the evolved grids. It configures grid parameters, allocates memory for grid f
 and coordinate arrays, performs interpolation from external input, applies boundary conditions,
 and computes necessary spatial derivatives.
 
-@param commondata Pointer to the common data structure containing simulation parameters and data.
-@param Nx_evol_grid Array specifying the number of grid points in each dimension for the evolved grid.
+@param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
+@param[in] Nx_evol_grid Array specifying the number of grid points in each dimension for the evolved grid.
 @return Returns BHAHAHA_SUCCESS on successful setup, or an error code if memory allocation fails."""
     cfunc_type = "int"
     name = "numgrid__interp_src_set_up"
@@ -188,7 +193,7 @@ and computes necessary spatial derivatives.
       // Memory allocation failed for grid functions.
       return NUMGRID_INTERP_MALLOC_ERROR_GFS;
     }
-  } // END STEP 1: Configure grid parameters for the interpolation source.
+  } // END BLOCK: Step 1 configure interpolation-source grid parameters
 
   // Step 2: Initialize coordinate arrays for the interpolation source grid.
   {
@@ -201,7 +206,7 @@ and computes necessary spatial derivatives.
       // Free previously allocated grid functions before exiting due to memory allocation failure.
       free(commondata->interp_src_gfs);
       return NUMGRID_INTERP_MALLOC_ERROR_RTHETAPHI;
-    } // END IF memory allocation for coordinate arrays failed
+    } // END IF: memory allocation for coordinate arrays failed
 
     // Step 2.b: Populate coordinate arrays for a uniform, cell-centered spherical grid.
     const REAL xxmin1 = 0.0;
@@ -218,7 +223,7 @@ and computes necessary spatial derivatives.
     // Initialize phi coordinates with cell-centered values.
     for (int j = 0; j < commondata->interp_src_Nxx_plus_2NGHOSTS2; j++)
       commondata->interp_src_r_theta_phi[2][j] = xxmin2 + ((REAL)(j - NGHOSTS) + (1.0 / 2.0)) * commondata->interp_src_dxx2;
-  } // END STEP 2: Initialize coordinate arrays for the interpolation source grid.
+  } // END BLOCK: Step 2 initialize interpolation-source coordinate arrays
 
   // Step 2.c: Extract grid sizes for use in indexing macros.
   const int Nxx_plus_2NGHOSTS0 = commondata->interp_src_Nxx_plus_2NGHOSTS0;
@@ -267,10 +272,10 @@ and computes necessary spatial derivatives.
                 f"in_gfs[IDX4(SRC_ADD{i}{j}GF, i0, i1, i2)] = external_Sph_aDD{i}{j};\n"
             )
     body += """
-        } // END LOOP over i0
-      } // END LOOP over i1
-    } // END LOOP over i2
-  } // END STEP 4: Transfer interpolated data to interpolation source grid functions.
+        } // END LOOP: for i0 over radial points in the interpolation-source grid
+      } // END LOOP: for i1 over theta points in the interpolation-source grid
+    } // END LOOP: for i2 over phi points in the interpolation-source grid
+  } // END BLOCK: Step 4 transfer interpolated data into interpolation-source gridfunctions
 
   // Step 5: Initialize boundary condition structure for the interpolation source grid.
   bc_struct interp_src_bcstruct;
@@ -284,8 +289,8 @@ and computes necessary spatial derivatives.
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = commondata->interp_src_Nxx_plus_2NGHOSTS2;
 
     // Set up boundary conditions based on the initialized grid.
-    bah_bcstruct_set_up(commondata, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
-  } // END STEP 5: Initialize boundary condition structure.
+    bah_bcstruct_set_up(commondata, NULL, commondata->interp_src_r_theta_phi, &interp_src_bcstruct);
+  } // END BLOCK: Step 5 initialize the interpolation-source boundary-condition structure
 
   // Step 6: Apply inner boundary conditions to specific grid functions to ensure smoothness.
   {
@@ -307,19 +312,21 @@ and computes necessary spatial derivatives.
         for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
           const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
           const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
+          const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
+          const int base_sign = bc->parity[interp_src_gf_parity[which_gf]];
 
-          // Apply boundary condition by copying and adjusting with parity.
+          // Apply boundary condition by copying and adjusting with base-field parity.
           commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
-              interp_src_bcstruct.inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
-        } // END LOOP over inner boundary points
+              (REAL)base_sign * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+        } // END LOOP: for pt over inner boundary points
         break;
-      }
+      } // END BLOCK: selected gridfunction case with inner boundary updates
       default:
         // No boundary conditions needed for other grid functions.
         break;
-      } // END SWITCH
-    } // END LOOP over gridfunctions
-  } // END STEP 6: Apply inner boundary conditions to specific grid functions.
+      } // END SWITCH: select gridfunctions requiring inner boundary conditions
+    } // END LOOP: for which_gf over gridfunctions
+  } // END BLOCK: Step 6 apply inner boundary conditions to selected interpolation-source fields
 
   // Step 7: Compute spatial derivatives of h_{ij} within the interior of the interpolation source grid.
   bah_hDD_dD_and_W_dD_in_interp_src_grid_interior(commondata);
@@ -338,22 +345,42 @@ and computes necessary spatial derivatives.
 #pragma omp parallel for collapse(2)
     for (int which_gf = 0; which_gf < NUM_INTERP_SRC_GFS; which_gf++) {
       for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+        const int deriv_dst_dirn = interp_src_gf_deriv_dst_dirn[which_gf];
+        const bool gf_is_derivative = deriv_dst_dirn >= 0;
+        const int base_parity = interp_src_gf_parity[which_gf];
         const int dstpt = interp_src_bcstruct.inner_bc_array[pt].dstpt;
         const int srcpt = interp_src_bcstruct.inner_bc_array[pt].srcpt;
 
-        // Apply boundary condition with parity correction for derivative calculations.
-        commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] =
-            interp_src_bcstruct.inner_bc_array[pt].parity[interp_src_gf_parity[which_gf]] * commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
-      } // END LOOP over inner boundary points
-    } // END LOOP over gridfunctions
-  } // END STEP 9: Enforce boundary conditions on all interpolation source grid functions.
+        const innerpt_bc_struct *restrict bc = &interp_src_bcstruct.inner_bc_array[pt];
+        const int base_sign = bc->parity[base_parity];
+
+        if (!gf_is_derivative) {
+          const REAL src_val = commondata->interp_src_gfs[IDX4pt(which_gf, srcpt)];
+          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * src_val;
+        } // END IF: gridfunction is not a stored coordinate derivative
+        else {
+          // Stored coordinate derivatives transform as the base field times the
+          // coordinate-map Jacobian parity:
+          //   partial_dst(ghost) = base_sign * sum_src deriv_jacobian[dst][src] * partial_src(inbounds).
+          REAL deriv_sum = 0.0;
+          for (int src_dirn = 0; src_dirn < 3; src_dirn++) {
+            const int src_gf = interp_src_gf_deriv_src_gf[which_gf][src_dirn];
+            const int jac_sign = bc->deriv_jacobian[deriv_dst_dirn][src_dirn];
+            if (src_gf >= 0 && jac_sign != 0)
+              deriv_sum += (REAL)jac_sign * commondata->interp_src_gfs[IDX4pt(src_gf, srcpt)];
+          } // END LOOP: for src_dirn over source derivative directions
+          commondata->interp_src_gfs[IDX4pt(which_gf, dstpt)] = (REAL)base_sign * deriv_sum;
+        } // END ELSE: gridfunction is a stored coordinate derivative
+      } // END LOOP: for pt over inner boundary points
+    } // END LOOP: for which_gf over gridfunctions
+  } // END BLOCK: Step 9 enforce boundary conditions on all interpolation-source gridfunctions
 
   // Step 10: Release allocated memory for boundary condition structures.
   {
     free(interp_src_bcstruct.inner_bc_array);
     for (int ng = 0; ng < NGHOSTS * 3; ng++)
       free(interp_src_bcstruct.pure_outer_bc_array[ng]);
-  } // END STEP 10: Free allocated memory for boundary condition structures.
+  } // END BLOCK: Step 10 free interpolation-source boundary-condition structures
 
   return BHAHAHA_SUCCESS;
 """
@@ -373,6 +400,7 @@ and computes necessary spatial derivatives.
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

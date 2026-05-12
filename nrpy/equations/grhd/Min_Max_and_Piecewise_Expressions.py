@@ -1,8 +1,11 @@
 """
-Construct symbolic expressions of min and max functions, later replacing.
+Construct symbolic min/max helpers and coordinate-bound expressions.
 
-calls of nrpyAbs with fabs calls
+These expressions are later converted from `nrpyAbs` calls to `fabs` calls in
+generated C code.
 
+Author: Terrence Pierre Jacques
+        terrencepierrej **at** gmail **dot* com
 """
 
 from typing import Any, Dict, cast
@@ -31,8 +34,8 @@ def min_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     """
     Return the minimum of a and b.
 
-    :param a: sympy expression or number
-    :param b: sympy expression or number.
+    :param a: First value to compare.
+    :param b: Second value to compare.
 
     :return: minimum of the two in symbolic form.
     """
@@ -47,8 +50,8 @@ def max_noif(a: sp.Expr, b: sp.Expr) -> sp.Expr:
     """
     Return the maximum of a and b.
 
-    :param a: sympy expression or number
-    :param b: sympy expression or number.
+    :param a: First value to compare.
+    :param b: Second value to compare.
 
     :return: maximum of the two in symbolic form
     """
@@ -63,8 +66,8 @@ def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     """
     Return 1.0 if x <= xstar, 0.0 otherwise.
 
-    :param x: sympy variable
-    :param xstar: bound for variable.
+    :param x: Coordinate value to test.
+    :param xstar: Boundary value for the comparison.
 
     :return: symbolic form x <= xstar
     """
@@ -79,8 +82,8 @@ def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     """
     Return 1.0 if x >= xstar, 0.0 otherwise.
 
-    :param x: sympy variable
-    :param xstar: bound for variable.
+    :param x: Coordinate value to test.
+    :param xstar: Boundary value for the comparison.
 
     :return: symbolic form x >= xstar
     """
@@ -95,8 +98,8 @@ def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     """
     Return 1.0 if x < xstar, 0.0 otherwise.
 
-    :param x: sympy variable
-    :param xstar: bound for variable.
+    :param x: Coordinate value to test.
+    :param xstar: Boundary value for the comparison.
 
     :return: symbolic form x > xstar
     """
@@ -110,8 +113,8 @@ def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     """
     Return 1.0 if x > xstar, 0.0 otherwise.
 
-    :param x: sympy variable
-    :param xstar: bound for variable.
+    :param x: Coordinate value to test.
+    :param xstar: Boundary value for the comparison.
 
     :return: symbolic form x > xstar
     """

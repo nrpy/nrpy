@@ -2,9 +2,9 @@
 """
 Generic helper functions used throughout NRPy.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
-        Dave Kirby (super-fast uniq function)
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Dave Kirby
 """
 
 import inspect

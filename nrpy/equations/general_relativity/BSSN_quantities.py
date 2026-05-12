@@ -27,9 +27,9 @@ class BSSNQuantities:
     Construct and store the BSSN quantities involved in General Relativity simulations.
     It takes care of registering the necessary grid functions for these quantities.
 
-    :param CoordSystem: (string) The coordinate system being used, defaults to "Cartesian"
-    :param enable_rfm_precompute: (bool) Whether to enable precomputation for reference metric, defaults to False
-    :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
+    :param CoordSystem: The coordinate system being used, defaults to "Cartesian"
+    :param enable_rfm_precompute: Whether to enable precomputation for reference metric, defaults to False
+    :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions, defaults to False.
     """
 
     def __init__(
@@ -43,7 +43,7 @@ class BSSNQuantities:
 
         :param CoordSystem: The coordinate system being used, defaults to "Cartesian".
         :param enable_rfm_precompute: Whether to enable precomputation for reference metric, defaults to False.
-        :param enable_RbarDD_gridfunctions: (bool) Whether to enable RbarDD gridfunctions, defaults to False.
+        :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions, defaults to False.
         :raises ValueError: If detgbarOverdetghat_equals_one=False and full implementation is not provided.
         :raises ValueError: If EvolvedConformalFactor_cf is not one of "W", "chi", or "phi".
         """

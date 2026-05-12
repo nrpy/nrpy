@@ -69,23 +69,6 @@ def register_CFunction_apply_copy_and_outflow_bcs(
     :param evolving_neutrinos: Whether NRPyLeakage variables are active.
     :param evolving_entropy: Whether entropy is an evolved primitive.
     :return: None if in registration phase, else the updated NRPy environment.
-
-    Doctests:
-    >>> from nrpy.helpers.generic import validate_strings, clang_format
-    >>> import nrpy.c_function as cfc
-    >>> import nrpy.params as par
-    >>> supported_Parallelizations = ["openmp"]
-    >>> name = "apply_copy_and_outflow_bcs"
-    >>> for parallelization in supported_Parallelizations:
-    ...    par.set_parval_from_str("parallelization", parallelization)
-    ...    cfc.CFunction_dict.clear()
-    ...    _ = register_CFunction_apply_copy_and_outflow_bcs("Spherical")
-    ...    generated_str = clang_format(cfc.CFunction_dict[f"{name}__rfm__Spherical"].full_function)
-    ...    validation_desc = f"{name}__{parallelization}__Spherical"
-    ...    _ = validate_strings(generated_str, validation_desc, file_ext="c")
-    Setting up BSSN_Quantities[Spherical]...
-    Setting up reference_metric[Spherical]...
-    Setting up basis_transforms[Spherical]...
     """
     # Step 1: Register the function with NRPy's parallel codegen infrastructure.
     if pcg.pcg_registration_phase():

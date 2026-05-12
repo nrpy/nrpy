@@ -27,8 +27,8 @@ _C_TRIM_SPACE_FUNC = r"""
 /**
  * Trims leading and trailing whitespace from a string.
  *
- * @param str - The input string to be trimmed.
- * @return - A pointer to the trimmed string.
+ * @param[in,out] str The input string to be trimmed.
+ * @return Pointer to the trimmed string.
  *
  * This function removes any leading and trailing whitespace characters from the input string.
  * It modifies the original string by inserting a null terminator after the last non-space character.
@@ -59,9 +59,9 @@ _C_SAFE_COPY_FUNC = r"""
 /**
  * Safely copies a source string to a destination buffer, preventing buffer overflows.
  *
- * @param dest - The destination buffer where the string will be copied.
- * @param src - The source string to be copied.
- * @param size - The size of the destination buffer.
+ * @param[out] dest The destination buffer where the string will be copied.
+ * @param[in] src The source string to be copied.
+ * @param size The size of the destination buffer.
  *
  * This function ensures that the source string fits within the destination buffer.
  * It checks for NULL pointers and verifies that the source string does not exceed the buffer size.
@@ -110,8 +110,8 @@ _C_FIND_PARAM_DESCRIPTOR_FUNC = r"""
 /**
  * Searches for a parameter descriptor by its name.
  *
- * @param param_name - The name of the parameter to search for.
- * @return - A pointer to the corresponding param_descriptor if found; otherwise, NULL.
+ * @param[in] param_name The name of the parameter to search for.
+ * @return Pointer to the corresponding param_descriptor if found; otherwise, NULL.
  *
  * This function iterates through the param_table to find a descriptor that matches the given
  * parameter name. It facilitates parameter validation and assignment during parsing.
@@ -130,9 +130,9 @@ _C_PARSE_PARAM_FUNC = r"""
 /**
  * Parses a parameter string to extract the parameter name and array size if applicable.
  *
- * @param param_str - The input parameter string, potentially containing array notation.
- * @param param_name - Buffer to store the extracted parameter name.
- * @param array_size - Pointer to store the extracted array size; set to 0 for scalar parameters.
+ * @param[in] param_str The input parameter string, potentially containing array notation.
+ * @param[out] param_name Buffer to store the extracted parameter name.
+ * @param[out] array_size Pointer to store the extracted array size; set to 0 for scalar parameters.
  *
  * This function analyzes the parameter string to determine if it represents an array. If array
  * notation (e.g., param[10]) is detected, it extracts the base parameter name and the specified
@@ -165,7 +165,7 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     safe_copy(param_name, param_str, PARAM_SIZE);
     *array_size = 0;
   } // END IF (bracket_start != NULL): Distinguish between array and scalar parameter
-} // END FUNCTION parse_param
+} // END FUNCTION: parse_param
 """
 
 _C_PARSE_VALUE_FUNC = r"""
@@ -206,7 +206,7 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     safe_copy(values[0], trimmed, PARAM_SIZE);
     *value_count = 1;
   } // END IF (value_str[0] == '{'): Handle array and scalar values
-} // END FUNCTION parse_value
+} // END FUNCTION: parse_value
 """
 
 _C_READ_INTEGER_FUNC = r"""
@@ -222,7 +222,7 @@ static void read_integer(const char *value, int *result, const char *param_name)
   } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate integer conversion and check for errors
 
   *result = (int)int_val;
-} // END FUNCTION read_integer
+} // END FUNCTION: read_integer
 """
 
 _C_READ_REAL_FUNC = r"""
@@ -238,7 +238,7 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
   } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate double conversion and check for errors
 
   *result = (REAL)double_val;
-} // END FUNCTION read_REAL
+} // END FUNCTION: read_REAL
 """
 
 _C_READ_CHARARRAY_FUNC = r"""
@@ -263,7 +263,7 @@ static void read_chararray(const char *value, char *result, const char *param_na
     exit(1);
   } // END IF (strlen(trimmed_value) >= size): Check for buffer overflow after trimming
   safe_copy(result, trimmed_value, size);
-} // END FUNCTION read_chararray
+} // END FUNCTION: read_chararray
 """
 
 _C_READ_BOOLEAN_FUNC = r"""
@@ -304,7 +304,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
 
   // Free the allocated memory for the lowercase copy of the value
   free(lower_value);
-} // END FUNCTION read_boolean
+} // END FUNCTION: read_boolean
 """
 
 # endregion
@@ -746,9 +746,9 @@ help information, reading different parameter files, and overwriting steerable p
 with provided convergence factors. The function ensures that all parameters are valid,
 correctly formatted, and not duplicated.
 
-@param commondata - Pointer to the commondata_struct to be populated.
-@param argc - The argument count from the command-line input.
-@param argv - The argument vector containing command-line arguments.""",
+@param[in,out] commondata Pointer to the commondata_struct to be populated.
+@param argc The argument count from the command-line input.
+@param[in] argv The argument vector containing command-line arguments.""",
         cfunc_type="void",
         name="cmdline_input_and_parfile_parser",
         params="commondata_struct *restrict commondata, int argc, const char *argv[]",

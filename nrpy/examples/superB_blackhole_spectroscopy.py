@@ -90,26 +90,32 @@ Nxx_dict = {
     "SinhSpherical": [800, 16, 2],
     "SinhCylindrical": [400, 2, 1200] if not paper else [800, 2, 2400],
     "GeneralRFM_fisheyeN1": [200, 200, 200],
+    "GeneralRFM_fisheyeN2": [200, 200, 200],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.25 if not paper else +5.0
 default_BH2_z_posn = -0.25 if not paper else -5.0
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
-if num_fisheye_transitions is not None:
-    for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
-    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
 if num_fisheye_transitions == 1:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 50.0,
-            "fisheye_phys_w_trans1": 10.0,
-        }
-    )
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 50.0,
+        "fisheye_phys_w_trans1": 10.0,
+    }
+elif num_fisheye_transitions == 2:
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_a2": 4.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 50.0,
+        "fisheye_phys_w_trans1": 10.0,
+        "fisheye_phys_r_trans2": 150.0,
+        "fisheye_phys_w_trans2": 20.0,
+    }
 enable_rfm_precompute = True
 MoL_method = "RK4" if not paper else "SSPRK33"
 fd_order = 8

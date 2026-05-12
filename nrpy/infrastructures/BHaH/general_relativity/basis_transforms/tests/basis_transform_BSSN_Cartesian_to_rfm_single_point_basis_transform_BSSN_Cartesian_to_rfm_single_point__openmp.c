@@ -27,4 +27,4 @@ void basis_transform_BSSN_Cartesian_to_rfm_single_point(const params_struct *res
             params->CoordSystem_hash);
     exit(1);
   }
-} // END FUNCTION basis_transform_BSSN_Cartesian_to_rfm_single_point
+} // END FUNCTION: basis_transform_BSSN_Cartesian_to_rfm_single_point

@@ -308,7 +308,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     if Path('/tmp/nrpy_BHaH_Makefile_doctest1').exists():
         ...         shutil.rmtree('/tmp/nrpy_BHaH_Makefile_doctest1')
     """
-    # Part 1: Validation and Initialization
+    # Step 1: Validate inputs and initialize local state
     _validate_inputs(create_lib, static_lib, addl_CFLAGS, include_dirs)
     local_addl_dirs_to_make = addl_dirs_to_make or []
 
@@ -324,19 +324,19 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         if not final_exec_or_library_name.endswith(ext):
             final_exec_or_library_name += ext
 
-    # Part 2: File Generation
+    # Step 2: Generate source files and create the output directory
     project_path = Path(project_dir)
     project_path.mkdir(parents=True, exist_ok=True)
     c_files = _generate_c_files_and_header(
         project_path, lib_function_prefix, src_code_file_ext
     )
 
-    # Part 3: Compiler and Flag Configuration
+    # Step 3: Configure compiler and flags
     cc, cflags_dict = _configure_compiler_and_flags(
         CC, create_lib, static_lib, addl_CFLAGS
     )
 
-    # Part 4: Construct Makefile Components
+    # Step 4: Construct Makefile components
     # Object files string
     obj_files_str = "OBJ_FILES = " + " ".join(
         f.replace(f".{src_code_file_ext}", ".o") for f in sorted(c_files, key=str.lower)
@@ -380,7 +380,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
 clean:
 \t$(RM) *.o */*.o */*/*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.avi *.png {final_exec_or_library_name}"""
 
-    # Part 5: Assemble and Write Makefile
+    # Step 5: Assemble and write the Makefile
     makefile_content = _construct_makefile_content(
         cc=cc,
         cflags=cflags_dict[compiler_opt_option],

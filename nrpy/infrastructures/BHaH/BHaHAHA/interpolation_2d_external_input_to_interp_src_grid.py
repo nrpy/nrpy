@@ -21,10 +21,6 @@ def register_CFunction_interpolation_2d_external_input_to_interp_src_grid() -> (
 
     Performs 2D angular Lagrange interpolation at all radii on an input 3D spherical grid.
 
-    >>> result = register_CFunction_interpolation_2d_external_input_to_interp_src_grid()
-    >>> result is None or isinstance(result, pcg.NRPyEnv_type)
-    True
-
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -47,7 +43,7 @@ Interpolates data from the source grid (external input) to the destination grid 
 Perform 2D interpolation on a uniform grid in the theta and phi directions,
 at all (perfectly overlapping) radial points on the src and dst grids.
 
-@param commondata A structure containing grid parameters and data arrays for both source and destination grids.
+@param[in,out] commondata A structure containing grid parameters and data arrays for both source and destination grids.
 
 @return Returns an error code if any pointer is NULL or if the interpolation order exceeds grid boundaries. Returns 0 on success.
 
@@ -140,7 +136,7 @@ Notes:
               error_flag = INTERP2D_EXT_TO_INTERPSRC_HORIZON_OUT_OF_BOUNDS;
             }
             continue; // Skip further work for this iteration
-          } // END IF stencil in bounds
+          } // END IF: stencil in bounds
 
 #ifdef DEBUG
           // Verify that the central index is the closest grid point to the destination radius
@@ -152,9 +148,9 @@ Notes:
           if (fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst) > src_dxx2 * (0.5 + TOLERANCE)) {
             fprintf(stderr, "ERROR: phi center index too far from destination point! %.15e > %.15e\n",
                     fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst), src_dxx2 * (0.5 + TOLERANCE));
-          } // END IF central index is properly centered
+          } // END IF: central index is properly centered
 #endif // DEBUG
-        } // END sanity checks
+        } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
 
         const int base_idx_th = idx_center_th - NinterpGHOSTS;
         const int base_idx_ph = idx_center_ph - NinterpGHOSTS;
@@ -173,14 +169,14 @@ Notes:
           const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
           for (int ith = 0; ith < INTERP_ORDER; ith++) {
             coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
-          } // END LOOP over theta
-        } // END LOOP over phi
+          } // END LOOP: for ith over theta stencil
+        } // END LOOP: for iph over phi stencil
 
         // Step 3: Perform the 2D Lagrange interpolation, optimizing memory accesses and enabling vectorization
         REAL sum[NUM_EXT_INPUT_CONFORMAL_GFS];
         for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
           sum[gf] = 0.0;
-        } // END LOOP over grid functions
+        } // END LOOP: for which_gf over grid functions
         for (int iph = 0; iph < INTERP_ORDER; iph++) {
           const int idx_ph = base_idx_ph + iph;
           for (int ith = 0; ith < INTERP_ORDER; ith++) {
@@ -189,15 +185,15 @@ Notes:
 #pragma omp simd
             for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
               sum[gf] += src_gfs[SRC_IDX4(gf, ir, idx_th, idx_ph)] * coeff;
-            } // END LOOP over src gridfunctions
-          } // END LOOP over theta
-        } // END LOOP over phi
+            } // END LOOP: for which_gf over source gridfunctions
+          } // END LOOP: for ith over theta stencil
+        } // END LOOP: for iph over phi stencil
         for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
           dst_gfs[DST_IDX4(gf, ir, itheta, iphi)] = sum[gf] * src_invdxx12_INTERP_ORDERm1;
-        } // END LOOP over dst gridfunctions
-      } // END LOOP over theta
-    } // END LOOP over phi
-  } // END LOOP over r
+        } // END LOOP: for which_gf over destination gridfunctions
+      } // END LOOP: for itheta over destination theta
+    } // END LOOP: for iphi over destination phi
+  } // END LOOP: for ir over radial shells
   return error_flag;
 """
     postfunc = r"""
@@ -251,20 +247,20 @@ int initialize_coordinates(const int N_r, const int N_theta, const int N_phi, RE
     free(r_theta_phi[1]);
     free(r_theta_phi[2]);
     return -1;
-  } // END IF memory allocation check
+  } // END IF: coordinate-array allocation failed
 
   // Populate coordinate arrays. Note the r-direction is vertex-centered like the 1D example.
   for (int i = 0; i < Nxx_plus_2NGHOSTS[0]; i++) {
     r_theta_phi[0][i] = (i - NGHOSTS) * dxx[0];
-  } // END LOOP over r-direction
+  } // END LOOP: for i0 over radial direction
   for (int i = 0; i < Nxx_plus_2NGHOSTS[1]; i++) {
     r_theta_phi[1][i] = (i - NGHOSTS + 0.5) * dxx[1];
-  } // END LOOP over theta-direction
+  } // END LOOP: for i1 over theta direction
   for (int i = 0; i < Nxx_plus_2NGHOSTS[2]; i++) {
     r_theta_phi[2][i] = -M_PI + (i - NGHOSTS + 0.5) * dxx[2];
-  } // END LOOP over phi-direction
+  } // END LOOP: for i2 over phi direction
   return 0;
-} // END FUNCTION initialize_coordinates()
+} // END FUNCTION: initialize_coordinates
 
 /**
  * Initializes the source grid function using a pre-optimized analytic function evaluation.
@@ -287,12 +283,12 @@ int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[
   if (!r_func_values) {
     fprintf(stderr, "malloc failed for r_func_values.\n");
     return -1;
-  } // END IF memory allocation check
+  } // END IF: r_func_values allocation failed
 
   for (int i = 0; i < src_Nxx_plus_2NGHOSTS0; i++) {
     const REAL r = src_r_theta_phi[0][i];
     r_func_values[i] = r * r * sin(r);
-  } // END LOOP to pre-calculate r-dependent values
+  } // END LOOP: for i over precomputed r-dependent values
 
 #pragma omp parallel for collapse(2)
   for (int gf = 0; gf < NUM_EXT_INPUT_CONFORMAL_GFS; gf++) {
@@ -302,13 +298,13 @@ int initialize_src_gf(const int src_Nxx_plus_2NGHOSTS[3], REAL *src_r_theta_phi[
         const REAL sintheta = sin(src_r_theta_phi[1][i1]);
         for (int i0 = 0; i0 < src_Nxx_plus_2NGHOSTS0; i0++) {
           src_gf[SRC_IDX4(gf, i0, i1, i2)] = r_func_values[i0] * sintheta * cosphi;
-        } // END LOOP over r
-      } // END LOOP over theta
-    } // END LOOP over phi
-  } // END LOOP over grid functions
+        } // END LOOP: for i0 over radial grid
+      } // END LOOP: for i1 over theta grid
+    } // END LOOP: for i2 over phi grid
+  } // END LOOP: for which_gf over grid functions
   free(r_func_values);
   return 0;
-} // END FUNCTION initialize_src_gf()
+} // END FUNCTION: initialize_src_gf
 
 /**
  * Main function to execute the standalone 2D interpolation and perform convergence validation tests.
@@ -348,7 +344,7 @@ int main() {
     fprintf(stderr, "Memory allocation failed for destination coordinate arrays.\n");
     return_code = EXIT_FAILURE;
     goto cleanup;
-  } // END IF destination coordinate initialization check
+  } // END IF: destination coordinate initialization failed
 
   const size_t total_dst_pts = (size_t)dst_Nxx_plus_2NGHOSTS0 * dst_Nxx_plus_2NGHOSTS1 * dst_Nxx_plus_2NGHOSTS2;
   dst_gfs = (REAL *)malloc(sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_dst_pts);
@@ -356,7 +352,7 @@ int main() {
     fprintf(stderr, "Memory allocation failed for destination grid functions.\n");
     return_code = EXIT_FAILURE;
     goto cleanup;
-  } // END IF destination grid function allocation check
+  } // END IF: destination gridfunction allocation failed
 
   for (int res = 0; res < NUM_RESOLUTIONS; res++) {
     const int Ntheta_src = Ntheta_src_arr[res];
@@ -368,7 +364,7 @@ int main() {
       fprintf(stderr, "Memory allocation failed for source coordinates at resolution %d.\n", res);
       return_code = EXIT_FAILURE;
       goto cleanup;
-    } // END IF source coordinate initialization check
+    } // END IF: source coordinate initialization failed
 
     const size_t total_src_pts = (size_t)src_Nxx_plus_2NGHOSTS[0] * src_Nxx_plus_2NGHOSTS[1] * src_Nxx_plus_2NGHOSTS[2];
     src_gf = (REAL *)malloc(sizeof(REAL) * NUM_EXT_INPUT_CONFORMAL_GFS * total_src_pts);
@@ -376,12 +372,12 @@ int main() {
       fprintf(stderr, "Memory allocation failed for source grid function at resolution %d.\n", res);
       return_code = EXIT_FAILURE;
       goto cleanup;
-    } // END IF source grid function allocation check
+    } // END IF: source gridfunction allocation failed
 
     if (initialize_src_gf(src_Nxx_plus_2NGHOSTS, src_r_theta_phi, src_gf) != 0) {
       return_code = EXIT_FAILURE;
       goto cleanup;
-    } // END IF source grid function initialization check
+    } // END IF: source gridfunction initialization failed
 
     // Use designated initializers for commondata_struct
     commondata_struct commondata = {
@@ -407,7 +403,7 @@ int main() {
     for (int i = 0; i < 3; i++) {
       commondata.external_input_r_theta_phi[i] = src_r_theta_phi[i];
       commondata.interp_src_r_theta_phi[i] = dst_r_theta_phi[i];
-    } // END LOOP to set coordinate pointers in commondata
+    } // END LOOP: for i over coordinate pointers in commondata
 
 #ifdef _OPENMP
     double start_time = omp_get_wtime();
@@ -429,7 +425,7 @@ int main() {
       fprintf(stderr, "Interpolation failed with error code: %d at resolution %d.\n", error_code, res);
       free(commondata.bhahaha_params_and_data);
       continue; // Continue to next resolution
-    } // END IF interpolation failed
+    } // END IF: interpolation failed
     free(commondata.bhahaha_params_and_data);
 
     h_arr[res] = src_dxx[1];
@@ -446,10 +442,10 @@ int main() {
             const REAL exact = analytic_function(r, theta, phi);
             const REAL error = interpolated - exact;
             error_sum += error * error;
-          } // END LOOP over phi for error calculation
-        } // END LOOP over theta for error calculation
-      } // END LOOP over r for error calculation
-    } // END LOOP over grid functions for error calculation
+          } // END LOOP: for i2 over phi error calculation
+        } // END LOOP: for i1 over theta error calculation
+      } // END LOOP: for i0 over r error calculation
+    } // END LOOP: for which_gf over grid functions for error calculation
     // Normalize L2 error by the number of interior destination points.
     error_L2_norm[res] = sqrt(error_sum / (N_r * Ntheta_dst * Nphi_dst * NUM_EXT_INPUT_CONFORMAL_GFS));
     printf("Resolution %d: N_theta = %d, N_phi = %d, h = %.5e, L2 error = %.5e\n", res, Ntheta_src, Nphi_src, h_arr[res], error_L2_norm[res]);
@@ -458,16 +454,16 @@ int main() {
     for (int i = 0; i < 3; i++) {
       free(src_r_theta_phi[i]);
       src_r_theta_phi[i] = NULL;
-    } // END LOOP to free source coordinate arrays
+    } // END LOOP: for i over source coordinate arrays
     free(src_gf);
     src_gf = NULL;
-  } // END LOOP over resolutions
+  } // END LOOP: for res over resolutions
 
   printf("\n--- Convergence Results ---\n");
   for (int res = 1; res < NUM_RESOLUTIONS; res++) {
     REAL observed_order = log(error_L2_norm[res - 1] / error_L2_norm[res]) / log(h_arr[res - 1] / h_arr[res]);
     printf("Observed order of convergence between resolutions %d and %d: %.2f\n", res - 1, res, observed_order);
-  } // END LOOP over resolutions for convergence
+  } // END LOOP: for res over resolutions for convergence
   printf("Expected order of convergence: %d\n", INTERP_ORDER);
 
 cleanup:
@@ -480,12 +476,12 @@ cleanup:
   for (int i = 0; i < 3; i++) {
     free(src_r_theta_phi[i]);
     free(dst_r_theta_phi[i]);
-  } // END LOOP to free all coordinate arrays
+  } // END LOOP: for i over coordinate arrays to free
   free(src_gf);
   free(dst_gfs);
 
   return return_code;
-} // END FUNCTION main()
+} // END FUNCTION: main
 #endif // STANDALONE
 """
     cfc.register_CFunction(

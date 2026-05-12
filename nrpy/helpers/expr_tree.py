@@ -20,7 +20,7 @@ and root expression. The Node subclass has a field for an expression and
 a field for subexpression children, which is implemented as a mutable list.
 
 Author: Ken Sible
-Email:  ksible *at* outlook *dot* com
+        ksible *at* outlook *dot* com
 """
 
 import sys  # Standard Python module for multiplatform OS-level functions

@@ -10,20 +10,18 @@ Author: Zachariah B. Etienne
 from nrpy.infrastructures import BHaH
 
 
-def register_C_functions(enable_xy_plane: bool = False) -> None:
+def register_C_functions_explicit(tp_orientation: str) -> None:
     """
     Register all C functions needed for the TwoPunctures solve/interpolation path.
 
-    With ``enable_xy_plane=True``, the physical binary stays in the fixed-frame ``xy``
-    orientation expected by NRPyPN/TwoPunctures. ``TP_Interp`` then emits native
-    fixed-basis components for fixed grids and the legacy startup component ordering
-    for rotating startup grids.
+    This explicit entry point exposes the real shared TwoPunctures orientation
+    choices without overloading them with rotating-grid behavior.
 
-    :param enable_xy_plane: Whether to keep the physical binary in the native fixed-frame
-        xy-plane orientation instead of using the legacy startup convention.
+    :param tp_orientation: TwoPunctures orientation choice, either
+        ``"native_cartesian_xy_plane"`` or ``"legacy_swap_xz"``.
     """
     BHaH.general_relativity.TwoPunctures.ID_persist_struct.register_CFunction_initialize_ID_persist_struct(
-        enable_xy_plane=enable_xy_plane
+        tp_orientation=tp_orientation
     )
 
     # Original TwoPunctures functions:
@@ -32,7 +30,24 @@ def register_C_functions(enable_xy_plane: bool = False) -> None:
     BHaH.general_relativity.TwoPunctures.FuncAndJacobian.register_CFunction_TP_FuncAndJacobian()
     BHaH.general_relativity.TwoPunctures.Newton.register_CFunction_TP_Newton()
     BHaH.general_relativity.TwoPunctures.TP_interp.register_CFunction_TP_Interp(
-        enable_xy_plane=enable_xy_plane
+        tp_orientation=tp_orientation
     )
     BHaH.general_relativity.TwoPunctures.TP_solve.register_CFunction_TP_solve()
     BHaH.general_relativity.TwoPunctures.TP_utilities.register_CFunction_TP_utilities()
+
+
+def register_C_functions(enable_xy_plane: bool = False) -> None:
+    """
+    Register all C functions needed for the TwoPunctures solve/interpolation path.
+
+    This compatibility shim maps the older boolean interface onto the explicit
+    shared TwoPunctures orientation names.
+
+    :param enable_xy_plane: Whether to keep the physical binary in the native fixed-frame
+        xy-plane orientation instead of using the legacy ``swap_xz`` convention.
+    """
+    register_C_functions_explicit(
+        tp_orientation=(
+            "native_cartesian_xy_plane" if enable_xy_plane else "legacy_swap_xz"
+        )
+    )

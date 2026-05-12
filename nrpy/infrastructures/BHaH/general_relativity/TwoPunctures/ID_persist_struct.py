@@ -11,6 +11,21 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 
+def _validate_tp_orientation(tp_orientation: str) -> None:
+    """
+    Validate the requested shared TwoPunctures orientation.
+
+    :param tp_orientation: Requested shared TwoPunctures orientation.
+    :raises ValueError: If the orientation is unsupported.
+    """
+    valid_orientations = {"legacy_swap_xz", "native_cartesian_xy_plane"}
+    if tp_orientation not in valid_orientations:
+        raise ValueError(
+            f"Unsupported tp_orientation='{tp_orientation}'. "
+            f"Expected one of {sorted(valid_orientations)}."
+        )
+
+
 def ID_persist_str() -> str:
     """
     Return contents of ID_persist_struct for TwoPunctures initial data.
@@ -87,6 +102,7 @@ def ID_persist_str() -> str:
 
 def register_CFunction_initialize_ID_persist_struct(
     enable_xy_plane: bool = False,
+    tp_orientation: str = "",
 ) -> None:
     """
     Register C function initialize_ID_persist_struct().
@@ -94,28 +110,35 @@ def register_CFunction_initialize_ID_persist_struct(
     This function populates ID_persist_struct with defaults, and overrides defaults with commondata.
 
     :param enable_xy_plane: Whether to keep the binary in the native xy-plane orientation
-        instead of rotating the exported initial data into the legacy startup convention.
+        instead of using the legacy ``swap_xz`` convention.
+    :param tp_orientation: Explicit shared TwoPunctures orientation, either
+        ``"native_cartesian_xy_plane"`` or ``"legacy_swap_xz"``. If empty, infer from
+        ``enable_xy_plane`` for backward compatibility.
     """
+    if not tp_orientation:
+        tp_orientation = (
+            "native_cartesian_xy_plane" if enable_xy_plane else "legacy_swap_xz"
+        )
+    _validate_tp_orientation(tp_orientation)
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    if enable_xy_plane:
+    if tp_orientation == "native_cartesian_xy_plane":
         desc = """
 IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
            as that is what TwoPunctures was designed to do in the Toolkit, AND this is what NRPyPN
-           assumes. With enable_xy_plane=True, the physical binary stays in that fixed-frame
-           xy orientation. TP_Interp then exports either fixed-basis components (for fixed grids) or
-           the legacy startup basis components (for rotating startup grids).
+           assumes. With native_cartesian_xy_plane, the physical binary stays in that fixed-frame
+           xy orientation, and TP_Interp exports native Cartesian tensor components.
 Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
 set up initial_p_t and initial_p_r if not set in parfile.
 """
         center_offset_comment = "x"
         center_offset_assignment = "  par->center_offset[0] = -(grid_dist_from_origin_BH_m - grid_dist_from_origin_BH_M) * 0.5;"
-    else:
+    else:  # tp_orientation == "legacy_swap_xz"
         desc = """
 IMPORTANT: We set up initial data in TwoPunctures assuming the BBH is initially in the xy-plane,
            as that is what TwoPunctures was designed to do in the Toolkit, AND this is what NRPyPN
-           assumes. By default we then rotate the exported initial data via x->z , y->x, z->y so
-           the punctures begin on the z axis and the binary orbits in the xz plane, matching the
-           legacy startup convention.
+           assumes. With legacy_swap_xz, TP_Interp applies the old x<->z compatibility
+           convention. This convention flips handedness; it is not a proper rotation.
 Initialize ID_persist_struct: populate some with defaults; set others with inputs from commondata;
 set up initial_p_t and initial_p_r if not set in parfile.
 """

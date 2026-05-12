@@ -26,4 +26,4 @@ void xx_to_Cart__rfm__RingHoleySinhSpherical(const params_struct *restrict param
     xCart[1] = params->Cart_originy + tmp3 * sin(xx2);
     xCart[2] = params->Cart_originz + tmp2 * cos(xx1);
   }
-} // END FUNCTION xx_to_Cart__rfm__RingHoleySinhSpherical
+} // END FUNCTION: xx_to_Cart__rfm__RingHoleySinhSpherical

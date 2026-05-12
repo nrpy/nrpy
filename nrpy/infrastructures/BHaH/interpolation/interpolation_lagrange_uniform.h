@@ -46,7 +46,7 @@ static inline void compute_inv_denom(const int INTERP_ORDER, REAL *RESTRICT inv_
       denom *= (REAL)(i - j);
     inv_denom[i] = 1.0 / denom;
   } // END LOOP: Precompute inverse denominators.
-} // END FUNCTION compute_inv_denom()
+} // END FUNCTION: compute_inv_denom()
 
 /**
  * @brief Compute differences between a destination point and source stencil points.
@@ -64,7 +64,7 @@ static inline void compute_diffs_xi(const int INTERP_ORDER, const REAL dst_xi, c
   for (int j = 0; j < INTERP_ORDER; j++) {
     diffs[j] = dst_xi - src_xi_stencil[j];
   } // END LOOP over j.
-} // END FUNCTION compute_diffs_xi()
+} // END FUNCTION: compute_diffs_xi()
 
 /**
  * @brief Compute Lagrange basis coefficients.
@@ -92,7 +92,7 @@ static inline void compute_lagrange_basis_coeffs_xi(const int INTERP_ORDER, cons
     } // END LOOP over j > i.
     lagrange_basis_coeffs_xi[i] = numer_i * inv_denom[i];
   } // END LOOP over i.
-} // END FUNCTION compute_lagrange_basis_coeffs_xi()
+} // END FUNCTION: compute_lagrange_basis_coeffs_xi()
 
 /**
  * @brief Compute the weighted sum of Lagrange basis coefficients and source data using SIMD instructions where possible.
@@ -124,6 +124,6 @@ static inline REAL sum_lagrange_x0_simd(const int INTERP_ORDER, const REAL *REST
     sum += src_gf_base_idx[ix0] * lagrange_basis_coeffs_x0_base_idx[ix0];
   } // END LOOP remainder of x0 direction
   return sum;
-} // END FUNCTION lagrange_sum_x0()
+} // END FUNCTION: lagrange_sum_x0()
 
 #endif // INTERPOLATION_LAGRANGE_UNIFORM_H_

@@ -33,7 +33,7 @@ static void setup_grid_r_min_interior_zero(const REAL r_min_interior, const REAL
   }
   *output_dr = r_max_interior / ((REAL)Nr_interior);
   *output_Nr_interp = Nr_interior + BHAHAHA_NGHOSTS;
-} // END FUNCTION setup_grid_r_min_interior_zero()
+} // END FUNCTION: setup_grid_r_min_interior_zero
 
 static void setup_grid_r_min_interior_gt_zero(const REAL r_min_interior, const REAL r_max_interior, const REAL max_search_radius, const int max_Nr,
                                               int *restrict output_Nr_interp, REAL *restrict output_r_min, REAL *restrict output_dr) {
@@ -65,7 +65,7 @@ static void setup_grid_r_min_interior_gt_zero(const REAL r_min_interior, const R
     }
   }
   *output_Nr_interp = Nr_interior + 2 * BHAHAHA_NGHOSTS;
-} // END FUNCTION setup_grid_r_min_interior_gt_zero()
+} // END FUNCTION: setup_grid_r_min_interior_gt_zero
 """
     desc = """
 Initializes a cell-centered radial grid for interpolation.
@@ -77,16 +77,14 @@ This function:
 - Adjusts `output_r_min` and `output_r_max` to accommodate ghost cells.
 - Populates the `radii` array with computed radial coordinates.
 
-@param Nr_interp_max               Maximum number of radial interpolation points.
-@param max_search_radius           Upper limit for the search radius; caps the adjusted maximum radius.
-@param input_r_min                 Initial minimum radius; may equal `input_r_max`.
-@param input_r_max                 Initial maximum radius; may equal `input_r_min`.
-@param output_Nr_interp            Pointer to store the adjusted number of interpolation points.
-@param output_r_min_interior       Pointer to store the minimum interior radius of the cell-centered radial grid.
-@param output_dr                   Pointer to store the output grid spacing.
-@param radii                       Array to store the computed radial coordinates.
-
-@return void
+@param Nr_interp_max Maximum number of radial interpolation points.
+@param max_search_radius Upper limit for the search radius; caps the adjusted maximum radius.
+@param input_r_min Initial minimum radius; may equal `input_r_max`.
+@param input_r_max Initial maximum radius; may equal `input_r_min`.
+@param[out] output_Nr_interp Pointer to store the adjusted number of interpolation points.
+@param[out] output_r_min_interior Pointer to store the minimum interior radius of the cell-centered radial grid.
+@param[out] output_dr Pointer to store the output grid spacing.
+@param[out] radii Array to store the computed radial coordinates.
 
 @note Ensures the radial grid includes ghost cells and maintains non-negative radii.
 """
@@ -116,7 +114,7 @@ This function:
   //   output_r_min, output_Nr_interp, and output_dr.
   for (int i = 0; i < (*output_Nr_interp); i++) {
     radii[i] = (output_r_min) + ((REAL)(i) + 0.5) * (*output_dr);
-  } // END LOOP: populating radii array for r_min > 0
+  } // END LOOP: for i over radii array when r_min > 0
   *output_r_min_interior = output_r_min + ((REAL)(BHAHAHA_NGHOSTS)) * (*output_dr);
 """
     postfunc = r"""
@@ -125,12 +123,10 @@ This function:
 /**
  * Displays the input parameters for a given test case.
  *
- * @param Nr_interp_max        Maximum number of radial interpolation points.
- * @param max_search_radius    Initial maximum radius for grid scaling.
- * @param input_r_min          Initial minimum radius.
- * @param input_r_max          Maximum radius.
- *
- * @return void
+ * @param Nr_interp_max Maximum number of radial interpolation points.
+ * @param max_search_radius Initial maximum radius for grid scaling.
+ * @param input_r_min Initial minimum radius.
+ * @param input_r_max Maximum radius.
  */
 void print_input_parameters(const int Nr_interp_max, const REAL max_search_radius, const REAL input_r_min, const REAL input_r_max) {
   printf("Input parameters:\n");
@@ -143,12 +139,10 @@ void print_input_parameters(const int Nr_interp_max, const REAL max_search_radiu
 /**
  * Displays the output parameters after setting up the radial grid.
  *
- * @param output_Nr_interp     Adjusted number of interpolation points.
- * @param output_dr            Adjusted minimum radius.
- * @param output_r_min_interior         Adjusted minimum radius.
- * @param output_r_max         Adjusted maximum radius.
- *
- * @return void
+ * @param output_Nr_interp Adjusted number of interpolation points.
+ * @param output_dr Adjusted minimum radius.
+ * @param output_r_min_interior Adjusted minimum radius.
+ * @param output_r_max Adjusted maximum radius.
  */
 void print_output_parameters(const int output_Nr_interp, const REAL output_dr, const REAL output_r_min_interior, const REAL output_r_max_interior) {
   printf("Output parameters for cell-centered radial grid:\n");
@@ -161,29 +155,25 @@ void print_output_parameters(const int output_Nr_interp, const REAL output_dr, c
 /**
  * Displays the computed radial coordinates.
  *
- * @param radii                Array of computed radial coordinates.
- * @param output_Nr_interp     Number of interpolation points.
- *
- * @return void
+ * @param[in] radii Array of computed radial coordinates.
+ * @param output_Nr_interp Number of interpolation points.
  */
 void print_radii(const REAL radii[], const int output_Nr_interp) {
   printf("Radii:\n");
   for (int i = 0; i < output_Nr_interp; i++) {
     printf("  radii[%d] = %f\n", i, radii[i]);
-  } // END LOOP: printing each radial coordinate
+  } // END LOOP: for i over radial coordinates
   printf("\n");
 } // END FUNCTION: print_radii
 
 /**
  * Executes a test case by displaying inputs, setting up the radial grid, and displaying outputs.
  *
- * @param test_case_description Description of the test case scenario.
- * @param Nr_interp_max         Maximum number of radial interpolation points.
- * @param max_search_radius     Maximum search radius.
- * @param input_r_min           Input minimum radius.
- * @param input_r_max           Input maximum radius.
- *
- * @return void
+ * @param[in] test_case_description Description of the test case scenario.
+ * @param Nr_interp_max Maximum number of radial interpolation points.
+ * @param max_search_radius Maximum search radius.
+ * @param input_r_min Input minimum radius.
+ * @param input_r_max Input maximum radius.
  */
 void run_test_case(const char *test_case_description, int Nr_interp_max, REAL max_search_radius, REAL input_r_min, REAL input_r_max) {
   printf("%s\n", test_case_description);

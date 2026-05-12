@@ -5,8 +5,6 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import sys
-
 import nrpy.c_function as cfc
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
     APPLY_PARITY_BRANCHLESS_PREFUNC,
@@ -16,12 +14,7 @@ from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only impo
 # apply_bcs_inner_only(): Apply inner boundary conditions.
 # This function is documented below in 'desc' and 'body' variables.
 def register_CFunction_apply_bcs_inner_only() -> None:
-    """
-    Register C function for filling inner boundary points on the computational grid, as prescribed by bcstruct.
-
-    DocTests:
-    >>> register_CFunction_apply_bcs_inner_only()
-    """
+    """Register C function for inner boundary conditions."""
     includes = ["BHaH_defines.h"]
     desc = r"""
 Apply BCs to inner boundary points only,
@@ -55,8 +48,8 @@ boundary points ("inner maps to outer").
       const REAL v = gf[bc->srcpt];
       const int8_t p = bc->parity[parity_idx];
       gf[dstpt] = apply_parity_branchless(v, p);
-    } // END for(int pt=0;pt<num_inner_pts;pt++)
-  } // END for(int which_gf=0;which_gf<NUM_EVOL_GFS;which_gf++)
+    } // END LOOP: for pt over inner boundary points
+  } // END LOOP: for which_gf over evolution gridfunctions
 """
     cfc.register_CFunction(
         prefunc=APPLY_PARITY_BRANCHLESS_PREFUNC,
@@ -72,6 +65,7 @@ boundary points ("inner maps to outer").
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

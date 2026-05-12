@@ -30,6 +30,7 @@ def register_CFunction_initial_data(
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
+    post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -47,6 +48,9 @@ def register_CFunction_initial_data(
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
     :param free_ID_persist_struct_str: Optional string to free the persistent structure for initial data.
     :param enable_T4munu: Whether to include the stress-energy tensor. Defaults to False.
+    :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
+        ``ADM_Cart_to_BSSN_Cart(...)`` and before
+        ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
 
     :raises ValueError: If ``set_of_CoordSystems`` is empty.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -89,6 +93,7 @@ def register_CFunction_initial_data(
         IDCoordSystem=IDCoordSystem,
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
+        post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
     )
     for coord in sorted(coord_systems_to_register):
         if coord.startswith("GeneralRFM"):

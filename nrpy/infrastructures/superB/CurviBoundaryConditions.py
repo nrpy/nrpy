@@ -83,7 +83,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     desc = r"""Setup bcstruct_chare from bcstruct"""
     cfunc_type = "void"
     name = "bcstruct_chare_set_up"
-    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, const charecomm_struct *restrict charecommstruct, REAL *restrict xx[3], const bc_struct *restrict bcstruct, bc_struct *restrict bcstruct_chare, nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, const int chare_index[3]"
+    params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const params_struct *restrict params_chare, REAL *restrict xx[3], const bc_struct *restrict bcstruct, bc_struct *restrict bcstruct_chare, nonlocalinnerbc_struct *restrict nonlocalinnerbcstruct, const int chare_index[3]"
     body = r"""
   const int Nchare0 = commondata->Nchare0;
   const int Nchare1 = commondata->Nchare1;
@@ -103,10 +103,6 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
   const int tot_num_chares = Nchare0*Nchare1*Nchare2;
   const int idx3_this_chare = IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2]);
 
-  // Unpack globalidx3pt_to_chareidx and globalidx3pt_to_localidx3pt from charecommstruct
-  const int *restrict globalidx3pt_to_chareidx3 = charecommstruct->globalidx3pt_to_chareidx3;
-  const int *restrict globalidx3pt_to_localidx3pt = charecommstruct->globalidx3pt_to_localidx3pt;
-
   ////////////////////////////////////////
   // STEP 1: SET UP INNER BOUNDARY STRUCTS
   {
@@ -116,8 +112,12 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
       const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
       const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
-      if (globalidx3pt_to_chareidx3[dstpt] == idx3_this_chare) {
-        if (globalidx3pt_to_chareidx3[srcpt] == idx3_this_chare) {
+      const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
+      const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
+      if (dst_owner == idx3_this_chare) {
+        if (src_owner == idx3_this_chare) {
           num_inner_chare++;
         } else {
           num_inner_chare_nonlocal++;
@@ -140,12 +140,20 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
       const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
       const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
+      const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
+      const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
       // if dstpt is in local grid
-      if (globalidx3pt_to_chareidx3[dstpt] == idx3_this_chare) {
+      if (dst_owner == idx3_this_chare) {
         // if srcpt is in local grid
-        if (globalidx3pt_to_chareidx3[srcpt] == idx3_this_chare) {
-          bcstruct_chare->inner_bc_array[which_inner_chare].dstpt = globalidx3pt_to_localidx3pt[dstpt]; // store the local idx3 of dstpt
-          bcstruct_chare->inner_bc_array[which_inner_chare].srcpt = globalidx3pt_to_localidx3pt[srcpt]; // store the local idx3 of srcpt
+        if (src_owner == idx3_this_chare) {
+          bcstruct_chare->inner_bc_array[which_inner_chare].dstpt =
+              globalidx3pt_to_localidx3pt(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                                   Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nchare0, Nchare1, Nchare2);
+          bcstruct_chare->inner_bc_array[which_inner_chare].srcpt =
+              globalidx3pt_to_localidx3pt(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                                   Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nchare0, Nchare1, Nchare2);
           // Also copy parity
           for (int i = 0; i < 10; ++i) {
             bcstruct_chare->inner_bc_array[which_inner_chare].parity[i] = bcstruct->inner_bc_array[pt].parity[i];
@@ -153,13 +161,13 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           which_inner_chare++;
         // if srcpt is not in local grid
         } else {
-          count_nonlocalinnerbc_srcpt_eachchare[globalidx3pt_to_chareidx3[srcpt]]++;
+          count_nonlocalinnerbc_srcpt_eachchare[src_owner]++;
         }
       // if dstpt is not in local grid
       } else {
         // if srcpt is in local grid
-        if (globalidx3pt_to_chareidx3[srcpt] == idx3_this_chare) {
-          count_nonlocalinnerbc_dstpt_eachchare[globalidx3pt_to_chareidx3[dstpt]]++;
+        if (src_owner == idx3_this_chare) {
+          count_nonlocalinnerbc_dstpt_eachchare[dst_owner]++;
         }
       }
     }
@@ -213,15 +221,21 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
       const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
       const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
+      const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
+      const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
+                                                             Nchare1, Nchare2);
       // if dstpt is in local grid
-      if (globalidx3pt_to_chareidx3[dstpt] == idx3_this_chare) {
-        int chareidx3 = globalidx3pt_to_chareidx3[srcpt];
+      if (dst_owner == idx3_this_chare) {
+        const int chareidx3 = src_owner;
         // if srcpt is not in local grid
         if ( chareidx3 != idx3_this_chare) {
           const int src_chare_id = nonlocalinnerbcstruct->idx3chare_to_src_chare_id[chareidx3];
           nonlocalinnerbcstruct->globalidx3_srcpts[src_chare_id][count_nonlocalinnerbc_srcpt_each_src_chare[src_chare_id]] =  srcpt;
           const int linear_id = nonlocalinnerbcstruct-> map_srcchare_and_srcpt_id_to_linear_id[src_chare_id][count_nonlocalinnerbc_srcpt_each_src_chare[src_chare_id]];
-          bcstruct_chare->inner_bc_array_nonlocal[linear_id].dstpt = globalidx3pt_to_localidx3pt[dstpt]; // store the local idx3 of dstpt
+          bcstruct_chare->inner_bc_array_nonlocal[linear_id].dstpt =
+              globalidx3pt_to_localidx3pt(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
+                                                   Nxx_plus_2NGHOSTS0chare, Nxx_plus_2NGHOSTS1chare, Nchare0, Nchare1, Nchare2);
           // Also copy parity
           for (int i = 0; i < 10; ++i) {
             bcstruct_chare->inner_bc_array_nonlocal[linear_id].parity[i] = bcstruct->inner_bc_array[pt].parity[i];
@@ -275,7 +289,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
           const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-          if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
+          if (globalidx3pt_to_chareidx3(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0, Nchare1,
+                                              Nchare2) == idx3_this_chare) {
             num_pure_outer_boundary_points_chare++;
           }
         }
@@ -294,7 +309,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
           const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
-          if (charecommstruct->globalidx3pt_to_chareidx3[globalidx3] == IDX3_OF_CHARE(chare_index[0], chare_index[1], chare_index[2])){
+          if (globalidx3pt_to_chareidx3(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0, Nchare1,
+                                              Nchare2) == idx3_this_chare) {
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);

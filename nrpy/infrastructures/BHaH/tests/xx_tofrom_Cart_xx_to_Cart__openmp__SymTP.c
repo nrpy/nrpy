@@ -21,4 +21,4 @@ void xx_to_Cart__rfm__SymTP(const params_struct *restrict params, const REAL xx[
     xCart[1] = params->Cart_originy + tmp0 * sin(xx2);
     xCart[2] = params->Cart_originz + sqrt(((params->bScale) * (params->bScale)) + ((xx0) * (xx0))) * cos(xx1);
   }
-} // END FUNCTION xx_to_Cart__rfm__SymTP
+} // END FUNCTION: xx_to_Cart__rfm__SymTP

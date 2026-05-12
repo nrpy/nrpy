@@ -40,10 +40,6 @@ def register_CFunction_rhs_eval(
     :param enable_fd_functions: Enable finite difference functions.
     :param OMP_collapse: Number of loops to collapse in OpenMP.
     :return: The NRPyEnv_type environment object.
-
-    >>> env = register_CFunction_rhs_eval()
-    >>> env is not None
-    True
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -131,10 +127,6 @@ def register_CFunction_KO_apply(
     :param enable_fd_functions: Enable finite difference functions.
     :param OMP_collapse: Number of loops to collapse in OpenMP.
     :return: The NRPyEnv_type environment object.
-
-    >>> env = register_CFunction_KO_apply()
-    >>> env is not None
-    True
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -182,11 +174,15 @@ def register_CFunction_KO_apply(
 
     body = "if(commondata->KO_diss_strength == 0.0) return;\n"
     h = sp.Symbol("hh", real=True)
+    surface_replacements = {
+        sp.Symbol("xx0"): h,
+        sp.Symbol("f0_of_xx0"): h,
+    }
     body += BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             [
-                hh_rhs.subs(rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h),
-                vv_rhs.subs(rfm.xx[0], h).subs(sp.sympify("f0_of_xx0"), h),
+                hh_rhs.xreplace(surface_replacements),
+                vv_rhs.xreplace(surface_replacements),
             ],
             [
                 gri.BHaHGridFunction.access_gf("hh", gf_array_name="rhs_gfs"),

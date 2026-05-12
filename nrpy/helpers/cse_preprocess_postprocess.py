@@ -567,12 +567,89 @@ def sort_cse_output_deterministically(
     ... )
     >>> sort_cse_output_deterministically(out_a, "t_") == sort_cse_output_deterministically(out_b, "t_")
     True
+    >>> comm_a = (
+    ...     [(a0, sp.Add(y, x, evaluate=False)), (a1, sp.Add(a0, z, evaluate=False))],
+    ...     [a1],
+    ... )
+    >>> comm_b = (
+    ...     [(a1, sp.Add(x, y, evaluate=False)), (a0, sp.Add(z, a1, evaluate=False))],
+    ...     [a0],
+    ... )
+    >>> [lhs for lhs, _ in sort_cse_output_deterministically(comm_a, "t_")[0]]
+    [t_tmp0, t_tmp1]
+    >>> [lhs for lhs, _ in sort_cse_output_deterministically(comm_b, "t_")[0]]
+    [t_tmp0, t_tmp1]
     """
+    SortKey = Tuple[object, ...]
+
+    def _stable_float_key(value: sp.Float) -> SortKey:
+        """
+        Construct a deterministic key for a SymPy float using public APIs only.
+
+        :param value: SymPy float to be keyed.
+        :return: Tuple key that can be used in deterministic sorting.
+        """
+        return ("Float", value.sort_key())
+
+    def _stable_expr_key(
+        expr: sp.Basic,
+        resolved_symbol_ranks: Dict[sp.Symbol, int],
+        cache: Dict[sp.Basic, SortKey],
+    ) -> SortKey:
+        """
+        Build a deterministic structural key for expressions.
+
+        The key is designed to remain stable even when SymPy changes the
+        ordering of unsorted CSE temporaries. It does so by ignoring the
+        original temporary-symbol names, normalizing argument order for
+        commutative subexpressions, and avoiding version-sensitive string
+        representations.
+
+        :param expr: SymPy expression to be keyed.
+        :param resolved_symbol_ranks: Map from already-ordered CSE symbols to
+            their deterministic ranks.
+        :param cache: Memoization cache for keys within one comparison pass.
+        :return: Tuple key that can be used in deterministic sorting.
+        """
+        cached = cache.get(expr)
+        if cached is not None:
+            return cached
+
+        key: SortKey
+        if isinstance(expr, sp.Symbol):
+            if expr in resolved_symbol_ranks:
+                key = ("ResolvedSymbol", resolved_symbol_ranks[expr])
+            else:
+                key = ("Symbol", expr.name)
+        elif isinstance(expr, sp.Integer):
+            key = ("Integer", int(expr))
+        elif isinstance(expr, sp.Rational):
+            key = ("Rational", expr.p, expr.q)
+        elif isinstance(expr, sp.Float):
+            key = _stable_float_key(expr)
+        elif expr.is_NumberSymbol:
+            key = ("NumberSymbol", expr.sort_key())
+        elif expr.is_Atom:
+            key = ("Atom", expr.sort_key())
+        else:
+            arg_keys = tuple(
+                _stable_expr_key(arg, resolved_symbol_ranks, cache) for arg in expr.args
+            )
+            if expr.is_commutative and len(arg_keys) > 1:
+                arg_keys = tuple(sorted(arg_keys))
+            key = ("Expr", expr.class_key(), len(arg_keys), arg_keys)
+
+        cache[expr] = key
+        return key
+
     replaced, reduced = cse_output
     if not replaced:
         return replaced, reduced
 
     replaced_lookup = dict(replaced)
+    replacement_op_counts = {
+        sym: sp.count_ops(expr) for sym, expr in replaced_lookup.items()
+    }
     unresolved_dependencies: Dict[sp.Symbol, Set[sp.Symbol]] = {
         sym: {
             cast(sp.Symbol, free_sym)
@@ -582,7 +659,7 @@ def sort_cse_output_deterministically(
         for sym, expr in replaced
     }
     ordered_symbols: List[sp.Symbol] = []
-    resolved_symbol_map: Dict[sp.Symbol, sp.Symbol] = {}
+    resolved_symbol_ranks: Dict[sp.Symbol, int] = {}
     num_resolved_symbols = 0
 
     while unresolved_dependencies:
@@ -593,23 +670,24 @@ def sort_cse_output_deterministically(
                 if not dependencies
             ),
             key=lambda sym: (
-                sp.count_ops(replaced_lookup[sym].xreplace(resolved_symbol_map)),
-                sp.srepr(replaced_lookup[sym].xreplace(resolved_symbol_map)),
+                replacement_op_counts[sym],
+                _stable_expr_key(replaced_lookup[sym], resolved_symbol_ranks, {}),
             ),
         )
         if not ready_symbols:
             raise ValueError("CSE replacements contain a dependency cycle.")
         for sym in ready_symbols:
             ordered_symbols.append(sym)
-            resolved_symbol_map[sym] = sp.Symbol(
-                f"{symbol_prefix}tmp{num_resolved_symbols}"
-            )
+            resolved_symbol_ranks[sym] = num_resolved_symbols
             num_resolved_symbols += 1
             del unresolved_dependencies[sym]
         for dependencies in unresolved_dependencies.values():
             dependencies.difference_update(ready_symbols)
 
-    symbol_map = resolved_symbol_map
+    symbol_map = {
+        sym: sp.Symbol(f"{symbol_prefix}tmp{resolved_symbol_ranks[sym]}")
+        for sym in ordered_symbols
+    }
     renamed_replaced = [
         (symbol_map[sym], replaced_lookup[sym].xreplace(symbol_map))
         for sym in ordered_symbols

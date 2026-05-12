@@ -19,18 +19,45 @@ Authors: Marcus Ansorg
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TP_Interp(enable_xy_plane: bool = False) -> None:
+def _validate_tp_orientation(tp_orientation: str) -> None:
+    """
+    Validate the requested shared TwoPunctures orientation.
+
+    :param tp_orientation: Requested shared TwoPunctures orientation.
+    :raises ValueError: If the orientation is unsupported.
+    """
+    valid_tp_orientations = {"legacy_swap_xz", "native_cartesian_xy_plane"}
+    if tp_orientation not in valid_tp_orientations:
+        raise ValueError(
+            f"Unsupported tp_orientation='{tp_orientation}'. "
+            f"Expected one of {sorted(valid_tp_orientations)}."
+        )
+
+
+def register_CFunction_TP_Interp(
+    enable_xy_plane: bool = False,
+    tp_orientation: str = "",
+) -> None:
     """
     Register C function TP_Interp().
 
     Provides spectral interpolation at an arbitrary Cartesian point. By default the exported
-    tensor components follow the legacy startup ordering; with ``enable_xy_plane=True`` the
-    fixed-frame query point stays native and the output basis depends on whether the destination
-    grid is rotating.
+    tensor components follow the legacy ``swap_xz`` compatibility convention; with
+    ``enable_xy_plane=True`` both the query point and tensor output remain in the
+    native Cartesian xy orientation.
 
     :param enable_xy_plane: Whether to keep the query point in the native xy-plane orientation
-        instead of applying the legacy startup permutation.
+        instead of using the legacy ``swap_xz`` convention.
+    :param tp_orientation: Explicit shared TwoPunctures orientation, either
+        ``"native_cartesian_xy_plane"`` or ``"legacy_swap_xz"``. If empty, infer from
+        ``enable_xy_plane`` for backward compatibility.
     """
+    if not tp_orientation:
+        tp_orientation = (
+            "native_cartesian_xy_plane" if enable_xy_plane else "legacy_swap_xz"
+        )
+    _validate_tp_orientation(tp_orientation)
+
     includes = ["assert.h", "TP_utilities.h", "TwoPunctures.h"]
     desc = "Spectral interpolation from TwoPunctures grids onto an arbitrary point xCart[3] = {x,y,z}."
     prefunc = f"// {desc}\n\n"
@@ -40,7 +67,7 @@ def register_CFunction_TP_Interp(enable_xy_plane: bool = False) -> None:
     name = "TP_Interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
-    if enable_xy_plane:
+    if tp_orientation == "native_cartesian_xy_plane":
         coordinate_map_body = """  REAL xx, yy, zz;
   {
     xx = x - ID_persist->center_offset[0];
@@ -48,67 +75,46 @@ def register_CFunction_TP_Interp(enable_xy_plane: bool = False) -> None:
     zz = z - ID_persist->center_offset[2];
   }
 """
-        output_assignment_body = """  if (params->grid_rotates) {
-    // Query coordinates stay in the native fixed frame so the physical BBH remains
-    // in the standard xy orientation. Rotating startup grids, however, interpret
-    // Cartesian tensor components in their own startup basis, so we emit the
-    // legacy startup component ordering here. Fixed grids keep the native
-    // fixed-frame Cartesian ordering.
-    initial_data->gammaSphorCartDD22 = gxx_out;
-    initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
-    initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
-    initial_data->gammaSphorCartDD00 = gyy_out;
-    initial_data->gammaSphorCartDD01 = gyz_out;
-    initial_data->gammaSphorCartDD11 = gzz_out;
+        output_assignment_body = """  initial_data->gammaSphorCartDD00 = gxx_out;
+  initial_data->gammaSphorCartDD01 = gxy_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
+  initial_data->gammaSphorCartDD02 = gxz_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+  initial_data->gammaSphorCartDD11 = gyy_out;
+  initial_data->gammaSphorCartDD12 = gyz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
+  initial_data->gammaSphorCartDD22 = gzz_out;
 
-    initial_data->KSphorCartDD22 = Kxx_out;
-    initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
-    initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
-    initial_data->KSphorCartDD00 = Kyy_out;
-    initial_data->KSphorCartDD01 = Kyz_out;
-    initial_data->KSphorCartDD11 = Kzz_out;
-  } else {
-    initial_data->gammaSphorCartDD00 = gxx_out;
-    initial_data->gammaSphorCartDD01 = gxy_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
-    initial_data->gammaSphorCartDD02 = gxz_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
-    initial_data->gammaSphorCartDD11 = gyy_out;
-    initial_data->gammaSphorCartDD12 = gyz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
-    initial_data->gammaSphorCartDD22 = gzz_out;
-
-    initial_data->KSphorCartDD00 = Kxx_out;
-    initial_data->KSphorCartDD01 = Kxy_out;  // Technically KSphorCartDD10 = KSphorCartDD01
-    initial_data->KSphorCartDD02 = Kxz_out;  // Technically KSphorCartDD20 = KSphorCartDD02
-    initial_data->KSphorCartDD11 = Kyy_out;
-    initial_data->KSphorCartDD12 = Kyz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
-    initial_data->KSphorCartDD22 = Kzz_out;
-  }
+  initial_data->KSphorCartDD00 = Kxx_out;
+  initial_data->KSphorCartDD01 = Kxy_out;  // Technically KSphorCartDD10 = KSphorCartDD01
+  initial_data->KSphorCartDD02 = Kxz_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+  initial_data->KSphorCartDD11 = Kyy_out;
+  initial_data->KSphorCartDD12 = Kyz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
+  initial_data->KSphorCartDD22 = Kzz_out;
 """
     else:
-        coordinate_map_body = """  // Legacy export permutation: native TP (x,y,z) -> legacy startup ordering (z,x,y).
+        coordinate_map_body = """  // Legacy swap_xz compatibility path: swap x and z only.
   REAL xx, yy, zz;
   {
     const REAL x_dest = x - ID_persist->center_offset[0];
     const REAL y_dest = y - ID_persist->center_offset[1];
     const REAL z_dest = z - ID_persist->center_offset[2];
     xx = z_dest;
-    yy = x_dest;
-    zz = y_dest;
+    yy = y_dest;
+    zz = x_dest;
   }
 """
-        output_assignment_body = """  // Legacy startup component ordering: (x,y,z) <- (y,z,x) from native TP output.
+        output_assignment_body = """  // Legacy swap_xz output: swap x and z tensor components only.
+  initial_data->gammaSphorCartDD00 = gzz_out;
+  initial_data->gammaSphorCartDD01 = gyz_out;  // Technically gammaSphorCartDD10 = gammaSphorCartDD01
+  initial_data->gammaSphorCartDD02 = gxz_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
+  initial_data->gammaSphorCartDD11 = gyy_out;
+  initial_data->gammaSphorCartDD12 = gxy_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
   initial_data->gammaSphorCartDD22 = gxx_out;
-  initial_data->gammaSphorCartDD02 = gxy_out;  // Technically gammaSphorCartDD20 = gammaSphorCartDD02
-  initial_data->gammaSphorCartDD12 = gxz_out;  // Technically gammaSphorCartDD21 = gammaSphorCartDD12
-  initial_data->gammaSphorCartDD00 = gyy_out;
-  initial_data->gammaSphorCartDD01 = gyz_out;
-  initial_data->gammaSphorCartDD11 = gzz_out;
 
+  initial_data->KSphorCartDD00 = Kzz_out;
+  initial_data->KSphorCartDD01 = Kyz_out;  // Technically KSphorCartDD10 = KSphorCartDD01
+  initial_data->KSphorCartDD02 = Kxz_out;  // Technically KSphorCartDD20 = KSphorCartDD02
+  initial_data->KSphorCartDD11 = Kyy_out;
+  initial_data->KSphorCartDD12 = Kxy_out;  // Technically KSphorCartDD21 = KSphorCartDD12
   initial_data->KSphorCartDD22 = Kxx_out;
-  initial_data->KSphorCartDD02 = Kxy_out;  // Technically KSphorCartDD20 = KSphorCartDD02
-  initial_data->KSphorCartDD12 = Kxz_out;  // Technically KSphorCartDD21 = KSphorCartDD12
-  initial_data->KSphorCartDD00 = Kyy_out;
-  initial_data->KSphorCartDD01 = Kyz_out;
-  initial_data->KSphorCartDD11 = Kzz_out;
 """
     body = r"""  const REAL mp = ID_persist->mp;
   const REAL mm = ID_persist->mm;
