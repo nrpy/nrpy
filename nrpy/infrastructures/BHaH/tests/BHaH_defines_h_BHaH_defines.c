@@ -18,7 +18,6 @@
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 #define REAL double
 #define DOUBLE double
-
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
@@ -26,23 +25,31 @@
 // #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 // #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
 // #define SQR(A) ((A) * (A))
+#ifndef MIN
 #define MIN(A, B)                                                                                                                                    \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     __typeof__(B) _b = (B);                                                                                                                          \
     _a < _b ? _a : _b;                                                                                                                               \
   })
+#endif // END ifndef MIN
+
+#ifndef MAX
 #define MAX(A, B)                                                                                                                                    \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     __typeof__(B) _b = (B);                                                                                                                          \
     _a > _b ? _a : _b;                                                                                                                               \
   })
+#endif // END ifndef MAX
+
+#ifndef SQR
 #define SQR(A)                                                                                                                                       \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     _a *_a;                                                                                                                                          \
   })
+#endif // END ifndef SQR
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]
@@ -63,14 +70,15 @@
 // commondata_struct:
 // ----------------------------
 typedef struct __commondata_struct__ {
-  REAL CFL_FACTOR; // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL dt;         // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL t_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL t_final;    // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  REAL time;       // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  int NUMGRIDS;    // (nrpy.grid)
-  int nn;          // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
-  int nn_0;        // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL CFL_FACTOR;           // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL dt;                   // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_0;                  // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL t_final;              // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  REAL time;                 // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  int C2P_diagnostics_every; // (nrpy.infrastructures.BHaH.GRoovy.conservatives_to_primitives_routine)
+  int NUMGRIDS;              // (nrpy.grid)
+  int nn;                    // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
+  int nn_0;                  // (nrpy.infrastructures.BHaH.MoLtimestepping.register_all)
 } commondata_struct;
 
 // ----------------------------

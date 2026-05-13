@@ -158,8 +158,8 @@ def _register_general_defines(
 
     real_means = par.parval_from_str("fp_type")
     general_defines_str += f"""#define REAL {real_means}
-#define DOUBLE {double_means}
-
+#define DOUBLE {double_means}"""
+    general_defines_str += """
 // These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
@@ -167,20 +167,28 @@ def _register_general_defines(
 // #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 // #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
 // #define SQR(A) ((A) * (A))
-#define MIN(A, B) ({{ \\
-    __typeof__(A) _a = (A); \\
-    __typeof__(B) _b = (B); \\
-    _a < _b ? _a : _b; \\
-}})
-#define MAX(A, B) ({{ \\
-    __typeof__(A) _a = (A); \\
-    __typeof__(B) _b = (B); \\
-    _a > _b ? _a : _b; \\
-}})
-#define SQR(A) ({{ \\
-    __typeof__(A) _a = (A); \\
-    _a * _a; \\
-}})
+#ifndef MIN
+#define MIN(A, B) ({              \
+    __typeof__(A) _a = (A);       \
+    __typeof__(B) _b = (B);       \
+    _a < _b ? _a : _b;            \
+})
+#endif // END ifndef MIN
+
+#ifndef MAX
+#define MAX(A, B) ({              \
+    __typeof__(A) _a = (A);       \
+    __typeof__(B) _b = (B);       \
+    _a > _b ? _a : _b;            \
+})
+#endif // END ifndef MAX
+
+#ifndef SQR
+#define SQR(A) ({                 \
+    __typeof__(A) _a = (A);       \
+    _a * _a;                      \
+})
+#endif // END ifndef SQR
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]
