@@ -40,7 +40,10 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Spherically symmetric TOV initial data"
+    desc = """Initialize GRoovy TOV initial data from TOVola and GRHayL.
+
+@param[in,out] commondata Global simulation data, including GRHayL parameters and EOS.
+@param[in,out] griddata Per-grid coordinates, parameters, and gridfunction storage."""
     cfunc_type = "void"
     # Has to be named this, for generic call in main.c
     name = "initial_data"
@@ -62,7 +65,7 @@ commondata->ode_error_limit = 1e-06;                  // TOVola::ode_error_limit
 commondata->ode_max_steps = 5000000;                  // TOVola::ode_max_steps
 commondata->poly_eos_Gamma = 2.0;                     // TOVola::poly_eos_Gamma
 commondata->poly_eos_K = 100.0;                         // TOVola::poly_eos_K
-        
+
 ID_persist_struct ID_persist;
 TOVola_solve(commondata, &ID_persist);
 
@@ -101,7 +104,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
 
   // Perform pointwise interpolation to radius r using ID_persist data
   REAL rho_energy_val, rho_baryon_val, P_val, M_val, expnu_val, exp4phi_val;
-  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->max_interpolation_stencil_size, ID_persist.numpoints_arr, ID_persist.r_Schw_arr,
+  TOVola_TOV_interpolate_1D(r_iso, commondata, commondata->interpolation_stencil_size, ID_persist.numpoints_arr, ID_persist.r_Schw_arr,
                             ID_persist.rho_energy_arr, ID_persist.rho_baryon_arr, ID_persist.P_arr, ID_persist.M_arr, ID_persist.expnu_arr,
                             ID_persist.exp4phi_arr, ID_persist.r_iso_arr, &rho_energy_val, &rho_baryon_val, &P_val, &M_val, &expnu_val,
                             &exp4phi_val);
@@ -135,14 +138,20 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
       ghl_metric_quantities metric = {0};
       ghl_conservative_quantities cons = {0};
 
-      basis_transform_rfm_basis_to_Cartesian(commondata, params, 
+      basis_transform_rfm_basis_to_Cartesian(commondata, params,
                                              &prims, &cons, &metric,
                                              i0, i1, i2, xx,
                                              auxevol_gfs, in_gfs);
 
       bool speed_limited = false;
-      ghl_enforce_primitive_limits_and_compute_u0(
+      ghl_error_codes_t error = ghl_enforce_primitive_limits_and_compute_u0(
           &commondata->ghl_params, &commondata->eos, &metric, &prims, &speed_limited);
+      if (error != ghl_success) {
+        fprintf(stderr,
+                "GRHayL primitive limiting failed in TOV initial data at (%d, %d, %d).\n",
+                i0, i1, i2);
+        exit(EXIT_FAILURE);
+      } // END IF: primitive limiting failed for TOV initial data
 
       basis_transform_Cartesian_to_rfm_basis(commondata, params, &prims, &cons,
                                              i0, i1, i2, xx, auxevol_gfs, in_gfs);

@@ -5,20 +5,18 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
 
-import multiprocessing
 import os
 import shutil
-
-#########################################################
-# STEP 1: Import needed Python modules, then set codegen
-#         and compile-time parameters.
-import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 from nrpy.infrastructures.BHaH.GRoovy import diagnostics_nearest
+
+#########################################################
+# STEP 1: Import needed Python modules, then set codegen
+#         and compile-time parameters.
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", "openmp")
@@ -483,45 +481,10 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
 
-print("Cloning and compiling GRHayL...")
-
-# Define the repository URL and directory
-repo_url = "https://github.com/GRHayL/GRHayL.git"
-repo_dir = "GRHayL"
-codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
-
-# Change to the codes root directory
-os.chdir(codes_root_dir)
-
-# Clone the repository
-result = subprocess.run(["git", "clone", repo_url], capture_output=True, text=True)
-print(result.stdout)
-
-# Change to the repository directory
-os.chdir(repo_dir)
-
-# Configure the build
-configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
-# For Terrence's laptop, uncomment the following lines and comment out the above line
-# configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
-#                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
-#                       '--prefix=./', '--buildtype=opt']
-result = subprocess.run(configure_options, capture_output=True, text=True)
-print(result.stdout)
-
-# Get the number of CPU cores
-cpus = str(multiprocessing.cpu_count())
-
-# Build and install
-result = subprocess.run(["make", "-j" + cpus], capture_output=True, text=True)
-print(result.stdout)
-result = subprocess.run(["make", "install"], capture_output=True, text=True)
-print(result.stdout)
-
-# Change to the project directory
-os.chdir("../")
-
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+)
+print(
+    "    GRHayL must already be available under the generated project or provided by the build environment."
 )
 print(f"    Parameter file can be found in {project_name}.par")

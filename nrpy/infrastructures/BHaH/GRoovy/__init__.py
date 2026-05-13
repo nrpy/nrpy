@@ -11,6 +11,7 @@ from . import (
     compute_stress_energy_tensor,
     compute_up_index_velocity_time_component_pointwise,
     conservatives_to_primitives_routine,
+    diagnostics_nearest,
     grhd_rhs_eval,
     hybrid_EoS_TOV_initial_data,
     interpolate_metric_gfs_to_cell_faces,
