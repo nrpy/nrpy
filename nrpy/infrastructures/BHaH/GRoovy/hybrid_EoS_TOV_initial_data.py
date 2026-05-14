@@ -1,5 +1,6 @@
 """
 Function for TOV initial data, for use by GRoovy.
+
 Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
@@ -28,10 +29,10 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
     """
     Register function to initialize grid functions with TOV initial data.
 
-    :param grhayl_setup_str: string to set up grhayl eos and parameters
+    :param grhayl_setup_str: GRHayL EOS and parameter setup code.
     :param CoordSystem: The coordinate system.
     :param OMP_collapse: Level of OpenMP loop collapsing.
-    :param enable_GoldenKernels: Boolean to enable Golden Kernels.
+    :param enable_GoldenKernels: Enable Golden Kernels.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -51,7 +52,8 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
         "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
     )
 
-    body = grhayl_setup_str + r"""
+    body = grhayl_setup_str
+    body += r"""
 
 // We're going to solve the TOV live, so we need to set some parameters.
 
@@ -69,7 +71,7 @@ commondata->poly_eos_K = 100.0;                         // TOVola::poly_eos_K
 ID_persist_struct ID_persist;
 TOVola_solve(commondata, &ID_persist);
 
-for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
+for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
   bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
@@ -83,8 +85,9 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
   REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
 
-  initial_data_reader__convert_ADM_Spherical_to_BSSN(commondata, params, (const REAL *restrict *)xx, bcstruct,
-                                                       &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
+  initial_data_reader__convert_ADM_Spherical_to_BSSN(
+      commondata, params, (const REAL *restrict *)xx, bcstruct,
+      &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
 """
 
     rfm = refmetric.reference_metric[CoordSystem]
@@ -112,7 +115,7 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
  """
     )
 
-    rho_baryon_val, P_val = sp.symbols(["rho_baryon_val", "P_val"])
+    rho_baryon_val, P_val = sp.symbols("rho_baryon_val P_val", real=True)
 
     rescaledvU = ixp.zerorank1()
 
@@ -159,19 +162,6 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
       auxevol_gfs[IDX4(U4UTGF, i0, i1, i2)] = prims.u0;
 """
 
-    end_body = r"""
-    {
-        free(ID_persist.r_Schw_arr);
-        free(ID_persist.rho_energy_arr);
-        free(ID_persist.rho_baryon_arr);
-        free(ID_persist.P_arr);
-        free(ID_persist.M_arr);
-        free(ID_persist.expnu_arr);
-        free(ID_persist.exp4phi_arr);
-        free(ID_persist.r_iso_arr);
-    }
-"""
-
     body += lp.simple_loop(
         loop_body=loop_body
         + ccg.c_codegen(
@@ -189,7 +179,18 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
         OMP_collapse=OMP_collapse,
     )
 
-    body += end_body + "}\n"
+    body += r"""
+   } // END LOOP: for grid over all numerical grids
+
+   free(ID_persist.r_Schw_arr);
+   free(ID_persist.rho_energy_arr);
+   free(ID_persist.rho_baryon_arr);
+   free(ID_persist.P_arr);
+   free(ID_persist.M_arr);
+   free(ID_persist.expnu_arr);
+   free(ID_persist.exp4phi_arr);
+   free(ID_persist.r_iso_arr);
+   """
     cfc.register_CFunction(
         include_CodeParameters_h=False,
         includes=includes,

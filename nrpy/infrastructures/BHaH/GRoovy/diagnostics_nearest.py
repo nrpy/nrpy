@@ -169,21 +169,17 @@ def register_CFunction_diagnostics_nearest(
         "diagnostics_nearest_common.h",
     ]
     desc = """
- * @file diagnostics_nearest.c
- * @brief Dispatch GRoovy nearest-sampled diagnostics and write hydro-center data.
- *
- * The diagnostics_nearest() dispatcher preserves the standard nearest sampled
- * constraint diagnostics and adds a GRHD-specific 0D output file. The GRHD output
- * reads primitive fields from auxevol_gfs and conserved fields from y_n_gfs at the
- * grid point nearest the physical center.
- *
- * @param[in] commondata       Global simulation metadata.
- * @param[in] griddata         Per-grid data structures.
- * @param[in] gridfuncs_diags  Per-grid diagnostic gridfunction arrays used by the
- *                             generic nearest constraint helpers.
- *
- * @return void.
- """
+Dispatch GRoovy nearest-sampled diagnostics and write hydro-center data.
+
+The diagnostics_nearest() dispatcher preserves the standard nearest sampled
+constraint diagnostics and adds a GRHD-specific 0D output file. The GRHD output
+reads primitive fields from auxevol_gfs and conserved fields from y_n_gfs at the
+grid point nearest the physical center.
+
+@param[in] commondata Global simulation metadata.
+@param[in] griddata Per-grid data structures.
+@param[in] gridfuncs_diags Per-grid diagnostic gridfunction arrays used by the generic nearest constraint helpers.
+"""
     cfunc_type = "void"
     name = "diagnostics_nearest"
     params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
