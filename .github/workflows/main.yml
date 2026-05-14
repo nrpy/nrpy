@@ -354,11 +354,11 @@ jobs:
           python -m nrpy.examples.sebobv1_jax
 
   codegen-mac:
-    # updated to macos-14 as requested
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
+        os: [ 'macos-14', 'macos-26' ]
         # Dropped 3.6/3.7 because macos-14 is Apple Silicon (ARM64).
         # Python < 3.8 has poor/no support for ARM64 and causes architecture mismatches
         # with Homebrew libraries (like GSL) which are installed as ARM64.
