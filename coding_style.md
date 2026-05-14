@@ -441,6 +441,17 @@ The following patterns are standard for NRPy infrastructure code:
   # Required as the opening pattern for modules under nrpy/equations/ and subdirectories
   ```
 
+### CodeParameter Registration Scope
+
+`CodeParameter` registration mutates NRPy's global code-parameter registry, which feeds generated headers such as `BHaH_defines.h`, `set_CodeParameters.h`, parameter-file output, and related trusted-string tests. For this reason, new or modified code must not register `CodeParameter`s at module import time.
+
+- Register each `CodeParameter` inside exactly one core registration function that owns the generated code needing that parameter. Prefer the principal `register_CFunction_*()` routine, or a single `register_all_*()`/setup routine that all relevant code-generation paths call before the parameter is consumed.
+- Do not place `par.register_CodeParameter(...)`, `par.register_CodeParameters(...)`, or direct `par.CodeParameter(...)` construction at module global scope.
+- Do not register the same `CodeParameter` redundantly in multiple modules. If several C functions need the same parameter, choose one central registration function and document that downstream registrations depend on it having been called.
+- Do not rely on package imports, especially `__init__.py` aggregation imports, to register code parameters as a side effect.
+
+Example failure mode: registering a GRoovy-only parameter such as `C2P_diagnostics_every` at module scope can cause an unrelated `from nrpy.infrastructures import BHaH` doctest to alter the global registry. Then `BHaH_defines.h` gains a GRoovy field and unrelated trusted-string tests fail, even though the tested module did not request GRoovy code generation.
+
 ### Doctest Conventions
 
 #### `Doctests:` section label
@@ -533,14 +544,17 @@ This pattern allows the codegen system to first collect all function calls durin
 
 ### Black Format Suppression
 
-Use `# fmt: off` and `# fmt: on` sparingly, only when Black formatting would destroy intentional alignment. The most common case is `par.CodeParameter` registration lines where positional arguments must align:
+Use `# fmt: off` and `# fmt: on` sparingly, only when Black formatting would destroy intentional alignment. One acceptable case is a compact group of `CodeParameter` registrations inside the single registration function that owns those parameters:
 
 ```python
-# fmt: off
-_ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
-# fmt: on
+def register_CFunction_time_metadata() -> None:
+    """Register time metadata handling."""
+    # fmt: off
+    _ = par.register_CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.register_CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.register_CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
+    # fmt: on
+    ...
 ```
 
 ### C Function Registration Pattern
