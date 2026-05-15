@@ -45,15 +45,6 @@ static inline REAL logcosh_stable(const REAL x) {
 } // END FUNCTION: logcosh_stable
 
 /**
- * Compute the difference log(cosh(u)) - log(cosh(v)).
- *
- * @param[in] u First input value.
- * @param[in] v Second input value.
- * @return Stable log-cosh ratio.
- */
-static inline REAL log_cosh_ratio(const REAL u, const REAL v) { return logcosh_stable(u) - logcosh_stable(v); } // END FUNCTION: log_cosh_ratio
-
-/**
  * Evaluate the unscaled fisheye radial map at radius r.
  *
  * @param[in] r Radius at which to evaluate the map.
@@ -70,7 +61,7 @@ static inline REAL rbar_unscaled(const REAL r, const REAL a[], const REAL R[], c
     const REAL denom = (REAL)2.0 * tanh(R[i] / s[i]);
     const REAL u = (r + R[i]) / s[i];
     const REAL v = (r - R[i]) / s[i];
-    const REAL term = (delta_a * s[i]) / denom * log_cosh_ratio(u, v);
+    const REAL term = (delta_a * s[i]) / denom * (logcosh_stable(u) - logcosh_stable(v));
     rb += term;
   } // END LOOP: for i over fisheye transitions
   return rb;
