@@ -284,7 +284,7 @@ const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
-// The sebobv2 example still uses the aligned spin coefficients, 
+// The sebobv2 example still uses the aligned spin coefficients,
 """
     body += ccg.c_codegen(
         [

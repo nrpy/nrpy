@@ -245,66 +245,71 @@ commondata->omega_spin_max = nsteps > 0 ? omega[nsteps - 1] : commondata->initia
 // create the splines
 commondata->chi1_lnhat.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_lnhat.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi1_lnhat.spline, omega, chi1_lnhat, nsteps);
-
 commondata->chi2_lnhat.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_lnhat.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi2_lnhat.spline, omega, chi2_lnhat, nsteps);
-
 commondata->chi1_l.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_l.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi1_l.spline, omega, chi1_l, nsteps);
-
 commondata->chi2_l.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_l.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi2_l.spline, omega, chi2_l, nsteps);
-
 commondata->chi1_x_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_x_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi1_x_spline.spline, omega, chi1_x, nsteps);
-
 commondata->chi1_y_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_y_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi1_y_spline.spline, omega, chi1_y, nsteps);
-
 commondata->chi1_z_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_z_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi1_z_spline.spline, omega, chi1_z, nsteps);
-
 commondata->chi2_x_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_x_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi2_x_spline.spline, omega, chi2_x, nsteps);
-
 commondata->chi2_y_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_y_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi2_y_spline.spline, omega, chi2_y, nsteps);
-
 commondata->chi2_z_spline.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi2_z_spline.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->chi2_z_spline.spline, omega, chi2_z, nsteps);
-
 commondata->lnhat_x.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->lnhat_x.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->lnhat_x.spline, omega, lnhat_x, nsteps);
-
 commondata->lnhat_y.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->lnhat_y.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->lnhat_y.spline, omega, lnhat_y, nsteps);
-
 commondata->lnhat_z.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->lnhat_z.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->lnhat_z.spline, omega, lnhat_z, nsteps);
-
 commondata->L_x.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->L_x.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->L_x.spline, omega, L_x, nsteps);
-
 commondata->L_y.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->L_y.acc = gsl_interp_accel_alloc();
-gsl_spline_init(commondata->L_y.spline, omega, L_y, nsteps);
-
 commondata->L_z.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->L_z.acc = gsl_interp_accel_alloc();
+if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
+    commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL ||
+    commondata->chi1_l.spline == NULL || commondata->chi1_l.acc == NULL ||
+    commondata->chi2_l.spline == NULL || commondata->chi2_l.acc == NULL ||
+    commondata->chi1_x_spline.spline == NULL || commondata->chi1_x_spline.acc == NULL ||
+    commondata->chi1_y_spline.spline == NULL || commondata->chi1_y_spline.acc == NULL ||
+    commondata->chi1_z_spline.spline == NULL || commondata->chi1_z_spline.acc == NULL ||
+    commondata->chi2_x_spline.spline == NULL || commondata->chi2_x_spline.acc == NULL ||
+    commondata->chi2_y_spline.spline == NULL || commondata->chi2_y_spline.acc == NULL ||
+    commondata->chi2_z_spline.spline == NULL || commondata->chi2_z_spline.acc == NULL ||
+    commondata->lnhat_x.spline == NULL || commondata->lnhat_x.acc == NULL ||
+    commondata->lnhat_y.spline == NULL || commondata->lnhat_y.acc == NULL ||
+    commondata->lnhat_z.spline == NULL || commondata->lnhat_z.acc == NULL ||
+    commondata->L_x.spline == NULL || commondata->L_x.acc == NULL ||
+    commondata->L_y.spline == NULL || commondata->L_y.acc == NULL ||
+    commondata->L_z.spline == NULL || commondata->L_z.acc == NULL) {
+  fprintf(stderr, "Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), spin spline allocation failed\\n");
+  exit(1);
+} // END IF: spin spline allocation failed
+
+gsl_spline_init(commondata->chi1_lnhat.spline, omega, chi1_lnhat, nsteps);
+gsl_spline_init(commondata->chi2_lnhat.spline, omega, chi2_lnhat, nsteps);
+gsl_spline_init(commondata->chi1_l.spline, omega, chi1_l, nsteps);
+gsl_spline_init(commondata->chi2_l.spline, omega, chi2_l, nsteps);
+gsl_spline_init(commondata->chi1_x_spline.spline, omega, chi1_x, nsteps);
+gsl_spline_init(commondata->chi1_y_spline.spline, omega, chi1_y, nsteps);
+gsl_spline_init(commondata->chi1_z_spline.spline, omega, chi1_z, nsteps);
+gsl_spline_init(commondata->chi2_x_spline.spline, omega, chi2_x, nsteps);
+gsl_spline_init(commondata->chi2_y_spline.spline, omega, chi2_y, nsteps);
+gsl_spline_init(commondata->chi2_z_spline.spline, omega, chi2_z, nsteps);
+gsl_spline_init(commondata->lnhat_x.spline, omega, lnhat_x, nsteps);
+gsl_spline_init(commondata->lnhat_y.spline, omega, lnhat_y, nsteps);
+gsl_spline_init(commondata->lnhat_z.spline, omega, lnhat_z, nsteps);
+gsl_spline_init(commondata->L_x.spline, omega, L_x, nsteps);
+gsl_spline_init(commondata->L_y.spline, omega, L_y, nsteps);
 gsl_spline_init(commondata->L_z.spline, omega, L_z, nsteps);
 
 // free up memory

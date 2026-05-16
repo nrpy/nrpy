@@ -101,7 +101,7 @@ Main function for computing the SEBOBv2 waveform.
     name = "main"
     params = "int argc, const char *argv[]"
     body = r"""  commondata_struct commondata; // commondata contains parameters common to all grids.
-// Step TBD: Initialize commondata 
+// Step TBD: Initialize commondata
 // Step TBD: Set each commondata CodeParameter to default.
 commondata_struct_set_to_default(&commondata);
 // Step TBD: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
@@ -130,120 +130,120 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 // merger-ringdown angle extension of Eqs. (18)-(20), and it does not alter
 // the IMR waveform pipeline.
 {
-    const size_t n_low = commondata.nsteps_low;
-    const size_t n_fine = commondata.nsteps_fine;
-    const size_t n_insp = n_low + n_fine;
-    const int enable_sandbox_diagnostics = __SANDBOX_DIAGNOSTICS_FLAG__;
-    const REAL sandbox_iota = 0.9;
-    const REAL sandbox_varphi_0 = 0.3;
+  const size_t n_low = commondata.nsteps_low;
+  const size_t n_fine = commondata.nsteps_fine;
+  const size_t n_insp = n_low + n_fine;
+  const int enable_sandbox_diagnostics = __SANDBOX_DIAGNOSTICS_FLAG__;
+  const REAL sandbox_iota = 0.9;
+  const REAL sandbox_varphi_0 = 0.3;
 
-    if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
-        fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
-        fprintf(stderr,
-            "Warning: the optional coprecessing-rotation sandbox uses "
-            "chi1_x/y/z and chi2_x/y/z, while the current aligned-spin IMR "
-            "path uses chi1 and chi2. For a self-consistent sandbox "
-            "validation, set chi1=chi1_z and chi2=chi2_z.\n");
-        fflush(stderr);
-    } // END IF: scalar and vector spin parameters differ for sandbox validation
+  if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
+      fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
+    fprintf(stderr,
+        "Warning: the optional coprecessing-rotation sandbox uses "
+        "chi1_x/y/z and chi2_x/y/z, while the current aligned-spin IMR "
+        "path uses chi1 and chi2. For a self-consistent sandbox "
+        "validation, set chi1=chi1_z and chi2=chi2_z.\n");
+    fflush(stderr);
+  } // END IF: scalar and vector spin parameters differ for sandbox validation
 
-    REAL *real_buffers = (REAL *)calloc(2 * n_insp, sizeof(REAL));
-    COMPLEX *complex_buffers = (COMPLEX *)calloc(7 * n_insp, sizeof(COMPLEX));
+  REAL *real_buffers = (REAL *)calloc(2 * n_insp, sizeof(REAL));
+  COMPLEX *complex_buffers = (COMPLEX *)calloc(7 * n_insp, sizeof(COMPLEX));
 
-    if (real_buffers != NULL && complex_buffers != NULL) {
-        // Partition sandbox work buffers.
-        REAL *h_plus_I  = real_buffers + 0 * n_insp;
-        REAL *h_cross_I = real_buffers + 1 * n_insp;
+  if (real_buffers != NULL && complex_buffers != NULL) {
+    // Partition sandbox work buffers.
+    REAL *h_plus_I  = real_buffers + 0 * n_insp;
+    REAL *h_cross_I = real_buffers + 1 * n_insp;
 
-        COMPLEX *hP_22 = complex_buffers + 0 * n_insp;
-        COMPLEX *hP_21 = complex_buffers + 1 * n_insp;
-        COMPLEX *hP_33 = complex_buffers + 2 * n_insp;
-        COMPLEX *hP_32 = complex_buffers + 3 * n_insp;
-        COMPLEX *hP_44 = complex_buffers + 4 * n_insp;
-        COMPLEX *hP_43 = complex_buffers + 5 * n_insp;
-        COMPLEX *hP_55 = complex_buffers + 6 * n_insp;
+    COMPLEX *hP_22 = complex_buffers + 0 * n_insp;
+    COMPLEX *hP_21 = complex_buffers + 1 * n_insp;
+    COMPLEX *hP_33 = complex_buffers + 2 * n_insp;
+    COMPLEX *hP_32 = complex_buffers + 3 * n_insp;
+    COMPLEX *hP_44 = complex_buffers + 4 * n_insp;
+    COMPLEX *hP_43 = complex_buffers + 5 * n_insp;
+    COMPLEX *hP_55 = complex_buffers + 6 * n_insp;
 
-        // Splice and unpack all seven positive-m coprecessing inspiral modes.
-        for(size_t i = 0; i < n_low; i++) {
-            hP_22[i] = commondata.waveform_low[IDX_WF(i, STRAIN22)];
-            hP_21[i] = commondata.waveform_low[IDX_WF(i, STRAIN21)];
-            hP_33[i] = commondata.waveform_low[IDX_WF(i, STRAIN33)];
-            hP_32[i] = commondata.waveform_low[IDX_WF(i, STRAIN32)];
-            hP_44[i] = commondata.waveform_low[IDX_WF(i, STRAIN44)];
-            hP_43[i] = commondata.waveform_low[IDX_WF(i, STRAIN43)];
-            hP_55[i] = commondata.waveform_low[IDX_WF(i, STRAIN55)];
-        } // END LOOP: for i over low-frequency inspiral modes
-        for(size_t i = 0; i < n_fine; i++) {
-            size_t dest_idx = i + n_low;
-            hP_22[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN22)];
-            hP_21[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN21)];
-            hP_33[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN33)];
-            hP_32[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN32)];
-            hP_44[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN44)];
-            hP_43[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN43)];
-            hP_55[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN55)];
-        } // END LOOP: for i over fine-frequency inspiral modes
+    // Splice and unpack all seven positive-m coprecessing inspiral modes.
+    for (size_t i = 0; i < n_low; i++) {
+      hP_22[i] = commondata.waveform_low[IDX_WF(i, STRAIN22)];
+      hP_21[i] = commondata.waveform_low[IDX_WF(i, STRAIN21)];
+      hP_33[i] = commondata.waveform_low[IDX_WF(i, STRAIN33)];
+      hP_32[i] = commondata.waveform_low[IDX_WF(i, STRAIN32)];
+      hP_44[i] = commondata.waveform_low[IDX_WF(i, STRAIN44)];
+      hP_43[i] = commondata.waveform_low[IDX_WF(i, STRAIN43)];
+      hP_55[i] = commondata.waveform_low[IDX_WF(i, STRAIN55)];
+    } // END LOOP: for i over low-frequency inspiral modes
+    for (size_t i = 0; i < n_fine; i++) {
+      size_t dest_idx = i + n_low;
+      hP_22[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN22)];
+      hP_21[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN21)];
+      hP_33[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN33)];
+      hP_32[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN32)];
+      hP_44[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN44)];
+      hP_43[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN43)];
+      hP_55[dest_idx] = commondata.waveform_fine[IDX_WF(i, STRAIN55)];
+    } // END LOOP: for i over fine-frequency inspiral modes
 
-        // Generate physical J->P Euler angles from the precessing dynamics.
-        SEOBNRv5_coprecessing_angles(&commondata);
+    // Generate physical J->P Euler angles from the precessing dynamics.
+    SEOBNRv5_coprecessing_angles(&commondata);
 
-        // Execute the physical coprecessing-to-observer rotation.
-        SEOBNRv5_coprecessing_rotations(
-            n_insp, sandbox_iota, sandbox_varphi_0,
-            commondata.J_f_x, commondata.J_f_y, commondata.J_f_z,
-            commondata.alpha_JP, commondata.beta_JP, commondata.gamma_JP,
-            hP_22, hP_21, hP_33, hP_32, hP_44, hP_43, hP_55,
-            h_plus_I, h_cross_I
-        );
+    // Execute the physical coprecessing-to-observer rotation.
+    SEOBNRv5_coprecessing_rotations(
+        n_insp, sandbox_iota, sandbox_varphi_0,
+        commondata.J_f_x, commondata.J_f_y, commondata.J_f_z,
+        commondata.alpha_JP, commondata.beta_JP, commondata.gamma_JP,
+        hP_22, hP_21, hP_33, hP_32, hP_44, hP_43, hP_55,
+        h_plus_I, h_cross_I
+    );
 
-        // Optionally dump raw modes, physical Euler angles, and rotated polarizations.
-        FILE *fp = enable_sandbox_diagnostics ? fopen("validation_waveform.txt", "w") : NULL;
-        if (fp != NULL) {
-            fprintf(fp, "# Physical coprecessing-rotation validation: iota=%.15e varphi_0=%.15e J_f=(%.15e, %.15e, %.15e)\n",
-                    sandbox_iota, sandbox_varphi_0, commondata.J_f_x, commondata.J_f_y, commondata.J_f_z);
-            fprintf(fp, "# Time | alpha_JP | beta_JP | gamma_JP | Re(hP_22) | Im(hP_22) | Re(hP_21) | Im(hP_21) | Re(hP_33) | Im(hP_33) | Re(hP_32) | Im(hP_32) | Re(hP_44) | Im(hP_44) | Re(hP_43) | Im(hP_43) | Re(hP_55) | Im(hP_55) | h_plus_I | h_cross_I\n");
-            for(size_t i = 0; i < n_low; i++) {
-                fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-                        commondata.dynamics_low[IDX(i, TIME)],
-                        commondata.alpha_JP[i], commondata.beta_JP[i], commondata.gamma_JP[i],
-                        creal(hP_22[i]), cimag(hP_22[i]),
-                        creal(hP_21[i]), cimag(hP_21[i]),
-                        creal(hP_33[i]), cimag(hP_33[i]),
-                        creal(hP_32[i]), cimag(hP_32[i]),
-                        creal(hP_44[i]), cimag(hP_44[i]),
-                        creal(hP_43[i]), cimag(hP_43[i]),
-                        creal(hP_55[i]), cimag(hP_55[i]),
-                        h_plus_I[i], h_cross_I[i]);
-            } // END LOOP: for i over low-frequency validation waveform samples
-            for(size_t i = 0; i < n_fine; i++) {
-                size_t dest_idx = i + n_low;
-                fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-                        commondata.dynamics_fine[IDX(i, TIME)],
-                        commondata.alpha_JP[dest_idx], commondata.beta_JP[dest_idx], commondata.gamma_JP[dest_idx],
-                        creal(hP_22[dest_idx]), cimag(hP_22[dest_idx]),
-                        creal(hP_21[dest_idx]), cimag(hP_21[dest_idx]),
-                        creal(hP_33[dest_idx]), cimag(hP_33[dest_idx]),
-                        creal(hP_32[dest_idx]), cimag(hP_32[dest_idx]),
-                        creal(hP_44[dest_idx]), cimag(hP_44[dest_idx]),
-                        creal(hP_43[dest_idx]), cimag(hP_43[dest_idx]),
-                        creal(hP_55[dest_idx]), cimag(hP_55[dest_idx]),
-                        h_plus_I[dest_idx], h_cross_I[dest_idx]);
-            } // END LOOP: for i over fine-frequency validation waveform samples
-            fclose(fp);
-        } else if (enable_sandbox_diagnostics) {
-            fprintf(stderr, "Warning: Could not open validation_waveform.txt for writing.\n");
-            fflush(stderr);
-        } // END ELSE IF: validation waveform requested but file open failed
-    } else {
-        if (enable_sandbox_diagnostics) {
-            fprintf(stderr, "Warning: Validation memory allocation failed. Skipping sandbox diagnostics.\n");
-            fflush(stderr);
-        } // END IF: sandbox diagnostics enabled after allocation failure
-    } // END ELSE: sandbox work-buffer allocation failed
+    // Optionally dump raw modes, physical Euler angles, and rotated polarizations.
+    FILE *fp = enable_sandbox_diagnostics ? fopen("validation_waveform.txt", "w") : NULL;
+    if (fp != NULL) {
+      fprintf(fp, "# Physical coprecessing-rotation validation: iota=%.15e varphi_0=%.15e J_f=(%.15e, %.15e, %.15e)\n",
+          sandbox_iota, sandbox_varphi_0, commondata.J_f_x, commondata.J_f_y, commondata.J_f_z);
+      fprintf(fp, "# Time | alpha_JP | beta_JP | gamma_JP | Re(hP_22) | Im(hP_22) | Re(hP_21) | Im(hP_21) | Re(hP_33) | Im(hP_33) | Re(hP_32) | Im(hP_32) | Re(hP_44) | Im(hP_44) | Re(hP_43) | Im(hP_43) | Re(hP_55) | Im(hP_55) | h_plus_I | h_cross_I\n");
+      for (size_t i = 0; i < n_low; i++) {
+        fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+            commondata.dynamics_low[IDX(i, TIME)],
+            commondata.alpha_JP[i], commondata.beta_JP[i], commondata.gamma_JP[i],
+            creal(hP_22[i]), cimag(hP_22[i]),
+            creal(hP_21[i]), cimag(hP_21[i]),
+            creal(hP_33[i]), cimag(hP_33[i]),
+            creal(hP_32[i]), cimag(hP_32[i]),
+            creal(hP_44[i]), cimag(hP_44[i]),
+            creal(hP_43[i]), cimag(hP_43[i]),
+            creal(hP_55[i]), cimag(hP_55[i]),
+            h_plus_I[i], h_cross_I[i]);
+      } // END LOOP: for i over low-frequency validation waveform samples
+      for (size_t i = 0; i < n_fine; i++) {
+        size_t dest_idx = i + n_low;
+        fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+            commondata.dynamics_fine[IDX(i, TIME)],
+            commondata.alpha_JP[dest_idx], commondata.beta_JP[dest_idx], commondata.gamma_JP[dest_idx],
+            creal(hP_22[dest_idx]), cimag(hP_22[dest_idx]),
+            creal(hP_21[dest_idx]), cimag(hP_21[dest_idx]),
+            creal(hP_33[dest_idx]), cimag(hP_33[dest_idx]),
+            creal(hP_32[dest_idx]), cimag(hP_32[dest_idx]),
+            creal(hP_44[dest_idx]), cimag(hP_44[dest_idx]),
+            creal(hP_43[dest_idx]), cimag(hP_43[dest_idx]),
+            creal(hP_55[dest_idx]), cimag(hP_55[dest_idx]),
+            h_plus_I[dest_idx], h_cross_I[dest_idx]);
+      } // END LOOP: for i over fine-frequency validation waveform samples
+      fclose(fp);
+    } else if (enable_sandbox_diagnostics) {
+      fprintf(stderr, "Warning: Could not open validation_waveform.txt for writing.\n");
+      fflush(stderr);
+    } // END ELSE IF: validation waveform requested but file open failed
+  } else {
+    if (enable_sandbox_diagnostics) {
+      fprintf(stderr, "Warning: Validation memory allocation failed. Skipping sandbox diagnostics.\n");
+      fflush(stderr);
+    } // END IF: sandbox diagnostics enabled after allocation failure
+  } // END ELSE: sandbox work-buffer allocation failed
 
-    // Free sandbox work buffers immediately.
-    free(real_buffers);
-    free(complex_buffers);
+  // Free sandbox work buffers immediately.
+  free(real_buffers);
+  free(complex_buffers);
 } // END BLOCK: optional inspiral-only coprecessing-rotation sandbox
 """.replace("__SANDBOX_DIAGNOSTICS_FLAG__", sandbox_diagnostics_flag)
     body += r"""
@@ -267,6 +267,38 @@ for (size_t i = 0; i < commondata.nsteps_IMR; i++) {
 commondata_io(&commondata, "commondata.bin");
 """
     body += r"""
+if (commondata.chi1_lnhat.spline != NULL) gsl_spline_free(commondata.chi1_lnhat.spline);
+if (commondata.chi1_lnhat.acc != NULL) gsl_interp_accel_free(commondata.chi1_lnhat.acc);
+if (commondata.chi2_lnhat.spline != NULL) gsl_spline_free(commondata.chi2_lnhat.spline);
+if (commondata.chi2_lnhat.acc != NULL) gsl_interp_accel_free(commondata.chi2_lnhat.acc);
+if (commondata.chi1_l.spline != NULL) gsl_spline_free(commondata.chi1_l.spline);
+if (commondata.chi1_l.acc != NULL) gsl_interp_accel_free(commondata.chi1_l.acc);
+if (commondata.chi2_l.spline != NULL) gsl_spline_free(commondata.chi2_l.spline);
+if (commondata.chi2_l.acc != NULL) gsl_interp_accel_free(commondata.chi2_l.acc);
+if (commondata.chi1_x_spline.spline != NULL) gsl_spline_free(commondata.chi1_x_spline.spline);
+if (commondata.chi1_x_spline.acc != NULL) gsl_interp_accel_free(commondata.chi1_x_spline.acc);
+if (commondata.chi1_y_spline.spline != NULL) gsl_spline_free(commondata.chi1_y_spline.spline);
+if (commondata.chi1_y_spline.acc != NULL) gsl_interp_accel_free(commondata.chi1_y_spline.acc);
+if (commondata.chi1_z_spline.spline != NULL) gsl_spline_free(commondata.chi1_z_spline.spline);
+if (commondata.chi1_z_spline.acc != NULL) gsl_interp_accel_free(commondata.chi1_z_spline.acc);
+if (commondata.chi2_x_spline.spline != NULL) gsl_spline_free(commondata.chi2_x_spline.spline);
+if (commondata.chi2_x_spline.acc != NULL) gsl_interp_accel_free(commondata.chi2_x_spline.acc);
+if (commondata.chi2_y_spline.spline != NULL) gsl_spline_free(commondata.chi2_y_spline.spline);
+if (commondata.chi2_y_spline.acc != NULL) gsl_interp_accel_free(commondata.chi2_y_spline.acc);
+if (commondata.chi2_z_spline.spline != NULL) gsl_spline_free(commondata.chi2_z_spline.spline);
+if (commondata.chi2_z_spline.acc != NULL) gsl_interp_accel_free(commondata.chi2_z_spline.acc);
+if (commondata.lnhat_x.spline != NULL) gsl_spline_free(commondata.lnhat_x.spline);
+if (commondata.lnhat_x.acc != NULL) gsl_interp_accel_free(commondata.lnhat_x.acc);
+if (commondata.lnhat_y.spline != NULL) gsl_spline_free(commondata.lnhat_y.spline);
+if (commondata.lnhat_y.acc != NULL) gsl_interp_accel_free(commondata.lnhat_y.acc);
+if (commondata.lnhat_z.spline != NULL) gsl_spline_free(commondata.lnhat_z.spline);
+if (commondata.lnhat_z.acc != NULL) gsl_interp_accel_free(commondata.lnhat_z.acc);
+if (commondata.L_x.spline != NULL) gsl_spline_free(commondata.L_x.spline);
+if (commondata.L_x.acc != NULL) gsl_interp_accel_free(commondata.L_x.acc);
+if (commondata.L_y.spline != NULL) gsl_spline_free(commondata.L_y.spline);
+if (commondata.L_y.acc != NULL) gsl_interp_accel_free(commondata.L_y.acc);
+if (commondata.L_z.spline != NULL) gsl_spline_free(commondata.L_z.spline);
+if (commondata.L_z.acc != NULL) gsl_interp_accel_free(commondata.L_z.acc);
 free(commondata.dynamics_low);
 free(commondata.dynamics_fine);
 free(commondata.dynamics_raw);
@@ -464,7 +496,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
 #define HNR44 5
 #define HNR55 6
 #define IDX_HNRFITS(idx, var) ((idx)*NUMVARS_HNRFITS + (var))
-#define NUMMODES 8 
+#define NUMMODES 8
 #define STRAIN22 1
 #define STRAIN21 2
 #define STRAIN33 3

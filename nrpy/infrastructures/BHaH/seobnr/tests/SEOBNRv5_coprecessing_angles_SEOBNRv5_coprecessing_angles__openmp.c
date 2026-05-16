@@ -68,6 +68,12 @@ static inline quat_t quat_sqrt_unit(quat_t q) {
   return (quat_t){0.0, 1.0, 0.0, 0.0};
 }
 
+/**
+ * Convert a rotation matrix to a unit quaternion.
+ *
+ * @param[in] rot_mat Rotation matrix.
+ * @return Unit quaternion representing the same rotation.
+ */
 static inline quat_t quat_from_rotation_matrix(const REAL rot_mat[3][3]) {
   quat_t q;
   const REAL trace = rot_mat[0][0] + rot_mat[1][1] + rot_mat[2][2];
@@ -97,8 +103,14 @@ static inline quat_t quat_from_rotation_matrix(const REAL rot_mat[3][3]) {
     q.z = 0.25 * s;
   }
   return quat_normalize(q);
-}
+} // END FUNCTION: quat_from_rotation_matrix
 
+/**
+ * Convert a unit quaternion to its rotation matrix.
+ *
+ * @param[in] q Input quaternion.
+ * @param[out] rot_mat Rotation matrix.
+ */
 static inline void quat_to_rotation_matrix(quat_t q, REAL rot_mat[3][3]) {
   q = quat_normalize(q);
   const REAL ww = q.w * q.w;
@@ -121,7 +133,7 @@ static inline void quat_to_rotation_matrix(quat_t q, REAL rot_mat[3][3]) {
   rot_mat[2][0] = 2.0 * (xz - wy);
   rot_mat[2][1] = 2.0 * (yz + wx);
   rot_mat[2][2] = ww - xx - yy + zz;
-}
+} // END FUNCTION: quat_to_rotation_matrix
 
 static inline void quat_image_of_z(const quat_t q_in, REAL *restrict zx, REAL *restrict zy, REAL *restrict zz) {
   REAL rot_mat[3][3];
@@ -136,6 +148,14 @@ static inline REAL angle_between_unit_vectors(const REAL ax, const REAL ay, cons
   return acos(seobnr_clamp_real(seobnr_vec_dot3(ax, ay, az, bx, by, bz), -1.0, 1.0));
 }
 
+/**
+ * Extract Z-Y-Z Euler angles from a unit quaternion.
+ *
+ * @param[in] q Input quaternion.
+ * @param[out] alpha First Euler angle.
+ * @param[out] beta Second Euler angle.
+ * @param[out] gamma Third Euler angle.
+ */
 static inline void extract_zyz_euler_angles_from_quat(const quat_t q, REAL *restrict alpha, REAL *restrict beta, REAL *restrict gamma) {
   REAL rot_mat[3][3];
   quat_to_rotation_matrix(q, rot_mat);
@@ -151,7 +171,7 @@ static inline void extract_zyz_euler_angles_from_quat(const quat_t q, REAL *rest
     *alpha = atan2(rot_mat[1][2], rot_mat[0][2]);
     *gamma = atan2(rot_mat[2][1], -rot_mat[2][0]);
   }
-}
+} // END FUNCTION: extract_zyz_euler_angles_from_quat
 
 static inline void sample_inspiral_time_and_omega(const commondata_struct *restrict commondata, const size_t i, REAL *restrict time_M,
                                                   REAL *restrict omega) {
@@ -165,6 +185,13 @@ static inline void sample_inspiral_time_and_omega(const commondata_struct *restr
   }
 }
 
+/**
+ * Interpolate the fine-dynamics orbital frequency at a target time.
+ *
+ * @param[in] commondata Common data struct containing dynamics arrays.
+ * @param[in] target_time Time at which to evaluate the frequency.
+ * @return Interpolated orbital frequency.
+ */
 static inline REAL interpolate_fine_omega_at_time(const commondata_struct *restrict commondata, const REAL target_time) {
   if (commondata->nsteps_fine == 0) {
     return commondata->nsteps_low > 0 ? commondata->dynamics_low[IDX(commondata->nsteps_low - 1, OMEGA)] : commondata->initial_omega;
@@ -187,8 +214,16 @@ static inline REAL interpolate_fine_omega_at_time(const commondata_struct *restr
     }
   }
   return commondata->dynamics_fine[IDX(commondata->nsteps_fine - 1, OMEGA)];
-}
+} // END FUNCTION: interpolate_fine_omega_at_time
 
+/**
+ * Compute not-a-knot cubic spline second derivatives at knots.
+ *
+ * @param[in] n Number of samples.
+ * @param[in] x Strictly increasing sample coordinates.
+ * @param[in] y Sample values.
+ * @param[out] second_deriv Spline second derivatives.
+ */
 static void notaknot_spline_second_derivatives(const size_t n, const REAL *restrict x, const REAL *restrict y, REAL *restrict second_deriv) {
   for (size_t i = 0; i < n; i++) {
     second_deriv[i] = 0.0;
@@ -251,8 +286,17 @@ static void notaknot_spline_second_derivatives(const size_t n, const REAL *restr
   free(diag);
   free(upper);
   free(rhs);
-}
+} // END FUNCTION: notaknot_spline_second_derivatives
 
+/**
+ * Evaluate first derivatives of a cubic spline at its knots.
+ *
+ * @param[in] n Number of samples.
+ * @param[in] x Strictly increasing sample coordinates.
+ * @param[in] y Sample values.
+ * @param[in] second_deriv Spline second derivatives.
+ * @param[out] deriv Spline first derivatives at knots.
+ */
 static void notaknot_spline_derivatives_at_knots(const size_t n, const REAL *restrict x, const REAL *restrict y, const REAL *restrict second_deriv,
                                                  REAL *restrict deriv) {
   if (n < 2) {
@@ -269,8 +313,17 @@ static void notaknot_spline_derivatives_at_knots(const size_t n, const REAL *res
   const REAL h = x[n - 1] - x[n - 2];
   const REAL delta = (y[n - 1] - y[n - 2]) / h;
   deriv[n - 1] = delta + h * (second_deriv[n - 2] + 2.0 * second_deriv[n - 1]) / 6.0;
-}
+} // END FUNCTION: notaknot_spline_derivatives_at_knots
 
+/**
+ * Integrate a cubic spline and return prefix integrals at knots.
+ *
+ * @param[in] n Number of samples.
+ * @param[in] x Strictly increasing sample coordinates.
+ * @param[in] y Sample values.
+ * @param[in] second_deriv Spline second derivatives.
+ * @param[out] integral Prefix integral values.
+ */
 static void notaknot_spline_integral_prefix(const size_t n, const REAL *restrict x, const REAL *restrict y, const REAL *restrict second_deriv,
                                             REAL *restrict integral) {
   if (n == 0) {
@@ -282,41 +335,19 @@ static void notaknot_spline_integral_prefix(const size_t n, const REAL *restrict
     const REAL area = 0.5 * h * (y[i] + y[i + 1]) - h * h * h * (second_deriv[i] + second_deriv[i + 1]) / 24.0;
     integral[i + 1] = integral[i] + area;
   }
-}
+} // END FUNCTION: notaknot_spline_integral_prefix
 
-static REAL interpolate_monotonic_series(const size_t n, const REAL *restrict x, const REAL *restrict y, const REAL target) {
-  if (n == 0) {
-    return 0.0;
-  }
-  if (n == 1 || target <= x[0]) {
-    return y[0];
-  }
-  for (size_t i = 0; i + 1 < n; i++) {
-    if (target <= x[i + 1] || i + 2 == n) {
-      const REAL denom = x[i + 1] - x[i];
-      if (fabs(denom) < 1e-15) {
-        return y[i];
-      }
-      const REAL frac = (target - x[i]) / denom;
-      return y[i] + frac * (y[i + 1] - y[i]);
-    }
-  }
-  return y[n - 1];
-}
-
-static void evaluate_LN_J_from_omega(const commondata_struct *restrict commondata, const REAL omega, const REAL e1J_x, const REAL e1J_y,
-                                     const REAL e1J_z, const REAL e2J_x, const REAL e2J_y, const REAL e2J_z, const REAL e3J_x, const REAL e3J_y,
-                                     const REAL e3J_z, REAL *restrict LN_J_x, REAL *restrict LN_J_y, REAL *restrict LN_J_z) {
-  REAL lnhat_I_x = gsl_spline_eval(commondata->lnhat_x.spline, omega, commondata->lnhat_x.acc);
-  REAL lnhat_I_y = gsl_spline_eval(commondata->lnhat_y.spline, omega, commondata->lnhat_y.acc);
-  REAL lnhat_I_z = gsl_spline_eval(commondata->lnhat_z.spline, omega, commondata->lnhat_z.acc);
-  seobnr_normalize3(&lnhat_I_x, &lnhat_I_y, &lnhat_I_z);
-  *LN_J_x = seobnr_vec_dot3(lnhat_I_x, lnhat_I_y, lnhat_I_z, e1J_x, e1J_y, e1J_z);
-  *LN_J_y = seobnr_vec_dot3(lnhat_I_x, lnhat_I_y, lnhat_I_z, e2J_x, e2J_y, e2J_z);
-  *LN_J_z = seobnr_vec_dot3(lnhat_I_x, lnhat_I_y, lnhat_I_z, e3J_x, e3J_y, e3J_z);
-  seobnr_normalize3(LN_J_x, LN_J_y, LN_J_z);
-}
-
+/**
+ * Compute the pyseobnr-style minimal-rotation quaternion track.
+ *
+ * @param[in] n Number of samples.
+ * @param[in] time_arr Time samples.
+ * @param[in] omega_arr Orbital-frequency samples.
+ * @param[in] LN_J_x_arr J-frame LN x samples.
+ * @param[in] LN_J_y_arr J-frame LN y samples.
+ * @param[in] LN_J_z_arr J-frame LN z samples.
+ * @param[out] q_pre_arr Minimal-rotation quaternions.
+ */
 static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *restrict time_arr, const REAL *restrict omega_arr,
                                                   const REAL *restrict LN_J_x_arr, const REAL *restrict LN_J_y_arr, const REAL *restrict LN_J_z_arr,
                                                   quat_t *restrict q_pre_arr) {
@@ -421,121 +452,7 @@ static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *re
   free(halfgammadot);
   free(halfgamma);
   free(halfgamma_second);
-}
-
-static void dump_coprecessing_rotator_diagnostics_block(FILE *restrict fp, const char *restrict label, const size_t n, const REAL *restrict time_arr,
-                                                        const REAL *restrict omega_arr, const REAL *restrict LN_J_x_arr,
-                                                        const REAL *restrict LN_J_y_arr, const REAL *restrict LN_J_z_arr,
-                                                        const quat_t *restrict q_pre_arr) {
-  if (fp == NULL) {
-    return;
-  }
-  fprintf(fp, "# block %s n %zu\n", label, n);
-  for (size_t i = 0; i < n; i++) {
-    fprintf(fp, "%s %zu %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n", label, i, time_arr[i], omega_arr[i], LN_J_x_arr[i], LN_J_y_arr[i],
-            LN_J_z_arr[i], q_pre_arr[i].w, q_pre_arr[i].x, q_pre_arr[i].y, q_pre_arr[i].z);
-  }
-  fflush(fp);
-}
-
-static inline REAL sanitize_omega_for_spin_splines(const REAL omega, const REAL omega_min, const REAL omega_max, const REAL abs_tol);
-
-static void write_one_coprecessing_rotator_grid_variant(FILE *restrict fp, const char *restrict label, const commondata_struct *restrict commondata,
-                                                        const size_t n, const REAL *restrict time_arr, const REAL *restrict omega_arr,
-                                                        const REAL e1J_x, const REAL e1J_y, const REAL e1J_z, const REAL e2J_x, const REAL e2J_y,
-                                                        const REAL e2J_z, const REAL e3J_x, const REAL e3J_y, const REAL e3J_z, const size_t stride,
-                                                        const int midpoint_refined, const int uniform_omega, const size_t uniform_factor,
-                                                        const REAL omega_boundary_tol) {
-  size_t n_grid = 0;
-  if (uniform_omega) {
-    n_grid = uniform_factor * n;
-  } else if (midpoint_refined) {
-    n_grid = n > 0 ? 2 * n - 1 : 0;
-  } else {
-    n_grid = (n + stride - 1) / stride;
-    if (n_grid > 0 && (n - 1) % stride != 0) {
-      n_grid++;
-    }
-  }
-  if (n_grid < 4) {
-    return;
-  }
-
-  REAL *restrict t_grid = (REAL *)malloc(n_grid * sizeof(REAL));
-  REAL *restrict omega_grid = (REAL *)malloc(n_grid * sizeof(REAL));
-  REAL *restrict LN_x = (REAL *)malloc(n_grid * sizeof(REAL));
-  REAL *restrict LN_y = (REAL *)malloc(n_grid * sizeof(REAL));
-  REAL *restrict LN_z = (REAL *)malloc(n_grid * sizeof(REAL));
-  quat_t *restrict q_grid = (quat_t *)malloc(n_grid * sizeof(quat_t));
-  if (t_grid == NULL || omega_grid == NULL || LN_x == NULL || LN_y == NULL || LN_z == NULL || q_grid == NULL) {
-    fprintf(stderr, "Error: write_one_coprecessing_rotator_grid_variant() malloc failed\n");
-    exit(1);
-  }
-
-  if (uniform_omega) {
-    const REAL omega_min = omega_arr[0];
-    const REAL omega_max = omega_arr[n - 1];
-    for (size_t i = 0; i < n_grid; i++) {
-      const REAL frac = n_grid > 1 ? (REAL)i / (REAL)(n_grid - 1) : 0.0;
-      omega_grid[i] = omega_min + frac * (omega_max - omega_min);
-      t_grid[i] = interpolate_monotonic_series(n, omega_arr, time_arr, omega_grid[i]);
-    }
-  } else if (midpoint_refined) {
-    for (size_t i = 0; i < n; i++) {
-      const size_t out = 2 * i;
-      t_grid[out] = time_arr[i];
-      omega_grid[out] = omega_arr[i];
-      if (i + 1 < n) {
-        t_grid[out + 1] = 0.5 * (time_arr[i] + time_arr[i + 1]);
-        omega_grid[out + 1] = 0.5 * (omega_arr[i] + omega_arr[i + 1]);
-      }
-    }
-  } else {
-    size_t out = 0;
-    for (size_t i = 0; i < n; i += stride) {
-      t_grid[out] = time_arr[i];
-      omega_grid[out] = omega_arr[i];
-      out++;
-    }
-    if (out == 0 || omega_grid[out - 1] != omega_arr[n - 1]) {
-      t_grid[out] = time_arr[n - 1];
-      omega_grid[out] = omega_arr[n - 1];
-      out++;
-    }
-    n_grid = out;
-  }
-
-  for (size_t i = 0; i < n_grid; i++) {
-    omega_grid[i] = sanitize_omega_for_spin_splines(omega_grid[i], commondata->omega_spin_min, commondata->omega_spin_max, omega_boundary_tol);
-    evaluate_LN_J_from_omega(commondata, omega_grid[i], e1J_x, e1J_y, e1J_z, e2J_x, e2J_y, e2J_z, e3J_x, e3J_y, e3J_z, &LN_x[i], &LN_y[i], &LN_z[i]);
-  }
-  compute_py_style_coprecessing_rotator(n_grid, t_grid, omega_grid, LN_x, LN_y, LN_z, q_grid);
-  dump_coprecessing_rotator_diagnostics_block(fp, label, n_grid, t_grid, omega_grid, LN_x, LN_y, LN_z, q_grid);
-
-  free(t_grid);
-  free(omega_grid);
-  free(LN_x);
-  free(LN_y);
-  free(LN_z);
-  free(q_grid);
-}
-
-static void write_coprecessing_rotator_grid_variant_diagnostics(FILE *restrict fp, const commondata_struct *restrict commondata, const size_t n,
-                                                                const REAL *restrict time_arr, const REAL *restrict omega_arr, const REAL e1J_x,
-                                                                const REAL e1J_y, const REAL e1J_z, const REAL e2J_x, const REAL e2J_y,
-                                                                const REAL e2J_z, const REAL e3J_x, const REAL e3J_y, const REAL e3J_z,
-                                                                const REAL omega_boundary_tol) {
-  write_one_coprecessing_rotator_grid_variant(fp, "native_drop_every_2", commondata, n, time_arr, omega_arr, e1J_x, e1J_y, e1J_z, e2J_x, e2J_y, e2J_z,
-                                              e3J_x, e3J_y, e3J_z, 2, 0, 0, 1, omega_boundary_tol);
-  write_one_coprecessing_rotator_grid_variant(fp, "native_drop_every_4", commondata, n, time_arr, omega_arr, e1J_x, e1J_y, e1J_z, e2J_x, e2J_y, e2J_z,
-                                              e3J_x, e3J_y, e3J_z, 4, 0, 0, 1, omega_boundary_tol);
-  write_one_coprecessing_rotator_grid_variant(fp, "native_midpoint_refined_2x", commondata, n, time_arr, omega_arr, e1J_x, e1J_y, e1J_z, e2J_x, e2J_y,
-                                              e2J_z, e3J_x, e3J_y, e3J_z, 1, 1, 0, 1, omega_boundary_tol);
-  write_one_coprecessing_rotator_grid_variant(fp, "uniform_omega_native_n", commondata, n, time_arr, omega_arr, e1J_x, e1J_y, e1J_z, e2J_x, e2J_y,
-                                              e2J_z, e3J_x, e3J_y, e3J_z, 1, 0, 1, 1, omega_boundary_tol);
-  write_one_coprecessing_rotator_grid_variant(fp, "uniform_omega_4x_native_n", commondata, n, time_arr, omega_arr, e1J_x, e1J_y, e1J_z, e2J_x, e2J_y,
-                                              e2J_z, e3J_x, e3J_y, e3J_z, 1, 0, 1, 4, omega_boundary_tol);
-}
+} // END FUNCTION: compute_py_style_coprecessing_rotator
 
 static inline REAL sanitize_omega_for_spin_splines(const REAL omega, const REAL omega_min, const REAL omega_max, const REAL abs_tol) {
   if (omega < omega_min && fabs(omega - omega_min) <= abs_tol) {
@@ -585,13 +502,6 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   // the right long-term fix is to tighten the consistency of the two trajectories,
   // not to widen this tolerance.
   const REAL omega_boundary_tol = 1e-7;
-  if (n_insp == 0) {
-    commondata->alpha_JP = NULL;
-    commondata->beta_JP = NULL;
-    commondata->gamma_JP = NULL;
-    return;
-  }
-
   if (commondata->alpha_JP != NULL) {
     free(commondata->alpha_JP);
     commondata->alpha_JP = NULL;
@@ -603,6 +513,10 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   if (commondata->gamma_JP != NULL) {
     free(commondata->gamma_JP);
     commondata->gamma_JP = NULL;
+  }
+
+  if (n_insp == 0) {
+    return;
   }
 
   commondata->alpha_JP = (REAL *)malloc(n_insp * sizeof(REAL));
@@ -707,12 +621,16 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   commondata->J_f_x = mu_Jf * L_attach_x + commondata->m1 * commondata->m1 * chi1_attach_x + commondata->m2 * commondata->m2 * chi2_attach_x;
   commondata->J_f_y = mu_Jf * L_attach_y + commondata->m1 * commondata->m1 * chi1_attach_y + commondata->m2 * commondata->m2 * chi2_attach_y;
   commondata->J_f_z = mu_Jf * L_attach_z + commondata->m1 * commondata->m1 * chi1_attach_z + commondata->m2 * commondata->m2 * chi2_attach_z;
-  seobnr_normalize3(&commondata->J_f_x, &commondata->J_f_y, &commondata->J_f_z);
-  if (seobnr_vec_norm3(commondata->J_f_x, commondata->J_f_y, commondata->J_f_z) < 1e-15) {
+  const REAL J_f_norm = seobnr_vec_norm3(commondata->J_f_x, commondata->J_f_y, commondata->J_f_z);
+  if (J_f_norm < 1e-15) {
     commondata->J_f_x = 0.0;
     commondata->J_f_y = 0.0;
     commondata->J_f_z = 1.0;
-  }
+  } else {
+    commondata->J_f_x /= J_f_norm;
+    commondata->J_f_y /= J_f_norm;
+    commondata->J_f_z /= J_f_norm;
+  } // END ELSE: final angular momentum has a reliable direction
 
   // Build the J-frame basis from the final angular momentum direction, following
   // Eq. (15) of the SEOBNRv5PHM paper with the smooth x/y prescription used in
@@ -795,13 +713,8 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   compute_py_style_coprecessing_rotator(n_insp, time_arr, omega_arr, LN_J_x_arr, LN_J_y_arr, LN_J_z_arr, q_pre_arr);
 
   for (size_t i = 0; i < n_insp; i++) {
-    REAL time_M = time_arr[i];
-    REAL omega = omega_arr[i];
-    REAL LN_J_x = LN_J_x_arr[i];
-    REAL LN_J_y = LN_J_y_arr[i];
-    REAL LN_J_z = LN_J_z_arr[i];
-    quat_t q_pre = q_pre_arr[i];
-    quat_t q_total = quat_normalize(q_pre);
+
+    const quat_t q_total = quat_normalize(q_pre_arr[i]);
     extract_zyz_euler_angles_from_quat(q_total, &commondata->alpha_JP[i], &commondata->beta_JP[i], &commondata->gamma_JP[i]);
     if (i == 0) {
 
