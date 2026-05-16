@@ -206,17 +206,14 @@ class SEOBNRv5_Coprecessing_Rotations:
         )
         weight_y = sp.sympify(1) - weight_x
 
-        # Preserve J-frame continuity by flipping the fallback y-projection sign.
-        # We use an algebraic sign formulation (x / |x|) from throwing "undefined reference to 'sign'".
-        fallback_sign = -e3_J_x / sp.Max(abs_e3_x, sp.sympify("1e-30"))
-
         v_x_x = 1 - e3_J_x**2
         v_x_y = -e3_J_x * e3_J_y
         v_x_z = -e3_J_x * e3_J_z
 
-        v_y_x = fallback_sign * (-e3_J_y * e3_J_x)
-        v_y_y = fallback_sign * (1 - e3_J_y**2)
-        v_y_z = fallback_sign * (-e3_J_y * e3_J_z)
+        # Match the generated C angle path and pyseobnr's SEOBBuildJframeVectors fallback.
+        v_y_x = -e3_J_y * e3_J_x
+        v_y_y = 1 - e3_J_y**2
+        v_y_z = -e3_J_y * e3_J_z
 
         # Normalize projections individually before blending
         norm_vx = sp.sqrt(sp.Max(v_x_x**2 + v_x_y**2 + v_x_z**2, sp.sympify("1e-30")))

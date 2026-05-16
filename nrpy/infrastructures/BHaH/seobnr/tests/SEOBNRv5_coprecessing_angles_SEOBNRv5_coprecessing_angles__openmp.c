@@ -326,9 +326,8 @@ static void notaknot_spline_derivatives_at_knots(const size_t n, const REAL *res
  */
 static void notaknot_spline_integral_prefix(const size_t n, const REAL *restrict x, const REAL *restrict y, const REAL *restrict second_deriv,
                                             REAL *restrict integral) {
-  if (n == 0) {
+  if (n == 0)
     return;
-  }
   integral[0] = 0.0;
   for (size_t i = 0; i + 1 < n; i++) {
     const REAL h = x[i + 1] - x[i];
@@ -351,9 +350,8 @@ static void notaknot_spline_integral_prefix(const size_t n, const REAL *restrict
 static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *restrict time_arr, const REAL *restrict omega_arr,
                                                   const REAL *restrict LN_J_x_arr, const REAL *restrict LN_J_y_arr, const REAL *restrict LN_J_z_arr,
                                                   quat_t *restrict q_pre_arr) {
-  if (n == 0) {
+  if (n == 0)
     return;
-  }
   quat_t *restrict q_domega = (quat_t *)malloc(n * sizeof(quat_t));
   REAL *restrict q_component = (REAL *)malloc(n * sizeof(REAL));
   REAL *restrict spline_second = (REAL *)malloc(n * sizeof(REAL));
@@ -367,29 +365,26 @@ static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *re
       halfgammadot == NULL || halfgamma == NULL || halfgamma_second == NULL) {
     fprintf(stderr, "Error: compute_py_style_coprecessing_rotator() malloc failed\n");
     exit(1);
-  }
+  } // END IF: minimal-rotation workspace allocation failed
 
   REAL min_abs_z_alignment = 1.0;
   REAL min_abs_x_alignment = 1.0;
   for (size_t i = 0; i < n; i++) {
     const REAL z_alignment = fabs(fabs(LN_J_z_arr[i]) - 1.0);
     const REAL x_alignment = fabs(fabs(LN_J_x_arr[i]) - 1.0);
-    if (z_alignment < min_abs_z_alignment) {
+    if (z_alignment < min_abs_z_alignment)
       min_abs_z_alignment = z_alignment;
-    }
-    if (x_alignment < min_abs_x_alignment) {
+    if (x_alignment < min_abs_x_alignment)
       min_abs_x_alignment = x_alignment;
-    }
-  }
+  } // END LOOP: for i over LN_J alignment checks
 
   quat_t aux_quat = {0.0, 0.0, 0.0, 0.0};
   const int use_aux_quat = min_abs_z_alignment < 1e-3;
   if (use_aux_quat) {
     aux_quat = (quat_t){0.0, 1.0, 0.0, 0.0};
-    if (min_abs_x_alignment < 1e-3) {
+    if (min_abs_x_alignment < 1e-3)
       aux_quat = (quat_t){0.0, 0.0, 1.0, 0.0};
-    }
-  }
+  } // END IF: auxiliary quaternion needed near z alignment
   const quat_t z_quat = {0.0, 0.0, 0.0, 1.0};
   for (size_t i = 0; i < n; i++) {
     const quat_t LN_quat = {0.0, LN_J_x_arr[i], LN_J_y_arr[i], LN_J_z_arr[i]};
@@ -399,23 +394,22 @@ static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *re
       q_pre_arr[i] = quat_multiply(step2, step1);
     } else {
       q_pre_arr[i] = quat_sqrt_unit(quat_negate(quat_multiply(LN_quat, z_quat)));
-    }
+    } // END ELSE: direct z-to-LN construction is well conditioned
     q_pre_arr[i] = quat_normalize(q_pre_arr[i]);
-    if (i > 0 && quat_dot(q_pre_arr[i], q_pre_arr[i - 1]) < 0.0) {
+    if (i > 0 && quat_dot(q_pre_arr[i], q_pre_arr[i - 1]) < 0.0)
       q_pre_arr[i] = quat_negate(q_pre_arr[i]);
-    }
-  }
+  } // END LOOP: for i over initial pyseobnr-style quaternions
 
   notaknot_spline_second_derivatives(n, time_arr, omega_arr, omega_second);
   notaknot_spline_derivatives_at_knots(n, time_arr, omega_arr, omega_second, domega_dt);
   for (size_t iter = 0; iter < 2; iter++) {
     for (size_t i = 0; i < n; i++) {
       q_domega[i] = (quat_t){0.0, 0.0, 0.0, 0.0};
-    }
+    } // END LOOP: for i over quaternion omega-derivative initialization
     for (size_t comp = 0; comp < 4; comp++) {
       for (size_t i = 0; i < n; i++) {
         q_component[i] = comp == 0 ? q_pre_arr[i].w : (comp == 1 ? q_pre_arr[i].x : (comp == 2 ? q_pre_arr[i].y : q_pre_arr[i].z));
-      }
+      } // END LOOP: for i over one quaternion component
       notaknot_spline_second_derivatives(n, omega_arr, q_component, spline_second);
       notaknot_spline_derivatives_at_knots(n, omega_arr, q_component, spline_second, spline_deriv);
       for (size_t i = 0; i < n; i++) {
@@ -427,21 +421,21 @@ static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *re
           q_domega[i].y = spline_deriv[i];
         } else {
           q_domega[i].z = spline_deriv[i];
-        }
-      }
-    }
+        } // END ELSE: storing z component omega derivative
+      } // END LOOP: for i over quaternion omega-derivative samples
+    } // END LOOP: for comp over quaternion components
     for (size_t i = 0; i < n; i++) {
       const quat_t qdot = quat_scale(q_domega[i], domega_dt[i]);
       const quat_t tmp = quat_multiply(quat_multiply(qdot, z_quat), quat_conjugate(q_pre_arr[i]));
       halfgammadot[i] = tmp.w;
-    }
+    } // END LOOP: for i over minimal-rotation gamma derivatives
     notaknot_spline_second_derivatives(n, time_arr, halfgammadot, halfgamma_second);
     notaknot_spline_integral_prefix(n, time_arr, halfgammadot, halfgamma_second, halfgamma);
     for (size_t i = 0; i < n; i++) {
       q_pre_arr[i] = quat_multiply(q_pre_arr[i], quat_exp_z(halfgamma[i]));
       q_pre_arr[i] = quat_normalize(q_pre_arr[i]);
-    }
-  }
+    } // END LOOP: for i over minimal-rotation gamma correction
+  } // END LOOP: for iter over minimal-rotation correction passes
 
   free(q_domega);
   free(q_component);
@@ -455,14 +449,12 @@ static void compute_py_style_coprecessing_rotator(const size_t n, const REAL *re
 } // END FUNCTION: compute_py_style_coprecessing_rotator
 
 static inline REAL sanitize_omega_for_spin_splines(const REAL omega, const REAL omega_min, const REAL omega_max, const REAL abs_tol) {
-  if (omega < omega_min && fabs(omega - omega_min) <= abs_tol) {
+  if (omega < omega_min && fabs(omega - omega_min) <= abs_tol)
     return omega_min;
-  }
-  if (omega > omega_max && fabs(omega - omega_max) <= abs_tol) {
+  if (omega > omega_max && fabs(omega - omega_max) <= abs_tol)
     return omega_max;
-  }
   return omega;
-}
+} // END FUNCTION: sanitize_omega_for_spin_splines
 
 #define CHECK_OMEGA_RANGE(label, omega_val, omega_min, omega_max, time_val, idx_val)                                                                 \
   do {                                                                                                                                               \
@@ -662,7 +654,7 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
     e1J_x = weightx * (1.0 - exdote3J * e3J_x) / normfacx + weighty * (-eydote3J * e3J_x) / normfacy;
     e1J_y = weightx * (-exdote3J * e3J_y) / normfacx + weighty * (1.0 - eydote3J * e3J_y) / normfacy;
     e1J_z = weightx * (-exdote3J * e3J_z) / normfacx + weighty * (-eydote3J * e3J_z) / normfacy;
-  }
+  } // END ELSE: blend x- and y-projection J-frame fallbacks
   seobnr_normalize3(&e1J_x, &e1J_y, &e1J_z);
 
   REAL e2J_x = e3J_y * e1J_z - e3J_z * e1J_y;

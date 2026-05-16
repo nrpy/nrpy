@@ -649,9 +649,8 @@ static void notaknot_spline_integral_prefix(
     const REAL *restrict y,
     const REAL *restrict second_deriv,
     REAL *restrict integral) {
-  if (n == 0) {
+  if (n == 0)
     return;
-  }
   integral[0] = 0.0;
   for (size_t i = 0; i + 1 < n; i++) {
     const REAL h = x[i + 1] - x[i];
@@ -749,9 +748,8 @@ static void compute_py_style_coprecessing_rotator(
     const REAL *restrict LN_J_y_arr,
     const REAL *restrict LN_J_z_arr,
     quat_t *restrict q_pre_arr) {
-  if (n == 0) {
+  if (n == 0)
     return;
-  }
   quat_t *restrict q_domega = (quat_t *)malloc(n * sizeof(quat_t));
   REAL *restrict q_component = (REAL *)malloc(n * sizeof(REAL));
   REAL *restrict spline_second = (REAL *)malloc(n * sizeof(REAL));
@@ -765,29 +763,26 @@ static void compute_py_style_coprecessing_rotator(
       omega_second == NULL || domega_dt == NULL || halfgammadot == NULL || halfgamma == NULL || halfgamma_second == NULL) {
     fprintf(stderr, "Error: compute_py_style_coprecessing_rotator() malloc failed\n");
     exit(1);
-  }
+  } // END IF: minimal-rotation workspace allocation failed
 
   REAL min_abs_z_alignment = 1.0;
   REAL min_abs_x_alignment = 1.0;
   for (size_t i = 0; i < n; i++) {
     const REAL z_alignment = fabs(fabs(LN_J_z_arr[i]) - 1.0);
     const REAL x_alignment = fabs(fabs(LN_J_x_arr[i]) - 1.0);
-    if (z_alignment < min_abs_z_alignment) {
+    if (z_alignment < min_abs_z_alignment)
       min_abs_z_alignment = z_alignment;
-    }
-    if (x_alignment < min_abs_x_alignment) {
+    if (x_alignment < min_abs_x_alignment)
       min_abs_x_alignment = x_alignment;
-    }
-  }
+  } // END LOOP: for i over LN_J alignment checks
 
   quat_t aux_quat = {0.0, 0.0, 0.0, 0.0};
   const int use_aux_quat = min_abs_z_alignment < 1e-3;
   if (use_aux_quat) {
     aux_quat = (quat_t){0.0, 1.0, 0.0, 0.0};
-    if (min_abs_x_alignment < 1e-3) {
+    if (min_abs_x_alignment < 1e-3)
       aux_quat = (quat_t){0.0, 0.0, 1.0, 0.0};
-    }
-  }
+  } // END IF: auxiliary quaternion needed near z alignment
   const quat_t z_quat = {0.0, 0.0, 0.0, 1.0};
   for (size_t i = 0; i < n; i++) {
     const quat_t LN_quat = {0.0, LN_J_x_arr[i], LN_J_y_arr[i], LN_J_z_arr[i]};
@@ -797,23 +792,22 @@ static void compute_py_style_coprecessing_rotator(
       q_pre_arr[i] = quat_multiply(step2, step1);
     } else {
       q_pre_arr[i] = quat_sqrt_unit(quat_negate(quat_multiply(LN_quat, z_quat)));
-    }
+    } // END ELSE: direct z-to-LN construction is well conditioned
     q_pre_arr[i] = quat_normalize(q_pre_arr[i]);
-    if (i > 0 && quat_dot(q_pre_arr[i], q_pre_arr[i - 1]) < 0.0) {
+    if (i > 0 && quat_dot(q_pre_arr[i], q_pre_arr[i - 1]) < 0.0)
       q_pre_arr[i] = quat_negate(q_pre_arr[i]);
-    }
-  }
+  } // END LOOP: for i over initial pyseobnr-style quaternions
 
   notaknot_spline_second_derivatives(n, time_arr, omega_arr, omega_second);
   notaknot_spline_derivatives_at_knots(n, time_arr, omega_arr, omega_second, domega_dt);
   for (size_t iter = 0; iter < 2; iter++) {
     for (size_t i = 0; i < n; i++) {
       q_domega[i] = (quat_t){0.0, 0.0, 0.0, 0.0};
-    }
+    } // END LOOP: for i over quaternion omega-derivative initialization
     for (size_t comp = 0; comp < 4; comp++) {
       for (size_t i = 0; i < n; i++) {
         q_component[i] = comp == 0 ? q_pre_arr[i].w : (comp == 1 ? q_pre_arr[i].x : (comp == 2 ? q_pre_arr[i].y : q_pre_arr[i].z));
-      }
+      } // END LOOP: for i over one quaternion component
       notaknot_spline_second_derivatives(n, omega_arr, q_component, spline_second);
       notaknot_spline_derivatives_at_knots(n, omega_arr, q_component, spline_second, spline_deriv);
       for (size_t i = 0; i < n; i++) {
@@ -825,21 +819,21 @@ static void compute_py_style_coprecessing_rotator(
           q_domega[i].y = spline_deriv[i];
         } else {
           q_domega[i].z = spline_deriv[i];
-        }
-      }
-    }
+        } // END ELSE: storing z component omega derivative
+      } // END LOOP: for i over quaternion omega-derivative samples
+    } // END LOOP: for comp over quaternion components
     for (size_t i = 0; i < n; i++) {
       const quat_t qdot = quat_scale(q_domega[i], domega_dt[i]);
       const quat_t tmp = quat_multiply(quat_multiply(qdot, z_quat), quat_conjugate(q_pre_arr[i]));
       halfgammadot[i] = tmp.w;
-    }
+    } // END LOOP: for i over minimal-rotation gamma derivatives
     notaknot_spline_second_derivatives(n, time_arr, halfgammadot, halfgamma_second);
     notaknot_spline_integral_prefix(n, time_arr, halfgammadot, halfgamma_second, halfgamma);
     for (size_t i = 0; i < n; i++) {
       q_pre_arr[i] = quat_multiply(q_pre_arr[i], quat_exp_z(halfgamma[i]));
       q_pre_arr[i] = quat_normalize(q_pre_arr[i]);
-    }
-  }
+    } // END LOOP: for i over minimal-rotation gamma correction
+  } // END LOOP: for iter over minimal-rotation correction passes
 
   free(q_domega);
   free(q_component);
@@ -940,13 +934,11 @@ static void write_one_coprecessing_rotator_grid_variant(
     n_grid = n > 0 ? 2 * n - 1 : 0;
   } else {
     n_grid = (n + stride - 1) / stride;
-    if (n_grid > 0 && (n - 1) % stride != 0) {
+    if (n_grid > 0 && (n - 1) % stride != 0)
       n_grid++;
-    }
-  }
-  if (n_grid < 4) {
+  } // END ELSE: use strided native grid
+  if (n_grid < 4)
     return;
-  }
 
   REAL *restrict t_grid = (REAL *)malloc(n_grid * sizeof(REAL));
   REAL *restrict omega_grid = (REAL *)malloc(n_grid * sizeof(REAL));
@@ -957,7 +949,7 @@ static void write_one_coprecessing_rotator_grid_variant(
   if (t_grid == NULL || omega_grid == NULL || LN_x == NULL || LN_y == NULL || LN_z == NULL || q_grid == NULL) {
     fprintf(stderr, "Error: write_one_coprecessing_rotator_grid_variant() malloc failed\n");
     exit(1);
-  }
+  } // END IF: rotator grid-variant allocation failed
 
   if (uniform_omega) {
     const REAL omega_min = omega_arr[0];
@@ -966,7 +958,7 @@ static void write_one_coprecessing_rotator_grid_variant(
       const REAL frac = n_grid > 1 ? (REAL)i / (REAL)(n_grid - 1) : 0.0;
       omega_grid[i] = omega_min + frac * (omega_max - omega_min);
       t_grid[i] = interpolate_monotonic_series(n, omega_arr, time_arr, omega_grid[i]);
-    }
+    } // END LOOP: for i over uniform omega diagnostic samples
   } else if (midpoint_refined) {
     for (size_t i = 0; i < n; i++) {
       const size_t out = 2 * i;
@@ -975,29 +967,29 @@ static void write_one_coprecessing_rotator_grid_variant(
       if (i + 1 < n) {
         t_grid[out + 1] = 0.5 * (time_arr[i] + time_arr[i + 1]);
         omega_grid[out + 1] = 0.5 * (omega_arr[i] + omega_arr[i + 1]);
-      }
-    }
+      } // END IF: midpoint sample exists after native sample
+    } // END LOOP: for i over midpoint-refined diagnostic samples
   } else {
     size_t out = 0;
     for (size_t i = 0; i < n; i += stride) {
       t_grid[out] = time_arr[i];
       omega_grid[out] = omega_arr[i];
       out++;
-    }
+    } // END LOOP: for i over strided native diagnostic samples
     if (out == 0 || omega_grid[out - 1] != omega_arr[n - 1]) {
       t_grid[out] = time_arr[n - 1];
       omega_grid[out] = omega_arr[n - 1];
       out++;
-    }
+    } // END IF: append final native diagnostic sample
     n_grid = out;
-  }
+  } // END ELSE: use strided native diagnostic grid
 
   for (size_t i = 0; i < n_grid; i++) {
     omega_grid[i] = sanitize_omega_for_spin_splines(omega_grid[i], commondata->omega_spin_min, commondata->omega_spin_max, omega_boundary_tol);
     evaluate_LN_J_from_omega(commondata, omega_grid[i],
         e1J_x, e1J_y, e1J_z, e2J_x, e2J_y, e2J_z, e3J_x, e3J_y, e3J_z,
         &LN_x[i], &LN_y[i], &LN_z[i]);
-  }
+  } // END LOOP: for i over diagnostic grid LN_J samples
   compute_py_style_coprecessing_rotator(n_grid, t_grid, omega_grid, LN_x, LN_y, LN_z, q_grid);
   dump_coprecessing_rotator_diagnostics_block(fp, label, n_grid, t_grid, omega_grid, LN_x, LN_y, LN_z, q_grid);
 
@@ -1055,14 +1047,12 @@ static inline REAL sanitize_omega_for_spin_splines(
     const REAL omega_min,
     const REAL omega_max,
     const REAL abs_tol) {
-  if (omega < omega_min && fabs(omega - omega_min) <= abs_tol) {
+  if (omega < omega_min && fabs(omega - omega_min) <= abs_tol)
     return omega_min;
-  }
-  if (omega > omega_max && fabs(omega - omega_max) <= abs_tol) {
+  if (omega > omega_max && fabs(omega - omega_max) <= abs_tol)
     return omega_max;
-  }
   return omega;
-}
+} // END FUNCTION: sanitize_omega_for_spin_splines
 
 #define CHECK_OMEGA_RANGE(label, omega_val, omega_min, omega_max, time_val, idx_val) \
   do { \
@@ -1283,7 +1273,7 @@ if (lambda_fac > 1e-4) {
   e1J_x = weightx * (1.0 - exdote3J * e3J_x) / normfacx + weighty * (-eydote3J * e3J_x) / normfacy;
   e1J_y = weightx * (-exdote3J * e3J_y) / normfacx + weighty * (1.0 - eydote3J * e3J_y) / normfacy;
   e1J_z = weightx * (-exdote3J * e3J_z) / normfacx + weighty * (-eydote3J * e3J_z) / normfacy;
-}
+} // END ELSE: blend x- and y-projection J-frame fallbacks
 seobnr_normalize3(&e1J_x, &e1J_y, &e1J_z);
 
 REAL e2J_x = e3J_y * e1J_z - e3J_z * e1J_y;
