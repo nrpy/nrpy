@@ -164,7 +164,7 @@ Authors: Zachariah B. Etienne
 
 Rules:
 - Use singular `Author:` for exactly one author; plural `Authors:` for two or more.
-- The names in the examples above are illustrative. Do not add any person to `Author:`/`Authors:` unless they are already an author of that file.
+- The names in the examples above are illustrative.
 - Email obfuscation is encouraged; the exact format is not enforced.
 
 **Common anti-patterns to avoid** (all widespread in older files — do not reproduce):
