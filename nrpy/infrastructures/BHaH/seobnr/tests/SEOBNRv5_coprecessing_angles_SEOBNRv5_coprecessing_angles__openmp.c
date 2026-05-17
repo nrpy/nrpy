@@ -477,9 +477,7 @@ static inline REAL sanitize_omega_for_spin_splines(const REAL omega, const REAL 
  * and Buonanno, Phys. Rev. D 95, 024010 (2017), arXiv:1607.05661, and
  * Ossokine et al., Phys. Rev. D 102, 044055 (2020), arXiv:2004.09442.
  *
- * @param[in,out] commondata Common data struct containing the inspiral dynamics,
- *                           precession splines, final angular momentum direction,
- *                           and output Euler-angle arrays.
+ * @param[in,out] commondata Common data struct updated with output Euler-angle arrays.
  */
 void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   const size_t n_low = commondata->nsteps_low;
@@ -508,8 +506,10 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
   }
 
   if (n_insp == 0) {
+    if (fp_dbg != NULL)
+      fclose(fp_dbg);
     return;
-  }
+  } // END IF: no inspiral samples available for angle construction
 
   commondata->alpha_JP = (REAL *)malloc(n_insp * sizeof(REAL));
   commondata->beta_JP = (REAL *)malloc(n_insp * sizeof(REAL));
@@ -700,7 +700,7 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
     LN_J_x_arr[i] = LN_J_x;
     LN_J_y_arr[i] = LN_J_y;
     LN_J_z_arr[i] = LN_J_z;
-  }
+  } // END LOOP: for i over inspiral samples building J-frame inputs
 
   compute_py_style_coprecessing_rotator(n_insp, time_arr, omega_arr, LN_J_x_arr, LN_J_y_arr, LN_J_z_arr, q_pre_arr);
 
@@ -708,11 +708,8 @@ void SEOBNRv5_coprecessing_angles(commondata_struct *restrict commondata) {
 
     const quat_t q_total = quat_normalize(q_pre_arr[i]);
     extract_zyz_euler_angles_from_quat(q_total, &commondata->alpha_JP[i], &commondata->beta_JP[i], &commondata->gamma_JP[i]);
-    if (i == 0) {
 
-    } else {
-    }
-  }
+  } // END LOOP: for i over inspiral samples extracting Euler angles
 
   free(time_arr);
   free(omega_arr);

@@ -57,16 +57,26 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_dynamics() -> (
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    prefunc = """
+    prefunc = r"""
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_odeiv2.h>
+
+static inline REAL *seobnr_realloc_real_or_exit(REAL *restrict ptr, const size_t new_count) {
+  REAL *restrict tmp = (REAL *)realloc(ptr, new_count * sizeof(REAL));
+  if (tmp == NULL) {
+    fprintf(stderr,
+            "Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), realloc() failed for spin_dynamics\n");
+    exit(1);
+  }
+  return tmp;
+} // END FUNCTION: seobnr_realloc_real_or_exit
 """
     desc = """
 Integrates the SEOBNRv5 quasi-precessing spin evolution equations of motion.
 Creates splines that are accessed by the orbital dynamics.
 
-@param commondata - Common data struct containing the model parameters.
+@param[in,out] commondata Common data struct containing model parameters and updated spin splines.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_quasi_precessing_spin_dynamics"
@@ -148,7 +158,7 @@ omega[nsteps] = z[OMEGA_PN];
 nsteps++;
 REAL Omega_previous = commondata->initial_omega;
 REAL time_previous = t;
-REAL r , v, Omega;
+REAL r, v, Omega;
 
 while (t < tmax && stop == 0) {
   // integrate
@@ -156,30 +166,26 @@ while (t < tmax && stop == 0) {
   handle_gsl_return_status(status,rhs_status,1,rhs_name);
 
   // buffercheck
-if (nsteps >= bufferlength) {
+  if (nsteps >= bufferlength) {
     bufferlength = 2 * bufferlength;
-    chi1_lnhat = (REAL *)realloc(chi1_lnhat, bufferlength * sizeof(REAL));
-    chi2_lnhat = (REAL *)realloc(chi2_lnhat, bufferlength * sizeof(REAL));
-    chi1_l = (REAL *)realloc(chi1_l, bufferlength * sizeof(REAL));
-    chi2_l = (REAL *)realloc(chi2_l, bufferlength * sizeof(REAL));
-    chi1_x = (REAL *)realloc(chi1_x, bufferlength * sizeof(REAL));
-    chi1_y = (REAL *)realloc(chi1_y, bufferlength * sizeof(REAL));
-    chi1_z = (REAL *)realloc(chi1_z, bufferlength * sizeof(REAL));
-    chi2_x = (REAL *)realloc(chi2_x, bufferlength * sizeof(REAL));
-    chi2_y = (REAL *)realloc(chi2_y, bufferlength * sizeof(REAL));
-    chi2_z = (REAL *)realloc(chi2_z, bufferlength * sizeof(REAL));
-    lnhat_x = (REAL *)realloc(lnhat_x, bufferlength * sizeof(REAL));
-    lnhat_y = (REAL *)realloc(lnhat_y, bufferlength * sizeof(REAL));
-    lnhat_z = (REAL *)realloc(lnhat_z, bufferlength * sizeof(REAL));
-    L_x = (REAL *)realloc(L_x, bufferlength * sizeof(REAL));
-    L_y = (REAL *)realloc(L_y, bufferlength * sizeof(REAL));
-    L_z = (REAL *)realloc(L_z, bufferlength * sizeof(REAL));
-    omega = (REAL *)realloc(omega, bufferlength * sizeof(REAL));
-    if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL || chi1_x == NULL || chi1_y == NULL || chi1_z == NULL || chi2_x == NULL || chi2_y == NULL || chi2_z == NULL || lnhat_x == NULL || lnhat_y == NULL || lnhat_z == NULL || L_x == NULL || L_y == NULL || L_z == NULL || omega == NULL){
-      fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_dynamics(), realloc() failed for spin_dynamics\\n");
-      exit(1);
-    }
-  }
+    chi1_lnhat = seobnr_realloc_real_or_exit(chi1_lnhat, bufferlength);
+    chi2_lnhat = seobnr_realloc_real_or_exit(chi2_lnhat, bufferlength);
+    chi1_l = seobnr_realloc_real_or_exit(chi1_l, bufferlength);
+    chi2_l = seobnr_realloc_real_or_exit(chi2_l, bufferlength);
+    chi1_x = seobnr_realloc_real_or_exit(chi1_x, bufferlength);
+    chi1_y = seobnr_realloc_real_or_exit(chi1_y, bufferlength);
+    chi1_z = seobnr_realloc_real_or_exit(chi1_z, bufferlength);
+    chi2_x = seobnr_realloc_real_or_exit(chi2_x, bufferlength);
+    chi2_y = seobnr_realloc_real_or_exit(chi2_y, bufferlength);
+    chi2_z = seobnr_realloc_real_or_exit(chi2_z, bufferlength);
+    lnhat_x = seobnr_realloc_real_or_exit(lnhat_x, bufferlength);
+    lnhat_y = seobnr_realloc_real_or_exit(lnhat_y, bufferlength);
+    lnhat_z = seobnr_realloc_real_or_exit(lnhat_z, bufferlength);
+    L_x = seobnr_realloc_real_or_exit(L_x, bufferlength);
+    L_y = seobnr_realloc_real_or_exit(L_y, bufferlength);
+    L_z = seobnr_realloc_real_or_exit(L_z, bufferlength);
+    omega = seobnr_realloc_real_or_exit(omega, bufferlength);
+  } // END IF: spin-dynamics output buffers need growth
 
   // update
   // store
@@ -207,10 +213,10 @@ if (nsteps >= bufferlength) {
 
   // stopcheck
   Omega = omega[nsteps - 1];
-  r = pow(Omega,-2./3.);
-  v = 1./sqrt(r);
+  r = pow(Omega, -2.0 / 3.0);
+  v = 1.0 / sqrt(r);
   // superluminal velocity
-  if (v > 1.0){
+  if (v > 1.0) {
     break;
   }
   // decrease in frequency: Omega peak stop = index of omega
@@ -219,12 +225,12 @@ if (nsteps >= bufferlength) {
     break;
   }
   // empirical upper bound on the frequency
-  if (Omega > 0.35){
+  if (Omega > 0.35) {
     break;
   }
   Omega_previous = Omega;
   time_previous = t;
-}
+} // END WHILE: integrating spin dynamics until a stop condition is reached
 
 // free up gsl ode solver
 gsl_odeiv2_control_free(c);

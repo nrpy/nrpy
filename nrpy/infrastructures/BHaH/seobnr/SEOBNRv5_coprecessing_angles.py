@@ -108,8 +108,7 @@ def register_CFunction_SEOBNRv5_coprecessing_angles(
     rotator_forensics = ""
     loop_forensic_locals = ""
     q_pre_expression = "q_pre_arr[i]"
-    frame_invariant_sample0 = ""
-    frame_invariant_samplei = ""
+    frame_invariant_branch = ""
     forensic_close = ""
     if enable_forensic_diagnostics:
         attach_input_forensics = r"""
@@ -239,43 +238,44 @@ if (fp_frame_inv != NULL) {
   }
 }
 """
-        frame_invariant_sample0 = r"""
-if (fp_frame_inv != NULL) {
-  REAL q_pre_z_x = 0.0;
-  REAL q_pre_z_y = 0.0;
-  REAL q_pre_z_z = 1.0;
-  REAL q_total_z_x = 0.0;
-  REAL q_total_z_y = 0.0;
-  REAL q_total_z_z = 1.0;
-  quat_image_of_z(q_pre_ref, &q_pre_z_x, &q_pre_z_y, &q_pre_z_z);
-  quat_image_of_z(q_total, &q_total_z_x, &q_total_z_y, &q_total_z_z);
-  const REAL q_pre_z_angle = angle_between_unit_vectors(q_pre_z_x, q_pre_z_y, q_pre_z_z, LN_J_x, LN_J_y, LN_J_z);
-  const REAL q_total_z_angle = angle_between_unit_vectors(q_total_z_x, q_total_z_y, q_total_z_z, LN_J_x, LN_J_y, LN_J_z);
-  fprintf(fp_frame_inv,
-      "%zu %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-      (size_t)0, time_M, omega, LN_J_x, LN_J_y, LN_J_z,
-      q_pre_z_x, q_pre_z_y, q_pre_z_z, q_total_z_x, q_total_z_y, q_total_z_z,
-      q_pre_z_angle, q_total_z_angle);
-}
-"""
-        frame_invariant_samplei = r"""
-  if (fp_frame_inv != NULL) {
-    REAL q_pre_z_x = 0.0;
-    REAL q_pre_z_y = 0.0;
-    REAL q_pre_z_z = 1.0;
-    REAL q_total_z_x = 0.0;
-    REAL q_total_z_y = 0.0;
-    REAL q_total_z_z = 1.0;
-    quat_image_of_z(q_pre, &q_pre_z_x, &q_pre_z_y, &q_pre_z_z);
-    quat_image_of_z(q_total, &q_total_z_x, &q_total_z_y, &q_total_z_z);
-    const REAL q_pre_z_angle = angle_between_unit_vectors(q_pre_z_x, q_pre_z_y, q_pre_z_z, LN_J_x, LN_J_y, LN_J_z);
-    const REAL q_total_z_angle = angle_between_unit_vectors(q_total_z_x, q_total_z_y, q_total_z_z, LN_J_x, LN_J_y, LN_J_z);
-    fprintf(fp_frame_inv,
-        "%zu %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
-        i, time_M, omega, LN_J_x, LN_J_y, LN_J_z,
-        q_pre_z_x, q_pre_z_y, q_pre_z_z, q_total_z_x, q_total_z_y, q_total_z_z,
-        q_pre_z_angle, q_total_z_angle);
-  }
+        frame_invariant_branch = r"""
+  if (i == 0) {
+    if (fp_frame_inv != NULL) {
+      REAL q_pre_z_x = 0.0;
+      REAL q_pre_z_y = 0.0;
+      REAL q_pre_z_z = 1.0;
+      REAL q_total_z_x = 0.0;
+      REAL q_total_z_y = 0.0;
+      REAL q_total_z_z = 1.0;
+      quat_image_of_z(q_pre_ref, &q_pre_z_x, &q_pre_z_y, &q_pre_z_z);
+      quat_image_of_z(q_total, &q_total_z_x, &q_total_z_y, &q_total_z_z);
+      const REAL q_pre_z_angle = angle_between_unit_vectors(q_pre_z_x, q_pre_z_y, q_pre_z_z, LN_J_x, LN_J_y, LN_J_z);
+      const REAL q_total_z_angle = angle_between_unit_vectors(q_total_z_x, q_total_z_y, q_total_z_z, LN_J_x, LN_J_y, LN_J_z);
+      fprintf(fp_frame_inv,
+          "%zu %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+          (size_t)0, time_M, omega, LN_J_x, LN_J_y, LN_J_z,
+          q_pre_z_x, q_pre_z_y, q_pre_z_z, q_total_z_x, q_total_z_y, q_total_z_z,
+          q_pre_z_angle, q_total_z_angle);
+    } // END IF: frame-invariant diagnostics file is open for first sample
+  } else {
+    if (fp_frame_inv != NULL) {
+      REAL q_pre_z_x = 0.0;
+      REAL q_pre_z_y = 0.0;
+      REAL q_pre_z_z = 1.0;
+      REAL q_total_z_x = 0.0;
+      REAL q_total_z_y = 0.0;
+      REAL q_total_z_z = 1.0;
+      quat_image_of_z(q_pre, &q_pre_z_x, &q_pre_z_y, &q_pre_z_z);
+      quat_image_of_z(q_total, &q_total_z_x, &q_total_z_y, &q_total_z_z);
+      const REAL q_pre_z_angle = angle_between_unit_vectors(q_pre_z_x, q_pre_z_y, q_pre_z_z, LN_J_x, LN_J_y, LN_J_z);
+      const REAL q_total_z_angle = angle_between_unit_vectors(q_total_z_x, q_total_z_y, q_total_z_z, LN_J_x, LN_J_y, LN_J_z);
+      fprintf(fp_frame_inv,
+          "%zu %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+          i, time_M, omega, LN_J_x, LN_J_y, LN_J_z,
+          q_pre_z_x, q_pre_z_y, q_pre_z_z, q_total_z_x, q_total_z_y, q_total_z_z,
+          q_pre_z_angle, q_total_z_angle);
+    } // END IF: frame-invariant diagnostics file is open for later sample
+  } // END ELSE: forensic frame-invariant sample is not first inspiral sample
 """
         forensic_close = r"""
 if (fp_frame_inv != NULL) {
@@ -1094,9 +1094,7 @@ consistent with the earlier SEOBNR implementations of Babak, Taracchini,
 and Buonanno, Phys. Rev. D 95, 024010 (2017), arXiv:1607.05661, and
 Ossokine et al., Phys. Rev. D 102, 044055 (2020), arXiv:2004.09442.
 
-@param[in,out] commondata Common data struct containing the inspiral dynamics,
-                          precession splines, final angular momentum direction,
-                          and output Euler-angle arrays.
+@param[in,out] commondata Common data struct updated with output Euler-angle arrays.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_coprecessing_angles"
@@ -1128,8 +1126,10 @@ if (commondata->gamma_JP != NULL) {
 }
 
 if (n_insp == 0) {
+  if (fp_dbg != NULL)
+    fclose(fp_dbg);
   return;
-}
+} // END IF: no inspiral samples available for angle construction
 
 commondata->alpha_JP = (REAL *)malloc(n_insp * sizeof(REAL));
 commondata->beta_JP = (REAL *)malloc(n_insp * sizeof(REAL));
@@ -1319,7 +1319,7 @@ for (size_t i = 0; i < n_insp; i++) {
   LN_J_x_arr[i] = LN_J_x;
   LN_J_y_arr[i] = LN_J_y;
   LN_J_z_arr[i] = LN_J_z;
-}
+} // END LOOP: for i over inspiral samples building J-frame inputs
 
 compute_py_style_coprecessing_rotator(n_insp, time_arr, omega_arr, LN_J_x_arr, LN_J_y_arr, LN_J_z_arr, q_pre_arr);
 
@@ -1331,12 +1331,8 @@ for (size_t i = 0; i < n_insp; i++) {
 __LOOP_FORENSIC_LOCALS__
   const quat_t q_total = quat_normalize(__Q_PRE_EXPRESSION__);
   extract_zyz_euler_angles_from_quat(q_total, &commondata->alpha_JP[i], &commondata->beta_JP[i], &commondata->gamma_JP[i]);
-  if (i == 0) {
-__FRAME_INVARIANT_SAMPLE0__
-  } else {
-__FRAME_INVARIANT_SAMPLEI__
-  }
-}
+__FRAME_INVARIANT_BRANCH__
+} // END LOOP: for i over inspiral samples extracting Euler angles
 
 free(time_arr);
 free(omega_arr);
@@ -1355,8 +1351,7 @@ __FORENSIC_CLOSE__
     body = body.replace("__FORENSIC_SETUP__", forensic_setup)
     body = body.replace("__LOOP_FORENSIC_LOCALS__", loop_forensic_locals)
     body = body.replace("__Q_PRE_EXPRESSION__", q_pre_expression)
-    body = body.replace("__FRAME_INVARIANT_SAMPLE0__", frame_invariant_sample0)
-    body = body.replace("__FRAME_INVARIANT_SAMPLEI__", frame_invariant_samplei)
+    body = body.replace("__FRAME_INVARIANT_BRANCH__", frame_invariant_branch)
     body = body.replace("__FORENSIC_CLOSE__", forensic_close)
     body = body.replace("__FRAME_INVARIANT_FILE_INIT__", frame_invariant_file_init)
     body = body.replace("__SPLINE_COMPARISON_FILE_INIT__", spline_comparison_file_init)
