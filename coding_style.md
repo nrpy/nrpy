@@ -166,6 +166,11 @@ Rules:
 - Use singular `Author:` for exactly one author; plural `Authors:` for two or more.
 - The names in the examples above are illustrative.
 - Email obfuscation is encouraged; the exact format is not enforced.
+- Legitimate authorship credit may be added when a contributor makes a
+  substantive change to an existing file. Reviewers must not object to adding a
+  new author solely because that person was not previously listed in the file.
+  Authorship comments should be reviewed only for formatting, consistency, and
+  accuracy, not for preserving the previous author list unchanged.
 
 **Common anti-patterns to avoid** (all widespread in older files — do not reproduce):
 
