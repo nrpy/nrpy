@@ -114,7 +114,7 @@ def register_CFunction_SEOBNRv5_coprecessing_angles(
         attach_input_forensics = r"""
 REAL omega_rISCO = interpolate_fine_omega_at_time(commondata, commondata->t_ISCO);
 omega_rISCO = sanitize_omega_for_spin_splines(omega_rISCO, commondata->omega_spin_min, commondata->omega_spin_max, omega_boundary_tol);
-CHECK_OMEGA_RANGE("omega_rISCO", omega_rISCO, commondata->omega_spin_min, commondata->omega_spin_max, commondata->t_ISCO, 0);
+check_omega_range("omega_rISCO", omega_rISCO, commondata->omega_spin_min, commondata->omega_spin_max, commondata->t_ISCO, 0);
 if (fp_dbg != NULL) {
   REAL lnhat_rISCO_x = gsl_spline_eval(commondata->lnhat_x.spline, omega_rISCO, commondata->lnhat_x.acc);
   REAL lnhat_rISCO_y = gsl_spline_eval(commondata->lnhat_y.spline, omega_rISCO, commondata->lnhat_y.acc);
@@ -1054,15 +1054,21 @@ static inline REAL sanitize_omega_for_spin_splines(
   return omega;
 } // END FUNCTION: sanitize_omega_for_spin_splines
 
-#define CHECK_OMEGA_RANGE(label, omega_val, omega_min, omega_max, time_val, idx_val) \
-  do { \
-    if ((omega_val) < (omega_min) || (omega_val) > (omega_max)) { \
-      fprintf(stderr, \
-              "SEOBNRv5_coprecessing_angles: %s out of range at i=%zu, t=%.15e: %.15e not in [%.15e, %.15e]\\n", \
-              label, (size_t)(idx_val), (double)(time_val), (double)(omega_val), (double)(omega_min), (double)(omega_max)); \
-      exit(1); \
-    } \
-  } while (0)
+static inline void check_omega_range(
+    const char *restrict label,
+    const REAL omega_val,
+    const REAL omega_min,
+    const REAL omega_max,
+    const REAL time_val,
+    const size_t idx_val) {
+  if (omega_val < omega_min || omega_val > omega_max) {
+    fprintf(stderr,
+            "SEOBNRv5_coprecessing_angles: %s out of range at i=%zu, t=%.15e: %.15e not in [%.15e, %.15e]\n",
+            label, idx_val, (double)time_val, (double)omega_val,
+            (double)omega_min, (double)omega_max);
+    exit(1);
+  } // END IF: omega sample lies outside spin-spline range
+} // END FUNCTION: check_omega_range
 """
     if not enable_forensic_diagnostics:
         helper_start = prefunc.index(
@@ -1157,7 +1163,7 @@ if (fp_dbg != NULL) {
   fprintf(fp_dbg, "ptr chi2_z %p %p\n", (void *)commondata->chi2_z_spline.spline, (void *)commondata->chi2_z_spline.acc);
   fflush(fp_dbg);
 }
-CHECK_OMEGA_RANGE("omega_attach", omega_attach, commondata->omega_spin_min, commondata->omega_spin_max, commondata->t_attach, 0);
+check_omega_range("omega_attach", omega_attach, commondata->omega_spin_min, commondata->omega_spin_max, commondata->t_attach, 0);
 __ATTACH_INPUT_FORENSICS__
 if (fp_dbg != NULL) {
   fprintf(fp_dbg, "about L_x %d %.15e\n", -1, omega_attach);
@@ -1300,7 +1306,7 @@ for (size_t i = 0; i < n_insp; i++) {
   REAL lnhat_I_z = 1.0;
   sample_inspiral_time_and_omega(commondata, i, &time_M, &omega);
   omega = sanitize_omega_for_spin_splines(omega, commondata->omega_spin_min, commondata->omega_spin_max, omega_boundary_tol);
-  CHECK_OMEGA_RANGE("sample_i", omega, commondata->omega_spin_min, commondata->omega_spin_max, time_M, i);
+  check_omega_range("sample_i", omega, commondata->omega_spin_min, commondata->omega_spin_max, time_M, i);
   if (fp_dbg != NULL && (i < 5 || i + 5 >= n_insp)) {
     fprintf(fp_dbg, "sample %zu %.15e %.15e %.15e %.15e\n", i, time_M, omega, commondata->omega_spin_min, commondata->omega_spin_max);
     fflush(fp_dbg);
