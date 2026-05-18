@@ -138,7 +138,8 @@ class SEOBNRv5_Coprecessing_Rotations:
 
             d_mat_pos = self.wigner_d_small(l, m, 2, beta)
             A_pos = pref * d_mat_pos
-            phase_pos = 2 * alpha + m * gamma
+            # Match pyseobnr's custom_swsh(beta, alpha) projection followed by exp(2i*gamma).
+            phase_pos = m * alpha + 2 * gamma
 
             Re_Cp = A_pos * (hR * sp.cos(phase_pos) - hI * sp.sin(phase_pos))
             Im_Cp = A_pos * (hR * sp.sin(phase_pos) + hI * sp.cos(phase_pos))
@@ -153,7 +154,7 @@ class SEOBNRv5_Coprecessing_Rotations:
 
             d_mat_neg = self.wigner_d_small(l, -m, 2, beta)
             A_neg = pref * d_mat_neg
-            phase_neg = 2 * alpha - m * gamma
+            phase_neg = -m * alpha + 2 * gamma
 
             Re_Cm = A_neg * (hR_neg * sp.cos(phase_neg) - hI_neg * sp.sin(phase_neg))
             Im_Cm = A_neg * (hR_neg * sp.sin(phase_neg) + hI_neg * sp.cos(phase_neg))
@@ -205,17 +206,14 @@ class SEOBNRv5_Coprecessing_Rotations:
         )
         weight_y = sp.sympify(1) - weight_x
 
-        # Preserve J-frame continuity by flipping the fallback y-projection sign.
-        # We use an algebraic sign formulation (x / |x|) from throwing "undefined reference to 'sign'".
-        fallback_sign = -e3_J_x / sp.Max(abs_e3_x, sp.sympify("1e-30"))
-
         v_x_x = 1 - e3_J_x**2
         v_x_y = -e3_J_x * e3_J_y
         v_x_z = -e3_J_x * e3_J_z
 
-        v_y_x = fallback_sign * (-e3_J_y * e3_J_x)
-        v_y_y = fallback_sign * (1 - e3_J_y**2)
-        v_y_z = fallback_sign * (-e3_J_y * e3_J_z)
+        # Match the generated C angle path and pyseobnr's SEOBBuildJframeVectors fallback.
+        v_y_x = -e3_J_y * e3_J_x
+        v_y_y = 1 - e3_J_y**2
+        v_y_z = -e3_J_y * e3_J_z
 
         # Normalize projections individually before blending
         norm_vx = sp.sqrt(sp.Max(v_x_x**2 + v_x_y**2 + v_x_z**2, sp.sympify("1e-30")))
