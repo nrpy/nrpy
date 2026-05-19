@@ -140,17 +140,21 @@ def register_CFunction_SEOBNRv5_coprecessing_rotations() -> (
 This function loops over a given timeseries, applying the Wigner small-d rotations
 to the co-precessing modes (h^P_lm) to compute h_+ and h_x in the observer's frame.
 
-@param nsteps - The number of points in the timeseries arrays.
-@param iota - The observer inclination angle.
-@param varphi_0 - The observer azimuthal angle.
-@param J_f_x, J_f_y, J_f_z - Cartesian components of the final angular momentum.
-@param alpha_JP_array, beta_JP_array, gamma_JP_array - Euler angles from J -> P frame.
+@param[in] nsteps The number of points in the timeseries arrays.
+@param[in] iota The observer inclination angle.
+@param[in] varphi_0 The observer azimuthal angle.
+@param[in] J_f_x Cartesian x component of the final angular momentum.
+@param[in] J_f_y Cartesian y component of the final angular momentum.
+@param[in] J_f_z Cartesian z component of the final angular momentum.
+@param[in] alpha_JP_array Euler-angle alpha array for the J -> P frame.
+@param[in] beta_JP_array Euler-angle beta array for the J -> P frame.
+@param[in] gamma_JP_array Euler-angle gamma array for the J -> P frame.
 """
     for l, m in modes:
-        desc += f"@param hP_l{l}m{m}_array - Array containing the complex co-precessing ({l},{m}) mode.\n"
+        desc += f"@param[in] hP_l{l}m{m}_array Array containing the complex co-precessing ({l},{m}) mode.\n"
 
-    desc += """@param h_plus_I_array - Output array for the inertial h_+ polarization.
-@param h_cross_I_array - Output array for the inertial h_x polarization.
+    desc += """@param[out] h_plus_I_array Output array for the inertial h_+ polarization.
+@param[out] h_cross_I_array Output array for the inertial h_x polarization.
 """
 
     cfc.register_CFunction(
