@@ -37,7 +37,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -U -r requirements.txt
           if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" && "${{ matrix.python-version }}" != "3.9.19" ]]; then
-            pip install -U -r requirements-dev.txt
+            pip install -U -r requirements-dev.txt matplotlib
             pip install git+https://github.com/sympy/sympy.git
           else
             # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
