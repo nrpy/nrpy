@@ -124,9 +124,9 @@ def simple_loop(
         for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
     <BLANKLINE>
           // <INTERIOR>
-        } // END LOOP: for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++)
-      } // END LOOP: for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++)
-    } // END LOOP: for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++)
+        } // END LOOP: for i0 over [0, Nxx_plus_2NGHOSTS0)
+      } // END LOOP: for i1 over [0, Nxx_plus_2NGHOSTS1)
+    } // END LOOP: for i2 over [0, Nxx_plus_2NGHOSTS2)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP")))
     #CUSTOM_OMP
@@ -135,9 +135,9 @@ def simple_loop(
         for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++) {
     <BLANKLINE>
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
+        } // END LOOP: for i0 over [NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)
+      } // END LOOP: for i1 over [NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS)
+    } // END LOOP: for i2 over [NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=3)))
@@ -161,9 +161,9 @@ def simple_loop(
           MAYBE_UNUSED const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
     <BLANKLINE>
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
+        } // END LOOP: for i0 over [NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)
+      } // END LOOP: for i1 over [NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS)
+    } // END LOOP: for i2 over [NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS)
     <BLANKLINE>
     >>> print(clang_format(simple_loop('// <INTERIOR>', loop_region="interior",
     ...       CoordSystem="SinhSymTP", enable_rfm_precompute=True, OMP_collapse=2)))
@@ -187,9 +187,9 @@ def simple_loop(
           MAYBE_UNUSED const REAL f2_of_xx0__DD00 = rfmstruct->f2_of_xx0__DD00[i0];
     <BLANKLINE>
           // <INTERIOR>
-        } // END LOOP: for (int i0 = NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0++)
-      } // END LOOP: for (int i1 = NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1++)
-    } // END LOOP: for (int i2 = NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2++)
+        } // END LOOP: for i0 over [NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)
+      } // END LOOP: for i1 over [NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS)
+    } // END LOOP: for i2 over [NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS)
     <BLANKLINE>
     """
     if not loop_region:
@@ -209,7 +209,7 @@ def simple_loop(
     increment = (
         ["stride2", "stride1", "stride0"]
         if is_cuda
-        else ["1", "1", "simd_width" if use_simd else "1"]
+        else ["1", "1", "SIMD_WIDTH" if use_simd else "1"]
     )
 
     min_idx_prefix = "tid" if is_cuda else None

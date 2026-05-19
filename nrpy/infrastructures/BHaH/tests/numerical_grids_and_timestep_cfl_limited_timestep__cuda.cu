@@ -29,9 +29,9 @@ __global__ static void compute_ds_min_gpu(const size_t streamid, const params_st
 
         ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &ds_min[IDX3(i0, i1, i2)]);
 
-      } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
-    } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
-  } // END LOOP: for (int i2 = tid2; i2 < Nxx_plus_2NGHOSTS2; i2 += stride2)
+      } // END LOOP: for i0 over [tid0, Nxx_plus_2NGHOSTS0)
+    } // END LOOP: for i1 over [tid1, Nxx_plus_2NGHOSTS1)
+  } // END LOOP: for i2 over [tid2, Nxx_plus_2NGHOSTS2)
 } // END FUNCTION: compute_ds_min_gpu
 
 /**

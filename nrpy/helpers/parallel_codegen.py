@@ -82,7 +82,7 @@ def deep_update(d: Dict[Any, Any], u: Dict[Any, Any]) -> None:
     :param d: The original dictionary to update.
     :param u: The dictionary containing new keys and values.
 
-    Doctest:
+    Doctests:
     >>> original = {'a': 1, 'b': {'c': 2}}
     >>> new = {'a': 'new_a', 'b': {'d': 'new_d'}}
     >>> deep_update(original, new)

@@ -6,7 +6,7 @@ Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
 
 import nrpy.c_function as cfc
 import nrpy.params as par  # NRPy: Parameter interface
-from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
+from nrpy.helpers.parallelization.gpu_kernel import GPUKernel
 
 # Define the default launch dictionary for CUDA kernels.
 #
@@ -255,7 +255,7 @@ def generate_CFunction_mallocHostgrid() -> str:
   gd_host->xx[1] = (REAL*) malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
   gd_host->xx[2] = (REAL*) malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
 """
-    kernel = GPU_Kernel(body, params_dict, name, decorators="__host__", comments=desc)
+    kernel = GPUKernel(body, params_dict, name, decorators="__host__", comments=desc)
     return kernel.CFunction.full_function
 
 

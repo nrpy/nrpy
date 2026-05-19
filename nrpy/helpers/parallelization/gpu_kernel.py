@@ -1,16 +1,17 @@
 """
 Module that provides the base functionality for generating GPU Kernels.
 
-Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
+Author: Samuel D. Tootle
+        sdtootle **at** gmail **dot** com
 """
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Optional
 
 import nrpy.c_function as cfc
 import nrpy.params as par
 
 
-class GPU_Kernel:
+class GPUKernel:
     """
     Class to Generate GPU Kernel code.
 
@@ -29,9 +30,10 @@ class GPU_Kernel:
     :param cuda_check_error: Add CUDA error checking after kernel call. Default is True
     :param thread_tiling_macro_suffix: Suffix for thread macros.
 
+    Doctests:
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("Infrastructure", "None")
-    >>> kernel = GPU_Kernel(
+    >>> kernel = GPUKernel(
     ... "*x = in;",
     ... {'x' : 'REAL *restrict', 'in' : 'const REAL'},
     ... 'basic_assignment_gpu',
@@ -59,7 +61,7 @@ class GPU_Kernel:
     dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
     dim3 blocks_per_grid(32,1,1);
     <BLANKLINE>
-    >>> kernel = GPU_Kernel(
+    >>> kernel = GPUKernel(
     ... "*x = in;",
     ... {'x' : 'REAL *restrict', 'in' : 'const REAL'},
     ... 'basic_assignment_gpu',
@@ -90,7 +92,7 @@ class GPU_Kernel:
         cfunc_type: str = "static void",
         decorators: str = "__global__",
         comments: str = "",
-        launch_dict: Union[Dict[str, Any], None] = None,
+        launch_dict: Optional[Dict[str, Any]] = None,
         streamid_param: bool = True,
         cuda_check_error: bool = True,
         thread_tiling_macro_suffix: str = "DEFAULT",
@@ -110,7 +112,7 @@ class GPU_Kernel:
         self.launch_block: str = ""
         self.launch_settings: str = ""
         self.thread_tiling_macro_suffix = thread_tiling_macro_suffix
-        self.threads_per_block: list[str] = []
+        self.threads_per_block: List[str] = []
 
         if self.decorators == "__global__" and launch_dict is None:
             raise ValueError(f"Error: {self.decorators} requires a launch_dict")
@@ -172,7 +174,7 @@ class GPU_Kernel:
         if self.launch_dict is None or "__global__" not in self.decorators:
             return
 
-        block_def_str = f"""
+        block_def_str = rf"""
 const size_t threads_in_x_dir = {self.threads_per_block[0]};
 const size_t threads_in_y_dir = {self.threads_per_block[1]};
 const size_t threads_in_z_dir = {self.threads_per_block[2]};
@@ -185,7 +187,7 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
             blocks_per_grid_str = ",".join(map(str, blocks_per_grid))
             grid_def_str = f"dim3 blocks_per_grid({blocks_per_grid_str});"
         else:
-            grid_def_str = """dim3 blocks_per_grid(
+            grid_def_str = r"""dim3 blocks_per_grid(
     (params->Nxx_plus_2NGHOSTS0 + threads_in_x_dir - 1) / threads_in_x_dir,
     (params->Nxx_plus_2NGHOSTS1 + threads_in_y_dir - 1) / threads_in_y_dir,
     (params->Nxx_plus_2NGHOSTS2 + threads_in_z_dir - 1) / threads_in_z_dir
@@ -205,9 +207,9 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
         # Determine if the shared memory size needs to be added to launch
         # If a stream is specified, we need to at least set SM to 0
         sm_def_str = None
-        if "sm" in self.launch_dict or not stream_def_str is None:
+        if "sm" in self.launch_dict or stream_def_str is not None:
             if (
-                not "sm" in self.launch_dict
+                "sm" not in self.launch_dict
                 or self.launch_dict["sm"] == ""
                 or self.launch_dict["sm"] == "default"
             ):
@@ -216,18 +218,18 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
             else:
                 sm_def_str = f"size_t sm = {self.launch_dict['sm']};\n"
 
-        self.launch_block = f"""{block_def_str}
+        self.launch_block = rf"""{block_def_str}
 {grid_def_str}
 """
-        if not sm_def_str is None:
+        if sm_def_str is not None:
             self.launch_block += f"{sm_def_str}"
-        if not stream_def_str is None:
+        if stream_def_str is not None:
             self.launch_block += f"{stream_def_str}"
 
         self.launch_settings = "<<<blocks_per_grid,threads_per_block"
-        if not sm_def_str is None:
+        if sm_def_str is not None:
             self.launch_settings += ",sm"
-        if not stream_def_str is None:
+        if stream_def_str is not None:
             self.launch_settings += ",streams[streamid]"
         self.launch_settings += ">>>"
 
@@ -249,6 +251,10 @@ dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);"""
             c_function_call += f"{msg};\n"
 
         return c_function_call
+
+
+# Backward-compatible alias for older call sites outside this module tree.
+GPU_Kernel = GPUKernel
 
 
 if __name__ == "__main__":

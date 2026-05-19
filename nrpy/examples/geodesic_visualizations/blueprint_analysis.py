@@ -63,7 +63,7 @@ def plot_heatmaps(data: "npt.NDArray[np.void]") -> None:
     :param data: The structured NumPy array containing ray termination data.
     """
     # pylint: disable=import-outside-toplevel, import-error
-    import matplotlib.pyplot as plt  # type: ignore[import-not-found]
+    import matplotlib.pyplot as plt
 
     # Preamble: Descriptive Physical Variable Mapping.
     # Extract coordinates from the structured array for plotting.

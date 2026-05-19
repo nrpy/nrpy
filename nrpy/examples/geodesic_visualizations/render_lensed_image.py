@@ -87,7 +87,7 @@ def _load_texture(
         if not os.path.exists(image_input):
             raise FileNotFoundError(f"Texture file not found: {image_input}")
         # pylint: disable=import-outside-toplevel, import-error
-        from PIL import Image  # type: ignore
+        from PIL import Image
 
         with Image.open(image_input) as img:
             return np.array(img.convert("RGB")).astype(np.float64) / 255.0
@@ -122,7 +122,7 @@ def generate_source_disk_array(
     :return: A uint8 RGB NumPy array of the generated accretion disk texture.
     """
     # pylint: disable=import-outside-toplevel, import-error
-    import matplotlib.pyplot as plt  # type: ignore
+    import matplotlib.pyplot as plt
 
     half_width = disk_physical_width / 2.0
     # Create coordinate grid representing the flat source plane

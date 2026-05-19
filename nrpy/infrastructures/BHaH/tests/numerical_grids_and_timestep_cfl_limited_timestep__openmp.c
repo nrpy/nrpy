@@ -25,9 +25,9 @@ static void compute_ds_min_host(const params_struct *restrict params, REAL *rest
         ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &local_ds_min);
         ds_min = MIN(ds_min, local_ds_min);
 
-      } // END LOOP: for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++)
-    } // END LOOP: for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++)
-  } // END LOOP: for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++)
+      } // END LOOP: for i0 over [0, Nxx_plus_2NGHOSTS0)
+    } // END LOOP: for i1 over [0, Nxx_plus_2NGHOSTS1)
+  } // END LOOP: for i2 over [0, Nxx_plus_2NGHOSTS2)
 
   *ds_min_result = ds_min;
 } // END FUNCTION: compute_ds_min_host
