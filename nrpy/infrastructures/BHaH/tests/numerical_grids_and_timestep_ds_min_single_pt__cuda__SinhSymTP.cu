@@ -33,5 +33,5 @@ __host__ __device__ void ds_min_single_pt__rfm__SinhSymTP(const params_struct *r
   const REAL ds0 = fabs(dxx0 * tmp10 * tmp9 * (tmp1 * tmp4 + tmp1 * tmp5)) / fabs(sqrt(((bScale) * (bScale)) + tmp7));
   const REAL ds1 = fabs(dxx1 * tmp9);
   const REAL ds2 = fabs(dxx2 * tmp10 * tmp6 * tmp8);
-  *ds_min = MIN(ds0, MIN(ds1, ds2));
+  *ds_min = NRPYMIN(ds0, NRPYMIN(ds1, ds2));
 } // END FUNCTION: ds_min_single_pt__rfm__SinhSymTP

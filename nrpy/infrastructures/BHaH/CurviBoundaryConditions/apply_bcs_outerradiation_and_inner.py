@@ -33,7 +33,7 @@ import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
 from nrpy.helpers.expression_utils import get_unique_expression_symbols_as_strings
-from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
+from nrpy.helpers.parallelization.gpu_kernel import GPUKernel
 from nrpy.validate_expressions.validate_expressions import check_zero
 
 
@@ -564,7 +564,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
+                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },
@@ -590,7 +590,7 @@ REAL *restrict x2 = xx[2];
   }}
 """
 
-    launch_kernel = GPU_Kernel(
+    launch_kernel = GPUKernel(
         kernel_launch_body,
         params_dict,
         f"{name}",

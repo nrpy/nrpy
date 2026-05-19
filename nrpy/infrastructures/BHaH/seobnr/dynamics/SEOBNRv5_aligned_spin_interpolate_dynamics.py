@@ -46,8 +46,8 @@ int i;
 REAL time_start = dynamics_fine_prelim[IDX(0,TIME)];
 REAL time_end = dynamics_fine_prelim[IDX(nsteps_fine_prelim-1,TIME)];
 if (stop != 0){
-  time_start = MAX(t_peak - commondata->t_stepback,dynamics_fine_prelim[IDX(0,TIME)]);
-  time_end = MIN(t_peak , time_end);
+  time_start = NRPYMAX(t_peak - commondata->t_stepback,dynamics_fine_prelim[IDX(0,TIME)]);
+  time_end = NRPYMIN(t_peak , time_end);
 }
 
 REAL *restrict ts = (REAL *)malloc(nsteps_fine_prelim*sizeof(REAL));

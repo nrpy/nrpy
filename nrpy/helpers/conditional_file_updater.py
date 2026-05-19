@@ -33,6 +33,7 @@ class ConditionalFileUpdater:
     :param encoding: The encoding to use when reading and writing the file. Defaults to 'utf-8'.
     :param do_format: Flag indicating whether the new content should be formatted before comparison. Defaults to False.
 
+    Doctests:
     >>> import os
     >>> c.colorize = c.leave_text_alone
     >>> test_file = "/tmp/_test_.txt"

@@ -422,10 +422,10 @@ def cse_postprocess(
         ):
             for k in range(i + 1, len(replaced)):
                 if sym in replaced[k][1].free_symbols:
-                    replaced[k] = (replaced[k][0], replaced[k][1].subs(sym, expr))
+                    replaced[k] = (replaced[k][0], replaced[k][1].xreplace({sym: expr}))
             for k, element in enumerate(reduced):
                 if sym in element.free_symbols:
-                    reduced[k] = reduced[k].subs(sym, expr)
+                    reduced[k] = reduced[k].xreplace({sym: expr})
             # Remove the current expression from the replaced list as its substitutions are done
             replaced.pop(i)
             if i != 0:
@@ -461,7 +461,10 @@ def cse_postprocess(
             if 0 < sym_count <= 2:
                 for k in range(i + 1, len(replaced)):
                     if sym in replaced[k][1].free_symbols:
-                        replaced[k] = (replaced[k][0], replaced[k][1].subs(sym, expr))
+                        replaced[k] = (
+                            replaced[k][0],
+                            replaced[k][1].xreplace({sym: expr}),
+                        )
                 for k, element in enumerate(reduced):
                     if sym in element.free_symbols:
                         reduced[k] = reduced[k].xreplace({sym: expr})
@@ -517,6 +520,7 @@ def sort_cse_output_deterministically(
     :return: CSE output with deterministically ordered and renamed replacements.
     :raises ValueError: If the replacement graph contains a dependency cycle.
 
+    Doctests:
     >>> x, y, z = sp.symbols("x y z")
     >>> a0, a1, a2 = sp.symbols("a0 a1 a2")
     >>> out0 = (

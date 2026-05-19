@@ -40,9 +40,9 @@ def simple_loop(
       for (int i1 = 0; i1 < cctk_lsh[1]; i1++) {
         for (int i0 = 0; i0 < cctk_lsh[0]; i0++) {
           // <INTERIOR>
-        } // END LOOP: for (int i0 = 0; i0 < cctk_lsh[0]; i0++)
-      } // END LOOP: for (int i1 = 0; i1 < cctk_lsh[1]; i1++)
-    } // END LOOP: for (int i2 = 0; i2 < cctk_lsh[2]; i2++)
+        } // END LOOP: for i0 over [0, cctk_lsh[0])
+      } // END LOOP: for i1 over [0, cctk_lsh[1])
+    } // END LOOP: for i2 over [0, cctk_lsh[2])
     <BLANKLINE>
     >>> print(clang_format(simple_loop(loop_body='// <INTERIOR>', loop_region="interior", OMP_custom_pragma="#CUSTOM_OMP")))
     #CUSTOM_OMP
@@ -50,9 +50,9 @@ def simple_loop(
       for (int i1 = cctk_nghostzones[1]; i1 < cctk_lsh[1] - cctk_nghostzones[1]; i1++) {
         for (int i0 = cctk_nghostzones[0]; i0 < cctk_lsh[0] - cctk_nghostzones[0]; i0++) {
           // <INTERIOR>
-        } // END LOOP: for (int i0 = cctk_nghostzones[0]; i0 < cctk_lsh[0]-cctk_nghostzones[0]; i0++)
-      } // END LOOP: for (int i1 = cctk_nghostzones[1]; i1 < cctk_lsh[1]-cctk_nghostzones[1]; i1++)
-    } // END LOOP: for (int i2 = cctk_nghostzones[2]; i2 < cctk_lsh[2]-cctk_nghostzones[2]; i2++)
+        } // END LOOP: for i0 over [cctk_nghostzones[0], cctk_lsh[0]-cctk_nghostzones[0])
+      } // END LOOP: for i1 over [cctk_nghostzones[1], cctk_lsh[1]-cctk_nghostzones[1])
+    } // END LOOP: for i2 over [cctk_nghostzones[2], cctk_lsh[2]-cctk_nghostzones[2])
     <BLANKLINE>
     """
     # 'AllPoints': loop over all points on a numerical grid, including ghost zones
@@ -87,7 +87,7 @@ def simple_loop(
             pragma = OMP_custom_pragma
     else:
         pragma = ""
-    increment = ["1", "1", "simd_width"] if enable_simd else ["1", "1", "1"]
+    increment = ["1", "1", "SIMD_WIDTH"] if enable_simd else ["1", "1", "1"]
 
     return str(
         lp.loop(

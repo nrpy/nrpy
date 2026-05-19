@@ -35,7 +35,7 @@ void diagnostics(commondata_struct *restrict commondata, griddata_struct *restri
     // Compute l2-norm of Hamiltonian constraint violation
     REAL residual_H;
     log10_L2norm_gf(commondata, &griddata[grid].params, griddata[grid].xx, integration_radius, RESIDUAL_HGF, &residual_H, diagnostic_output_gfs);
-    global_norm = MAX(global_norm, residual_H);
+    global_norm = NRPYMAX(global_norm, residual_H);
   } // END for(grid=0; grid<commondata->NUMGRIDS; ++grid)
 
   // Update residual to be used in stop condition

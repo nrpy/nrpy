@@ -113,7 +113,7 @@ static inline REAL sum_lagrange_x0_simd(const int INTERP_ORDER, const REAL *REST
   // Vectorized loop over ix0 using SIMD with FMA, if available
   int ix0 = 0;
   REAL_SIMD_ARRAY vec_sum = SetZeroSIMD;
-  for (; ix0 <= INTERP_ORDER - simd_width; ix0 += simd_width) {
+  for (; ix0 <= INTERP_ORDER - SIMD_WIDTH; ix0 += SIMD_WIDTH) {
     vec_sum = FusedMulAddSIMD(ReadSIMD(&src_gf_base_idx[ix0]), ReadSIMD(&lagrange_basis_coeffs_x0_base_idx[ix0]), vec_sum);
   } // END LOOP x0 direction up to integer number of SIMD widths
   // Accumulate SIMD result
