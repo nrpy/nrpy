@@ -149,7 +149,7 @@ def PowSIMD_check(a: sp.Basic, b: sp.Basic) -> Any:
     :param b: The power.
     :return: The result of the operation `a**b`.
     """
-    return a**b
+    return sp.Pow(a, b)
 
 
 def SqrtSIMD_check(a: sp.Basic) -> Any:
