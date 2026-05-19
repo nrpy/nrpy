@@ -110,9 +110,9 @@ def loop(
 
     >>> print(clang_format(loop('i', '0', 'N', '1', '', loop_body='// <INTERIOR>', tile_size='16')))
     for (int iB = 0; iB < N; iB += 16) {
-      for (int i = iB; i < MIN(N, iB + 16); i++) {
+      for (int i = iB; i < NRPYMIN(N, iB + 16); i++) {
         // <INTERIOR>
-      } // END LOOP: for i over [iB, MIN(N, iB + 16))
+      } // END LOOP: for i over [iB, NRPYMIN(N, iB + 16))
     } // END LOOP: for iB over [0, N)
     <BLANKLINE>
     """
@@ -147,7 +147,7 @@ def loop(
             header, footer = loop1D(
                 var,
                 f"{var}B",
-                f"MIN({upper_bound[i]}, {var}B + {tile_size[i]})",
+                f"NRPYMIN({upper_bound[i]}, {var}B + {tile_size[i]})",
                 increment[i],
                 pragma[i],
             )

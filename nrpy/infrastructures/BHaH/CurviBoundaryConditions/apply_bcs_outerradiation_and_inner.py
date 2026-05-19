@@ -564,7 +564,7 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
+                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },

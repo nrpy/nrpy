@@ -59,6 +59,6 @@ void cfl_limited_timestep(commondata_struct *restrict commondata, params_struct 
   cudaCheckErrors(cudaKernel, "compute_ds_min_gpu failure");
 
   REAL ds_min = find_global__minimum(ds_min_device, Nxx_tot);
-  commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
+  commondata->dt = NRPYMIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
   BHAH_FREE_DEVICE(ds_min_device);
 } // END FUNCTION: cfl_limited_timestep

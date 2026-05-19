@@ -304,7 +304,7 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
         ds_str_list,
         include_braces=False,
     )
-    body += "*ds_min_radial_like_dirns = MIN(ds0, MIN(ds1, ds2));\n"
+    body += "*ds_min_radial_like_dirns = NRPYMIN(ds0, NRPYMIN(ds1, ds2));\n"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
@@ -398,7 +398,7 @@ def register_CFunction_ds_min_single_pt(
         ["const REAL ds0", "const REAL ds1", "const REAL ds2"],
         include_braces=False,
     )
-    body += "*ds_min = MIN(ds0, MIN(ds1, ds2));\n"
+    body += "*ds_min = NRPYMIN(ds0, NRPYMIN(ds1, ds2));\n"
 
     parallelization = par.parval_from_str("parallelization")
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)
@@ -443,7 +443,7 @@ def generate_grid_minimum_gridspacing_prefunc() -> Tuple[str, str]:
     loop_body = (
         r"""REAL local_ds_min;
     ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &local_ds_min);
-    ds_min = MIN(ds_min, local_ds_min);
+    ds_min = NRPYMIN(ds_min, local_ds_min);
     """
         if parallelization not in ["cuda"]
         else r"""ds_min_single_pt(params, xx0[i0], xx1[i1], xx2[i2], &ds_min[IDX3(i0, i1, i2)]);
@@ -540,7 +540,9 @@ def register_CFunction_cfl_limited_timestep() -> None:
         body += rf"""REAL ds_min = 1e38;
         {ds_min_launch.replace(", ds_min", ", &ds_min")}
     """
-    body += "commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);\n"
+    body += (
+        "commondata->dt = NRPYMIN(commondata->dt, ds_min * commondata->CFL_FACTOR);\n"
+    )
 
     if par.parval_from_str("parallelization") in ["cuda"]:
         body += "BHAH_FREE_DEVICE(ds_min_device);\n"

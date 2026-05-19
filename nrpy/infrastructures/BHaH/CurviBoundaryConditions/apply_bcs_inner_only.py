@@ -161,7 +161,7 @@ boundary points ("inner maps to outer").
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "MAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
+                "NRPYMAX(1U, (num_inner_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir)"
             ],
             "stream": "params->grid_idx % NUM_STREAMS",
         },

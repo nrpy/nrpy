@@ -251,7 +251,7 @@ def register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes(
         "BHaH_function_prototypes.h",
         "diagnostics/diagnostics_nearest_common.h",
     ]
-    desc = f"""
+    desc = r"""
  * @file diagnostics_nearest_2d_xy_and_yz_planes.c
  * @brief Sample and write 2D diagnostics on the nearest xy and yz planes for a single grid.
  *

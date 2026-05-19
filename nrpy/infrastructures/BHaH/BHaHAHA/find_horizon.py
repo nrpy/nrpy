@@ -239,7 +239,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
         if (resolution >= 2)
           eta_max_times_M = 30.0;
 
-        const REAL eta_damping_times_M = MAX(eta_min_times_M, eta_max_times_M * sqrt(bhahaha_diags->Theta_Linf_times_M));
+        const REAL eta_damping_times_M = NRPYMAX(eta_min_times_M, eta_max_times_M * sqrt(bhahaha_diags->Theta_Linf_times_M));
         commondata.eta_damping = eta_damping_times_M / bhahaha_params_and_data->M_scale;
 
         LOOP_OMP("omp parallel for", i0, NGHOSTS, NGHOSTS + 1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
