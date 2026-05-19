@@ -23,30 +23,26 @@ class BSSN_to_g4Christoffel:
 
     This class reuses the existing BSSN-to-ADM reconstruction already present in
     NRPy, then assembles the missing time-derivative sector needed to build the
-    physical four-metric derivatives and Christoffel symbols.
+    physical four-metric derivatives and Christoffel symbols. The K_{ij}
+    reconstruction in this class always projects out any residual conformal
+    trace from \bar{A}_{ij} so that the physical trace remains trK.
 
     :param CoordSystem: Coordinate system to use.
     :param enable_rfm_precompute: Whether to enable reference-metric precomputation.
-    :param enforce_Abar_tracefree_in_KDD: Whether to project out any residual
-        conformal trace from \bar{A}_{ij} before reconstructing K_{ij}.
     """
 
     def __init__(
         self,
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
-        enforce_Abar_tracefree_in_KDD: bool = True,
     ) -> None:
         r"""
         Initialize the BSSN_to_g4Christoffel class.
 
         :param CoordSystem: Coordinate system to use.
         :param enable_rfm_precompute: Whether to enable reference-metric precomputation.
-        :param enforce_Abar_tracefree_in_KDD: Whether to project out any residual
-            conformal trace from \bar{A}_{ij} before reconstructing K_{ij}.
         :raises ValueError: If the coordinate system is unsupported.
         :raises ValueError: If enable_rfm_precompute is not a bool.
-        :raises ValueError: If enforce_Abar_tracefree_in_KDD is not a bool.
         """
         # Step 1.a: Validate constructor inputs before triggering cached dictionary lookups.
         if CoordSystem not in refmetric.supported_CoordSystems:
@@ -58,11 +54,6 @@ class BSSN_to_g4Christoffel:
             raise ValueError(
                 "enable_rfm_precompute must be a bool, "
                 f"got {type(enable_rfm_precompute).__name__}"
-            )
-        if not isinstance(enforce_Abar_tracefree_in_KDD, bool):
-            raise ValueError(
-                "enforce_Abar_tracefree_in_KDD must be a bool, "
-                f"got {type(enforce_Abar_tracefree_in_KDD).__name__}"
             )
 
         # Step 1.b: Given the chosen coordinate system, set up the reference metric.
@@ -90,31 +81,27 @@ class BSSN_to_g4Christoffel:
         self.gammaDDdD = BtoA.gammaDDdD
         self.gammaUU = BtoA.gammaUU
         self.GammaUDD = BtoA.GammaUDD
-        self.enforce_Abar_tracefree_in_KDD = enforce_Abar_tracefree_in_KDD
 
-        # Step 1.f: Reconstruct K_{ij}. By default enforce the
-        #           trace-free projection so that the physical trace remains trK
-        #           even if numerical error introduces a small conformal trace in \bar{A}_{ij}.
+        # Step 1.f: Reconstruct K_{ij}, always enforcing the trace-free projection
+        #           so that the physical trace remains trK even if numerical error
+        #           introduces a small conformal trace in \bar{A}_{ij}.
         self.KDD = ixp.zerorank2()
-        if enforce_Abar_tracefree_in_KDD:
-            self.trAbar = sp.sympify(0)
-            for i in range(3):
-                for j in range(3):
-                    self.trAbar += Bq.gammabarUU[i][j] * Bq.AbarDD[i][j]
+        self.trAbar = sp.sympify(0)
+        for i in range(3):
+            for j in range(3):
+                self.trAbar += Bq.gammabarUU[i][j] * Bq.AbarDD[i][j]
 
-            self.AbarDD_for_KDD = ixp.zerorank2()
-            for i in range(3):
-                for j in range(3):
-                    self.AbarDD_for_KDD[i][j] = (
-                        Bq.AbarDD[i][j]
-                        - sp.Rational(1, 3) * Bq.gammabarDD[i][j] * self.trAbar
-                    )
-                    self.KDD[i][j] = (
-                        self.AbarDD_for_KDD[i][j] / Bq.exp_m4phi
-                        + sp.Rational(1, 3) * self.gammaDD[i][j] * Bq.trK
-                    )
-        else:
-            self.KDD = BtoA.KDD
+        self.AbarDD_for_KDD = ixp.zerorank2()
+        for i in range(3):
+            for j in range(3):
+                self.AbarDD_for_KDD[i][j] = (
+                    Bq.AbarDD[i][j]
+                    - sp.Rational(1, 3) * Bq.gammabarDD[i][j] * self.trAbar
+                )
+                self.KDD[i][j] = (
+                    self.AbarDD_for_KDD[i][j] / Bq.exp_m4phi
+                    + sp.Rational(1, 3) * self.gammaDD[i][j] * Bq.trK
+                )
 
         # Step 2.a: Construct the covariant shift \beta_i = \gamma_{ij} \beta^j.
         self.betaD = ixp.zerorank1()
