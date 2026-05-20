@@ -7,6 +7,7 @@ returned quantities may be non-conserved diagnostics.
 It supports both massive and photon particles.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 
 
 --------------------------------------------------------------------------------

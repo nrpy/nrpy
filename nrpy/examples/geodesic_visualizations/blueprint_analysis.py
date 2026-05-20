@@ -15,6 +15,7 @@ It performs three functions:
    errors or integration 'blind spots'.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import os

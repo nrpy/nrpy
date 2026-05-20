@@ -7,22 +7,19 @@ integration, namely the Christoffel symbols and the geodesic equations of motion
 It supports both massive and photon particles.
 
 Author: Dalton J. Moone
-
+        daltonmoone **at** gmail **dot** com
 """
 
-# Step 0.a: Import standard Python modules
-import doctest
+# Step 0.a: Import standard Python modules.
 import logging
-import os
-import sys
 from typing import Dict, List, Optional, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
+from typing_extensions import Literal
 
 # Step 0.c: Import NRPy core modules
 import nrpy.indexedexp as ixp
-import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
 )
@@ -42,7 +39,7 @@ class GeodesicEquations:
     u0_massive: Optional[sp.Expr]
     p0_photon: Optional[sp.Expr]
     norm_constraint_expr: sp.Expr
-    Gamma4UDD_from_generic_metric: List[List[List[sp.Expr]]]
+    Gamma4UDD_from_metric_recipe: List[List[List[sp.Expr]]]
 
     def __init__(self, spacetime: str, particle_type: str = "massive") -> None:
         """
@@ -84,8 +81,9 @@ class GeodesicEquations:
         else:
             raise ValueError(f"Particle type '{self.particle_type}' is not supported.")
 
-        # Step 4: Reuse the precomputed symbolic recipe for Christoffel symbols from a generic metric.
-        self.Gamma4UDD_from_generic_metric = _GAMMA4UDD_GENERIC_RECIPE
+        # Step 4: Reuse the precomputed symbolic recipe for Christoffel symbols
+        #         built directly from generic metric data.
+        self.Gamma4UDD_from_metric_recipe = _GAMMA4UDD_METRIC_RECIPE
 
         # Step 5: Generate generic normalization constraint for validation
         self.norm_constraint_expr = self.normalization_constraint()
@@ -170,7 +168,7 @@ class GeodesicEquations:
         uU = ixp.declarerank1("uU", dimension=4)
         pos_rhs = [uU[0], uU[1], uU[2], uU[3]]
 
-        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, sym="sym12")
+        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         vel_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
@@ -209,7 +207,7 @@ class GeodesicEquations:
         """
         uU = ixp.declarerank1("uU", dimension=4)
 
-        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
         # The constraint is g_4DD00 (u^0)^2 + 2 g_4DD0i u^0 u^i + g_4DDij u^i u^j = -1
         # This is a quadratic equation: A (u^0)^2 + B u^0 + C = 0
@@ -293,12 +291,12 @@ class GeodesicEquations:
         pU = ixp.declarerank1("pU", dimension=4)
         pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
-        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
         # We need the inverse metric g^UU to compute g^00 for the lapse function.
         g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
 
-        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, sym="sym12")
+        Gamma4UDD = ixp.declarerank3("conn_Gamma4UDD", dimension=4, symmetry="sym12")
         mom_rhs = ixp.zerorank1(dimension=4)
         for alpha in range(4):
             sum_term = sp.sympify(0)
@@ -342,7 +340,7 @@ class GeodesicEquations:
         """
         pU = ixp.declarerank1("pU", dimension=4)
 
-        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
         # The constraint is g_00 (p^0)^2 + 2 g_0i p^0 p^i + g_ij p^i p^j = 0
         # This is a quadratic equation: A (p^0)^2 + B p^0 + C = 0
@@ -404,7 +402,7 @@ class GeodesicEquations:
         vU = ixp.declarerank1("vU", dimension=4)
 
         # Generic metric g_mu_nu
-        g4DD = ixp.declarerank2("metric_g4DD", sym="sym01", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
 
         constraint = sp.sympify(0)
 
@@ -459,9 +457,276 @@ class GeodesicEquations:
                     Gamma4UDD_recipe[alpha][nu][mu] = term
         return Gamma4UDD_recipe
 
+    @staticmethod
+    def _transform_christoffel_recipe_from_grid_basis_data(
+        grid_Gamma4UDD: List[List[List[sp.Expr]]],
+        J4UD: List[List[sp.Expr]],
+        J4UD_dD: List[List[List[sp.Expr]]],
+        K4UD: Optional[List[List[sp.Expr]]] = None,
+    ) -> List[List[List[sp.Expr]]]:
+        r"""
+        Transform grid-basis Christoffel symbols using a supplied Jacobian recipe.
 
-# Compute the generic Christoffel recipe once at module scope to avoid recomputation.
-_GAMMA4UDD_GENERIC_RECIPE = GeodesicEquations.symbolic_numerical_christoffel_recipe()
+        This routine implements the coordinate-transformation law
+
+        \Gamma^\alpha{}_{\mu\nu}
+            =
+            J^\alpha{}_a K^b{}_\mu K^c{}_\nu \Gamma^a{}_{bc}
+            -
+            K^b{}_\mu K^c{}_\nu \partial_b J^\alpha{}_c,
+
+        where ``J4UD[alpha][a] = \partial x^\alpha / \partial u^a`` is the
+        grid-to-target Jacobian and ``K4UD[a][mu] = \partial u^a / \partial x^\mu``
+        is its inverse.
+
+        The derivative tensor is indexed as
+        ``J4UD_dD[alpha][c][b] = \partial_b J^\alpha{}_c``.
+
+        If ``K4UD`` is supplied, this routine consumes it directly as the
+        inverse Jacobian associated with ``J4UD``. As an internal helper, it
+        assumes the Christoffel and Jacobian inputs from module-local callers
+        already satisfy the expected 4D tensor structure.
+
+        :param grid_Gamma4UDD: Christoffel symbols in the source grid basis.
+        :param J4UD: Grid-to-target Jacobian.
+        :param J4UD_dD: Derivatives of the grid-to-target Jacobian.
+        :param K4UD: Inverse Jacobian. If ``None``, compute it from ``J4UD``.
+        :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel
+                 symbols.
+        """
+        # Step 1: Invert the non-symmetric grid-to-target Jacobian if needed.
+        if K4UD is None:
+            K4UD, _ = ixp.generic_matrix_inverter4x4(J4UD)
+
+        # Step 2: Construct the target-basis Christoffels from the standard
+        #         coordinate-transformation law.
+        Gamma4UDD_recipe = ixp.zerorank3(dimension=4)
+        for alpha in range(4):
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    term = sp.sympify(0)
+
+                    # Step 2.a: Add the tensorial pullback term
+                    #           J^alpha_a K^b_mu K^c_nu Gamma^a_bc.
+                    for grid_a in range(4):
+                        for grid_b in range(4):
+                            for grid_c in range(4):
+                                term += (
+                                    J4UD[alpha][grid_a]
+                                    * K4UD[grid_b][mu]
+                                    * K4UD[grid_c][nu]
+                                    * grid_Gamma4UDD[grid_a][grid_b][grid_c]
+                                )
+
+                    # Step 2.b: Subtract the inhomogeneous connection term
+                    #           K^b_mu K^c_nu partial_b J^alpha_c.
+                    for grid_b in range(4):
+                        for grid_c in range(4):
+                            term -= (
+                                K4UD[grid_b][mu]
+                                * K4UD[grid_c][nu]
+                                * J4UD_dD[alpha][grid_c][grid_b]
+                            )
+
+                    Gamma4UDD_recipe[alpha][mu][nu] = term
+                    Gamma4UDD_recipe[alpha][nu][mu] = term
+        return Gamma4UDD_recipe
+
+    @staticmethod
+    def symbolic_christoffel_recipe_from_grid_basis() -> List[List[List[sp.Expr]]]:
+        r"""
+        Generate the fully generic symbolic transformed-Christoffel recipe.
+
+        This routine declares symbolic grid-basis Christoffel symbols
+        ``grid_Gamma4UDD``, a symbolic 4D Jacobian ``J4UD``, and a symbolic
+        Hessian ``J4UD_dD`` for an arbitrary smooth spacetime coordinate map
+        ``x^\alpha(u^a)``. It therefore returns a purely symbolic recipe for
+        the transformed connection, without assuming any particular spacetime,
+        coordinate system, or reference metric.
+
+        :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel
+                 symbols.
+        """
+        # Step 1: Declare symbolic source-basis Christoffels
+        #         Gamma^a_bc in an arbitrary smooth grid basis u^a.
+        grid_Gamma4UDD = ixp.declarerank3(
+            "grid_Gamma4UDD", dimension=4, symmetry="sym12"
+        )
+
+        # Step 2: Declare the fully generic Jacobian J^alpha_a =
+        #         partial x^alpha / partial u^a.
+        J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
+
+        # Step 3: Declare the Jacobian derivatives
+        #         partial_b J^alpha_c = partial^2 x^alpha / partial u^b partial u^c.
+        #         Because these are mixed partials of one smooth coordinate map,
+        #         the last two indices are symmetric.
+        J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
+
+        # Step 4: Apply the general connection-transformation formula.
+        return GeodesicEquations._transform_christoffel_recipe_from_grid_basis_data(
+            grid_Gamma4UDD=grid_Gamma4UDD,
+            J4UD=J4UD,
+            J4UD_dD=J4UD_dD,
+        )
+
+    @staticmethod
+    def symbolic_christoffel_recipe_from_bssn_grid_basis(
+        bssn_coord_system: str,
+        target_basis: Literal["Cartesian", "Spherical"] = "Cartesian",
+        enable_bssn_rfm_precompute: bool = False,
+    ) -> List[List[List[sp.Expr]]]:
+        r"""
+        Generate a transformed-Christoffel recipe from BSSN/reference-metric data.
+
+        This routine specializes to the NRPy BSSN/reference-metric data model.
+        The spacetime map is assumed to be a time-independent spatial map lifted
+        into 4D with identity time:
+
+        ``x^0 = u^0``
+
+        ``x^i = X^i(u^1, u^2, u^3)``
+
+        Here ``u^1``, ``u^2``, and ``u^3`` are the spatial grid coordinates
+        stored in ``ReferenceMetric.xx``. The target spatial map ``X^i`` is
+        selected by ``target_basis`` from the matching ``ReferenceMetric``.
+        This routine does not rebuild those Jacobians from ``xx_to_Cart`` or
+        ``xxSph``. Instead, it consumes the public canonical Jacobian objects
+        already stored on ``ReferenceMetric``:
+
+        - ``"Cartesian"`` uses the public Jacobians
+          ``rfm.Jac_dUCart_dDrfmUD`` and ``rfm.Jac_dUrfm_dDCartUD``
+        - ``"Spherical"`` uses the public Jacobians
+          ``rfm.Jac_dUSph_dDrfmUD`` and ``rfm.Jac_dUrfm_dDSphUD``
+
+        All mixed time-space Jacobian entries vanish except ``J4UD[0][0] = 1``,
+        and all second derivatives involving time vanish as well. This branch
+        therefore supports only time-independent spatial maps lifted into
+        spacetime by identity time. It does not represent moving grids,
+        time-dependent spacetime maps, or general non-coordinate basis
+        transformations.
+
+        :param bssn_coord_system: BSSN coordinate system used to construct the
+                                  grid-basis Christoffel symbols.
+        :param target_basis: Target spatial basis. Supported values are
+                             ``"Cartesian"`` and ``"Spherical"``.
+        :param enable_bssn_rfm_precompute: Whether to enable reference-metric
+                                           precomputation inside the BSSN
+                                           Christoffel helper.
+        :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel
+                 symbols.
+        :raises ValueError: If ``bssn_coord_system`` is not a string.
+        :raises ValueError: If ``target_basis`` is unsupported.
+        :raises ValueError: If ``enable_bssn_rfm_precompute`` is not a bool.
+        """
+        # Step 1.a: Validate the public API inputs before triggering cached lookups.
+        if not isinstance(bssn_coord_system, str):
+            raise ValueError(
+                "bssn_coord_system must be a string, "
+                f"got {type(bssn_coord_system).__name__}"
+            )
+        if target_basis not in ("Cartesian", "Spherical"):
+            raise ValueError(
+                f"Unsupported target_basis '{target_basis}'. "
+                "Supported values are 'Cartesian' and 'Spherical'."
+            )
+        if not isinstance(enable_bssn_rfm_precompute, bool):
+            raise ValueError(
+                "enable_bssn_rfm_precompute must be a bool, "
+                f"got {type(enable_bssn_rfm_precompute).__name__}"
+            )
+
+        # Step 1.b: Import the BSSN and reference-metric helpers lazily so
+        #         analytic-only users do not pull in the full BSSN stack at import time.
+        # pylint: disable-next=import-outside-toplevel,redefined-outer-name
+        import nrpy.reference_metric as refmetric
+
+        # pylint: disable-next=import-outside-toplevel
+        from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (
+            BSSN_to_g4Christoffel,
+        )
+
+        if bssn_coord_system not in refmetric.supported_CoordSystems:
+            raise ValueError(
+                f"Unsupported CoordSystem '{bssn_coord_system}'. "
+                f"Supported coordinate systems: {refmetric.supported_CoordSystems}"
+            )
+
+        # Step 2: Construct the source-basis four-Christoffels Gamma^a_bc from
+        #         the BSSN variables native to the requested grid basis.
+        bssn_to_g4christoffel = BSSN_to_g4Christoffel(
+            CoordSystem=bssn_coord_system,
+            enable_rfm_precompute=enable_bssn_rfm_precompute,
+        )
+        grid_Gamma4UDD = bssn_to_g4christoffel.Gamma4UDD
+
+        # Step 3: Fetch the matching ReferenceMetric object so the spatial
+        #         basis transformation uses the same coordinate model as the
+        #         underlying BSSN quantities.
+        coord_system_key = bssn_coord_system + (
+            "_rfm_precompute" if enable_bssn_rfm_precompute else ""
+        )
+        rfm = refmetric.reference_metric[coord_system_key]
+        if len(rfm.xx) != 3:
+            raise ValueError(
+                "ReferenceMetric coordinates are inconsistent with 3D space."
+            )
+
+        # Step 4: Select the canonical spatial Jacobian pair
+        #         J^i_j = partial x^i / partial u^j and
+        #         K^j_i = partial u^j / partial x^i
+        #         for the requested target basis.
+        if target_basis == "Cartesian":
+            spatial_J4UD = rfm.Jac_dUCart_dDrfmUD
+            spatial_K4UD = rfm.Jac_dUrfm_dDCartUD
+        else:
+            spatial_J4UD = rfm.Jac_dUSph_dDrfmUD
+            spatial_K4UD = rfm.Jac_dUrfm_dDSphUD
+
+        # Step 5: Lift the time-independent spatial Jacobians into the 4D map
+        #         x^0 = u^0, x^i = X^i(u^j), so only the purely spatial block
+        #         differs from the identity.
+        J4UD = ixp.zerorank2(dimension=4)
+        K4UD = ixp.zerorank2(dimension=4)
+        J4UD[0][0] = sp.sympify(1)
+        K4UD[0][0] = sp.sympify(1)
+        for target_i in range(3):
+            for grid_j in range(3):
+                J4UD[target_i + 1][grid_j + 1] = spatial_J4UD[target_i][grid_j]
+                K4UD[grid_j + 1][target_i + 1] = spatial_K4UD[grid_j][target_i]
+
+        # Step 6: Construct the lifted Hessian
+        #         partial_k J^i_j = partial^2 X^i / partial u^k partial u^j.
+        #         All entries involving time vanish because the lifted map is
+        #         explicitly time independent.
+        J4UD_dD = ixp.zerorank3(dimension=4)
+        for target_i in range(3):
+            for grid_j in range(3):
+                for grid_k in range(3):
+                    J4UD_dD[target_i + 1][grid_j + 1][grid_k + 1] = sp.diff(
+                        spatial_J4UD[target_i][grid_j], rfm.xx[grid_k]
+                    )
+
+        # Step 7: Apply the connection-transformation formula to expose the
+        #         BSSN Christoffels in the requested target basis.
+        return GeodesicEquations._transform_christoffel_recipe_from_grid_basis_data(
+            grid_Gamma4UDD=grid_Gamma4UDD,
+            J4UD=J4UD,
+            J4UD_dD=J4UD_dD,
+            K4UD=K4UD,
+        )
+
+
+# Compute the metric-based Christoffel recipe once at module scope to avoid recomputation.
+_GAMMA4UDD_METRIC_RECIPE = GeodesicEquations.symbolic_numerical_christoffel_recipe()
+# Module-level convenience alias for callers that need only the transformed
+# Christoffel recipe and do not need to instantiate GeodesicEquations.
+symbolic_christoffel_recipe_from_grid_basis = (
+    GeodesicEquations.symbolic_christoffel_recipe_from_grid_basis
+)
+symbolic_christoffel_recipe_from_bssn_grid_basis = (
+    GeodesicEquations.symbolic_christoffel_recipe_from_bssn_grid_basis
+)
 
 
 class GeodesicEquations_dict(Dict[str, "GeodesicEquations"]):
@@ -493,6 +758,21 @@ Geodesic_Equations = GeodesicEquations_dict()
 
 
 if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    import os
+
+    import nrpy.validate_expressions.validate_expressions as ve
+
     # Configure logging to output to the console for direct script execution.
     logging.basicConfig(level=logging.INFO)
 
@@ -530,13 +810,176 @@ if __name__ == "__main__":
     print("Validation successful.")
     print("-" * 40)
 
-    # Step 2: Run doctests
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
+    # Step 2: Validate the transformed-Christoffel recipe helpers using
+    #         numeric substitution. First evaluate the fully generic
+    #         grid-basis recipe on cylindrical Minkowski data and confirm the
+    #         transformed Cartesian Christoffels vanish. Then validate the
+    #         BSSN-specialized wrapper in an identity-map case where it must
+    #         reproduce the underlying BSSN four-Christoffels exactly.
+    print("Checking transformed-Christoffel recipes with numeric substitution...")
+    import nrpy.equations.general_relativity.BSSN_to_g4Christoffel
+    import nrpy.reference_metric as refmetric
+
+    cylindrical_rfm = refmetric.reference_metric["Cylindrical"]
+    cylindrical_xx = cylindrical_rfm.xx
+    sample_rho = sp.Rational(5, 4)
+    sample_phi = sp.Rational(2, 5)
+    sample_z = sp.Rational(7, 10)
+    cylindrical_sample_values: Dict[sp.Basic, sp.Basic] = {
+        cylindrical_xx[0]: sample_rho,
+        cylindrical_xx[1]: sample_phi,
+        cylindrical_xx[2]: sample_z,
+    }
+
+    # Step 2.a: Supply the 4D cylindrical-to-Cartesian Jacobian and its
+    #           second derivatives at a fixed nonsingular sample point.
+    transformed_recipe = symbolic_christoffel_recipe_from_grid_basis()
+    transformed_grid_Gamma4UDD = ixp.declarerank3(
+        "grid_Gamma4UDD", dimension=4, symmetry="sym12"
+    )
+    transformed_J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
+    transformed_J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
+
+    transform_values: Dict[sp.Basic, sp.Basic] = {}
+    for jac_alpha in range(4):
+        for jac_beta in range(4):
+            if jac_alpha == 0 and jac_beta == 0:
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(1)
+            elif jac_alpha == 0 or jac_beta == 0:
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(0)
+            else:
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = (
+                    cylindrical_rfm.xx_to_Cart[jac_alpha - 1]
+                    .diff(cylindrical_rfm.xx[jac_beta - 1])
+                    .xreplace(cylindrical_sample_values)
+                )
+
+    for hess_alpha in range(4):
+        for hess_nu in range(4):
+            for hess_mu in range(4):
+                if hess_alpha == 0 or hess_nu == 0 or hess_mu == 0:
+                    transform_values[
+                        transformed_J4UD_dD[hess_alpha][hess_nu][hess_mu]
+                    ] = sp.sympify(0)
+                else:
+                    transform_values[
+                        transformed_J4UD_dD[hess_alpha][hess_nu][hess_mu]
+                    ] = (
+                        cylindrical_rfm.xx_to_Cart[hess_alpha - 1]
+                        .diff(cylindrical_rfm.xx[hess_nu - 1])
+                        .diff(cylindrical_rfm.xx[hess_mu - 1])
+                        .xreplace(cylindrical_sample_values)
+                    )
+
+    # Step 2.b: Evaluate the metric-based Christoffel recipe on the
+    #           cylindrical Minkowski metric at the same sample point.
+    cylindrical_flat_g4DD = ixp.zerorank2(dimension=4)
+    cylindrical_flat_g4DD[0][0] = sp.sympify(-1)
+    cylindrical_flat_g4DD[1][1] = sp.sympify(1)
+    cylindrical_flat_g4DD[2][2] = cylindrical_xx[0] ** 2
+    cylindrical_flat_g4DD[3][3] = sp.sympify(1)
+
+    cylindrical_flat_g4DD_dD = ixp.zerorank3(dimension=4)
+    for cyl_mu in range(4):
+        for cyl_nu in range(cyl_mu, 4):
+            for cyl_rho in range(4):
+                cylindrical_deriv = (
+                    sp.diff(
+                        cylindrical_flat_g4DD[cyl_mu][cyl_nu],
+                        cylindrical_xx[cyl_rho - 1],
+                    ).xreplace(cylindrical_sample_values)
+                    if cyl_rho > 0
+                    else sp.sympify(0)
+                )
+                cylindrical_flat_g4DD_dD[cyl_mu][cyl_nu][cyl_rho] = cylindrical_deriv
+                cylindrical_flat_g4DD_dD[cyl_nu][cyl_mu][cyl_rho] = cylindrical_deriv
+
+    metric_recipe_g4DD_sym = ixp.declarerank2("g4DD_sym", dimension=4)
+    metric_recipe_g4DD_dD_sym = ixp.declarerank3("g4DD_dD_sym", dimension=4)
+    metric_recipe_values: Dict[sp.Basic, sp.Basic] = {}
+    for sym_mu in range(4):
+        for sym_nu in range(4):
+            metric_recipe_values[metric_recipe_g4DD_sym[sym_mu][sym_nu]] = (
+                cylindrical_flat_g4DD[sym_mu][sym_nu].xreplace(
+                    cylindrical_sample_values
+                )
+            )
+            for sym_rho in range(4):
+                metric_recipe_values[
+                    metric_recipe_g4DD_dD_sym[sym_mu][sym_nu][sym_rho]
+                ] = cylindrical_flat_g4DD_dD[sym_mu][sym_nu][sym_rho]
+
+    cylindrical_flat_gamma = GeodesicEquations.symbolic_numerical_christoffel_recipe()
+    for gamma_alpha in range(4):
+        for gamma_mu in range(4):
+            for gamma_nu in range(4):
+                cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu] = (
+                    cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu].xreplace(
+                        metric_recipe_values
+                    )
+                )
+
+    # Step 2.c: Feed the numerically evaluated cylindrical Christoffels into
+    #           the coordinate-transformation recipe.
+    for grid_alpha_val in range(4):
+        for grid_mu_val in range(4):
+            for grid_nu_val in range(4):
+                transform_values[
+                    transformed_grid_Gamma4UDD[grid_alpha_val][grid_mu_val][grid_nu_val]
+                ] = cylindrical_flat_gamma[grid_alpha_val][grid_mu_val][grid_nu_val]
+
+    # Step 2.d: Evaluate the transformed recipe numerically. Because the
+    #           target coordinates are Cartesian flat spacetime, every
+    #           transformed Christoffel component should vanish.
+    for check_alpha in range(4):
+        for check_mu in range(4):
+            for check_nu in range(check_mu, 4):
+                transformed_diff = transformed_recipe[check_alpha][check_mu][
+                    check_nu
+                ].xreplace(transform_values)
+                if not ve.check_zero(
+                    transformed_diff,
+                    fixed_mpfs_for_free_symbols=True,
+                    verbose=False,
+                ):
+                    raise ValueError(
+                        "Nontrivial Christoffel transform check failed for "
+                        f"Gamma[{check_alpha}][{check_mu}][{check_nu}]"
+                    )
+    print("Generic transformed-Christoffel recipe check passed.")
+
+    # Step 2.e: Validate the BSSN-specialized wrapper in the Cartesian
+    #           identity-map case, where the transformed Christoffels must
+    #           reproduce the source-basis BSSN Christoffels exactly.
+    print(
+        "Checking BSSN-specialized transformed-Christoffel recipe in the "
+        "Cartesian identity-map case..."
+    )
+    bssn_identity_helper = (
+        nrpy.equations.general_relativity.BSSN_to_g4Christoffel.BSSN_to_g4Christoffel(
+            CoordSystem="Cartesian"
+        )
+    )
+    bssn_identity_recipe = symbolic_christoffel_recipe_from_bssn_grid_basis(
+        bssn_coord_system="Cartesian", target_basis="Cartesian"
+    )
+    for check_alpha in range(4):
+        for check_mu in range(4):
+            for check_nu in range(check_mu, 4):
+                identity_diff = (
+                    bssn_identity_recipe[check_alpha][check_mu][check_nu]
+                    - bssn_identity_helper.Gamma4UDD[check_alpha][check_mu][check_nu]
+                )
+                if not ve.check_zero(
+                    identity_diff,
+                    fixed_mpfs_for_free_symbols=True,
+                    verbose=False,
+                ):
+                    raise ValueError(
+                        "BSSN transformed-Christoffel identity-map check failed for "
+                        f"Gamma[{check_alpha}][{check_mu}][{check_nu}]"
+                    )
+    print("BSSN-specialized transformed-Christoffel recipe check passed.")
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.

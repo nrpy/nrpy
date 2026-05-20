@@ -21,6 +21,7 @@ ensures constraint solver convergence. Evaluating conserved quantities establish
 data baseline before the pipeline mutates the state vectors.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

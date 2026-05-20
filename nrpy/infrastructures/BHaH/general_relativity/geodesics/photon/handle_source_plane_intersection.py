@@ -14,6 +14,7 @@ the blueprint structures. It relies on constant memory caching to process physic
 impact parameters.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

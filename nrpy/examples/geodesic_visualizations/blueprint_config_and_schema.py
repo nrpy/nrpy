@@ -7,6 +7,7 @@ shared termination-type constants expected in serialized blueprint files, and
 common visualization defaults used by renderer and diagnostic scripts.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import numpy as np

@@ -19,6 +19,7 @@ Numerical fidelity is validated by monitoring constants of motion
 associated with the spacetime's symmetries, including Killing vectors and tensors.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import os

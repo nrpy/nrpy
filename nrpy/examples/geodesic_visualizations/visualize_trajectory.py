@@ -7,6 +7,7 @@ the structural integrity of the output. It creates a 3D plot of the particle's p
 interacting with the event horizon to visually confirm gravitational lensing effects.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import argparse

@@ -20,6 +20,7 @@ boundaries, while global state values are mapped to immediate local variables to
 minimize memory latency.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
