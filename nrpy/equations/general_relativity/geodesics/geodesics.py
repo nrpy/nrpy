@@ -483,7 +483,9 @@ class GeodesicEquations:
         ``J4UD_dD[alpha][c][b] = \partial_b J^\alpha{}_c``.
 
         If ``K4UD`` is supplied, this routine consumes it directly as the
-        inverse Jacobian associated with ``J4UD``.
+        inverse Jacobian associated with ``J4UD``. As an internal helper, it
+        assumes the Christoffel and Jacobian inputs from module-local callers
+        already satisfy the expected 4D tensor structure.
 
         :param grid_Gamma4UDD: Christoffel symbols in the source grid basis.
         :param J4UD: Grid-to-target Jacobian.
@@ -491,41 +493,10 @@ class GeodesicEquations:
         :param K4UD: Inverse Jacobian. If ``None``, compute it from ``J4UD``.
         :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel
                  symbols.
-        :raises ValueError: If the supplied Jacobian tensors are not 4D objects.
         """
-        # Step 1.a: Validate the tensor dimensions for the 4D transformation law.
-        if len(grid_Gamma4UDD) != 4 or len(J4UD) != 4 or len(J4UD_dD) != 4:
-            raise ValueError(
-                "All Christoffel and Jacobian tensors must be 4-dimensional."
-            )
-        for alpha in range(4):
-            if (
-                len(grid_Gamma4UDD[alpha]) != 4
-                or len(J4UD[alpha]) != 4
-                or len(J4UD_dD[alpha]) != 4
-            ):
-                raise ValueError(
-                    "All Christoffel and Jacobian tensors must be 4x4x4- or "
-                    "4x4-shaped objects."
-                )
-            for mu in range(4):
-                if len(grid_Gamma4UDD[alpha][mu]) != 4 or len(J4UD_dD[alpha][mu]) != 4:
-                    raise ValueError(
-                        "All Christoffel and Jacobian tensors must be 4x4x4- or "
-                        "4x4-shaped objects."
-                    )
-
-        # Step 1.b: Invert the non-symmetric grid-to-target Jacobian if needed.
+        # Step 1: Invert the non-symmetric grid-to-target Jacobian if needed.
         if K4UD is None:
             K4UD, _ = ixp.generic_matrix_inverter4x4(J4UD)
-        else:
-            if len(K4UD) != 4:
-                raise ValueError("The supplied inverse Jacobian must be 4-dimensional.")
-            for alpha in range(4):
-                if len(K4UD[alpha]) != 4:
-                    raise ValueError(
-                        "The supplied inverse Jacobian must be a 4x4-shaped object."
-                    )
 
         # Step 2: Construct the target-basis Christoffels from the standard
         #         coordinate-transformation law.
