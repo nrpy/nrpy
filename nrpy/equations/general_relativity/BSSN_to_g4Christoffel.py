@@ -1,8 +1,7 @@
 """
 Construct the physical spacetime Christoffel symbols from BSSN quantities.
 
-Author: OpenAI
-        support **at** openai **dot** com
+Author: Dalton J. Moone
 """
 
 import sympy as sp
@@ -207,27 +206,68 @@ class BSSN_to_g4Christoffel:
             self.g4DD_dD[0][i + 1][0] = self.betaDd0[i]
             self.g4DD_dD[i + 1][0][0] = self.betaDd0[i]
 
-        # Step 7: Construct
-        #         \Gamma^\alpha_{\mu\nu} = \frac{1}{2} g^{\alpha\beta}
-        #         \left( g_{\beta\mu,\nu} + g_{\beta\nu,\mu} - g_{\mu\nu,\beta} \right).
+        # Step 7.a: Construct ADM-reduced helper contractions for the
+        #           four-Christoffel symbols.
+        self.KUD = ixp.zerorank2()
+        self.DalphaU = ixp.zerorank1()
+        self.DbetaUD = ixp.zerorank2()
+        self.KbetaD = ixp.zerorank1()
+        self.Kbetabeta = sp.sympify(0)
+        self.betaDalpha = sp.sympify(0)
+        for i in range(3):
+            self.betaDalpha += self.betaU[i] * self.alpha_dD[i]
+            for j in range(3):
+                self.KbetaD[i] += self.KDD[i][j] * self.betaU[j]
+                self.Kbetabeta += self.KDD[i][j] * self.betaU[i] * self.betaU[j]
+                self.DalphaU[i] += self.gammaUU[i][j] * self.alpha_dD[j]
+                self.DbetaUD[i][j] = self.betaU_dD[i][j]
+                for k in range(3):
+                    self.KUD[i][j] += self.gammaUU[i][k] * self.KDD[k][j]
+                    self.DbetaUD[i][j] += self.GammaUDD[i][j][k] * self.betaU[k]
+
+        # Step 7.b: Construct the spacetime Christoffels using the ADM-reduced
+        #           formulas, avoiding the much larger generic four-metric
+        #           contraction while preserving the same physical connection.
         self.Gamma4UDD = ixp.zerorank3(dimension=4)
-        for alpha in range(4):
-            for mu in range(4):
-                for nu in range(mu, 4):
-                    for beta in range(4):
-                        self.Gamma4UDD[alpha][mu][nu] += (
-                            sp.Rational(1, 2)
-                            * self.g4UU[alpha][beta]
-                            * (
-                                self.g4DD_dD[beta][mu][nu]
-                                + self.g4DD_dD[beta][nu][mu]
-                                - self.g4DD_dD[mu][nu][beta]
-                            )
-                        )
-                    self.Gamma4UDD[alpha][nu][mu] = self.Gamma4UDD[alpha][mu][nu]
+        self.Gamma4UDD[0][0][0] = (
+            self.alpha_d0 + self.betaDalpha - self.Kbetabeta
+        ) / self.alpha
+        for i in range(3):
+            self.Gamma4UDD[0][0][i + 1] = (
+                self.alpha_dD[i] - self.KbetaD[i]
+            ) / self.alpha
+            self.Gamma4UDD[0][i + 1][0] = self.Gamma4UDD[0][0][i + 1]
 
+            betaD_Db = sp.sympify(0)
+            KUDbeta = sp.sympify(0)
+            for j in range(3):
+                betaD_Db += self.betaU[j] * self.DbetaUD[i][j]
+                KUDbeta += self.KUD[i][j] * self.betaU[j]
+            self.Gamma4UDD[i + 1][0][0] = (
+                self.betaU_d0[i]
+                + betaD_Db
+                + self.alpha * self.DalphaU[i]
+                - 2 * self.alpha * KUDbeta
+                + self.betaU[i]
+                / self.alpha
+                * (self.Kbetabeta - self.alpha_d0 - self.betaDalpha)
+            )
 
-BSSN_to_g4Christoffel = BSSN_to_g4Christoffel
+            for j in range(3):
+                self.Gamma4UDD[0][i + 1][j + 1] = -self.KDD[i][j] / self.alpha
+
+                self.Gamma4UDD[i + 1][0][j + 1] = (
+                    self.DbetaUD[i][j]
+                    - self.alpha * self.KUD[i][j]
+                    + self.betaU[i] / self.alpha * (self.KbetaD[j] - self.alpha_dD[j])
+                )
+                self.Gamma4UDD[i + 1][j + 1][0] = self.Gamma4UDD[i + 1][0][j + 1]
+
+                for k in range(3):
+                    self.Gamma4UDD[i + 1][j + 1][k + 1] = (
+                        self.GammaUDD[i][j][k]
+                        + self.betaU[i] * self.KDD[j][k] / self.alpha
+                    )
 
 
 if __name__ == "__main__":
