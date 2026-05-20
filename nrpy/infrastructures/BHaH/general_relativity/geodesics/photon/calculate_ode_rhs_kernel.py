@@ -12,6 +12,7 @@ threads exceeding the active chunk. The stage index dictates the offset for memo
 alignment.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 from typing import List

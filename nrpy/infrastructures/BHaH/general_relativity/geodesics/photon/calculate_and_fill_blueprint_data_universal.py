@@ -16,6 +16,7 @@ pre-loaded into staging buffers to prevent overwriting valid memory with uniniti
 data during asynchronous transfers.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

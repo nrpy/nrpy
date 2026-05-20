@@ -8,6 +8,7 @@ accumulator-based approach to map ray endpoints from curved spacetime onto a 2D
 pixel grid via the camera's local window coordinates.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import os

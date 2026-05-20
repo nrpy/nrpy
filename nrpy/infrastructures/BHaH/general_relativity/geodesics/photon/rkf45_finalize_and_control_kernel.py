@@ -17,6 +17,7 @@ and sets the ray status to active; otherwise, it increments the retries and sets
 rejected or failure status.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

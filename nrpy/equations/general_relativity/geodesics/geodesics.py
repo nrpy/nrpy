@@ -707,64 +707,30 @@ if __name__ == "__main__":
     print("Validation successful.")
     print("-" * 40)
 
-    # Step 2: Validate the transformed-Christoffel recipe using a genuinely
-    #         nontrivial spherical-to-Cartesian coordinate map on flat spacetime.
-    print("Checking transformed-Christoffel recipe with a nontrivial coordinate map...")
+    # Step 2: Validate both Christoffel recipes at a fixed cylindrical sample
+    #         point in flat spacetime. First evaluate the metric-based recipe
+    #         on cylindrical Minkowski data, then feed that result into the
+    #         coordinate-transformation recipe and confirm the Cartesian
+    #         Christoffels vanish.
+    print(
+        "Checking metric-based and transformed-Christoffel recipes "
+        "at a fixed cylindrical sample point..."
+    )
     import nrpy.reference_metric as refmetric
 
-    spherical_rfm = refmetric.reference_metric["Spherical"]
-    spherical_xx = spherical_rfm.xx
+    cylindrical_rfm = refmetric.reference_metric["Cylindrical"]
+    cylindrical_xx = cylindrical_rfm.xx
+    sample_rho = sp.Rational(5, 4)
+    sample_phi = sp.Rational(2, 5)
+    sample_z = sp.Rational(7, 10)
+    cylindrical_sample_values: Dict[sp.Basic, sp.Basic] = {
+        cylindrical_xx[0]: sample_rho,
+        cylindrical_xx[1]: sample_phi,
+        cylindrical_xx[2]: sample_z,
+    }
 
-    # Step 2.a: Build the flat spacetime metric in spherical coordinates:
-    #           ds^2 = -dt^2 + dr^2 + r^2 dtheta^2 + r^2 sin^2(theta) dphi^2.
-    spherical_flat_g4DD = ixp.zerorank2(dimension=4)
-    spherical_flat_g4DD[0][0] = sp.sympify(-1)
-    spherical_flat_g4DD[1][1] = sp.sympify(1)
-    spherical_flat_g4DD[2][2] = spherical_xx[0] ** 2
-    spherical_flat_g4DD[3][3] = spherical_xx[0] ** 2 * sp.sin(spherical_xx[1]) ** 2
-
-    spherical_flat_g4DD_dD = ixp.zerorank3(dimension=4)
-    for sph_mu in range(4):
-        for sph_nu in range(sph_mu, 4):
-            for sph_rho in range(4):
-                spherical_deriv = (
-                    sp.diff(
-                        spherical_flat_g4DD[sph_mu][sph_nu],
-                        spherical_xx[sph_rho - 1],
-                    )
-                    if sph_rho > 0
-                    else sp.sympify(0)
-                )
-                spherical_flat_g4DD_dD[sph_mu][sph_nu][sph_rho] = spherical_deriv
-                spherical_flat_g4DD_dD[sph_nu][sph_mu][sph_rho] = spherical_deriv
-
-    # Step 2.b: Evaluate the generic metric-based Christoffel recipe on the
-    #           spherical Minkowski metric to obtain the grid-basis connection.
-    metric_recipe_g4DD_sym = ixp.declarerank2("g4DD_sym", dimension=4)
-    metric_recipe_g4DD_dD_sym = ixp.declarerank3("g4DD_dD_sym", dimension=4)
-    spherical_flat_subs: Dict[sp.Expr, sp.Expr] = {}
-    for sym_mu in range(4):
-        for sym_nu in range(4):
-            spherical_flat_subs[metric_recipe_g4DD_sym[sym_mu][sym_nu]] = (
-                spherical_flat_g4DD[sym_mu][sym_nu]
-            )
-            for sym_rho in range(4):
-                spherical_flat_subs[
-                    metric_recipe_g4DD_dD_sym[sym_mu][sym_nu][sym_rho]
-                ] = spherical_flat_g4DD_dD[sym_mu][sym_nu][sym_rho]
-
-    spherical_flat_gamma = GeodesicEquations.symbolic_numerical_christoffel_recipe()
-    for gamma_alpha in range(4):
-        for gamma_mu in range(4):
-            for gamma_nu in range(4):
-                spherical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu] = (
-                    spherical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu].subs(
-                        spherical_flat_subs
-                    )
-                )
-
-    # Step 2.c: Supply the corresponding 4D spherical-to-Cartesian Jacobian and
-    #           its second derivatives to the transformed-Christoffel recipe.
+    # Step 2.a: Supply the 4D cylindrical-to-Cartesian Jacobian and its
+    #           second derivatives at a fixed nonsingular sample point.
     transformed_recipe = symbolic_christoffel_recipe_from_grid_basis()
     transformed_grid_Gamma4UDD = ixp.declarerank3(
         "grid_Gamma4UDD", dimension=4, symmetry="sym12"
@@ -772,58 +738,103 @@ if __name__ == "__main__":
     transformed_J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
     transformed_J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
 
-    transform_subs: Dict[sp.Expr, sp.Expr] = {}
+    transform_values: Dict[sp.Basic, sp.Basic] = {}
     for jac_alpha in range(4):
         for jac_beta in range(4):
             if jac_alpha == 0 and jac_beta == 0:
-                transform_subs[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(1)
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(1)
             elif jac_alpha == 0 or jac_beta == 0:
-                transform_subs[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(0)
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = sp.sympify(0)
             else:
-                transform_subs[transformed_J4UD[jac_alpha][jac_beta]] = (
-                    spherical_rfm.xx_to_Cart[jac_alpha - 1].diff(
-                        spherical_rfm.xx[jac_beta - 1]
-                    )
+                transform_values[transformed_J4UD[jac_alpha][jac_beta]] = (
+                    cylindrical_rfm.xx_to_Cart[jac_alpha - 1]
+                    .diff(cylindrical_rfm.xx[jac_beta - 1])
+                    .xreplace(cylindrical_sample_values)
                 )
 
     for hess_alpha in range(4):
         for hess_nu in range(4):
-            for hess_mu in range(hess_nu, 4):
+            for hess_mu in range(4):
                 if hess_alpha == 0 or hess_nu == 0 or hess_mu == 0:
-                    transform_subs[
+                    transform_values[
                         transformed_J4UD_dD[hess_alpha][hess_nu][hess_mu]
                     ] = sp.sympify(0)
                 else:
-                    transform_subs[
+                    transform_values[
                         transformed_J4UD_dD[hess_alpha][hess_nu][hess_mu]
-                    ] = sp.diff(
-                        transform_subs[transformed_J4UD[hess_alpha][hess_nu]],
-                        spherical_rfm.xx[hess_mu - 1],
+                    ] = (
+                        cylindrical_rfm.xx_to_Cart[hess_alpha - 1]
+                        .diff(cylindrical_rfm.xx[hess_nu - 1])
+                        .diff(cylindrical_rfm.xx[hess_mu - 1])
+                        .xreplace(cylindrical_sample_values)
                     )
 
+    # Step 2.b: Evaluate the metric-based Christoffel recipe on the
+    #           cylindrical Minkowski metric at the same sample point.
+    cylindrical_flat_g4DD = ixp.zerorank2(dimension=4)
+    cylindrical_flat_g4DD[0][0] = sp.sympify(-1)
+    cylindrical_flat_g4DD[1][1] = sp.sympify(1)
+    cylindrical_flat_g4DD[2][2] = cylindrical_xx[0] ** 2
+    cylindrical_flat_g4DD[3][3] = sp.sympify(1)
+
+    cylindrical_flat_g4DD_dD = ixp.zerorank3(dimension=4)
+    for cyl_mu in range(4):
+        for cyl_nu in range(cyl_mu, 4):
+            for cyl_rho in range(4):
+                cylindrical_deriv = (
+                    sp.diff(
+                        cylindrical_flat_g4DD[cyl_mu][cyl_nu],
+                        cylindrical_xx[cyl_rho - 1],
+                    ).xreplace(cylindrical_sample_values)
+                    if cyl_rho > 0
+                    else sp.sympify(0)
+                )
+                cylindrical_flat_g4DD_dD[cyl_mu][cyl_nu][cyl_rho] = cylindrical_deriv
+                cylindrical_flat_g4DD_dD[cyl_nu][cyl_mu][cyl_rho] = cylindrical_deriv
+
+    metric_recipe_g4DD_sym = ixp.declarerank2("g4DD_sym", dimension=4)
+    metric_recipe_g4DD_dD_sym = ixp.declarerank3("g4DD_dD_sym", dimension=4)
+    metric_recipe_values: Dict[sp.Basic, sp.Basic] = {}
+    for sym_mu in range(4):
+        for sym_nu in range(4):
+            metric_recipe_values[metric_recipe_g4DD_sym[sym_mu][sym_nu]] = (
+                cylindrical_flat_g4DD[sym_mu][sym_nu].xreplace(
+                    cylindrical_sample_values
+                )
+            )
+            for sym_rho in range(4):
+                metric_recipe_values[
+                    metric_recipe_g4DD_dD_sym[sym_mu][sym_nu][sym_rho]
+                ] = cylindrical_flat_g4DD_dD[sym_mu][sym_nu][sym_rho]
+
+    cylindrical_flat_gamma = GeodesicEquations.symbolic_numerical_christoffel_recipe()
+    for gamma_alpha in range(4):
+        for gamma_mu in range(4):
+            for gamma_nu in range(4):
+                cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu] = (
+                    cylindrical_flat_gamma[gamma_alpha][gamma_mu][gamma_nu].xreplace(
+                        metric_recipe_values
+                    )
+                )
+
+    # Step 2.c: Feed the numerically evaluated cylindrical Christoffels into
+    #           the coordinate-transformation recipe.
     for grid_alpha_val in range(4):
         for grid_mu_val in range(4):
-            for grid_nu_val in range(grid_mu_val, 4):
-                transform_subs[
+            for grid_nu_val in range(4):
+                transform_values[
                     transformed_grid_Gamma4UDD[grid_alpha_val][grid_mu_val][grid_nu_val]
-                ] = spherical_flat_gamma[grid_alpha_val][grid_mu_val][grid_nu_val]
+                ] = cylindrical_flat_gamma[grid_alpha_val][grid_mu_val][grid_nu_val]
 
-    # Step 2.d: Evaluate the transformed-connection identity at a fixed
-    #           nonsingular spherical sample point to avoid slow and fragile
-    #           exact symbolic simplification.
-    spherical_sample_subs: Dict[sp.Symbol, sp.Expr] = {
-        spherical_xx[0]: sp.Rational(5, 4),
-        spherical_xx[1]: sp.Rational(7, 10),
-        spherical_xx[2]: sp.Rational(2, 5),
-    }
-
+    # Step 2.d: Evaluate the transformed recipe numerically. Because the
+    #           target coordinates are Cartesian flat spacetime, every
+    #           transformed Christoffel component should vanish.
     for check_alpha in range(4):
         for check_mu in range(4):
             for check_nu in range(check_mu, 4):
                 transformed_diff = transformed_recipe[check_alpha][check_mu][
                     check_nu
-                ].subs(transform_subs)
-                transformed_diff = transformed_diff.subs(spherical_sample_subs)
+                ].xreplace(transform_values)
                 if not ve.check_zero(
                     transformed_diff,
                     fixed_mpfs_for_free_symbols=True,

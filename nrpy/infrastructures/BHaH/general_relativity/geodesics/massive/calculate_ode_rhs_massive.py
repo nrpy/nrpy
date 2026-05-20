@@ -12,6 +12,7 @@ and reading from local arrays organizes memory access. Common Subexpression Elim
 (CSE) reduces floating-point operations during the derivative calculation.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 from typing import List

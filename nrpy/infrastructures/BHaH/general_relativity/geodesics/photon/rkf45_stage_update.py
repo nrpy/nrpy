@@ -13,6 +13,7 @@ update directly to memory enforces the split-pipeline communication constraint r
 for the architecture.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

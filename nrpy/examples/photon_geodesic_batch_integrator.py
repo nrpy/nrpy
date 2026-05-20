@@ -8,6 +8,7 @@ The generated code employs a Structure of Arrays (SoA) memory layout and an
 adaptive RKF45 integration scheme managed by a lock-free TimeSlotManager system.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 
 """
 

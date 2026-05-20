@@ -10,6 +10,7 @@ Statically allocated execution buffers map to the memory hierarchy. A pagination
 orchestrates data transfers.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 from typing import List

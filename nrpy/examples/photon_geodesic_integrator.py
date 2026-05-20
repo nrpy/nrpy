@@ -23,6 +23,7 @@ Physics Context:
     associated with the spacetime's symmetries (Killing vectors and tensors).
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import os

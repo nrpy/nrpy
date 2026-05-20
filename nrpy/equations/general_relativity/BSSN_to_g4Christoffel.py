@@ -2,6 +2,7 @@
 Construct the physical spacetime Christoffel symbols from BSSN quantities.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import sympy as sp

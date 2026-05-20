@@ -19,6 +19,7 @@ Processing memory in static bundles protects hardware limits. A synchronization
 transfer updates the master Structure of Arrays state.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
