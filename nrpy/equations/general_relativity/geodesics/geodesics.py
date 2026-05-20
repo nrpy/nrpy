@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
+from typing_extensions import Literal
 
 # Step 0.c: Import NRPy core modules
 import nrpy.indexedexp as ixp
@@ -459,22 +460,13 @@ class GeodesicEquations:
     @staticmethod
     def symbolic_christoffel_recipe_from_grid_basis(
         bssn_coord_system: Optional[str] = None,
+        target_basis: Literal["Cartesian", "Spherical"] = "Cartesian",
         enable_bssn_rfm_precompute: bool = False,
     ) -> List[List[List[sp.Expr]]]:
         r"""
         Generate a symbolic recipe for target-coordinate Christoffel symbols.
 
-        This routine implements the coordinate-transformation law for
-        Christoffel symbols. It assumes that ``J4UD`` is the Jacobian of a
-        smooth coordinate map from grid coordinates ``u^a`` to target
-        coordinates ``x^\alpha``, and that ``J4UD_dD`` contains the
-        corresponding coordinate second derivatives.
-
-        Greek indices ``alpha``, ``mu``, and ``nu`` refer to target
-        coordinates ``x^\alpha``. Latin indices ``a``, ``b``, and ``c`` refer
-        to grid coordinates ``u^a``.
-
-        This routine applies the coordinate-transformation law
+        This routine implements the coordinate-transformation law
 
         \Gamma^\alpha{}_{\mu\nu}
             =
@@ -483,69 +475,57 @@ class GeodesicEquations:
             K^b{}_\mu K^c{}_\nu \partial_b J^\alpha{}_c,
 
         where ``J4UD[alpha][a] = \partial x^\alpha / \partial u^a`` is the
-        grid-to-target Jacobian and ``K4DU[a][mu] = \partial u^a / \partial x^\mu``
+        grid-to-target Jacobian and ``K4UD[a][mu] = \partial u^a / \partial x^\mu``
         is its inverse.
 
-        The first term is the homogeneous, tensor-like part of the
-        coordinate-connection transformation law. The second term is required
-        because Christoffel symbols are not tensor components; it accounts for
-        the second derivatives of the coordinate map. In this representation
-        those second derivatives are encoded in ``J4UD_dD``.
-
-        If ``bssn_coord_system`` is ``None``, the grid-coordinate Christoffel
-        symbols are declared symbolically as ``grid_Gamma4UDD``. If
-        ``bssn_coord_system`` is provided, they are obtained from
-        ``BSSN_to_g4Christoffel`` in that grid coordinate system. This assumes
-        that ``BSSN_to_g4Christoffel`` returns coordinate-basis Christoffel
-        symbols for that coordinate system.
-
         The derivative tensor is indexed as
-        ``J4UD_dD[alpha][grid_c][grid_b] = \partial_{grid_b} J^\alpha{}_{grid_c}``,
-        where ``grid_b`` and ``grid_c`` are grid-coordinate indices. This
-        corresponds to ``\partial_b J^\alpha{}_c`` in the transformation
-        formula. Thus ``J4UD_dD`` is the Hessian of the same 4D coordinate map
-        represented by ``J4UD``, with one target-coordinate component index and
-        two grid-coordinate derivative indices.
+        ``J4UD_dD[alpha][c][b] = \partial_b J^\alpha{}_c``.
 
-        This routine is valid only when ``J4UD`` and ``J4UD_dD`` come from the
-        same smooth spacetime coordinate map. In particular,
+        If ``bssn_coord_system`` is ``None``, this routine preserves the fully
+        generic symbolic behavior: it declares symbolic grid-basis Christoffel
+        symbols ``grid_Gamma4UDD``, a symbolic 4D Jacobian ``J4UD``, and a
+        symbolic Hessian ``J4UD_dD`` for an arbitrary smooth spacetime
+        coordinate map ``x^\alpha(u^a)``.
 
-        ``J4UD[alpha][a] = \partial x^\alpha / \partial u^a``
+        If ``bssn_coord_system`` is provided, this routine specializes to the
+        NRPy BSSN/reference-metric data model. In that mode, the spacetime map
+        is assumed to be a time-independent spatial map lifted into 4D with
+        identity time:
 
-        ``J4UD_dD[alpha][c][b] = \partial_b J4UD[alpha][c]``
+        ``x^0 = u^0``
 
-        The routine is not valid for an arbitrary matrix field ``J4UD`` with
-        unrelated derivative data, nor for a general non-coordinate basis
-        transformation. For the intended BSSN use case, ``J4UD`` and
-        ``J4UD_dD`` must represent the same 4D coordinate map as the one
-        relating the chosen BSSN grid basis to the target basis. In
-        particular, if time is unchanged so that ``x^0 = u^0``, callers should
-        supply time-component entries consistent with that map in both
-        ``J4UD`` and ``J4UD_dD``. For example, this includes
-        ``J4UD[0][0] = 1``, ``J4UD[0][i] = 0``, and ``J4UD_dD[0][a][b] = 0``.
-        Any additional zero entries should reflect the full chosen coordinate
-        map, including whether the spatial target coordinates depend on the
-        grid time coordinate.
+        ``x^i = X^i(u^1, u^2, u^3)``
 
-        Note: ``J4UD_dD`` is declared symmetric in its two grid-coordinate
-        derivative indices. This is valid only when ``J4UD_dD`` is the Hessian
-        of the same smooth coordinate map represented by ``J4UD``:
-        ``\partial_b \partial_c x^\alpha = \partial_c \partial_b x^\alpha``.
-        Do not use this interface for a generic non-integrable matrix field or
-        for a non-coordinate basis transformation.
+        Here ``u^1``, ``u^2``, and ``u^3`` are the spatial grid coordinates
+        stored in ``ReferenceMetric.xx``. The target spatial map ``X^i`` is
+        selected by ``target_basis`` from the matching ``ReferenceMetric``:
+
+        - ``"Cartesian"`` uses ``rfm.xx_to_Cart``
+        - ``"Spherical"`` uses ``rfm.xxSph``
+
+        In this BSSN/reference-metric branch, all mixed time-space Jacobian
+        entries vanish except ``J4UD[0][0] = 1``, and all second derivatives
+        involving time vanish as well. This branch therefore supports only
+        time-independent spatial maps lifted into spacetime by identity time.
+        It does not represent moving grids, time-dependent spacetime maps, or
+        general non-coordinate basis transformations.
 
         :param bssn_coord_system: BSSN coordinate system used to construct the
-                                grid-basis Christoffel symbols. If ``None``,
-                                declare them symbolically instead.
+                                  grid-basis Christoffel symbols. If ``None``,
+                                  declare them symbolically instead.
+        :param target_basis: Target spatial basis for the
+                             BSSN/reference-metric branch. Supported values are
+                             ``"Cartesian"`` and ``"Spherical"``. Ignored when
+                             ``bssn_coord_system is None``.
         :param enable_bssn_rfm_precompute: Whether to enable reference-metric
-                                        precomputation inside the BSSN
-                                        Christoffel helper. This should affect
-                                        construction/performance only and
-                                        should not change the coordinate
-                                        transformation law used here.
-        :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel symbols.
+                                           precomputation inside the BSSN
+                                           Christoffel helper.
+        :return: A 4x4x4 list of SymPy expressions for the transformed Christoffel
+                 symbols.
         :raises ValueError: If reference-metric precomputation is requested without
                             specifying ``bssn_coord_system``.
+        :raises ValueError: If ``target_basis`` is unsupported in
+                            BSSN/reference-metric mode.
         """
         # Step 1: Declare or construct the grid-basis Christoffel symbols.
         if bssn_coord_system is None:
@@ -557,9 +537,21 @@ class GeodesicEquations:
             grid_Gamma4UDD = ixp.declarerank3(
                 "grid_Gamma4UDD", dimension=4, symmetry="sym12"
             )
+            # Step 2: Preserve the fully generic symbolic Jacobian path.
+            J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
+            # Step 2.a: J4UD_dD represents mixed partials of the same smooth
+            #           coordinate map as J4UD, so the last two indices are symmetric.
+            J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
         else:
-            # Step 1.a: Import the BSSN helper lazily so analytic-only users of
-            #           this module do not pull in the full BSSN stack at import time.
+            if target_basis not in ("Cartesian", "Spherical"):
+                raise ValueError(
+                    f"Unsupported target_basis '{target_basis}'. "
+                    "Supported values are 'Cartesian' and 'Spherical'."
+                )
+
+            # Step 1.a: Import the BSSN and reference-metric helpers lazily so
+            #           analytic-only users do not pull in the full BSSN stack at import time.
+            import nrpy.reference_metric as refmetric  # pylint: disable=import-outside-toplevel
             from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (  # pylint: disable=import-outside-toplevel
                 BSSN_to_g4Christoffel,
             )
@@ -570,20 +562,45 @@ class GeodesicEquations:
             )
             grid_Gamma4UDD = bssn_to_g4christoffel.Gamma4UDD
 
-        # Step 2: Declare the grid-to-target Jacobian and its grid derivatives.
-        J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
-        # Step 2.a: J4UD_dD stores second derivatives of the same coordinate map
-        #           as J4UD, so symmetry in the last two indices represents
-        #           equality of mixed partials for that smooth coordinate map.
-        J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
+            # Step 2: Fetch the matching ReferenceMetric object used by the BSSN branch.
+            coord_system_key = bssn_coord_system + (
+                "_rfm_precompute" if enable_bssn_rfm_precompute else ""
+            )
+            rfm = refmetric.reference_metric[coord_system_key]
+
+            # Step 2.a: Select the analytic spatial target map from ReferenceMetric.
+            if target_basis == "Cartesian":
+                target_map = rfm.xx_to_Cart
+            else:
+                target_map = rfm.xxSph
+
+            if len(rfm.xx) != 3 or len(target_map) != 3:
+                raise ValueError(
+                    "ReferenceMetric target map is inconsistent with a 3D spatial coordinate map."
+                )
+
+            # Step 2.b: Lift the chosen time-independent spatial map into a 4D
+            #           Jacobian with identity time.
+            J4UD = ixp.zerorank2(dimension=4)
+            J4UD[0][0] = sp.sympify(1)
+            for target_i in range(3):
+                for grid_j in range(3):
+                    J4UD[target_i + 1][grid_j + 1] = sp.diff(
+                        target_map[target_i], rfm.xx[grid_j]
+                    )
+
+            # Step 2.c: Build the corresponding 4D Hessian tensor. All entries
+            #           involving time vanish for this lifted spatial map.
+            J4UD_dD = ixp.zerorank3(dimension=4)
+            for target_i in range(3):
+                for grid_j in range(3):
+                    for grid_k in range(3):
+                        J4UD_dD[target_i + 1][grid_j + 1][grid_k + 1] = sp.diff(
+                            target_map[target_i], rfm.xx[grid_j], rfm.xx[grid_k]
+                        )
 
         # Step 3: Invert the non-symmetric grid-to-target Jacobian.
-        # K4DU stores the inverse Jacobian K^a_mu = partial u^a / partial x^mu.
-        # Here the first list index is the grid-coordinate index a and the
-        # second list index is the target-coordinate index mu. The variable
-        # name follows the local code convention and should not be read as
-        # changing this mathematical index order.
-        K4DU, _ = ixp.generic_matrix_inverter4x4(J4UD)
+        K4UD, _ = ixp.generic_matrix_inverter4x4(J4UD)
 
         # Step 4: Transform the grid-basis Christoffel symbols to the target coordinates.
         Gamma4UDD_recipe = ixp.zerorank3(dimension=4)
@@ -593,23 +610,23 @@ class GeodesicEquations:
                     term = sp.sympify(0)
 
                     # Step 4.a: Add J^alpha_a K^b_mu K^c_nu Gamma^a_bc.
-                    for grid_alpha in range(4):
-                        for grid_mu in range(4):
-                            for grid_nu in range(4):
+                    for grid_a in range(4):
+                        for grid_b in range(4):
+                            for grid_c in range(4):
                                 term += (
-                                    J4UD[alpha][grid_alpha]
-                                    * K4DU[grid_mu][mu]
-                                    * K4DU[grid_nu][nu]
-                                    * grid_Gamma4UDD[grid_alpha][grid_mu][grid_nu]
+                                    J4UD[alpha][grid_a]
+                                    * K4UD[grid_b][mu]
+                                    * K4UD[grid_c][nu]
+                                    * grid_Gamma4UDD[grid_a][grid_b][grid_c]
                                 )
 
                     # Step 4.b: Subtract K^b_mu K^c_nu partial_b J^alpha_c.
-                    for grid_mu in range(4):
-                        for grid_nu in range(4):
+                    for grid_b in range(4):
+                        for grid_c in range(4):
                             term -= (
-                                K4DU[grid_mu][mu]
-                                * K4DU[grid_nu][nu]
-                                * J4UD_dD[alpha][grid_nu][grid_mu]
+                                K4UD[grid_b][mu]
+                                * K4UD[grid_c][nu]
+                                * J4UD_dD[alpha][grid_c][grid_b]
                             )
 
                     Gamma4UDD_recipe[alpha][mu][nu] = term
@@ -732,11 +749,29 @@ if __name__ == "__main__":
     # Step 2.a: Supply the 4D cylindrical-to-Cartesian Jacobian and its
     #           second derivatives at a fixed nonsingular sample point.
     transformed_recipe = symbolic_christoffel_recipe_from_grid_basis()
+    transformed_recipe_spherical_generic = symbolic_christoffel_recipe_from_grid_basis(
+        target_basis="Spherical"
+    )
     transformed_grid_Gamma4UDD = ixp.declarerank3(
         "grid_Gamma4UDD", dimension=4, symmetry="sym12"
     )
     transformed_J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
     transformed_J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
+
+    # Step 2.a.i: In generic symbolic mode, target_basis is ignored by design.
+    for check_alpha in range(4):
+        for check_mu in range(4):
+            for check_nu in range(check_mu, 4):
+                if (
+                    transformed_recipe[check_alpha][check_mu][check_nu]
+                    != transformed_recipe_spherical_generic[check_alpha][check_mu][
+                        check_nu
+                    ]
+                ):
+                    raise ValueError(
+                        "Generic symbolic mode should ignore target_basis, but "
+                        f"Gamma[{check_alpha}][{check_mu}][{check_nu}] differs."
+                    )
 
     transform_values: Dict[sp.Basic, sp.Basic] = {}
     for jac_alpha in range(4):
