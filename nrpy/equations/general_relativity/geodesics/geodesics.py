@@ -638,7 +638,8 @@ class GeodesicEquations:
 
         # Step 1.b: Import the BSSN and reference-metric helpers lazily so
         #         analytic-only users do not pull in the full BSSN stack at import time.
-        import nrpy.reference_metric as refmetric  # pylint: disable=import-outside-toplevel
+        # pylint: disable-next=import-outside-toplevel,redefined-outer-name
+        import nrpy.reference_metric as refmetric
 
         # pylint: disable-next=import-outside-toplevel
         from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (
