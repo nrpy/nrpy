@@ -845,12 +845,10 @@ if __name__ == "__main__":
     #         BSSN-specialized wrapper in an identity-map case where it must
     #         reproduce the underlying BSSN four-Christoffels exactly.
     print("Checking transformed-Christoffel recipes with numeric substitution...")
-    from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (
-        BSSN_to_g4Christoffel,
-    )
-    from nrpy.reference_metric import reference_metric
+    import nrpy.equations.general_relativity.BSSN_to_g4Christoffel
+    import nrpy.reference_metric as refmetric
 
-    cylindrical_rfm = reference_metric["Cylindrical"]
+    cylindrical_rfm = refmetric.reference_metric["Cylindrical"]
     cylindrical_xx = cylindrical_rfm.xx
     sample_rho = sp.Rational(5, 4)
     sample_phi = sp.Rational(2, 5)
@@ -985,7 +983,11 @@ if __name__ == "__main__":
         "Checking BSSN-specialized transformed-Christoffel recipe in the "
         "Cartesian identity-map case..."
     )
-    bssn_identity_helper = BSSN_to_g4Christoffel(CoordSystem="Cartesian")
+    bssn_identity_helper = (
+        nrpy.equations.general_relativity.BSSN_to_g4Christoffel.BSSN_to_g4Christoffel(
+            CoordSystem="Cartesian"
+        )
+    )
     bssn_identity_recipe = symbolic_christoffel_recipe_from_bssn_grid_basis(
         bssn_coord_system="Cartesian", target_basis="Cartesian"
     )
