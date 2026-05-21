@@ -69,35 +69,7 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-enable_stored_state_export = True
-stored_state_export_root = "stored_state/raw"
-stored_state_export_run_id = "two_blackholes_collide"
-stored_state_export_evol_gf_names = [
-    "aDD00",
-    "aDD01",
-    "aDD02",
-    "aDD11",
-    "aDD12",
-    "aDD22",
-    "alpha",
-    "betU0",
-    "betU1",
-    "betU2",
-    "cf",
-    "hDD00",
-    "hDD01",
-    "hDD02",
-    "hDD11",
-    "hDD12",
-    "hDD22",
-    "lambdaU0",
-    "lambdaU1",
-    "lambdaU2",
-    "trK",
-    "vetU0",
-    "vetU1",
-    "vetU2",
-]
+enable_raytracing_connections_output = True
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
@@ -274,14 +246,11 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
-    enable_stored_state_export=enable_stored_state_export,
-    enable_rfm_precompute=enable_rfm_precompute,
-    stored_state_export_root=stored_state_export_root,
-    stored_state_export_run_id=stored_state_export_run_id,
-    stored_state_export_evol_gf_names=stored_state_export_evol_gf_names,
+    enable_raytracing_connections_output=enable_raytracing_connections_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,

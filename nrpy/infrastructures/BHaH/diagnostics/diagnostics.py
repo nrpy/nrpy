@@ -30,18 +30,16 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import os
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Optional, Set, Union, cast
+from typing import Set, Union, cast
 
 import nrpy.c_function as cfc
-import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
-from nrpy.infrastructures.BHaH import stored_state_export
+from nrpy.infrastructures.BHaH.diagnostics import output_raytracing_connections_4D_data
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
@@ -52,7 +50,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
-    enable_stored_state_export: bool = False,
+    enable_raytracing_connections_output: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -102,9 +100,11 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     :param enable_psi4_diagnostics: If True, include a call to
         psi4_spinweightm2_decomposition(...) on output steps.
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
-    :param enable_stored_state_export: If True, include a call to stored_state_export(...)
-        on output steps. This export writes only directly stored host-side runtime state and
-        metadata, without finite differencing, interpolation, or tensor reconstruction.
+    :param enable_raytracing_connections_output: If True, include a call to
+        output_raytracing_connections_4D_data(...) on output steps. This export
+        writes the physical time, full raw ``griddata[0].params`` bytes, logical
+        coordinate arrays, and exactly the required BSSN evolution
+        gridfunctions.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
 
@@ -230,8 +230,9 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 #endif // __CUDACC__
     }} // END LOOP over grids
 
-    {"// Export directly stored runtime data for later offline reconstruction." if enable_stored_state_export else ""}
-    {"stored_state_export(commondata, griddata);" + newline if enable_stored_state_export else ""}
+    {"// Export raytracing-connection 4D reconstruction data from the stored BSSN state." if enable_raytracing_connections_output else ""}
+    {"const int raytracing_output_index = (int)round(currtime / outevery);" + newline if enable_raytracing_connections_output else ""}
+    {"output_raytracing_connections_4D_data(commondata, griddata, raytracing_output_index);" + newline if enable_raytracing_connections_output else ""}
 
     // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
@@ -252,7 +253,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     // Optional hook: restore MoL scratch storage after diagnostics (currently disabled).
     // for (int grid = 0; grid < commondata->NUMGRIDS; grid++)
     //   MoL_malloc_intermediate_stage_gfs(commondata, &griddata[grid].params, &griddata[grid].gridfuncs);
-  }} // END if output step
+  }} // END IF: diagnostics output step
 
   progress_indicator(commondata, griddata);
 """
@@ -276,14 +277,11 @@ def register_all_diagnostics(
     enable_nearest_diagnostics: bool,
     enable_interp_diagnostics: bool,
     enable_volume_integration_diagnostics: bool,
+    enable_rfm_precompute: bool = False,
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
-    enable_stored_state_export: bool = False,
-    enable_rfm_precompute: bool = False,
-    stored_state_export_root: str = "stored_state/raw",
-    stored_state_export_run_id: str = "default_run",
-    stored_state_export_evol_gf_names: Optional[List[str]] = None,
+    enable_raytracing_connections_output: bool = False,
 ) -> None:
     """
     Register and stage diagnostics-related C code and helper headers.
@@ -310,24 +308,20 @@ def register_all_diagnostics(
     :param enable_nearest_diagnostics: If True, include sampling-based "nearest" diagnostics.
     :param enable_interp_diagnostics: If True, include interpolation-based diagnostics (driver call only).
     :param enable_volume_integration_diagnostics: If True, include volume-integration diagnostics.
+    :param enable_rfm_precompute: Whether reference-metric precompute is enabled in the
+        generated project. When the raytracing-connections exporter is enabled, this
+        flag is recorded in the emitted file header so offline reconstruction can choose
+        the correct reference-metric pathway.
     :param enable_free_auxevol: Currently ignored and has no effect on emitted C code.
         The MoL scratch free/restore hooks remain commented out in the generated driver.
     :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics
         (driver call only).
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
-    :param enable_stored_state_export: If True, register and call a direct runtime-state
-        exporter that writes host-side metadata, xx arrays, y_n_gfs arrays, and optional
-        rfmstruct arrays on diagnostics output steps.
-    :param enable_rfm_precompute: Whether runtime reference-metric precompute is enabled.
-        When True and runtime-data export is enabled, host-side rfmstruct arrays are exported.
-    :param stored_state_export_root: Root directory under which
-        ``snapshot_stepXXXXXXXX/`` directories will be written directly.
-    :param stored_state_export_run_id: Run identifier recorded in emitted raw
-        runtime-export metadata.
-    :param stored_state_export_evol_gf_names: Optional explicit ordered list of EVOL
-        gridfunction names to export. This is useful when parallel codegen isolates the
-        runtime-export registration worker from other workers that register EVOL
-        gridfunctions.
+    :param enable_raytracing_connections_output: If True, register and call a raytracing-data
+        exporter that writes one binary file per diagnostics output containing the physical
+        time, full raw ``griddata[0].params`` bytes, logical coordinate arrays, and exactly
+        the BSSN gridfunctions needed for later interpolation/finite-difference
+        reconstruction of the Christoffel inputs.
     :raises ValueError: If runtime-data export is enabled for anything other than exactly
         one coordinate system.
 
@@ -355,23 +349,15 @@ def register_all_diagnostics(
         enable_free_auxevol=enable_free_auxevol,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_bhahaha=enable_bhahaha,
-        enable_stored_state_export=enable_stored_state_export,
+        enable_raytracing_connections_output=enable_raytracing_connections_output,
     )
-    if enable_stored_state_export:
+    if enable_raytracing_connections_output:
         if len(set_of_CoordSystems) != 1:
             raise ValueError(
-                "enable_stored_state_export currently supports exactly one CoordSystem."
+                "enable_raytracing_connections_output currently supports exactly one CoordSystem."
             )
-        evol_gf_names = stored_state_export_evol_gf_names
-        if evol_gf_names is None:
-            evol_gf_names, _, _, _ = gri.BHaHGridFunction.gridfunction_lists()
-        stored_state_export.register_CFunction_stored_state_export(
-            CoordSystem=next(iter(set_of_CoordSystems)),
-            enable_rfm_precompute=enable_rfm_precompute,
-            project_name=os.path.basename(project_dir),
-            export_root=stored_state_export_root,
-            run_id=stored_state_export_run_id,
-            evol_gf_names=evol_gf_names,
+        output_raytracing_connections_4D_data.output_raytracing_connections_4D_data(
+            enable_rfm_precompute=enable_rfm_precompute
         )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:
