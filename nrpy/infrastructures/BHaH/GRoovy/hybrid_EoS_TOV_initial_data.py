@@ -55,19 +55,7 @@ def register_CFunction_hybrid_EoS_TOV_initial_data(
     body = grhayl_setup_str
     body += r"""
 
-// We're going to solve the TOV live, so we need to set some parameters.
-
-commondata->initial_central_density = 1.28e-3;          // TOVola::initial_central_density
-commondata->initial_ode_step_size = 1e-20;            // TOVola::initial_ode_step_size
-commondata->interpolation_stencil_size = 11;          // TOVola::interpolation_stencil_size
-commondata->max_interpolation_stencil_size = 13;      // TOVola::max_interpolation_stencil_size
-commondata->max_step_size = 1.0;                      // TOVola::max_step_size
-commondata->min_step_size = 1e-20;                    // TOVola::min_step_size
-commondata->ode_error_limit = 1e-06;                  // TOVola::ode_error_limit
-commondata->ode_max_steps = 5000000;                  // TOVola::ode_max_steps
-commondata->poly_eos_Gamma = 2.0;                     // TOVola::poly_eos_Gamma
-commondata->poly_eos_K = 100.0;                         // TOVola::poly_eos_K
-
+// TOVola CodeParameters are already populated from defaults and the parfile, and placed within commondata.
 ID_persist_struct ID_persist;
 TOVola_solve(commondata, &ID_persist);
 
