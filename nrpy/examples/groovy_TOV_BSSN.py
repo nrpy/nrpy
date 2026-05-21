@@ -189,7 +189,7 @@ BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 
 BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem=CoordSystem,
-    enable_T4munu=True,
+    enable_T4munu=False,
     enable_fd_functions=False,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
 )
@@ -456,6 +456,8 @@ for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
 
   primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
   conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);
+  
+  compute_stress_energy_tensor(&commondata, params, xx, &commondata.eos, in_gfs, auxevol_gfs);
 } // END LOOP: for grid over all numerical grids
 """
 BHaH.main_c.register_CFunction_main_c(

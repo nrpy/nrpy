@@ -110,40 +110,59 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
 
           // Note: in the following lines we compare the conserved energy and electron
           // fraction between routines. We do not include entropy, since it is not
-          // conserved at shocks. We ignore the diagnostic from
-          // ghl_enforce_primitive_limits_and_compute_u0 here; a candidate that fails
-          // primitive limiting is unlikely to be selected.
+          // conserved at shocks. Candidates that fail primitive limiting or u0
+          // computation are marked failed before their mismatch is computed.
 
           if (error1 == ghl_success) {
             ghl_conservative_quantities cons_temp = {0};
-            ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims1, &speed_limited_dummy);
-            ghl_compute_conservs(&ADM_metric, &metric_aux, &prims1, &cons_temp);
-            err1 =
-                fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            const ghl_error_codes_t limit_error1 =
+                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims1, &speed_limited_dummy);
+            if (limit_error1 != ghl_success) {
+              error1 = limit_error1;
+            } else {
+              ghl_compute_conservs(&ADM_metric, &metric_aux, &prims1, &cons_temp);
+              err1 =
+                  fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            } // END ELSE: primitive limiting succeeded for Palenzuela energy candidate
           } // END IF: Palenzuela energy recovery succeeded
 
           if (error2 == ghl_success) {
             ghl_conservative_quantities cons_temp = {0};
-            ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims2, &speed_limited_dummy);
-            ghl_compute_conservs(&ADM_metric, &metric_aux, &prims2, &cons_temp);
-            err2 =
-                fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            const ghl_error_codes_t limit_error2 =
+                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims2, &speed_limited_dummy);
+            if (limit_error2 != ghl_success) {
+              error2 = limit_error2;
+            } else {
+              ghl_compute_conservs(&ADM_metric, &metric_aux, &prims2, &cons_temp);
+              err2 =
+                  fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            } // END ELSE: primitive limiting succeeded for Newman energy candidate
           } // END IF: Newman energy recovery succeeded
 
           if (error3 == ghl_success) {
             ghl_conservative_quantities cons_temp = {0};
-            ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims3, &speed_limited_dummy);
-            ghl_compute_conservs(&ADM_metric, &metric_aux, &prims3, &cons_temp);
-            err3 =
-                fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            const ghl_error_codes_t limit_error3 =
+                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims3, &speed_limited_dummy);
+            if (limit_error3 != ghl_success) {
+              error3 = limit_error3;
+            } else {
+              ghl_compute_conservs(&ADM_metric, &metric_aux, &prims3, &cons_temp);
+              err3 =
+                  fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            } // END ELSE: primitive limiting succeeded for Palenzuela entropy candidate
           } // END IF: Palenzuela entropy recovery succeeded
 
           if (error4 == ghl_success) {
             ghl_conservative_quantities cons_temp = {0};
-            ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims4, &speed_limited_dummy);
-            ghl_compute_conservs(&ADM_metric, &metric_aux, &prims4, &cons_temp);
-            err4 =
-                fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            const ghl_error_codes_t limit_error4 =
+                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims4, &speed_limited_dummy);
+            if (limit_error4 != ghl_success) {
+              error4 = limit_error4;
+            } else {
+              ghl_compute_conservs(&ADM_metric, &metric_aux, &prims4, &cons_temp);
+              err4 =
+                  fabs((cons_temp.Y_e - cons_orig.Y_e) / (cons_orig.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_orig.tau) / (cons_orig.tau + 1e-100));
+            } // END ELSE: primitive limiting succeeded for Newman entropy candidate
           } // END IF: Newman entropy recovery succeeded
 
           REAL min_err = err1;
@@ -251,34 +270,54 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
 
               if (error1 == ghl_success) {
                 ghl_conservative_quantities cons_temp = {0};
-                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims1, &speed_limited_dummy);
-                ghl_compute_conservs(&ADM_metric, &metric_aux, &prims1, &cons_temp);
-                err1 =
-                    fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                const ghl_error_codes_t limit_error1 =
+                    ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims1, &speed_limited_dummy);
+                if (limit_error1 != ghl_success) {
+                  error1 = limit_error1;
+                } else {
+                  ghl_compute_conservs(&ADM_metric, &metric_aux, &prims1, &cons_temp);
+                  err1 =
+                      fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                } // END ELSE: primitive limiting succeeded for averaged Palenzuela energy candidate
               } // END IF: averaged Palenzuela energy recovery succeeded
 
               if (error2 == ghl_success) {
                 ghl_conservative_quantities cons_temp = {0};
-                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims2, &speed_limited_dummy);
-                ghl_compute_conservs(&ADM_metric, &metric_aux, &prims2, &cons_temp);
-                err2 =
-                    fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                const ghl_error_codes_t limit_error2 =
+                    ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims2, &speed_limited_dummy);
+                if (limit_error2 != ghl_success) {
+                  error2 = limit_error2;
+                } else {
+                  ghl_compute_conservs(&ADM_metric, &metric_aux, &prims2, &cons_temp);
+                  err2 =
+                      fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                } // END ELSE: primitive limiting succeeded for averaged Newman energy candidate
               } // END IF: averaged Newman energy recovery succeeded
 
               if (error3 == ghl_success) {
                 ghl_conservative_quantities cons_temp = {0};
-                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims3, &speed_limited_dummy);
-                ghl_compute_conservs(&ADM_metric, &metric_aux, &prims3, &cons_temp);
-                err3 =
-                    fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                const ghl_error_codes_t limit_error3 =
+                    ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims3, &speed_limited_dummy);
+                if (limit_error3 != ghl_success) {
+                  error3 = limit_error3;
+                } else {
+                  ghl_compute_conservs(&ADM_metric, &metric_aux, &prims3, &cons_temp);
+                  err3 =
+                      fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                } // END ELSE: primitive limiting succeeded for averaged Palenzuela entropy candidate
               } // END IF: averaged Palenzuela entropy recovery succeeded
 
               if (error4 == ghl_success) {
                 ghl_conservative_quantities cons_temp = {0};
-                ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims4, &speed_limited_dummy);
-                ghl_compute_conservs(&ADM_metric, &metric_aux, &prims4, &cons_temp);
-                err4 =
-                    fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                const ghl_error_codes_t limit_error4 =
+                    ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims4, &speed_limited_dummy);
+                if (limit_error4 != ghl_success) {
+                  error4 = limit_error4;
+                } else {
+                  ghl_compute_conservs(&ADM_metric, &metric_aux, &prims4, &cons_temp);
+                  err4 =
+                      fabs((cons_temp.Y_e - cons_avg.Y_e) / (cons_avg.Y_e + 1e-100)) + fabs((cons_temp.tau - cons_avg.tau) / (cons_avg.tau + 1e-100));
+                } // END ELSE: primitive limiting succeeded for averaged Newman entropy candidate
               } // END IF: averaged Newman entropy recovery succeeded
 
               min_err = err1;
@@ -316,12 +355,12 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
           rho_star_fix_applied++;
         } // END IF: conservative density is positive
 
-        ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
+        error = ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         if (error != ghl_success) {
           ghl_set_prims_to_constant_atm(eos, &prims);
           failures++;
           failures_inhoriz += in_horizon;
-          ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
+          error = ghl_enforce_primitive_limits_and_compute_u0(ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
         } // END IF: primitive post-processing failed and atmosphere fallback was applied
 
         if (diagnostics.speed_limited)
