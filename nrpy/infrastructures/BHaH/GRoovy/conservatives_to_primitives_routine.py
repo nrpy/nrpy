@@ -1085,7 +1085,9 @@ def register_CFunction_conservatives_to_primitives_routine(
     ...     file_ext="c",
     ... )
     """
-    # Step 0: Define parameter for how often to output C2P diagnostics
+    # # Step 0: Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
+    # diagnostic output. This is useful for debugging C2P failures or monitoring
+    # the health of the primitive recovery routine.
     _ = par.register_CodeParameter(
         "int",
         __name__,
