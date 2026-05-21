@@ -30,15 +30,18 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import os
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Set, Union, cast
+from typing import List, Optional, Set, Union, cast
 
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
+from nrpy.infrastructures.BHaH import stored_state_export
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
@@ -49,6 +52,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
+    enable_stored_state_export: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -98,6 +102,9 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     :param enable_psi4_diagnostics: If True, include a call to
         psi4_spinweightm2_decomposition(...) on output steps.
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
+    :param enable_stored_state_export: If True, include a call to stored_state_export(...)
+        on output steps. This export writes only directly stored host-side runtime state and
+        metadata, without finite differencing, interpolation, or tensor reconstruction.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
 
@@ -195,7 +202,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 
     {"// Find apparent horizon(s)." if enable_bhahaha else ""}
     {"bhahaha_find_horizons(commondata, griddata);" + newline if enable_bhahaha else ""}
-
     // Allocate temporary storage for diagnostic_gfs.
     REAL *diagnostic_gfs[MAXNUMGRIDS];
     for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {{
@@ -223,6 +229,9 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
       cudaStreamSynchronize(streams[streamid]);
 #endif // __CUDACC__
     }} // END LOOP over grids
+
+    {"// Export directly stored runtime data for later offline reconstruction." if enable_stored_state_export else ""}
+    {"stored_state_export(commondata, griddata);" + newline if enable_stored_state_export else ""}
 
     // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
@@ -270,6 +279,11 @@ def register_all_diagnostics(
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
+    enable_stored_state_export: bool = False,
+    enable_rfm_precompute: bool = False,
+    stored_state_export_root: str = "stored_state/raw",
+    stored_state_export_run_id: str = "default_run",
+    stored_state_export_evol_gf_names: Optional[List[str]] = None,
 ) -> None:
     """
     Register and stage diagnostics-related C code and helper headers.
@@ -301,6 +315,21 @@ def register_all_diagnostics(
     :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics
         (driver call only).
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
+    :param enable_stored_state_export: If True, register and call a direct runtime-state
+        exporter that writes host-side metadata, xx arrays, y_n_gfs arrays, and optional
+        rfmstruct arrays on diagnostics output steps.
+    :param enable_rfm_precompute: Whether runtime reference-metric precompute is enabled.
+        When True and runtime-data export is enabled, host-side rfmstruct arrays are exported.
+    :param stored_state_export_root: Root directory under which
+        ``snapshot_stepXXXXXXXX/`` directories will be written directly.
+    :param stored_state_export_run_id: Run identifier recorded in emitted raw
+        runtime-export metadata.
+    :param stored_state_export_evol_gf_names: Optional explicit ordered list of EVOL
+        gridfunction names to export. This is useful when parallel codegen isolates the
+        runtime-export registration worker from other workers that register EVOL
+        gridfunctions.
+    :raises ValueError: If runtime-data export is enabled for anything other than exactly
+        one coordinate system.
 
     Doctests:
     None.
@@ -326,7 +355,24 @@ def register_all_diagnostics(
         enable_free_auxevol=enable_free_auxevol,
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_bhahaha=enable_bhahaha,
+        enable_stored_state_export=enable_stored_state_export,
     )
+    if enable_stored_state_export:
+        if len(set_of_CoordSystems) != 1:
+            raise ValueError(
+                "enable_stored_state_export currently supports exactly one CoordSystem."
+            )
+        evol_gf_names = stored_state_export_evol_gf_names
+        if evol_gf_names is None:
+            evol_gf_names, _, _, _ = gri.BHaHGridFunction.gridfunction_lists()
+        stored_state_export.register_CFunction_stored_state_export(
+            CoordSystem=next(iter(set_of_CoordSystems)),
+            enable_rfm_precompute=enable_rfm_precompute,
+            project_name=os.path.basename(project_dir),
+            export_root=stored_state_export_root,
+            run_id=stored_state_export_run_id,
+            evol_gf_names=evol_gf_names,
+        )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:
             BHaH.diagnostics.diagnostics_nearest_grid_center.register_CFunction_diagnostics_nearest_grid_center(
