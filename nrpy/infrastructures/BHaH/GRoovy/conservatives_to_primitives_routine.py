@@ -251,12 +251,12 @@ if (error != ghl_success) {
 """
     block += _indent_block(neighbor_init, 2)
     block += r"""
-  const int iavg_min = MAX(imin, i - 1);
-  const int javg_min = MAX(jmin, j - 1);
-  const int kavg_min = MAX(kmin, k - 1);
-  const int iavg_max = MIN(imax, i + 2);
-  const int javg_max = MIN(jmax, j + 2);
-  const int kavg_max = MIN(kmax, k + 2);
+  const int iavg_min = NRPYMAX(imin, i - 1);
+  const int javg_min = NRPYMAX(jmin, j - 1);
+  const int kavg_min = NRPYMAX(kmin, k - 1);
+  const int iavg_max = NRPYMIN(imax, i + 2);
+  const int javg_max = NRPYMIN(jmax, j + 2);
+  const int kavg_max = NRPYMIN(kmax, k + 2);
 
   int n_avg = 0;
   for (int kavg = kavg_min; kavg < kavg_max; kavg++) {
@@ -452,12 +452,12 @@ if (cons.rho > 0.0) {
     cons_neigh_avg.entropy = 0.0;
     cons_neigh_avg.Y_e = 0.0;
 
-    const int iavg_min = MAX(imin, i - 1);
-    const int javg_min = MAX(jmin, j - 1);
-    const int kavg_min = MAX(kmin, k - 1);
-    const int iavg_max = MIN(imax, i + 2);
-    const int javg_max = MIN(jmax, j + 2);
-    const int kavg_max = MIN(kmax, k + 2);
+    const int iavg_min = NRPYMAX(imin, i - 1);
+    const int javg_min = NRPYMAX(jmin, j - 1);
+    const int kavg_min = NRPYMAX(kmin, k - 1);
+    const int iavg_max = NRPYMIN(imax, i + 2);
+    const int javg_max = NRPYMIN(jmax, j + 2);
+    const int kavg_max = NRPYMIN(kmax, k + 2);
 
     int n_avg = 0;
     for (int kavg = kavg_min; kavg < kavg_max; kavg++) {

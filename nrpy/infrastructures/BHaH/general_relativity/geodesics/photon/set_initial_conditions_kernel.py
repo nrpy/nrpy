@@ -19,6 +19,7 @@ Processing memory in static bundles protects hardware limits. A synchronization
 transfer updates the master Structure of Arrays state.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
@@ -350,7 +351,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Generate the host-side loop string to iterate over the dataset in bundles.
     loop_body = f"""
         // Variable chunk_size defines the active range for the current streaming bundle.
-        const long int chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY);
+        const long int chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY);
 
         {launch_code}
 

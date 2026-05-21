@@ -13,6 +13,7 @@ and outputs the filtered physical intersections to persistent blueprint structur
 while shifting the valid trajectory history arrays to stage the next solver step.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

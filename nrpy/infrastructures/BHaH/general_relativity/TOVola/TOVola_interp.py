@@ -105,12 +105,12 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
     } // END IF: interpolation stencil size exceeds maximum
 
     /* Use standard library functions instead of redefining macros */
-    int idxmin = MAX(0, idx_mid - interpolation_stencil_size / 2 - 1);
+    int idxmin = NRPYMAX(0, idx_mid - interpolation_stencil_size / 2 - 1);
 
     // -= Do not allow the interpolation stencil to cross the star's surface =-
     // max index is when idxmin + (interpolation_stencil_size-1) = R_idx
     //  -> idxmin at most can be R_idx - interpolation_stencil_size + 1
-    idxmin = MIN(idxmin, R_idx - interpolation_stencil_size + 1);
+    idxmin = NRPYMIN(idxmin, R_idx - interpolation_stencil_size + 1);
 
     // Now perform the Lagrange polynomial interpolation:
 

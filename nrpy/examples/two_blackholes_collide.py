@@ -339,10 +339,6 @@ if enable_bhahaha:
         [2e-4, 2e-4, 2e-4],
     )
     par.adjust_CodeParam_default(
-        "bah_Nphi_array_multigrid",
-        [2, 2, 2],
-    )
-    par.adjust_CodeParam_default(
         "bah_Nr_interp_max",
         40,
     )

@@ -1,5 +1,5 @@
 r"""
-Orchestrator for the Split-Pipeline Photon Geodesic Integrator targeting the RTX 3080.
+Orchestrator for the Split-Pipeline Photon Geodesic Integrator.
 
 This module constructs a high-performance C project for simulating photon trajectories
 in curved spacetimes.
@@ -8,6 +8,7 @@ The generated code employs a Structure of Arrays (SoA) memory layout and an
 adaptive RKF45 integration scheme managed by a lock-free TimeSlotManager system.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 
 """
 
@@ -170,8 +171,8 @@ if __name__ == "__main__":
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
 
-    # The RTX 3080 (sm_86 architecture) performs optimally with block sizes of 128 or 256
-    # for register-heavy kernels, rather than the infrastructure's default of 32.
+    # For modern GPUs, register-heavy kernels generally perform optimally with block sizes
+    # of 128 or 256, rather than the infrastructure's default block size of 32.
     if "DEVICE_THREAD_MACROS" not in par.glb_extras_dict:
         par.glb_extras_dict["DEVICE_THREAD_MACROS"] = {}
 
@@ -222,19 +223,32 @@ if __name__ == "__main__":
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
     par.glb_code_params_dict["window_width"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_tiles_width"].defaultvalue = 1
-    par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
+
+    # CUDA uses a 1x1 tile to saturate GPU compute units with concurrent photons.
+    # CPU uses a 2x2 grid to minimize peak memory footprint and improve cache performance.
+    if parallelization_mode == "cuda":
+        par.glb_code_params_dict["window_tiles_width"].defaultvalue = 1
+        par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
+    else:
+        par.glb_code_params_dict["window_tiles_width"].defaultvalue = 2
+        par.glb_code_params_dict["window_tiles_height"].defaultvalue = 2
 
     # RKF45 Adaptive Control Tolerances
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-12
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-12
+    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-10
+    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["scan_density"].defaultvalue = 1000
     par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
+
+    # CUDA requires high photon density to maximize parallel efficiency.
+    # CPU uses lower density to maintain reasonable execution times and stable RAM usage.
+    if parallelization_mode == "cuda":
+        par.glb_code_params_dict["scan_density"].defaultvalue = 1000
+    else:
+        par.glb_code_params_dict["scan_density"].defaultvalue = 500
 
     # Step 6: Generate C Code for Parameter Handling
     print(" -> Generating parameter handling code...")

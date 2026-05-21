@@ -13,6 +13,7 @@ instructions based on the target architecture, mapping SIMD operations to native
 hardware intrinsics where applicable.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import sympy as sp

@@ -1,7 +1,11 @@
 """
 Custom JAX printer to handle custom power simplification.
-This module performs the same power simplification as custom_c_codegen_functions.py for double
-Author: Siddharth Mahesh; sm0193 **at** mix **dot* wvu **dot* edu
+
+This module performs the same power simplification as
+custom_c_codegen_functions.py for double precision values.
+
+Author: Siddharth Mahesh
+        sm0193 **at** mix **dot* wvu **dot* edu
 """
 
 from typing import TYPE_CHECKING, Any, Dict, Union, cast

@@ -21,6 +21,7 @@ ensures constraint solver convergence. Evaluating conserved quantities establish
 data baseline before the pipeline mutates the state vectors.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
@@ -412,7 +413,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     for (long int init_batch = 0; init_batch < num_batches; ++init_batch) {{ // Loop iterator $init_batch$ for evaluating the initialization constraint across sequential blocks.
         long int start_idx = init_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current initialization batch.
-        long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed total trajectories.
+        long int chunk_size = NRPYMIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed total trajectories.
 
         for (int init_i = 0; init_i < chunk_size; ++init_i) {{ // Loop index $init_i$ iterating over the specific initialization batch elements to pack the bridge.
             long int master_idx = start_idx + init_i; // Computes the absolute master index $m_{{idx}}$ tracking the photon within the global array.
@@ -553,7 +554,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         //==========================================
         // Populate the first bridge and launch asynchronous integration on the primary stream.
 
-        active_chunks[current] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the PCIe transfer to avoid VRAM overflow.
+        active_chunks[current] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the PCIe transfer to avoid VRAM overflow.
 
         if (active_chunks[current] > 0) {{
             slot_remove_chunk(&tsm, slot_idx, chunk_buffer[current], active_chunks[current]); // Extracts the execution chunk mapping from the Host-side temporal bin.
@@ -672,7 +673,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
         while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{
 
-            active_chunks[next] = MIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming PCIe transfer execution block.
+            active_chunks[next] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming PCIe transfer execution block.
             if (active_chunks[next] > 0) {{
                 slot_remove_chunk(&tsm, slot_idx, chunk_buffer[next], active_chunks[next]); // Extracts the next execution chunk mapping from the Host-side temporal bin.
 
@@ -932,7 +933,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
             for (long int norm_batch = 0; norm_batch < norm_num_batches; ++norm_batch) {{ // Loop iterator $norm_batch$ for evaluating the terminal normalization constraint across sequential chunks.
                 long int start_idx = norm_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current normalization batch.
-                long int chunk_size = MIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed the total trajectory count.
+                long int chunk_size = NRPYMIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed the total trajectory count.
 
                 for (int norm_i = 0; norm_i < chunk_size; ++norm_i) {{ // Loop index $norm_i$ iterating over the specific normalization batch elements to pack the bridge.
                     long int master_idx = start_idx + norm_i; // Computes the absolute master index $m_{{idx}}$ tracking the specific photon within the global matrix.

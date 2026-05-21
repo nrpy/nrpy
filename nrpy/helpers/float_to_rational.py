@@ -3,11 +3,9 @@
 Store helper function f2r needed by sebob to convert floating point numbers to sympy rationals.
 
 Authors: Siddharth Mahesh
-        sm0193 **at** mix **dot** wvu **dot** edu
-        Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
-
-License: BSD 2-Clause
+         sm0193 **at** mix **dot** wvu **dot** edu
+         Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
 """
 
 # Step P1: Import needed modules:
@@ -32,6 +30,7 @@ def f2r(
     :param zpad: Number of zeros to append after the decimal point (default is 60).
     :return: A sympy Rational number with high precision.
 
+    Doctests:
     >>> f2r(0.1)
     1/10
     >>> f2r(1.5)
@@ -45,7 +44,7 @@ def f2r(
     if "." not in float_as_string:
         float_as_string = f"{float_as_string}."
 
-    # Append 60 zeros after the decimal of the floating point number to increase precision
+    # Append zpad zeros after the decimal point to increase precision.
     return cast(sp.Rational, sp.Rational(float_as_string + "0" * zpad))
 
 

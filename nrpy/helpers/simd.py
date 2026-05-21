@@ -2,76 +2,54 @@
 """
 Convert Expression to SIMD Intrinsics.
 
-Authors: Ken Sible, Thiago Assumpcao, and Zachariah Etienne
-Emails: ksible *at* outlook *dot** com
-        assumpcaothiago *at* gmail *dot** com
-        zachetie *at* gmail *dot** com
+Authors: Ken Sible
+         ksible *at* outlook *dot** com
+         Thiago Assumpcao
+         assumpcaothiago *at* gmail *dot** com
+         Zachariah Etienne
+         zachetie *at* gmail *dot** com
 """
 
-import sys
 from typing import Any, Dict, Optional, Union, cast
 
-from sympy import (
-    Abs,
-    Add,
-    Basic,
-    Expr,
-    Float,
-    Function,
-    Integer,
-    Mul,
-    Pow,
-    Rational,
-    S,
-    Symbol,
-    cos,
-    exp,
-    log,
-    preorder_traversal,
-    sign,
-    simplify,
-    sin,
-    srepr,
-    sympify,
-    var,
-)
+import sympy as sp
 
 from nrpy.helpers.cse_preprocess_postprocess import cse_preprocess
 from nrpy.helpers.expr_tree import ExprTree
 
 
 # Basic Arithmetic Operations (Debugging)
-def AbsSIMD_check(a: Symbol) -> Any:
+def AbsSIMD_check(a: sp.Symbol) -> Any:
     """
     Check that AbsSIMD(a) evaluates to sympy's Abs(a).
 
     :param a: The symbol to be evaluated.
     :return: The absolute value of symbol `a`.
     """
-    return Abs(a)
+    return sp.Abs(a)
 
 
-def ConstSIMD_check(a: Basic) -> Float:
+def ConstSIMD_check(a: sp.Basic) -> sp.Float:
     """
     Convert a sympy Basic type to a Float with 34 digits of precision.
 
     :param a: The sympy Basic expression to be converted.
     :return: A floating-point number with 34 digits of precision.
     """
-    return Float(a, 34)
+    return sp.Float(a, 34)
 
 
-def nrpyAbsSIMD_check(a: Symbol) -> Any:
+def nrpyAbsSIMD_check(a: sp.Symbol) -> Any:
     """
     Check that nrpyAbsSIMD(a) evaluates to sympy's Abs(a).
 
     :param a: The symbol to be evaluated.
     :return: The absolute value of symbol `a`.
     """
-    return Abs(a)
+    return sp.Abs(a)
 
 
-def AddSIMD_check(a: Symbol, b: Symbol) -> Any:
+def AddSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
     """
     Perform addition operation for sympy Symbols.
 
@@ -82,7 +60,7 @@ def AddSIMD_check(a: Symbol, b: Symbol) -> Any:
     return a + b
 
 
-def SubSIMD_check(a: Symbol, b: Symbol) -> Any:
+def SubSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
     """
     Perform subtraction operation for sympy Symbols.
 
@@ -93,7 +71,7 @@ def SubSIMD_check(a: Symbol, b: Symbol) -> Any:
     return a - b
 
 
-def MulSIMD_check(a: Symbol, b: Symbol) -> Any:
+def MulSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
     """
     Perform multiplication operation for sympy Symbols.
 
@@ -104,7 +82,7 @@ def MulSIMD_check(a: Symbol, b: Symbol) -> Any:
     return a * b
 
 
-def FusedMulAddSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
+def FusedMulAddSIMD_check(a: sp.Symbol, b: sp.Symbol, c: sp.Symbol) -> Any:
     """
     Perform fused multiply-add operation for sympy Symbols.
 
@@ -116,7 +94,7 @@ def FusedMulAddSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
     return a * b + c
 
 
-def FusedMulSubSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
+def FusedMulSubSIMD_check(a: sp.Symbol, b: sp.Symbol, c: sp.Symbol) -> Any:
     """
     Perform fused multiply-subtract operation for sympy Symbols.
 
@@ -128,7 +106,31 @@ def FusedMulSubSIMD_check(a: Symbol, b: Symbol, c: Symbol) -> Any:
     return a * b - c
 
 
-def DivSIMD_check(a: Symbol, b: Symbol) -> Any:
+def NegFusedMulAddSIMD_check(a: sp.Symbol, b: sp.Symbol, c: sp.Symbol) -> Any:
+    """
+    Perform negative fused multiply-add operation for sympy Symbols.
+
+    :param a: The first symbol in the operation.
+    :param b: The second symbol in the operation.
+    :param c: The third symbol in the operation.
+    :return: The result of the operation `c - a * b`.
+    """
+    return c - a * b
+
+
+def NegFusedMulSubSIMD_check(a: sp.Symbol, b: sp.Symbol, c: sp.Symbol) -> Any:
+    """
+    Perform negative fused multiply-subtract operation for sympy Symbols.
+
+    :param a: The first symbol in the operation.
+    :param b: The second symbol in the operation.
+    :param c: The third symbol in the operation.
+    :return: The result of the operation `-(a * b + c)`.
+    """
+    return -(a * b + c)
+
+
+def DivSIMD_check(a: sp.Symbol, b: sp.Symbol) -> Any:
     """
     Perform division operation for sympy Symbols.
 
@@ -139,24 +141,130 @@ def DivSIMD_check(a: Symbol, b: Symbol) -> Any:
     return a / b
 
 
-def signSIMD_check(a: Basic) -> Any:
+def PowSIMD_check(a: sp.Basic, b: sp.Basic) -> Any:
+    """
+    Perform power operation for sympy expressions.
+
+    :param a: The expression being raised to a power.
+    :param b: The power.
+    :return: The result of the operation `a**b`.
+    """
+    return sp.Pow(a, b)
+
+
+def SqrtSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the square root of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The square root of `a`.
+    """
+    return sp.sqrt(a)
+
+
+def CbrtSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the cube root of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The cube root of `a`.
+    """
+    return a ** sp.Rational(1, 3)
+
+
+def ExpSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the exponential of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The exponential of `a`.
+    """
+    return sp.exp(a)
+
+
+def LogSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the natural logarithm of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The natural logarithm of `a`.
+    """
+    return sp.log(a)
+
+
+def SinSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the sine of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The sine of `a`.
+    """
+    return sp.sin(a)
+
+
+def CosSIMD_check(a: sp.Basic) -> Any:
+    """
+    Find the cosine of a sympy expression.
+
+    :param a: The expression to evaluate.
+    :return: The cosine of `a`.
+    """
+    return sp.cos(a)
+
+
+def SignSIMD_check(a: sp.Basic) -> Any:
     """
     Find the sign of a sympy Basic type.
 
     :param a: The expression to evaluate the sign of.
     :return: The sign of `a`.
     """
-    return sign(a)
+    return sp.sign(a)
+
+
+def _debug_eval_namespace(expr: sp.Basic) -> Dict[str, Any]:
+    """
+    Build an explicit namespace for debug-mode expression evaluation.
+
+    :param expr: The expression whose free symbols should be made available.
+    :return: Namespace containing SymPy constructors, SIMD check functions, and expression symbols.
+    """
+    namespace: Dict[str, Any] = vars(sp).copy()
+    namespace.update(
+        {
+            "AbsSIMD_check": AbsSIMD_check,
+            "ConstSIMD_check": ConstSIMD_check,
+            "nrpyAbsSIMD_check": nrpyAbsSIMD_check,
+            "AddSIMD_check": AddSIMD_check,
+            "SubSIMD_check": SubSIMD_check,
+            "MulSIMD_check": MulSIMD_check,
+            "FusedMulAddSIMD_check": FusedMulAddSIMD_check,
+            "FusedMulSubSIMD_check": FusedMulSubSIMD_check,
+            "NegFusedMulAddSIMD_check": NegFusedMulAddSIMD_check,
+            "NegFusedMulSubSIMD_check": NegFusedMulSubSIMD_check,
+            "DivSIMD_check": DivSIMD_check,
+            "PowSIMD_check": PowSIMD_check,
+            "SqrtSIMD_check": SqrtSIMD_check,
+            "CbrtSIMD_check": CbrtSIMD_check,
+            "ExpSIMD_check": ExpSIMD_check,
+            "LogSIMD_check": LogSIMD_check,
+            "SinSIMD_check": SinSIMD_check,
+            "CosSIMD_check": CosSIMD_check,
+            "SignSIMD_check": SignSIMD_check,
+        }
+    )
+    namespace.update({str(sym): sym for sym in expr.free_symbols})
+    return namespace
 
 
 def expr_convert_to_simd_intrins(
-    expr: Basic,
-    symbol_to_Rational_dict: Optional[Dict[Basic, Rational]] = None,
+    expr: sp.Basic,
+    symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
     prefix: str = "",
     simd_find_more_FMAsFMSs: bool = True,
     clean_NegativeOnes_after_processing: bool = False,
     debug: bool = False,
-) -> Union[Basic, Expr]:
+) -> Union[sp.Basic, sp.Expr]:
     """
     Convert a given SymPy expression into one that uses SIMD compiler intrinsics.
 
@@ -169,12 +277,12 @@ def expr_convert_to_simd_intrins(
 
     :return: A transformed SymPy expression using SIMD intrinsics.
 
-    :raises Warning: If debug mode is enabled and the transformed expression differs from the original,
-                      indicating a potential issue with the conversion process.
+    :raises ValueError: If debug mode is enabled and the transformed expression differs from the original,
+        indicating a potential issue with the conversion process.
 
     Doctests:
     >>> from sympy.abc import a, b, c, d
-    >>> from sympy import sqrt
+    >>> import sympy as sp
     >>> convert = expr_convert_to_simd_intrins
 
     >>> convert(-2*a)
@@ -198,7 +306,7 @@ def expr_convert_to_simd_intrins(
     >>> convert(a**(-5/2))
     DivSIMD(_Integer_1, MulSIMD(MulSIMD(a, a), SqrtSIMD(a)))
 
-    >>> convert(a**Rational(1, 3))
+    >>> convert(a**sp.Rational(1, 3))
     CbrtSIMD(a)
 
     >>> convert(a**b)
@@ -237,16 +345,19 @@ def expr_convert_to_simd_intrins(
     >>> convert(-a*b - c)
     NegFusedMulSubSIMD(a, b, c)
 
-    >>> convert(cos(a*b + c))
+    >>> convert(sp.cos(a*b + c))
     CosSIMD(FusedMulAddSIMD(a, b, c))
 
-    >>> convert(sqrt(a))
+    >>> convert(sp.sqrt(a))
     SqrtSIMD(a)
+
+    >>> convert(a + b, debug=True)
+    AddSIMD(a, b)
     """
-    for item in preorder_traversal(expr):
+    for item in sp.preorder_traversal(expr):
         for arg in item.args:
-            if isinstance(arg, Symbol):
-                var(str(arg))
+            if isinstance(arg, sp.Symbol):
+                sp.var(str(arg))
 
     if symbol_to_Rational_dict is None:
         cse_preprocessed_expr_list, symbol_to_Rational_dict = cse_preprocess(expr)
@@ -256,24 +367,24 @@ def expr_convert_to_simd_intrins(
 
     expr_orig, tree = expr, ExprTree(expr)
 
-    AbsSIMD = Function("AbsSIMD")
-    AddSIMD = Function("AddSIMD")
-    SubSIMD = Function("SubSIMD")
-    MulSIMD = Function("MulSIMD")
-    FusedMulAddSIMD = Function("FusedMulAddSIMD")
-    FusedMulSubSIMD = Function("FusedMulSubSIMD")
-    NegFusedMulAddSIMD = Function("NegFusedMulAddSIMD")
-    NegFusedMulSubSIMD = Function("NegFusedMulSubSIMD")
-    DivSIMD = Function("DivSIMD")
-    SignSIMD = Function("SignSIMD")
+    AbsSIMD = sp.Function("AbsSIMD")
+    AddSIMD = sp.Function("AddSIMD")
+    SubSIMD = sp.Function("SubSIMD")
+    MulSIMD = sp.Function("MulSIMD")
+    FusedMulAddSIMD = sp.Function("FusedMulAddSIMD")
+    FusedMulSubSIMD = sp.Function("FusedMulSubSIMD")
+    NegFusedMulAddSIMD = sp.Function("NegFusedMulAddSIMD")
+    NegFusedMulSubSIMD = sp.Function("NegFusedMulSubSIMD")
+    DivSIMD = sp.Function("DivSIMD")
+    SignSIMD = sp.Function("SignSIMD")
 
-    PowSIMD = Function("PowSIMD")
-    SqrtSIMD = Function("SqrtSIMD")
-    CbrtSIMD = Function("CbrtSIMD")
-    ExpSIMD = Function("ExpSIMD")
-    LogSIMD = Function("LogSIMD")
-    SinSIMD = Function("SinSIMD")
-    CosSIMD = Function("CosSIMD")
+    PowSIMD = sp.Function("PowSIMD")
+    SqrtSIMD = sp.Function("SqrtSIMD")
+    CbrtSIMD = sp.Function("CbrtSIMD")
+    ExpSIMD = sp.Function("ExpSIMD")
+    LogSIMD = sp.Function("LogSIMD")
+    SinSIMD = sp.Function("SinSIMD")
+    CosSIMD = sp.Function("CosSIMD")
 
     # Step 1: Replace transcendental functions, power functions, and division expressions.
     #   Note: SymPy does not represent fractional integers as rationals since
@@ -284,39 +395,45 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args = subtree.expr.args
-        if func == Abs:
+        if func == sp.Abs:
             subtree.expr = AbsSIMD(args[0])
-        elif func == exp:
+        elif func == sp.exp:
             subtree.expr = ExpSIMD(args[0])
-        elif func == log:
+        elif func == sp.log:
             subtree.expr = LogSIMD(args[0])
-        elif func == sin:
+        elif func == sp.sin:
             subtree.expr = SinSIMD(args[0])
-        elif func == cos:
+        elif func == sp.cos:
             subtree.expr = CosSIMD(args[0])
-        elif func == sign:
+        elif func == sp.sign:
             subtree.expr = SignSIMD(args[0])
     tree.reconstruct()
 
-    def IntegerPowSIMD(a: Basic, n: int) -> Any:
+    def IntegerPowSIMD(a: sp.Basic, n: int) -> Any:
         # Recursive Helper Function: Construct Integer Powers
         if n == 2:
             return MulSIMD(a, a)
         if n > 2:
             return MulSIMD(IntegerPowSIMD(a, n - 1), a)
         if n <= -2:
-            one = Symbol(prefix + "_Integer_1")
+            one = sp.Symbol(prefix + "_Integer_1")
             try:
-                map_rat_to_sym[sympify(1)]
+                map_rat_to_sym[sp.sympify(1)]
             except KeyError:
-                symbol_to_Rational_dict[one], map_rat_to_sym[sympify(1)] = S.One, one
+                symbol_to_Rational_dict[one], map_rat_to_sym[sp.sympify(1)] = (
+                    sp.S.One,
+                    one,
+                )
             return DivSIMD(one, IntegerPowSIMD(a, -n))
         if n == -1:
-            one = Symbol(prefix + "_Integer_1")
+            one = sp.Symbol(prefix + "_Integer_1")
             try:
-                map_rat_to_sym[sympify(1)]
+                map_rat_to_sym[sp.sympify(1)]
             except KeyError:
-                symbol_to_Rational_dict[one], map_rat_to_sym[sympify(1)] = S.One, one
+                symbol_to_Rational_dict[one], map_rat_to_sym[sp.sympify(1)] = (
+                    sp.S.One,
+                    one,
+                )
             return DivSIMD(one, a)
         if n == 1:
             return a
@@ -324,9 +441,9 @@ def expr_convert_to_simd_intrins(
         return a
 
     def lookup_rational(
-        arg: Union[Expr, Symbol, Rational, Basic],
-    ) -> Union[Expr, Symbol, Rational, Basic]:
-        if arg.func == Symbol:
+        arg: Union[sp.Expr, sp.Symbol, sp.Rational, sp.Basic],
+    ) -> Union[sp.Expr, sp.Symbol, sp.Rational, sp.Basic]:
+        if arg.func == sp.Symbol:
             try:
                 arg = symbol_to_Rational_dict[arg]
             except KeyError:
@@ -336,25 +453,25 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args = subtree.expr.args
-        if func == Pow:
-            one = Symbol(prefix + "_Integer_1")
+        if func == sp.Pow:
+            one = sp.Symbol(prefix + "_Integer_1")
             exponent = lookup_rational(args[1])
-            if exponent in (Rational(1, 2), 0.5):
+            if exponent in (sp.Rational(1, 2), 0.5):
                 subtree.expr = SqrtSIMD(args[0])
                 subtree.children.pop(1)
-            elif exponent in (-Rational(1, 2), -0.5):
+            elif exponent in (-sp.Rational(1, 2), -0.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]))
                 tree.build(subtree)
-            elif exponent in (-Rational(3, 2), -1.5):
+            elif exponent in (-sp.Rational(3, 2), -1.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0])
                 tree.build(subtree)
-            elif exponent in (-Rational(5, 2), -2.5):
+            elif exponent in (-sp.Rational(5, 2), -2.5):
                 subtree.expr = DivSIMD(one, SqrtSIMD(args[0]) * args[0] * args[0])
                 tree.build(subtree)
-            elif exponent == Rational(1, 3):
+            elif exponent == sp.Rational(1, 3):
                 subtree.expr = CbrtSIMD(args[0])
                 subtree.children.pop(1)
-            elif isinstance(exponent, (Integer, int)):
+            elif isinstance(exponent, (sp.Integer, int)):
                 subtree.expr = IntegerPowSIMD(args[0], exponent)
                 tree.build(subtree)
             else:
@@ -367,13 +484,13 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args_list = list(subtree.expr.args)
-        if func == Add:
+        if func == sp.Add:
             try:
                 # Find the first occurrence of a negative product inside the addition
                 i = next(
                     i
                     for i, term in enumerate(args_list)
-                    if term.func == Mul
+                    if term.func == sp.Mul
                     and any(lookup_rational(factor) == -1 for factor in term.args)
                 )
                 # Find the first occurrence of a negative symbol inside the product
@@ -389,13 +506,15 @@ def expr_convert_to_simd_intrins(
                 subargs.pop(j)
                 # Build the subtraction expression for replacement
                 # FIX: Cast subargs to List[Expr] to satisfy stricter SymPy type hints
-                subexpr = SubSIMD(args_list[k], Mul(*[cast(Expr, a) for a in subargs]))
+                subexpr = SubSIMD(
+                    args_list[k], sp.Mul(*[cast(sp.Expr, a) for a in subargs])
+                )
                 args_list = [
                     arg for arg in args_list if arg not in (args_list[i], args_list[k])
                 ]
                 if len(args_list) > 0:
                     # FIX: Cast args_list to List[Expr]
-                    subexpr = Add(subexpr, *[cast(Expr, a) for a in args_list])
+                    subexpr = sp.Add(subexpr, *[cast(sp.Expr, a) for a in args_list])
                 subtree.expr = subexpr
                 tree.build(subtree)
             except StopIteration:
@@ -411,8 +530,8 @@ def expr_convert_to_simd_intrins(
     for subtree in tree.preorder():
         func = subtree.expr.func
         args = subtree.expr.args
-        if func in (Mul, Add):
-            func = MulSIMD if func == Mul else AddSIMD
+        if func in (sp.Mul, sp.Add):
+            func = MulSIMD if func == sp.Mul else AddSIMD
             subexpr = func(*args[-2:])
             args, N = args[:-2], len(args) - 2
             for i in range(0, N, 2):
@@ -732,30 +851,42 @@ def expr_convert_to_simd_intrins(
 
     if debug:
         # pylint: disable=W0123
-        expr_check = eval(str(expr).replace("SIMD", "SIMD_check"))
-        expr_check = expr_check.subs(-1, Symbol("_NegativeOne_"))
+        expr_check = eval(
+            str(expr).replace("SIMD", "SIMD_check"),
+            {"__builtins__": {}},
+            _debug_eval_namespace(expr),
+        )
+        expr_check = expr_check.xreplace(symbol_to_Rational_dict)
 
-        expr_diff = expr_check - expr_orig
+        expr_orig_check = expr_orig.xreplace(symbol_to_Rational_dict)
+        expr_diff = expr_check - expr_orig_check
         # The eval(str(srepr())) below normalizes the expression,
         # fixing a cancellation issue in SymPy ~0.7.4.
         # pylint: disable=W0123
-        expr_diff = eval(str(srepr(expr_diff)))
+        expr_diff = eval(
+            str(sp.srepr(expr_diff)),
+            {"__builtins__": {}},
+            _debug_eval_namespace(expr_diff),
+        )
         tree_diff = ExprTree(expr_diff)
         for subtree in tree_diff.preorder():
             subexpr = subtree.expr
-            if subexpr.func == Float:
-                if abs(subexpr - Integer(subexpr)) < 1.0e-14 * cast(Expr, subexpr):
-                    subtree.expr = Integer(subexpr)
+            if subexpr.func == sp.Float:
+                if abs(subexpr - sp.Integer(subexpr)) < 1.0e-14 * cast(
+                    sp.Expr, subexpr
+                ):
+                    subtree.expr = sp.Integer(subexpr)
         expr_diff = tree_diff.reconstruct()
 
         if expr_diff != 0:
             # MyPy gives a completely bogus error: Module not callable  [operator], referring to simplify().
-            simp_expr_diff = simplify(expr_diff)
+            simp_expr_diff = sp.simplify(expr_diff)
             if simp_expr_diff != 0:
-                raise Warning("Expression Difference: " + str(simp_expr_diff))
+                raise ValueError("Expression Difference: " + str(simp_expr_diff))
 
     def remove_unused_NegativeOnes_from_symbol_to_Rational_dict(
-        expr: Union[Basic, Expr], symbol_to_Rational_dict: Dict[Basic, Rational]
+        expr: Union[sp.Basic, sp.Expr],
+        symbol_to_Rational_dict: Dict[sp.Basic, sp.Rational],
     ) -> None:
         """
         In matching many patterns above, we have removed NegativeOne's from expressions.
@@ -766,7 +897,7 @@ def expr_convert_to_simd_intrins(
         :param symbol_to_Rational_dict: Dictionary mapping symbols to Rational numbers.
         """
         NegOne_in_symbol_to_Rational_dict = False
-        NegOne_symb = Symbol("none") * 2
+        NegOne_symb = sp.Symbol("none") * 2
         NegOne_symb_str = f"{prefix}_NegativeOne_"
         for symb in symbol_to_Rational_dict.keys():
             if str(symb) == NegOne_symb_str:
@@ -791,6 +922,7 @@ def expr_convert_to_simd_intrins(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

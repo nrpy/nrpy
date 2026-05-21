@@ -18,31 +18,38 @@
 #include <time.h>    // Time-related functions and types, such as time(), clock(),
 #define REAL double
 #define DOUBLE double
-
-// These macros for MIN(), MAX(), and SQR() ensure that if the arguments inside
+// These macros for NRPYMIN(), NRPYMAX(), and NRPYSQR() ensure that if the arguments inside
 //   are a function/complex expression, the function/expression is evaluated
 //   *only once* per argument. See https://lwn.net/Articles/983965/ for details.
 // They are improvements over the original implementations:
-// #define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
-// #define MAX(A, B) ( ((A) > (B)) ? (A) : (B) )
-// #define SQR(A) ((A) * (A))
-#define MIN(A, B)                                                                                                                                    \
+// #define NRPYMIN(A, B) ( ((A) < (B)) ? (A) : (B) )
+// #define NRPYMAX(A, B) ( ((A) > (B)) ? (A) : (B) )
+// #define NRPYSQR(A) ((A) * (A))
+#ifndef NRPYMIN
+#define NRPYMIN(A, B)                                                                                                                                \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     __typeof__(B) _b = (B);                                                                                                                          \
     _a < _b ? _a : _b;                                                                                                                               \
   })
-#define MAX(A, B)                                                                                                                                    \
+#endif // END ifndef NRPYMIN
+
+#ifndef NRPYMAX
+#define NRPYMAX(A, B)                                                                                                                                \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     __typeof__(B) _b = (B);                                                                                                                          \
     _a > _b ? _a : _b;                                                                                                                               \
   })
-#define SQR(A)                                                                                                                                       \
+#endif // END ifndef NRPYMAX
+
+#ifndef NRPYSQR
+#define NRPYSQR(A)                                                                                                                                   \
   ({                                                                                                                                                 \
     __typeof__(A) _a = (A);                                                                                                                          \
     _a *_a;                                                                                                                                          \
   })
+#endif // END ifndef NRPYSQR
 #ifndef MAYBE_UNUSED
 #if __cplusplus >= 201703L
 #define MAYBE_UNUSED [[maybe_unused]]

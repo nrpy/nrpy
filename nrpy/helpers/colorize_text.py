@@ -39,7 +39,7 @@ def leave_text_alone(arg: Any, c: ColorNames) -> str:  # pylint: disable=unused-
     :param c: A valid color name, unused here but kept for interface consistency.
     :return: A stringified and uncolored version of `arg`.
 
-    DocTests:
+    Doctests:
     >>> leave_text_alone('fish', 'blue')
     'fish'
     >>> leave_text_alone('fish', 'green')
@@ -57,17 +57,19 @@ def apply_colorization(arg: Any, c: ColorNames) -> str:
     :param arg: The object to convert to a string.
     :param c: The name of the color to use.
     :return: A stringified and colored version of `arg`.
-    :raises AssertionError: If `c` is not a string or not a valid color name.
+    :raises ValueError: If `c` is not a valid color name.
 
-    DocTests:
+    Doctests:
     >>> import re
     >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'blue'))
     'ESC34mfishESC0m'
     >>> re.sub(r'\033\[', 'ESC', apply_colorization('fish', 'green'))
     'ESC32mfishESC0m'
     """
-    assert isinstance(c, str), "Color name must be a string"
-    assert c in colors, f"Invalid color name: {c}"
+    if not isinstance(c, str):
+        raise ValueError(f"Invalid color name: {c}")
+    if c not in colors:
+        raise ValueError(f"Invalid color name: {c}")
     return colors[c] + str(arg) + reset
 
 

@@ -751,7 +751,7 @@ and result updates for multiple horizons.
       const REAL rmax2 = params_bh2->r_max_m1, t2 = params_bh2->t_m1;
 
       if (t1 >= 0.0 && t2 >= 0.0) { // Both BH1 and BH2 were found previously.
-        const REAL dist_centers = sqrt(SQR(x1 - x2) + SQR(y1 - y2) + SQR(z1 - z2));
+        const REAL dist_centers = sqrt(NRPYSQR(x1 - x2) + NRPYSQR(y1 - y2) + NRPYSQR(z1 - z2));
         const REAL threshold_diam = 2.0 * commondata->bah_max_search_radius[com_idx]; // Diameter for common horizon search area.
 
         if (commondata->bah_verbosity_level > 0) {

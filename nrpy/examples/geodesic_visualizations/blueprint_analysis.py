@@ -15,6 +15,7 @@ It performs three functions:
    errors or integration 'blind spots'.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import os
@@ -63,7 +64,7 @@ def plot_heatmaps(data: "npt.NDArray[np.void]") -> None:
     :param data: The structured NumPy array containing ray termination data.
     """
     # pylint: disable=import-outside-toplevel, import-error
-    import matplotlib.pyplot as plt  # type: ignore[import-not-found]
+    import matplotlib.pyplot as plt
 
     # Preamble: Descriptive Physical Variable Mapping.
     # Extract coordinates from the structured array for plotting.

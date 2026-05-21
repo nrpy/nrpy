@@ -6,7 +6,6 @@ Author: Samuel Tootle
         sdtootle *at* gmail *dot* com
 """
 
-import sys  # Standard Python module for multiplatform OS-level functions
 from typing import Dict, FrozenSet, List, Set, Tuple, Union, cast
 
 import sympy as sp
@@ -82,7 +81,7 @@ def get_unique_expression_symbols_as_strings(
     :param exclude: List of symbol names to exclude
     :return: List of unique symbol names from the expression
 
-    DOCTEST:
+    Doctests:
     >>> from sympy.abc import a, b
     >>> from sympy import cos, sin
     >>> xx0 = sp.Symbol('xx0')
@@ -152,6 +151,7 @@ def generate_definition_header(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

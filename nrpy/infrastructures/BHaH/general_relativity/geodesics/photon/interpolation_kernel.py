@@ -11,6 +11,7 @@ registers, invokes the numerical evaluators for the metric and connection compon
 and writes the computed tensor components back into their respective memory bundles.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
