@@ -34,10 +34,13 @@ by the Christoffel construction. In particular, it does not write ``betU`` or
 construction depends only on ``alpha``, ``cf``, ``trK``, ``vetU``, ``hDD``,
 and ``aDD`` plus spatial coordinates and grid parameters. Spatial derivatives
 are not exported directly; the file contains the state needed to reconstruct
-them later by interpolation and finite differencing. Likewise, reference-metric
-precompute helpers such as ``f0_of_xx0`` and ``f1_of_xx1`` are not serialized
-as payload arrays because they are deterministic functions of the coordinate
-system, the stored coordinate arrays, and the stored runtime parameters.
+them later by interpolation and finite differencing.
+
+Reference-metric precompute helpers such as ``f0_of_xx0`` and ``f1_of_xx1``
+are not serialized as payload arrays. With the current fixed header metadata,
+offline reconstruction is supported only for Cartesian and Spherical coordinate
+systems; registration rejects other coordinate systems until their
+coordinate-system-specific metadata is serialized.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -52,37 +55,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def _raytracing_connections_required_gridfunctions() -> List[Tuple[str, str]]:
-    """
-    Return the exact evolved BSSN gridfunctions needed for Christoffel reconstruction.
-
-    The list order defines the on-disk payload order for every exported
-    ``raytracing_connections_4d_data_t########.bin`` file.
-
-    :return: Ordered ``(macro_name, human_readable_name)`` pairs for each exported field.
-    """
-    return [
-        ("ADD00GF", "aDD00"),
-        ("ADD01GF", "aDD01"),
-        ("ADD02GF", "aDD02"),
-        ("ADD11GF", "aDD11"),
-        ("ADD12GF", "aDD12"),
-        ("ADD22GF", "aDD22"),
-        ("ALPHAGF", "alpha"),
-        ("CFGF", "cf"),
-        ("HDD00GF", "hDD00"),
-        ("HDD01GF", "hDD01"),
-        ("HDD02GF", "hDD02"),
-        ("HDD11GF", "hDD11"),
-        ("HDD12GF", "hDD12"),
-        ("HDD22GF", "hDD22"),
-        ("TRKGF", "trK"),
-        ("VETU0GF", "vetU0"),
-        ("VETU1GF", "vetU1"),
-        ("VETU2GF", "vetU2"),
-    ]
-
-
 def output_raytracing_connections_4d_data(
     enable_rfm_precompute: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
@@ -91,17 +63,17 @@ def output_raytracing_connections_4d_data(
 
     The generated C helper writes one binary file per diagnostics output with
     filename pattern ``./raytracing_connections_4d_data_t########.bin``. The
-    file is first written to a temporary sibling path and renamed into place
-    only after all bytes are successfully flushed. If the final file already
-    exists, the exporter returns immediately so restart/checkpoint workflows do
-    not overwrite or append duplicate data.
+    file is first written to a unique temporary sibling path and installed at
+    the final path without overwriting an existing file. If the final file
+    already exists, the exporter returns without modifying it so
+    restart/checkpoint workflows do not overwrite or append duplicate data.
 
     File contents, in order:
     1. A fixed-size binary header describing the payload layout, byte offsets,
        array lengths, array sizes, canonical floating-point precision, byte
        order, the evolved conformal-factor convention, the reference-metric
-       precompute mode, and the interpolation-critical grid metadata duplicated
-       from ``griddata[0].params``.
+       precompute mode, and selected interpolation-critical grid metadata read
+       field-by-field from ``griddata[0].params``.
     2. The physical simulation time ``commondata->time`` serialized as
        little-endian IEEE-754 binary64.
     3. The logical coordinate arrays ``xx[0]``, ``xx[1]``, and ``xx[2]``
@@ -141,7 +113,26 @@ def output_raytracing_connections_4d_data(
     # pylint: disable-next=import-outside-toplevel
     __import__("nrpy.equations.general_relativity.BSSN_quantities")
 
-    required_gfs = _raytracing_connections_required_gridfunctions()
+    required_gfs: List[Tuple[str, str]] = [
+        ("ADD00GF", "aDD00"),
+        ("ADD01GF", "aDD01"),
+        ("ADD02GF", "aDD02"),
+        ("ADD11GF", "aDD11"),
+        ("ADD12GF", "aDD12"),
+        ("ADD22GF", "aDD22"),
+        ("ALPHAGF", "alpha"),
+        ("CFGF", "cf"),
+        ("HDD00GF", "hDD00"),
+        ("HDD01GF", "hDD01"),
+        ("HDD02GF", "hDD02"),
+        ("HDD11GF", "hDD11"),
+        ("HDD12GF", "hDD12"),
+        ("HDD22GF", "hDD22"),
+        ("TRKGF", "trK"),
+        ("VETU0GF", "vetU0"),
+        ("VETU1GF", "vetU1"),
+        ("VETU2GF", "vetU2"),
+    ]
     num_export_gfs = len(required_gfs)
     gf_name_buffer_size = 24
     coord_name_buffer_size = 8
@@ -173,6 +164,8 @@ def output_raytracing_connections_4d_data(
         "<stdio.h>",
         "<stdlib.h>",
         "<string.h>",
+        "<sys/stat.h>",
+        "<unistd.h>",
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
     ]
@@ -184,8 +177,8 @@ This function writes at most one binary file per diagnostics output to:
   ./raytracing_connections_4d_data_t########.bin
 
 where the eight-digit index is the diagnostics output index, not the raw
-timestep counter. Each file is written to a temporary sibling path and then
-atomically renamed into place after all bytes are flushed successfully. If
+timestep counter. Each file is written to a unique temporary sibling path and
+then installed at the final path without overwriting an existing file. If
 the final file already exists, the function returns without modifying it so
 restarted runs do not overwrite or append duplicate output.
 
@@ -193,7 +186,7 @@ The exported payload is intentionally limited to the quantities needed to
 reconstruct the spatial BSSN state used later for 4D Christoffel
 reconstruction:
   - physical simulation time serialized as little-endian IEEE-754 binary64,
-  - duplicated interpolation-critical grid metadata in the fixed header,
+  - selected interpolation-critical grid metadata in the fixed header,
   - logical coordinate arrays xx[0], xx[1], xx[2] serialized as little-endian
     IEEE-754 binary64,
   - aDD00, aDD01, aDD02, aDD11, aDD12, aDD22,
@@ -218,13 +211,15 @@ bytes.
 
 Fields not used by the current BSSN-to-Christoffel construction, such as
 betU and lambdaU, are deliberately omitted. Reference-metric helper arrays
-such as f0_of_xx0 are also omitted because they are reconstructed
-analytically from CoordSystemName, xx[0..2], and the stored runtime
-parameters instead of being treated as independent simulation data.
+such as f0_of_xx0 are also omitted for the currently supported Cartesian and
+Spherical coordinate systems, where they are reconstructible from the stored
+coordinate arrays and fixed header metadata. Other coordinate systems are
+rejected at Python registration time until their coordinate-system-specific
+metadata is serialized.
 
 @param[in] commondata  Global simulation metadata used in the file header and output naming
 @param[in] griddata  Host-side per-grid runtime state to export
-@param[in] time_output_index  Diagnostics output index used in the emitted filename
+@param time_output_index  Diagnostics output index used in the emitted filename
 """
     cfunc_type = "void"
     name = "output_raytracing_connections_4d_data"
@@ -248,7 +243,7 @@ static void raytracing_connections_abort_with_message(const char *restrict messa
 /**
  * Cast a nonnegative integer to uint32_t, aborting if negative or if it overflows.
  *
- * @param[in] value  Integer value to convert.
+ * @param value  Integer value to convert.
  * @param[in] label  Label for error message.
  * @return Safely casted uint32_t.
  */
@@ -276,8 +271,8 @@ static uint32_t raytracing_connections_u32_from_nonnegative_int_or_abort(
 /**
  * Add two uint64_t values, aborting on overflow.
  *
- * @param[in] a      First value.
- * @param[in] b      Second value.
+ * @param a      First value.
+ * @param b      Second value.
  * @param[in] label  Label for error message.
  * @return Sum of a and b.
  */
@@ -298,8 +293,8 @@ static uint64_t raytracing_connections_add_u64_or_abort(
 /**
  * Multiply two uint64_t values, aborting on overflow.
  *
- * @param[in] a      First value.
- * @param[in] b      Second value.
+ * @param a      First value.
+ * @param b      Second value.
  * @param[in] label  Label for error message.
  * @return Product of a and b.
  */
@@ -320,11 +315,11 @@ static uint64_t raytracing_connections_mul_u64_or_abort(
 /**
  * Write elements to a file, aborting on failure.
  *
- * @param[in,out] fp            File pointer.
- * @param[in]     data          Data to write.
- * @param[in]     element_size  Size of each element.
- * @param[in]     count         Number of elements.
- * @param[in]     label         Label for error message.
+ * @param[in,out] fp    File pointer.
+ * @param[in] data      Data to write.
+ * @param element_size  Size of each element.
+ * @param count         Number of elements.
+ * @param[in] label     Label for error message.
  */
 static void raytracing_connections_write_or_abort(
     FILE *restrict fp,
@@ -352,9 +347,9 @@ static void raytracing_connections_write_or_abort(
 /**
  * Write a uint32_t value as little-endian, aborting on failure.
  *
- * @param[in,out] fp     File pointer.
- * @param[in]     value  Value to write.
- * @param[in]     label  Label for error message.
+ * @param[in,out] fp  File pointer.
+ * @param value       Value to write.
+ * @param[in] label   Label for error message.
  */
 static void raytracing_connections_write_u32_or_abort(
     FILE *restrict fp,
@@ -372,9 +367,9 @@ static void raytracing_connections_write_u32_or_abort(
 /**
  * Write a uint64_t value as little-endian, aborting on failure.
  *
- * @param[in,out] fp     File pointer.
- * @param[in]     value  Value to write.
- * @param[in]     label  Label for error message.
+ * @param[in,out] fp  File pointer.
+ * @param value       Value to write.
+ * @param[in] label   Label for error message.
  */
 static void raytracing_connections_write_u64_or_abort(
     FILE *restrict fp,
@@ -396,9 +391,9 @@ static void raytracing_connections_write_u64_or_abort(
 /**
  * Write a double value as little-endian binary64, aborting on failure.
  *
- * @param[in,out] fp     File pointer.
- * @param[in]     value  Value to write.
- * @param[in]     label  Label for error message.
+ * @param[in,out] fp  File pointer.
+ * @param value       Value to write.
+ * @param[in] label   Label for error message.
  */
 static void raytracing_connections_write_f64_or_abort(
     FILE *restrict fp,
@@ -419,23 +414,21 @@ static void raytracing_connections_validate_binary64_output_or_abort(void) {
   raytracing_connections_abort_with_message(
       "Error: raytracing output requires C double to match IEEE-754 binary64 semantics.");
 #endif
-  if (sizeof(double) != 8) {
+  if (sizeof(double) != 8)
     raytracing_connections_abort_with_message(
         "Error: raytracing output requires 8-byte C double for binary64 serialization.");
-  } // END IF: unsupported double size
-  if (sizeof(REAL) > sizeof(double)) {
+  if (sizeof(REAL) > sizeof(double))
     raytracing_connections_abort_with_message(
         "Error: raytracing output refuses to silently down-convert REAL values wider than binary64.");
-  } // END IF: REAL would lose precision in the documented on-disk format
 } // END FUNCTION: raytracing_connections_validate_binary64_output_or_abort
 
 /**
  * Write an array of REAL values as little-endian binary64, aborting on failure.
  *
- * @param[in,out] fp      File pointer.
- * @param[in]     values  Array of REAL values.
- * @param[in]     count   Number of values.
- * @param[in]     label   Label for error message.
+ * @param[in,out] fp  File pointer.
+ * @param[in] values  Array of REAL values.
+ * @param count       Number of values.
+ * @param[in] label   Label for error message.
  */
 static void raytracing_connections_write_real_array_as_f64_or_abort(
     FILE *restrict fp,
@@ -443,18 +436,17 @@ static void raytracing_connections_write_real_array_as_f64_or_abort(
     const uint64_t count,
     const char *restrict label
 ) {
-  for (uint64_t idx = 0; idx < count; idx++) {
+  for (uint64_t idx = 0; idx < count; idx++)
     raytracing_connections_write_f64_or_abort(fp, (double)values[idx], label);
-  } // END LOOP: write REAL array as canonical little-endian binary64
 } // END FUNCTION: raytracing_connections_write_real_array_as_f64_or_abort
 
 /**
  * Write a fixed-width string (null-padded), aborting if too long.
  *
- * @param[in,out] fp           File pointer.
- * @param[in]     text         String to write.
- * @param[in]     field_bytes  Exact number of bytes to write.
- * @param[in]     label        Label for error message.
+ * @param[in,out] fp  File pointer.
+ * @param[in] text    String to write.
+ * @param field_bytes Exact number of bytes to write.
+ * @param[in] label   Label for error message.
  */
 static void raytracing_connections_write_fixed_length_string_or_abort(
     FILE *restrict fp,
@@ -464,10 +456,9 @@ static void raytracing_connections_write_fixed_length_string_or_abort(
 ) {
   char buffer[128];
   const size_t text_len = strlen(text);
-  if (field_bytes > sizeof(buffer)) {
+  if (field_bytes > sizeof(buffer))
     raytracing_connections_abort_with_message(
         "Error: raytracing header string field exceeds the internal serialization buffer.");
-  } // END IF: unsupported fixed-width string size
   if (field_bytes == 0 || text_len >= field_bytes) {
     fprintf(stderr,
             "Error: output_raytracing_connections_4d_data string field %s is too long for its fixed header field.\n",
@@ -483,8 +474,8 @@ static void raytracing_connections_write_fixed_length_string_or_abort(
 /**
  * Assert that the file pointer is at the expected header size, aborting if not.
  *
- * @param[in,out] fp                    File pointer.
- * @param[in]     expected_header_size  Expected byte offset.
+ * @param[in,out] fp  File pointer.
+ * @param expected_header_size  Expected byte offset.
  */
 static void raytracing_connections_assert_header_size_or_abort(
     FILE *restrict fp,
@@ -501,32 +492,16 @@ static void raytracing_connections_assert_header_size_or_abort(
   } // END IF: hand-maintained header byte count is inconsistent
 } // END FUNCTION: raytracing_connections_assert_header_size_or_abort
 
-/**
- * Check if a file exists and is readable.
- *
- * @param[in] path  File path to check.
- * @return 1 if exists, 0 otherwise.
- */
-static int raytracing_connections_file_exists(const char *restrict path) {
-  FILE *restrict fp = fopen(path, "rb");
-  if (fp != NULL) {
-    fclose(fp);
-    return 1;
-  } // END IF: existing file found
-  return 0;
-} // END FUNCTION: raytracing_connections_file_exists
 """
 
     body = rf"""
-  if (commondata->NUMGRIDS != 1) {{
+  if (commondata->NUMGRIDS != 1)
     raytracing_connections_abort_with_message(
         "Error: output_raytracing_connections_4d_data currently requires commondata->NUMGRIDS == 1.");
-  }} // END IF: unsupported number of grids
 
-  if (time_output_index < 0) {{
+  if (time_output_index < 0)
     raytracing_connections_abort_with_message(
         "Error: output_raytracing_connections_4d_data received a negative output index.");
-  }} // END IF: invalid output index
 
   raytracing_connections_validate_binary64_output_or_abort();
 
@@ -601,22 +576,59 @@ static int raytracing_connections_file_exists(const char *restrict path) {
   snprintf(
       temporary_filename,
       sizeof(temporary_filename),
-      "./raytracing_connections_4d_data_t%08d.bin.tmp",
+      "./raytracing_connections_4d_data_t%08d.bin.tmp.XXXXXX",
       time_output_index);
 
-  if (raytracing_connections_file_exists(final_filename)) {{
-    return;
-  }} // END IF: output file already exists
-
-  remove(temporary_filename);
-
-  FILE *restrict fp = fopen(temporary_filename, "wb");
-  if (fp == NULL) {{
+  const int temporary_fd = mkstemp(temporary_filename);
+  if (temporary_fd == -1) {{
     fprintf(stderr,
-            "Error: output_raytracing_connections_4d_data could not open %s for writing. errno=%d\n",
+            "Error: output_raytracing_connections_4d_data could not create temporary file %s. errno=%d\n",
             temporary_filename, errno);
     exit(1);
-  }} // END IF: fopen failed
+  }} // END IF: temporary output file could not be created
+
+  const mode_t current_umask = umask((mode_t)0);
+  umask(current_umask);
+  if (fchmod(temporary_fd, (mode_t)(0666 & ~current_umask)) != 0) {{
+    const int saved_errno = errno;
+    const int close_result = close(temporary_fd);
+    const int close_errno = close_result == 0 ? 0 : errno;
+    const int cleanup_result = remove(temporary_filename);
+    const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
+
+    if (close_result != 0 || cleanup_result != 0) {{
+      fprintf(stderr,
+              "Error: output_raytracing_connections_4d_data could not adjust permissions on %s and cleanup was incomplete. fchmod errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+              temporary_filename, saved_errno, close_result, close_errno, cleanup_result, cleanup_errno);
+      exit(1);
+    }} // END IF: cleanup after fchmod failure failed
+
+    fprintf(stderr,
+            "Error: output_raytracing_connections_4d_data could not adjust permissions on %s. errno=%d\n",
+            temporary_filename, saved_errno);
+    exit(1);
+  }} // END IF: temporary output file permissions could not be adjusted
+
+  FILE *restrict fp = fdopen(temporary_fd, "wb");
+  if (fp == NULL) {{
+    const int saved_errno = errno;
+    const int close_result = close(temporary_fd);
+    const int close_errno = close_result == 0 ? 0 : errno;
+    const int cleanup_result = remove(temporary_filename);
+    const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
+
+    if (close_result != 0 || cleanup_result != 0) {{
+      fprintf(stderr,
+              "Error: output_raytracing_connections_4d_data could not open %s for writing and cleanup was incomplete. fdopen errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+              temporary_filename, saved_errno, close_result, close_errno, cleanup_result, cleanup_errno);
+      exit(1);
+    }} // END IF: cleanup after fdopen failure failed
+
+    fprintf(stderr,
+            "Error: output_raytracing_connections_4d_data could not open %s for writing. errno=%d\n",
+            temporary_filename, saved_errno);
+    exit(1);
+  }} // END IF: fdopen failed
 
   const uint64_t simulation_time_offset = (uint64_t)header_size;
   const uint64_t params_struct_offset = 0ULL;
@@ -687,13 +699,12 @@ static int raytracing_connections_file_exists(const char *restrict path) {
   const int8_t reserved_flags[5] = {{0, 0, 0, 0, 0}};
   const char magic[16] = "NRPYRTCONN4D";
 
-  for (size_t gf_index = 0; gf_index < (size_t){num_export_gfs}; gf_index++) {{
+  for (size_t gf_index = 0; gf_index < (size_t){num_export_gfs}; gf_index++)
     gridfunction_offsets[gf_index] = raytracing_connections_add_u64_or_abort(
         gridfunction_payload_offset,
         raytracing_connections_mul_u64_or_abort(
             (uint64_t)gf_index, gridfunction_bytes_per_array, "gridfunction offset stride"),
         "gridfunction offset");
-  }} // END LOOP: assign gridfunction payload offsets
 """
     body += r"""
 
@@ -799,7 +810,7 @@ static int raytracing_connections_file_exists(const char *restrict path) {
       "gridfunction_payload_description");
   raytracing_connections_write_fixed_length_string_or_abort(
       fp,
-      "Rebuild reference-metric helper functions analytically from CoordSystemName, xx[0..2], and stored parameters.",
+      "Reference-metric helpers are reconstructible only for Cartesian/Spherical metadata in this format.",
       128,
       "reference_metric_reconstruction");
   raytracing_connections_write_f64_or_abort(fp, cart_origin[0], "Cart_origin[0]");
@@ -874,26 +885,77 @@ static int raytracing_connections_file_exists(const char *restrict path) {
     body += r"""
 
   if (fflush(fp) != 0) {
+    const int saved_errno = errno;
+    const int close_result = fclose(fp);
+    const int close_errno = close_result == 0 ? 0 : errno;
+    const int cleanup_result = remove(temporary_filename);
+    const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
+
+    if (close_result != 0 || cleanup_result != 0) {
+      fprintf(stderr,
+              "Error: output_raytracing_connections_4d_data could not flush %s and cleanup was incomplete. fflush errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+              temporary_filename, saved_errno, close_result, close_errno, cleanup_result, cleanup_errno);
+      exit(1);
+    } // END IF: cleanup after fflush failure failed
+
     fprintf(stderr,
             "Error: output_raytracing_connections_4d_data could not flush %s. errno=%d\n",
-            temporary_filename, errno);
-    fclose(fp);
+            temporary_filename, saved_errno);
     exit(1);
   } // END IF: fflush failed
 
   if (fclose(fp) != 0) {
+    const int saved_errno = errno;
+    if (remove(temporary_filename) != 0) {
+      const int cleanup_errno = errno;
+      fprintf(stderr,
+              "Error: output_raytracing_connections_4d_data could not close %s cleanly and could not remove it. fclose errno=%d cleanup errno=%d\n",
+              temporary_filename, saved_errno, cleanup_errno);
+      exit(1);
+    } // END IF: cleanup after fclose failure failed
+
     fprintf(stderr,
             "Error: output_raytracing_connections_4d_data could not close %s cleanly. errno=%d\n",
-            temporary_filename, errno);
+            temporary_filename, saved_errno);
     exit(1);
   } // END IF: fclose failed
 
-  if (rename(temporary_filename, final_filename) != 0) {
+  if (link(temporary_filename, final_filename) != 0) {
+    const int saved_errno = errno;
+
+    if (saved_errno == EEXIST) {
+      if (remove(temporary_filename) != 0) {
+        const int cleanup_errno = errno;
+        fprintf(stderr,
+                "Error: output_raytracing_connections_4d_data found existing final file %s but could not remove temporary file %s. cleanup errno=%d\n",
+                final_filename, temporary_filename, cleanup_errno);
+        exit(1);
+      } // END IF: temporary output cleanup failed after existing final file
+
+      return;
+    } // END IF: final output already exists
+
+    if (remove(temporary_filename) != 0) {
+      const int cleanup_errno = errno;
+      fprintf(stderr,
+              "Error: output_raytracing_connections_4d_data could not remove temporary file %s after failed install. install errno=%d cleanup errno=%d\n",
+              temporary_filename, saved_errno, cleanup_errno);
+      exit(1);
+    } // END IF: temporary output cleanup failed after install failure
+
     fprintf(stderr,
-            "Error: output_raytracing_connections_4d_data could not rename %s to %s. errno=%d\n",
-            temporary_filename, final_filename, errno);
+            "Error: output_raytracing_connections_4d_data could not install %s as %s without overwriting. errno=%d\n",
+            temporary_filename, final_filename, saved_errno);
     exit(1);
-  } // END IF: rename failed
+  } // END IF: final output could not be created without clobbering
+
+  if (remove(temporary_filename) != 0) {
+    const int cleanup_errno = errno;
+    fprintf(stderr,
+            "Error: output_raytracing_connections_4d_data installed %s but could not remove temporary file %s. errno=%d\n",
+            final_filename, temporary_filename, cleanup_errno);
+    exit(1);
+  } // END IF: temporary output cleanup failed after successful install
 """
 
     cfc.register_CFunction(

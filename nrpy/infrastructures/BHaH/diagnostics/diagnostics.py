@@ -102,8 +102,8 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_connections_output: If True, include a call to
         output_raytracing_connections_4d_data(...) on output steps. This export
-        writes the physical time, full raw ``griddata[0].params`` bytes, logical
-        coordinate arrays, and exactly the required BSSN evolution
+        writes the physical time, explicit selected grid metadata in the fixed
+        header, logical coordinate arrays, and exactly the required BSSN evolution
         gridfunctions.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
@@ -319,11 +319,14 @@ def register_all_diagnostics(
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_connections_output: If True, register and call a raytracing-data
         exporter that writes one binary file per diagnostics output containing the physical
-        time, full raw ``griddata[0].params`` bytes, logical coordinate arrays, and exactly
-        the BSSN gridfunctions needed for later interpolation/finite-difference
+        time, explicit selected grid metadata in the fixed header, logical coordinate arrays,
+        and exactly the BSSN gridfunctions needed for later interpolation/finite-difference
         reconstruction of the Christoffel inputs.
-    :raises ValueError: If runtime-data export is enabled for anything other than exactly
-        one coordinate system.
+    :raises ValueError: If raytracing-data export is enabled for more than one
+        coordinate system, or for a coordinate system whose reference-metric
+        reconstruction metadata is not fully serialized. Note: this exporter
+        also currently supports only one runtime grid; generated C aborts unless
+        commondata->NUMGRIDS == 1.
 
     Doctests:
     None.
@@ -341,6 +344,22 @@ def register_all_diagnostics(
             subdirectory="diagnostics",
         )
 
+    if enable_raytracing_connections_output:
+        if len(set_of_CoordSystems) != 1:
+            raise ValueError(
+                "enable_raytracing_connections_output currently supports exactly "
+                "one CoordSystem. The generated exporter also requires "
+                "commondata->NUMGRIDS == 1 at runtime."
+            )
+        CoordSystem = next(iter(set_of_CoordSystems))
+        if CoordSystem not in ("Cartesian", "Spherical"):
+            raise ValueError(
+                "enable_raytracing_connections_output currently serializes enough "
+                "reference-metric metadata only for Cartesian and Spherical. "
+                "Serialize coordinate-system-specific CodeParameters before "
+                f"enabling it for {CoordSystem}."
+            )
+
     _register_CFunction_diagnostics(
         default_diagnostics_out_every=default_diagnostics_out_every,
         enable_nearest_diagnostics=enable_nearest_diagnostics,
@@ -352,10 +371,6 @@ def register_all_diagnostics(
         enable_raytracing_connections_output=enable_raytracing_connections_output,
     )
     if enable_raytracing_connections_output:
-        if len(set_of_CoordSystems) != 1:
-            raise ValueError(
-                "enable_raytracing_connections_output currently supports exactly one CoordSystem."
-            )
         output_raytracing_connections_4d_data.output_raytracing_connections_4d_data(
             enable_rfm_precompute=enable_rfm_precompute
         )
