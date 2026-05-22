@@ -2,6 +2,7 @@ from . import (
     SEBOBv2_IMR_waveform,
     SEOBNRv5_aligned_spin_coefficients,
     SEOBNRv5_aligned_spin_hNR_fits_at_t_attach,
+    SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach,
     SEOBNRv5_aligned_spin_IMR_waveform,
     SEOBNRv5_coprecessing_angles,
     SEOBNRv5_coprecessing_rotations,

@@ -404,6 +404,10 @@ if __name__ == "__main__":
     # Register some functions/code parameters based on input flags
     BHaH.seobnr.nqc_corrections.SEBOBv2_NQC_corrections.register_CFunction_SEBOBv2_NQC_corrections()
     BHaH.seobnr.nqc_corrections.BOB_v2_NQC_rhs.register_CFunction_BOB_v2_NQC_rhs()
+    BHaH.seobnr.nqc_corrections.BOB_aligned_spin_NQC_corrections_higher_modes.register_CFunction_BOB_aligned_spin_NQC_corrections_higher_modes(
+        False
+    )
+    BHaH.seobnr.nqc_corrections.BOB_aligned_spin_NQC_rhs_higher_modes.register_CFunction_BOB_aligned_spin_NQC_rhs_HM()
 
     # set up merger-ringdown routines based on input flags
     BHaH.seobnr.merger_waveform.BOB_v2_setup_peak_attachment.register_CFunction_BOB_v2_setup_peak_attachment()
