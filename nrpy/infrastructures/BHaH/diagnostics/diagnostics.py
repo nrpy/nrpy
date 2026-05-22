@@ -39,7 +39,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
-from nrpy.infrastructures.BHaH.diagnostics import output_raytracing_connections_4D_data
+from nrpy.infrastructures.BHaH.diagnostics import output_raytracing_connections_4d_data
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
@@ -101,7 +101,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         psi4_spinweightm2_decomposition(...) on output steps.
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_connections_output: If True, include a call to
-        output_raytracing_connections_4D_data(...) on output steps. This export
+        output_raytracing_connections_4d_data(...) on output steps. This export
         writes the physical time, full raw ``griddata[0].params`` bytes, logical
         coordinate arrays, and exactly the required BSSN evolution
         gridfunctions.
@@ -232,7 +232,7 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
 
     {"// Export raytracing-connection 4D reconstruction data from the stored BSSN state." if enable_raytracing_connections_output else ""}
     {"const int raytracing_output_index = (int)round(currtime / outevery);" + newline if enable_raytracing_connections_output else ""}
-    {"output_raytracing_connections_4D_data(commondata, griddata, raytracing_output_index);" + newline if enable_raytracing_connections_output else ""}
+    {"output_raytracing_connections_4d_data(commondata, griddata, raytracing_output_index);" + newline if enable_raytracing_connections_output else ""}
 
     // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
@@ -356,7 +356,7 @@ def register_all_diagnostics(
             raise ValueError(
                 "enable_raytracing_connections_output currently supports exactly one CoordSystem."
             )
-        output_raytracing_connections_4D_data.output_raytracing_connections_4D_data(
+        output_raytracing_connections_4d_data.output_raytracing_connections_4d_data(
             enable_rfm_precompute=enable_rfm_precompute
         )
     if enable_nearest_diagnostics:

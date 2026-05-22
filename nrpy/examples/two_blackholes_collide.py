@@ -37,6 +37,11 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
+parser.add_argument(
+    "--raytracing-connections",
+    action="store_true",
+    help="Enable full-grid raytracing connection dumps on diagnostics output steps.",
+)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
@@ -69,7 +74,7 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-enable_raytracing_connections_output = True
+enable_raytracing_connections_output = args.raytracing_connections
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
