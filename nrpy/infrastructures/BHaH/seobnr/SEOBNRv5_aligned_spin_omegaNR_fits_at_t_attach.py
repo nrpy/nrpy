@@ -39,7 +39,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach() -> (
     modes = [(2, 2), (2, 1), (3, 3), (3, 2), (4, 4), (4, 3), (5, 5)]
 
     for l, m in modes:
-        omegaNR.append(cast(sp.Expr, const.omegaNR[f"({l} , {m})"]))
+        omegaNR.append(const.omegaNR[f"({l} , {m})"])
         omegaNR_labels.append(f"const REAL omegaNR{l}{m}")
 
     omegaNR_code = ccg.c_codegen(
