@@ -28,13 +28,14 @@ header. If a future reader requires additional runtime parameters, they should
 be added to the header or to a documented field-by-field canonical params block,
 not by writing native C struct bytes.
 
-The emitted payload intentionally excludes evolved fields that are not consumed
-by the Christoffel construction. In particular, it does not write ``betU`` or
-``lambdaU`` gridfunctions, because the current ``BSSN_to_g4Christoffel``
-construction depends only on ``alpha``, ``cf``, ``trK``, ``vetU``, ``hDD``,
-and ``aDD`` plus spatial coordinates and grid parameters. Spatial derivatives
-are not exported directly; the file contains the state needed to reconstruct
-them later by interpolation and finite differencing.
+The emitted payload intentionally contains one spatial BSSN state snapshot per
+diagnostics output time. A single file does not by itself determine the full
+4D Christoffel symbols, because the current ``BSSN_to_g4Christoffel``
+construction also requires the time derivatives ``alpha_d0`` and ``vetU_d0``.
+Those derivative fields are not serialized directly by this exporter, but they
+can be reconstructed in post-processing from multiple compatible output files.
+Spatial derivatives are not exported directly; the file contains the state
+needed to reconstruct them later by interpolation and finite differencing.
 
 Reference-metric precompute helpers such as ``f0_of_xx0`` and ``f1_of_xx1``
 are not serialized as payload arrays. With the current fixed header metadata,
@@ -82,8 +83,10 @@ def output_raytracing_connections_4d_data(
        time, serialized as little-endian IEEE-754 binary64.
 
     One output file contains the spatial BSSN state and metadata needed for
-    later interpolation/finite-difference reconstruction. Time derivatives such
-    as ``alpha_d0`` and ``vetU_d0`` are not directly stored in a single file.
+    later interpolation/finite-difference reconstruction. A single file does not
+    by itself determine the full 4D Christoffel symbols, because time derivatives
+    such as ``alpha_d0`` and ``vetU_d0`` are not directly stored. Those quantities
+    can be reconstructed in post-processing from multiple compatible output files.
 
     The portable payload intentionally does not serialize raw ``params_struct``
     bytes. All reader-required grid metadata is written explicitly in the fixed
@@ -170,7 +173,7 @@ def output_raytracing_connections_4d_data(
         "BHaH_function_prototypes.h",
     ]
     desc = """
-Export raytracing-connection 4D reconstruction data from the stored BSSN state.
+Export BSSN-state data for later raytracing-connection reconstruction.
 
 This function writes at most one binary file per diagnostics output to:
 
@@ -183,8 +186,8 @@ the final file already exists, the function returns without modifying it so
 restarted runs do not overwrite or append duplicate output.
 
 The exported payload is intentionally limited to the quantities needed to
-reconstruct the spatial BSSN state used later for 4D Christoffel
-reconstruction:
+reconstruct the spatial BSSN state used later for raytracing-connection
+post-processing:
   - physical simulation time serialized as little-endian IEEE-754 binary64,
   - selected interpolation-critical grid metadata in the fixed header,
   - logical coordinate arrays xx[0], xx[1], xx[2] serialized as little-endian
@@ -195,6 +198,11 @@ reconstruction:
   - hDD00, hDD01, hDD02, hDD11, hDD12, hDD22,
   - trK,
   - vetU0, vetU1, vetU2.
+
+A single output file does not by itself determine the full 4D Christoffel
+symbols, because time derivatives such as alpha_d0 and vetU_d0 are not
+directly stored. Those quantities can be reconstructed in post-processing from
+multiple compatible output files.
 
 The fixed header records byte offsets and byte counts for every payload
 section, the EvolvedConformalFactor_cf convention used to interpret the
@@ -406,8 +414,10 @@ static void raytracing_connections_write_f64_or_abort(
 } // END FUNCTION: raytracing_connections_write_f64_or_abort
 
 /**
- * Validate that the current C compiler's double matches IEEE-754 binary64 semantics,
- * and REAL is not wider than double. Abort if unsupported.
+ * Validate binary64 output assumptions before serialization.
+ *
+ * Abort if the C compiler's double does not match IEEE-754 binary64 semantics,
+ * or if REAL is wider than double.
  */
 static void raytracing_connections_validate_binary64_output_or_abort(void) {
 #if FLT_RADIX != 2 || DBL_MANT_DIG != 53 || DBL_MAX_EXP != 1024 || DBL_MIN_EXP != -1021

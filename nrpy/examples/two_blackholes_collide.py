@@ -40,7 +40,10 @@ parser.add_argument(
 parser.add_argument(
     "--raytracing-connections",
     action="store_true",
-    help="Enable full-grid raytracing connection dumps on diagnostics output steps.",
+    help=(
+        "Enable full-grid BSSN-state dumps for later raytracing-connection "
+        "reconstruction on diagnostics output steps."
+        ),
 )
 args = parser.parse_args()
 
