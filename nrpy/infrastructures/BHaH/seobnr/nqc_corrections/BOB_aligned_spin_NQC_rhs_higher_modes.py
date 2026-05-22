@@ -71,7 +71,7 @@ SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
 
         # frequency at t_0
         declare_HM_input_symbols += (
-            f"const REAL {wf.modewise_input_symbols[lm][1]} = wNR[HNR{lm[0]}{lm[1]}];\n"
+            f"const REAL {wf.modewise_input_symbols[lm][1]} = fabs(wNR[HNR{lm[0]}{lm[1]}]);\n"
         )
         nqc_rhs_quantities.append(wf.wdot_t_attach_lm[lm])
         nqc_rhs_labels.append(f"const REAL wdot_{lm[0]}{lm[1]}_t_attach")
@@ -86,7 +86,7 @@ SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
 amps[HNR{lm[0]}{lm[1]}][0] = {wf.modewise_input_symbols[lm][0]};
 amps[HNR{lm[0]}{lm[1]}][1] = hdot_{lm[0]}{lm[1]}_t_attach;
 amps[HNR{lm[0]}{lm[1]}][2] = hddot_{lm[0]}{lm[1]}_t_attach;
-omegas[HNR{lm[0]}{lm[1]}][0] = {wf.modewise_input_symbols[lm][1]};
+omegas[HNR{lm[0]}{lm[1]}][0] = fabs({wf.modewise_input_symbols[lm][1]});
 omegas[HNR{lm[0]}{lm[1]}][1] = wdot_{lm[0]}{lm[1]}_t_attach;
 """
     BOB_code = ccg.c_codegen(

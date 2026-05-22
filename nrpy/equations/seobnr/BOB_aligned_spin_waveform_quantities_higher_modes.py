@@ -152,8 +152,19 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
+    wf = BOB_aligned_spin_waveform_quantities_higher_modes()
+    expressions_dict = {}
+    for ell, em in wf.modes:
+        label = f"{ell}{em}"
+        ellm = (ell, em)
+        expressions_dict[f"h_{label}"] = wf.h_lm[ellm]
+        expressions_dict[f"phi_{label}"] = wf.phi_lm[ellm]
+        expressions_dict[f"hdot_t_attach_{label}"] = wf.hdot_t_attach_lm[ellm]
+        expressions_dict[f"hddot_t_attach_{label}"] = wf.hddot_t_attach_lm[ellm]
+        expressions_dict[f"wdot_t_attach{label}"] = wf.wdot_t_attach_lm[ellm]
+
     results_dict = ve.process_dictionary_of_expressions(
-        BOB_aligned_spin_waveform_quantities_higher_modes().__dict__,
+        expressions_dict,
         fixed_mpfs_for_free_symbols=True,
     )
     ve.compare_or_generate_trusted_results(

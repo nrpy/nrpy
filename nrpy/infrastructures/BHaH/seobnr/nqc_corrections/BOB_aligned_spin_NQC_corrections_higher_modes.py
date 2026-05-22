@@ -100,24 +100,29 @@ if (phase_unwrapped == NULL){
   exit(1);
 }
 REAL radius, omega, prstar;
-double complex h22;
 size_t i;
+"""
+    for lm in modes:
+        body+=f"""
+double complex h{lm[0]}{lm[1]};
 
-for (i = 0; i < commondata->nsteps_fine; i++){
+for (i = 0; i < commondata->nsteps_fine; i++){{
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  h22 = commondata->waveform_fine[IDX_WF(i,STRAIN22)];
-  hamp[i] = cabs(h22);
-  phase[i] = carg(h22);
+  h{lm[0]}{lm[1]} = commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})];
+  hamp[i] = cabs(h{lm[0]}{lm[1]});
+  phase[i] = carg(h{lm[0]}{lm[1]});
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
   Q3[i] = Q2[i] / sqrt(r[i]);
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-}
+}}
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
+"""
+        body += """
 // Find t_ISCO:
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -183,55 +188,58 @@ if (spline == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
   exit(1);
 }
-
-gsl_matrix *restrict Q = gsl_matrix_alloc (3, 3);
-if (Q == NULL){
+"""
+    for lm in modes:
+        body += f"""
+gsl_matrix *restrict Q{lm[0]}{lm[1]} = gsl_matrix_alloc (3, 3);
+if (Q{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
-}
-gsl_matrix *restrict P = gsl_matrix_alloc (2, 2);
-if (P == NULL){
+}}
+gsl_matrix *restrict P{lm[0]}{lm[1]} = gsl_matrix_alloc (2, 2);
+if (P{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
-}
+}}
 gsl_spline_init(spline,t_cropped, Q_cropped1,right-left);
-gsl_matrix_set(Q,0,0,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q,1,0,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q,2,0,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,0,gsl_spline_eval(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,0,gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,0,gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, Q_cropped2,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(Q,0,1,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q,1,1,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q,2,1,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,1,gsl_spline_eval(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,1,gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,1,gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, Q_cropped3,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(Q,0,2,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q,1,2,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q,2,2,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,2,gsl_spline_eval(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,2,gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,2,gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped1,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(P,1,0,-gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_matrix_set(P{lm[0]}{lm[1]},0,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P{lm[0]}{lm[1]},1,0,-gsl_spline_eval_deriv2(spline, t_peak, acc));
 
 gsl_spline_init(spline,t_cropped, P_cropped2,right-left);
 gsl_interp_accel_reset(acc);
-gsl_matrix_set(P,0,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(P,1,1,-gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_matrix_set(P{lm[0]}{lm[1]},0,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
+gsl_matrix_set(P{lm[0]}{lm[1]},1,1,-gsl_spline_eval_deriv2(spline, t_peak, acc));
 
-gsl_vector *restrict A = gsl_vector_alloc(3);
-if (A == NULL){
+gsl_vector *restrict A{lm[0]}{lm[1]} = gsl_vector_alloc(3);
+if (A{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
-gsl_vector *restrict O = gsl_vector_alloc(2);
-if (O == NULL){
+}}
+gsl_vector *restrict O{lm[0]}{lm[1]} = gsl_vector_alloc(2);
+if (O{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
-
+}}
+"""
+    body +="""
 gsl_spline_init(spline,t_cropped, amp_cropped,right-left);
 gsl_interp_accel_reset(acc);
 const REAL amp_insp = gsl_spline_eval(spline, t_peak, acc);
@@ -256,6 +264,7 @@ else{
 }
 
 REAL omegas[NUMMODES][2] , amps[NUMMODES][3];
+REAL a_nqc[NUMMODES][3], b_nqc[NUMMODES][2];
 """
     if not use_numerical_relativity_nqc:
         body += """
@@ -267,11 +276,11 @@ SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
 """
     for lm in modes:
         body += f"""
-gsl_vector_set(A , 0 , amps[HNR{lm[0]}{lm[1]}][0] - amp_insp);
-gsl_vector_set(A , 1 , amps[HNR{lm[0]}{lm[1]}][1] - ampdot_insp);
-gsl_vector_set(A , 2 , amps[HNR{lm[0]}{lm[1]}][2] - ampddot_insp);
-gsl_vector_set(O , 0 , omegas[HNR{lm[0]}{lm[1]}][0] - omega_insp);
-gsl_vector_set(O , 1 , omegas[HNR{lm[0]}{lm[1]}][1] - omegadot_insp);
+gsl_vector_set(A{lm[0]}{lm[1]} , 0 , amps[HNR{lm[0]}{lm[1]}][0] - amp_insp);
+gsl_vector_set(A{lm[0]}{lm[1]} , 1 , amps[HNR{lm[0]}{lm[1]}][1] - ampdot_insp);
+gsl_vector_set(A{lm[0]}{lm[1]} , 2 , amps[HNR{lm[0]}{lm[1]}][2] - ampddot_insp);
+gsl_vector_set(O{lm[0]}{lm[1]} , 0 , omegas[HNR{lm[0]}{lm[1]}][0] - omega_insp);
+gsl_vector_set(O{lm[0]}{lm[1]} , 1 , omegas[HNR{lm[0]}{lm[1]}][1] - omegadot_insp);
 
 gsl_vector *restrict a{lm[0]}{lm[1]} = gsl_vector_alloc (3);
 if (a{lm[0]}{lm[1]} == NULL){{
@@ -285,16 +294,16 @@ if (p_A{lm[0]}{lm[1]} == NULL){{
   exit(1);
 }}
 gsl_linalg_LU_decomp(Q, p_A{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
-gsl_linalg_LU_solve(Q, p_A{lm[0]}{lm[1]}, A, a{lm[0]}{lm[1]});
+gsl_linalg_LU_solve(Q, p_A{lm[0]}{lm[1]}, A{lm[0]}{lm[1]}, a{lm[0]}{lm[1]});
 gsl_permutation_free(p_A{lm[0]}{lm[1]});
 
-commondata->a_1_NQC = gsl_vector_get(a{lm[0]}{lm[1]},0);
-commondata->a_2_NQC = gsl_vector_get(a{lm[0]}{lm[1]},1);
-commondata->a_3_NQC = gsl_vector_get(a{lm[0]}{lm[1]},2);
+a_nqc[HNR{lm[0]}{lm[1]}][0] = gsl_vector_get(a{lm[0]}{lm[1]},0);
+a_nqc[HNR{lm[0]}{lm[1]}][1] = gsl_vector_get(a{lm[0]}{lm[1]},1);
+a_nqc[HNR{lm[0]}{lm[1]}][2] = gsl_vector_get(a{lm[0]}{lm[1]},2);
 
 gsl_vector_free(a{lm[0]}{lm[1]});
-gsl_vector_free(A);
-gsl_matrix_free(Q);
+gsl_vector_free(A{lm[0]}{lm[1]});
+
 
 gsl_vector *restrict b{lm[0]}{lm[1]} = gsl_vector_alloc(2);
 if (b{lm[0]}{lm[1]} == NULL){{
@@ -307,18 +316,18 @@ if (p_B{lm[0]}{lm[1]} == NULL){{
   exit(1);
 }}
 gsl_linalg_LU_decomp(P, p_B{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
-gsl_linalg_LU_solve (P, p_B{lm[0]}{lm[1]}, O, b{lm[0]}{lm[1]});
+gsl_linalg_LU_solve (P, p_B{lm[0]}{lm[1]}, O{lm[0]}{lm[1]}, b{lm[0]}{lm[1]});
 gsl_permutation_free (p_B{lm[0]}{lm[1]});
 
-commondata->b_1_NQC = gsl_vector_get(b{lm[0]}{lm[1]},0);
-commondata->b_2_NQC = gsl_vector_get(b{lm[0]}{lm[1]},1);
+b_nqc[HNR{lm[0]}{lm[1]}][0]= gsl_vector_get(b{lm[0]}{lm[1]},0);
+b_nqc[HNR{lm[0]}{lm[1]}][1] = gsl_vector_get(b{lm[0]}{lm[1]},1);
 
-gsl_vector_free (b{lm[0]}{lm[1]});
-gsl_vector_free(O);
-gsl_matrix_free(P);
+gsl_vector_free(b{lm[0]}{lm[1]});
+gsl_vector_free(O{lm[0]}{lm[1]});
 """
-        body += """
-
+    body += """
+gsl_matrix_free(P);
+gsl_matrix_free(Q);
 free(times);
 free(Q1);
 free(Q2);
@@ -332,12 +341,19 @@ free(phase);
 free(phase_unwrapped);
 
 // apply the nqc correction
+commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
+commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
+for (i = 0; i < commondata->nsteps_low; i++){
+  commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
+}
+for (i = 0; i< commondata->nsteps_fine; i++){
+  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
+}
 """
     for lm in modes:
         body += f"""
 
-commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
-commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
+
 REAL nqc_amp{lm[0]}{lm[1]}, nqc_phase{lm[0]}{lm[1]}, q1_{lm[0]}{lm[1]}, q2_{lm[0]}{lm[1]}, q3_{lm[0]}{lm[1]},p1_{lm[0]}{lm[1]}, p2_{lm[0]}{lm[1]};
 for (i = 0; i < commondata->nsteps_low; i++){{
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
@@ -348,9 +364,8 @@ for (i = 0; i < commondata->nsteps_low; i++){{
   q3_{lm[0]}{lm[1]} = q2_{lm[0]}{lm[1]} / sqrt(radius);
   p1_{lm[0]}{lm[1]} = -prstar / radius /omega;
   p2_{lm[0]}{lm[1]} = -p1_{lm[0]}{lm[1]} * prstar * prstar;
-  nqc_amp{lm[0]}{lm[1]} = 1 + commondata->a_1_NQC*q1_{lm[0]}{lm[1]} + commondata->a_2_NQC*q2_{lm[0]}{lm[1]} + commondata->a_3_NQC*q3_{lm[0]}{lm[1]};
-  nqc_phase{lm[0]}{lm[1]} =  commondata->b_1_NQC*p1_{lm[0]}{lm[1]} + commondata->b_2_NQC*p2_{lm[0]}{lm[1]};
-  commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
+  nqc_amp{lm[0]}{lm[1]} = 1 + a_nqc[HNR{lm[0]}{lm[1]}][0]*q1_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][1]*q2_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][2]*q3_{lm[0]}{lm[1]};
+  nqc_phase{lm[0]}{lm[1]} =  b_nqc[HNR{lm[0]}{lm[1]}][0]*p1_{lm[0]}{lm[1]} + b_nqc[HNR{lm[0]}{lm[1]}][1]*p2_{lm[0]}{lm[1]};
   commondata->waveform_inspiral[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] = nqc_amp{lm[0]}{lm[1]} * commondata->waveform_low[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] *cexp(I * nqc_phase{lm[0]}{lm[1]});
 }}
 for (i = 0; i< commondata->nsteps_fine; i++){{
@@ -362,9 +377,8 @@ for (i = 0; i< commondata->nsteps_fine; i++){{
   q3_{lm[0]}{lm[1]} = q2_{lm[0]}{lm[1]} / sqrt(radius);
   p1_{lm[0]}{lm[1]} = -prstar / radius /omega;
   p2_{lm[0]}{lm[1]} = -p1_{lm[0]}{lm[1]} * prstar * prstar;
-  nqc_amp{lm[0]}{lm[1]} = 1 + commondata->a_1_NQC*q1_{lm[0]}{lm[1]} + commondata->a_2_NQC*q2_{lm[0]}{lm[1]} + commondata->a_3_NQC*q3_{lm[0]}{lm[1]};
-  nqc_phase{lm[0]}{lm[1]} =  commondata->b_1_NQC*p1_{lm[0]}{lm[1]} + commondata->b_2_NQC*p2_{lm[0]}{lm[1]};
-  commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
+  nqc_amp{lm[0]}{lm[1]} = 1 + a_nqc[HNR{lm[0]}{lm[1]}][0]*q1_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][1]*q2_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][2]*q3_{lm[0]}{lm[1]};
+  nqc_phase{lm[0]}{lm[1]} =  b_nqc[HNR{lm[0]}{lm[1]}][0]*p1_{lm[0]}{lm[1]} + b_nqc[HNR{lm[0]}{lm[1]}][1]*p2_{lm[0]}{lm[1]};
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN{lm[0]}{lm[1]})] = nqc_amp{lm[0]}{lm[1]} * commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] * cexp(I * nqc_phase{lm[0]}{lm[1]});
 }}
 
