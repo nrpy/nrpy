@@ -56,7 +56,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def output_raytracing_connections_4d_data(
+def register_CFunction_output_raytracing_connections_4d_data(
     enable_rfm_precompute: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
@@ -141,7 +141,7 @@ def output_raytracing_connections_4d_data(
     coord_name_buffer_size = 8
     type_name_buffer_size = 32
     header_scalar_real_count = 19
-    format_version = 5
+    format_version = 6
     header_size_bytes = (
         16
         + 20 * 4
@@ -152,7 +152,7 @@ def output_raytracing_connections_4d_data(
         + 3 * coord_name_buffer_size
         + 100
         + 100
-        + 5 * 128
+        + 6 * 128
         + header_scalar_real_count * 8
         + 3
         + 5
@@ -481,27 +481,6 @@ static void raytracing_connections_write_fixed_length_string_or_abort(
   raytracing_connections_write_or_abort(fp, buffer, sizeof(char), field_bytes, label);
 } // END FUNCTION: raytracing_connections_write_fixed_length_string_or_abort
 
-/**
- * Assert that the file pointer is at the expected header size, aborting if not.
- *
- * @param[in,out] fp  File pointer.
- * @param expected_header_size  Expected byte offset.
- */
-static void raytracing_connections_assert_header_size_or_abort(
-    FILE *restrict fp,
-    const uint32_t expected_header_size
-) {
-  const long current_offset = ftell(fp);
-  if (current_offset < 0 || (uint64_t)current_offset != (uint64_t)expected_header_size) {
-    fprintf(stderr,
-            "Error: output_raytracing_connections_4d_data wrote %ld header bytes, expected %u.\n",
-            current_offset,
-            expected_header_size);
-    fclose(fp);
-    exit(1);
-  } // END IF: hand-maintained header byte count is inconsistent
-} // END FUNCTION: raytracing_connections_assert_header_size_or_abort
-
 """
 
     body = rf"""
@@ -607,9 +586,16 @@ static void raytracing_connections_assert_header_size_or_abort(
     const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
 
     if (close_result != 0 || cleanup_result != 0) {{
-      fprintf(stderr,
-              "Error: output_raytracing_connections_4d_data could not adjust permissions on %s and cleanup was incomplete. fchmod errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
-              temporary_filename, saved_errno, close_result, close_errno, cleanup_result, cleanup_errno);
+    fprintf(stderr,
+            "Error: output_raytracing_connections_4d_data could not adjust "
+            "permissions on %s and cleanup was incomplete. fchmod errno=%d "
+            "close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+            temporary_filename,
+            saved_errno,
+            close_result,
+            close_errno,
+            cleanup_result,
+            cleanup_errno);
       exit(1);
     }} // END IF: cleanup after fchmod failure failed
 
@@ -775,6 +761,11 @@ static void raytracing_connections_assert_header_size_or_abort(
       fp, coord_array_bytes[2], "coord_array_bytes[2]");
   raytracing_connections_write_u64_or_abort(
       fp, gridfunction_bytes_per_array, "gridfunction_bytes_per_array");
+  raytracing_connections_write_fixed_length_string_or_abort(
+      fp,
+      "IDX3(i0,i1,i2)=i0+N0*(i1+N1*i2); each gridfunction is one IDX3-contiguous block",
+      128,
+      "gridfunction_layout");
 """
     for gf_index, _ in enumerate(required_gfs):
         body += rf"""
@@ -856,7 +847,15 @@ static void raytracing_connections_assert_header_size_or_abort(
 """
     body += r"""
 
-  raytracing_connections_assert_header_size_or_abort(fp, header_size);
+  const long current_offset = ftell(fp);
+  if (current_offset < 0 || (uint64_t)current_offset != (uint64_t)header_size) {
+    fprintf(stderr,
+            "Error: output_raytracing_connections_4d_data wrote %ld header bytes, expected %u.\n",
+            current_offset,
+            header_size);
+    fclose(fp);
+    exit(1);
+  } // END IF: hand-maintained header byte count is inconsistent
 
   // Step 2: Write the physical simulation time in the canonical on-disk format.
   raytracing_connections_write_f64_or_abort(

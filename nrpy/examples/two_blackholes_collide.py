@@ -43,7 +43,7 @@ parser.add_argument(
     help=(
         "Enable full-grid BSSN-state dumps for later raytracing-connection "
         "reconstruction on diagnostics output steps."
-        ),
+    ),
 )
 args = parser.parse_args()
 
