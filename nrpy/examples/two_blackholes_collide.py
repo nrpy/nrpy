@@ -38,11 +38,11 @@ parser.add_argument(
     default="double",
 )
 parser.add_argument(
-    "--raytracing-connections",
+    "--raytracing-outputs",
     action="store_true",
     help=(
-        "Enable full-grid BSSN-state dumps for later raytracing-connection "
-        "reconstruction on diagnostics output steps."
+        "Enable Cartesian metric and Christoffel raytracing outputs on "
+        "diagnostics output steps."
     ),
 )
 args = parser.parse_args()
@@ -77,7 +77,7 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-enable_raytracing_connections_output = args.raytracing_connections
+enable_raytracing_data_output = args.raytracing_outputs
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
@@ -258,7 +258,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
-    enable_raytracing_connections_output=enable_raytracing_connections_output,
+    enable_raytracing_data_output=enable_raytracing_data_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
