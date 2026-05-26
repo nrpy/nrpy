@@ -34,16 +34,17 @@ Horizon_finder_SDAG_CODE
     private :
   /// Member Variables (Object State) ///
   commondata_struct commondata;
-  griddata_struct *griddata;
-  REAL *x_guess;
-  REAL *y_guess;
-  REAL *z_guess;
-  int total_elements;
-  int which_horizon;
-  REAL *radii;
-  REAL (*dst_x0x1x2)[3];
-  REAL **dst_data_ptrs;
-  bool do_horizon_find;
+  griddata_struct *griddata = nullptr;
+  bool owns_griddata = false;
+  REAL *x_guess = nullptr;
+  REAL *y_guess = nullptr;
+  REAL *z_guess = nullptr;
+  int total_elements = 0;
+  int which_horizon = 0;
+  REAL *radii = nullptr;
+  REAL (*dst_x0x1x2)[3] = nullptr;
+  REAL **dst_data_ptrs = nullptr;
+  bool do_horizon_find = false;
 
   /// Member Functions (private) ///
 
@@ -51,6 +52,7 @@ public:
   /// Constructors ///
   Horizon_finder();
   Horizon_finder(CkMigrateMessage *msg);
+  void pup(PUP::er &p);
   /// Destructor ///
   ~Horizon_finder();
   void process_interpolation_results(InterpBufMsg *msg);
@@ -91,6 +93,22 @@ extern/* readonly */ CProxy_Timestepping timesteppingArray;
 extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
 extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 
+static void horizon_finder_pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
+  int has_array = (*array != nullptr) ? 1 : 0;
+  p | has_array;
+  if (has_array != 0) {
+    if (p.isUnpacking()) {
+      *array = (REAL *restrict)malloc(sizeof(REAL) * length);
+      if (*array == nullptr && length > 0) {
+        CkAbort("%s", name);
+      }
+    }
+    PUParray(p, *array, length);
+  } else if (p.isUnpacking()) {
+    *array = nullptr;
+  }
+}
+
 Horizon_finder::Horizon_finder() {
   CkPrintf("Horizon_finder chare %d created on PE %d\n", thisIndex, CkMyPe());
 }
@@ -98,11 +116,99 @@ Horizon_finder::Horizon_finder() {
 // migration constructor
 Horizon_finder::Horizon_finder(CkMigrateMessage *msg) : CBase_Horizon_finder(msg) {}
 
+// PUP routine for class Horizon_finder
+void Horizon_finder::pup(PUP::er &p) {
+  CBase_Horizon_finder::pup(p);
+  __sdag_pup(p);
+  pup_commondata_struct(p, commondata);
+
+  int has_griddata = (griddata != nullptr) ? 1 : 0;
+  p | has_griddata;
+  if (has_griddata != 0) {
+    int size_griddata = commondata.NUMGRIDS;
+    p | size_griddata;
+    if (p.isUnpacking()) {
+      owns_griddata = true;
+      griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
+      if (griddata == nullptr && size_griddata > 0) {
+        CkAbort("Horizon_finder PUP failed to allocate griddata.");
+      }
+    }
+    for (int i = 0; i < size_griddata; i++) {
+      pup_griddata(p, griddata[i]);
+    }
+  } else if (p.isUnpacking()) {
+    owns_griddata = false;
+    griddata = nullptr;
+  }
+
+  p | total_elements;
+  p | which_horizon;
+  p | do_horizon_find;
+
+  const int num_horizons = commondata.bah_max_num_horizons;
+  horizon_finder_pup_optional_REAL_array(p, &x_guess, num_horizons, "Horizon_finder PUP failed to allocate x_guess.");
+  horizon_finder_pup_optional_REAL_array(p, &y_guess, num_horizons, "Horizon_finder PUP failed to allocate y_guess.");
+  horizon_finder_pup_optional_REAL_array(p, &z_guess, num_horizons, "Horizon_finder PUP failed to allocate z_guess.");
+
+  int has_dst_x0x1x2 = (dst_x0x1x2 != nullptr) ? 1 : 0;
+  p | has_dst_x0x1x2;
+  if (has_dst_x0x1x2 != 0) {
+    if (p.isUnpacking()) {
+      dst_x0x1x2 = (REAL(*)[3])malloc(sizeof(REAL) * total_elements * 3);
+      if (dst_x0x1x2 == nullptr && total_elements > 0) {
+        CkAbort("Horizon_finder PUP failed to allocate dst_x0x1x2.");
+      }
+    }
+    PUParray(p, (REAL *)dst_x0x1x2, total_elements * 3);
+  } else if (p.isUnpacking()) {
+    dst_x0x1x2 = nullptr;
+  }
+
+  int has_dst_data_ptrs = (dst_data_ptrs != nullptr) ? 1 : 0;
+  p | has_dst_data_ptrs;
+  if (has_dst_data_ptrs != 0) {
+    if (p.isUnpacking()) {
+      dst_data_ptrs = (REAL **)malloc(sizeof(REAL *) * BHAHAHA_NUM_INTERP_GFS);
+      if (dst_data_ptrs == nullptr) {
+        CkAbort("Horizon_finder PUP failed to allocate dst_data_ptrs.");
+      }
+    }
+    for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
+      if (p.isUnpacking()) {
+        dst_data_ptrs[i] = (REAL *restrict)malloc(sizeof(REAL) * total_elements);
+        if (dst_data_ptrs[i] == nullptr && total_elements > 0) {
+          CkAbort("Horizon_finder PUP failed to allocate dst_data_ptrs[i].");
+        }
+      }
+      PUParray(p, dst_data_ptrs[i], total_elements);
+    }
+  } else if (p.isUnpacking()) {
+    dst_data_ptrs = nullptr;
+  }
+}
+
 // destructor
 Horizon_finder::~Horizon_finder() {
-  if (x_guess) free(x_guess);
-  if (y_guess) free(y_guess);
-  if (z_guess) free(z_guess);
+  BHAH_FREE(x_guess);
+  BHAH_FREE(y_guess);
+  BHAH_FREE(z_guess);
+  BHAH_FREE(radii);
+  BHAH_FREE(dst_x0x1x2);
+  if (dst_data_ptrs != nullptr) {
+    for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
+      BHAH_FREE(dst_data_ptrs[i]);
+    }
+    BHAH_FREE(dst_data_ptrs);
+  }
+  if (owns_griddata && griddata != nullptr) {
+    for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
+      BHAH_FREE(griddata[grid].xx[0]);
+      BHAH_FREE(griddata[grid].xx[1]);
+      BHAH_FREE(griddata[grid].xx[2]);
+    }
+    BHAH_FREE(griddata);
+  }
 }
 
 void Horizon_finder::process_interpolation_results(InterpBufMsg *msg) {
@@ -197,6 +303,7 @@ module horizon_finder {
           if (!(commondata.bah_enable_BBH_mode && !commondata.bah_BBH_mode_horizon_active[which_horizon])) {
             serial {
               bhahaha_find_horizons(&commondata, griddata, x_guess, y_guess, z_guess, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_SETUP);
+              BHAH_FREE(radii);
             }
 
             when ready_for_interpolation() {
@@ -213,7 +320,14 @@ module horizon_finder {
             }
             serial {
               bhahaha_find_horizons(&commondata, griddata, x_guess, y_guess, z_guess, &radii, &total_elements, &dst_x0x1x2, &dst_data_ptrs, which_horizon, BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE);
-              free(radii);
+              BHAH_FREE(dst_x0x1x2);
+              if (dst_data_ptrs != nullptr) {
+                for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
+                  BHAH_FREE(dst_data_ptrs[i]);
+                } // END LOOP: for interpolated horizon gridfunctions
+                BHAH_FREE(dst_data_ptrs);
+              } // END IF: interpolation data pointers allocated
+              total_elements = 0;
               thisProxy[CkArrayIndex1D(thisIndex)].horizon_finding_complete();
             }
 
