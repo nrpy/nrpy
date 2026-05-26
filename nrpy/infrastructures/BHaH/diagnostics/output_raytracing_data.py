@@ -241,6 +241,9 @@ def register_CFunction_output_raytracing_data(
   MAYBE_UNUSED const REAL xx1 = xx[1][i1];
   MAYBE_UNUSED const REAL xx2 = xx[2][i2];
   const int idx3 = IDX3(i0, i1, i2);
+  const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
+      i0, i1, i2, NGHOSTS, Nxx0, Nxx1, Nxx2);
+  const uint64_t base_index = point_index * (uint64_t)point_record_real_count;
   const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
   const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
   const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
@@ -258,18 +261,21 @@ def register_CFunction_output_raytracing_data(
         enable_fd_functions=False,
         include_braces=False,
     )}
-  raytracing_data_write_f64_or_abort(fp, (double)xCart[0], "x");
-  raytracing_data_write_f64_or_abort(fp, (double)xCart[1], "y");
-  raytracing_data_write_f64_or_abort(fp, (double)xCart[2], "z");
+  payload_buffer[base_index + 0] = (double)xCart[0];
+  payload_buffer[base_index + 1] = (double)xCart[1];
+  payload_buffer[base_index + 2] = (double)xCart[2];
 """
+    component_index = 3
     for _, name in metric_components:
         loop_body += (
-            f'  raytracing_data_write_f64_or_abort(fp, (double){name}, "{name}");\n'
+            f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
         )
+        component_index += 1
     for _, name in christoffel_components:
         loop_body += (
-            f'  raytracing_data_write_f64_or_abort(fp, (double){name}, "{name}");\n'
+            f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
         )
+        component_index += 1
 
     # Step 7: Wrap the pointwise kernel in the standard BHaH interior loop.
     loop = BHaH.simple_loop.simple_loop(
@@ -286,6 +292,7 @@ def register_CFunction_output_raytracing_data(
     includes = [
         "<errno.h>",
         "<float.h>",
+        "<inttypes.h>",
         "<math.h>",
         "<stdint.h>",
         "<stdio.h>",
@@ -326,7 +333,10 @@ auxiliary data using:
 
 where rhs_gfs is a temporary EVOL-sized scratch buffer allocated inside this
 function. The header explicitly records that only interior logical-grid points
-are exported in v1, so ghost-zone points are not serialized.
+are exported in v1, so ghost-zone points are not serialized. Point records are
+first assembled into a deterministic in-memory payload buffer using the
+documented logical-grid ordering, then written to disk after the interior loop
+completes.
 
 @param[in] commondata  Global simulation metadata used in output naming and headers
 @param[in] griddata  Host-side per-grid runtime state to export
@@ -424,6 +434,27 @@ static uint64_t raytracing_data_mul_u64_or_abort(
 } // END FUNCTION: raytracing_data_mul_u64_or_abort
 
 /**
+ * Cast a uint64_t value to size_t, aborting on overflow.
+ *
+ * @param value  Integer value to convert.
+ * @param[in] label  Label for the error message.
+ * @return Safely casted size_t value.
+ */
+static size_t raytracing_data_size_t_from_u64_or_abort(
+    const uint64_t value,
+    const char *restrict label
+) {
+  if (value > (uint64_t)SIZE_MAX) {
+    fprintf(stderr,
+            "Error: output_raytracing_data %s=%" PRIu64 " does not fit in size_t.\n",
+            label,
+            value);
+    exit(1);
+  } // END IF: value exceeds the local size_t range
+  return (size_t)value;
+} // END FUNCTION: raytracing_data_size_t_from_u64_or_abort
+
+/**
  * Write elements to a file, aborting on failure.
  *
  * @param[in,out] fp  File pointer.
@@ -517,6 +548,31 @@ static void raytracing_data_write_f64_or_abort(
 } // END FUNCTION: raytracing_data_write_f64_or_abort
 
 /**
+ * Write an array of binary64 values in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param[in] values  Contiguous binary64 payload values.
+ * @param count  Number of binary64 values to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_f64_array_or_abort(
+    FILE *restrict fp,
+    const double *restrict values,
+    const size_t count,
+    const char *restrict label
+) {
+  const uint16_t endianness_probe = 1U;
+  if (((const uint8_t *restrict)&endianness_probe)[0] == 1U) {
+    raytracing_data_write_or_abort(fp, values, sizeof(double), count, label);
+    return;
+  } // END IF: host memory already matches the documented little-endian payload format
+
+  for (size_t i = 0; i < count; i++) {
+    raytracing_data_write_f64_or_abort(fp, values[i], label);
+  } // END LOOP: for i over payload binary64 values on non-little-endian hosts
+} // END FUNCTION: raytracing_data_write_f64_array_or_abort
+
+/**
  * Validate the binary64 output assumptions before serialization.
  */
 static void raytracing_data_validate_binary64_output_or_abort(void) {
@@ -562,6 +618,41 @@ static void raytracing_data_write_fixed_length_string_or_abort(
   memcpy(buffer, text, text_len);
   raytracing_data_write_or_abort(fp, buffer, sizeof(char), field_bytes, label);
 } // END FUNCTION: raytracing_data_write_fixed_length_string_or_abort
+
+/**
+ * Map interior logical-grid indices to the payload-local point-record order.
+ *
+ * @param i0  Logical x0 index including ghost zones.
+ * @param i1  Logical x1 index including ghost zones.
+ * @param i2  Logical x2 index including ghost zones.
+ * @param nghosts  Number of ghost zones on each side.
+ * @param Nxx0  Interior point count in the x0 direction.
+ * @param Nxx1  Interior point count in the x1 direction.
+ * @param Nxx2  Interior point count in the x2 direction.
+ * @return The zero-based payload-local point index in i2-major, i0-fast order.
+ */
+static uint64_t raytracing_data_point_index_from_logical_indices(
+    const int i0,
+    const int i1,
+    const int i2,
+    const int nghosts,
+    const uint32_t Nxx0,
+    const uint32_t Nxx1,
+    const uint32_t Nxx2
+) {
+  if (i0 < nghosts || i1 < nghosts || i2 < nghosts) {
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data received logical indices below NGHOSTS.");
+  } // END IF: logical indices must start at the interior payload origin
+  const uint32_t j0 = (uint32_t)(i0 - nghosts);
+  const uint32_t j1 = (uint32_t)(i1 - nghosts);
+  const uint32_t j2 = (uint32_t)(i2 - nghosts);
+  if (j0 >= Nxx0 || j1 >= Nxx1 || j2 >= Nxx2) {
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data logical indices exceeded payload bounds.");
+  } // END IF: logical indices must stay within the documented interior payload
+  return (uint64_t)j0 + (uint64_t)Nxx0 * ((uint64_t)j1 + (uint64_t)Nxx1 * (uint64_t)j2);
+} // END FUNCTION: raytracing_data_point_index_from_logical_indices
 
 """
 
@@ -623,11 +714,21 @@ static void raytracing_data_write_fixed_length_string_or_abort(
       point_record_count,
       (uint64_t)point_record_bytes,
       "point-record payload size");
+  const uint64_t payload_value_count_u64 = raytracing_data_mul_u64_or_abort(
+      point_record_count,
+      (uint64_t)point_record_real_count,
+      "point-record payload value count");
   const uint64_t simulation_time_offset = (uint64_t)header_size;
   const uint64_t point_records_offset = raytracing_data_add_u64_or_abort(
       simulation_time_offset, 8ULL, "point-record payload offset");
   const uint64_t total_file_bytes = raytracing_data_add_u64_or_abort(
       point_records_offset, point_records_bytes, "total file bytes");
+  const size_t point_records_bytes_size_t =
+      raytracing_data_size_t_from_u64_or_abort(
+          point_records_bytes, "point-record payload size");
+  const size_t payload_value_count =
+      raytracing_data_size_t_from_u64_or_abort(
+          payload_value_count_u64, "point-record payload value count");
   SET_NXX_PLUS_2NGHOSTS_VARS(0);
   const double dxx[3] = {{
       (double)params->dxx0,
@@ -749,6 +850,16 @@ static void raytracing_data_write_fixed_length_string_or_abort(
         "Error: output_raytracing_data could not allocate temporary rhs_gfs storage.");
   }} // END IF: rhs scratch allocation failed
 
+  double *restrict payload_buffer;
+  BHAH_MALLOC(payload_buffer, point_records_bytes_size_t);
+  if (payload_buffer == NULL) {{
+    BHAH_FREE(rhs_gfs);
+    fclose(fp);
+    remove(temporary_filename);
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data could not allocate the raytracing payload buffer.");
+  }} // END IF: payload buffer allocation failed
+
   Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
   rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
 """
@@ -855,12 +966,17 @@ static void raytracing_data_write_fixed_length_string_or_abort(
   // Step 2: Write the physical simulation time.
   raytracing_data_write_f64_or_abort(fp, (double)commondata->time, "simulation_time");
 
-  // Step 3: Evaluate Cartesian coordinates, metric, and Christoffels on the interior grid.
+  // Step 3: Evaluate Cartesian coordinates, metric, and Christoffels into the payload buffer.
 """
     body += loop
     body += r"""
 
-  // Step 4: Finalize the file and install it without overwriting an existing output.
+  // Step 4: Serialize the payload buffer using the documented little-endian binary64 layout.
+  raytracing_data_write_f64_array_or_abort(
+      fp, payload_buffer, payload_value_count, "point-record payload");
+
+  // Step 5: Finalize the file and install it without overwriting an existing output.
+  BHAH_FREE(payload_buffer);
   BHAH_FREE(rhs_gfs);
 
   if (fflush(fp) != 0) {
