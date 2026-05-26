@@ -102,7 +102,10 @@ extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
  * @param[in] name Allocation/error label.
  */
 static void horizon_finder_pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
-  int has_array = (*array != nullptr) ? 1 : 0;
+  int has_array = 0;
+  if (!p.isUnpacking()) {
+    has_array = (*array != nullptr) ? 1 : 0;
+  } // END IF: computing optional REAL array presence while packing
   p | has_array;
   if (has_array != 0) {
     if (p.isUnpacking()) {

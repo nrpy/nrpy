@@ -82,7 +82,7 @@ This comprehensive set of routines is crucial for efficient data management and 
 
     prefunc = ""
     if enable_bhahaha:
-        prefunc += """
+        prefunc += r"""
 /**
  * Validate the configured number of BHaHAHA horizons for PUP.
  *
@@ -92,7 +92,7 @@ This comprehensive set of routines is crucial for efficient data management and 
 static int pup_bhahaha_num_horizons(const commondata_struct &commondata) {
   const int max_horizons = (int)(sizeof(commondata.bhahaha_params_and_data) / sizeof(commondata.bhahaha_params_and_data[0]));
   if (commondata.bah_max_num_horizons < 0 || commondata.bah_max_num_horizons > max_horizons) {
-    fprintf(stderr, "PUP error: bah_max_num_horizons=%d exceeds compiled horizon capacity %d.\\n",
+    fprintf(stderr, "PUP error: bah_max_num_horizons=%d exceeds compiled horizon capacity %d.\n",
             commondata.bah_max_num_horizons, max_horizons);
     exit(EXIT_FAILURE);
   } // END IF: invalid BHaHAHA horizon count
@@ -108,7 +108,7 @@ static int pup_bhahaha_num_horizons(const commondata_struct &commondata) {
 static int pup_bhahaha_shape_points(const commondata_struct &commondata) {
   const int n = commondata.bah_num_resolutions_multigrid - 1;
   if (n < 0 || n >= MAX_RESOLUTIONS || commondata.bah_Ntheta_array_multigrid[n] <= 0 || commondata.bah_Nphi_array_multigrid[n] <= 0) {
-    fprintf(stderr, "PUP error: invalid BHaHAHA horizon-shape dimensions for multigrid level %d.\\n", n);
+    fprintf(stderr, "PUP error: invalid BHaHAHA horizon-shape dimensions for multigrid level %d.\n", n);
     exit(EXIT_FAILURE);
   } // END IF: invalid BHaHAHA shape dimensions
   return commondata.bah_Ntheta_array_multigrid[n] * commondata.bah_Nphi_array_multigrid[n];
@@ -127,7 +127,7 @@ static int pup_bhahaha_input_metric_points(const commondata_struct &commondata, 
   } // END IF: no external input radial points
   const int n = bp.num_resolutions_multigrid - 1;
   if (n < 0 || n >= MAX_RESOLUTIONS || bp.Ntheta_array_multigrid[n] <= 0 || bp.Nphi_array_multigrid[n] <= 0) {
-    fprintf(stderr, "PUP error: invalid BHaHAHA input-metric dimensions for multigrid level %d.\\n", n);
+    fprintf(stderr, "PUP error: invalid BHaHAHA input-metric dimensions for multigrid level %d.\n", n);
     exit(EXIT_FAILURE);
   } // END IF: invalid BHaHAHA input metric dimensions
   (void)commondata;
@@ -143,17 +143,20 @@ static int pup_bhahaha_input_metric_points(const commondata_struct &commondata, 
  * @param[in] name Allocation/error label.
  */
 static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
-  int has_array = (*array != NULL) ? 1 : 0;
+  int has_array = 0;
+  if (!p.isUnpacking()) {
+    has_array = (*array != NULL) ? 1 : 0;
+  } // END IF: computing optional REAL array presence while packing
   p | has_array;
   if (has_array != 0) {
     if (length < 0) {
-      fprintf(stderr, "PUP error: negative array length for %s.\\n", name);
+      fprintf(stderr, "PUP error: negative array length for %s.\n", name);
       exit(EXIT_FAILURE);
     } // END IF: invalid optional REAL array length
     if (p.isUnpacking()) {
       *array = (REAL *restrict)malloc(sizeof(REAL) * length);
       if (*array == NULL && length > 0) {
-        fprintf(stderr, "PUP error: malloc failed for %s.\\n", name);
+        fprintf(stderr, "PUP error: malloc failed for %s.\n", name);
         exit(EXIT_FAILURE);
       } // END IF: optional REAL array allocation failed
     } // END IF: unpacking optional REAL array
@@ -171,14 +174,17 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
  * @param[in] commondata Common simulation data.
  */
 static void pup_bhahaha_input_metric_workspace(PUP::er &p, bhahaha_params_and_data_struct &bp, const commondata_struct &commondata) {
-  int has_input_metric_data = (bp.input_metric_data != NULL) ? 1 : 0;
+  int has_input_metric_data = 0;
+  if (!p.isUnpacking()) {
+    has_input_metric_data = (bp.input_metric_data != NULL) ? 1 : 0;
+  } // END IF: computing input metric workspace presence while packing
   p | has_input_metric_data;
   if (p.isUnpacking()) {
     if (has_input_metric_data != 0) {
       const int npts = pup_bhahaha_input_metric_points(commondata, bp);
       bp.input_metric_data = (REAL *restrict)malloc(sizeof(REAL) * npts);
       if (bp.input_metric_data == NULL && npts > 0) {
-        fprintf(stderr, "PUP error: malloc failed for BHaHAHA input_metric_data.\\n");
+        fprintf(stderr, "PUP error: malloc failed for BHaHAHA input_metric_data.\n");
         exit(EXIT_FAILURE);
       } // END IF: input metric workspace allocation failed
     } else {

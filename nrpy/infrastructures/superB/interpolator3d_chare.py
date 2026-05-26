@@ -174,7 +174,29 @@ def output_interpolator3d_cpp(
     psi4_send_concat_block = ""
     psi4_pup_block = ""
     psi4_destructor_block = ""
+    psi4_pup_helpers = ""
     if enable_psi4:
+        psi4_pup_helpers = r"""
+/**
+ * PUP a PSI4 shell angular grid and its optional work arrays.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] shell PSI4 shell angular grid state.
+ */
+static void pup_psi4_shell_angular_grid(PUP::er &p, psi4_shell_angular_grid_t &shell) {
+  p | shell.N_theta;
+  p | shell.N_phi;
+  p | shell.num_pts;
+  p | shell.dtheta;
+  p | shell.dphi;
+  pup_optional_REAL_array(p, &shell.theta_array, shell.N_theta, "psi4 theta_array");
+  pup_optional_REAL_array(p, &shell.phi_array, shell.N_phi, "psi4 phi_array");
+  pup_optional_REAL_array(p, &shell.sin_theta_array, shell.N_theta, "psi4 sin_theta_array");
+  pup_optional_REAL_array(p, &shell.cos_theta_array, shell.N_theta, "psi4 cos_theta_array");
+  pup_optional_REAL_array(p, &shell.sin_phi_array, shell.N_phi, "psi4 sin_phi_array");
+  pup_optional_REAL_array(p, &shell.cos_phi_array, shell.N_phi, "psi4 cos_phi_array");
+} // END FUNCTION: pup_psi4_shell_angular_grid
+"""
         psi4_pup_block = r"""
   pup_psi4_shell_angular_grid(p, psi4_shell);
   pup_optional_REAL_array(p, &psi4r_at_R_ext, psi4_shell.num_pts, "psi4r_at_R_ext");
@@ -229,7 +251,10 @@ extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
  * @param[in] name Allocation/error label.
  */
 static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
-  int has_array = (*array != nullptr) ? 1 : 0;
+  int has_array = 0;
+  if (!p.isUnpacking()) {
+    has_array = (*array != nullptr) ? 1 : 0;
+  } // END IF: computing optional REAL array presence while packing
   p | has_array;
   if (has_array != 0) {
     if (p.isUnpacking()) {
@@ -243,26 +268,7 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
     *array = nullptr;
   } // END ELSE IF: unpacking absent optional REAL array
 } // END FUNCTION: pup_optional_REAL_array
-
-/**
- * PUP a PSI4 shell angular grid and its optional work arrays.
- *
- * @param[in,out] p Charm++ PUP serializer.
- * @param[in,out] shell PSI4 shell angular grid state.
- */
-static void pup_psi4_shell_angular_grid(PUP::er &p, psi4_shell_angular_grid_t &shell) {
-  p | shell.N_theta;
-  p | shell.N_phi;
-  p | shell.num_pts;
-  p | shell.dtheta;
-  p | shell.dphi;
-  pup_optional_REAL_array(p, &shell.theta_array, shell.N_theta, "psi4 theta_array");
-  pup_optional_REAL_array(p, &shell.phi_array, shell.N_phi, "psi4 phi_array");
-  pup_optional_REAL_array(p, &shell.sin_theta_array, shell.N_theta, "psi4 sin_theta_array");
-  pup_optional_REAL_array(p, &shell.cos_theta_array, shell.N_theta, "psi4 cos_theta_array");
-  pup_optional_REAL_array(p, &shell.sin_phi_array, shell.N_phi, "psi4 sin_phi_array");
-  pup_optional_REAL_array(p, &shell.cos_phi_array, shell.N_phi, "psi4 cos_phi_array");
-} // END FUNCTION: pup_psi4_shell_angular_grid
+<<PSI4_PUP_HELPERS>>
 
 Interpolator3d::Interpolator3d() {
   CkPrintf("Interpolator3d chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
@@ -546,6 +552,7 @@ void Interpolator3d::send_interp_concat(){
         "<<PSI4_SEND_CONCAT_BLOCK>>", psi4_send_concat_block
     )
     file_output_str = file_output_str.replace("<<PSI4_PUP_BLOCK>>", psi4_pup_block)
+    file_output_str = file_output_str.replace("<<PSI4_PUP_HELPERS>>", psi4_pup_helpers)
     file_output_str = file_output_str.replace(
         "<<PSI4_DESTRUCTOR_BLOCK>>", psi4_destructor_block
     )
