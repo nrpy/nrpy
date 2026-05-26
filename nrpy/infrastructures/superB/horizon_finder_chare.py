@@ -93,6 +93,14 @@ extern/* readonly */ CProxy_Timestepping timesteppingArray;
 extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
 extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 
+/**
+ * PUP an optional REAL array owned by Horizon_finder.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] array Pointer to the optional array pointer.
+ * @param length Number of REAL entries to serialize.
+ * @param[in] name Allocation/error label.
+ */
 static void horizon_finder_pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
   int has_array = (*array != nullptr) ? 1 : 0;
   p | has_array;
@@ -101,13 +109,13 @@ static void horizon_finder_pup_optional_REAL_array(PUP::er &p, REAL **array, con
       *array = (REAL *restrict)malloc(sizeof(REAL) * length);
       if (*array == nullptr && length > 0) {
         CkAbort("%s", name);
-      }
-    }
+      } // END IF: optional REAL array allocation failed
+    } // END IF: unpacking optional REAL array
     PUParray(p, *array, length);
   } else if (p.isUnpacking()) {
     *array = nullptr;
-  }
-}
+  } // END ELSE IF: unpacking absent optional REAL array
+} // END FUNCTION: horizon_finder_pup_optional_REAL_array
 
 Horizon_finder::Horizon_finder() {
   CkPrintf("Horizon_finder chare %d created on PE %d\n", thisIndex, CkMyPe());

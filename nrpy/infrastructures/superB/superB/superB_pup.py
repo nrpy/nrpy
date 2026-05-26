@@ -83,38 +83,65 @@ This comprehensive set of routines is crucial for efficient data management and 
     prefunc = ""
     if enable_bhahaha:
         prefunc += """
+/**
+ * Validate the configured number of BHaHAHA horizons for PUP.
+ *
+ * @param[in] commondata Common simulation data.
+ * @return Number of horizons to serialize.
+ */
 static int pup_bhahaha_num_horizons(const commondata_struct &commondata) {
   const int max_horizons = (int)(sizeof(commondata.bhahaha_params_and_data) / sizeof(commondata.bhahaha_params_and_data[0]));
   if (commondata.bah_max_num_horizons < 0 || commondata.bah_max_num_horizons > max_horizons) {
     fprintf(stderr, "PUP error: bah_max_num_horizons=%d exceeds compiled horizon capacity %d.\\n",
             commondata.bah_max_num_horizons, max_horizons);
     exit(EXIT_FAILURE);
-  }
+  } // END IF: invalid BHaHAHA horizon count
   return commondata.bah_max_num_horizons;
-}
+} // END FUNCTION: pup_bhahaha_num_horizons
 
+/**
+ * Compute the number of stored points in a serialized horizon shape.
+ *
+ * @param[in] commondata Common simulation data.
+ * @return Number of angular shape points.
+ */
 static int pup_bhahaha_shape_points(const commondata_struct &commondata) {
   const int n = commondata.bah_num_resolutions_multigrid - 1;
   if (n < 0 || n >= MAX_RESOLUTIONS || commondata.bah_Ntheta_array_multigrid[n] <= 0 || commondata.bah_Nphi_array_multigrid[n] <= 0) {
     fprintf(stderr, "PUP error: invalid BHaHAHA horizon-shape dimensions for multigrid level %d.\\n", n);
     exit(EXIT_FAILURE);
-  }
+  } // END IF: invalid BHaHAHA shape dimensions
   return commondata.bah_Ntheta_array_multigrid[n] * commondata.bah_Nphi_array_multigrid[n];
-}
+} // END FUNCTION: pup_bhahaha_shape_points
 
+/**
+ * Compute the serialized size of the optional BHaHAHA input metric workspace.
+ *
+ * @param[in] commondata Common simulation data.
+ * @param[in] bp Horizon-specific BHaHAHA state.
+ * @return Number of REAL entries in the input metric workspace.
+ */
 static int pup_bhahaha_input_metric_points(const commondata_struct &commondata, const bhahaha_params_and_data_struct &bp) {
   if (bp.Nr_external_input <= 0) {
     return 0;
-  }
+  } // END IF: no external input radial points
   const int n = bp.num_resolutions_multigrid - 1;
   if (n < 0 || n >= MAX_RESOLUTIONS || bp.Ntheta_array_multigrid[n] <= 0 || bp.Nphi_array_multigrid[n] <= 0) {
     fprintf(stderr, "PUP error: invalid BHaHAHA input-metric dimensions for multigrid level %d.\\n", n);
     exit(EXIT_FAILURE);
-  }
+  } // END IF: invalid BHaHAHA input metric dimensions
   (void)commondata;
   return NUM_EXT_INPUT_CARTESIAN_GFS * bp.Nr_external_input * bp.Ntheta_array_multigrid[n] * bp.Nphi_array_multigrid[n];
-}
+} // END FUNCTION: pup_bhahaha_input_metric_points
 
+/**
+ * PUP an optional REAL array without reading destination storage on unpack.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] array Pointer to the optional array pointer.
+ * @param length Number of REAL entries to serialize.
+ * @param[in] name Allocation/error label.
+ */
 static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
   int has_array = (*array != NULL) ? 1 : 0;
   p | has_array;
@@ -122,20 +149,27 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
     if (length < 0) {
       fprintf(stderr, "PUP error: negative array length for %s.\\n", name);
       exit(EXIT_FAILURE);
-    }
+    } // END IF: invalid optional REAL array length
     if (p.isUnpacking()) {
       *array = (REAL *restrict)malloc(sizeof(REAL) * length);
       if (*array == NULL && length > 0) {
         fprintf(stderr, "PUP error: malloc failed for %s.\\n", name);
         exit(EXIT_FAILURE);
-      }
-    }
+      } // END IF: optional REAL array allocation failed
+    } // END IF: unpacking optional REAL array
     PUParray(p, *array, length);
   } else if (p.isUnpacking()) {
     *array = NULL;
-  }
-}
+  } // END ELSE IF: unpacking absent optional REAL array
+} // END FUNCTION: pup_optional_REAL_array
 
+/**
+ * PUP the optional BHaHAHA input metric workspace.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] bp Horizon-specific BHaHAHA state.
+ * @param[in] commondata Common simulation data.
+ */
 static void pup_bhahaha_input_metric_workspace(PUP::er &p, bhahaha_params_and_data_struct &bp, const commondata_struct &commondata) {
   int has_input_metric_data = (bp.input_metric_data != NULL) ? 1 : 0;
   p | has_input_metric_data;
@@ -146,13 +180,20 @@ static void pup_bhahaha_input_metric_workspace(PUP::er &p, bhahaha_params_and_da
       if (bp.input_metric_data == NULL && npts > 0) {
         fprintf(stderr, "PUP error: malloc failed for BHaHAHA input_metric_data.\\n");
         exit(EXIT_FAILURE);
-      }
+      } // END IF: input metric workspace allocation failed
     } else {
       bp.input_metric_data = NULL;
-    }
-  }
-}
+    } // END ELSE: absent input metric workspace on unpack
+  } // END IF: unpacking input metric workspace
+} // END FUNCTION: pup_bhahaha_input_metric_workspace
 
+/**
+ * PUP one BHaHAHA horizon parameter-and-data record.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] bp Horizon-specific BHaHAHA state.
+ * @param[in] commondata Common simulation data.
+ */
 static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_data_struct &bp, const commondata_struct &commondata) {
   p | bp.time_external_input;
   p | bp.iteration_external_input;
@@ -197,7 +238,7 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   pup_optional_REAL_array(p, &bp.prev_horizon_m2, pup_bhahaha_shape_points(commondata), "prev_horizon_m2");
   pup_optional_REAL_array(p, &bp.prev_horizon_m3, pup_bhahaha_shape_points(commondata), "prev_horizon_m3");
   pup_bhahaha_input_metric_workspace(p, bp, commondata);
-}
+} // END FUNCTION: pup_bhahaha_params_and_data_struct
 
 """
 

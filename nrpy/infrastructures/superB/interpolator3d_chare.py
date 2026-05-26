@@ -220,6 +220,14 @@ extern/* readonly */ CProxy_Timestepping timesteppingArray;
 extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
 
+/**
+ * PUP an optional REAL array without reading destination storage on unpack.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] array Pointer to the optional array pointer.
+ * @param length Number of REAL entries to serialize.
+ * @param[in] name Allocation/error label.
+ */
 static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
   int has_array = (*array != nullptr) ? 1 : 0;
   p | has_array;
@@ -228,14 +236,20 @@ static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, 
       *array = (REAL *restrict)malloc(sizeof(REAL) * length);
       if (*array == nullptr && length > 0) {
         CkAbort("%s", name);
-      }
-    }
+      } // END IF: optional REAL array allocation failed
+    } // END IF: unpacking optional REAL array
     PUParray(p, *array, length);
   } else if (p.isUnpacking()) {
     *array = nullptr;
-  }
-}
+  } // END ELSE IF: unpacking absent optional REAL array
+} // END FUNCTION: pup_optional_REAL_array
 
+/**
+ * PUP a PSI4 shell angular grid and its optional work arrays.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] shell PSI4 shell angular grid state.
+ */
 static void pup_psi4_shell_angular_grid(PUP::er &p, psi4_shell_angular_grid_t &shell) {
   p | shell.N_theta;
   p | shell.N_phi;
@@ -248,7 +262,7 @@ static void pup_psi4_shell_angular_grid(PUP::er &p, psi4_shell_angular_grid_t &s
   pup_optional_REAL_array(p, &shell.cos_theta_array, shell.N_theta, "psi4 cos_theta_array");
   pup_optional_REAL_array(p, &shell.sin_phi_array, shell.N_phi, "psi4 sin_phi_array");
   pup_optional_REAL_array(p, &shell.cos_phi_array, shell.N_phi, "psi4 cos_phi_array");
-}
+} // END FUNCTION: pup_psi4_shell_angular_grid
 
 Interpolator3d::Interpolator3d() {
   CkPrintf("Interpolator3d chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
