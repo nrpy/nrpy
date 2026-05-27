@@ -710,6 +710,9 @@ module interpolator3d {
               src_gfs_buffer_len = len_tmpBuffer;
               if (src_gfs_buffer_len > 0) {
                 BHAH_MALLOC(src_gfs_buffer, sizeof(REAL) * src_gfs_buffer_len);
+                if (src_gfs_buffer == nullptr) {
+                  CkAbort("Interpolator3d failed to allocate src_gfs_buffer.");
+                }
               }
             }
             if (src_gfs_buffer_len > 0) {
