@@ -54,6 +54,7 @@ def _validate_fixed_width_string(text: str, field_bytes: int, label: str) -> Non
 def register_CFunction_output_raytracing_data(
     CoordSystem: str,
     enable_rfm_precompute: bool,
+    enable_RbarDD_gridfunctions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register the stage-1 Cartesian raytracing binary exporter.
@@ -78,9 +79,14 @@ def register_CFunction_output_raytracing_data(
     :param CoordSystem: Coordinate system used by the evolved BSSN state.
     :param enable_rfm_precompute: Whether the generated project uses
         reference-metric precomputation.
+    :param enable_RbarDD_gridfunctions: Whether the generated project registers
+        a separate Ricci evaluation path that populates the RbarDD gridfunctions
+        consumed by the exported geodesic data.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If ``CoordSystem`` is not a string.
     :raises ValueError: If ``enable_rfm_precompute`` is not a bool.
+    :raises ValueError: If ``enable_RbarDD_gridfunctions`` is not a bool.
+    :raises ValueError: If the generated project uses CUDA parallelization.
 
     Doctests:
     None.
@@ -94,10 +100,22 @@ def register_CFunction_output_raytracing_data(
             "enable_rfm_precompute must be a bool, "
             f"got {type(enable_rfm_precompute).__name__}"
         )
+    if not isinstance(enable_RbarDD_gridfunctions, bool):
+        raise ValueError(
+            "enable_RbarDD_gridfunctions must be a bool, "
+            f"got {type(enable_RbarDD_gridfunctions).__name__}"
+        )
 
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    parallelization = cast(str, par.parval_from_str("parallelization"))
+    if parallelization == "cuda":
+        raise ValueError(
+            "Raytracing binary exporters currently support only host/OpenMP builds. "
+            "Add host-only Ricci/RHS extraction before enabling CUDA."
+        )
 
     # Import the BSSN quantities module so the conformal-factor parameter is registered.
     # pylint: disable-next=import-outside-toplevel
@@ -826,19 +844,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     exit(1);
   }} // END IF: fdopen failed
 
-  if (access(final_filename, F_OK) == 0) {{
-    fclose(fp);
-    if (remove(temporary_filename) != 0) {{
-      fprintf(stderr,
-              "Error: output_raytracing_data found existing final file %s but could not remove temporary file %s. errno=%d\n",
-              final_filename,
-              temporary_filename,
-              errno);
-      exit(1);
-    }} // END IF: temporary file cleanup failed after no-overwrite check
-    return;
-  }} // END IF: final output file already exists
-
   const int Nxx_plus_2NGHOSTS_tot =
       params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
   REAL *restrict rhs_gfs;
@@ -860,7 +865,11 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
         "Error: output_raytracing_data could not allocate the raytracing payload buffer.");
   }} // END IF: payload buffer allocation failed
 
-  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
+"""
+    if enable_RbarDD_gridfunctions:
+        body += """  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
+"""
+    body += """
   rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
 """
     body += r"""
@@ -998,16 +1007,35 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             saved_errno);
     exit(1);
   } // END IF: fclose failed
-  if (rename(temporary_filename, final_filename) != 0) {
+  if (link(temporary_filename, final_filename) != 0) {
     const int saved_errno = errno;
-    remove(temporary_filename);
+    if (remove(temporary_filename) != 0) {
+      fprintf(stderr,
+              "Error: output_raytracing_data could not install %s at %s and could not remove %s. link errno=%d cleanup errno=%d\n",
+              temporary_filename,
+              final_filename,
+              temporary_filename,
+              saved_errno,
+              errno);
+      exit(1);
+    } // END IF: cleanup failed after installation failure
+    if (saved_errno == EEXIST)
+      return;
     fprintf(stderr,
             "Error: output_raytracing_data could not install %s at %s. errno=%d\n",
             temporary_filename,
             final_filename,
             saved_errno);
     exit(1);
-  } // END IF: rename failed
+  } // END IF: final output file could not be installed without overwrite
+  if (remove(temporary_filename) != 0) {
+    fprintf(stderr,
+            "Error: output_raytracing_data installed %s but could not remove %s. errno=%d\n",
+            final_filename,
+            temporary_filename,
+            errno);
+    exit(1);
+  } // END IF: temporary output file could not be removed after installation
 """
 
     cfc.register_CFunction(

@@ -42,7 +42,7 @@ parser.add_argument(
     action="store_true",
     help=(
         "Enable Cartesian metric and Christoffel raytracing outputs on "
-        "diagnostics output steps."
+        "diagnostics output steps. Currently supported only for OpenMP builds."
     ),
 )
 args = parser.parse_args()
@@ -55,6 +55,10 @@ if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
+    )
+if args.cuda and args.raytracing_outputs:
+    raise ValueError(
+        "--raytracing-outputs is currently supported only for OpenMP builds."
     )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -255,6 +259,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,

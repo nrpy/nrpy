@@ -278,6 +278,7 @@ def register_all_diagnostics(
     enable_interp_diagnostics: bool,
     enable_volume_integration_diagnostics: bool,
     enable_rfm_precompute: bool = False,
+    enable_RbarDD_gridfunctions: bool = False,
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
@@ -313,6 +314,9 @@ def register_all_diagnostics(
         generated project. When raytracing export is enabled, this flag is passed
         through to the generated exporter so the emitted tensor expressions and
         serialized metadata match the active reference-metric pathway.
+    :param enable_RbarDD_gridfunctions: Whether the generated project registers a
+        separate Ricci evaluation path that populates the RbarDD gridfunctions
+        required by raytracing export.
     :param enable_free_auxevol: Currently ignored and has no effect on emitted C code.
         The MoL scratch free/restore hooks remain commented out in the generated driver.
     :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics
@@ -321,6 +325,9 @@ def register_all_diagnostics(
     :param enable_raytracing_data_output: If True, register and call the
         stage-1 raytracing-data exporter that writes final Cartesian metric and
         Christoffel data during the evolution.
+    :raises ValueError: If raytracing-data export is enabled for CUDA code generation.
+    :raises ValueError: If raytracing-data export is enabled without
+        ``enable_RbarDD_gridfunctions=True``.
     :raises ValueError: If raytracing-data export is enabled for more than one
         coordinate system, or for a coordinate system that is not currently
         supported by the raytracing binary exporters. Note: these exporters
@@ -344,6 +351,18 @@ def register_all_diagnostics(
         )
 
     if enable_raytracing_data_output:
+        parallelization = cast(str, par.parval_from_str("parallelization"))
+        if parallelization == "cuda":
+            raise ValueError(
+                "Raytracing binary exporters currently support only host/OpenMP "
+                "builds. Add host-only Ricci/RHS extraction before enabling CUDA."
+            )
+        if not enable_RbarDD_gridfunctions:
+            raise ValueError(
+                "Raytracing binary exporters currently require "
+                "enable_RbarDD_gridfunctions=True so Ricci_eval() is registered "
+                "before rhs_eval() is reused for same-slice export."
+            )
         if len(set_of_CoordSystems) != 1:
             raise ValueError(
                 "Raytracing binary exporters currently support exactly one "
@@ -372,6 +391,7 @@ def register_all_diagnostics(
         output_raytracing_data.register_CFunction_output_raytracing_data(
             CoordSystem=CoordSystem,
             enable_rfm_precompute=enable_rfm_precompute,
+            enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
         )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:
