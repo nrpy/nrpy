@@ -293,9 +293,8 @@ void Interpolator3d::pup(PUP::er &p) {
     owns_griddata_chare = true;
     griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
   } // END IF: unpacking griddata_chare container
-  for (int i = 0; i < size_griddata; i++) {
+  for (int i = 0; i < size_griddata; i++)
     pup_griddata(p, griddata_chare[i]);
-  } // END LOOP: for i over serialized griddata_chare entries
 
   p | iter;
   p | interp_count;

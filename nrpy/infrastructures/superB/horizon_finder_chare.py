@@ -149,9 +149,8 @@ void Horizon_finder::pup(PUP::er &p) {
         CkAbort("Horizon_finder PUP failed to allocate griddata.");
       } // END IF: griddata allocation failed during Horizon_finder PUP
     } // END IF: unpacking griddata state in Horizon_finder PUP
-    for (int i = 0; i < size_griddata; i++) {
+    for (int i = 0; i < size_griddata; i++)
       pup_griddata(p, griddata[i]);
-    } // END LOOP: for i over serialized griddata entries
   } else if (p.isUnpacking()) {
     owns_griddata = false;
     griddata = nullptr;

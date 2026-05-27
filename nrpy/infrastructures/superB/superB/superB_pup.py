@@ -131,6 +131,7 @@ static int pup_bhahaha_input_metric_points(const commondata_struct &commondata, 
     exit(EXIT_FAILURE);
   } // END IF: invalid BHaHAHA input metric dimensions
   (void)commondata;
+  // Must match the input_metric_data allocation shape in superB/BHaH_implementation.py.
   return NUM_EXT_INPUT_CARTESIAN_GFS * bp.Nr_external_input * bp.Ntheta_array_multigrid[n] * bp.Nphi_array_multigrid[n];
 } // END FUNCTION: pup_bhahaha_input_metric_points
 
@@ -268,9 +269,8 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
     if enable_bhahaha:
         prefunc += """
   const int num_horizons = pup_bhahaha_num_horizons(commondata);
-  for (int h = 0; h < num_horizons; h++) {
+  for (int h = 0; h < num_horizons; h++)
     pup_bhahaha_params_and_data_struct(p, commondata.bhahaha_params_and_data[h], commondata);
-  }
 """
     prefunc += "}\n"
 
