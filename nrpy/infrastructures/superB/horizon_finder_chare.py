@@ -127,7 +127,11 @@ Horizon_finder::Horizon_finder() {
 // migration constructor
 Horizon_finder::Horizon_finder(CkMigrateMessage *msg) : CBase_Horizon_finder(msg) {}
 
-// PUP routine for class Horizon_finder
+/**
+ * Serialize and restore Horizon_finder state for Charm++ migration/checkpointing.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ */
 void Horizon_finder::pup(PUP::er &p) {
   CBase_Horizon_finder::pup(p);
   __sdag_pup(p);
@@ -143,15 +147,15 @@ void Horizon_finder::pup(PUP::er &p) {
       griddata = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
       if (griddata == nullptr && size_griddata > 0) {
         CkAbort("Horizon_finder PUP failed to allocate griddata.");
-      }
-    }
+      } // END IF: griddata allocation failed during Horizon_finder PUP
+    } // END IF: unpacking griddata state in Horizon_finder PUP
     for (int i = 0; i < size_griddata; i++) {
       pup_griddata(p, griddata[i]);
-    }
+    } // END LOOP: for i over serialized griddata entries
   } else if (p.isUnpacking()) {
     owns_griddata = false;
     griddata = nullptr;
-  }
+  } // END ELSE IF: unpacking absent griddata state
 
   p | total_elements;
   p | which_horizon;
@@ -169,12 +173,12 @@ void Horizon_finder::pup(PUP::er &p) {
       dst_x0x1x2 = (REAL(*)[3])malloc(sizeof(REAL) * total_elements * 3);
       if (dst_x0x1x2 == nullptr && total_elements > 0) {
         CkAbort("Horizon_finder PUP failed to allocate dst_x0x1x2.");
-      }
-    }
+      } // END IF: dst_x0x1x2 allocation failed during Horizon_finder PUP
+    } // END IF: unpacking dst_x0x1x2 in Horizon_finder PUP
     PUParray(p, (REAL *)dst_x0x1x2, total_elements * 3);
   } else if (p.isUnpacking()) {
     dst_x0x1x2 = nullptr;
-  }
+  } // END ELSE IF: unpacking absent dst_x0x1x2 state
 
   int has_dst_data_ptrs = (dst_data_ptrs != nullptr) ? 1 : 0;
   p | has_dst_data_ptrs;
@@ -183,23 +187,25 @@ void Horizon_finder::pup(PUP::er &p) {
       dst_data_ptrs = (REAL **)malloc(sizeof(REAL *) * BHAHAHA_NUM_INTERP_GFS);
       if (dst_data_ptrs == nullptr) {
         CkAbort("Horizon_finder PUP failed to allocate dst_data_ptrs.");
-      }
-    }
+      } // END IF: dst_data_ptrs allocation failed during Horizon_finder PUP
+    } // END IF: unpacking dst_data_ptrs container
     for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
       if (p.isUnpacking()) {
         dst_data_ptrs[i] = (REAL *restrict)malloc(sizeof(REAL) * total_elements);
         if (dst_data_ptrs[i] == nullptr && total_elements > 0) {
           CkAbort("Horizon_finder PUP failed to allocate dst_data_ptrs[i].");
-        }
-      }
+        } // END IF: dst_data_ptrs[i] allocation failed during Horizon_finder PUP
+      } // END IF: unpacking one dst_data_ptrs entry
       PUParray(p, dst_data_ptrs[i], total_elements);
-    }
+    } // END LOOP: for i over serialized dst_data_ptrs entries
   } else if (p.isUnpacking()) {
     dst_data_ptrs = nullptr;
-  }
-}
+  } // END ELSE IF: unpacking absent dst_data_ptrs state
+} // END FUNCTION: Horizon_finder::pup
 
-// destructor
+/**
+ * Release Horizon_finder-owned buffers on chare teardown.
+ */
 Horizon_finder::~Horizon_finder() {
   BHAH_FREE(x_guess);
   BHAH_FREE(y_guess);
@@ -209,18 +215,18 @@ Horizon_finder::~Horizon_finder() {
   if (dst_data_ptrs != nullptr) {
     for (int i = 0; i < BHAHAHA_NUM_INTERP_GFS; i++) {
       BHAH_FREE(dst_data_ptrs[i]);
-    }
+    } // END LOOP: for i over Horizon_finder interpolation buffers
     BHAH_FREE(dst_data_ptrs);
-  }
+  } // END IF: Horizon_finder interpolation buffers are allocated
   if (owns_griddata && griddata != nullptr) {
     for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
       BHAH_FREE(griddata[grid].xx[0]);
       BHAH_FREE(griddata[grid].xx[1]);
       BHAH_FREE(griddata[grid].xx[2]);
-    }
+    } // END LOOP: for grid over owned griddata coordinate arrays
     BHAH_FREE(griddata);
-  }
-}
+  } // END IF: Horizon_finder owns griddata
+} // END FUNCTION: Horizon_finder::~Horizon_finder
 
 void Horizon_finder::process_interpolation_results(InterpBufMsg *msg) {
   char *buf = msg->buf;

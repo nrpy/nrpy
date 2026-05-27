@@ -277,7 +277,11 @@ Interpolator3d::Interpolator3d() {
 // migration constructor
 Interpolator3d::Interpolator3d(CkMigrateMessage *msg) : CBase_Interpolator3d(msg) {}
 
-// PUP routine for class Interpolator3d
+/**
+ * Serialize and restore Interpolator3d state for Charm++ migration/checkpointing.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ */
 void Interpolator3d::pup(PUP::er &p) {
   CBase_Interpolator3d::pup(p);
   __sdag_pup(p);
@@ -288,10 +292,10 @@ void Interpolator3d::pup(PUP::er &p) {
   if (p.isUnpacking()) {
     owns_griddata_chare = true;
     griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
-  }
+  } // END IF: unpacking griddata_chare container
   for (int i = 0; i < size_griddata; i++) {
     pup_griddata(p, griddata_chare[i]);
-  }
+  } // END LOOP: for i over serialized griddata_chare entries
 
   p | iter;
   p | interp_count;
@@ -305,14 +309,14 @@ void Interpolator3d::pup(PUP::er &p) {
       src_gfs_buffer = (REAL *restrict)malloc(sizeof(REAL) * src_gfs_buffer_len);
       if (src_gfs_buffer == nullptr) {
         CkAbort("Interpolator3d PUP failed to allocate src_gfs_buffer.");
-      }
+      } // END IF: src_gfs_buffer allocation failed during Interpolator3d PUP
     } else {
       src_gfs_buffer = nullptr;
-    }
-  }
+    } // END ELSE: no src_gfs_buffer payload to restore
+  } // END IF: unpacking src_gfs_buffer
   if (src_gfs_buffer_len > 0) {
     PUParray(p, src_gfs_buffer, src_gfs_buffer_len);
-  }
+  } // END IF: src_gfs_buffer has serialized payload
 <<PSI4_PUP_BLOCK>>
 
   if (p.isUnpacking()) {
@@ -322,20 +326,20 @@ void Interpolator3d::pup(PUP::er &p) {
       for (int i = 0; i < interp_total; i++) {
         interp_bufs[i] = nullptr;
         interp_lens[i] = 0;
-      }
+      } // END LOOP: for i over restored interpolation buffer slots
     } else {
       interp_bufs = nullptr;
       interp_lens = nullptr;
-    }
-  }
+    } // END ELSE: no interpolation aggregation buffers to restore
+  } // END IF: unpacking interpolation aggregation containers
 
   for (int i = 0; i < interp_count; i++) {
     p | interp_lens[i];
     if (p.isUnpacking()) {
       interp_bufs[i] = new char[interp_lens[i]];
-    }
+    } // END IF: unpacking one interpolation buffer
     p(interp_bufs[i], interp_lens[i]);
-  }
+  } // END LOOP: for i over serialized interpolation buffers
 
   if (p.isUnpacking()) {
     dst_x0x1x2 = nullptr;
@@ -351,30 +355,32 @@ void Interpolator3d::pup(PUP::er &p) {
       src_gf_ptrs_capacity = interp_num_gfs;
       for (int idx = 0; idx < interp_num_gfs; idx++) {
         src_gf_ptrs[idx] = src_gfs_buffer + idx * Nxx_plus_2NGHOSTS_tot;
-      }
+      } // END LOOP: for idx over restored source gridfunction pointers
     } else {
       src_gf_ptrs = nullptr;
       src_gf_ptrs_capacity = 0;
-    }
+    } // END ELSE: no source gridfunction pointers to restore
     total_elements_chare = 0;
-  }
-}
+  } // END IF: unpacking Interpolator3d transient pointers
+} // END FUNCTION: Interpolator3d::pup
 
-// destructor
+/**
+ * Release Interpolator3d-owned buffers on chare teardown.
+ */
 Interpolator3d::~Interpolator3d() {
   if (owns_griddata_chare && griddata_chare != nullptr) {
     for (int grid_idx = 0; grid_idx < commondata.NUMGRIDS; grid_idx++) {
       BHAH_FREE(griddata_chare[grid_idx].xx[0]);
       BHAH_FREE(griddata_chare[grid_idx].xx[1]);
       BHAH_FREE(griddata_chare[grid_idx].xx[2]);
-    }
+    } // END LOOP: for grid_idx over owned griddata_chare coordinate arrays
     BHAH_FREE(griddata_chare);
     griddata_chare = nullptr;
-  }
+  } // END IF: Interpolator3d owns griddata_chare
   BHAH_FREE(src_gfs_buffer);
   delete[] src_gf_ptrs;
 <<PSI4_DESTRUCTOR_BLOCK>>
-}
+} // END FUNCTION: Interpolator3d::~Interpolator3d
 
 void Interpolator3d::perform_interpolation(int request_type, int request_id, int num_gfs, int total_elements, REAL *dst_x0x1x2_linear) {
   dst_x0x1x2 = (REAL(*)[3])dst_x0x1x2_linear;
