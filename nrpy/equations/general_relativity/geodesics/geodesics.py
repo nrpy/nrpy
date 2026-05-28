@@ -1229,7 +1229,9 @@ if __name__ == "__main__":
     for check_mu in range(4):
         for check_nu in range(check_mu, 4):
             spherical_g4_diff = sp.simplify(
-                spherical_recipe_g4DD[check_mu][check_nu].subs(spherical_numeric_values)
+                spherical_recipe_g4DD[check_mu][check_nu].xreplace(
+                    spherical_numeric_values
+                )
                 - spherical_expected_g4DD[check_mu][check_nu]
             )
             if spherical_g4_diff != sp.sympify(0):
