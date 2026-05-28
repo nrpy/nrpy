@@ -249,7 +249,7 @@ def register_CFunction_output_raytracing_data(
         )
 
     # Step 6: Build the interior-point evaluation kernel for one output record.
-    loop_body = f"""
+    loop_body = rf"""
 {commondata_definitions}
 {params_definitions}
   MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
@@ -867,9 +867,9 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
 
 """
     if enable_RbarDD_gridfunctions:
-        body += """  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
+        body += r"""  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
 """
-    body += """
+    body += r"""
   rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
 """
     body += r"""

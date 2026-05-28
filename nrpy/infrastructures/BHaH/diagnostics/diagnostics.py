@@ -168,8 +168,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
  * - Diagnostics that encounter allocation or I/O failures may abort the program.
  * - The set of diagnostics compiled in is fixed at code generation time; manual changes
  *   must remain consistent with generated headers and prototypes.
- *
- * @return void
 """
     parallelization = par.parval_from_str("parallelization")
     _ = par.CodeParameter(

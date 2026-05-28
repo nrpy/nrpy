@@ -265,6 +265,9 @@ class AxisymmetryMetadata:
     requires_rotation_for_arbitrary_phi: bool
 
 
+SUPPORTED_AXISYMMETRIC_COORD_SYSTEMS = ("Spherical",)
+
+
 @dataclass(frozen=True)
 class GeometryBlockData:
     """
@@ -609,11 +612,8 @@ def parse_args() -> argparse.Namespace:
         "--axisymmetry-enabled",
         dest="axisymmetry_enabled",
         action="store_true",
-        default=True,
-        help=(
-            "Record axisymmetry metadata in the combined file. Default matches "
-            "the current axisymmetric two-phi-sample pipeline."
-        ),
+        default=False,
+        help="Record axisymmetry metadata in the combined file after validating the input grid.",
     )
     parser.add_argument(
         "--no-axisymmetry",
@@ -629,8 +629,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--phi-samples",
-        default="0,3.141592653589793",
-        help="Comma-separated stored phi sample values.",
+        default=None,
+        help="Comma-separated stored phi sample values; if omitted, derive them from the stage-1 native grid.",
     )
     parser.add_argument(
         "--requires-axisymmetry-rotation",
@@ -1114,11 +1114,27 @@ def validate_sorted_slices(infos: Sequence[Stage1Info]) -> None:
         previous_time = info.simulation_time
 
 
-def determine_axisymmetry_metadata(args: argparse.Namespace) -> AxisymmetryMetadata:
+def _native_phi_samples(info: Stage1Info) -> Tuple[float, ...]:
     """
-    Build axisymmetry metadata from CLI options.
+    Compute stored phi-plane locations from the native stage-1 grid.
+
+    :param info: Parsed stage-1 header info.
+    :return: Tuple of native cell-centered phi samples.
+    """
+    return tuple(
+        info.xxmin[2] + (float(phi_index) + 0.5) * info.dxx[2]
+        for phi_index in range(info.payload_i_count[2])
+    )
+
+
+def determine_axisymmetry_metadata(
+    args: argparse.Namespace, base: Stage1Info
+) -> AxisymmetryMetadata:
+    """
+    Build axisymmetry metadata from CLI options and stage-1 grid metadata.
 
     :param args: Parsed CLI namespace.
+    :param base: Reference stage-1 file whose native grid defines the payload.
     :return: Axisymmetry metadata record.
     :raises ValueError: If axisymmetry metadata is internally inconsistent.
     """
@@ -1131,15 +1147,42 @@ def determine_axisymmetry_metadata(args: argparse.Namespace) -> AxisymmetryMetad
             requires_rotation_for_arbitrary_phi=False,
         )
 
-    phi_samples = tuple(
-        float(token.strip()) for token in args.phi_samples.split(",") if token.strip()
-    )
-    if not phi_samples:
-        raise ValueError("Axisymmetry is enabled but --phi-samples was empty.")
+    if base.source_coord_system not in SUPPORTED_AXISYMMETRIC_COORD_SYSTEMS:
+        raise ValueError(
+            "Axisymmetry metadata currently supports only source_coord_system values "
+            f"{SUPPORTED_AXISYMMETRIC_COORD_SYSTEMS}; found "
+            f"'{base.source_coord_system}'."
+        )
+    if args.axisymmetry_axis != "z":
+        raise ValueError(
+            "Axisymmetry metadata currently supports only --axisymmetry-axis=z."
+        )
+
+    expected_phi_samples: Tuple[float, ...] = _native_phi_samples(base)
+    if len(expected_phi_samples) != 2:
+        raise ValueError(
+            "Axisymmetry metadata currently requires the stage-1 payload to store "
+            f"exactly two native phi planes; found {len(expected_phi_samples)}."
+        )
+
+    phi_samples: Tuple[float, ...]
+    if args.phi_samples is None:
+        phi_samples = expected_phi_samples
+    else:
+        phi_samples = tuple(
+            float(token.strip())
+            for token in args.phi_samples.split(",")
+            if token.strip()
+        )
     if not all(math.isfinite(value) for value in phi_samples):
         raise ValueError("All phi samples must be finite.")
     if len(set(phi_samples)) != len(phi_samples):
         raise ValueError("Phi samples must be unique.")
+    if len(phi_samples) != len(expected_phi_samples):
+        raise ValueError("Phi sample count does not match the stage-1 payload.")
+    for got_phi, expected_phi in zip(phi_samples, expected_phi_samples):
+        if not math.isclose(got_phi, expected_phi, rel_tol=0.0, abs_tol=1.0e-14):
+            raise ValueError("Phi samples do not match the stage-1 native grid.")
     return AxisymmetryMetadata(
         enabled=True,
         symmetry_axis=args.axisymmetry_axis,
@@ -2582,7 +2625,7 @@ def main() -> None:
         validate_stage1_compatible(base, info)
 
     # Step 3: Build the side metadata blocks before computing the final layout.
-    axisymmetry = determine_axisymmetry_metadata(args)
+    axisymmetry = determine_axisymmetry_metadata(args, base)
     spatial_lookup_mode_id, spatial_lookup_mode_name = determine_spatial_lookup_mode(
         args, args.include_coordinate_table
     )

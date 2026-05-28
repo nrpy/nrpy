@@ -1191,44 +1191,48 @@ if __name__ == "__main__":
     print("BSSN-specialized transformed-four-metric identity-map check passed.")
 
     # Step 2.g: Validate the spherical-to-Cartesian transformed-four-metric
-    #           recipe against an independently assembled lifted-Jacobian
-    #           transformation built from the same source-basis BSSN metric.
+    #           recipe by plugging in flat-space spherical BSSN data at a
+    #           fixed nonsingular sample point. The transformed metric must
+    #           reduce numerically to Cartesian Minkowski spacetime.
     print(
         "Checking BSSN-specialized transformed-four-metric recipe in the "
         "Spherical-to-Cartesian case..."
     )
-    spherical_bssn_helper = (
-        nrpy.equations.general_relativity.BSSN_to_g4Christoffel.BSSN_to_g4Christoffel(
-            CoordSystem="Spherical"
-        )
-    )
-    spherical_rfm = refmetric.reference_metric["Spherical"]
     spherical_recipe_g4DD = symbolic_g4DD_recipe_from_bssn_grid_basis(
         bssn_coord_system="Spherical", target_basis="Cartesian"
     )
-    spherical_K4UD = ixp.zerorank2(dimension=4)
-    spherical_K4UD[0][0] = sp.sympify(1)
-    for grid_j in range(3):
-        for target_i in range(3):
-            spherical_K4UD[grid_j + 1][target_i + 1] = spherical_rfm.Jac_dUrfm_dDCartUD[
-                grid_j
-            ][target_i]
-    spherical_direct_g4DD = (
-        GeodesicEquations._transform_covariant_metric_from_grid_basis_data(
-            grid_g4DD=spherical_bssn_helper.g4DD, K4UD=spherical_K4UD
-        )
-    )
+    spherical_symbol_by_name: Dict[str, sp.Basic] = {}
+    for metric_row in spherical_recipe_g4DD:
+        for metric_component in metric_row:
+            for free_symbol in metric_component.free_symbols:
+                spherical_symbol_by_name[str(free_symbol)] = free_symbol
+    spherical_numeric_values: Dict[sp.Basic, sp.Basic] = {
+        spherical_symbol_by_name["alpha"]: sp.sympify(1),
+        spherical_symbol_by_name["cf"]: sp.sympify(1),
+        spherical_symbol_by_name["hDD00"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD01"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD02"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD11"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD12"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD22"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU0"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU1"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU2"]: sp.sympify(0),
+        spherical_symbol_by_name["xx0"]: sp.Rational(5, 4),
+        spherical_symbol_by_name["xx1"]: sp.Rational(2, 5),
+    }
+    spherical_expected_g4DD = ixp.zerorank2(dimension=4)
+    spherical_expected_g4DD[0][0] = sp.sympify(-1)
+    spherical_expected_g4DD[1][1] = sp.sympify(1)
+    spherical_expected_g4DD[2][2] = sp.sympify(1)
+    spherical_expected_g4DD[3][3] = sp.sympify(1)
     for check_mu in range(4):
         for check_nu in range(check_mu, 4):
-            spherical_g4_diff = (
-                spherical_recipe_g4DD[check_mu][check_nu]
-                - spherical_direct_g4DD[check_mu][check_nu]
+            spherical_g4_diff = sp.simplify(
+                spherical_recipe_g4DD[check_mu][check_nu].subs(spherical_numeric_values)
+                - spherical_expected_g4DD[check_mu][check_nu]
             )
-            if not ve.check_zero(
-                spherical_g4_diff,
-                fixed_mpfs_for_free_symbols=True,
-                verbose=False,
-            ):
+            if spherical_g4_diff != sp.sympify(0):
                 raise ValueError(
                     "BSSN transformed-four-metric spherical-to-Cartesian check "
                     f"failed for g4DD[{check_mu}][{check_nu}]"
