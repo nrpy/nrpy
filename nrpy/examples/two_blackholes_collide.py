@@ -37,6 +37,14 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
+parser.add_argument(
+    "--raytracing-outputs",
+    action="store_true",
+    help=(
+        "Enable Cartesian metric and Christoffel raytracing outputs on "
+        "diagnostics output steps. Currently supported only for OpenMP builds."
+    ),
+)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
@@ -47,6 +55,10 @@ if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
+    )
+if args.cuda and args.raytracing_outputs:
+    raise ValueError(
+        "--raytracing-outputs is currently supported only for OpenMP builds."
     )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -69,6 +81,7 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
+enable_raytracing_data_output = args.raytracing_outputs
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
@@ -195,17 +208,6 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-BHaH.diagnostics.diagnostics.register_all_diagnostics(
-    project_dir=project_dir,
-    set_of_CoordSystems=set_of_CoordSystems,
-    default_diagnostics_out_every=diagnostics_output_every,
-    enable_nearest_diagnostics=True,
-    enable_interp_diagnostics=False,
-    enable_volume_integration_diagnostics=True,
-    enable_free_auxevol=False,
-    enable_psi4_diagnostics=False,
-    enable_bhahaha=enable_bhahaha,
-)
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
 )
@@ -248,6 +250,20 @@ BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunctio
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+)
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    project_dir=project_dir,
+    set_of_CoordSystems=set_of_CoordSystems,
+    default_diagnostics_out_every=diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_free_auxevol=False,
+    enable_psi4_diagnostics=False,
+    enable_bhahaha=enable_bhahaha,
+    enable_raytracing_data_output=enable_raytracing_data_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
