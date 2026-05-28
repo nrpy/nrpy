@@ -1,4 +1,5 @@
 from . import (
+    combine_raytracing_time_slices,
     diagnostic_gfs_h_create,
     diagnostics,
     diagnostics_nearest_1d_y_and_z_axes,

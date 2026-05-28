@@ -325,6 +325,8 @@ def register_all_diagnostics(
         Christoffel data during the evolution.
     :raises ValueError: If raytracing-data export is enabled for CUDA code generation.
     :raises ValueError: If raytracing-data export is enabled without
+        ``enable_rfm_precompute=True``.
+    :raises ValueError: If raytracing-data export is enabled without
         ``enable_RbarDD_gridfunctions=True``.
     :raises ValueError: If raytracing-data export is enabled for more than one
         coordinate system, or for a coordinate system that is not currently
@@ -354,6 +356,12 @@ def register_all_diagnostics(
             raise ValueError(
                 "Raytracing binary exporters currently support only host/OpenMP "
                 "builds. Add host-only Ricci/RHS extraction before enabling CUDA."
+            )
+        if not enable_rfm_precompute:
+            raise ValueError(
+                "Raytracing binary exporters currently require "
+                "enable_rfm_precompute=True because the generated exporter reuses "
+                "the rfm-precompute Ricci_eval() and rhs_eval() call signatures."
             )
         if not enable_RbarDD_gridfunctions:
             raise ValueError(

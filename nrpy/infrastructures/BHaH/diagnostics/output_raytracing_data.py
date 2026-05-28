@@ -86,6 +86,10 @@ def register_CFunction_output_raytracing_data(
     :raises ValueError: If ``CoordSystem`` is not a string.
     :raises ValueError: If ``enable_rfm_precompute`` is not a bool.
     :raises ValueError: If ``enable_RbarDD_gridfunctions`` is not a bool.
+    :raises ValueError: If ``CoordSystem`` is not currently supported by the
+        raytracing binary exporter.
+    :raises ValueError: If ``enable_rfm_precompute`` is False.
+    :raises ValueError: If ``enable_RbarDD_gridfunctions`` is False.
     :raises ValueError: If the generated project uses CUDA parallelization.
 
     Doctests:
@@ -104,6 +108,24 @@ def register_CFunction_output_raytracing_data(
         raise ValueError(
             "enable_RbarDD_gridfunctions must be a bool, "
             f"got {type(enable_RbarDD_gridfunctions).__name__}"
+        )
+    if CoordSystem not in ("Cartesian", "Spherical"):
+        raise ValueError(
+            "Raytracing binary exporters currently support only Cartesian "
+            "and Spherical coordinate systems. Extend the serialized "
+            f"metadata contract before enabling them for {CoordSystem}."
+        )
+    if not enable_rfm_precompute:
+        raise ValueError(
+            "Raytracing binary exporters currently require "
+            "enable_rfm_precompute=True because the generated exporter reuses "
+            "the rfm-precompute Ricci_eval() and rhs_eval() call signatures."
+        )
+    if not enable_RbarDD_gridfunctions:
+        raise ValueError(
+            "Raytracing binary exporters currently require "
+            "enable_RbarDD_gridfunctions=True so Ricci_eval() is registered "
+            "before rhs_eval() is reused for same-slice export."
         )
 
     if pcg.pcg_registration_phase():
