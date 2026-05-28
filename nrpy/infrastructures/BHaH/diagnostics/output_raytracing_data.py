@@ -91,9 +91,6 @@ def register_CFunction_output_raytracing_data(
     :raises ValueError: If ``enable_rfm_precompute`` is False.
     :raises ValueError: If ``enable_RbarDD_gridfunctions`` is False.
     :raises ValueError: If the generated project uses CUDA parallelization.
-
-    Doctests:
-    None.
     """
     if not isinstance(CoordSystem, str):
         raise ValueError(
@@ -866,10 +863,25 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     exit(1);
   }} // END IF: fdopen failed
 
-  const int Nxx_plus_2NGHOSTS_tot =
-      params->Nxx_plus_2NGHOSTS0 * params->Nxx_plus_2NGHOSTS1 * params->Nxx_plus_2NGHOSTS2;
+  const uint64_t Nxx_plus_2NGHOSTS_tot = raytracing_data_mul_u64_or_abort(
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)params->Nxx_plus_2NGHOSTS0,
+          (uint64_t)params->Nxx_plus_2NGHOSTS1,
+          "Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1"),
+      (uint64_t)params->Nxx_plus_2NGHOSTS2,
+      "Nxx_plus_2NGHOSTS_tot");
+  const uint64_t rhs_gfs_bytes_u64 = raytracing_data_mul_u64_or_abort(
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)NUM_EVOL_GFS,
+          Nxx_plus_2NGHOSTS_tot,
+          "rhs_gfs value count"),
+      (uint64_t)sizeof(REAL),
+      "rhs_gfs byte count");
+  const size_t rhs_gfs_bytes =
+      raytracing_data_size_t_from_u64_or_abort(
+          rhs_gfs_bytes_u64, "rhs_gfs byte count");
   REAL *restrict rhs_gfs;
-  BHAH_MALLOC(rhs_gfs, NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot * sizeof(REAL));
+  BHAH_MALLOC(rhs_gfs, rhs_gfs_bytes);
   if (rhs_gfs == NULL) {{
     fclose(fp);
     remove(temporary_filename);
