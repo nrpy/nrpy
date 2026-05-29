@@ -16,6 +16,7 @@ pre-loaded into staging buffers to prevent overwriting valid memory with uniniti
 data during asynchronous transfers.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc
@@ -149,7 +150,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     loop_body = f"""
     // Variable current_chunk_size defines the active range for the current streaming bundle.
-    const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY); // Active chunk size.
+    const long int current_chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY); // Active chunk size.
 
     {transfer_comment_in}
     // Transfer the status array for the current bundle to supply the kernel with termination states.

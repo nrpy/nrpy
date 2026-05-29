@@ -76,12 +76,12 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
     int idx_mid = TOVola_bisection_idx_finder(rr_iso, numpoints_arr, r_iso_arr);
 
     /* Use standard library functions instead of redefining macros */
-    int idxmin = MAX(0, idx_mid - commondata->interpolation_stencil_size / 2 - 1);
+    int idxmin = NRPYMAX(0, idx_mid - commondata->interpolation_stencil_size / 2 - 1);
 
     // -= Do not allow the interpolation stencil to cross the star's surface =-
     // max index is when idxmin + (commondata->interpolation_stencil_size-1) = R_idx
     //  -> idxmin at most can be R_idx - commondata->interpolation_stencil_size + 1
-    idxmin = MIN(idxmin, R_idx - commondata->interpolation_stencil_size + 1);
+    idxmin = NRPYMIN(idxmin, R_idx - commondata->interpolation_stencil_size + 1);
 
     // Ensure that commondata->interpolation_stencil_size does not exceed the maximum
     if (commondata->interpolation_stencil_size > commondata->max_interpolation_stencil_size) {

@@ -223,7 +223,7 @@ for script in "${cuda_example_scripts[@]}"; do
   IFS=' ' read -r script_path project_path <<< "$script"
   echo ""
   echo "Running CUDA-enabled Python script: $script_path"
-  PYTHONPATH=.:$PYTHONPATH python "$script_path" --parallelization cuda
+  PYTHONPATH=.:$PYTHONPATH python "$script_path" --cuda
   if [[ $? -ne 0 ]]; then
     echo "Error: Python script $script_path failed."
     exit 1

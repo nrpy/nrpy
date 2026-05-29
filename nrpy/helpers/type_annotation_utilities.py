@@ -6,6 +6,8 @@ Author: Steven R. Brandt
         sbrandt **at** cct **dot** lsu **dot** edu
 """
 
+import inspect
+from json import dumps
 from typing import Any, Tuple, cast
 
 try:
@@ -27,6 +29,7 @@ except ImportError as ae:
         :param tp: The type to extract arguments from.
         :return: A tuple of arguments extracted from the type.
 
+        Doctests:
         >>> get_args(Literal["x", "y", "z"])
         ('x', 'y', 'z')
         >>> get_args(int)
@@ -41,9 +44,6 @@ except ImportError as ae:
         return ()
 
 
-import inspect
-from json import dumps
-
 _literal = Literal["x"]
 _tuple = Tuple[str, int]
 
@@ -55,6 +55,7 @@ def is_type_literal(arg: Any) -> bool:
     :param arg: The argument to check.
     :return: True if arg is a Literal type, False otherwise.
 
+    Doctests:
     >>> is_type_literal(Literal["a", "b"])
     True
     >>> is_type_literal(int)
@@ -85,6 +86,7 @@ def validate_literal_arguments() -> None:
 
     :raises ValueError: If the value of any parameter doesn't match its allowed Literal values.
 
+    Doctests:
     >>> def foo(a:Literal["fish","bird"]):
     ...    validate_literal_arguments()
     ...    print("ok")
@@ -139,7 +141,7 @@ def generate_class_representation() -> str:
 
     :return: A string representation of the calling object.
 
-    # Example usage inside a class:
+    Doctests:
     >>> class MyClass:
     ...     def __init__(self, name: str, age: int):
     ...         self.name = name

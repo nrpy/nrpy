@@ -49,9 +49,9 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
 
         dsmin1 = fabs(hh * dxx1);
         dsmin2 = fabs(hh * dxx2 * sin(xx1));
-        ds_min = MIN(ds_min, MIN(dsmin1, dsmin2));
+        ds_min = NRPYMIN(ds_min, NRPYMIN(dsmin1, dsmin2));
     }
-    commondata->dt = MIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
+    commondata->dt = NRPYMIN(commondata->dt, ds_min * commondata->CFL_FACTOR);
 }
 """
 

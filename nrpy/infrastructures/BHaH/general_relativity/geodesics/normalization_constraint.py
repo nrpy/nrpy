@@ -10,6 +10,7 @@ function that maps SymPy expressions to a bounded kernel architecture, utilizing
 configured parallelization strategy.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import sympy as sp

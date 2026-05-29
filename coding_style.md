@@ -164,8 +164,13 @@ Authors: Zachariah B. Etienne
 
 Rules:
 - Use singular `Author:` for exactly one author; plural `Authors:` for two or more.
-- The names in the examples above are illustrative. Do not add any person to `Author:`/`Authors:` unless they are already an author of that file.
+- The names in the examples above are illustrative.
 - Email obfuscation is encouraged; the exact format is not enforced.
+- Legitimate authorship credit may be added when a contributor makes a
+  substantive change to an existing file. Reviewers must not object to adding a
+  new author solely because that person was not previously listed in the file.
+  Authorship comments should be reviewed only for formatting, consistency, and
+  accuracy, not for preserving the previous author list unchanged.
 
 **Common anti-patterns to avoid** (all widespread in older files — do not reproduce):
 
@@ -436,10 +441,21 @@ The following patterns are standard for NRPy infrastructure code:
   """Module docstring with author info."""
   # Imports
   # Main registration function: register_CFunction_<name>()
-  # Optional helper functions (Python-side symbolic computation)
+  # Optional helper functions (Python-side symbolic computation, only when reused)
   # Optional if __name__ == "__main__": doctest-runner prefix
   # Required as the opening pattern for modules under nrpy/equations/ and subdirectories
   ```
+
+### CodeParameter Registration Scope
+
+`CodeParameter` registration mutates NRPy's global code-parameter registry, which feeds generated headers such as `BHaH_defines.h`, `set_CodeParameters.h`, parameter-file output, and related trusted-string tests. For this reason, new or modified code must not register `CodeParameter`s at module import time.
+
+- Register each `CodeParameter` inside exactly one core registration function that owns the generated code needing that parameter. Prefer the principal `register_CFunction_*()` routine, or a single `register_all_*()`/setup routine that all relevant code-generation paths call before the parameter is consumed.
+- Do not place `par.register_CodeParameter(...)`, `par.register_CodeParameters(...)`, or direct `par.CodeParameter(...)` construction at module global scope.
+- Do not register the same `CodeParameter` redundantly in multiple modules. If several C functions need the same parameter, choose one central registration function and document that downstream registrations depend on it having been called.
+- Do not rely on package imports, especially `__init__.py` aggregation imports, to register code parameters as a side effect.
+
+Example failure mode: registering a GRoovy-only parameter such as `C2P_diagnostics_every` at module scope can cause an unrelated `from nrpy.infrastructures import BHaH` doctest to alter the global registry. Then `BHaH_defines.h` gains a GRoovy field and unrelated trusted-string tests fail, even though the tested module did not request GRoovy code generation.
 
 ### Doctest Conventions
 
@@ -533,14 +549,17 @@ This pattern allows the codegen system to first collect all function calls durin
 
 ### Black Format Suppression
 
-Use `# fmt: off` and `# fmt: on` sparingly, only when Black formatting would destroy intentional alignment. The most common case is `par.CodeParameter` registration lines where positional arguments must align:
+Use `# fmt: off` and `# fmt: on` sparingly, only when Black formatting would destroy intentional alignment. One acceptable case is a compact group of `CodeParameter` registrations inside the single registration function that owns those parameters:
 
 ```python
-# fmt: off
-_ = par.CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
-_ = par.CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
-# fmt: on
+def register_CFunction_time_metadata() -> None:
+    """Register time metadata handling."""
+    # fmt: off
+    _ = par.register_CodeParameter("int", __name__, "nn_0", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.register_CodeParameter("int", __name__, "nn", add_to_parfile=False, add_to_set_CodeParameters_h=True, commondata=True)
+    _ = par.register_CodeParameter("REAL", __name__, "CFL_FACTOR", 0.5, commondata=True)
+    # fmt: on
+    ...
 ```
 
 ### C Function Registration Pattern
@@ -587,6 +606,7 @@ For new BHaH infrastructure generators that emit ordinary per-grid or per-point 
 - Construct symbolic expressions immediately before they are consumed by `c_codegen()` or `simple_loop()`. Do not build `expr_list`, `lhs_list`, tensor declarations, or supporting symbolic state far earlier in the function than the code-generation call that uses them.
 - Register gridfunctions, parity tables, and other registration-time metadata in the same local part of the function where they are actually needed. Do not front-load unrelated setup before `desc`, `name`, `params`, or other basic C-function metadata when that setup is specific to a later code-generation block.
 - When assembling emitted C bodies, prefer a top-to-bottom `body += ...` construction that follows the generated C execution order. Avoid proliferating temporary string fragments or helper functions whose primary purpose is to manufacture pieces of C text.
+- Do not introduce Python helper functions whose only purpose is to indent, dedent, reindent, or otherwise cosmetically format emitted C fragments that will later be normalized by `clang_format`/`clang-format`. Append the raw C fragments directly in execution order; let the C formatter handle indentation in the generated file.
 - Add short comments at jarring transitions in registration functions so readers understand why the flow changes abruptly. In particular, annotate jumps such as “register DIAG gridfunctions before building parity tables” or “construct the symbolic kernel immediately before `c_codegen()`” instead of leaving those shifts implicit.
 
 **Raw-string indentation note**: Embedded C inside raw strings may appear with minor indentation variance across modules due to historical edits. The requirement is that the C is valid and consistently readable; do not mechanically re-indent unless you are fixing a functional or formatting issue.
@@ -605,7 +625,7 @@ body = rf"""
 The Python registration function must closely imitate the C function it registers. Follow these guidelines:
 
 - Use separate lines for declaring `desc`, `cfunc_type`, `name`, `params`, `body`, etc. variables before passing them to `register_CFunction()`
-- Registration functions should be self-contained and read in execution order. Do not introduce tiny helper wrappers or one-off private setup helpers unless they encapsulate genuinely reusable logic shared across multiple registration functions.
+- Registration functions should be self-contained and read in execution order. Do not introduce tiny helper wrappers or one-off private setup helpers. Private/module-local helper functions, including leading-underscore helpers, must have at least two real call sites to justify their existence; otherwise inline the logic at the point of use.
 
 Example pattern:
 ```python
@@ -631,10 +651,14 @@ def register_CFunction_my_function() -> None:
 
 ### Function Inlining Guidelines
 
-**Inline all C and Python functions that do not save lines of code by existing separately.** Separate a function only if it is called from multiple locations or has >10-15 lines of actual logic.
+**Inline all C and Python functions that do not save lines of code by existing separately.** Private/module-local Python helper functions (including leading-underscore "static" helpers) must be called from at least two real call sites to qualify for existence. If a private helper is called only once, inline it at the point of use; a long docstring, local tidiness, or cosmetic string manipulation is not enough justification. The rare exception is a named function required by an external API, callback protocol, or test harness.
+
+For C functions, separate a function only if it is called from multiple locations or has >10-15 lines of actual logic.
 
 **Anti-patterns to avoid**:
 - Single-use functions that are only 2-5 lines
+- Single-use private Python helpers, including `_helper()` functions used by only one registration routine
+- Helpers whose primary purpose is indentation, dedentation, line wrapping, or cosmetic formatting of generated C that will later pass through `clang-format`
 - Functions whose docstring is longer than the body
 - Functions that simply return a single expression
 

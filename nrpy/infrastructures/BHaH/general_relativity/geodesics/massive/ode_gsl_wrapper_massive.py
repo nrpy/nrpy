@@ -11,6 +11,7 @@ global memory grids. Reusing the GSL output array $f$ as the target buffer avoid
 intermediate memory copy.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

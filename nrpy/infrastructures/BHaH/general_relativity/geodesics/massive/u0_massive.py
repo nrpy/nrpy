@@ -10,6 +10,7 @@ one-dimensional array using local and global batch indexing for memory access. T
 kernel is wrapped with offloading pragmas to facilitate execution.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import sympy as sp

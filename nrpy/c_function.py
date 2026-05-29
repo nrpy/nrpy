@@ -265,7 +265,7 @@ class CFunction:
         if self.include_CodeParameters_h:
             CodeParameters_file_name = (
                 "set_CodeParameters-simd.h"
-                if self.enable_simd or "simd_width" in self.body
+                if self.enable_simd or "SIMD_WIDTH" in self.body
                 else "set_CodeParameters.h"
             )
             include_Cparams_str = f'#include "{CodeParameters_file_name}"\n'

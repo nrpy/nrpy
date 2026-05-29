@@ -7,6 +7,7 @@ photon trajectories onto a static background texture and an accretion disk geome
 using r_min and r_max to define source bounds.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import argparse

@@ -113,7 +113,7 @@ def register_CFunction_numerical_grids_and_timestep_setup() -> None:
       commondata->t_0 = 0.0;
       commondata->time = 0.0;
     }
-    commondata->dt = MIN(commondata->dt, commondata->CFL_FACTOR * MIN(params->dxx0, MIN(params->dxx1, params->dxx2))); // CFL condition
+    commondata->dt = NRPYMIN(commondata->dt, commondata->CFL_FACTOR * NRPYMIN(params->dxx0, NRPYMIN(params->dxx1, params->dxx2))); // CFL condition
 
     // Set up cell-centered Cartesian coordinate grid, centered at the origin.
     griddata[grid].xx[0] = (REAL *restrict)malloc(sizeof(REAL) * params->Nxx_plus_2NGHOSTS0);

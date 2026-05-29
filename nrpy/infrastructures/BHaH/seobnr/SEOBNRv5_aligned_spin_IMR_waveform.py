@@ -100,8 +100,8 @@ for(i = 0; i < nsteps_ringdown; i++){
 """
     if use_seobnrv5_merger_ringdown:
         body += """
-size_t left = MAX(5,idx_match) - 5;
-size_t right = MIN(commondata->nsteps_inspiral,idx_match + 5);
+size_t left = NRPYMAX(5,idx_match) - 5;
+size_t right = NRPYMIN(commondata->nsteps_inspiral,idx_match + 5);
 REAL times_cropped[right-left] , amps_cropped[right-left] , phases_cropped[right-left];
 for (i = left; i < right; i++){
   times_cropped[i - left] = times_new[i];

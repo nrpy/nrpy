@@ -10,6 +10,7 @@ Statically allocated execution buffers map to the memory hierarchy. A pagination
 orchestrates data transfers.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 from typing import List
@@ -277,7 +278,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     // BUNDLE SIZING
     //==========================================
     // Variable $current_chunk_size$ defines the active range for the current streaming bundle.
-    const long int current_chunk_size = MIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current_chunk_size$.
+    const long int current_chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY); // Safely bounded active chunk parameter $current_chunk_size$.
     {host_to_device_transfer}
         //==========================================
         // KERNEL LAUNCH

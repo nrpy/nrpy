@@ -256,8 +256,8 @@ def register_CFunction_rhs_eval(
             )
         )
         body += """
-#ifndef MIN
-#define MIN(A, B) ( ((A) < (B)) ? (A) : (B) )
+#ifndef NRPYMIN
+#define NRPYMIN(A, B) ( ((A) < (B)) ? (A) : (B) )
 #endif
   // cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
   // Original prescription: -dt * (orig_C_H * dsmin / dt * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * H / 4
@@ -265,7 +265,7 @@ def register_CFunction_rhs_eval(
   // -C_CAHD * dsmin * CFL_FACTOR__ignore_repeats_Carpet_timeref_factors) * H ,
   // where CFL_FACTOR is most typically 0.45 or 0.5, and C_CAHD = 0.15 = orig_C_H / 4 = 0.6 / 4
   // Thus, New & Original prescriptions are the same, just with some redefinitions.
-  const CCTK_REAL dsmin CCTK_ATTRIBUTE_UNUSED = MIN(CCTK_DELTA_SPACE(0),MIN(CCTK_DELTA_SPACE(1),CCTK_DELTA_SPACE(2)));
+  const CCTK_REAL dsmin CCTK_ATTRIBUTE_UNUSED = NRPYMIN(CCTK_DELTA_SPACE(0),NRPYMIN(CCTK_DELTA_SPACE(1),CCTK_DELTA_SPACE(2)));
 """
         if enable_simd:
             body += f"""
