@@ -15,6 +15,7 @@ import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_constants as SEOBNRv5_const
 import nrpy.equations.seobnr.SEOBNRv5_aligned_spin_waveform_quantities as SEOBNRv5_wf
 import nrpy.helpers.parallel_codegen as pcg
 
@@ -108,6 +109,22 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
+    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
+    projected_risco_code = ccg.c_codegen(
+        [v5_const.rISCO],
+        ["const REAL projected_r_ISCO"],
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_risco",
+    )
+    projected_delta_t_code = ccg.c_codegen(
+        [v5_const.Delta_t],
+        ["const REAL projected_Delta_t"],
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_delta_t",
+    )
+
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Computes and applies the special amplitude coefficients to inspiral waveform modes (2,1), (4,3), and (5,5).
@@ -192,6 +209,101 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
 }
 
+// Step 1: Build combined time-frequency samples for projected-spin attachment fits.
+const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
+if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
+  exit(1);
+}
+if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
+    commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
+  exit(1);
+}
+
+REAL *restrict times_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
+if (times_combined == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times_combined\\n");
+  exit(1);
+}
+REAL *restrict Omega_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
+if (Omega_combined == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_combined\\n");
+  exit(1);
+}
+REAL *restrict u_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
+if (u_rlow == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for u_rlow\\n");
+  exit(1);
+}
+REAL *restrict t_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
+if (t_rlow == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_rlow\\n");
+  exit(1);
+}
+for (i = 0; i < commondata->nsteps_low; i++){
+  const REAL r_low_i = commondata->dynamics_low[IDX(i,R)];
+  if (r_low_i <= 0.0) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), nonpositive low-dynamics radius in projected attachment inputs\\n");
+    exit(1);
+  }
+  u_rlow[i] = 1.0 / r_low_i;
+  t_rlow[i] = commondata->dynamics_low[IDX(i,TIME)];
+  times_combined[i] = t_rlow[i];
+  Omega_combined[i] = commondata->dynamics_low[IDX(i,OMEGA)];
+} // END LOOP: for i over low-dynamics projected attachment samples
+for (i = 0; i < commondata->nsteps_fine; i++){
+  const size_t dst_idx = commondata->nsteps_low + i;
+  times_combined[dst_idx] = times[i];
+  Omega_combined[dst_idx] = Omega[i];
+} // END LOOP: for i over fine-dynamics projected attachment samples
+REAL u_r10M = 0.1;
+if (u_r10M < u_rlow[0]) {
+  fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies before the low-dynamics projected-spin reference domain; using first available low-dynamics point\\n");
+  u_r10M = u_rlow[0];
+}
+if (u_r10M > u_rlow[commondata->nsteps_low - 1]) {
+  fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies after the low-dynamics projected-spin reference domain; using last available low-dynamics point\\n");
+  u_r10M = u_rlow[commondata->nsteps_low - 1];
+}
+
+gsl_interp_accel *restrict acc_t_of_u = gsl_interp_accel_alloc();
+if (acc_t_of_u == NULL) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_t_of_u\\n");
+  exit(1);
+}
+gsl_spline *restrict spline_t_of_u = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_low);
+if (spline_t_of_u == NULL) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_t_of_u\\n");
+  exit(1);
+}
+gsl_spline_init(spline_t_of_u,u_rlow,t_rlow,commondata->nsteps_low);
+
+gsl_interp_accel *restrict acc_Omega_combined = gsl_interp_accel_alloc();
+if (acc_Omega_combined == NULL) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_Omega_combined\\n");
+  exit(1);
+}
+gsl_spline *restrict spline_Omega_combined = gsl_spline_alloc(gsl_interp_cspline, nsteps_combined);
+if (spline_Omega_combined == NULL) {
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_Omega_combined\\n");
+  exit(1);
+}
+gsl_spline_init(spline_Omega_combined,times_combined,Omega_combined,nsteps_combined);
+
+const REAL t_r10M = gsl_spline_eval(spline_t_of_u, u_r10M, acc_t_of_u);
+REAL omega_r10M = gsl_spline_eval(spline_Omega_combined, t_r10M, acc_Omega_combined);
+omega_r10M = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_r10M));
+const REAL chi1_projected_r10 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_r10M, commondata->chi1_lnhat.acc);
+const REAL chi2_projected_r10 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_r10M, commondata->chi2_lnhat.acc);
+{
+  const REAL chi1 = chi1_projected_r10;
+  const REAL chi2 = chi2_projected_r10;
+"""
+    body += projected_risco_code
+    body += """
+  commondata->r_ISCO = projected_r_ISCO;
+} // END BLOCK: projected-spin r_ISCO evaluation at r=10M
 
 // construct splines of dynamical variables
 
@@ -285,7 +397,7 @@ gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
     }
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
 
-// Find t_ISCO:
+// Step 2: Find t_ISCO with the projected-spin r_ISCO.
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
@@ -293,6 +405,10 @@ if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
 else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
+  if (N_zoom == 0) {
+    fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), fine dynamics time interval is too short for t_ISCO search\\n");
+    exit(1);
+  }
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (t_zoom == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\\n");
@@ -303,26 +419,48 @@ else{
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
       exit(1);
     }
-    for (i = 0; i < N_zoom; i++){
+  for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
   }
-  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1);
+  size_t ISCO_zoom_idx = 0;
+  REAL min_abs_r_gap = fabs(minus_r_zoom[0] + commondata->r_ISCO);
+  for (i = 1; i < N_zoom; i++){
+    const REAL abs_r_gap = fabs(minus_r_zoom[i] + commondata->r_ISCO);
+    if (abs_r_gap < min_abs_r_gap) {
+      min_abs_r_gap = abs_r_gap;
+      ISCO_zoom_idx = (size_t)i;
+    }
+  } // END LOOP: for i over fine-grid r_ISCO search samples
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
   free(t_zoom);
   free(minus_r_zoom);
 }
 
+// Step 3: Evaluate the attachment-time shift from projected spins at r_ISCO.
+REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
+omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
+const REAL chi1_projected_rISCO = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_rISCO, commondata->chi1_lnhat.acc);
+const REAL chi2_projected_rISCO = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_rISCO, commondata->chi2_lnhat.acc);
+{
+  const REAL chi1 = chi1_projected_rISCO;
+  const REAL chi2 = chi2_projected_rISCO;
+"""
+    body += projected_delta_t_code
+    body += """
+  commondata->Delta_t = projected_Delta_t;
+} // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
+
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
-  t_peak_22 = times[commondata->nsteps_fine - 2];
+  t_peak_22 = times[commondata->nsteps_fine - 1];
   t_peak_55 = t_peak_22;
 }
 if (t_peak_55 > times[commondata->nsteps_fine - 1]){
-  t_peak_55 = times[commondata->nsteps_fine - 2];  
+  t_peak_55 = times[commondata->nsteps_fine - 1];
 }
 commondata->t_attach = t_peak_22;
 
@@ -413,8 +551,16 @@ free(prstar);
 free(Omega);
 free(Hreal);
 free(Omega_circ);
+free(times_combined);
+free(Omega_combined);
+free(u_rlow);
+free(t_rlow);
 
 
+gsl_spline_free(spline_t_of_u);
+gsl_interp_accel_free(acc_t_of_u);
+gsl_spline_free(spline_Omega_combined);
+gsl_interp_accel_free(acc_Omega_combined);
 gsl_spline_free(spline_r);
 gsl_interp_accel_free(acc_r);
 gsl_spline_free(spline_phi);
