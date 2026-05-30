@@ -10,6 +10,7 @@ a photon. Unpacking these variables into a thread-local execution context and st
 mathematical intermediates in registers reduces memory latency.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 # Import standard modules

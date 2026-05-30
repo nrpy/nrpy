@@ -464,7 +464,7 @@ _Pragma("omp parallel for simd") \
             warnings.warn(
                 "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
             )
-            prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
+            prefunc = prefunc.replace("(ii)++", "(ii) += (SIMD_WIDTH)")
 
     prefunc += BHaH.MoLtimestepping.rk_substep.construct_RK_functions_prefunc()
 

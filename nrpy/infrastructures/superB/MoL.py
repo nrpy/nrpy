@@ -122,7 +122,7 @@ switch (which_MOL_part) {
             "enable_simd in MoL is not properly supported -- MoL update loops are not properly bounds checked."
         )
         return_str += "#pragma omp parallel for\n"
-        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=simd_width) {{\n"
+        return_str += "for(int i=0;i<Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1*Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;i+=SIMD_WIDTH) {{\n"
     else:
         return_str += "LOOP_ALL_GFS_GPS(i) {\n"
 

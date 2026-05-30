@@ -3,10 +3,9 @@
 Functional Programming Toolkit.
 
 Author: Ken Sible
-Email:  ksible *at* outlook *dot* com
+        ksible *at* outlook *dot* com
 """
 
-import sys
 from typing import Any, Callable, Generator, Iterable, List, Optional, Tuple, Union
 
 
@@ -18,7 +17,7 @@ def pipe(x: Any, *f: Callable[..., Any]) -> Any:
     :param f: Functions to apply in sequence.
     :return: The result of applying all the functions to the input.
 
-    Doctest:
+    Doctests:
     >>> pipe(range(5, 0, -1), reversed, list)
     [1, 2, 3, 4, 5]
     >>> pipe([3, 2, 2, 4, 5, 1], sorted, set, list)
@@ -38,7 +37,7 @@ def repeat(f: Callable[..., Any], x: Any, n: int) -> Any:
     :param n: The number of times to apply the function.
     :return: The result of repeatedly applying the function.
 
-    Doctest:
+    Doctests:
     >>> list(repeat(flatten, [1, 2, [3, [4]], 5], 2))
     [1, 2, 3, 4, 5]
     """
@@ -54,7 +53,7 @@ def chain(*iterable: Iterable[Any]) -> Generator[Any, None, None]:
     :param iterable: A sequence of iterables to chain together.
     :yield: A generator that yields elements from each iterable in sequence.
 
-    Doctest:
+    Doctests:
     >>> list(chain([1], [2, 3], [4, 5]))
     [1, 2, 3, 4, 5]
     """
@@ -73,7 +72,7 @@ def flatten(iterable: Iterable[Any]) -> Generator[Any, None, None]:
     :param iterable: The iterable to flatten.
     :return: A generator that yields the flattened elements of the iterable.
 
-    Doctest:
+    Doctests:
     >>> list(flatten([1, [2, 3], [4, 5]]))
     [1, 2, 3, 4, 5]
     """
@@ -116,7 +115,7 @@ def uniquify(iterable: Iterable[Any]) -> List[Any]:
     :param iterable: An iterable.
     :return: A list with the unique elements of the iterable.
 
-    Doctest:
+    Doctests:
     >>> uniquify(([1, 1, 2, 3, 3, 3, 4, 5, 5]))
     [1, 2, 3, 4, 5]
     """
@@ -159,6 +158,7 @@ def product(
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

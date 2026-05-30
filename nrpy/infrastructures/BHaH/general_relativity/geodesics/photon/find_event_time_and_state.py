@@ -14,6 +14,7 @@ transfers and maintains all intermediate state reconstructions within local hard
 threads.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import nrpy.c_function as cfc

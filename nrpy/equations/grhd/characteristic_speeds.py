@@ -105,8 +105,8 @@ def find_cmax_cmin(
 
     #   // Then compute cmax, cmin. This is required for the HLL flux.
     #   original C code
-    #   CCTK_REAL cmaxL =  MAX(0.0,MAX(cplusl,cplusr));
-    #   CCTK_REAL cminL = -MIN(0.0,MIN(cminusl,cminusr));
+    #   CCTK_REAL cmaxL =  NRPYMAX(0.0,NRPYMAX(cplusl,cplusr));
+    #   CCTK_REAL cminL = -NRPYMIN(0.0,NRPYMIN(cminusl,cminusr));
 
     # Now, we need to set cmax to the larger of cpr,cpl, and 0
     cmax = noif.max_noif(sp.sympify(0.0), noif.max_noif(cpl, cpr))

@@ -15,6 +15,7 @@ into the global window coordinate system by their spatial offsets before native 
 serialization and archive compression.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 import logging

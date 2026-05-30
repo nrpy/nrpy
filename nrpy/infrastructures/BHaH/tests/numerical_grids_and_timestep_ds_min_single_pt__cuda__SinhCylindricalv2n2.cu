@@ -38,5 +38,5 @@ __host__ __device__ void ds_min_single_pt__rfm__SinhCylindricalv2n2(const params
   const REAL ds0 = fabs(dxx0 * (rho_slope + 2 * tmp4 * tmp5 * xx0 + tmp6 * (tmp0 * tmp2 + tmp0 * tmp3)));
   const REAL ds1 = fabs(dxx1 * (rho_slope * xx0 + tmp4 * tmp6));
   const REAL ds2 = fabs(dxx2 * (tmp11 * ((xx2) * (xx2)) * (tmp10 * tmp7 + tmp7 * tmp9) - 2 * tmp11 * xx2 * (tmp10 - tmp9) + z_slope));
-  *ds_min = MIN(ds0, MIN(ds1, ds2));
+  *ds_min = NRPYMIN(ds0, NRPYMIN(ds1, ds2));
 } // END FUNCTION: ds_min_single_pt__rfm__SinhCylindricalv2n2

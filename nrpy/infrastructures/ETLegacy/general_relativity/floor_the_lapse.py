@@ -40,14 +40,14 @@ def register_CFunction_floor_the_lapse(
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
   DECLARE_CCTK_PARAMETERS;
 
-#ifndef MAX
-#define MAX(a,b) ( ((a) > (b)) ? (a) : (b) )
+#ifndef NRPYMAX
+#define NRPYMAX(a,b) ( ((a) > (b)) ? (a) : (b) )
 #endif
 
 """
     lapse_access_gfs = [gri.ETLegacyGridFunction.access_gf(gf_name="alpha")]
     loop_body = (
-        lapse_access_gfs[0] + " = MAX(" + lapse_access_gfs[0] + ", lapse_floor);"
+        lapse_access_gfs[0] + " = NRPYMAX(" + lapse_access_gfs[0] + ", lapse_floor);"
     )
 
     body += lp.simple_loop(

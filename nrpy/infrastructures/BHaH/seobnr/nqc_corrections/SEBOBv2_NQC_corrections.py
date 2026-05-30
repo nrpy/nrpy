@@ -172,8 +172,8 @@ commondata->t_attach = t_peak;
 BOB_v2_setup_peak_attachment(commondata);
 // Compute Q_cropped, P_cropped, t_cropped, phase_cropped, amp_cropped
 size_t N = 5;
-size_t left = MAX(peak_idx, N) - N;
-size_t right = MIN(peak_idx + N , commondata->nsteps_fine);
+size_t left = NRPYMAX(peak_idx, N) - N;
+size_t right = NRPYMIN(peak_idx + N , commondata->nsteps_fine);
 REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
 REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
 for (i = left; i < right; i++){

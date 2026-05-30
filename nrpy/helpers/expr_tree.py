@@ -23,7 +23,6 @@ Author: Ken Sible
         ksible *at* outlook *dot* com
 """
 
-import sys  # Standard Python module for multiplatform OS-level functions
 from typing import Generator, List, Optional
 
 import sympy as sp
@@ -37,12 +36,9 @@ class ExprTree:
     of symbolic expressions, supporting operations like building the tree from
     an expression, preorder and postorder traversal.
 
-    Attributes
-    ----------
-    root : Node
-        The root node of the expression tree.
+    The `root` attribute stores the root node of the expression tree.
 
-    Example:
+    Doctests:
     >>> from sympy.abc import a, b
     >>> from sympy import cos
     >>> tree = ExprTree(cos(a + b)**2)
@@ -56,14 +52,9 @@ class ExprTree:
         """
         Represents a node within an `ExprTree`, holding a SymPy expression and its function.
 
-        Attributes
-        ----------
-        expr : sp.Basic
-            The SymPy expression held by this node.
-        func : Optional[sp.FunctionClass]
-            The function of the expression if applicable.
-        children : List["ExprTree.Node"]
-            Child nodes under this node.
+        The `expr` attribute stores the node expression, `func` stores the
+        associated SymPy function when applicable, and `children` stores the
+        child nodes.
         """
 
         def __init__(self, expr: sp.Basic, func: Optional[sp.FunctionClass]) -> None:
@@ -101,7 +92,7 @@ class ExprTree:
         :param node: The node to start building the tree from.
         :param clear: If `True`, clears existing children of `node` before building.
 
-        Example:
+        Doctests:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, sin
         >>> tree = ExprTree(cos(a + b)**2)
@@ -126,7 +117,7 @@ class ExprTree:
         :param node: The starting node for the traversal. If `None`, starts from the root.
         :yields: Each node in preorder sequence.
 
-        Example:
+        Doctests:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
         >>> tree = ExprTree(cos(a*b)**2)
@@ -150,7 +141,8 @@ class ExprTree:
         :param node: The starting node for the traversal. If `None`, starts from the root.
         :yields: Each node in postorder sequence.
 
-        Example:
+        Doctests:
+        Doctests:
         >>> from sympy.abc import a, b
         >>> from sympy import cos, Mul
         >>> tree = ExprTree(cos(a*b)**2)
@@ -193,6 +185,7 @@ class ExprTree:
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 

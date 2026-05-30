@@ -10,6 +10,7 @@ flattened, thread-local state vector into registers reduces memory latency durin
 geodesic integration.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 # Import standard modules for typing

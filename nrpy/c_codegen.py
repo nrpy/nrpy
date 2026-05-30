@@ -377,10 +377,9 @@ def c_codegen(
         if isinstance(output_varname_str, list)
         else [output_varname_str]
     )
-    sympyexpr_list = sympyexpr if isinstance(sympyexpr, list) else [sympyexpr]
-    sympyexpr_list = sympyexpr_list[
-        :
-    ]  # Make a copy of sympyexpr_list to safeguard against the input expressions being changed.
+    sympyexpr_list: List[sp.Basic] = (
+        sympyexpr[:] if isinstance(sympyexpr, list) else [cast(sp.Basic, sympyexpr)]
+    )
 
     # Step 2b: Check that output_varname_str and sympyexpr_list lists
     #          are the same length

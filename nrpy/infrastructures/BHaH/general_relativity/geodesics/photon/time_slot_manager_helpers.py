@@ -9,6 +9,7 @@ tracing. Atomic operations and speculative memory writes guarantee thread safety
 mathematical consistency during concurrent orchestration.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
 """
 
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h

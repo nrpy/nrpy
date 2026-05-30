@@ -1,12 +1,13 @@
 """
 Module that abstracts the process of building and launching an host/device execution kernel.
 
-Authors: Samuel D. Tootle; sdtootle **at** gmail **dot** com
+Author: Samuel D. Tootle
+        sdtootle **at** gmail **dot** com
 """
 
 from typing import Any, Dict, Optional, Tuple
 
-from nrpy.helpers.parallelization.gpu_kernel import GPU_Kernel
+from nrpy.helpers.parallelization.gpu_kernel import GPUKernel
 from nrpy.infrastructures import BHaH
 
 
@@ -17,7 +18,7 @@ def get_params_access(parallelization: str) -> str:
     allocated in __constant__ memory rather a pointer passed as a function argument.
 
     :param parallelization: The parallelization method to use.
-    :returns: The appropriate prefix for accessing the params struct.
+    :return: The appropriate prefix for accessing the params struct.
     """
     if parallelization == "cuda":
         params_access = "d_params[streamid]."
@@ -33,7 +34,7 @@ def get_commondata_access(parallelization: str) -> str:
     allocated in __constant__ memory rather than a pointer passed as a function argument.
 
     :param parallelization: The parallelization method to use.
-    :returns: The appropriate prefix for accessing the commondata struct.
+    :return: The appropriate prefix for accessing the commondata struct.
     """
     if parallelization == "cuda":
         cd_access = "d_commondata."
@@ -47,7 +48,7 @@ def get_memory_malloc_function(parallelization: str) -> str:
     Return the appropriate function to allocate memory.
 
     :param parallelization: The parallelization method to use.
-    :returns: The appropriate function to allocate memory.
+    :return: The appropriate function to allocate memory.
     """
     if parallelization == "cuda":
         malloc_func = "cudaMalloc"
@@ -61,7 +62,7 @@ def get_memory_free_function(parallelization: str) -> str:
     Return the appropriate function to free memory.
 
     :param parallelization: The parallelization method to use.
-    :returns: The appropriate function to free memory.
+    :return: The appropriate function to free memory.
     """
     if parallelization == "cuda":
         free_func = "cudaFree"
@@ -79,7 +80,7 @@ def get_check_errors_str(
     :param parallelization: The parallelization method to use.
     :param kernel_name: The name of the kernel function.
     :param opt_msg: Optional custom message to throw.
-    :returns: The error checking string.
+    :return: The error checking string.
     """
     opt_msg = f"{kernel_name} failed." if opt_msg == "" else opt_msg
 
@@ -95,7 +96,7 @@ def get_device_sync_function(parallelization: str) -> str:
     Return the appropriate function to synchronize with a device.
 
     :param parallelization: The parallelization method to use.
-    :returns: The appropriate function to free memory.
+    :return: The appropriate function to free memory.
     """
     if parallelization == "cuda":
         sync_func = "cudaDeviceSynchronize()"
@@ -122,7 +123,7 @@ def generate_kernel_and_launch_code(
 ) -> Tuple[str, str]:
     """
     Generate kernels as prefuncs and the necessary launch body.
-    Here we build the compute kernel using GPU_Kernel, and then
+    Here we build the compute kernel using GPUKernel, and then
     append the function definition to `prefunc` and the kernel
     launch code to `body`.
 
@@ -150,7 +151,7 @@ def generate_kernel_and_launch_code(
             if launch_dict is None
             else launch_dict
         )
-        device_kernel = GPU_Kernel(
+        device_kernel = GPUKernel(
             kernel_body.replace("params->", params_access),
             arg_dict_cuda,
             f"{kernel_name}_gpu",
@@ -172,7 +173,7 @@ def generate_kernel_and_launch_code(
             .replace("__device__", "")
             .replace("__host__", "")
         )
-        device_kernel = GPU_Kernel(
+        device_kernel = GPUKernel(
             kernel_body,
             arg_dict_host,
             f"{kernel_name}_host",
@@ -189,7 +190,7 @@ def generate_kernel_and_launch_code(
     # Build the launch call in `body`:
     body = device_kernel.launch_block + device_kernel.c_function_call()
     if launchblock_with_braces and len(body.splitlines()) > 1:
-        body = f"""{{{body}
+        body = rf"""{{{body}
         }}"""
 
     return prefunc, body
@@ -204,7 +205,7 @@ def get_loop_parameters(
     :param parallelization: The parallelization method to use.
     :param dim: The number of dimensions to loop over.
     :param enable_intrinsics: Whether to modify str based on hardware intrinsics.
-    :returns: The appropriate loop parameters.
+    :return: The appropriate loop parameters.
     """
     loop_params = ""
     param_access = get_params_access(parallelization)
