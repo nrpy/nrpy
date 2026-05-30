@@ -19,7 +19,7 @@ This module does not implement JSON parsing for the combined metadata. The
 caller must parse the combined file elsewhere and populate the lightweight
 runtime context consumed by the interpolation routine.
 
-Author: Dalton Moone
+Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
