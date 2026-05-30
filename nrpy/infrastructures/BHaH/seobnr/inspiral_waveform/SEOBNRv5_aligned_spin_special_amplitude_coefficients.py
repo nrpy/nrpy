@@ -192,6 +192,9 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
 const REAL chiA = (chi1 - chi2) / 2;
+const int use_projected_attachment =
+    fabs(commondata->chi1 - commondata->chi1_z) <= 1e-14 &&
+    fabs(commondata->chi2 - commondata->chi2_z) <= 1e-14;
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_HNRFITS];
 double complex inspiral_modes[NUMMODES];
@@ -210,6 +213,7 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 }
 
 // Step 1: Build combined time-frequency samples for projected-spin attachment fits.
+if (use_projected_attachment) {
 const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
 if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
@@ -304,6 +308,15 @@ const REAL chi2_projected_r10 = gsl_spline_eval(commondata->chi2_lnhat.spline, o
     body += """
   commondata->r_ISCO = projected_r_ISCO;
 } // END BLOCK: projected-spin r_ISCO evaluation at r=10M
+gsl_spline_free(spline_t_of_u);
+gsl_interp_accel_free(acc_t_of_u);
+gsl_spline_free(spline_Omega_combined);
+gsl_interp_accel_free(acc_Omega_combined);
+free(times_combined);
+free(Omega_combined);
+free(u_rlow);
+free(t_rlow);
+} // END IF: projected-spin attachment inputs are self-consistent
 
 // construct splines of dynamical variables
 
@@ -424,14 +437,18 @@ else{
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
   }
   size_t ISCO_zoom_idx = 0;
-  REAL min_abs_r_gap = fabs(minus_r_zoom[0] + commondata->r_ISCO);
-  for (i = 1; i < N_zoom; i++){
-    const REAL abs_r_gap = fabs(minus_r_zoom[i] + commondata->r_ISCO);
-    if (abs_r_gap < min_abs_r_gap) {
-      min_abs_r_gap = abs_r_gap;
-      ISCO_zoom_idx = (size_t)i;
-    }
-  } // END LOOP: for i over fine-grid r_ISCO search samples
+  if (use_projected_attachment) {
+    REAL min_abs_r_gap = fabs(minus_r_zoom[0] + commondata->r_ISCO);
+    for (i = 1; i < N_zoom; i++){
+      const REAL abs_r_gap = fabs(minus_r_zoom[i] + commondata->r_ISCO);
+      if (abs_r_gap < min_abs_r_gap) {
+        min_abs_r_gap = abs_r_gap;
+        ISCO_zoom_idx = (size_t)i;
+      }
+    } // END LOOP: for i over fine-grid projected r_ISCO search samples
+  } else {
+    ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1);
+  } // END ELSE: legacy scalar aligned-spin r_ISCO search
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
   free(t_zoom);
@@ -439,6 +456,7 @@ else{
 }
 
 // Step 3: Evaluate the attachment-time shift from projected spins at r_ISCO.
+if (use_projected_attachment) {
 REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
 omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
 const REAL chi1_projected_rISCO = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_rISCO, commondata->chi1_lnhat.acc);
@@ -451,16 +469,18 @@ const REAL chi2_projected_rISCO = gsl_spline_eval(commondata->chi2_lnhat.spline,
     body += """
   commondata->Delta_t = projected_Delta_t;
 } // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
+} // END IF: projected-spin Delta_t inputs are self-consistent
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
+const size_t attachment_end_idx = use_projected_attachment ? commondata->nsteps_fine - 1 : commondata->nsteps_fine - 2;
 
 if (t_peak_22 > times[commondata->nsteps_fine - 1]){
-  t_peak_22 = times[commondata->nsteps_fine - 1];
+  t_peak_22 = times[attachment_end_idx];
   t_peak_55 = t_peak_22;
 }
 if (t_peak_55 > times[commondata->nsteps_fine - 1]){
-  t_peak_55 = times[commondata->nsteps_fine - 1];
+  t_peak_55 = times[attachment_end_idx];
 }
 commondata->t_attach = t_peak_22;
 
@@ -551,16 +571,8 @@ free(prstar);
 free(Omega);
 free(Hreal);
 free(Omega_circ);
-free(times_combined);
-free(Omega_combined);
-free(u_rlow);
-free(t_rlow);
 
 
-gsl_spline_free(spline_t_of_u);
-gsl_interp_accel_free(acc_t_of_u);
-gsl_spline_free(spline_Omega_combined);
-gsl_interp_accel_free(acc_Omega_combined);
 gsl_spline_free(spline_r);
 gsl_interp_accel_free(acc_r);
 gsl_spline_free(spline_phi);
