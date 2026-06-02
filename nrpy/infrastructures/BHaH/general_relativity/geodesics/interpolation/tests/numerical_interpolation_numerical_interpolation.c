@@ -14,6 +14,10 @@
  * at the photon coordinate time, and writes the final metric and optional
  * Christoffel bundles.
  *
+ * The design goal is to let all photons in the chunk reuse the same mapped
+ * numerical-spacetime payload window rather than loading numerical grids
+ * independently ray-by-ray.
+ *
  * @param[in] commondata Common runtime parameters.
  * @param[in] params Generated BHaH grid parameters for the mapped numerical data.
  * @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
@@ -38,7 +42,45 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
 #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
   const int temporal_half_width = commondata->numerical_spacetime_temporal_interp_order;
+  // The mapped numerical window and the temporal helper must agree on the
+  // centered temporal stencil width before any variable-length arrays are
+  // sized from runtime data.
+  if (temporal_half_width < 0 || temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH ||
+      temporal_half_width != numerical_window->temporal_interp_half_width) {
+#pragma omp parallel for
+    for (long int i = 0; i < chunk_size; i++) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      } // END LOOP: for comp over metric outputs after invalid temporal order
+      if (d_connection_bundle != NULL) {
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
+        } // END LOOP: for comp over connection outputs after invalid temporal order
+      } // END IF: connection output bundle was requested
+    } // END LOOP: for i over rays after invalid temporal order
+#undef IDX_F
+#undef IDX_METRIC
+#undef IDX_CONN
+    return;
+  } // END IF: runtime temporal interpolation half-width was invalid
   const int temporal_num_points = 2 * temporal_half_width + 1;
+  if (temporal_num_points != numerical_window->temporal_interp_num_points) {
+#pragma omp parallel for
+    for (long int i = 0; i < chunk_size; i++) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
+      } // END LOOP: for comp over metric outputs after inconsistent temporal stencil size
+      if (d_connection_bundle != NULL) {
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
+        } // END LOOP: for comp over connection outputs after inconsistent temporal stencil size
+      } // END IF: connection output bundle was requested
+    } // END LOOP: for i over rays after inconsistent temporal stencil size
+#undef IDX_F
+#undef IDX_METRIC
+#undef IDX_CONN
+    return;
+  } // END IF: runtime temporal stencil size did not match the mapped numerical window
 
 #pragma omp parallel for
   for (long int i = 0; i < chunk_size; i++) {
@@ -54,6 +96,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
     REAL g4dd_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
     REAL gamma4udd_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
 
+    // Step 1: Recover the mapped temporal stencil for this photon from the
+    // slot-level numerical window shared by the whole chunk.
     const int window_status =
         numerical_time_window_manager_stencil_for_time(numerical_window, (double)t, temporal_half_width, slice_indices, slice_times, slice_payloads);
     if (window_status != NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
@@ -68,6 +112,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       continue;
     } // END IF: temporal stencil was not inside the mapped numerical window
 
+    // Step 2: Interpolate each mapped time slice in space at the photon
+    // position, producing one tensor bundle per temporal node.
     const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
         spatial_context, commondata, params, x, y, z, temporal_num_points, slice_payloads, g4dd_slices, gamma4udd_slices);
     if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
@@ -82,6 +128,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
       continue;
     } // END IF: spatial interpolation failed for this ray
 
+    // Step 3: Interpolate the per-slice tensor bundles in physical time to the
+    // photon coordinate time.
     temporal_lagrange_interpolation(commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local, gamma4udd_local);
 
     for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {

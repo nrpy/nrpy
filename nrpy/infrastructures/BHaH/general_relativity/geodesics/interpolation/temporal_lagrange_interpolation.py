@@ -1,12 +1,12 @@
 """
 Register trusted temporal Lagrange interpolation.
 
-This module emits a small reader-side temporal interpolation helper for
-numerical geodesic workflows. The generated C API consumes flat per-slice
-spatial-interpolation outputs for Cartesian-basis `g4DD` and `Gamma4UDD`
-components at one fixed spatial point, plus the corresponding physical slice
-times, and interpolates all 50 serialized tensor components to one target
-coordinate time.
+This module emits the temporal stage of the numerical-spacetime interpolation
+pipeline used by the geodesic integrators. The generated C API consumes flat
+per-slice spatial-interpolation outputs for Cartesian-basis `g4DD` and
+`Gamma4UDD` components at one fixed spatial point, plus the corresponding
+physical slice times, and interpolates all 50 serialized tensor components to
+one target coordinate time.
 
 The helper deliberately assumes trusted inputs. In particular, callers must
 provide physical `slice_times` that are strictly increasing and uniformly
@@ -20,7 +20,11 @@ the geodesic kernels, with `alpha` outermost and `(mu, nu)` serialized in
 upper-triangular order:
 `Gamma4UDD000, Gamma4UDD001, ..., Gamma4UDD333`.
 This module performs no file I/O, no stencil selection, no coordinate mapping,
-no tensor rotation, and no defensive validation of trusted inputs.
+no tensor rotation, and no defensive validation of trusted inputs beyond a
+light runtime check that the requested interpolation half-width is within the
+supported range. Higher-level code is responsible for selecting the temporal
+stencil and for ensuring that the supplied slices already correspond to one
+fixed spatial point.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -43,10 +47,12 @@ TEMPORAL_LAGRANGE_INTERP_DEFINES = r"""
 #define TEMPORAL_LAGRANGE_INTERP_TENSOR_COMPONENT_COUNT \
   (TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + \
    TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT)
+#define TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH 32
 
 // Status codes returned by the temporal Lagrange interpolation helper.
 typedef enum {
-  TEMPORAL_LAGRANGE_INTERP_SUCCESS = 0
+  TEMPORAL_LAGRANGE_INTERP_SUCCESS = 0,
+  TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER = 1
 } temporal_lagrange_interp_status; // END ENUM: temporal_lagrange_interp_status
 """
 
@@ -60,9 +66,11 @@ def register_CFunction_temporal_lagrange_interpolation(
 
     The generated C helper assumes the caller already ran the spatial
     interpolation stage for the desired temporal stencil and now wants a
-    lightweight 1D interpolation in physical coordinate time. It assumes the
-    supplied `slice_times` are trusted, strictly increasing, uniformly spaced,
-    and contain exactly `2*n+1` entries, where `n` is
+    lightweight 1D interpolation in physical coordinate time. In the full
+    pipeline, this helper is called after the spatial helper has produced one
+    tensor bundle per mapped numerical time slice. It assumes the supplied
+    `slice_times` are trusted, strictly increasing, uniformly spaced, and
+    contain exactly `2*n+1` entries, where `n` is
     `commondata->numerical_spacetime_temporal_interp_order`. The flat tensor
     bundles must contain one entry per supplied time node, so no
     cadence-validation or input-sanity logic is emitted.
@@ -79,7 +87,7 @@ def register_CFunction_temporal_lagrange_interpolation(
     >>> import nrpy.c_function as cfc
     >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
-    >>> with tempfile.TemporaryDirectory() as project_dir:
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as project_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
     ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", project_dir)
     ...     with contextlib.redirect_stdout(io.StringIO()):
@@ -163,7 +171,7 @@ Gamma4UDD012, ..., Gamma4UDD333`.
 @param[in] t_target Target physical coordinate time.
 @param[out] g4dd_out Final interpolated metric components.
 @param[out] gamma4udd_out Final interpolated Christoffel components.
-@return `TEMPORAL_LAGRANGE_INTERP_SUCCESS`.
+@return Status code indicating success or invalid runtime interpolation order.
 
 @note Callers must provide trusted, strictly increasing, uniformly spaced
 physical `slice_times`, not abstract slot indices.
@@ -181,6 +189,10 @@ physical `slice_times`, not abstract slot indices.
   // Step 1: Build the shared 1D Lagrange basis in physical time.
   const int temporal_half_width =
       commondata->numerical_spacetime_temporal_interp_order;
+  if (temporal_half_width < 0 ||
+      temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH) {
+    return TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER;
+  } // END IF: runtime temporal interpolation half-width was outside the supported range
   const int interp_order = 2 * temporal_half_width + 1;
   REAL inv_denom[interp_order];
   REAL diffs_t[interp_order];

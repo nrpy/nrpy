@@ -1,11 +1,13 @@
 """
 Register azimuthal-symmetry spatial Lagrange interpolation.
 
-This module emits a reader-side spatial interpolation helper for numerical
-geodesic workflows using the current two-phi-plane azimuthal-symmetry data
-contract. The generated C API evaluates one spatial position `(x, y, z)`
-against caller-supplied mapped time-slice payloads and flat output buffers for
-the interpolated Cartesian-basis `g4DD` and `Gamma4UDD` components.
+This module emits the spatial stage of the numerical-spacetime interpolation
+pipeline used by the geodesic integrators. The generated C API evaluates one
+spatial position `(x, y, z)` against caller-supplied mapped time-slice
+payloads and flat output buffers for the interpolated Cartesian-basis `g4DD`
+and `Gamma4UDD` components. Higher-level code applies this helper once per
+time slice in the active temporal stencil, then passes the resulting per-slice
+tensors to the temporal interpolation stage.
 
 The target spatial position is still converted from Cartesian to native
 spherical coordinates with the generated BHaH inverse map. In contrast, raw
@@ -22,9 +24,11 @@ When reflected stencil nodes read payload values from different stored phi
 planes, the helper first rotates each node's Cartesian-basis tensors back to
 one common stored reference plane, then performs the weighted `(r, theta)`
 interpolation, and finally rotates the interpolated tensors to the target
-azimuth. This means the caller must provide metadata for exactly those two
-stored phi planes, and the native spatial grid spacing in `r` and `theta` must
-be constant across the stored payload.
+azimuth. In other words, axisymmetry is enforced through tensor rotation rather
+than through a separate interpolation in `phi`. This means the caller must
+provide metadata for exactly those two stored phi planes, and the native
+spatial grid spacing in `r` and `theta` must be constant across the stored
+payload.
 
 This module does not implement JSON parsing or mmap ownership for the combined
 metadata. The caller must parse the combined file elsewhere, map the required
@@ -56,6 +60,7 @@ AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES = r"""
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT \
   (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT)
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT 53
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH 32
 // Status codes returned by the azimuthal-symmetry spatial Lagrange helper.
 typedef enum {
   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS = 0,
@@ -78,6 +83,12 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     """
     Register the azimuthal-symmetry spatial Lagrange interpolation helper.
 
+    This is the first stage of the numerical-spacetime interpolation pipeline.
+    For one requested photon position and one set of already-mapped numerical
+    time slices, it computes spatially interpolated Cartesian-basis tensors on
+    each supplied slice. The companion temporal interpolation helper then
+    consumes those per-slice tensors and interpolates them in physical time.
+
     :param CoordSystem: Coordinate system used by the source dataset.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
@@ -92,7 +103,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     >>> import nrpy.c_function as cfc
     >>> from nrpy.helpers.generic import validate_strings
     >>> cfc.CFunction_dict.clear()
-    >>> with tempfile.TemporaryDirectory() as project_dir:
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as project_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
     ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", project_dir)
     ...     with contextlib.redirect_stdout(io.StringIO()):
@@ -159,7 +170,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     includes = [
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
-        "stdint.h",
+        "<stdint.h>",
         "interpolation_lagrange_uniform.h",
     ]
 
@@ -169,7 +180,10 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
  *
  * The interpolation coefficients are always built on the raw uniform stencil.
  * This helper only recovers the in-domain payload index for one raw node by
- * applying the dataset-specific spherical reflection rules directly.
+ * applying the dataset-specific spherical reflection rules directly. The key
+ * idea is that the polynomial nodes stay on the mathematically uniform
+ * extended stencil, while only the payload reads are reflected back into the
+ * stored two-plane data.
  *
  * @param[in] params Generated BHaH parameter struct.
  * @param[in] r_ext Raw stencil radial coordinate, possibly outside the interior.
@@ -275,8 +289,9 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
  * The payload stores tensors on one of exactly two native reference azimuthal
  * planes. This helper does not interpolate in `phi`; instead, axisymmetry
  * recovers the target azimuth by an active spatial rotation through
- * `delta_phi` after the `(r, theta)` interpolation has completed, embedded in
- * 4D so that:
+ * `delta_phi` after the `(r, theta)` interpolation has completed. This keeps
+ * the interpolation strictly two-dimensional in the stored data while still
+ * returning tensors at the requested azimuth, embedded in 4D so that:
  *
  *   x'^i = Lambda^i_j x^j
  *   g'_{mu nu} = (Lambda^T)^alpha_mu (Lambda^T)^beta_nu g_{alpha beta}
@@ -301,12 +316,12 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
     REAL gamma_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT]) {
   REAL g_ref[4][4] = {{0}};
   REAL g_dst[4][4] = {{0}};
-  REAL Gamma_ref[4][4][4] = {{{0}}};
-  REAL Gamma_dst[4][4][4] = {{{0}}};
-  REAL Lambda[4][4] = {{0}};
-  REAL LambdaT[4][4] = {{0}};
-  const REAL cosD = cos(delta_phi);
-  const REAL sinD = sin(delta_phi);
+  REAL gamma_ref_full[4][4][4] = {{{0}}};
+  REAL gamma_dst_full[4][4][4] = {{{0}}};
+  REAL rotation_matrix[4][4] = {{0}};
+  REAL rotation_matrix_transpose[4][4] = {{0}};
+  const REAL cos_delta = cos(delta_phi);
+  const REAL sin_delta = sin(delta_phi);
   int gamma_index = 0;
 
   // Step 1: Unpack the stored upper-triangular metric components.
@@ -325,25 +340,25 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   for (int alpha = 0; alpha < 4; alpha++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int nu = mu; nu < 4; nu++) {
-        Gamma_ref[alpha][mu][nu] = gamma_ref[gamma_index];
-        Gamma_ref[alpha][nu][mu] = gamma_ref[gamma_index];
+        gamma_ref_full[alpha][mu][nu] = gamma_ref[gamma_index];
+        gamma_ref_full[alpha][nu][mu] = gamma_ref[gamma_index];
         gamma_index++;
       } // END LOOP: for nu over upper-triangular lower-index Christoffel entries
     } // END LOOP: for mu over lower Christoffel index rows
   } // END LOOP: for alpha over upper Christoffel index
 
   // Step 3: Build the active z-axis rotation matrix in Cartesian components.
-  Lambda[0][0] = 1.0;
-  Lambda[1][1] = cosD;
-  Lambda[1][2] = -sinD;
-  Lambda[2][1] = sinD;
-  Lambda[2][2] = cosD;
-  Lambda[3][3] = 1.0;
+  rotation_matrix[0][0] = 1.0;
+  rotation_matrix[1][1] = cos_delta;
+  rotation_matrix[1][2] = -sin_delta;
+  rotation_matrix[2][1] = sin_delta;
+  rotation_matrix[2][2] = cos_delta;
+  rotation_matrix[3][3] = 1.0;
 
   // Step 4: For pure rotations, the inverse acting on lower indices is Lambda^T.
   for (int a = 0; a < 4; a++) {
     for (int b = 0; b < 4; b++) {
-      LambdaT[a][b] = Lambda[b][a];
+      rotation_matrix_transpose[a][b] = rotation_matrix[b][a];
     } // END LOOP: for b over rotation-matrix columns
   } // END LOOP: for a over rotation-matrix rows
 
@@ -353,7 +368,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
       REAL sum = 0.0;
       for (int a = 0; a < 4; a++) {
         for (int b = 0; b < 4; b++) {
-          sum += LambdaT[a][mu] * LambdaT[b][nu] * g_ref[a][b];
+          sum += rotation_matrix_transpose[a][mu] *
+                 rotation_matrix_transpose[b][nu] * g_ref[a][b];
         } // END LOOP: for b over source metric columns
       } // END LOOP: for a over source metric rows
       g_dst[mu][nu] = sum;
@@ -368,12 +384,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
         for (int b = 0; b < 4; b++) {
           for (int g = 0; g < 4; g++) {
             for (int d = 0; d < 4; d++) {
-              sum += Lambda[alpha][b] * LambdaT[g][mu] * LambdaT[d][nu] *
-                     Gamma_ref[b][g][d];
+              sum += rotation_matrix[alpha][b] *
+                     rotation_matrix_transpose[g][mu] *
+                     rotation_matrix_transpose[d][nu] *
+                     gamma_ref_full[b][g][d];
             } // END LOOP: for d over source lower Christoffel column index
           } // END LOOP: for g over source lower Christoffel row index
         } // END LOOP: for b over source upper Christoffel index
-        Gamma_dst[alpha][mu][nu] = sum;
+        gamma_dst_full[alpha][mu][nu] = sum;
       } // END LOOP: for nu over destination lower Christoffel column index
     } // END LOOP: for mu over destination lower Christoffel row index
   } // END LOOP: for alpha over destination upper Christoffel index
@@ -394,7 +412,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   for (int alpha = 0; alpha < 4; alpha++) {
     for (int mu = 0; mu < 4; mu++) {
       for (int nu = mu; nu < 4; nu++) {
-        gamma_rot[gamma_index] = Gamma_dst[alpha][mu][nu];
+        gamma_rot[gamma_index] = gamma_dst_full[alpha][mu][nu];
         gamma_index++;
       } // END LOOP: for nu over serialized upper-triangular Christoffel entries
     } // END LOOP: for mu over serialized Christoffel row index
@@ -428,7 +446,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   const REAL origin_epsilon = 1.0e-14;
   const REAL axis_rho_epsilon = 1.0e-14;
   const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_order;
-  const int interp_order = 2 * n_interp_ghosts + 1;
+  const long int interp_order_long = 2L * (long int)n_interp_ghosts + 1L;
   const REAL r_max_supported =
       (REAL)(params->xxmin0 + (((params->Nxx0 - 1) + 0.5) * params->dxx0));
   const REAL r_support_tol =
@@ -450,16 +468,23 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
   }
 
-  // Reject the origin/axis because the azimuth is degenerate and no phi interpolation is available.
+  // Reject the origin/axis because the azimuth is degenerate and this helper
+  // recovers phi through rotation, not through a separate interpolation.
   if (target_r <= origin_epsilon || rho_sq <= axis_rho_epsilon * axis_rho_epsilon) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
   }
-  if (interp_order > params->Nxx0 || interp_order > params->Nxx1) {
+  if (n_interp_ghosts < 0 ||
+      n_interp_ghosts > AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH ||
+      interp_order_long > (long int)params->Nxx0 ||
+      interp_order_long > (long int)params->Nxx1) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
   }
 
-  // Step 3: Select one of the two stored phi planes and build 2D interpolation coefficients.
-  // No interpolation in phi is performed anywhere in this helper.
+  // Step 3: Select one of the two stored phi planes and build 2D interpolation
+  // coefficients. No interpolation in phi is performed anywhere in this helper;
+  // phi is handled later by rotating tensors from the stored plane to the
+  // target azimuth.
+  const int interp_order = (int)interp_order_long;
   phi_plane = target_phi < (REAL)0.0 ? 0 : 1;
   i2_base = NGHOSTS + phi_plane;
   phi_ref = (REAL)context->stored_phi_samples[phi_plane];

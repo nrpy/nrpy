@@ -5,11 +5,17 @@ Define C helpers for numerical-spacetime time-window mmap management.
 The NumericalTimeWindowManager owns the active mapped group of adjacent 3D-grid
 payloads in one trusted combined numerical-spacetime binary container. It
 depends on shared TimeSlotManager definitions for slot time bounds, but keeps
-mmap and numerical file state out of analytic builds. The mapped range for one
-slot is intentionally conservative: reverse ray tracing receives additional
-lower-time lookahead below the slot boundary, and then both ends are widened by
-the temporal interpolation halo so RKF45 steps can remain inside the active
-mapping while photons cross slot boundaries.
+mmap and numerical file state out of analytic builds.
+
+The key design constraint is that numerical-spacetime data is expensive to
+load, while photons are already grouped by coordinate time through the
+TimeSlotManager. This manager therefore chooses one contiguous range of
+numerical 3D-grid time slices for an entire photon slot instead of loading
+data ray-by-ray. The mapped range for one slot is intentionally conservative:
+reverse ray tracing receives additional lower-time lookahead below the slot
+boundary, and then both ends are widened by the centered temporal
+interpolation halo so RKF45 steps can remain inside the active mapping while
+photons cross slot boundaries.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -29,10 +35,14 @@ def numerical_time_window_manager() -> None:
     This registration owns the `rkf45_max_delta_t` CodeParameter consumed by
     the generated time-window C helpers. It also ensures the shared
     TimeSlotManager helpers are registered first so the emitted code sees
-    `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`. The
-    generated slot-window selector intentionally maps a conservative slice
-    interval rather than the exact minimal interpolation stencil so reverse
-    ray tracing can cross slot boundaries safely.
+    `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`.
+
+    The generated slot-window selector intentionally maps a conservative slice
+    interval rather than the exact minimal interpolation stencil. The upper
+    side only needs the centered temporal-interpolation halo, while the lower
+    side also needs the additional backward-time RKF45 lookahead promised by
+    `rkf45_max_delta_t`. The matching RKF45 step-size cap is enforced in the
+    companion finalization kernel.
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
@@ -56,6 +66,12 @@ def numerical_time_window_manager() -> None:
     // NUMERICAL TIME-WINDOW MANAGER
     //==========================================
     // Lightweight trusted-input mmap window over one combined numerical-spacetime container.
+    // Time slices are assumed ordered by increasing coordinate time, while
+    // reverse ray tracing moves from larger t toward smaller t. The manager
+    // maps one contiguous slot-derived time window so many photons can reuse
+    // the same numerical 3D-grid payloads. The mapped window is wider than
+    // the slot itself because it includes temporal-interpolation halo slices
+    // and lower-time RKF45 lookahead.
 #include <fcntl.h>
 #include <math.h>
 #include <stdint.h>
@@ -78,6 +94,7 @@ def numerical_time_window_manager() -> None:
 
 #define NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS 0
 #define NUMERICAL_TIME_WINDOW_MANAGER_ERROR 1
+#define NUMERICAL_TIME_WINDOW_MANAGER_MAX_TEMPORAL_INTERP_HALF_WIDTH 32
 
     // Owns the currently mapped group of adjacent 3D-grid payloads.
     typedef struct {
@@ -240,6 +257,11 @@ def numerical_time_window_manager() -> None:
         unsigned char time_bytes[sizeof(double)];
 
         numerical_time_window_manager_free(ntwm);
+        if (temporal_interp_half_width < 0 ||
+            temporal_interp_half_width >
+                NUMERICAL_TIME_WINDOW_MANAGER_MAX_TEMPORAL_INTERP_HALF_WIDTH) {
+            return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+        } // END IF: requested temporal interpolation half-width was outside the supported range
         ntwm->temporal_interp_half_width = temporal_interp_half_width;
         ntwm->temporal_interp_num_points = 2 * temporal_interp_half_width + 1;
         ntwm->max_backward_dt_lookahead = commondata->rkf45_max_delta_t;
@@ -307,11 +329,11 @@ def numerical_time_window_manager() -> None:
      *
      * @note This mapped interval is intentionally wider than the exact slice
      * set requested later by numerical_time_window_manager_stencil_for_time().
-     * Reverse ray tracing gets extra lower-time lookahead through
-     * ntwm->max_backward_dt_lookahead, the upper slot edge is still included,
-     * and both ends are then widened by the centered temporal interpolation
-     * halo so RKF45 steps can cross slot boundaries without leaving the
-     * mapped window.
+     * The upper side covers the centered temporal-interpolation halo above the
+     * slot, while the lower side covers both the centered halo and the extra
+     * backward-time RKF45 lookahead stored in
+     * ntwm->max_backward_dt_lookahead. This asymmetry matches backward
+     * raytracing, where photons move toward lower coordinate time.
      */
     static inline int numerical_time_window_manager_required_grid_range(
         const NumericalTimeWindowManager *ntwm,
@@ -321,12 +343,25 @@ def numerical_time_window_manager() -> None:
         uint64_t *last_slice_exclusive) {
         const double t_lower = slot_lower_time(tsm, slot_idx);
         const double t_upper = slot_upper_time(tsm, slot_idx);
+        // The mapped query is biased toward lower coordinate time because the
+        // photons are evolved backward in time.
         const double query_min = t_lower - ntwm->max_backward_dt_lookahead;
         const double query_max = t_upper;
         const double scaled_min = (query_min - ntwm->time_start) * ntwm->inv_grid_time_spacing;
         const double scaled_max = (query_max - ntwm->time_start) * ntwm->inv_grid_time_spacing;
         const long int center_first = (long int)floor(scaled_min);
         const long int center_last = (long int)ceil(scaled_max);
+        // Conceptually, for temporal half-width n, centered interpolation uses
+        // 2n + 1 slices. A photon anywhere in the slot may therefore need
+        // about n + 1 halo slices outside the queried coordinate-time
+        // interval. Since photons evolve backward in time, the queried
+        // interval is extended below the slot before the halo is applied:
+        //   query_min = slot_lower - max_backward_dt_lookahead
+        //   query_max = slot_upper
+        //   mapped range = [floor(query_min / dt_grid) - (n + 1),
+        //                   ceil(query_max / dt_grid) + (n + 1))
+        // The exclusive upper bound in the half-open slice indexing adds the
+        // final +1 seen below.
         const long int halo = (long int)ntwm->temporal_interp_half_width + 1L;
         const long int required_first = center_first - halo;
         const long int required_last_exclusive = center_last + halo + 1L;
@@ -421,6 +456,11 @@ def numerical_time_window_manager() -> None:
      * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
      *
      * @pre The caller provides arrays of length at least `2*temporal_interp_half_width + 1`.
+     *
+     * @note This routine returns the exact centered stencil for one photon,
+     * whereas numerical_time_window_manager_required_grid_range() maps the
+     * larger slot-level window needed so every photon in the slot can request
+     * its own stencil without forcing a remap.
      */
     static inline int numerical_time_window_manager_stencil_for_time(
         const NumericalTimeWindowManager *ntwm,
@@ -429,7 +469,16 @@ def numerical_time_window_manager() -> None:
         uint64_t *restrict slice_indices,
         REAL *restrict slice_times,
         const double **restrict slice_payloads) {
+        if (temporal_interp_half_width < 0 ||
+            temporal_interp_half_width >
+                NUMERICAL_TIME_WINDOW_MANAGER_MAX_TEMPORAL_INTERP_HALF_WIDTH) {
+            return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+        } // END IF: requested temporal interpolation half-width was outside the supported range
         const int temporal_num_points = 2 * temporal_interp_half_width + 1;
+        if (temporal_interp_half_width != ntwm->temporal_interp_half_width ||
+            temporal_num_points != ntwm->temporal_interp_num_points) {
+            return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+        } // END IF: requested temporal interpolation stencil disagreed with the active mapped window
         const double scaled_time = (photon_time - ntwm->time_start) * ntwm->inv_grid_time_spacing;
         const long int center_slice = (long int)floor(scaled_time + 0.5);
         const long int first_slice = center_slice - (long int)temporal_interp_half_width;

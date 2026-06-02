@@ -23,6 +23,12 @@ The companion numerical time-window manager owns registration of
 `rkf45_max_delta_t` because it also consumes that runtime parameter when
 building the required mmap slice window.
 
+Together, the time-window manager and this kernel enforce one shared contract:
+the manager maps enough lower-time numerical data for one photon slot assuming
+the next accepted RKF45 step will not move farther backward in coordinate time
+than the promised lookahead, and this kernel makes that assumption true by
+limiting the next accepted affine-parameter step when necessary.
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
@@ -40,8 +46,9 @@ def rkf45_finalize_and_control_kernel(
     r"""
     Global kernel for RKF45 finalization and error control.
 
-    The kernel computes the 4th and 5th order solutions, calculates the error norm,
-    and updates the photon's status (ACTIVE/REJECTED) and step size $h$ in global memory.
+    The kernel computes the 4th and 5th order solutions, calculates the error
+    norm, and updates the photon's status (ACTIVE/REJECTED) and step size $h$
+    in global memory.
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
@@ -132,12 +139,18 @@ def rkf45_finalize_and_control_kernel(
         //==========================================
         // NUMERICAL TIME-WINDOW ACCEPTED-STEP CAP
         //==========================================
-        // Reverse ray tracing moves toward lower coordinate time. Bound the next
-        // accepted affine step using the accepted fifth-order coordinate time and
-        // p^0 = dt/dlambda, so the next RKF45 stages stay inside the mapped slot
-        // plus its lower-time lookahead.
+        // Reverse ray tracing moves toward lower coordinate time. The numerical
+        // time-window manager mapped enough lower-time data under the
+        // assumption that the next accepted RKF45 step will stay within the
+        // current slot plus rkf45_max_delta_t of extra lookahead. Convert that
+        // allowed coordinate-time motion into an affine-parameter cap using
+        // the accepted fifth-order estimate of p^0 = dt/dlambda.
         {{
             const double t_accepted = f_5th_cache[0];
+            // f_5th_cache[4] is used instead of the old p^0 because it is the
+            // accepted fifth-order value after the just-completed step, hence
+            // the best local estimate for converting the next affine step into
+            // coordinate-time motion.
             const double p0_accepted_abs = fabs(f_5th_cache[4]);
             const long int slot_idx =
                 (long int)floor((t_accepted - {cd_access}slot_manager_t_min) /
@@ -151,14 +164,27 @@ def rkf45_finalize_and_control_kernel(
                 delta_to_lower_slot_edge + {cd_access}rkf45_max_delta_t;
 
             if (p0_accepted_abs > 0.0 && allowed_delta_t > 0.0) {{
+                // Local estimate:
+                //   |Delta t| approx |p^0| Delta lambda
+                // so require:
+                //   Delta lambda <= 0.9 * allowed_delta_t / |p^0|
+                // Use a fixed 0.9 geometric safety margin here, independent
+                // of the RKF45 adaptive error-control safety factor, so the
+                // step stays away from the mmap boundary even if p^0 changes
+                // during the next trial step.
                 const double time_window_h_cap =
                     0.9 * allowed_delta_t / p0_accepted_abs;
-                h_new = fmin(h_new, time_window_h_cap);
-                // The usual RKF45 minimum-step floor is applied immediately
-                // afterward. Numerical-spacetime runs therefore assume
-                // rkf45_h_min is configured comfortably below any practical
-                // time-window cap.
-                h_new = fmax(h_new, {cd_access}rkf45_h_min);
+                if (time_window_h_cap < {cd_access}rkf45_h_min) {{
+                    // This configuration should be unreachable in practice.
+                    // Fail the ray rather than stepping outside the mapped
+                    // numerical time window that the companion manager
+                    // promised to keep available.
+                    h_new = time_window_h_cap;
+                    WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                }} else {{
+                    h_new = fmin(h_new, time_window_h_cap);
+                    h_new = fmax(h_new, {cd_access}rkf45_h_min);
+                }} // END ELSE: time-window cap remained compatible with h_min
             }} // END IF: accepted temporal derivative supports a finite cap
         }} // END BLOCK: numerical time-window accepted-step cap
 """
@@ -367,6 +393,10 @@ def rkf45_finalize_and_control_kernel(
     @param d_affine Pointer to the affine parameter $\lambda$.
     @param d_retries Pointer to the retry counter.
     @param chunk_size The number of rays in the current bundle.
+
+    @note When numerical-spacetime support requests the optional accepted-step
+    cap, this routine becomes the runtime enforcement layer for the
+    slot-based numerical time window mapped by the companion manager.
     """
 
     cfunc_type = "void"

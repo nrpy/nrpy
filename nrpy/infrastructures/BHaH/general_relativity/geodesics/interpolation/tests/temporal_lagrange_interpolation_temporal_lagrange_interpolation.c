@@ -30,7 +30,7 @@
  * @param[in] t_target Target physical coordinate time.
  * @param[out] g4dd_out Final interpolated metric components.
  * @param[out] gamma4udd_out Final interpolated Christoffel components.
- * @return `TEMPORAL_LAGRANGE_INTERP_SUCCESS`.
+ * @return Status code indicating success or invalid runtime interpolation order.
  *
  * @note Callers must provide trusted, strictly increasing, uniformly spaced
  * physical `slice_times`, not abstract slot indices.
@@ -40,6 +40,9 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
                                     REAL *restrict gamma4udd_out) {
   // Step 1: Build the shared 1D Lagrange basis in physical time.
   const int temporal_half_width = commondata->numerical_spacetime_temporal_interp_order;
+  if (temporal_half_width < 0 || temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH) {
+    return TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER;
+  } // END IF: runtime temporal interpolation half-width was outside the supported range
   const int interp_order = 2 * temporal_half_width + 1;
   REAL inv_denom[interp_order];
   REAL diffs_t[interp_order];
