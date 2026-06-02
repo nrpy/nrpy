@@ -230,15 +230,16 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(const REAL delta_
  * payload pointers. The helper builds one native `(r, theta)` stencil, remaps the
  * payload-read indices once with explicit spherical reflections, reads tensor
  * components directly from mapped payload memory for each requested slice,
- * interpolates them, rotates to the target azimuth, and writes flat per-slice
- * outputs.
+ * rotates each remapped node back to one common stored phi plane, interpolates
+ * there, rotates to the target azimuth, and writes flat per-slice outputs.
  *
  * This helper assumes the stored payload has constant native grid spacing in
  * `r` and `theta`, and that axisymmetry is represented by exactly two stored phi
  * planes. It therefore performs no interpolation in `phi`: it interpolates only
- * on the uniform `(r, theta)` stencil and then rotates the resulting
- * Cartesian-basis tensors from the selected stored phi plane to the target
- * azimuth.
+ * on the uniform `(r, theta)` stencil. Reflected nodes that land on the opposite
+ * stored phi plane are first rotated back to the selected stored reference plane
+ * before weighted accumulation, and the final interpolated Cartesian-basis
+ * tensors are then rotated from that reference plane to the target azimuth.
  *
  * @param[in] context Trusted spatial context.
  * @param[in] commondata Common runtime parameters.
@@ -319,6 +320,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   REAL coeff_r[interp_order];
   REAL coeff_theta[interp_order];
   uint64_t mapped_point_index[interp_order][interp_order];
+  int mapped_phi_plane[interp_order][interp_order];
   const REAL normalization_2d = pow((REAL)(params->dxx0 * params->dxx1), -(interp_order - 1));
 
   for (int u = 0; u < interp_order; u++) {
@@ -358,6 +360,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
       const uint64_t j1 = (uint64_t)(i0i1i2_map[1] - NGHOSTS);
       const uint64_t j2 = (uint64_t)(i0i1i2_map[2] - NGHOSTS);
       mapped_point_index[v][u] = j0 + (uint64_t)params->Nxx0 * (j1 + (uint64_t)params->Nxx1 * j2);
+      mapped_phi_plane[v][u] = i0i1i2_map[2] - NGHOSTS;
     } // END LOOP: for u over radial stencil nodes during remap precompute
   } // END LOOP: for v over theta stencil nodes during remap precompute
 
@@ -365,17 +368,38 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
     const double *restrict slice_payload = slice_payloads[which_slice];
     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT] = {0};
+    REAL g4dd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+    REAL gamma4udd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
+    REAL g4dd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+    REAL gamma4udd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
 
-    // Step 5.a: Read and accumulate the weighted stencil nodes for this slice.
+    // Step 5.a: Read, basis-align, and accumulate the weighted stencil nodes for this slice.
     for (int v = 0; v < interp_order; v++) {
       for (int u = 0; u < interp_order; u++) {
         const double *restrict tensor_record =
             slice_payload + mapped_point_index[v][u] * (uint64_t)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT + 3ULL;
         const REAL weight = normalization_2d * coeff_theta[v] * coeff_r[u];
+        const REAL node_phi_ref = (REAL)context->stored_phi_samples[mapped_phi_plane[v][u]];
 
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT; comp++) {
-          tensor_ref[comp] += weight * (REAL)tensor_record[comp];
-        } // END LOOP: for comp over metric and Christoffel payload components
+        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+          g4dd_node_ref[comp] = (REAL)tensor_record[comp];
+        } // END LOOP: for comp over serialized metric payload components
+        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+          gamma4udd_node_ref[comp] = (REAL)tensor_record[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
+        } // END LOOP: for comp over serialized Christoffel payload components
+
+        // Rotate each remapped node back to the selected stored reference
+        // plane so weighted accumulation never mixes Cartesian bases from
+        // different azimuthal orientations.
+        azimuthal_symmetry_spatial_lagrange_rotate_about_z(phi_ref - node_phi_ref, g4dd_node_ref, gamma4udd_node_ref, g4dd_node_common,
+                                                           gamma4udd_node_common);
+
+        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+          tensor_ref[comp] += weight * g4dd_node_common[comp];
+        } // END LOOP: for comp over metric components on the common reference plane
+        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+          tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * gamma4udd_node_common[comp];
+        } // END LOOP: for comp over Christoffel components on the common reference plane
       } // END LOOP: for u over radial stencil nodes
     } // END LOOP: for v over theta stencil nodes
 

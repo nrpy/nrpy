@@ -5,22 +5,52 @@ Define C helpers for numerical-spacetime time-window mmap management.
 The NumericalTimeWindowManager owns the active mapped group of adjacent 3D-grid
 payloads in one trusted combined numerical-spacetime binary container. It
 depends on shared TimeSlotManager definitions for slot time bounds, but keeps
-mmap and numerical file state out of analytic builds.
+mmap and numerical file state out of analytic builds. The mapped range for one
+slot is intentionally conservative: reverse ray tracing receives additional
+lower-time lookahead below the slot boundary, and then both ends are widened by
+the temporal interpolation halo so RKF45 steps can remain inside the active
+mapping while photons cross slot boundaries.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
+import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
+    time_slot_manager_helpers,
+)
 
 
 def numerical_time_window_manager() -> None:
     """
     Register NumericalTimeWindowManager helpers in BHaH_defines.h.
 
-    The time_slot_manager() registration must run before this function so the
-    generated C has TimeSlotManager and slot bound helpers available first.
+    This registration owns the `rkf45_max_delta_t` CodeParameter consumed by
+    the generated time-window C helpers. It also ensures the shared
+    TimeSlotManager helpers are registered first so the emitted code sees
+    `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`. The
+    generated slot-window selector intentionally maps a conservative slice
+    interval rather than the exact minimal interpolation stencil so reverse
+    ray tracing can cross slot boundaries safely.
     """
+    if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
+        time_slot_manager_helpers()
+
+    _ = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "rkf45_max_delta_t",
+        10.0,
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Maximum backward coordinate-time lookahead used by the numerical "
+            "time-window manager to keep reverse ray tracing inside the mapped "
+            "time-slice window."
+        ),
+    )
+
     numerical_time_window_manager_c_code = r"""
     //==========================================
     // NUMERICAL TIME-WINDOW MANAGER
@@ -198,7 +228,7 @@ def numerical_time_window_manager() -> None:
      * @param temporal_interp_half_width Centered temporal interpolation half-width n.
      * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
      *
-     * @note The forward-lookahead distance is read from
+     * @note The backward-lookahead distance is read from
      * commondata->rkf45_max_delta_t.
      */
     static inline int numerical_time_window_manager_init(
@@ -266,14 +296,22 @@ def numerical_time_window_manager() -> None:
     // NUMERICAL WINDOW SLOT RANGE SELECTION
     //==========================================
     /**
-     * Compute the required time-slice range for one TimeSlotManager slot.
+     * Compute the conservative mapped time-slice range for one TimeSlotManager slot.
      *
      * @param[in] ntwm Initialized numerical time-window manager.
      * @param[in] tsm Base time-slot manager.
      * @param slot_idx Slot index.
-     * @param[out] first_slice First required slice, inclusive.
-     * @param[out] last_slice_exclusive One past the final required slice.
+     * @param[out] first_slice First mapped slice, inclusive.
+     * @param[out] last_slice_exclusive One past the final mapped slice.
      * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
+     *
+     * @note This mapped interval is intentionally wider than the exact slice
+     * set requested later by numerical_time_window_manager_stencil_for_time().
+     * Reverse ray tracing gets extra lower-time lookahead through
+     * ntwm->max_backward_dt_lookahead, the upper slot edge is still included,
+     * and both ends are then widened by the centered temporal interpolation
+     * halo so RKF45 steps can cross slot boundaries without leaving the
+     * mapped window.
      */
     static inline int numerical_time_window_manager_required_grid_range(
         const NumericalTimeWindowManager *ntwm,
@@ -298,7 +336,7 @@ def numerical_time_window_manager() -> None:
             *first_slice = 0ULL;
             *last_slice_exclusive = 0ULL;
             return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
-        } // END IF: requested temporal interpolation window is outside the trusted file
+        } // END IF: requested conservative slot mapping window is outside the trusted file
 
         *first_slice = (uint64_t)required_first;
         *last_slice_exclusive = (uint64_t)required_last_exclusive;
@@ -325,7 +363,7 @@ def numerical_time_window_manager() -> None:
         if (numerical_time_window_manager_required_grid_range(ntwm, tsm, slot_idx, &first_slice, &last_slice_exclusive) !=
             NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
             return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
-        } // END IF: requested slot window is outside the trusted file
+        } // END IF: requested conservative slot mapping window is outside the trusted file
 
         if (ntwm->mapped_base != NULL && ntwm->mapped_first_slice == first_slice &&
             ntwm->mapped_last_slice_exclusive == last_slice_exclusive) {

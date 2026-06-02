@@ -30,6 +30,9 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numeri
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
+    time_slot_manager_helpers,
+)
 
 
 def register_CFunction_numerical_interpolation(
@@ -78,6 +81,8 @@ def register_CFunction_numerical_interpolation(
             f"found '{CoordSystem}'."
         )
 
+    if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
+        time_slot_manager_helpers()
     if "numerical_time_window_manager" not in par.glb_extras_dict.get(
         "BHaH_defines", {}
     ):

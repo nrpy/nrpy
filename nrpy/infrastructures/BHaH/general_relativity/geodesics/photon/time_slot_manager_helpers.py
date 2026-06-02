@@ -82,7 +82,17 @@ def time_slot_manager_helpers() -> None:
     static inline int slot_get_index(const TimeSlotManager *tsm, double t) {
         if (isnan(t) || t < tsm->t_min || t >= tsm->t_max) return -1;
         return (int)floor((t - tsm->t_min) / tsm->delta_t_slot);
-    }
+    } // END FUNCTION: slot_get_index
+
+    // Return the inclusive lower physical-time boundary for one slot.
+    static inline double slot_lower_time(const TimeSlotManager *tsm, int slot_idx) {
+        return tsm->t_min + (double)slot_idx * tsm->delta_t_slot;
+    } // END FUNCTION: slot_lower_time
+
+    // Return the exclusive upper physical-time boundary for one slot.
+    static inline double slot_upper_time(const TimeSlotManager *tsm, int slot_idx) {
+        return fmin(tsm->t_max, slot_lower_time(tsm, slot_idx) + tsm->delta_t_slot);
+    } // END FUNCTION: slot_upper_time
 
     //==========================================
     // PHOTON REGISTRATION

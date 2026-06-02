@@ -19,6 +19,9 @@ rejected or failure status.
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
 also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
 numerical-spacetime ray tracing remains inside the mapped time window.
+The companion numerical time-window manager owns registration of
+`rkf45_max_delta_t` because it also consumes that runtime parameter when
+building the required mmap slice window.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -42,7 +45,8 @@ def rkf45_finalize_and_control_kernel(
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
-        currently mapped time window.
+        currently mapped time window. The companion numerical time-window
+        manager owns the shared `rkf45_max_delta_t` CodeParameter.
     """
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
@@ -51,11 +55,10 @@ def rkf45_finalize_and_control_kernel(
         "rkf45_h_max",
     ]
     real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
-    if enable_numerical_time_window_step_cap:
-        # Register this only for numerical-spacetime builds that emit the
-        # accepted-step time-window cap.
-        real_param_names.append("rkf45_max_delta_t")
-        real_param_defaults.append(10.0)
+    # The accepted-step cap is emitted only for numerical-spacetime builds.
+    # The shared rkf45_max_delta_t parameter is registered by the companion
+    # numerical_time_window_manager() helper so both code-generation paths
+    # consume one common runtime control.
     real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
     real_param_defaults.extend([0.9, 1.0])
     par.register_CodeParameters(
@@ -151,6 +154,10 @@ def rkf45_finalize_and_control_kernel(
                 const double time_window_h_cap =
                     0.9 * allowed_delta_t / p0_accepted_abs;
                 h_new = fmin(h_new, time_window_h_cap);
+                // The usual RKF45 minimum-step floor is applied immediately
+                // afterward. Numerical-spacetime runs therefore assume
+                // rkf45_h_min is configured comfortably below any practical
+                // time-window cap.
                 h_new = fmax(h_new, {cd_access}rkf45_h_min);
             }} // END IF: accepted temporal derivative supports a finite cap
         }} // END BLOCK: numerical time-window accepted-step cap

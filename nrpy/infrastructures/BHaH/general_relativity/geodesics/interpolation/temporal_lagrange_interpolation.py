@@ -36,19 +36,6 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 
-_ = par.register_CodeParameter(
-    "int",
-    __name__,
-    "numerical_spacetime_temporal_interp_order",
-    2,
-    commondata=True,
-    add_to_parfile=True,
-    description=(
-        "Centered temporal Lagrange interpolation half-width n; the generated "
-        "helper uses 2*n+1 mapped time slices."
-    ),
-)
-
 TEMPORAL_LAGRANGE_INTERP_DEFINES = r"""
 // Constants for temporal Lagrange interpolation.
 #define TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT 10
@@ -62,9 +49,6 @@ typedef enum {
   TEMPORAL_LAGRANGE_INTERP_SUCCESS = 0
 } temporal_lagrange_interp_status; // END ENUM: temporal_lagrange_interp_status
 """
-Bdefines_h.register_BHaH_defines(
-    "temporal_lagrange_interpolation", TEMPORAL_LAGRANGE_INTERP_DEFINES
-)
 
 
 def register_CFunction_temporal_lagrange_interpolation(
@@ -114,6 +98,22 @@ def register_CFunction_temporal_lagrange_interpolation(
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    _ = par.register_CodeParameter(
+        "int",
+        __name__,
+        "numerical_spacetime_temporal_interp_order",
+        2,
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Centered temporal Lagrange interpolation half-width n; the generated "
+            "helper uses 2*n+1 mapped time slices."
+        ),
+    )
+    Bdefines_h.register_BHaH_defines(
+        "temporal_lagrange_interpolation", TEMPORAL_LAGRANGE_INTERP_DEFINES
+    )
 
     # Step 1: Ensure required helper headers are copied into the project.
     if not enable_simd:
