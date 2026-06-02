@@ -16,34 +16,53 @@ commits the updated state, advances the affine parameter, resets the retry count
 and sets the ray status to active; otherwise, it increments the retries and sets a
 rejected or failure status.
 
+When requested by `enable_numerical_time_window_step_cap`, the generated kernel
+also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
+numerical-spacetime ray tracing remains inside the mapped time window.
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
+
+from typing import List, Union
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
 
-def rkf45_finalize_and_control_kernel() -> None:
+def rkf45_finalize_and_control_kernel(
+    enable_numerical_time_window_step_cap: bool = False,
+) -> None:
     r"""
     Global kernel for RKF45 finalization and error control.
 
     The kernel computes the 4th and 5th order solutions, calculates the error norm,
     and updates the photon's status (ACTIVE/REJECTED) and step size $h$ in global memory.
+
+    :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
+        step sizes so numerical-spacetime interpolation remains inside the
+        currently mapped time window.
     """
+    real_param_names: List[str] = [
+        "rkf45_error_tolerance",
+        "rkf45_absolute_error_tolerance",
+        "rkf45_h_min",
+        "rkf45_h_max",
+    ]
+    real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
+    if enable_numerical_time_window_step_cap:
+        # Register this only for numerical-spacetime builds that emit the
+        # accepted-step time-window cap.
+        real_param_names.append("rkf45_max_delta_t")
+        real_param_defaults.append(10.0)
+    real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
+    real_param_defaults.extend([0.9, 1.0])
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "rkf45_error_tolerance",
-            "rkf45_absolute_error_tolerance",
-            "rkf45_h_min",
-            "rkf45_h_max",
-            "rkf45_safety_factor",
-            "numerical_initial_h",
-        ],
-        [1e-8, 1e-8, 1e-10, 10.0, 0.9, 1.0],
+        real_param_names,
+        real_param_defaults,
         commondata=True,
         add_to_parfile=True,
     )
@@ -103,6 +122,39 @@ def rkf45_finalize_and_control_kernel() -> None:
     for(long int i = 0; i < chunk_size; i++) {
     """
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
+
+    accepted_time_window_step_cap = ""
+    if enable_numerical_time_window_step_cap:
+        accepted_time_window_step_cap = rf"""
+        //==========================================
+        // NUMERICAL TIME-WINDOW ACCEPTED-STEP CAP
+        //==========================================
+        // Reverse ray tracing moves toward lower coordinate time. Bound the next
+        // accepted affine step using the accepted fifth-order coordinate time and
+        // p^0 = dt/dlambda, so the next RKF45 stages stay inside the mapped slot
+        // plus its lower-time lookahead.
+        {{
+            const double t_accepted = f_5th_cache[0];
+            const double p0_accepted_abs = fabs(f_5th_cache[4]);
+            const long int slot_idx =
+                (long int)floor((t_accepted - {cd_access}slot_manager_t_min) /
+                                {cd_access}slot_manager_delta_t);
+            const double slot_lower =
+                {cd_access}slot_manager_t_min +
+                (double)slot_idx * {cd_access}slot_manager_delta_t;
+            const double delta_to_lower_slot_edge =
+                fmax(0.0, t_accepted - slot_lower);
+            const double allowed_delta_t =
+                delta_to_lower_slot_edge + {cd_access}rkf45_max_delta_t;
+
+            if (p0_accepted_abs > 0.0 && allowed_delta_t > 0.0) {{
+                const double time_window_h_cap =
+                    0.9 * allowed_delta_t / p0_accepted_abs;
+                h_new = fmin(h_new, time_window_h_cap);
+                h_new = fmax(h_new, {cd_access}rkf45_h_min);
+            }} // END IF: accepted temporal derivative supports a finite cap
+        }} // END BLOCK: numerical time-window accepted-step cap
+"""
 
     core_math = rf"""
     //==========================================
@@ -245,6 +297,7 @@ def rkf45_finalize_and_control_kernel() -> None:
         WriteCUDA(&d_retries[i], 0); // Resets the retry counter to zero for the active ray.
         WriteCUDA(&d_status[i], ACTIVE); // Updates the ray status flag to active.
 
+{accepted_time_window_step_cap}
         // Commit the newly adapted step size $h$ to memory.
         WriteCUDA(&d_h[i], h_new); // Commits the newly adapted step size $h$ to memory.
     }} // END IF: err_norm <= 1.0
