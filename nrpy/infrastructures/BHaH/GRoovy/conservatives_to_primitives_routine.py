@@ -5,7 +5,6 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
 
-import textwrap
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
@@ -20,20 +19,6 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
-
-
-def _indent_block(block: str, spaces: int) -> str:
-    """
-    Indent a multi-line code block by a fixed number of spaces.
-
-    :param block: The code block to indent.
-    :param spaces: Number of spaces to prepend to each line.
-    :return: The indented block, including a trailing newline when non-empty.
-    """
-    stripped = textwrap.dedent(block).strip("\n")
-    if not stripped:
-        return ""
-    return textwrap.indent(stripped + "\n", " " * spaces)
 
 
 def _select_recovery_mode(
@@ -216,7 +201,7 @@ ghl_apply_conservative_limits(
     block = r"""
 if (cons.rho > 0.0) {
 """
-    block += _indent_block(pre_recovery, 2)
+    block += pre_recovery
     block += r"""
   ghl_conservative_quantities cons_undens = {0};
   ghl_undensitize_conservatives(
@@ -239,7 +224,7 @@ if (error != ghl_success) {
   pointcount_avg++;
   cons = cons_orig;
 """
-    block += _indent_block(neighbor_init, 2)
+    block += neighbor_init
     block += r"""
   const int iavg_min = NRPYMAX(imin, i - 1);
   const int javg_min = NRPYMAX(jmin, j - 1);
@@ -262,7 +247,7 @@ if (error != ghl_success) {
             commondata, params, &cons_avg_loop, &ADM_metric_avg,
             iavg, javg, kavg, xx, auxevol_gfs, evol_gfs);
 """
-    block += _indent_block(neighbor_add, 8)
+    block += neighbor_add
     block += r"""
         n_avg++;
       } // END LOOP: for iavg over neighboring x indices
@@ -275,7 +260,7 @@ if (error != ghl_success) {
     const REAL cfac = 1.0 - wfac;
     const REAL inv_n_avg = 1.0 / (REAL)n_avg;
 """
-    block += _indent_block(avg_mix, 4)
+    block += avg_mix
     block += r"""
     ghl_undensitize_conservatives(
         ADM_metric.sqrt_detgamma, &cons_avg, &cons_undens);
@@ -291,7 +276,7 @@ if (error != ghl_success) {
       error = ghl_error_c2p_singular;
   } // END WHILE: weighted averages remain available
 """
-    block += _indent_block(hybrid_backup, 2)
+    block += hybrid_backup
     block += r"""
   if (error != ghl_success) {
     ghl_set_prims_to_constant_atm(eos, &prims);
@@ -893,11 +878,11 @@ ghl_tabulated_compute_eps_T_from_P(
         pointcount_inhoriz += in_horizon;
         cons_orig = cons;
 """
-    body += _indent_block(guess_setup, 8)
+    body += guess_setup
     body += r"""
         ghl_error_codes_t error = ghl_success;
 """
-    body += _indent_block(recovery_block, 8)
+    body += recovery_block
     body += r"""
         error = ghl_enforce_primitive_limits_and_compute_u0(
             ghl_params, eos, &ADM_metric, &prims, &diagnostics.speed_limited);
@@ -916,7 +901,7 @@ ghl_tabulated_compute_eps_T_from_P(
         backup2 += diagnostics.backup[2];
         n_iter += diagnostics.n_iter;
 """
-    body += _indent_block(store_primitives_code, 8)
+    body += store_primitives_code
     body += r"""
       } // END LOOP: for i over interior x indices
     } // END LOOP: for j over interior y indices
@@ -943,7 +928,7 @@ ghl_tabulated_compute_eps_T_from_P(
             i, j, k, xx, auxevol_gfs, evol_gfs);
 
 """
-    body += _indent_block(guess_setup, 8)
+    body += guess_setup
     body += r"""
         ghl_ADM_aux_quantities metric_aux = {0};
         ghl_compute_ADM_auxiliaries(&ADM_metric, &metric_aux);
@@ -1085,18 +1070,6 @@ def register_CFunction_conservatives_to_primitives_routine(
     ...     file_ext="c",
     ... )
     """
-    # # Step 0: Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
-    # diagnostic output. This is useful for debugging C2P failures or monitoring
-    # the health of the primitive recovery routine.
-    _ = par.register_CodeParameter(
-        "int",
-        __name__,
-        "C2P_diagnostics_every",
-        2,
-        commondata=True,
-        add_to_parfile=True,
-    )
-
     # Step 1: Validate the requested recovery mode.
     if tabulated_entropy_robust and not (evolving_temperature and evolving_entropy):
         raise ValueError(
@@ -1109,7 +1082,19 @@ def register_CFunction_conservatives_to_primitives_routine(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    # Step 3: Build the mode-specific C function body.
+    # # Step 3: Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
+    # diagnostic output. This is useful for debugging C2P failures or monitoring
+    # the health of the primitive recovery routine.
+    _ = par.register_CodeParameter(
+        "int",
+        __name__,
+        "C2P_diagnostics_every",
+        2,
+        commondata=True,
+        add_to_parfile=True,
+    )
+
+    # Step 4: Build the mode-specific C function body.
     mode = _select_recovery_mode(evolving_temperature, evolving_entropy)
     strategy_desc = (
         "strategy with the robust tabulated-entropy fallback"
@@ -1133,7 +1118,7 @@ def register_CFunction_conservatives_to_primitives_routine(
         tabulated_entropy_robust,
     )
 
-    # Step 4: Register the final C function.
+    # Step 5: Register the final C function.
     cfunc_type = "void"
     name = "conservatives_to_primitives_routine"
     params = (

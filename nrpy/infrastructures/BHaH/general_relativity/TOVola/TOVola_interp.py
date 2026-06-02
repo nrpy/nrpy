@@ -44,7 +44,14 @@ def register_CFunction_TOVola_TOV_interpolate_1D() -> None:
 @param[out] expnu Interpolated lapse-squared value.
 @param[out] exp4phi Interpolated conformal-factor value."""
     prefunc = r"""
-/* Bisection index finder using binary search */
+/**
+  * Find the nearest radial-table index bracketing an isotropic radius.
+  *
+  * @param rr_iso Isotropic radius to locate in the radial table.
+  * @param numpoints_arr Number of radial samples.
+  * @param[in] r_iso_arr Isotropic-radius samples.
+  * @return Nearest bracketing radial-table index.
+  */
 static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_arr, const REAL *restrict r_iso_arr) {
   int x1 = 0;
   int x2 = numpoints_arr - 1;
@@ -77,7 +84,7 @@ static int TOVola_bisection_idx_finder(const REAL rr_iso, const int numpoints_ar
   fprintf(stderr, "INTERPOLATION BRACKETING ERROR: r_iso_min = %e ?<= r_iso = %.15e ?<= %e = r_iso_max\n", r_iso_arr[0], rr_iso,
           r_iso_arr[numpoints_arr - 1]);
   exit(EXIT_FAILURE);
-}
+} // END FUNCTION: TOVola_bisection_idx_finder
 """
     params = """REAL rr_iso, const commondata_struct *restrict commondata,
 const int interpolation_stencil_size, const int numpoints_arr, const REAL *restrict r_Schw_arr,
@@ -104,7 +111,8 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
       exit(EXIT_FAILURE);
     } // END IF: interpolation stencil size exceeds maximum
 
-    /* Use standard library functions instead of redefining macros */
+    // Clamp the interpolation stencil to valid table bounds without crossing
+    // the stellar surface.
     int idxmin = NRPYMAX(0, idx_mid - interpolation_stencil_size / 2 - 1);
 
     // -= Do not allow the interpolation stencil to cross the star's surface =-

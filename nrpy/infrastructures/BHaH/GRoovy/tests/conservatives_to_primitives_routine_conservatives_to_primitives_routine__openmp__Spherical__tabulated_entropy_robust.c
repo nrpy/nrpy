@@ -60,10 +60,12 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
         const int in_horizon = (ADM_metric.sqrt_detgamma > ghl_params->psi6threshold);
         pointcount_inhoriz += in_horizon;
         cons_orig = cons;
+
         ghl_tabulated_enforce_bounds_rho_Ye_P(eos, &prims.rho, &prims.Y_e, &prims.press);
         ghl_tabulated_compute_eps_T_from_P(eos, prims.rho, prims.Y_e, prims.press, &prims.eps, &prims.temperature);
 
         ghl_error_codes_t error = ghl_success;
+
         if (cons.rho > 0.0) {
           ghl_primitive_quantities prims1 = {0};
           ghl_primitive_quantities prims2 = {0};
@@ -369,6 +371,7 @@ void conservatives_to_primitives_routine__rfm__Spherical(const commondata_struct
         backup1 += diagnostics.backup[1];
         backup2 += diagnostics.backup[2];
         n_iter += diagnostics.n_iter;
+
         // Store the recovered primitive state without touching evol_gfs yet.
         // Conserved variables are rewritten in a later pass once all points have
         // finished their primitive recovery.

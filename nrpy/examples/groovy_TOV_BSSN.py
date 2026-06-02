@@ -5,8 +5,10 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
 
+import multiprocessing
 import os
 import shutil
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -189,7 +191,7 @@ BHaH.general_relativity.TOVola.TOVola_solve.register_CFunction_TOVola_solve()
 
 BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     CoordSystem=CoordSystem,
-    enable_T4munu=False,
+    enable_T4munu=True,
     enable_fd_functions=False,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
 )
@@ -341,8 +343,10 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
     set_parity_on_auxevol=True,
 )
 
-rhs_string = """
-REAL *restrict xx[3]; for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];
+rhs_string = r"""
+REAL *restrict xx[3]; 
+for(int ww=0;ww<3;ww++) 
+    xx[ww] = griddata[grid].xx[ww];
 
 Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -456,7 +460,7 @@ for (int grid = 0; grid < commondata.NUMGRIDS; grid++) {
 
   primitives_to_conservatives_routine(&commondata, params, xx, &commondata.eos, auxevol_gfs, in_gfs);
   conservatives_to_primitives_routine(&commondata, params, &commondata.ghl_params, &commondata.eos, xx, in_gfs, auxevol_gfs);
-  
+
   compute_stress_energy_tensor(&commondata, params, xx, &commondata.eos, in_gfs, auxevol_gfs);
 } // END LOOP: for grid over all numerical grids
 """
@@ -486,6 +490,52 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
 if __name__ == "__main__":
+    print("Cloning and compiling GRHayL...")
+
+    # Define the repository URL and directory
+    repo_url = "https://github.com/GRHayL/GRHayL.git"
+    repo_dir = "GRHayL"
+    codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
+
+    # Change to the codes root directory
+    os.chdir(codes_root_dir)
+
+    # Clone the repository
+    result = subprocess.run(
+        ["git", "clone", repo_url], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
+
+    # Change to the repository directory
+    os.chdir(repo_dir)
+
+    # Configure the build
+    configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
+    # For Terrence's laptop, uncomment the following lines and comment out the above line
+    # configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
+    #                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
+    #                       '--prefix=./', '--buildtype=opt']
+    result = subprocess.run(
+        configure_options, capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
+
+    # Get the number of CPU cores
+    cpus = str(multiprocessing.cpu_count())
+
+    # Build and install
+    result = subprocess.run(
+        ["make", "-j" + cpus], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
+    result = subprocess.run(
+        ["make", "install"], capture_output=True, text=True, check=True
+    )
+    print(result.stdout)
+
+    # Change to the project directory
+    os.chdir("../")
+
     print(
         f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
     )
