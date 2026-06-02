@@ -67,7 +67,7 @@ def register_CFunction_numerical_interpolation(
     >>> import os
     >>> import tempfile
     >>> import nrpy.c_function as cfc
-    >>> from nrpy.helpers.generic import validate_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as project_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
@@ -76,7 +76,9 @@ def register_CFunction_numerical_interpolation(
     ...         _ = register_CFunction_numerical_interpolation(
     ...             "Spherical", enable_simd=True, project_dir=project_dir
     ...         )
-    ...         generated = cfc.CFunction_dict["numerical_interpolation"].full_function
+    ...         generated = clang_format(
+    ...             cfc.CFunction_dict["numerical_interpolation"].full_function
+    ...         )
     ...         _ = validate_strings(generated, "numerical_interpolation", file_ext="c")
     ...     if old_cache_home is None:
     ...         _ = os.environ.pop("XDG_CACHE_HOME", None)

@@ -82,7 +82,7 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(const params_st
   if (phi_toggle == 0) {
     i2_map = i2_base;
   } else {
-    i2_map = payload_i2_start + payload_i2_end - 1 - (i2_base - payload_i2_start);
+    i2_map = payload_i2_end - 1 - (i2_base - payload_i2_start);
   } // END IF: apply the pi shift through the stored two-plane layout
 
   // Step 6: Confirm that the remapped logical index lies inside the stored payload.
@@ -284,11 +284,14 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   const REAL axis_rho_epsilon = 1.0e-14;
   const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_order;
   const long int interp_order_long = 2L * (long int)n_interp_ghosts + 1L;
+  const REAL phi0 = (REAL)context->stored_phi_samples[0];
+  const REAL phi1 = (REAL)context->stored_phi_samples[1];
   const REAL r_max_supported = (REAL)(params->xxmin0 + (((params->Nxx0 - 1) + 0.5) * params->dxx0));
   const REAL r_support_tol = (REAL)(1.0e-12 * fmax(1.0, fabs((double)r_max_supported)));
   int phi_plane;
   int i2_base;
   REAL phi_ref = 0.0;
+  REAL phi_delta = phi1 - phi0;
 
   if (!isfinite((double)target_r) || !isfinite((double)target_theta) || !isfinite((double)target_phi)) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
@@ -306,6 +309,14 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   // recovers phi through rotation, not through a separate interpolation.
   if (target_r <= origin_epsilon || rho_sq <= axis_rho_epsilon * axis_rho_epsilon) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
+  }
+  while (phi_delta <= (REAL)(-AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI))
+    phi_delta += (REAL)(2.0 * AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI);
+  while (phi_delta > (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI)
+    phi_delta -= (REAL)(2.0 * AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI);
+  if (params->Nxx2 != 2 || !isfinite((double)phi0) || !isfinite((double)phi1) ||
+      fabs((double)(fabs((double)phi_delta) - AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI)) > 1.0e-12) {
+    return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
   }
   if (n_interp_ghosts < 0 || n_interp_ghosts > AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH ||
       interp_order_long > (long int)params->Nxx0 || interp_order_long > (long int)params->Nxx1) {
@@ -368,8 +379,11 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
       const uint64_t j0 = (uint64_t)(i0i1i2_map[0] - NGHOSTS);
       const uint64_t j1 = (uint64_t)(i0i1i2_map[1] - NGHOSTS);
       const uint64_t j2 = (uint64_t)(i0i1i2_map[2] - NGHOSTS);
+      const int mapped_phi = i0i1i2_map[2] - NGHOSTS;
       mapped_point_index[v][u] = j0 + (uint64_t)params->Nxx0 * (j1 + (uint64_t)params->Nxx1 * j2);
-      mapped_phi_plane[v][u] = i0i1i2_map[2] - NGHOSTS;
+      if (mapped_phi < 0 || mapped_phi >= 2)
+        return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
+      mapped_phi_plane[v][u] = mapped_phi;
     } // END LOOP: for u over radial stencil nodes during remap precompute
   } // END LOOP: for v over theta stencil nodes during remap precompute
 

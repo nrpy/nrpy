@@ -85,7 +85,7 @@ def register_CFunction_temporal_lagrange_interpolation(
     >>> import os
     >>> import tempfile
     >>> import nrpy.c_function as cfc
-    >>> from nrpy.helpers.generic import validate_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as project_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
@@ -94,7 +94,9 @@ def register_CFunction_temporal_lagrange_interpolation(
     ...         _ = register_CFunction_temporal_lagrange_interpolation(
     ...             enable_simd=True, project_dir=project_dir
     ...         )
-    ...         generated = cfc.CFunction_dict["temporal_lagrange_interpolation"].full_function
+    ...         generated = clang_format(
+    ...             cfc.CFunction_dict["temporal_lagrange_interpolation"].full_function
+    ...         )
     ...         _ = validate_strings(
     ...             generated, "temporal_lagrange_interpolation", file_ext="c"
     ...         )
@@ -190,9 +192,8 @@ physical `slice_times`, not abstract slot indices.
   const int temporal_half_width =
       commondata->numerical_spacetime_temporal_interp_order;
   if (temporal_half_width < 0 ||
-      temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH) {
+      temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH)
     return TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER;
-  } // END IF: runtime temporal interpolation half-width was outside the supported range
   const int interp_order = 2 * temporal_half_width + 1;
   REAL inv_denom[interp_order];
   REAL diffs_t[interp_order];
