@@ -257,9 +257,17 @@ if __name__ == "__main__":
     cmdline_input_and_parfiles.generate_default_parfile(
         project_dir=project_dir, project_name=project_name
     )
-    cmdline_inputs_list = list(par.glb_code_params_dict.keys())
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-        project_name=project_name, cmdline_inputs=cmdline_inputs_list
+        project_name=project_name,
+        cmdline_inputs=[
+            "source_r_min",
+            "source_r_max",
+            "window_width",
+            "window_height",
+            "window_tiles_width",
+            "window_tiles_height",
+            "scan_density",
+        ],
     )
 
     # ##########################################################################

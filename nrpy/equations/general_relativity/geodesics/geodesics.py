@@ -420,6 +420,132 @@ class GeodesicEquations:
         return constraint
 
     @staticmethod
+    def symbolic_g4DD_recipe_from_bssn_grid_basis(
+        bssn_coord_system: str,
+        target_basis: Literal["Cartesian", "Spherical"] = "Cartesian",
+        enable_bssn_rfm_precompute: bool = False,
+    ) -> List[List[sp.Expr]]:
+        r"""
+        Generate a transformed covariant four-metric recipe from BSSN grid-basis data.
+
+        This routine specializes to the NRPy BSSN/reference-metric data model.
+        The spacetime map is assumed to be a time-independent spatial map lifted
+        into 4D with identity time:
+
+        ``x^0 = u^0``
+
+        ``x^i = X^i(u^1, u^2, u^3)``
+
+        Here ``u^1``, ``u^2``, and ``u^3`` are the spatial grid coordinates
+        stored in ``ReferenceMetric.xx``. The target spatial map ``X^i`` is
+        selected by ``target_basis`` from the matching ``ReferenceMetric``.
+        This routine does not rebuild Jacobians from ``xx_to_Cart`` or
+        ``xxSph``. Instead, it consumes the canonical inverse-Jacobian objects
+        stored on ``ReferenceMetric``.
+
+        Since the four-metric is a covariant rank-2 tensor, the transformation is
+
+        ``g'_{\mu\nu} = K^a{}_\mu K^b{}_\nu g_{ab}``,
+
+        where ``K4UD[a][mu] = \partial u^a / \partial x^\mu`` is the inverse
+        Jacobian from target-basis coordinates back to grid-basis coordinates.
+        All mixed time-space Jacobian entries vanish except ``K4UD[0][0] = 1``.
+        Unlike the Christoffel transformation, no forward Jacobian derivative or
+        inhomogeneous connection term appears.
+
+        :param bssn_coord_system: BSSN coordinate system used to construct the
+                                  source grid-basis four-metric.
+        :param target_basis: Target spatial basis. Supported values are
+                             ``"Cartesian"`` and ``"Spherical"``.
+        :param enable_bssn_rfm_precompute: Whether to enable reference-metric
+                                           precomputation inside the BSSN helper.
+        :return: A 4x4 list of SymPy expressions for the transformed covariant
+                 four-metric.
+        :raises ValueError: If ``bssn_coord_system`` is not a string.
+        :raises ValueError: If ``target_basis`` is unsupported.
+        :raises ValueError: If ``enable_bssn_rfm_precompute`` is not a bool.
+        :raises ValueError: If ``bssn_coord_system`` is unsupported.
+        :raises ValueError: If the matching reference metric is not 3D.
+        """
+        # Step 1.a: Validate the public API inputs before triggering cached lookups.
+        if not isinstance(bssn_coord_system, str):
+            raise ValueError(
+                "bssn_coord_system must be a string, "
+                f"got {type(bssn_coord_system).__name__}"
+            )
+        if target_basis not in ("Cartesian", "Spherical"):
+            raise ValueError(
+                f"Unsupported target_basis '{target_basis}'. "
+                "Supported values are 'Cartesian' and 'Spherical'."
+            )
+        if not isinstance(enable_bssn_rfm_precompute, bool):
+            raise ValueError(
+                "enable_bssn_rfm_precompute must be a bool, "
+                f"got {type(enable_bssn_rfm_precompute).__name__}"
+            )
+
+        # Step 1.b: Import the BSSN and reference-metric helpers lazily so
+        #           analytic-only users do not pull in the full BSSN stack at import time.
+        # pylint: disable-next=import-outside-toplevel,redefined-outer-name
+        import nrpy.reference_metric as refmetric
+
+        # pylint: disable-next=import-outside-toplevel
+        from nrpy.equations.general_relativity.g4munu_conversions import (
+            BSSN_to_g4DD,
+        )
+
+        if bssn_coord_system not in refmetric.supported_CoordSystems:
+            raise ValueError(
+                f"Unsupported CoordSystem '{bssn_coord_system}'. "
+                f"Supported coordinate systems: {refmetric.supported_CoordSystems}"
+            )
+
+        # Step 2: Construct the source-basis four-metric g_{ab} directly from
+        #         the BSSN variables native to the requested grid basis.
+        grid_g4DD = BSSN_to_g4DD(
+            CoordSystem=bssn_coord_system,
+            enable_rfm_precompute=enable_bssn_rfm_precompute,
+        )
+
+        # Step 3: Fetch the matching ReferenceMetric object so the spatial
+        #         basis transformation uses the same coordinate model as the
+        #         underlying BSSN quantities.
+        coord_system_key = bssn_coord_system + (
+            "_rfm_precompute" if enable_bssn_rfm_precompute else ""
+        )
+        rfm = refmetric.reference_metric[coord_system_key]
+        if len(rfm.xx) != 3:
+            raise ValueError(
+                "ReferenceMetric coordinates are inconsistent with 3D space."
+            )
+
+        # Step 4: Select the canonical inverse spatial Jacobian
+        #         K^j_i = partial u^j / partial x^i for the requested target basis.
+        #         Since g_{mu nu} is a covariant tensor, the forward Jacobian and
+        #         its derivatives are not needed.
+        if target_basis == "Cartesian":
+            spatial_K3UD = rfm.Jac_dUrfm_dDCartUD
+        else:
+            spatial_K3UD = rfm.Jac_dUrfm_dDSphUD
+
+        # Step 5: Lift the time-independent inverse spatial Jacobian into the
+        #         4D map x^0 = u^0, x^i = X^i(u^j). Thus K^0_0 = 1 and all
+        #         mixed time-space entries vanish.
+        K4UD = ixp.zerorank2(dimension=4)
+        K4UD[0][0] = sp.sympify(1)
+        for spatial_grid_index in range(3):
+            for spatial_target_index in range(3):
+                K4UD[spatial_grid_index + 1][spatial_target_index + 1] = spatial_K3UD[
+                    spatial_grid_index
+                ][spatial_target_index]
+
+        # Step 6: Apply the covariant tensor transformation law:
+        #         g'_{mu nu} = K^a_mu K^b_nu g_{ab}.
+        return GeodesicEquations._transform_covariant_metric_from_grid_basis_data(
+            grid_g4DD=grid_g4DD, K4UD=K4UD
+        )
+
+    @staticmethod
     def symbolic_numerical_christoffel_recipe() -> List[List[List[sp.Expr]]]:
         r"""
         Generate a symbolic recipe for Christoffel symbols from generic metric data.
@@ -456,6 +582,52 @@ class GeodesicEquations:
                     Gamma4UDD_recipe[alpha][mu][nu] = term
                     Gamma4UDD_recipe[alpha][nu][mu] = term
         return Gamma4UDD_recipe
+
+    @staticmethod
+    def _transform_covariant_metric_from_grid_basis_data(
+        grid_g4DD: List[List[sp.Expr]], K4UD: List[List[sp.Expr]]
+    ) -> List[List[sp.Expr]]:
+        r"""
+        Transform a covariant four-metric using a supplied inverse Jacobian recipe.
+
+        This routine implements the coordinate-transformation law
+
+        ``g'_{mu nu} = K^a{}_{mu} K^b{}_{nu} g_{ab}``,
+
+        where ``K4UD[a][mu] = \partial u^a / \partial x^\mu`` is the inverse
+        Jacobian from target-basis coordinates back to the source grid basis.
+
+        :param grid_g4DD: Covariant four-metric in the source grid basis.
+        :param K4UD: Inverse Jacobian from target basis to grid basis.
+        :return: A 4x4 list of SymPy expressions for the transformed covariant
+                 four-metric.
+        """
+        # Step 1: Loop over the target-basis covariant indices. Since the
+        #         output metric is symmetric, compute only the upper triangle
+        #         and mirror each entry to the lower triangle.
+        target_g4DD = ixp.zerorank2(dimension=4)
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = sp.sympify(0)
+
+                # Step 2: Contract the source-basis metric with one inverse
+                #         Jacobian factor for each covariant index:
+                #         g'_{mu nu} = K^a_mu K^b_nu g_{ab}.
+                #         The dummy indices grid_a and grid_b run over the
+                #         source-basis spacetime coordinates.
+                for grid_a in range(4):
+                    for grid_b in range(4):
+                        term += (
+                            K4UD[grid_a][mu]
+                            * K4UD[grid_b][nu]
+                            * grid_g4DD[grid_a][grid_b]
+                        )
+
+                # Step 3: Store the transformed component and copy it across
+                #         the diagonal to preserve explicit symmetry.
+                target_g4DD[mu][nu] = term
+                target_g4DD[nu][mu] = term
+        return target_g4DD
 
     @staticmethod
     def _transform_christoffel_recipe_from_grid_basis_data(
@@ -690,21 +862,28 @@ class GeodesicEquations:
         K4UD = ixp.zerorank2(dimension=4)
         J4UD[0][0] = sp.sympify(1)
         K4UD[0][0] = sp.sympify(1)
-        for target_i in range(3):
-            for grid_j in range(3):
-                J4UD[target_i + 1][grid_j + 1] = spatial_J4UD[target_i][grid_j]
-                K4UD[grid_j + 1][target_i + 1] = spatial_K4UD[grid_j][target_i]
+        for spatial_target_index in range(3):
+            for spatial_grid_index in range(3):
+                J4UD[spatial_target_index + 1][spatial_grid_index + 1] = spatial_J4UD[
+                    spatial_target_index
+                ][spatial_grid_index]
+                K4UD[spatial_grid_index + 1][spatial_target_index + 1] = spatial_K4UD[
+                    spatial_grid_index
+                ][spatial_target_index]
 
         # Step 6: Construct the lifted Hessian
         #         partial_k J^i_j = partial^2 X^i / partial u^k partial u^j.
         #         All entries involving time vanish because the lifted map is
         #         explicitly time independent.
         J4UD_dD = ixp.zerorank3(dimension=4)
-        for target_i in range(3):
-            for grid_j in range(3):
-                for grid_k in range(3):
-                    J4UD_dD[target_i + 1][grid_j + 1][grid_k + 1] = sp.diff(
-                        spatial_J4UD[target_i][grid_j], rfm.xx[grid_k]
+        for spatial_target_i in range(3):
+            for spatial_grid_j in range(3):
+                for spatial_grid_k in range(3):
+                    J4UD_dD[spatial_target_i + 1][spatial_grid_j + 1][
+                        spatial_grid_k + 1
+                    ] = sp.diff(
+                        spatial_J4UD[spatial_target_i][spatial_grid_j],
+                        rfm.xx[spatial_grid_k],
                     )
 
         # Step 7: Apply the connection-transformation formula to expose the
@@ -723,6 +902,9 @@ _GAMMA4UDD_METRIC_RECIPE = GeodesicEquations.symbolic_numerical_christoffel_reci
 # Christoffel recipe and do not need to instantiate GeodesicEquations.
 symbolic_christoffel_recipe_from_grid_basis = (
     GeodesicEquations.symbolic_christoffel_recipe_from_grid_basis
+)
+symbolic_g4DD_recipe_from_bssn_grid_basis = (
+    GeodesicEquations.symbolic_g4DD_recipe_from_bssn_grid_basis
 )
 symbolic_christoffel_recipe_from_bssn_grid_basis = (
     GeodesicEquations.symbolic_christoffel_recipe_from_bssn_grid_basis
@@ -980,6 +1162,84 @@ if __name__ == "__main__":
                         f"Gamma[{check_alpha}][{check_mu}][{check_nu}]"
                     )
     print("BSSN-specialized transformed-Christoffel recipe check passed.")
+
+    # Step 2.f: Validate the BSSN-specialized transformed-four-metric recipe
+    #           in the Cartesian identity-map case, where the transformed
+    #           four-metric must reproduce the source-basis BSSN four-metric.
+    print(
+        "Checking BSSN-specialized transformed-four-metric recipe in the "
+        "Cartesian identity-map case..."
+    )
+    bssn_identity_g4_recipe = symbolic_g4DD_recipe_from_bssn_grid_basis(
+        bssn_coord_system="Cartesian", target_basis="Cartesian"
+    )
+    for check_mu in range(4):
+        for check_nu in range(check_mu, 4):
+            identity_g4_diff = (
+                bssn_identity_g4_recipe[check_mu][check_nu]
+                - bssn_identity_helper.g4DD[check_mu][check_nu]
+            )
+            if not ve.check_zero(
+                identity_g4_diff,
+                fixed_mpfs_for_free_symbols=True,
+                verbose=False,
+            ):
+                raise ValueError(
+                    "BSSN transformed-four-metric identity-map check failed for "
+                    f"g4DD[{check_mu}][{check_nu}]"
+                )
+    print("BSSN-specialized transformed-four-metric identity-map check passed.")
+
+    # Step 2.g: Validate the spherical-to-Cartesian transformed-four-metric
+    #           recipe by plugging in flat-space spherical BSSN data at a
+    #           fixed nonsingular sample point. The transformed metric must
+    #           reduce numerically to Cartesian Minkowski spacetime.
+    print(
+        "Checking BSSN-specialized transformed-four-metric recipe in the "
+        "Spherical-to-Cartesian case..."
+    )
+    spherical_recipe_g4DD = symbolic_g4DD_recipe_from_bssn_grid_basis(
+        bssn_coord_system="Spherical", target_basis="Cartesian"
+    )
+    spherical_symbol_by_name: Dict[str, sp.Basic] = {}
+    for metric_row in spherical_recipe_g4DD:
+        for metric_component in metric_row:
+            for free_symbol in metric_component.free_symbols:
+                spherical_symbol_by_name[str(free_symbol)] = free_symbol
+    spherical_numeric_values: Dict[sp.Basic, sp.Basic] = {
+        spherical_symbol_by_name["alpha"]: sp.sympify(1),
+        spherical_symbol_by_name["cf"]: sp.sympify(1),
+        spherical_symbol_by_name["hDD00"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD01"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD02"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD11"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD12"]: sp.sympify(0),
+        spherical_symbol_by_name["hDD22"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU0"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU1"]: sp.sympify(0),
+        spherical_symbol_by_name["vetU2"]: sp.sympify(0),
+        spherical_symbol_by_name["xx0"]: sp.Rational(5, 4),
+        spherical_symbol_by_name["xx1"]: sp.Rational(2, 5),
+    }
+    spherical_expected_g4DD = ixp.zerorank2(dimension=4)
+    spherical_expected_g4DD[0][0] = sp.sympify(-1)
+    spherical_expected_g4DD[1][1] = sp.sympify(1)
+    spherical_expected_g4DD[2][2] = sp.sympify(1)
+    spherical_expected_g4DD[3][3] = sp.sympify(1)
+    for check_mu in range(4):
+        for check_nu in range(check_mu, 4):
+            spherical_g4_diff = sp.simplify(
+                spherical_recipe_g4DD[check_mu][check_nu].xreplace(
+                    spherical_numeric_values
+                )
+                - spherical_expected_g4DD[check_mu][check_nu]
+            )
+            if spherical_g4_diff != sp.sympify(0):
+                raise ValueError(
+                    "BSSN transformed-four-metric spherical-to-Cartesian check "
+                    f"failed for g4DD[{check_mu}][{check_nu}]"
+                )
+    print("BSSN-specialized transformed-four-metric spherical check passed.")
 
     # Step 3: Generate trusted results for all configurations.
     # This loop ensures that the __init__ logic (including the solver) works for all spacetimes.

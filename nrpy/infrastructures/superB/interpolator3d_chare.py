@@ -120,6 +120,8 @@ Interpolator3d_SDAG_CODE
   int total_elements_chare;
   const REAL *restrict *src_gf_ptrs = nullptr;
   int src_gf_ptrs_capacity = 0;
+  REAL *src_gfs_buffer = nullptr;
+  int src_gfs_buffer_len = 0;
   int *dst_indices_chare = nullptr;
   int iter = 0;
   char **interp_bufs = nullptr;
@@ -170,7 +172,41 @@ def output_interpolator3d_cpp(
 
     psi4_send_concat_log = ""
     psi4_send_concat_block = ""
+    psi4_pup_block = ""
+    psi4_destructor_block = ""
+    psi4_pup_helpers = ""
     if enable_psi4:
+        psi4_pup_helpers = r"""
+/**
+ * PUP a PSI4 shell angular grid and its optional work arrays.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] shell PSI4 shell angular grid state.
+ */
+static void pup_psi4_shell_angular_grid(PUP::er &p, psi4_shell_angular_grid_t &shell) {
+  p | shell.N_theta;
+  p | shell.N_phi;
+  p | shell.num_pts;
+  p | shell.dtheta;
+  p | shell.dphi;
+  pup_optional_REAL_array(p, &shell.theta_array, shell.N_theta, "psi4 theta_array");
+  pup_optional_REAL_array(p, &shell.phi_array, shell.N_phi, "psi4 phi_array");
+  pup_optional_REAL_array(p, &shell.sin_theta_array, shell.N_theta, "psi4 sin_theta_array");
+  pup_optional_REAL_array(p, &shell.cos_theta_array, shell.N_theta, "psi4 cos_theta_array");
+  pup_optional_REAL_array(p, &shell.sin_phi_array, shell.N_phi, "psi4 sin_phi_array");
+  pup_optional_REAL_array(p, &shell.cos_phi_array, shell.N_phi, "psi4 cos_phi_array");
+} // END FUNCTION: pup_psi4_shell_angular_grid
+"""
+        psi4_pup_block = r"""
+  pup_psi4_shell_angular_grid(p, psi4_shell);
+  pup_optional_REAL_array(p, &psi4r_at_R_ext, psi4_shell.num_pts, "psi4r_at_R_ext");
+  pup_optional_REAL_array(p, &psi4i_at_R_ext, psi4_shell.num_pts, "psi4i_at_R_ext");
+"""
+        psi4_destructor_block = r"""
+  psi4_spinweightm2_shell_free(&psi4_shell);
+  BHAH_FREE(psi4r_at_R_ext);
+  BHAH_FREE(psi4i_at_R_ext);
+"""
         psi4_send_concat_block = r"""
   } else if (interp_request_type == INTERP_REQUEST_PSI4) {
     if (psi4r_at_R_ext == nullptr || psi4i_at_R_ext == nullptr) {
@@ -206,6 +242,34 @@ extern/* readonly */ CProxy_Timestepping timesteppingArray;
 extern/* readonly */ CProxy_Horizon_finder horizon_finderProxy;
 extern/* readonly */ CProxy_Interpolator3d interpolator3dArray;
 
+/**
+ * PUP an optional REAL array without reading destination storage on unpack.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] array Pointer to the optional array pointer.
+ * @param length Number of REAL entries to serialize.
+ * @param[in] name Allocation/error label.
+ */
+static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
+  int has_array = 0;
+  if (!p.isUnpacking()) {
+    has_array = (*array != nullptr) ? 1 : 0;
+  } // END IF: computing optional REAL array presence while packing
+  p | has_array;
+  if (has_array != 0) {
+    if (p.isUnpacking()) {
+      *array = (REAL *restrict)malloc(sizeof(REAL) * length);
+      if (*array == nullptr && length > 0) {
+        CkAbort("%s", name);
+      } // END IF: optional REAL array allocation failed
+    } // END IF: unpacking optional REAL array
+    PUParray(p, *array, length);
+  } else if (p.isUnpacking()) {
+    *array = nullptr;
+  } // END ELSE IF: unpacking absent optional REAL array
+} // END FUNCTION: pup_optional_REAL_array
+<<PSI4_PUP_HELPERS>>
+
 Interpolator3d::Interpolator3d() {
   CkPrintf("Interpolator3d chare %d,%d,%d created on PE %d\n", thisIndex.x, thisIndex.y, thisIndex.z, CkMyPe());
 }
@@ -213,7 +277,11 @@ Interpolator3d::Interpolator3d() {
 // migration constructor
 Interpolator3d::Interpolator3d(CkMigrateMessage *msg) : CBase_Interpolator3d(msg) {}
 
-// PUP routine for class Interpolator3d
+/**
+ * Serialize and restore Interpolator3d state for Charm++ migration/checkpointing.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ */
 void Interpolator3d::pup(PUP::er &p) {
   CBase_Interpolator3d::pup(p);
   __sdag_pup(p);
@@ -224,10 +292,9 @@ void Interpolator3d::pup(PUP::er &p) {
   if (p.isUnpacking()) {
     owns_griddata_chare = true;
     griddata_chare = (griddata_struct *restrict)malloc(sizeof(griddata_struct) * size_griddata);
-  }
-  for (int i = 0; i < size_griddata; i++) {
+  } // END IF: unpacking griddata_chare container
+  for (int i = 0; i < size_griddata; i++)
     pup_griddata(p, griddata_chare[i]);
-  }
 
   p | iter;
   p | interp_count;
@@ -235,6 +302,21 @@ void Interpolator3d::pup(PUP::er &p) {
   p | interp_request_type;
   p | interp_request_id;
   p | interp_num_gfs;
+  p | src_gfs_buffer_len;
+  if (p.isUnpacking()) {
+    if (src_gfs_buffer_len > 0) {
+      src_gfs_buffer = (REAL *restrict)malloc(sizeof(REAL) * src_gfs_buffer_len);
+      if (src_gfs_buffer == nullptr) {
+        CkAbort("Interpolator3d PUP failed to allocate src_gfs_buffer.");
+      } // END IF: src_gfs_buffer allocation failed during Interpolator3d PUP
+    } else {
+      src_gfs_buffer = nullptr;
+    } // END ELSE: no src_gfs_buffer payload to restore
+  } // END IF: unpacking src_gfs_buffer
+  if (src_gfs_buffer_len > 0) {
+    PUParray(p, src_gfs_buffer, src_gfs_buffer_len);
+  } // END IF: src_gfs_buffer has serialized payload
+<<PSI4_PUP_BLOCK>>
 
   if (p.isUnpacking()) {
     if (interp_total > 0) {
@@ -243,40 +325,61 @@ void Interpolator3d::pup(PUP::er &p) {
       for (int i = 0; i < interp_total; i++) {
         interp_bufs[i] = nullptr;
         interp_lens[i] = 0;
-      }
+      } // END LOOP: for i over restored interpolation buffer slots
     } else {
       interp_bufs = nullptr;
       interp_lens = nullptr;
-    }
-  }
+    } // END ELSE: no interpolation aggregation buffers to restore
+  } // END IF: unpacking interpolation aggregation containers
 
   for (int i = 0; i < interp_count; i++) {
     p | interp_lens[i];
     if (p.isUnpacking()) {
       interp_bufs[i] = new char[interp_lens[i]];
-    }
+    } // END IF: unpacking one interpolation buffer
     p(interp_bufs[i], interp_lens[i]);
-  }
+  } // END LOOP: for i over serialized interpolation buffers
 
   if (p.isUnpacking()) {
     dst_x0x1x2 = nullptr;
     dst_x0x1x2_chare = nullptr;
     dst_data_ptrs_chare = nullptr;
     dst_indices_chare = nullptr;
-    src_gf_ptrs = nullptr;
-    src_gf_ptrs_capacity = 0;
+    if (src_gfs_buffer != nullptr && interp_num_gfs > 0) {
+      const int Nxx_plus_2NGHOSTS0 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS0;
+      const int Nxx_plus_2NGHOSTS1 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS1;
+      const int Nxx_plus_2NGHOSTS2 = griddata_chare[grid].params.Nxx_plus_2NGHOSTS2;
+      const int Nxx_plus_2NGHOSTS_tot = Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+      src_gf_ptrs = new const REAL *[interp_num_gfs];
+      src_gf_ptrs_capacity = interp_num_gfs;
+      for (int idx = 0; idx < interp_num_gfs; idx++) {
+        src_gf_ptrs[idx] = src_gfs_buffer + idx * Nxx_plus_2NGHOSTS_tot;
+      } // END LOOP: for idx over restored source gridfunction pointers
+    } else {
+      src_gf_ptrs = nullptr;
+      src_gf_ptrs_capacity = 0;
+    } // END ELSE: no source gridfunction pointers to restore
     total_elements_chare = 0;
-  }
-}
+  } // END IF: unpacking Interpolator3d transient pointers
+} // END FUNCTION: Interpolator3d::pup
 
-// destructor
+/**
+ * Release Interpolator3d-owned buffers on chare teardown.
+ */
 Interpolator3d::~Interpolator3d() {
   if (owns_griddata_chare && griddata_chare != nullptr) {
-    free(griddata_chare);
+    for (int grid_idx = 0; grid_idx < commondata.NUMGRIDS; grid_idx++) {
+      BHAH_FREE(griddata_chare[grid_idx].xx[0]);
+      BHAH_FREE(griddata_chare[grid_idx].xx[1]);
+      BHAH_FREE(griddata_chare[grid_idx].xx[2]);
+    } // END LOOP: for grid_idx over owned griddata_chare coordinate arrays
+    BHAH_FREE(griddata_chare);
     griddata_chare = nullptr;
-  }
+  } // END IF: Interpolator3d owns griddata_chare
+  BHAH_FREE(src_gfs_buffer);
   delete[] src_gf_ptrs;
-}
+<<PSI4_DESTRUCTOR_BLOCK>>
+} // END FUNCTION: Interpolator3d::~Interpolator3d
 
 void Interpolator3d::perform_interpolation(int request_type, int request_id, int num_gfs, int total_elements, REAL *dst_x0x1x2_linear) {
   dst_x0x1x2 = (REAL(*)[3])dst_x0x1x2_linear;
@@ -453,6 +556,11 @@ void Interpolator3d::send_interp_concat(){
     file_output_str = file_output_str.replace(
         "<<PSI4_SEND_CONCAT_BLOCK>>", psi4_send_concat_block
     )
+    file_output_str = file_output_str.replace("<<PSI4_PUP_BLOCK>>", psi4_pup_block)
+    file_output_str = file_output_str.replace("<<PSI4_PUP_HELPERS>>", psi4_pup_helpers)
+    file_output_str = file_output_str.replace(
+        "<<PSI4_DESTRUCTOR_BLOCK>>", psi4_destructor_block
+    )
     interpolator3d_cpp_file = project_Path / "interpolator3d.cpp"
     with interpolator3d_cpp_file.open("w", encoding="utf-8") as file:
         file.write(file_output_str)
@@ -602,8 +710,21 @@ module interpolator3d {
               src_gf_ptrs = new const REAL *[interp_num_gfs];
               src_gf_ptrs_capacity = interp_num_gfs;
             }
+            if (src_gfs_buffer_len != len_tmpBuffer) {
+              BHAH_FREE(src_gfs_buffer);
+              src_gfs_buffer_len = len_tmpBuffer;
+              if (src_gfs_buffer_len > 0) {
+                BHAH_MALLOC(src_gfs_buffer, sizeof(REAL) * src_gfs_buffer_len);
+                if (src_gfs_buffer == nullptr) {
+                  CkAbort("Interpolator3d failed to allocate src_gfs_buffer.");
+                }
+              }
+            }
+            if (src_gfs_buffer_len > 0) {
+              memcpy(src_gfs_buffer, tmpBuffer, sizeof(REAL) * src_gfs_buffer_len);
+            }
             for (int idx = 0; idx < interp_num_gfs; idx++) {
-              src_gf_ptrs[idx] = tmpBuffer + idx * Nxx_plus_2NGHOSTS_tot;
+              src_gf_ptrs[idx] = src_gfs_buffer + idx * Nxx_plus_2NGHOSTS_tot;
             }
           }
 
@@ -628,6 +749,14 @@ module interpolator3d {
               }
             } // end for (iter = 0; iter < commondata.bah_max_num_horizons; iter++)
 {psi4_request_block}
+          serial {
+            BHAH_FREE(src_gfs_buffer);
+            src_gfs_buffer_len = 0;
+            delete[] src_gf_ptrs;
+            src_gf_ptrs = nullptr;
+            src_gf_ptrs_capacity = 0;
+          }
+
         } // end when receiv_interp_gfs
       } // end while (commondata.time < commondata.t_final)
     };
