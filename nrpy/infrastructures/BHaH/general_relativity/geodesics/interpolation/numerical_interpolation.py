@@ -30,11 +30,11 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
     register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numerical_time_window_manager import (
-    numerical_time_window_manager,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
+    time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
     time_slot_manager_helpers,
@@ -97,10 +97,10 @@ def register_CFunction_numerical_interpolation(
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
-    if "numerical_time_window_manager" not in par.glb_extras_dict.get(
+    if "time_window_manager_numerical" not in par.glb_extras_dict.get(
         "BHaH_defines", {}
     ):
-        numerical_time_window_manager()
+        time_window_manager_numerical()
 
     spatial_name = "azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical"
     if spatial_name not in cfc.CFunction_dict:
@@ -223,10 +223,10 @@ independently ray-by-ray.
 
     // Step 1: Recover the mapped temporal stencil for this photon from the
     // slot-level numerical window shared by the whole chunk.
-    const int window_status = numerical_time_window_manager_stencil_for_time(
+    const int window_status = time_window_manager_numerical_stencil_for_time(
         numerical_window, (double)t, temporal_half_width, slice_indices,
         slice_times, slice_payloads);
-    if (window_status != NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
+    if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
       ray_failed = 1;
     } else {
       // Step 2: Interpolate each mapped time slice in space at the photon

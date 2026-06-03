@@ -100,8 +100,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
     // Step 1: Recover the mapped temporal stencil for this photon from the
     // slot-level numerical window shared by the whole chunk.
     const int window_status =
-        numerical_time_window_manager_stencil_for_time(numerical_window, (double)t, temporal_half_width, slice_indices, slice_times, slice_payloads);
-    if (window_status != NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
+        time_window_manager_numerical_stencil_for_time(numerical_window, (double)t, temporal_half_width, slice_indices, slice_times, slice_payloads);
+    if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
       ray_failed = 1;
     } else {
       // Step 2: Interpolate each mapped time slice in space at the photon
