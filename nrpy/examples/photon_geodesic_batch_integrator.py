@@ -43,7 +43,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
-    batch_integrator_numerical,
+    batch_integrator_analytical,
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     # --- Infrastructure Helpers ---
     time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
+    batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
     main.main(SPACETIME)
 
     # --- Native NRPy Cleanup ---

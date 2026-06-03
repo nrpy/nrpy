@@ -1,4 +1,4 @@
-# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py
+# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_analytical.py
 r"""
 Defines the orchestration module for the numerical integration pipeline.
 
@@ -28,7 +28,7 @@ import nrpy.c_function as cfc
 import nrpy.params as par
 
 
-def batch_integrator_numerical(spacetime_name: str) -> None:
+def batch_integrator_analytical(spacetime_name: str) -> None:
     r"""
     Construct the Native CUDA orchestrator for the batched numerical integration pipeline.
 
@@ -81,7 +81,7 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
 
     cfunc_type = "void"
 
-    name = "batch_integrator_numerical"
+    name = "batch_integrator_analytical"
 
     params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
 

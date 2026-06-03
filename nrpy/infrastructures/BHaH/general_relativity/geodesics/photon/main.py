@@ -216,7 +216,7 @@ def main(spacetime_name: str) -> None:
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
             // 3. Execute Numerical Integration Pipeline
-            batch_integrator_numerical(&commondata, num_rays, results_buffer);
+            batch_integrator_analytical(&commondata, num_rays, results_buffer);
 
             // 3.5. Coordinate Global Shift
             // Maps local tile-space hits to the global window coordinate system.
