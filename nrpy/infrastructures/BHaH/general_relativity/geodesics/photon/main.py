@@ -59,7 +59,7 @@ def main(spacetime_name: str) -> None:
     2. Parses command-line arguments and parameter files to override defaults.
     3. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
     4. Loops through a grid of tiles (tx, ty), shifting the window center.
-    5. Dispatches the batched numerical integrator for the {spacetime_name} metric per tile.
+    5. Dispatches the batched analytical integrator for the {spacetime_name} metric per tile.
     6. Serializes and zips each tile's data to 'light_blueprint_XX_YY.zip'."""
 
     cfunc_type = "int"
