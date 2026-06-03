@@ -73,6 +73,7 @@ def numerical_time_window_manager() -> None:
     // the slot itself because it includes temporal-interpolation halo slices
     // and lower-time RKF45 lookahead.
 #include <fcntl.h>
+#include <limits.h>
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
@@ -90,6 +91,14 @@ def numerical_time_window_manager() -> None:
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_PAYLOAD_STRIDE_BYTES 120U
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_POINT_RECORD_COUNT 144U
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_POINT_RECORD_BYTES 160U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NUM_GRIDS 188U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NGHOSTS 192U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NXX 220U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NXX_PLUS_2NGHOSTS 244U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_DXX 340U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_INVDXX 364U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMIN 388U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMAX 412U
 #define NUMERICAL_TIME_WINDOW_MANAGER_SLICE_ENTRY_TIME 8U
 
 #define NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS 0
@@ -108,6 +117,14 @@ def numerical_time_window_manager() -> None:
       uint64_t payload_stride_bytes; // Byte stride between adjacent slice payloads.
       uint64_t point_record_count; // Number of point records in one payload.
       uint32_t point_record_bytes; // Bytes in one point record.
+      uint32_t num_grids; // Writer-side grid count stored in the combined header.
+      uint32_t nghosts; // Writer-side NGHOSTS stored in the combined header.
+      uint64_t Nxx[3]; // Interior point counts stored in the combined header.
+      uint64_t Nxx_plus_2NGHOSTS[3]; // Full logical-grid counts stored in the combined header.
+      double dxx[3]; // Native coordinate spacings stored in the combined header.
+      double invdxx[3]; // Reciprocal native coordinate spacings stored in the combined header.
+      double xxmin[3]; // Native lower bounds stored in the combined header.
+      double xxmax[3]; // Native upper bounds stored in the combined header.
 
       double time_start; // Coordinate time of slice 0.
       double grid_time_spacing; // Uniform coordinate-time spacing between 3D grids.
@@ -187,6 +204,16 @@ def numerical_time_window_manager() -> None:
       ntwm->payload_stride_bytes = 0ULL;
       ntwm->point_record_count = 0ULL;
       ntwm->point_record_bytes = 0U;
+      ntwm->num_grids = 0U;
+      ntwm->nghosts = 0U;
+      for (int dirn = 0; dirn < 3; dirn++) {
+        ntwm->Nxx[dirn] = 0ULL;
+        ntwm->Nxx_plus_2NGHOSTS[dirn] = 0ULL;
+        ntwm->dxx[dirn] = 0.0;
+        ntwm->invdxx[dirn] = 0.0;
+        ntwm->xxmin[dirn] = 0.0;
+        ntwm->xxmax[dirn] = 0.0;
+      } // END LOOP: for dirn over stored grid metadata arrays during inert reset
       ntwm->time_start = 0.0;
       ntwm->grid_time_spacing = 0.0;
       ntwm->inv_grid_time_spacing = 0.0;
@@ -230,6 +257,51 @@ def numerical_time_window_manager() -> None:
     } // END FUNCTION: numerical_time_window_manager_free
 
     /**
+     * Copy combined-file grid metadata into a runtime params_struct.
+     *
+     * Only the grid fields serialized by the numerical-data writer are
+     * overwritten here. Higher-level caller-owned params metadata unrelated to
+     * the spatial lookup contract remains untouched.
+     *
+     * @param[in] ntwm Initialized numerical time-window manager.
+     * @param[out] params Destination params_struct to populate.
+     * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
+     */
+    static inline int numerical_time_window_manager_apply_metadata_to_params(
+        const NumericalTimeWindowManager *ntwm,
+        params_struct *restrict params) {
+      if (ntwm == NULL || params == NULL)
+        return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+      if (ntwm->num_grids != 1U || ntwm->nghosts != (uint32_t)NGHOSTS)
+        return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+      for (int dirn = 0; dirn < 3; dirn++) {
+        if (ntwm->Nxx[dirn] > (uint64_t)INT_MAX ||
+            ntwm->Nxx_plus_2NGHOSTS[dirn] > (uint64_t)INT_MAX)
+          return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+      } // END LOOP: for dirn over integer-valued grid metadata before params assignment
+
+      params->Nxx0 = (int)ntwm->Nxx[0];
+      params->Nxx1 = (int)ntwm->Nxx[1];
+      params->Nxx2 = (int)ntwm->Nxx[2];
+      params->Nxx_plus_2NGHOSTS0 = (int)ntwm->Nxx_plus_2NGHOSTS[0];
+      params->Nxx_plus_2NGHOSTS1 = (int)ntwm->Nxx_plus_2NGHOSTS[1];
+      params->Nxx_plus_2NGHOSTS2 = (int)ntwm->Nxx_plus_2NGHOSTS[2];
+      params->xxmin0 = (REAL)ntwm->xxmin[0];
+      params->xxmin1 = (REAL)ntwm->xxmin[1];
+      params->xxmin2 = (REAL)ntwm->xxmin[2];
+      params->xxmax0 = (REAL)ntwm->xxmax[0];
+      params->xxmax1 = (REAL)ntwm->xxmax[1];
+      params->xxmax2 = (REAL)ntwm->xxmax[2];
+      params->dxx0 = (REAL)ntwm->dxx[0];
+      params->dxx1 = (REAL)ntwm->dxx[1];
+      params->dxx2 = (REAL)ntwm->dxx[2];
+      params->invdxx0 = (REAL)ntwm->invdxx[0];
+      params->invdxx1 = (REAL)ntwm->invdxx[1];
+      params->invdxx2 = (REAL)ntwm->invdxx[2];
+      return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS;
+    } // END FUNCTION: numerical_time_window_manager_apply_metadata_to_params
+
+    /**
      * Initialize a trusted-input numerical time-window manager.
      *
      * The caller must call numerical_time_window_manager_set_inert() before
@@ -240,6 +312,7 @@ def numerical_time_window_manager() -> None:
      * @param[in] combined_path Path to the combined numerical .bin container.
      * @param[in] commondata Common runtime parameters.
      * @param temporal_interp_half_width Centered temporal interpolation half-width n.
+     * @param[out] params Optional params_struct updated from the combined-file grid metadata.
      * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
      *
      * @note The backward-lookahead distance is read from
@@ -249,7 +322,8 @@ def numerical_time_window_manager() -> None:
         NumericalTimeWindowManager *ntwm,
         const char *combined_path,
         const commondata_struct *restrict commondata,
-        const int temporal_interp_half_width) {
+        const int temporal_interp_half_width,
+        params_struct *restrict params) {
       unsigned char header_bytes[NUMERICAL_TIME_WINDOW_MANAGER_FIXED_HEADER_BYTES];
       unsigned char time_bytes[sizeof(double)];
       const uint64_t expected_point_record_bytes = 53ULL * (uint64_t)sizeof(double);
@@ -303,15 +377,57 @@ def numerical_time_window_manager() -> None:
           header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_POINT_RECORD_COUNT);
       ntwm->point_record_bytes = numerical_time_window_manager_load_u32(
           header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_POINT_RECORD_BYTES);
+      ntwm->num_grids = numerical_time_window_manager_load_u32(
+          header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NUM_GRIDS);
+      ntwm->nghosts = numerical_time_window_manager_load_u32(
+          header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NGHOSTS);
+      for (int dirn = 0; dirn < 3; dirn++) {
+        const uint64_t offset_u64 = (uint64_t)dirn * (uint64_t)sizeof(uint64_t);
+        const uint64_t offset_f64 = (uint64_t)dirn * (uint64_t)sizeof(double);
+        ntwm->Nxx[dirn] = numerical_time_window_manager_load_u64(
+            header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NXX + offset_u64);
+        ntwm->Nxx_plus_2NGHOSTS[dirn] = numerical_time_window_manager_load_u64(
+            header_bytes +
+            NUMERICAL_TIME_WINDOW_MANAGER_HEADER_NXX_PLUS_2NGHOSTS + offset_u64);
+        ntwm->dxx[dirn] = numerical_time_window_manager_load_f64(
+            header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_DXX + offset_f64);
+        ntwm->invdxx[dirn] = numerical_time_window_manager_load_f64(
+            header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_INVDXX + offset_f64);
+        ntwm->xxmin[dirn] = numerical_time_window_manager_load_f64(
+            header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMIN + offset_f64);
+        ntwm->xxmax[dirn] = numerical_time_window_manager_load_f64(
+            header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMAX + offset_f64);
+      } // END LOOP: for dirn over fixed-header grid metadata arrays during initialization
 
       if (ntwm->num_time_slices < 2ULL || ntwm->payload_bytes_per_slice == 0ULL ||
           ntwm->payload_stride_bytes < ntwm->payload_bytes_per_slice ||
+          ntwm->num_grids != 1U || ntwm->nghosts != (uint32_t)NGHOSTS ||
           ntwm->point_record_count == 0ULL ||
           (uint64_t)ntwm->point_record_bytes != expected_point_record_bytes ||
           ntwm->point_record_count > UINT64_MAX / expected_point_record_bytes) {
         numerical_time_window_manager_free(ntwm);
         return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
       } // END IF: trusted file payload metadata could not describe interpolation records
+
+      uint64_t expected_point_record_count = 1ULL;
+      for (int dirn = 0; dirn < 3; dirn++) {
+        if (ntwm->Nxx[dirn] == 0ULL ||
+            ntwm->Nxx[dirn] > UINT64_MAX / expected_point_record_count ||
+            ntwm->Nxx_plus_2NGHOSTS[dirn] !=
+                ntwm->Nxx[dirn] + 2ULL * (uint64_t)ntwm->nghosts ||
+            !isfinite(ntwm->dxx[dirn]) || ntwm->dxx[dirn] <= 0.0 ||
+            !isfinite(ntwm->invdxx[dirn]) || ntwm->invdxx[dirn] <= 0.0 ||
+            !isfinite(ntwm->xxmin[dirn]) || !isfinite(ntwm->xxmax[dirn]) ||
+            ntwm->xxmax[dirn] <= ntwm->xxmin[dirn]) {
+          numerical_time_window_manager_free(ntwm);
+          return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+        } // END IF: combined-file grid metadata was not numerically usable
+        expected_point_record_count *= ntwm->Nxx[dirn];
+      } // END LOOP: for dirn over combined-file grid metadata during validation
+      if (ntwm->point_record_count != expected_point_record_count) {
+        numerical_time_window_manager_free(ntwm);
+        return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+      } // END IF: point-record count disagreed with combined-file grid dimensions
 
       const uint64_t expected_payload_bytes =
           ntwm->point_record_count * expected_point_record_bytes;
@@ -402,6 +518,12 @@ def numerical_time_window_manager() -> None:
       ntwm->time_start = first_time;
       ntwm->grid_time_spacing = grid_time_spacing;
       ntwm->inv_grid_time_spacing = inv_grid_time_spacing;
+      if (params != NULL &&
+          numerical_time_window_manager_apply_metadata_to_params(ntwm, params) !=
+              NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
+        numerical_time_window_manager_free(ntwm);
+        return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
+      } // END IF: caller requested params_struct population from combined metadata
       return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS;
     } // END FUNCTION: numerical_time_window_manager_init
 
