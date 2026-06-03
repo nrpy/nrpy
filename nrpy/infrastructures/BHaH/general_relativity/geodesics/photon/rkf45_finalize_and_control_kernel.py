@@ -52,9 +52,23 @@ def rkf45_finalize_and_control_kernel(
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
-        currently mapped time window. The companion numerical time-window
-        manager owns the shared `rkf45_max_delta_t` CodeParameter.
+        currently mapped time window. When enabled, this registration also
+        ensures the numerical time-window helper owns and registers the shared
+        slot-lattice and lookahead CodeParameters first.
     """
+    if (
+        enable_numerical_time_window_step_cap
+        and "numerical_time_window_manager"
+        not in (par.glb_extras_dict.get("BHaH_defines", {}))
+    ):
+        # Import lazily to avoid a package-level circular import between the
+        # photon and interpolation aggregation modules.
+        from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numerical_time_window_manager import (  # pylint: disable=import-outside-toplevel
+            numerical_time_window_manager,
+        )
+
+        numerical_time_window_manager()
+
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
         "rkf45_absolute_error_tolerance",
@@ -63,9 +77,9 @@ def rkf45_finalize_and_control_kernel(
     ]
     real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
     # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The shared rkf45_max_delta_t parameter is registered by the companion
-    # numerical_time_window_manager() helper so both code-generation paths
-    # consume one common runtime control.
+    # The companion numerical_time_window_manager() helper owns and registers
+    # the shared lookahead and slot-lattice CodeParameters before this kernel
+    # consumes them.
     real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
     real_param_defaults.extend([0.9, 1.0])
     par.register_CodeParameters(

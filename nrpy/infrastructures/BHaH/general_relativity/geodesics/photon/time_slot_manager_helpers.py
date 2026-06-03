@@ -8,19 +8,39 @@ temporally enforces the split-pipeline architecture required for relativistic ra
 tracing. Atomic operations and speculative memory writes guarantee thread safety and
 mathematical consistency during concurrent orchestration.
 
+This helper also owns the shared slot-manager CodeParameters that describe the
+physical slot lattice used by the batched photon pipeline. Other generators that
+consume `slot_manager_t_min` or `slot_manager_delta_t` should depend on this helper
+instead of registering those fields independently.
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
+import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
 
 def time_slot_manager_helpers() -> None:
     """
-    Register the TimeSlotManager struct and associated inline helper functions within the BHaH macro definitions file.
+    Register TimeSlotManager helpers and shared slot-lattice CodeParameters.
+
+    This helper owns the commondata fields `slot_manager_t_min` and
+    `slot_manager_delta_t`, plus the emitted `TimeSlotManager` struct and its
+    inline arena-management helpers. Generators that need either the runtime
+    slot-lattice parameters or the C helper API should call this function.
 
     >>> time_slot_manager_helpers()
     """
+    par.register_CodeParameters(
+        "REAL",
+        __name__,
+        ["slot_manager_t_min", "slot_manager_delta_t"],
+        [-1000.0, 10.0],
+        commondata=True,
+        add_to_parfile=True,
+    )
+
     portable_tsm = r"""
     // Structure representing a discrete temporal arena for binning active photon trajectories.
     typedef struct {

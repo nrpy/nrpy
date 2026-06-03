@@ -34,8 +34,9 @@ def numerical_time_window_manager() -> None:
 
     This registration owns the `rkf45_max_delta_t` CodeParameter consumed by
     the generated time-window C helpers. It also ensures the shared
-    TimeSlotManager helpers are registered first so the emitted code sees
-    `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`.
+    TimeSlotManager helper is registered first so the emitted code sees
+    `TimeSlotManager`, `slot_lower_time()`, and `slot_upper_time()`, and so
+    the commondata slot-lattice parameters already exist.
 
     The generated slot-window selector intentionally maps a conservative slice
     interval rather than the exact minimal interpolation stencil. The upper
@@ -99,6 +100,7 @@ def numerical_time_window_manager() -> None:
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_INVDXX 364U
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMIN 388U
 #define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMAX 412U
+#define NUMERICAL_TIME_WINDOW_MANAGER_HEADER_CART_ORIGIN 436U
 #define NUMERICAL_TIME_WINDOW_MANAGER_SLICE_ENTRY_TIME 8U
 
 #define NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS 0
@@ -125,6 +127,7 @@ def numerical_time_window_manager() -> None:
       double invdxx[3]; // Reciprocal native coordinate spacings stored in the combined header.
       double xxmin[3]; // Native lower bounds stored in the combined header.
       double xxmax[3]; // Native upper bounds stored in the combined header.
+      double cart_origin[3]; // Cartesian grid origin stored in the combined header.
 
       double time_start; // Coordinate time of slice 0.
       double grid_time_spacing; // Uniform coordinate-time spacing between 3D grids.
@@ -173,12 +176,15 @@ def numerical_time_window_manager() -> None:
      * @param offset Absolute file offset.
      * @return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS or NUMERICAL_TIME_WINDOW_MANAGER_ERROR.
      */
-    static inline int numerical_time_window_manager_read_exact_at(int fd, void *buffer, size_t nbytes, uint64_t offset) {
+    static inline int numerical_time_window_manager_read_exact_at(
+        int fd, void *buffer, size_t nbytes, uint64_t offset) {
       unsigned char *dst = (unsigned char *)buffer;
       size_t bytes_read = 0U;
 
       while (bytes_read < nbytes) {
-        const ssize_t nread = pread(fd, dst + bytes_read, nbytes - bytes_read, (off_t)(offset + bytes_read));
+        const ssize_t nread = pread(
+            fd, dst + bytes_read, nbytes - bytes_read,
+            (off_t)(offset + bytes_read));
         if (nread <= 0)
           return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
         bytes_read += (size_t)nread;
@@ -213,6 +219,7 @@ def numerical_time_window_manager() -> None:
         ntwm->invdxx[dirn] = 0.0;
         ntwm->xxmin[dirn] = 0.0;
         ntwm->xxmax[dirn] = 0.0;
+        ntwm->cart_origin[dirn] = 0.0;
       } // END LOOP: for dirn over stored grid metadata arrays during inert reset
       ntwm->time_start = 0.0;
       ntwm->grid_time_spacing = 0.0;
@@ -298,6 +305,9 @@ def numerical_time_window_manager() -> None:
       params->invdxx0 = (REAL)ntwm->invdxx[0];
       params->invdxx1 = (REAL)ntwm->invdxx[1];
       params->invdxx2 = (REAL)ntwm->invdxx[2];
+      params->Cart_originx = (REAL)ntwm->cart_origin[0];
+      params->Cart_originy = (REAL)ntwm->cart_origin[1];
+      params->Cart_originz = (REAL)ntwm->cart_origin[2];
       return NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS;
     } // END FUNCTION: numerical_time_window_manager_apply_metadata_to_params
 
@@ -397,6 +407,9 @@ def numerical_time_window_manager() -> None:
             header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMIN + offset_f64);
         ntwm->xxmax[dirn] = numerical_time_window_manager_load_f64(
             header_bytes + NUMERICAL_TIME_WINDOW_MANAGER_HEADER_XXMAX + offset_f64);
+        ntwm->cart_origin[dirn] = numerical_time_window_manager_load_f64(
+            header_bytes +
+            NUMERICAL_TIME_WINDOW_MANAGER_HEADER_CART_ORIGIN + offset_f64);
       } // END LOOP: for dirn over fixed-header grid metadata arrays during initialization
 
       if (ntwm->num_time_slices < 2ULL || ntwm->payload_bytes_per_slice == 0ULL ||
@@ -418,7 +431,8 @@ def numerical_time_window_manager() -> None:
             !isfinite(ntwm->dxx[dirn]) || ntwm->dxx[dirn] <= 0.0 ||
             !isfinite(ntwm->invdxx[dirn]) || ntwm->invdxx[dirn] <= 0.0 ||
             !isfinite(ntwm->xxmin[dirn]) || !isfinite(ntwm->xxmax[dirn]) ||
-            ntwm->xxmax[dirn] <= ntwm->xxmin[dirn]) {
+            ntwm->xxmax[dirn] <= ntwm->xxmin[dirn] ||
+            !isfinite(ntwm->cart_origin[dirn])) {
           numerical_time_window_manager_free(ntwm);
           return NUMERICAL_TIME_WINDOW_MANAGER_ERROR;
         } // END IF: combined-file grid metadata was not numerically usable
