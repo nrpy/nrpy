@@ -159,7 +159,7 @@ grhayl_setup_str = rf"""
   const double rho_ppoly[{max(neos - 1, 1)}] = {{0.0}};
   const double Gamma_ppoly[{neos}] = {{2.0}};
   const double k_ppoly0 = {K_poly_tab0};
-  const double Lorentz_damping_factor = 0./0.0;
+  const double Lorentz_damping_factor = NAN;
 
   // Here, we initialize the structs that are (usually) static during a simulation.
   ghl_initialize_params(Noble2D,

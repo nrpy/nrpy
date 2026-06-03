@@ -97,10 +97,13 @@ REAL *restrict M, REAL *restrict expnu, REAL *restrict exp4phi"""
   const REAL M_star = M_arr[R_idx];
   const REAL r_iso_max_inside_star = r_iso_arr[R_idx];
   REAL r_Schw = 0.0;
-  if (rr_iso < r_iso_max_inside_star) { // If we are INSIDE the star, we need to interpolate the data to the grid.
-    // For this case, we know that for all our scalars, f(r) = f(-r)
+
+  // For this case, we know that for all our scalars, f(r) = f(-r)
     if (rr_iso < 0)
       rr_iso = -rr_iso;
+
+  // If we are INSIDE the star, we need to interpolate the data to the grid.    
+  if (rr_iso < r_iso_max_inside_star) {
 
     // First find the central interpolation stencil index:
     int idx_mid = TOVola_bisection_idx_finder(rr_iso, numpoints_arr, r_iso_arr);
