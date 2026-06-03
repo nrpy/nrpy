@@ -1082,7 +1082,7 @@ def register_CFunction_conservatives_to_primitives_routine(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    # # Step 3: Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
+    # Step 3: Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
     # diagnostic output. This is useful for debugging C2P failures or monitoring
     # the health of the primitive recovery routine.
     _ = par.register_CodeParameter(

@@ -5,10 +5,8 @@ Author: Terrence Pierre Jacques
         terrencepierrej **at** gmail **dot** com
 """
 
-import multiprocessing
 import os
 import shutil
-import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -47,8 +45,8 @@ Nxx_dict = {
     "SinhCartesian": [64, 64, 64],
 }
 
-enable_rfm_precompute = False
-enable_intrinsics = False
+enable_rfm_precompute = True
+enable_intrinsics = True
 MoL_method = "RK4"
 # PPM requires at least 3 ghost zones
 fd_order = 4
@@ -91,28 +89,31 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_T4munu=True,
-    enable_intrinsics=True,
+    enable_intrinsics=enable_intrinsics,
     enable_fd_functions=enable_fd_functions,
     LapseEvolutionOption=LapseEvolutionOption,
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     KreissOliger_strength_gauge=KreissOliger_strength_gauge,
     KreissOliger_strength_nongauge=KreissOliger_strength_nongauge,
+    enable_CAHD=enable_CAHD,
+    enable_CAKO=enable_CAKO,
+    enable_SSL=enable_SSL,
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
     BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval(
         CoordSystem=CoordSystem,
-        enable_intrinsics=True,
+        enable_intrinsics=enable_intrinsics,
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
 BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
@@ -143,13 +144,16 @@ grhayl_setup_str = rf"""
   // This section sets up the initial parameters that would normally
   // be provided by the simulation.
   const int backup_routine[3] = {{Palenzuela1D,Font1D,None}};
-  const bool calc_prims_guess = true; // GRHayL's primitive guesses are better to use than the previous time step, at least for hybrid eos
+
+  // GRHayL's primitive guesses are better to use than the previous time step, at least for hybrid eos
+  const bool calc_prims_guess = true;
+
   const double Psi6threshold = 1e100;
 
   commondata->eos.eos_type = ghl_eos_hybrid;
   const int neos = {neos};
   const double W_max = 10.0;
-  const double rho_b_min = {rho_baryon_central * 1e-13}; //*1e-9
+  const double rho_b_min = {rho_baryon_central * 1e-13};
   const double rho_b_max = 1e300;
   const double Gamma_th = 2.0;
   const double rho_ppoly[{max(neos - 1, 1)}] = {{0.0}};
@@ -157,9 +161,7 @@ grhayl_setup_str = rf"""
   const double k_ppoly0 = {K_poly_tab0};
   const double Lorentz_damping_factor = 0./0.0;
 
-  // Here, we initialize the structs that are (usually) static during
-  // a simulation.
-
+  // Here, we initialize the structs that are (usually) static during a simulation.
   ghl_initialize_params(Noble2D,
                       backup_routine,
                       false, // evolve entropy
@@ -204,7 +206,7 @@ par.adjust_CodeParam_default("poly_eos_K", K_poly_tab0)
 # grhayl calls currently incompatible with SIMD
 BHaH.GRoovy.calculate_all_source_terms.register_CFunction_calculate_all_source_terms(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=False,
     enable_intrinsics=False,
     OMP_collapse=OMP_collapse,
     enable_GoldenKernels=True,
@@ -221,7 +223,7 @@ for flux_dirn in range(3):
 
 BHaH.GRoovy.calculate_flux_divergences.register_CFunction_calculate_flux_divergences(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=False,
     OMP_collapse=OMP_collapse,
     enable_GoldenKernels=True,
     evolving_temperature=evolving_temperature,
@@ -229,7 +231,7 @@ BHaH.GRoovy.calculate_flux_divergences.register_CFunction_calculate_flux_diverge
 
 BHaH.GRoovy.compute_up_index_velocity_time_component_pointwise.register_CFunction_compute_up_index_velocity_time_component_pointwise(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=False,
     enable_GoldenKernels=True,
 )
 
@@ -243,7 +245,7 @@ BHaH.GRoovy.interpolate_metric_gfs_to_cell_faces.register_CFunction_interpolate_
 
 BHaH.GRoovy.primitives_to_conservatives_routine.register_CFunction_primitives_to_conservatives_routine(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=False,
     enable_intrinsics=False,
     OMP_collapse=OMP_collapse,
     enable_GoldenKernels=True,
@@ -273,13 +275,13 @@ BHaH.GRoovy.apply_copy_and_outflow_bcs.register_CFunction_apply_copy_and_outflow
 
 BHaH.GRoovy.grhd_rhs_eval.register_CFunction_grhd_rhs_eval(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
+    enable_rfm_precompute=False,
 )
 
 BHaH.GRoovy.compute_stress_energy_tensor.register_CFunction_compute_stress_energy_tensor(
     CoordSystem=CoordSystem,
-    enable_rfm_precompute=enable_rfm_precompute,
-    enable_intrinsics=enable_intrinsics,
+    enable_rfm_precompute=False,
+    enable_intrinsics=False,
     OMP_collapse=OMP_collapse,
     enable_GoldenKernels=True,
     evolving_temperature=evolving_temperature,
@@ -305,7 +307,7 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     set_of_CoordSystems=set_of_CoordSystems,
     list_of_grid_physical_sizes=[grid_physical_size],
     Nxx_dict=Nxx_dict,
-    enable_rfm_precompute=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
 
@@ -369,7 +371,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_string=post_RHS_string,
-    enable_rfm_precompute=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
@@ -387,6 +389,7 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
 par.adjust_CodeParam_default("CFL_FACTOR", CFL_FACTOR)
+par.adjust_CodeParam_default("eta", eta)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
 
@@ -436,7 +439,7 @@ copy_files(
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
     additional_includes=additional_includes,
-    enable_rfm_precompute=True,
+    enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
 )
@@ -473,7 +476,7 @@ BHaH.main_c.register_CFunction_main_c(
     post_non_y_n_auxevol_mallocs=post_initial,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=True, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
 # Set GRHayL directory
@@ -490,6 +493,9 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
 if __name__ == "__main__":
+    import multiprocessing
+    import subprocess
+
     print("Cloning and compiling GRHayL...")
 
     # Define the repository URL and directory
@@ -511,10 +517,7 @@ if __name__ == "__main__":
 
     # Configure the build
     configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
-    # For Terrence's laptop, uncomment the following lines and comment out the above line
-    # configure_options = ['./configure', '--hdf5inc', '/usr/include/hdf5/mpich',
-    #                       '--hdf5lib', '/usr/lib/x86_64-linux-gnu/hdf5/mpich/',
-    #                       '--prefix=./', '--buildtype=opt']
+
     result = subprocess.run(
         configure_options, capture_output=True, text=True, check=True
     )

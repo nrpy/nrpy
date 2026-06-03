@@ -18,6 +18,10 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.indexedexp as ixp
 import nrpy.infrastructures.BHaH.simple_loop as lp
 import nrpy.reference_metric as refmetric
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 
 
 def register_CFunction_hybrid_EoS_TOV_initial_data(
@@ -63,10 +67,20 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
   // Unpack griddata struct:
   params_struct *restrict params = &griddata[grid].params;
   bc_struct *restrict bcstruct = &griddata[grid].bcstruct;
+
+  const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+  const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+  const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
 """
+    rfm = refmetric.reference_metric[CoordSystem]
+    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        [rfm.xxSph[0]]
+    )
+
+    body += generate_definition_header(param_symbols, var_access="params->")
+    body += generate_definition_header(commondata_symbols, var_access="commondata->")
 
     body += r"""
-#include "set_CodeParameters.h"
   REAL *restrict xx[3];
   for (int ww = 0; ww < 3; ww++)
     xx[ww] = griddata[grid].xx[ww];
@@ -77,8 +91,6 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
       commondata, params, (const REAL *restrict *)xx, bcstruct,
       &griddata[grid].gridfuncs, &ID_persist, TOVola_interp);
 """
-
-    rfm = refmetric.reference_metric[CoordSystem]
 
     loop_body = (
         """  // First set r(=r_iso), theta, phi in terms of xCart[3]:
