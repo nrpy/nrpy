@@ -577,16 +577,22 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
       for (int u = 0; u < interp_order; u++) {
         const double *restrict tensor_record =
             slice_payload +
-            mapped_point_index[v][u] * (uint64_t)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
+            mapped_point_index[v][u] *
+                (uint64_t)
+                    AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
             3ULL;
         const REAL weight = normalization_2d * coeff_theta[v] * coeff_r[u];
         const REAL node_phi_ref =
             (REAL)context->stored_phi_samples[mapped_phi_plane[v][u]];
 
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+        for (int comp = 0;
+             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+             comp++) {
           g4dd_node_ref[comp] = (REAL)tensor_record[comp];
         } // END LOOP: for comp over serialized metric payload components
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+        for (int comp = 0;
+             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
+             comp++) {
           gamma4udd_node_ref[comp] = (REAL)tensor_record[
               AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
         } // END LOOP: for comp over serialized Christoffel payload components
@@ -598,10 +604,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
             phi_ref - node_phi_ref, g4dd_node_ref, gamma4udd_node_ref,
             g4dd_node_common, gamma4udd_node_common);
 
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+        for (int comp = 0;
+             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+             comp++) {
           tensor_ref[comp] += weight * g4dd_node_common[comp];
         } // END LOOP: for comp over metric components on the common reference plane
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+        for (int comp = 0;
+             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
+             comp++) {
           tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] +=
               weight * gamma4udd_node_common[comp];
         } // END LOOP: for comp over Christoffel components on the common reference plane

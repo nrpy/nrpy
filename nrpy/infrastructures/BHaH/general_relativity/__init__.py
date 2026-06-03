@@ -12,6 +12,7 @@ from . import (
     diagnostics_nearest,
     diagnostics_volume_integration,
     enforce_detgammabar_equals_detgammahat,
+    geodesics,
     initial_data,
     psi4,
     psi4_spinweightm2_decomposition,

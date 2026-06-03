@@ -29,6 +29,13 @@ the next accepted RKF45 step will not move farther backward in coordinate time
 than the promised lookahead, and this kernel makes that assumption true by
 limiting the next accepted affine-parameter step when necessary.
 
+For the full mapped-window reasoning, including why the lower side of the
+window carries extra backward-time lookahead while the upper side only needs
+the centered interpolation halo, see
+`time_window_manager_numerical_required_grid_range()` and
+`time_window_manager_numerical_stencil_for_time()` in the companion
+`time_window_manager_numerical` helper.
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
@@ -52,9 +59,42 @@ def rkf45_finalize_and_control_kernel(
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
-        currently mapped time window. The companion numerical time-window
-        manager owns the shared `rkf45_max_delta_t` CodeParameter.
+        currently mapped time window. When enabled, this registration also
+        ensures the numerical time-window helper owns and registers the shared
+        slot-lattice and lookahead CodeParameters first.
+
+    Doctests:
+    >>> import nrpy.c_function as cfc
+    >>> import os
+    >>> import tempfile
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_checked_floor_to_long" in generated
+    True
+    >>> "rkf45_checked_floor_to_long(slot_position, &slot_idx)" in generated
+    True
     """
+    if (
+        enable_numerical_time_window_step_cap
+        and "time_window_manager_numerical"
+        not in (par.glb_extras_dict.get("BHaH_defines", {}))
+    ):
+        # Import lazily to avoid a package-level circular import between the
+        # photon and interpolation aggregation modules.
+        from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (  # pylint: disable=import-outside-toplevel
+            time_window_manager_numerical,
+        )
+
+        time_window_manager_numerical()
+
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
         "rkf45_absolute_error_tolerance",
@@ -63,9 +103,9 @@ def rkf45_finalize_and_control_kernel(
     ]
     real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
     # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The shared rkf45_max_delta_t parameter is registered by the companion
-    # numerical_time_window_manager() helper so both code-generation paths
-    # consume one common runtime control.
+    # The companion time_window_manager_numerical() helper owns and registers
+    # the shared lookahead and slot-lattice CodeParameters before this kernel
+    # consumes them.
     real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
     real_param_defaults.extend([0.9, 1.0])
     par.register_CodeParameters(
@@ -130,8 +170,21 @@ def rkf45_finalize_and_control_kernel(
     // Distribute photon rays across available CPU threads for parallel evaluation.
     #pragma omp parallel for
     for(long int i = 0; i < chunk_size; i++) {
-    """
+        """
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
+
+    prefunc = r"""
+static inline int rkf45_checked_floor_to_long(
+    const double value,
+    long int *out) {
+  if (out == NULL || !isfinite(value) ||
+      value < (double)LONG_MIN || value > (double)LONG_MAX) {
+    return 1;
+  } // END IF: floor() source value was not representable as long int
+  *out = (long int)floor(value);
+  return 0;
+} // END FUNCTION: rkf45_checked_floor_to_long
+"""
 
     accepted_time_window_step_cap = ""
     if enable_numerical_time_window_step_cap:
@@ -145,6 +198,10 @@ def rkf45_finalize_and_control_kernel(
         // current slot plus rkf45_max_delta_t of extra lookahead. Convert that
         // allowed coordinate-time motion into an affine-parameter cap using
         // the accepted fifth-order estimate of p^0 = dt/dlambda.
+        // For the full cross-file contract, see
+        // time_window_manager_numerical_required_grid_range() and
+        // time_window_manager_numerical_stencil_for_time() in the companion
+        // time_window_manager_numerical helper.
         {{
             const double t_accepted = f_5th_cache[0];
             // f_5th_cache[4] is used instead of the old p^0 because it is the
@@ -152,40 +209,47 @@ def rkf45_finalize_and_control_kernel(
             // the best local estimate for converting the next affine step into
             // coordinate-time motion.
             const double p0_accepted_abs = fabs(f_5th_cache[4]);
-            const long int slot_idx =
-                (long int)floor((t_accepted - {cd_access}slot_manager_t_min) /
-                                {cd_access}slot_manager_delta_t);
-            const double slot_lower =
-                {cd_access}slot_manager_t_min +
-                (double)slot_idx * {cd_access}slot_manager_delta_t;
-            const double delta_to_lower_slot_edge =
-                fmax(0.0, t_accepted - slot_lower);
-            const double allowed_delta_t =
-                delta_to_lower_slot_edge + {cd_access}rkf45_max_delta_t;
+            const double slot_position =
+                (t_accepted - {cd_access}slot_manager_t_min) /
+                {cd_access}slot_manager_delta_t;
+            long int slot_idx = 0L;
 
-            if (p0_accepted_abs > 0.0 && allowed_delta_t > 0.0) {{
-                // Local estimate:
-                //   |Delta t| approx |p^0| Delta lambda
-                // so require:
-                //   Delta lambda <= 0.9 * allowed_delta_t / |p^0|
-                // Use a fixed 0.9 geometric safety margin here, independent
-                // of the RKF45 adaptive error-control safety factor, so the
-                // step stays away from the mmap boundary even if p^0 changes
-                // during the next trial step.
-                const double time_window_h_cap =
-                    0.9 * allowed_delta_t / p0_accepted_abs;
-                if (time_window_h_cap < {cd_access}rkf45_h_min) {{
-                    // This configuration should be unreachable in practice.
-                    // Fail the ray rather than stepping outside the mapped
-                    // numerical time window that the companion manager
-                    // promised to keep available.
-                    h_new = time_window_h_cap;
-                    WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
-                }} else {{
-                    h_new = fmin(h_new, time_window_h_cap);
-                    h_new = fmax(h_new, {cd_access}rkf45_h_min);
-                }} // END ELSE: time-window cap remained compatible with h_min
-            }} // END IF: accepted temporal derivative supports a finite cap
+            if (rkf45_checked_floor_to_long(slot_position, &slot_idx) != 0) {{
+                h_new = {cd_access}rkf45_h_min;
+                WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+            }} else {{
+                const double slot_lower =
+                    {cd_access}slot_manager_t_min +
+                    (double)slot_idx * {cd_access}slot_manager_delta_t;
+                const double delta_to_lower_slot_edge =
+                    fmax(0.0, t_accepted - slot_lower);
+                const double allowed_delta_t =
+                    delta_to_lower_slot_edge + {cd_access}rkf45_max_delta_t;
+
+                if (p0_accepted_abs > 0.0 && allowed_delta_t > 0.0) {{
+                    // Local estimate:
+                    //   |Delta t| approx |p^0| Delta lambda
+                    // so require:
+                    //   Delta lambda <= 0.9 * allowed_delta_t / |p^0|
+                    // Use a fixed 0.9 geometric safety margin here, independent
+                    // of the RKF45 adaptive error-control safety factor, so the
+                    // step stays away from the mmap boundary even if p^0 changes
+                    // during the next trial step.
+                    const double time_window_h_cap =
+                        0.9 * allowed_delta_t / p0_accepted_abs;
+                    if (time_window_h_cap < {cd_access}rkf45_h_min) {{
+                        // This configuration should be unreachable in practice.
+                        // Fail the ray rather than stepping outside the mapped
+                        // numerical time window that the companion manager
+                        // promised to keep available.
+                        h_new = time_window_h_cap;
+                        WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                    }} else {{
+                        h_new = fmin(h_new, time_window_h_cap);
+                        h_new = fmax(h_new, {cd_access}rkf45_h_min);
+                    }} // END ELSE: time-window cap remained compatible with h_min
+                }} // END IF: accepted temporal derivative supports a finite cap
+            }} // END ELSE: slot position was representable as long int
         }} // END BLOCK: numerical time-window accepted-step cap
 """
 
@@ -369,7 +433,7 @@ def rkf45_finalize_and_control_kernel(
         "stream": "stream_idx",
     }
 
-    prefunc, launch_code = parallel_utils.generate_kernel_and_launch_code(
+    generated_prefunc, launch_code = parallel_utils.generate_kernel_and_launch_code(
         kernel_name="rkf45_finalize_and_control_kernel",
         kernel_body=kernel_body,
         arg_dict_cuda=arg_dict_cuda,
@@ -378,6 +442,7 @@ def rkf45_finalize_and_control_kernel(
         launch_dict=launch_dict,
         cfunc_decorators="__global__" if parallelization == "cuda" else "",
     )
+    prefunc += generated_prefunc
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     if parallelization == "cuda":

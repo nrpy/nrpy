@@ -30,11 +30,11 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
     register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numerical_time_window_manager import (
-    numerical_time_window_manager,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
+    time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
     time_slot_manager_helpers,
@@ -97,10 +97,10 @@ def register_CFunction_numerical_interpolation(
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
-    if "numerical_time_window_manager" not in par.glb_extras_dict.get(
+    if "time_window_manager_numerical" not in par.glb_extras_dict.get(
         "BHaH_defines", {}
     ):
-        numerical_time_window_manager()
+        time_window_manager_numerical()
 
     spatial_name = "azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical"
     if spatial_name not in cfc.CFunction_dict:
@@ -212,6 +212,7 @@ independently ray-by-ray.
     const REAL x = (REAL)d_f_bundle[IDX_F(1, i)];
     const REAL y = (REAL)d_f_bundle[IDX_F(2, i)];
     const REAL z = (REAL)d_f_bundle[IDX_F(3, i)];
+    int ray_failed = 0;
     uint64_t slice_indices[temporal_num_points];
     REAL slice_times[temporal_num_points];
     const double *slice_payloads[temporal_num_points];
@@ -222,10 +223,33 @@ independently ray-by-ray.
 
     // Step 1: Recover the mapped temporal stencil for this photon from the
     // slot-level numerical window shared by the whole chunk.
-    const int window_status = numerical_time_window_manager_stencil_for_time(
+    const int window_status = time_window_manager_numerical_stencil_for_time(
         numerical_window, (double)t, temporal_half_width, slice_indices,
         slice_times, slice_payloads);
-    if (window_status != NUMERICAL_TIME_WINDOW_MANAGER_SUCCESS) {
+    if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+      ray_failed = 1;
+    } else {
+      // Step 2: Interpolate each mapped time slice in space at the photon
+      // position, producing one tensor bundle per temporal node.
+      const int spatial_status =
+          azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
+              spatial_context, commondata, params, x, y, z, temporal_num_points,
+              slice_payloads, g4dd_slices, gamma4udd_slices);
+      if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+        ray_failed = 1;
+      } else {
+        // Step 3: Interpolate the per-slice tensor bundles in physical time to the
+        // photon coordinate time.
+        const int temporal_status = temporal_lagrange_interpolation(
+            commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local,
+            gamma4udd_local);
+        if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS) {
+          ray_failed = 1;
+        } // END IF: temporal interpolation failed for this ray
+      } // END ELSE: spatial interpolation succeeded for this ray
+    } // END ELSE: mapped temporal stencil was available for this ray
+
+    if (ray_failed) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
       } // END LOOP: for comp over metric failure outputs
@@ -235,31 +259,7 @@ independently ray-by-ray.
         } // END LOOP: for comp over connection failure outputs
       } // END IF: connection output bundle was requested
       continue;
-    } // END IF: temporal stencil was not inside the mapped numerical window
-
-    // Step 2: Interpolate each mapped time slice in space at the photon
-    // position, producing one tensor bundle per temporal node.
-    const int spatial_status =
-        azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
-            spatial_context, commondata, params, x, y, z, temporal_num_points,
-            slice_payloads, g4dd_slices, gamma4udd_slices);
-    if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
-        d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      } // END LOOP: for comp over metric failure outputs
-      if (d_connection_bundle != NULL) {
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
-          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
-        } // END LOOP: for comp over connection failure outputs
-      } // END IF: connection output bundle was requested
-      continue;
-    } // END IF: spatial interpolation failed for this ray
-
-    // Step 3: Interpolate the per-slice tensor bundles in physical time to the
-    // photon coordinate time.
-    temporal_lagrange_interpolation(
-        commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local,
-        gamma4udd_local);
+    } // END IF: at least one interpolation stage failed for this ray
 
     for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
       d_metric_bundle[IDX_METRIC(comp, i)] = (double)g4dd_local[comp];

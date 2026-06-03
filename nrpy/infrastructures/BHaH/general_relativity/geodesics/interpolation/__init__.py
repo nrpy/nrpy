@@ -1,6 +1,6 @@
 from . import (
     azimuthal_symmetry_spatial_lagrange_interpolation,
     numerical_interpolation,
-    numerical_time_window_manager,
+    time_window_manager_numerical,
     temporal_lagrange_interpolation,
 )

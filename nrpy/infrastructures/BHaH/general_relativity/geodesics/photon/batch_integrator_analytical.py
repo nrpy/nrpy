@@ -26,6 +26,9 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 import nrpy.params as par
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
+    time_slot_manager_helpers,
+)
 
 
 def batch_integrator_analytical(spacetime_name: str) -> None:
@@ -34,6 +37,9 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
     :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
     """
+    if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
+        time_slot_manager_helpers()
+
     # Core physics and numerical simulation parameters for the global spacetime struct.
     par.register_CodeParameters(
         "REAL",
@@ -42,11 +48,9 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             "t_integration_max",
             "r_escape",
             "p_t_max",
-            "slot_manager_t_min",
-            "slot_manager_delta_t",
             "numerical_initial_h",
         ],
-        [10000.0, 150.0, 1e3, -1000.0, 10.0, 0.1],
+        [10000.0, 150.0, 1e3, 0.1],
         commondata=True,
         add_to_parfile=True,
     )
