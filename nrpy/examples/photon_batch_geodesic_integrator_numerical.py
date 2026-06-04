@@ -1,15 +1,16 @@
 r"""
-Orchestrator for the Split-Pipeline Photon Geodesic Integrator.
+Orchestrator for the CPU numerical-spacetime photon geodesic integrator.
 
-This module constructs a high-performance C project for simulating photon trajectories
-in curved spacetimes.
+This module constructs the C project that evolves batched photon trajectories
+through a numerical spacetime sourced from the combined raytracing ``.bin``
+generated from ``two_blackholes_collide.py --raytracing-outputs``.
 
-The generated code employs a Structure of Arrays (SoA) memory layout and an
-adaptive RKF45 integration scheme managed by a lock-free TimeSlotManager system.
+The generated code keeps the existing Structure-of-Arrays photon pipeline and
+adaptive RKF45 stepping, but all metric and Christoffel evaluations now come
+from the numerical interpolation helpers instead of analytic spacetime kernels.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
-
 """
 
 # ##############################################################################
@@ -21,28 +22,36 @@ import os
 import shutil
 import sys
 
+import sympy as sp
+
 # NRPy core and helper modules for C code generation
 import nrpy.c_function as cfc
-import nrpy.helpers.generic as gh
 import nrpy.params as par
 
-# Physics/Math Generators (Symbolic definitions of spacetimes and geodesics)
-from nrpy.equations.general_relativity.geodesics import analytic_spacetimes as anasp
+# Physics/Math Generators (Symbolic definitions of geodesics)
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
+from nrpy.examples.geodesic_helpers.combined_raytracing_bin_helper import (
+    ensure_required_combined_bin,
+)
 
 # NRPy BlackHoles@Home (BHaH) infrastructure modules for C project management
-from nrpy.infrastructures.BHaH import BHaH_defines_h, BHaH_device_defines_h
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
 
 # C-Code Builder Functions (Registers specific physical and numerical routines)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics import normalization_constraint
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import (
-    azimuthal_symmetry_spatial_lagrange_interpolation,
-    numerical_interpolation,
-    temporal_lagrange_interpolation,
-    time_window_manger_numerical,
+from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
+    normalization_constraint,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
+    register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numerical_interpolation import (
+    register_CFunction_numerical_interpolation,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
+    register_CFunction_temporal_lagrange_interpolation,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     batch_integrator_numerical,
@@ -52,22 +61,16 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     find_event_time_and_state,
     handle_source_plane_intersection,
     handle_window_plane_intersection,
-    interpolation_kernel,
     main,
     p0_reverse_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
-    time_slot_manager_helpers,
-)
-
-# Import python helper function to check/generate required .bin interpolation data
-from nrpy.infrastructures.BHaH.diagnostics.combined_raytracing_bin_helper import (
-    ensure_required_combined_bin,
 )
 
 # Establish the script directory for reliable relative path resolution
 script_dir = os.path.dirname(os.path.abspath(__file__))
+repo_root = os.path.dirname(os.path.dirname(script_dir))
 
 # ##############################################################################
 # PART 1: MAIN CONFIGURATION
@@ -90,25 +93,34 @@ if __name__ == "__main__":
     project_name = "photon_batch_geodesic_integrator_numerical"
     exec_name = "photon_batch_geodesic_integrator_numerical"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
-    blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
 
     # Define the physical regime: Target spacetime and particle classification
     SPACETIME = "Numerical"
-    integrator_mode = SPACETIME
+    integrator_mode = "Numerical"
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
+    dataset_coord_system = "Spherical"
+    enable_simd = False
 
     # Step 3: Initialize the project directory and select the infrastructure backend
     print(f"Initializing project: {project_name}")
     shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
 
-    # Instruct NRPy to use the BHaH infrastructure for macro expansions and SoA layouts
+    # Instruct NRPy to emit the CPU/OpenMP BHaH pipeline used by the numerical integrator.
     par.set_parval_from_str("Infrastructure", "BHaH")
+    par.set_parval_from_str("parallelization", "openmp")
 
-    # Step 4: Acquire Symbolic Physics Expressions
-    print(f" -> Acquiring symbolic data for {GEO_KEY}...")
-    geodesic_data = geo.Geodesic_Equations[GEO_KEY]
+    # Step 4: Build the generic symbolic photon equations consumed by the
+    # runtime numerical metric and Christoffel interpolation pipeline.
+    print(f" -> Assembling symbolic data for {GEO_KEY}...")
+    generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
+    coordinate_symbols = list(sp.symbols("t x y z", real=True))
+    geodesic_rhs = generic_geodesic_equations.geodesic_eom_rhs_photon()
+    p0_photon = generic_geodesic_equations.hamiltonian_constraint_photon()
+    normalization_constraint_expr = (
+        generic_geodesic_equations.normalization_constraint()
+    )
 
     # ##########################################################################
     # Step 5: Execute Modules and Register C Functions (Split-Pipeline Order)
@@ -118,25 +130,30 @@ if __name__ == "__main__":
     # --- Initialization Phase Kernels ---
     set_initial_conditions_kernel.set_initial_conditions_kernel(SPACETIME)
 
-    if geodesic_data.p0_photon is None:
-        raise ValueError(f"p0_photon is None for {GEO_KEY}")
-    p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
+    p0_reverse_kernel.p0_reverse_kernel(p0_photon)
 
-    # --- Fundamental Tensor Calculations (VRAM Persisted) ---
+    # --- Fundamental Constraint Evaluation ---
     normalization_constraint.normalization_constraint(
-        geodesic_data.norm_constraint_expr, PARTICLE
+        normalization_constraint_expr, PARTICLE
     )
 
-    # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
-    interpolation_kernel.interpolation_kernel(SPACETIME)
-    azimuthal_symmetry_spatial_lagrange_interpolation.azimuthal_symmetry_spatial_lagrange_interpolation()
-    temporal_lagrange_interpolationtemporal_lagrange_interpolation()
-    numerical_interpolation.numerical_interpolation()
-    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
-        geodesic_data.geodesic_rhs, geodesic_data.xx
+    # --- Numerical Interpolation Pipeline ---
+    register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
+        dataset_coord_system, enable_simd=enable_simd, project_dir=project_dir
     )
+    register_CFunction_temporal_lagrange_interpolation(
+        enable_simd=enable_simd, project_dir=project_dir
+    )
+    register_CFunction_numerical_interpolation(
+        dataset_coord_system, enable_simd=enable_simd, project_dir=project_dir
+    )
+
+    # --- Core RKF45 and Geodesic Update Kernels ---
+    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(geodesic_rhs, coordinate_symbols)
     rkf45_stage_update.rkf45_stage_update()
-    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
+    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
+        enable_numerical_time_window_step_cap=True
+    )
 
     # --- Event Detection & Boundary Management ---
     find_event_time_and_state.find_event_time_and_state()
@@ -146,17 +163,16 @@ if __name__ == "__main__":
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
 
     # --- Infrastructure Helpers ---
-    time_slot_manager_helpers.time_slot_manager_helpers()
-        time_window_manger_numerical.time_window_manger_numerical()
+    # The numerical interpolation and RKF45 finalization registrations above
+    # already pull in the shared slot/time-window helpers on demand. Calling
+    # them again here would append duplicate definitions into BHaH_defines.h.
     batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
     main.main(SPACETIME, integrator_mode)
 
     # --- Native NRPy Cleanup ---
-    # Remove the inline helper functions from the global CFunction dictionary.
-    # Because the manager kernel incorporates their logic directly via its prefunc,
-    # popping them prevents the infrastructure from generating standalone .cu files
-    # and prevents 'ghost' prototypes in BHaH_function_prototypes.h. This eliminates
-    # nvlink multiple-definition conflicts during relocatable device code linking.
+    # Remove helper registrations that the event manager inlines through its
+    # prefunc so the project does not emit redundant standalone C files or
+    # extra prototypes for functions that are no longer called directly.
     for internal_func in [
         "find_event_time_and_state",
         "handle_source_plane_intersection",
@@ -236,7 +252,8 @@ if __name__ == "__main__":
                 "two_blackholes_collide.py",
             ),
             "combine_raytracing_time_slices_script": os.path.join(
-                os.path.dirname(script_dir),
+                repo_root,
+                "nrpy",
                 "infrastructures",
                 "BHaH",
                 "diagnostics",
@@ -244,7 +261,8 @@ if __name__ == "__main__":
             ),
             "stage1_raytracing_output_dir": os.path.abspath(
                 os.path.join(
-                    args.outdir,
+                    repo_root,
+                    "project",
                     "two_blackholes_collide",
                 )
             ),
@@ -262,11 +280,13 @@ if __name__ == "__main__":
 
     print(" -> Overriding desired CodeParameters before .par generation...")
 
-    # .bin Path for interpolation
-    par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = combined_bin_location
+    # Bind the validated combined numerical-spacetime dataset into commondata.
+    par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = (
+        combined_bin_location
+    )
     # Batch Integrator & Numerical Limits
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
-    par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
+    par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
@@ -335,7 +355,7 @@ if __name__ == "__main__":
     # ##########################################################################
     print(" -> Assembling C project on disk...")
 
-    # OpenMP 
+    # Map the shared CUDA-flavored kernel abstraction macros onto CPU/OpenMP.
     cpu_macros = {
         # --- Memory Access Redirection ---
         "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))\n",
@@ -392,7 +412,9 @@ if __name__ == "__main__":
     # ##########################################################################
 
     # Define the directory containing the visualization assets relative to the repository root
-    vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
+    vis_dir = os.path.join(
+        "nrpy", "examples", "geodesic_helpers", "geodesic_visualizations"
+    )
 
     # Locate the visualization script
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
@@ -440,9 +462,11 @@ if __name__ == "__main__":
     )
 
     print(
-        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{exec_name} to run."
+        f"Finished! Now go into {project_dir} and type `make` to build, then ./{exec_name} to run."
     )
-    print(f"    Parameter file can be found in {project_name}.par\n")
+    print(
+        f"    Parameter file can be found at {os.path.join(project_dir, f'{project_name}.par')}\n"
+    )
     print(
         "    To generate the lensed image after running the C executable, ensure you have the required Python packages:"
     )

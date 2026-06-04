@@ -62,6 +62,59 @@ def time_window_manager_numerical() -> None:
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
+    # Step 1: Register the runtime grid metadata fields this helper copies from
+    # the combined numerical-spacetime container into params_struct.
+    for dirn in range(3):
+        _ = par.register_CodeParameter(
+            "int",
+            __name__,
+            f"Nxx{dirn}",
+            64,
+            commondata=False,
+            add_to_parfile=False,
+        )
+        _ = par.register_CodeParameter(
+            "int",
+            __name__,
+            f"Nxx_plus_2NGHOSTS{dirn}",
+            0,
+            commondata=False,
+            add_to_parfile=False,
+        )
+        _ = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            f"xxmin{dirn}",
+            -10.0,
+            commondata=False,
+            add_to_parfile=False,
+        )
+        _ = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            f"xxmax{dirn}",
+            10.0,
+            commondata=False,
+            add_to_parfile=False,
+        )
+        _ = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            f"dxx{dirn}",
+            0.0,
+            commondata=False,
+            add_to_parfile=False,
+        )
+        _ = par.register_CodeParameter(
+            "REAL",
+            __name__,
+            f"invdxx{dirn}",
+            0.0,
+            commondata=False,
+            add_to_parfile=False,
+        )
+
+    # Step 2: Register the shared backward-time RKF45 lookahead parameter.
     _ = par.register_CodeParameter(
         "REAL",
         __name__,

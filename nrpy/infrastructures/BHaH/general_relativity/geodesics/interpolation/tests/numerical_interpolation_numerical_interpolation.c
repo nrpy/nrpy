@@ -58,9 +58,6 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         } // END LOOP: for comp over connection outputs after invalid temporal order
       } // END IF: connection output bundle was requested
     } // END LOOP: for i over rays after invalid temporal order
-#undef IDX_F
-#undef IDX_METRIC
-#undef IDX_CONN
     return;
   } // END IF: runtime temporal interpolation half-width was invalid
   const int temporal_num_points = 2 * temporal_half_width + 1;
@@ -76,9 +73,6 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         } // END LOOP: for comp over connection outputs after inconsistent temporal stencil size
       } // END IF: connection output bundle was requested
     } // END LOOP: for i over rays after inconsistent temporal stencil size
-#undef IDX_F
-#undef IDX_METRIC
-#undef IDX_CONN
     return;
   } // END IF: runtime temporal stencil size did not match the mapped numerical window
 

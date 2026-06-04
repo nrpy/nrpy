@@ -421,7 +421,7 @@ if __name__ == "__main__":
     # ---------------------------------------------------------
 
     # Define the directory containing the visualization assets relative to the repository root
-    vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
+    vis_dir = os.path.join("nrpy", "examples", "geodesic_helpers", "geodesic_visualizations")
 
     # Locate the visualization script
     vis_script_src = os.path.join(vis_dir, "visualize_trajectory.py")

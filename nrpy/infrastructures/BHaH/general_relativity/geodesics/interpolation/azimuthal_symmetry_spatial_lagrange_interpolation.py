@@ -168,6 +168,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         subdirectory="./",
     )
     register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    cart_to_xx_name = f"Cart_to_xx_and_nearest_i0i1i2__rfm__{CoordSystem}"
 
     includes = [
         "BHaH_defines.h",
@@ -438,7 +439,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   int center_idx[3];
 
   // Step 2: Convert the target Cartesian point to native spherical coordinates.
-  Cart_to_xx_and_nearest_i0i1i2(params, xCart, xx_target, center_idx);
+  {cart_to_xx_name}(params, xCart, xx_target, center_idx);
 
   const REAL target_r = xx_target[0];
   const REAL target_theta = xx_target[1];
@@ -628,7 +629,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   } // END LOOP: for which_slice over requested slice indices
 
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
-"""
+""".replace("{cart_to_xx_name}", cart_to_xx_name)
 
     desc = r"""Interpolate Cartesian geodesic tensors at one spatial position.
 
