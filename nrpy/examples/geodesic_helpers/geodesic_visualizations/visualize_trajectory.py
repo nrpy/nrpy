@@ -148,7 +148,9 @@ def visualize_trajectory(
         )
         print("\n    Did you compile and run the C executable first?")
         print("    1. Type `make` in this directory.")
-        print("    2. Run the executable (e.g., `./photon_single_geodesic_integrator_analytical`).")
+        print(
+            "    2. Run the executable (e.g., `./photon_single_geodesic_integrator_analytical`)."
+        )
         return
 
     # Step 1: Load and Validate Data.

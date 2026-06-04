@@ -381,9 +381,12 @@ if __name__ == "__main__":
         "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n",
     }
 
+    # Match the combined numerical spacetime payload layout produced by the
+    # trusted two-black-hole raytracing pipeline, which stores NGHOSTS = 3.
     BHaH_defines_h.output_BHaH_defines_h(
         project_dir=project_dir,
         enable_rfm_precompute=False,
+        fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
         supplemental_defines_dict=cpu_macros,
     )
 
