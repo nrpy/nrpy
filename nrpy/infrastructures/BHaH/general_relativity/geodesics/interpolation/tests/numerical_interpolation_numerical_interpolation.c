@@ -97,8 +97,9 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
     REAL g4dd_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
     REAL gamma4udd_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
 
-    // Step 1: Recover the mapped temporal stencil for this photon from the
-    // slot-level numerical window shared by the whole chunk.
+    // Step 1: Recover the mapped temporal stencil and exact physical slice
+    // times for this photon from the slot-level numerical window shared by
+    // the whole chunk.
     const int window_status =
         time_window_manager_numerical_stencil_for_time(numerical_window, (double)t, temporal_half_width, slice_indices, slice_times, slice_payloads);
     if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {

@@ -9,9 +9,10 @@ writes the 40-component Christoffel bundle only when requested.
 
 Operationally, this wrapper is the bridge between the data-management layer
 and the two interpolation helpers. For each photon, it asks the numerical
-time-window manager for the mapped temporal stencil, runs the spatial helper on
-every slice in that stencil, and then runs the temporal helper once to recover
-the final tensors at the photon coordinate time.
+time-window manager for the mapped temporal stencil and its exact physical
+slice times, runs the spatial helper on every slice in that stencil, and then
+runs the temporal helper once to recover the final tensors at the photon
+coordinate time.
 
 The wrapper does not own file or mmap lifetime. A NumericalTimeWindowManager
 must already have an active mapped time window for the slot being processed.
@@ -222,8 +223,9 @@ independently ray-by-ray.
     REAL g4dd_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
     REAL gamma4udd_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
 
-    // Step 1: Recover the mapped temporal stencil for this photon from the
-    // slot-level numerical window shared by the whole chunk.
+      // Step 1: Recover the mapped temporal stencil and exact physical slice
+      // times for this photon from the slot-level numerical window shared by
+      // the whole chunk.
     const int window_status = time_window_manager_numerical_stencil_for_time(
         numerical_window, (double)t, temporal_half_width, slice_indices,
         slice_times, slice_payloads);

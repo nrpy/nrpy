@@ -39,15 +39,20 @@ def time_window_manager_numerical() -> None:
     interval rather than the exact minimal interpolation stencil. The upper
     side only needs the centered temporal-interpolation halo, while the lower
     side also needs the additional backward-time RKF45 lookahead promised by
-    `rkf45_max_delta_t`. The matching RKF45 step-size cap is enforced in the
+    `rkf45_max_delta_t`. Exact physical slice times are cached from the
+    combined-file slice table and queried through binary search, so the
+    mapped slot window remains correct even when stored output times are not
+    uniformly spaced. The matching RKF45 step-size cap is enforced in the
     companion finalization kernel.
 
     Doctests:
     >>> time_window_manager_numerical()
     >>> generated = par.glb_extras_dict["BHaH_defines"]["time_window_manager_numerical"]
-    >>> "time_window_manager_numerical_validate_uniform_cadence" in generated
+    >>> "time_window_manager_numerical_load_and_validate_slice_times" in generated
     True
-    >>> "time_window_manager_numerical_checked_floor_to_long" in generated
+    >>> "time_window_manager_numerical_lower_bound_slice_time" in generated
+    True
+    >>> "time_window_manager_numerical_nearest_slice_for_time" in generated
     True
     """
     from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
@@ -86,6 +91,7 @@ def time_window_manager_numerical() -> None:
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -138,9 +144,11 @@ def time_window_manager_numerical() -> None:
       double xxmax[3]; // Native upper bounds stored in the combined header.
       double cart_origin[3]; // Cartesian grid origin stored in the combined header.
 
-      double time_start; // Coordinate time of slice 0.
-      double grid_time_spacing; // Uniform coordinate-time spacing between 3D grids.
-      double inv_grid_time_spacing; // Reciprocal grid spacing.
+      double *slice_times; // Exact physical coordinate times cached from the slice table.
+      double first_time; // Smallest cached physical slice time.
+      double last_time; // Largest cached physical slice time.
+      double min_slice_dt; // Smallest positive spacing between adjacent cached slice times.
+      double max_slice_dt; // Largest positive spacing between adjacent cached slice times.
 
       int temporal_interp_half_width; // Centered temporal interpolation half-width n.
       int temporal_interp_num_points; // Number of temporal interpolation points, 2n + 1.
@@ -202,85 +210,157 @@ def time_window_manager_numerical() -> None:
     } // END FUNCTION: time_window_manager_numerical_read_exact_at
 
     /**
-     * Validate that stored slice times follow one uniform cadence.
+     * Cache and validate the exact physical times of all stored slices.
      *
-     * @param fd Open file descriptor.
-     * @param slice_table_offset Absolute byte offset of the slice table.
-     * @param num_time_slices Number of stored slice-table entries.
-     * @param first_time Physical time stored for slice 0.
-     * @param grid_time_spacing Expected uniform spacing between adjacent slices.
+     * @param[in,out] ntwm Numerical time-window manager.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      */
-    static inline int time_window_manager_numerical_validate_uniform_cadence(
-        int fd,
-        uint64_t slice_table_offset,
-        uint64_t num_time_slices,
-        double first_time,
-        double grid_time_spacing) {
+    static inline int time_window_manager_numerical_load_and_validate_slice_times(
+        NumericalTimeWindowManager *ntwm) {
       unsigned char time_bytes[sizeof(double)];
-      double previous_time = first_time;
+      double *slice_times = NULL;
+      double first_time = 0.0;
+      double last_time = 0.0;
+      double min_slice_dt = 0.0;
+      double max_slice_dt = 0.0;
+      double previous_time = 0.0;
 
-      for (uint64_t slice_index = 2ULL; slice_index < num_time_slices; slice_index++) {
+      if (ntwm == NULL || ntwm->fd < 0 || ntwm->num_time_slices < 2ULL ||
+          ntwm->slice_times != NULL ||
+          ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(double))) {
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: slice-time cache prerequisites were not satisfied
+
+      slice_times = (double *)malloc(
+          (size_t)ntwm->num_time_slices * sizeof(double));
+      if (slice_times == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      for (uint64_t slice_index = 0ULL; slice_index < ntwm->num_time_slices; slice_index++) {
         const uint64_t time_offset =
-            slice_table_offset +
+            ntwm->slice_table_offset +
             slice_index * TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES +
             TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME;
         if (time_window_manager_numerical_read_exact_at(
-                fd, time_bytes, sizeof(double), time_offset) !=
+                ntwm->fd, time_bytes, sizeof(double), time_offset) !=
             TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+          free(slice_times);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: slice time could not be read during uniform-cadence validation
+        } // END IF: slice time could not be read during exact-time cache population
 
         const double this_time = time_window_manager_numerical_load_f64(time_bytes);
-        const double expected_time =
-            first_time + (double)slice_index * grid_time_spacing;
-        const double time_tolerance =
-            1.0e-12 * fmax(1.0, fabs(expected_time));
-        if (!isfinite(this_time) || !isfinite(expected_time) ||
-            this_time <= previous_time ||
-            fabs(this_time - expected_time) > time_tolerance) {
+        if (!isfinite(this_time)) {
+          free(slice_times);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: stored slice times were not uniformly spaced
+        } // END IF: cached slice time was not finite
+
+        slice_times[slice_index] = this_time;
+        if (slice_index > 0ULL) {
+          const double slice_dt = this_time - previous_time;
+          if (!isfinite(slice_dt) || slice_dt <= 0.0) {
+            free(slice_times);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: cached slice times were not strictly increasing
+          if (slice_index == 1ULL) {
+            min_slice_dt = slice_dt;
+            max_slice_dt = slice_dt;
+          } else {
+            min_slice_dt = fmin(min_slice_dt, slice_dt);
+            max_slice_dt = fmax(max_slice_dt, slice_dt);
+          } // END ELSE: update cached adjacent-slice spacing extrema
+        } // END IF: enough cached slice times exist to form one adjacent spacing
         previous_time = this_time;
-      } // END LOOP: for slice_index over slice-table times during uniform-cadence validation
+      } // END LOOP: for slice_index over slice-table times during exact-time cache population
+      first_time = slice_times[0];
+      last_time = slice_times[ntwm->num_time_slices - 1ULL];
+      if (!isfinite(first_time) || !isfinite(last_time) ||
+          last_time <= first_time ||
+          !isfinite(min_slice_dt) || min_slice_dt <= 0.0 ||
+          !isfinite(max_slice_dt) || max_slice_dt <= 0.0) {
+        free(slice_times);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: cached slice-time summary values were not numerically usable
+
+      ntwm->slice_times = slice_times;
+      ntwm->first_time = first_time;
+      ntwm->last_time = last_time;
+      ntwm->min_slice_dt = min_slice_dt;
+      ntwm->max_slice_dt = max_slice_dt;
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
-    } // END FUNCTION: time_window_manager_numerical_validate_uniform_cadence
+    } // END FUNCTION: time_window_manager_numerical_load_and_validate_slice_times
 
     /**
-     * Convert one finite double to long int using floor().
+     * Return the first slice index whose cached time is not less than target_time.
      *
-     * @param value Finite source value.
-     * @param[out] out Converted long int destination.
-     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     * @param[in] ntwm Numerical time-window manager with cached exact slice times.
+     * @param target_time Physical coordinate time to bracket.
+     * @return Lower-bound slice index in [0, num_time_slices].
      */
-    static inline int time_window_manager_numerical_checked_floor_to_long(
-        double value,
-        long int *out) {
-      if (out == NULL || !isfinite(value) ||
-          value < (double)LONG_MIN || value > (double)LONG_MAX) {
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: floor() source value was not representable as long int
-      *out = (long int)floor(value);
-      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
-    } // END FUNCTION: time_window_manager_numerical_checked_floor_to_long
+    static inline uint64_t time_window_manager_numerical_lower_bound_slice_time(
+        const NumericalTimeWindowManager *ntwm,
+        const double target_time) {
+      uint64_t first = 0ULL;
+      uint64_t last = ntwm->num_time_slices;
+
+      while (first < last) {
+        const uint64_t mid = first + (last - first) / 2ULL;
+        if (ntwm->slice_times[mid] < target_time) {
+          first = mid + 1ULL;
+        } else {
+          last = mid;
+        } // END ELSE: lower-bound search moved its upper half-open endpoint
+      } // END WHILE: binary searching the lower-bound cached slice time
+      return first;
+    } // END FUNCTION: time_window_manager_numerical_lower_bound_slice_time
 
     /**
-     * Convert one finite double to long int using ceil().
+     * Return the first slice index whose cached time is greater than target_time.
      *
-     * @param value Finite source value.
-     * @param[out] out Converted long int destination.
-     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     * @param[in] ntwm Numerical time-window manager with cached exact slice times.
+     * @param target_time Physical coordinate time to bracket.
+     * @return Upper-bound slice index in [0, num_time_slices].
      */
-    static inline int time_window_manager_numerical_checked_ceil_to_long(
-        double value,
-        long int *out) {
-      if (out == NULL || !isfinite(value) ||
-          value < (double)LONG_MIN || value > (double)LONG_MAX) {
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: ceil() source value was not representable as long int
-      *out = (long int)ceil(value);
-      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
-    } // END FUNCTION: time_window_manager_numerical_checked_ceil_to_long
+    static inline uint64_t time_window_manager_numerical_upper_bound_slice_time(
+        const NumericalTimeWindowManager *ntwm,
+        const double target_time) {
+      uint64_t first = 0ULL;
+      uint64_t last = ntwm->num_time_slices;
+
+      while (first < last) {
+        const uint64_t mid = first + (last - first) / 2ULL;
+        if (ntwm->slice_times[mid] <= target_time) {
+          first = mid + 1ULL;
+        } else {
+          last = mid;
+        } // END ELSE: upper-bound search moved its upper half-open endpoint
+      } // END WHILE: binary searching the upper-bound cached slice time
+      return first;
+    } // END FUNCTION: time_window_manager_numerical_upper_bound_slice_time
+
+    /**
+     * Return the cached slice index nearest to one physical target time.
+     *
+     * @param[in] ntwm Numerical time-window manager with cached exact slice times.
+     * @param target_time Physical coordinate time to bracket.
+     * @return Nearest cached slice index.
+     */
+    static inline uint64_t time_window_manager_numerical_nearest_slice_for_time(
+        const NumericalTimeWindowManager *ntwm,
+        const double target_time) {
+      const uint64_t right =
+          time_window_manager_numerical_lower_bound_slice_time(ntwm, target_time);
+
+      if (right == 0ULL)
+        return 0ULL;
+      if (right >= ntwm->num_time_slices)
+        return ntwm->num_time_slices - 1ULL;
+
+      const double dt_right = fabs(ntwm->slice_times[right] - target_time);
+      const double dt_left = fabs(target_time - ntwm->slice_times[right - 1ULL]);
+      if (dt_left <= dt_right)
+        return right - 1ULL;
+      return right;
+    } // END FUNCTION: time_window_manager_numerical_nearest_slice_for_time
 
     //==========================================
     // NUMERICAL WINDOW LIFETIME MANAGEMENT
@@ -311,9 +391,11 @@ def time_window_manager_numerical() -> None:
         ntwm->xxmax[dirn] = 0.0;
         ntwm->cart_origin[dirn] = 0.0;
       } // END LOOP: for dirn over stored grid metadata arrays during inert reset
-      ntwm->time_start = 0.0;
-      ntwm->grid_time_spacing = 0.0;
-      ntwm->inv_grid_time_spacing = 0.0;
+      ntwm->slice_times = NULL;
+      ntwm->first_time = 0.0;
+      ntwm->last_time = 0.0;
+      ntwm->min_slice_dt = 0.0;
+      ntwm->max_slice_dt = 0.0;
       ntwm->temporal_interp_half_width = 0;
       ntwm->temporal_interp_num_points = 0;
       ntwm->max_backward_dt_lookahead = 0.0;
@@ -348,6 +430,8 @@ def time_window_manager_numerical() -> None:
      */
     static inline void time_window_manager_numerical_free(NumericalTimeWindowManager *ntwm) {
       time_window_manager_numerical_close_mmap(ntwm);
+      if (ntwm->slice_times != NULL)
+        free(ntwm->slice_times);
       if (ntwm->fd >= 0)
         close(ntwm->fd);
       time_window_manager_numerical_set_inert(ntwm);
@@ -425,7 +509,6 @@ def time_window_manager_numerical() -> None:
         const int temporal_interp_half_width,
         params_struct *restrict params) {
       unsigned char header_bytes[TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES];
-      unsigned char time_bytes[sizeof(double)];
       const uint64_t expected_point_record_bytes = 53ULL * (uint64_t)sizeof(double);
 
       if (ntwm == NULL)
@@ -502,7 +585,10 @@ def time_window_manager_numerical() -> None:
             TIME_WINDOW_MANAGER_NUMERICAL_HEADER_CART_ORIGIN + offset_f64);
       } // END LOOP: for dirn over fixed-header grid metadata arrays during initialization
 
-      if (ntwm->num_time_slices < 2ULL || ntwm->payload_bytes_per_slice == 0ULL ||
+      if (ntwm->num_time_slices < 2ULL ||
+          ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
+          ntwm->num_time_slices > (uint64_t)LONG_MAX ||
+          ntwm->payload_bytes_per_slice == 0ULL ||
           ntwm->payload_stride_bytes < ntwm->payload_bytes_per_slice ||
           ntwm->num_grids != 1U || ntwm->nghosts != (uint32_t)NGHOSTS ||
           ntwm->point_record_count == 0ULL ||
@@ -584,51 +670,11 @@ def time_window_manager_numerical() -> None:
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: trusted payload region exceeded the combined container
 
-      const uint64_t first_time_offset =
-          ntwm->slice_table_offset +
-          TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME;
-      const uint64_t second_time_offset =
-          ntwm->slice_table_offset +
-          TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES +
-          TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME;
-      if (time_window_manager_numerical_read_exact_at(
-              ntwm->fd, time_bytes, sizeof(double), first_time_offset) !=
+      if (time_window_manager_numerical_load_and_validate_slice_times(ntwm) !=
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: first slice time could not be read
-      const double first_time = time_window_manager_numerical_load_f64(time_bytes);
-
-      if (time_window_manager_numerical_read_exact_at(
-              ntwm->fd, time_bytes, sizeof(double), second_time_offset) !=
-          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: second slice time could not be read
-      const double second_time = time_window_manager_numerical_load_f64(time_bytes);
-      const double grid_time_spacing = second_time - first_time;
-      if (!isfinite(first_time) || !isfinite(second_time) ||
-          !isfinite(grid_time_spacing) || grid_time_spacing <= 0.0) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted file time samples were not finite and strictly increasing
-
-      const double inv_grid_time_spacing = 1.0 / grid_time_spacing;
-      if (!isfinite(inv_grid_time_spacing)) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted file time spacing produced an unusable reciprocal
-      if (time_window_manager_numerical_validate_uniform_cadence(
-              ntwm->fd, ntwm->slice_table_offset, ntwm->num_time_slices,
-              first_time, grid_time_spacing) !=
-          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: stored slice times were not uniformly spaced
-
-      ntwm->time_start = first_time;
-      ntwm->grid_time_spacing = grid_time_spacing;
-      ntwm->inv_grid_time_spacing = inv_grid_time_spacing;
+      } // END IF: exact slice-table times could not be cached and validated
       if (params != NULL &&
           time_window_manager_numerical_apply_metadata_to_params(ntwm, params) !=
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
@@ -665,53 +711,75 @@ def time_window_manager_numerical() -> None:
         const int slot_idx,
         uint64_t *first_slice,
         uint64_t *last_slice_exclusive) {
+      if (ntwm == NULL || tsm == NULL || first_slice == NULL ||
+          last_slice_exclusive == NULL || ntwm->slice_times == NULL) {
+        if (first_slice != NULL)
+          *first_slice = 0ULL;
+        if (last_slice_exclusive != NULL)
+          *last_slice_exclusive = 0ULL;
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: slot-range query was missing the cached exact-time window state
+
       const double t_lower = slot_lower_time(tsm, slot_idx);
       const double t_upper = slot_upper_time(tsm, slot_idx);
       // The mapped query is biased toward lower coordinate time because the
       // photons are evolved backward in time.
       const double query_min = t_lower - ntwm->max_backward_dt_lookahead;
       const double query_max = t_upper;
-      const double scaled_min =
-          (query_min - ntwm->time_start) * ntwm->inv_grid_time_spacing;
-      const double scaled_max =
-          (query_max - ntwm->time_start) * ntwm->inv_grid_time_spacing;
-      long int center_first = 0L;
-      long int center_last = 0L;
-      if (time_window_manager_numerical_checked_floor_to_long(
-              scaled_min, &center_first) !=
-              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
-          time_window_manager_numerical_checked_ceil_to_long(
-              scaled_max, &center_last) !=
-              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+      if (!isfinite(query_min) || !isfinite(query_max) || query_max < query_min) {
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slot query bounds could not be represented as long int
+      } // END IF: slot query bounds or cached exact slice times were not usable
+
+      const uint64_t left =
+          time_window_manager_numerical_lower_bound_slice_time(ntwm, query_min);
+      const uint64_t right =
+          time_window_manager_numerical_upper_bound_slice_time(ntwm, query_max);
+      uint64_t center_first = 0ULL;
+      uint64_t center_last = 0ULL;
+
+      if (left == 0ULL) {
+        center_first = 0ULL;
+      } else if (left >= ntwm->num_time_slices) {
+        center_first = ntwm->num_time_slices - 1ULL;
+      } else {
+        center_first = left - 1ULL;
+      } // END ELSE: cached lower-bound time had one slice below it
+
+      if (right == 0ULL) {
+        center_last = 0ULL;
+      } else if (right >= ntwm->num_time_slices) {
+        center_last = ntwm->num_time_slices - 1ULL;
+      } else {
+        center_last = right;
+      } // END ELSE: cached upper-bound time had one slice above it
+
       // Conceptually, for temporal half-width n, centered interpolation uses
       // 2n + 1 slices. A photon anywhere in the slot may therefore need
       // about n + 1 halo slices outside the queried coordinate-time
       // interval. Since photons evolve backward in time, the queried
-      // interval is extended below the slot before the halo is applied:
-      //   query_min = slot_lower - max_backward_dt_lookahead
-      //   query_max = slot_upper
-      //   mapped range = [floor(query_min / dt_grid) - (n + 1),
-      //                   ceil(query_max / dt_grid) + (n + 1))
-      // The exclusive upper bound in the half-open slice indexing adds the
-      // final +1 seen below.
-      const long int halo = (long int)ntwm->temporal_interp_half_width + 1L;
-      const long int required_first = center_first - halo;
-      const long int required_last_exclusive = center_last + halo + 1L;
+      // interval is extended below the slot before the halo is applied.
+      const uint64_t halo =
+          (uint64_t)ntwm->temporal_interp_half_width + 1ULL;
+      if (center_first < halo ||
+          center_last > UINT64_MAX - halo - 1ULL) {
+        *first_slice = 0ULL;
+        *last_slice_exclusive = 0ULL;
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: conservative exact-time halo arithmetic would underflow or overflow
 
-      if (required_first < 0L ||
-          required_last_exclusive > (long int)ntwm->num_time_slices ||
+      const uint64_t required_first = center_first - halo;
+      const uint64_t required_last_exclusive = center_last + halo + 1ULL;
+      if (required_last_exclusive > ntwm->num_time_slices ||
           required_last_exclusive <= required_first) {
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: requested conservative slot mapping window is outside the trusted file
 
-      *first_slice = (uint64_t)required_first;
-      *last_slice_exclusive = (uint64_t)required_last_exclusive;
+      *first_slice = required_first;
+      *last_slice_exclusive = required_last_exclusive;
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_required_grid_range
 
@@ -731,10 +799,15 @@ def time_window_manager_numerical() -> None:
         const TimeSlotManager *tsm,
         const int slot_idx) {
       if (ntwm == NULL || tsm == NULL || ntwm->fd < 0 || ntwm->page_size <= 0 ||
-          ntwm->num_time_slices < 2ULL || ntwm->payload_bytes_per_slice == 0ULL ||
+          ntwm->slice_times == NULL ||
+          ntwm->num_time_slices < 2ULL ||
+          ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
+          ntwm->payload_bytes_per_slice == 0ULL ||
           ntwm->payload_stride_bytes < ntwm->payload_bytes_per_slice ||
-          !isfinite(ntwm->time_start) || !isfinite(ntwm->grid_time_spacing) ||
-          ntwm->grid_time_spacing <= 0.0 || !isfinite(ntwm->inv_grid_time_spacing))
+          !isfinite(ntwm->first_time) || !isfinite(ntwm->last_time) ||
+          ntwm->last_time <= ntwm->first_time ||
+          !isfinite(ntwm->min_slice_dt) || ntwm->min_slice_dt <= 0.0 ||
+          !isfinite(ntwm->max_slice_dt) || ntwm->max_slice_dt <= 0.0)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       uint64_t first_slice = 0ULL;
@@ -840,37 +913,36 @@ def time_window_manager_numerical() -> None:
               TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: requested temporal interpolation half-width was outside the supported range
+      if (ntwm == NULL || slice_indices == NULL || slice_times == NULL ||
+          slice_payloads == NULL || ntwm->slice_times == NULL ||
+          ntwm->mapped_base == NULL || !isfinite(photon_time)) {
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: active exact-time window or caller-owned output buffers were not usable
       const int temporal_num_points = 2 * temporal_interp_half_width + 1;
       if (temporal_interp_half_width != ntwm->temporal_interp_half_width ||
           temporal_num_points != ntwm->temporal_interp_num_points) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: requested temporal interpolation stencil disagreed with the active mapped window
-      const double scaled_time =
-          (photon_time - ntwm->time_start) * ntwm->inv_grid_time_spacing;
-      long int center_slice = 0L;
-      if (time_window_manager_numerical_checked_floor_to_long(
-              scaled_time + 0.5, &center_slice) !=
-          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+      const uint64_t center_slice =
+          time_window_manager_numerical_nearest_slice_for_time(ntwm, photon_time);
+      if (center_slice < (uint64_t)temporal_interp_half_width) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: photon-centered slice index could not be represented as long int
-      const long int first_slice =
-          center_slice - (long int)temporal_interp_half_width;
-      const long int last_slice_exclusive =
-          first_slice + (long int)temporal_num_points;
+      } // END IF: nearest exact slice did not leave enough lower-side halo
+      const uint64_t first_slice =
+          center_slice - (uint64_t)temporal_interp_half_width;
+      const uint64_t last_slice_exclusive =
+          first_slice + (uint64_t)temporal_num_points;
 
-      if (first_slice < (long int)ntwm->mapped_first_slice ||
-          last_slice_exclusive >
-              (long int)ntwm->mapped_last_slice_exclusive ||
-          first_slice < 0L ||
-          last_slice_exclusive > (long int)ntwm->num_time_slices) {
+      if (last_slice_exclusive > ntwm->mapped_last_slice_exclusive ||
+          first_slice < ntwm->mapped_first_slice ||
+          last_slice_exclusive > ntwm->num_time_slices) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: requested photon stencil is outside the active mapped window
 
       for (int s = 0; s < temporal_num_points; s++) {
-        const uint64_t slice_index = (uint64_t)(first_slice + (long int)s);
+        const uint64_t slice_index = first_slice + (uint64_t)s;
         slice_indices[s] = slice_index;
-        slice_times[s] =
-            (REAL)(ntwm->time_start + ((double)slice_index) * ntwm->grid_time_spacing);
+        slice_times[s] = (REAL)ntwm->slice_times[slice_index];
         slice_payloads[s] =
             time_window_manager_numerical_grid_ptr(ntwm, slice_index);
       } // END LOOP: for s over temporal interpolation stencil slices
