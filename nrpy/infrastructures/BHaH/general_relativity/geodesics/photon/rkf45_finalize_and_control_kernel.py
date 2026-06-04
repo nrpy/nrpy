@@ -444,7 +444,7 @@ static inline int rkf45_checked_floor_to_long(
     )
     prefunc += generated_prefunc
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "limits.h"]
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 

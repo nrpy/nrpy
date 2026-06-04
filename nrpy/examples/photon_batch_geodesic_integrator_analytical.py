@@ -43,7 +43,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
-    batch_integrator_numerical,
+    batch_integrator_analytical,
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
@@ -85,8 +85,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Step 2: Define strict project constants and simulation targets
-    project_name = "photon_geodesic_batch_integrator"
-    exec_name = "photon_geodesic_batch_integrator"
+    project_name = "photon_batch_geodesic_integrator_analytical"
+    exec_name = "photon_batch_geodesic_integrator_analytical"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
     blueprint_path = os.path.join(project_dir, "light_blueprint.bin")
 
@@ -149,7 +149,7 @@ if __name__ == "__main__":
 
     # --- Infrastructure Helpers ---
     time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
+    batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
     main.main(SPACETIME)
 
     # --- Native NRPy Cleanup ---
@@ -196,7 +196,6 @@ if __name__ == "__main__":
     par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
-    par.glb_code_params_dict["t_integration_max"].defaultvalue = 10000.0
 
     # Source Plane Geometric Mapping
     par.glb_code_params_dict["source_plane_center_x"].defaultvalue = 0.0

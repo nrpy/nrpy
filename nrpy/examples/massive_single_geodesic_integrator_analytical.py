@@ -1,4 +1,4 @@
-# nrpy/examples/mass_geodesic_integrator.py
+# nrpy/examples/massive_single_geodesic_integrator_analytical.py
 r"""
 Defines a C project for integrating massive geodesics in curved spacetime.
 
@@ -283,7 +283,7 @@ if __name__ == "__main__":
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
 
-    project_name = "mass_geodesic_integrator"
+    project_name = "massive_single_geodesic_integrator_analytical"
     project_dir = os.path.join("project", project_name)
 
     SPACETIME = "KerrSchild_Cartesian"

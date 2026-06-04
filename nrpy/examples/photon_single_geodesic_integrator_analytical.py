@@ -1,4 +1,4 @@
-# nrpy/examples/photon_geodesic_integrator.py
+# nrpy/examples/photon_single_geodesic_integrator_analytical.py
 r"""
 Defines a complete C project for integrating photon geodesics in curved spacetime.
 
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
 
-    project_name = "photon_geodesic_integrator"
+    project_name = "photon_single_geodesic_integrator_analytical"
     project_dir = os.path.join("project", project_name)
 
     SPACETIME = "KerrSchild_Cartesian"
