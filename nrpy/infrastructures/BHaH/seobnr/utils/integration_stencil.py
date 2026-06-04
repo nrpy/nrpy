@@ -37,9 +37,9 @@ def get_integration_stencil_uniform_spacing(
     x_0, x = sp.symbols("x_0 x", real=True)
     X = [x_0 + i for i in range(polynomial_order + 1)]
     Y = [sp.Symbol(f"y_{i}", real=True) for i in range(polynomial_order + 1)]
-    interpolating_polynomial = 0
+    interpolating_polynomial: sp.Expr = sp.sympify(0)
     for i in range(polynomial_order + 1):
-        l_i = 1
+        l_i: sp.Expr = sp.sympify(1)
         for j in range(polynomial_order + 1):
             if i != j:
                 l_i *= (x - X[j]) / (X[i] - X[j])

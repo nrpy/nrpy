@@ -607,7 +607,7 @@ def generate_bssn_to_adm_codegen(CoordSystem: str) -> str:
     Cart_AbarDD = basis_transforms.basis_transform_tensorDD_from_rfmbasis_to_Cartesian(
         rfm_AbarDD
     )
-    exp4phi = sp.sympify(0)
+    exp4phi: sp.Expr = sp.sympify(0)
     cf = sp.Symbol("cf", real=True)
     EvolvedConformalFactor_cf = par.parval_from_str("EvolvedConformalFactor_cf")
     if EvolvedConformalFactor_cf == "phi":

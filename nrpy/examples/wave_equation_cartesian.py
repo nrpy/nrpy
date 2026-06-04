@@ -11,6 +11,9 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+from typing import cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -323,6 +326,8 @@ def register_CFunction_rhs_eval() -> None:
     params = "const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL *restrict in_gfs, REAL *restrict rhs_gfs"
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
+    uu_rhs = cast(sp.Expr, rhs.uu_rhs)
+    vv_rhs = cast(sp.Expr, rhs.vv_rhs)
 
     if enable_KreissOliger_dissipation:
         diss_strength = par.register_CodeParameter(
@@ -335,12 +340,12 @@ def register_CFunction_rhs_eval() -> None:
         uu_dKOD = ixp.declarerank1("uu_dKOD")
         vv_dKOD = ixp.declarerank1("vv_dKOD")
         for k in range(3):
-            rhs.uu_rhs += diss_strength * uu_dKOD[k]
-            rhs.vv_rhs += diss_strength * vv_dKOD[k]
+            uu_rhs += diss_strength * uu_dKOD[k]
+            vv_rhs += diss_strength * vv_dKOD[k]
 
     body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
-            [rhs.uu_rhs, rhs.vv_rhs],
+            [uu_rhs, vv_rhs],
             [
                 gri.BHaHGridFunction.access_gf("uu", gf_array_name="rhs_gfs"),
                 gri.BHaHGridFunction.access_gf("vv", gf_array_name="rhs_gfs"),

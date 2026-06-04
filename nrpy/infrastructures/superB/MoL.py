@@ -17,7 +17,7 @@ superB changes/additions to nrpy.infrastructures.BHaH.MoLtimestepping.MoL.py:
 
 import os  # Standard Python module for multiplatform OS-level functions
 import warnings
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, cast
 
 import sympy as sp  # Import SymPy, a computer algebra system written entirely in Python
 
@@ -477,9 +477,9 @@ REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
         gf_aliases += f"const int Nxx_plus_2NGHOSTS{i} = griddata[grid].params.Nxx_plus_2NGHOSTS{i};\n"
 
     # Implement Method of Lines (MoL) Timestepping
-    Butcher = Butcher_dict[MoL_method][
-        0
-    ]  # Get the desired Butcher table from the dictionary
+    Butcher = cast(
+        List[List[sp.Expr]], Butcher_dict[MoL_method][0]
+    )  # Get the desired Butcher table from the dictionary
     num_steps = (
         len(Butcher) - 1
     )  # Specify the number of required steps to update solution
@@ -644,7 +644,7 @@ REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
                     RK_lhs = y_n
                 else:  # If on anything but the final step:
                     RK_lhs = next_y_input
-                RK_rhs = y_n
+                RK_rhs: sp.Expr = y_n
                 for m in range(s + 1):
                     k_mp1_gfs = sp.Symbol("k" + str(m + 1) + "_gfsL")
                     if Butcher[s + 1][m + 1] != 0:
@@ -718,7 +718,7 @@ REAL *restrict y_n_gfs = {gf_prefix}y_n_gfs;
                         rhs_input = sp.Symbol("k_odd_gfsL", real=True)
                         rhs_output = sp.Symbol("k_even_gfsL", real=True)
                     RK_lhs_list: List[sp.Basic] = []
-                    RK_rhs_list = []
+                    RK_rhs_list: List[sp.Basic] = []
                     if s != num_steps - 1:  # For anything besides the final step
                         if s == 0:  # The first RK step
                             RK_lhs_list.append(y_nplus1_running_total)

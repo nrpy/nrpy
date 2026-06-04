@@ -183,10 +183,9 @@ class Psi4:
             eta: int,
             delta: int,
         ) -> sp.Expr:
-            return cast(
-                sp.Expr,
+            return (
                 +n[mu] * Mre[nu] * n[eta] * Mre[delta]
-                - n[mu] * Mim[nu] * n[eta] * Mim[delta],
+                - n[mu] * Mim[nu] * n[eta] * Mim[delta]
             )
 
         def tetrad_product__Imag_psi4(
@@ -198,10 +197,9 @@ class Psi4:
             eta: int,
             delta: int,
         ) -> sp.Expr:
-            return cast(
-                sp.Expr,
+            return (
                 -n[mu] * Mre[nu] * n[eta] * Mim[delta]
-                - n[mu] * Mim[nu] * n[eta] * Mre[delta],
+                - n[mu] * Mim[nu] * n[eta] * Mre[delta]
             )
 
         # We split psi_4 into three pieces, to expedite & possibly parallelize C code generation.

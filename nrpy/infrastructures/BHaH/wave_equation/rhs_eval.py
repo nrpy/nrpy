@@ -76,6 +76,8 @@ def register_CFunction_rhs_eval(
         )
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquationCurvilinear_RHSs(CoordSystem, enable_rfm_precompute)
+    uu_rhs = cast(sp.Expr, rhs.uu_rhs)
+    vv_rhs = cast(sp.Expr, rhs.vv_rhs)
     if enable_KreissOliger_dissipation:
         diss_strength = par.register_CodeParameter(
             "REAL",
@@ -90,13 +92,13 @@ def register_CFunction_rhs_eval(
         uu_dKOD = ixp.declarerank1("uu_dKOD")
         vv_dKOD = ixp.declarerank1("vv_dKOD")
         for k in range(3):
-            rhs.uu_rhs += (
+            uu_rhs += (
                 diss_strength * uu_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            rhs.vv_rhs += (
+            vv_rhs += (
                 diss_strength * vv_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-    expr_list: List[sp.Expr] = [rhs.uu_rhs, rhs.vv_rhs]
+    expr_list: List[sp.Expr] = [uu_rhs, vv_rhs]
 
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
