@@ -1,4 +1,5 @@
 from . import (
+    batch_integrator_analytical,
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,

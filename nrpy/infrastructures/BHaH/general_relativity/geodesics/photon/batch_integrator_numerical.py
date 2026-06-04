@@ -51,7 +51,6 @@ def batch_integrator_numerical(
     # numerical_time_window_manager_init, numerical_time_window_manager_mmap_for_slot,
     # and numerical_time_window_manager_free correspond to the supplied helper names
     # time_window_manager_numerical_set_inert/init/mmap_for_slot/free.
-
     # Core physics and numerical simulation parameters for the global spacetime struct.
     par.register_CodeParameters(
         "REAL",
