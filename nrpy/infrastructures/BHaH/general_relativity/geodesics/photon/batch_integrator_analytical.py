@@ -45,12 +45,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         "REAL",
         __name__,
         [
-            "t_integration_max",
             "r_escape",
             "p_t_max",
             "numerical_initial_h",
         ],
-        [10000.0, 150.0, 1e3, 0.1],
+        [150.0, 1e3, 0.1],
         commondata=True,
         add_to_parfile=True,
     )

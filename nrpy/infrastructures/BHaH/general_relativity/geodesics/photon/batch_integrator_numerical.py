@@ -8,6 +8,10 @@ numerical raytracing ``.bin`` path stored on ``commondata``, initializes a
 ``NumericalTimeWindowManager``, maps numerical time windows per time slot, and
 calls ``numerical_interpolation()`` for metric and Christoffel data.
 
+The numerical time-window logic assumes the generator also registers
+``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
+so accepted RKF45 steps remain inside the mapped numerical window.
+
 The script keeps the broad photon orchestration, RKF45 stepping, and
 ``TimeSlotManager`` structure used by the analytic photon batch integrator, but
 all metric/connection evaluations go through the numerical ``.bin`` data path.
@@ -19,9 +23,6 @@ Author: Dalton J. Moone
 
 import nrpy.c_function as cfc
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.numerical_interpolation import (
-    register_CFunction_numerical_interpolation,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
     time_slot_manager_helpers,
 )
@@ -29,26 +30,22 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 
 def batch_integrator_numerical(
     spacetime_name: str,
-    CoordSystem: str = "Spherical",
-    enable_simd: bool = False,
-    project_dir: str = ".",
 ) -> None:
     r"""
     Construct the CPU numerical-spacetime photon batch integrator.
 
     :param spacetime_name: Spacetime identifier used by photon-specific initial-condition helpers.
-    :param CoordSystem: Coordinate system used by the combined numerical dataset.
-    :param enable_simd: Whether SIMD helper headers are already available.
-    :param project_dir: Destination project directory for interpolation helper headers.
+    :raises ValueError: If the configured parallelization mode is not OpenMP.
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
-    register_CFunction_numerical_interpolation(
-        CoordSystem=CoordSystem,
-        enable_simd=enable_simd,
-        project_dir=project_dir,
-    )
+    parallelization = par.parval_from_str("parallelization")
+    if parallelization != "openmp":
+        raise ValueError(
+            "batch_integrator_numerical currently supports only "
+            "parallelization='openmp'."
+        )
 
     # Supplied-name mapping: the checklist aliases numerical_time_window_manager_set_inert,
     # numerical_time_window_manager_init, numerical_time_window_manager_mmap_for_slot,
@@ -60,12 +57,11 @@ def batch_integrator_numerical(
         "REAL",
         __name__,
         [
-            "t_integration_max",
             "r_escape",
             "p_t_max",
             "numerical_initial_h",
         ],
-        [10000.0, 150.0, 1e3, 0.1],
+        [150.0, 1e3, 0.1],
         commondata=True,
         add_to_parfile=True,
     )
@@ -125,10 +121,15 @@ def batch_integrator_numerical(
     free_pinned = "BHAH_FREE"
     free_device = "BHAH_FREE"
     pin_comment = "Host memory allocation: CPU RAM mapped for"
-    dev_comment = "Host memory allocation: CPU RAM mapped for"
-    bridge_alloc_comment = "Allocate memory arrays in Host RAM for the structural bridge payloads."
-    scratch_alloc_comment = "Allocate 1D Host scratchpad arrays for temporal data staging."
-    results_memcpy = "// Event outputs are written directly to results_buffer on the CPU."
+    bridge_alloc_comment = (
+        "Allocate memory arrays in Host RAM for the structural bridge payloads."
+    )
+    scratch_alloc_comment = (
+        "Allocate 1D Host scratchpad arrays for temporal data staging."
+    )
+    results_memcpy = (
+        "// Event outputs are written directly to results_buffer on the CPU."
+    )
     calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);"
     set_intitial_con = f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
 
@@ -301,7 +302,7 @@ def batch_integrator_numerical(
     slot_manager_init(
         &tsm,
         commondata->slot_manager_t_min,
-        commondata->t_integration_max,
+        commondata->t_start + 1.0,
         commondata->slot_manager_delta_t,
         num_rays);
 
@@ -506,22 +507,28 @@ def batch_integrator_numerical(
         }} // END LOOP: for c_k over 9 to orchestrate memory transfer of constrained state vector
         {no_sync()}
 
-        long int nan_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing NaN values post-constraint solving.
+        long int nonfinite_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing non-finite values post-constraint solving.
         for (int gather_i = 0; gather_i < chunk_size; ++gather_i) {{ // Loop iterator $gather_i$ scanning each trajectory within the retrieved initialization chunk.
             long int master_idx = start_idx + gather_i; // Computes the absolute master index $m_{{idx}}$ mapping the localized chunk to the global master SoA.
-            bool has_nan = false; // Boolean flag indicating if the specific state vector $f^\mu$ contains a NaN value.
+            bool has_nonfinite = false; // Boolean flag indicating if the specific state vector $f^\mu$ contains a non-finite value.
             for (int gather_k = 0; gather_k < 9; ++gather_k) {{ // Loop index $gather_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
                 double val = f_bridge[0][gather_k * BUNDLE_CAPACITY + gather_i]; // Evaluates the updated numerical value of the specific tensor component.
                 all_photons_host.f[gather_k * num_rays + master_idx] = val; // Maps the valid constrained tensor scalar back to the global Host SoA.
-                if (isnan(val)) has_nan = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
+                if (!isfinite(val)) has_nonfinite = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
             }} // END LOOP: for gather_k over 9 to iterate over tensor components
-            if (has_nan) nan_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
+            if (has_nonfinite) nonfinite_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
         }} // END LOOP: for gather_i over chunk_size to retrieve updated constrained state vectors
 
-        if (nan_count > 0) {{
-            // This is a soft warning alerting to unresolved constraints $p_\mu p^\mu = 0$ for isolated trajectories.
-            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays contain NaN in state f^mu after p_t solve.\n", init_batch, nan_count);
-        }} // END IF: nan_count > 0 to print diagnostic
+        if (nonfinite_count > 0) {{
+            fprintf(stderr,
+                    "ERROR: Init Batch %ld: %ld rays contain nonfinite state values "
+                    "after p_t solve. Aborting numerical batch integration.\n",
+                    init_batch,
+                    nonfinite_count);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: nonfinite_count > 0 to abort on invalid post-p_t states
     }} // END LOOP: for init_batch over num_batches to evaluate initialization constraints
 
 
@@ -693,15 +700,22 @@ def batch_integrator_numerical(
                             }}
                         }}
                     }}
-                    if (bad_interp) {{
-                        d_status[current][interp_i] = TERMINATION_TYPE_FAILURE;
+                    if (bad_interp)
                         bad_interp_current++;
-                    }}
                 }}
                 if (bad_interp_current > 0) {{
-                    printf("[DIAGNOSTIC] Slot %d stage %d buffer %d: %ld rays had nonfinite numerical interpolation output.\n",
-                           slot_idx, stage, current, bad_interp_current);
-                }}
+                    fprintf(stderr,
+                            "ERROR: Slot %d stage %d buffer %d: %ld rays had "
+                            "nonfinite numerical interpolation output. "
+                            "Aborting numerical batch integration.\n",
+                            slot_idx,
+                            stage,
+                            current,
+                            bad_interp_current);
+                    time_window_manager_numerical_free(&numerical_window);
+                    slot_manager_free(&tsm);
+                    exit(1);
+                }} // END IF: bad_interp_current > 0 to abort before RHS on invalid interpolation
                 // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ synchronously on the active buffer.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
                 // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates synchronously on the active buffer.
@@ -848,15 +862,22 @@ def batch_integrator_numerical(
                                 }}
                             }}
                         }}
-                        if (bad_interp) {{
-                            d_status[next][interp_i] = TERMINATION_TYPE_FAILURE;
+                        if (bad_interp)
                             bad_interp_next++;
-                        }}
                     }}
                     if (bad_interp_next > 0) {{
-                        printf("[DIAGNOSTIC] Slot %d stage %d buffer %d: %ld rays had nonfinite numerical interpolation output.\n",
-                               slot_idx, stage, next, bad_interp_next);
-                    }}
+                        fprintf(stderr,
+                                "ERROR: Slot %d stage %d buffer %d: %ld rays had "
+                                "nonfinite numerical interpolation output. "
+                                "Aborting numerical batch integration.\n",
+                                slot_idx,
+                                stage,
+                                next,
+                                bad_interp_next);
+                        time_window_manager_numerical_free(&numerical_window);
+                        slot_manager_free(&tsm);
+                        exit(1);
+                    }} // END IF: bad_interp_next > 0 to abort before RHS on invalid interpolation
                     // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ synchronously on the alternate buffer.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
                     // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates synchronously on the alternate buffer.

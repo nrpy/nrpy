@@ -28,14 +28,47 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def main(spacetime_name: str) -> None:
+def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
     """
     Register the master orchestrator C function for the geodesic integrator.
 
     This version implements Spatial Domain Decomposition (Tiling).
 
     :param spacetime_name: Metric name for numerical integration.
+    :param integrator_mode: Batch-integrator implementation to emit.
+    :raises ValueError: If `integrator_mode` is not supported.
     """
+    if integrator_mode not in ("Analytical", "Numerical"):
+        raise ValueError(
+            "integrator_mode must be either 'Analytical' or 'Numerical'; "
+            f"found '{integrator_mode}'."
+        )
+
+    batch_integrator_name = (
+        "batch_integrator_numerical"
+        if integrator_mode == "Numerical"
+        else "batch_integrator_analytical"
+    )
+    diagnostic_flag_name = (
+        "perform_normalization_check"
+        if integrator_mode == "Numerical"
+        else "perform_conservation_check"
+    )
+    diagnostic_flag_label = (
+        "Normalization Check"
+        if integrator_mode == "Numerical"
+        else "Conservation Check"
+    )
+    analytic_spacetime_telemetry = (
+        """
+    printf("--- Analytic Spacetime Physics ---\\n");
+    printf("Mass Scale (M): %.2f\\n", commondata.M_scale);
+    printf("Spin Parameter (a): %.2f\\n", commondata.a_spin);
+"""
+        if integrator_mode == "Analytical"
+        else ""
+    )
+
     # Step 1: Register Tiling Parameters
     par.register_CodeParameter(
         "int", __name__, "window_tiles_width", 1, commondata=True, add_to_parfile=True
@@ -59,7 +92,7 @@ def main(spacetime_name: str) -> None:
     2. Parses command-line arguments and parameter files to override defaults.
     3. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
     4. Loops through a grid of tiles (tx, ty), shifting the window center.
-    5. Dispatches the batched analytical integrator for the {spacetime_name} metric per tile.
+    5. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
     6. Serializes and zips each tile's data to 'light_blueprint_XX_YY.zip'."""
 
     cfunc_type = "int"
@@ -98,10 +131,7 @@ def main(spacetime_name: str) -> None:
     printf("  Geodesic Engine  \\n");
     printf("=============================================\\n");
     printf("Spacetime Metric: {spacetime_name}\\n");
-
-    printf("--- Analytic Spacetime Physics ---\\n");
-    printf("Mass Scale (M): %.2f\\n", commondata.M_scale);
-    printf("Spin Parameter (a): %.2f\\n", commondata.a_spin);
+{analytic_spacetime_telemetry}
 
     printf("--- Camera & Window Plane ---\\n");
     printf("Camera Pos (x, y, z): %.2f, %.2f, %.2f\\n", commondata.camera_pos_x, commondata.camera_pos_y, commondata.camera_pos_z);
@@ -121,7 +151,6 @@ def main(spacetime_name: str) -> None:
 
     printf("--- Temporal & Boundary Conditions ---\\n");
     printf("Start Time (t_start): %.2f\\n", commondata.t_start);
-    printf("Integration Max t: %.2f\\n", commondata.t_integration_max);
     printf("Escape Radius (r_escape): %.2f\\n", commondata.r_escape);
     printf("Max Momentum (p_t,max): %.2f\\n", commondata.p_t_max);
 
@@ -131,7 +160,7 @@ def main(spacetime_name: str) -> None:
     printf("Abs / Rel Tolerance: %e / %e\\n", commondata.rkf45_absolute_error_tolerance, commondata.rkf45_error_tolerance);
     printf("Safety Factor: %.2f\\n", commondata.rkf45_safety_factor);
     printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
-    printf("Conservation Check: %d\\n", commondata.perform_conservation_check);
+    printf("{diagnostic_flag_label}: %d\\n", commondata.{diagnostic_flag_name});
     printf("Slot Manager (Delta t / Min t): %.2f / %.2f\\n", commondata.slot_manager_delta_t, commondata.slot_manager_t_min);
 
     //==========================================
@@ -216,7 +245,7 @@ def main(spacetime_name: str) -> None:
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
             // 3. Execute Numerical Integration Pipeline
-            batch_integrator_analytical(&commondata, num_rays, results_buffer);
+            {batch_integrator_name}(&commondata, num_rays, results_buffer);
 
             // 3.5. Coordinate Global Shift
             // Maps local tile-space hits to the global window coordinate system.

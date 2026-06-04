@@ -23,6 +23,7 @@ import shutil
 # NRPy core and helper modules for C code generation
 import nrpy.c_function as cfc
 import nrpy.helpers.generic as gh
+import nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.batch_integrator_numerical as batch_integrator_numerical
 import nrpy.params as par
 
 # Physics/Math Generators (Symbolic definitions of spacetimes and geodesics)
@@ -82,6 +83,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable CUDA support. Defaults to OpenMP if omitted.",
     )
+    parser.add_argument(
+        "--integrator",
+        choices=("Analytical", "Numerical"),
+        default="Analytical",
+        help="Select the batch-integrator implementation to generate.",
+    )
     args = parser.parse_args()
 
     # Step 2: Define strict project constants and simulation targets
@@ -106,6 +113,12 @@ if __name__ == "__main__":
     # Map the new boolean flag to the string values your pipeline expects
     parallelization_mode = "cuda" if args.cuda else "openmp"
     par.set_parval_from_str("parallelization", parallelization_mode)
+    integrator_mode = args.integrator
+
+    if integrator_mode == "Numerical" and parallelization_mode == "cuda":
+        raise ValueError(
+            "The numerical batch integrator currently supports only OpenMP."
+        )
 
     # Step 4: Acquire Symbolic Physics Expressions
     print(f" -> Acquiring symbolic data for {GEO_KEY}...")
@@ -125,20 +138,24 @@ if __name__ == "__main__":
     p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
 
     # --- Fundamental Tensor Calculations (VRAM Persisted) ---
-    g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
-    connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
-    conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
-    normalization_constraint.normalization_constraint(
-        geodesic_data.norm_constraint_expr, PARTICLE
-    )
+    if integrator_mode == "Analytical":
+        g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
+        connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
+        conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
+        normalization_constraint.normalization_constraint(
+            geodesic_data.norm_constraint_expr, PARTICLE
+        )
 
     # --- Core Pipeline Kernels (The RKF45 Modular Loop) ---
-    interpolation_kernel.interpolation_kernel(SPACETIME)
+    if integrator_mode == "Analytical":
+        interpolation_kernel.interpolation_kernel(SPACETIME)
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_data.geodesic_rhs, geodesic_data.xx
     )
     rkf45_stage_update.rkf45_stage_update()
-    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
+    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
+        enable_numerical_time_window_step_cap=(integrator_mode == "Numerical")
+    )
 
     # --- Event Detection & Boundary Management ---
     find_event_time_and_state.find_event_time_and_state()
@@ -149,8 +166,11 @@ if __name__ == "__main__":
 
     # --- Infrastructure Helpers ---
     time_slot_manager_helpers.time_slot_manager_helpers()
-    batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
-    main.main(SPACETIME)
+    if integrator_mode == "Numerical":
+        batch_integrator_numerical.batch_integrator_numerical(SPACETIME)
+    else:
+        batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
+    main.main(SPACETIME, integrator_mode=integrator_mode)
 
     # --- Native NRPy Cleanup ---
     # Remove the inline helper functions from the global CFunction dictionary.
@@ -192,12 +212,13 @@ if __name__ == "__main__":
 
     # Batch Integrator & Numerical Limits
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
-    par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
+    if integrator_mode == "Numerical":
+        par.glb_code_params_dict["perform_normalization_check"].defaultvalue = False
+    else:
+        par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
-    par.glb_code_params_dict["t_integration_max"].defaultvalue = 10000.0
-
     # Source Plane Geometric Mapping
     par.glb_code_params_dict["source_plane_center_x"].defaultvalue = 0.0
     par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0

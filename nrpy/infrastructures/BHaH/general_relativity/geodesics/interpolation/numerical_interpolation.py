@@ -33,12 +33,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimut
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
-    time_window_manager_numerical,
-)
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
-    time_slot_manager_helpers,
-)
 
 
 def register_CFunction_numerical_interpolation(
@@ -94,6 +88,13 @@ def register_CFunction_numerical_interpolation(
             "numerical_interpolation currently supports only CoordSystem='Spherical'; "
             f"found '{CoordSystem}'."
         )
+
+    from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (  # pylint: disable=import-outside-toplevel
+        time_window_manager_numerical,
+    )
+    from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
+        time_slot_manager_helpers,
+    )
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()

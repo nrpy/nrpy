@@ -23,9 +23,6 @@ Author: Dalton J. Moone
 
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
-    time_slot_manager_helpers,
-)
 
 
 def time_window_manager_numerical() -> None:
@@ -53,6 +50,10 @@ def time_window_manager_numerical() -> None:
     >>> "time_window_manager_numerical_checked_floor_to_long" in generated
     True
     """
+    from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
+        time_slot_manager_helpers,
+    )
+
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
