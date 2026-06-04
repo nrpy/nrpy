@@ -72,10 +72,7 @@ def coord_leq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x <= xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return cast(
-        sp.Expr,
-        min_noif(x - xstar - TINYDOUBLE, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE),
-    )
+    return min_noif(x - xstar - TINYDOUBLE, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE)
 
 
 def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -88,10 +85,7 @@ def coord_geq_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x >= xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return cast(
-        sp.Expr,
-        max_noif(x - xstar + TINYDOUBLE, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE),
-    )
+    return max_noif(x - xstar + TINYDOUBLE, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE)
 
 
 def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -104,9 +98,7 @@ def coord_less_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x > xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return cast(
-        sp.Expr, min_noif(x - xstar, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE)
-    )
+    return min_noif(x - xstar, sp.sympify(0.0)) / (x - xstar - TINYDOUBLE)
 
 
 def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
@@ -119,9 +111,7 @@ def coord_greater_bound(x: sp.Expr, xstar: sp.Expr) -> sp.Expr:
     :return: symbolic form x > xstar
     """
     TINYDOUBLE = register_TINYDOUBLE_if_needed()
-    return cast(
-        sp.Expr, max_noif(x - xstar, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE)
-    )
+    return max_noif(x - xstar, sp.sympify(0.0)) / (x - xstar + TINYDOUBLE)
 
 
 if __name__ == "__main__":

@@ -433,7 +433,7 @@ def _radius_map_unscaled(
         delta_a = a_list[i] - a_list[i + 1]
         rb += delta_a * _G_kernel(r=r, R=R_i, s=s_i)
 
-    return cast(sp.Expr, rb)
+    return rb
 
 
 def _G_and_derivs_closed_form(
