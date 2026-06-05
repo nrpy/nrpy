@@ -22,6 +22,7 @@ import math
 import os
 import shutil
 import sys
+from typing import Dict, Union
 
 import sympy as sp
 
@@ -198,21 +199,224 @@ if __name__ == "__main__":
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
 
-    # Step 5.5.a: Define the numerical-spacetime contract required by the
-    # BBH helper and runtime.
+    # Step 5.5.a: Define the user-facing physical and numerical knobs.
     #
-    # These values are deliberately independent literals. Do not derive one
-    # CodeParameter from another in this block.
+    # This is the only block ordinary users should edit. Most entries are photon
+    # CodeParameter defaults. The remaining entries define the numerical
+    # spacetime dataset contract needed by the derived relationships below.
+    photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
+        # Batch Integrator & Numerical Limits
+        "p_t_max": 1000.0,
+        "perform_normalization_check": True,
+        "r_escape": 100.0,
+        "rkf45_max_delta_t": 1.0,
+        "slot_manager_delta_t": 100.0,
+        "slot_manager_t_min": -1000.0,
+        # Source Plane Geometric Mapping
+        "source_plane_center_x": 0.0,
+        "source_plane_center_y": 0.0,
+        "source_plane_center_z": 0.0,
+        "source_plane_normal_x": 0.0,
+        "source_plane_normal_y": 0.0,
+        "source_plane_normal_z": 1.0,
+        "source_r_max": 20.0,
+        "source_r_min": 6.0,
+        "source_up_vec_x": 0.0,
+        "source_up_vec_y": 1.0,
+        "source_up_vec_z": 0.0,
+        # Camera Window Geometric Mapping
+        "camera_pos_x": 51.0,
+        "camera_pos_y": 0.0,
+        "camera_pos_z": 10.2,
+        "original_window_center_x": 50.0,
+        "original_window_center_y": 0.0,
+        "original_window_center_z": 10.0,
+        "window_height": 1.0,
+        "window_up_vec_x": 0.0,
+        "window_up_vec_y": 0.0,
+        "window_up_vec_z": 1.0,
+        "window_width": 1.0,
+        "window_tiles_width": 2,
+        "window_tiles_height": 2,
+        # RKF45 Adaptive Control Tolerances
+        "numerical_initial_h": 0.1,
+        "rkf45_absolute_error_tolerance": 1.0e-10,
+        "rkf45_error_tolerance": 1.0e-10,
+        "rkf45_h_max": 10.0,
+        "rkf45_h_min": 1.0e-15,
+        # Execution Initial Conditions
+        "t_start": 1000.0,
+        "scan_density": 500,
+    }
+
+    # Numerical-spacetime dataset knobs used by the radial and temporal contract.
+    #
+    # nxx[0] is the number of radial grid points in the generated numerical
+    # spacetime data. The radial relationship below solves for the physical
+    # radial extent, grid_physical_size, using nxx[0] as fixed input.
+    #
+    # dt_grids is the diagnostic cadence of the generated BBH spacetime data.
+    # It also sets the spacing of the time slices used by temporal interpolation.
+    nxx = [72, 12, 2]
+    dt_grids = 0.25
+
+    # eta in the radial relationship. This safety factor scales the radial
+    # RKF45/time-slot overshoot estimate, but it is not a temporal endpoint
+    # padding. The temporal endpoint safety is already represented by the +2
+    # in (N_t + 2) * dt_grids below.
+    radial_overshoot_safety_factor = 1.0
+
+    numerical_spacetime_spatial_interp_order = int(
+        par.glb_code_params_dict[
+            "numerical_spacetime_spatial_interp_order"
+        ].defaultvalue
+    )
+    numerical_spacetime_temporal_interp_order = int(
+        par.glb_code_params_dict[
+            "numerical_spacetime_temporal_interp_order"
+        ].defaultvalue
+    )
+
+    # Step 5.5.b: Derive the numerical-spacetime time-window relationships.
+    #
+    # Pull the relationship-driving photon parameters out of the user-facing
+    # dictionary so that the equations below read like the derivation.
+    r_escape = float(photon_code_param_defaults["r_escape"])
+    rkf45_max_delta_t = float(photon_code_param_defaults["rkf45_max_delta_t"])
+    slot_manager_delta_t = float(photon_code_param_defaults["slot_manager_delta_t"])
+    slot_manager_t_min = float(photon_code_param_defaults["slot_manager_t_min"])
+    t_start_photon = float(photon_code_param_defaults["t_start"])
+
+    n_r = int(nxx[0])
+
+    # The temporal interpolation stencil has order N_t and uses 2*N_t + 1 time
+    # slices. In the worst case, interpolation near a time boundary can require
+    # N_t + 1 slices on one side of the photon time. We add one extra diagnostic
+    # interval for boundary alignment, floating-point roundoff, and rare endpoint
+    # cases in large photon batches, giving the halo (N_t + 2) * dt_grids.
+    temporal_halo = (
+        numerical_spacetime_temporal_interp_order + 2
+    ) * dt_grids
+
+    # Photons are reverse ray traced from t_start_photon toward smaller
+    # coordinate time. Therefore the upper-time boundary of the BBH data does
+    # not need rkf45_max_delta_t: photons move away from that boundary after
+    # initialization. It still needs the temporal interpolation halo above
+    # t_start_photon so the initial interpolation stencil is available.
+    bbh_data_t_final = t_start_photon + temporal_halo
+
+    # The lower-time boundary is different. Reverse-ray-traced photons evolve
+    # toward smaller coordinate time, and the RKF45 time-window logic can move
+    # a photon below slot_manager_t_min by roughly rkf45_max_delta_t before the
+    # boundary is noticed. At that overshot time, temporal interpolation still
+    # needs the full halo below the photon time.
+    bbh_data_t_start = slot_manager_t_min - rkf45_max_delta_t - temporal_halo
+
+    # The BBH runtime target is one diagnostic interval beyond the requested
+    # combined-data final time so that the raytracing-data output sequence can
+    # include the final requested data slice.
+    bbh_runtime_t_final = bbh_data_t_final + dt_grids
+
+    # Step 5.5.c: Compute the ceiling-aware radial grid contract.
+    #
+    # The radial grid must extend beyond r_escape because photons are terminated
+    # only after an accepted RKF45 step. Interpolation may also be needed during
+    # the step or at the accepted endpoint, so merely setting
+    # grid_physical_size = r_escape is not enough.
+    #
+    # Spatial interpolation of order N needs a far-side radial buffer of N + 1
+    # cells in the worst case. With n_r = nxx[0] and
+    # N = numerical_spacetime_spatial_interp_order, this buffer is represented
+    # by radial_interp_buffer_cells.
+    radial_interp_buffer_cells = numerical_spacetime_spatial_interp_order + 1
+
+    # For an outward null ray in the approximately flat far-field region, the
+    # worst-case radial coordinate motion is estimated by Delta r <= Delta t.
+    # The relevant coordinate-time lookahead is modeled as the slot-manager time
+    # window plus the maximum RKF45 step-time cap. The eta factor accounts for
+    # stage excursions, coordinate effects, and small mismatches between the
+    # ideal estimate and the actual numerical evolution.
+    radial_overshoot_buffer = radial_overshoot_safety_factor * (
+        slot_manager_delta_t + rkf45_max_delta_t
+    )
+
+    # The radial extent condition is
+    #
+    #   R >= r_escape + (N + 1) * dr + T,
+    #
+    # where R is grid_physical_size, dr = R / n_r, and
+    # T = eta * (slot_manager_delta_t + rkf45_max_delta_t).
+    #
+    # The formula is implicit because dr itself depends on R. In addition, the
+    # time-overshoot buffer must be represented by an integer number of radial
+    # cells. The ceiling-aware solve reserves
+    #
+    #   k_t = ceil(((n_r - (N + 1)) * T) / (r_escape + T))
+    #
+    # radial cells for the RKF45/time-slot overshoot.
+    radial_buffer_denominator = r_escape + radial_overshoot_buffer
+    radial_buffer_numerator = (
+        (n_r - radial_interp_buffer_cells) * radial_overshoot_buffer
+    )
+    radial_time_buffer_cells = math.ceil(
+        radial_buffer_numerator / radial_buffer_denominator
+    )
+
+    # After reserving N + 1 interpolation cells and k_t overshoot cells, the
+    # remaining radial cells determine the minimum physical grid size:
+    #
+    #   R_min = n_r * r_escape / (n_r - (N + 1) - k_t).
+    #
+    # Guards for invalid user choices are intentionally left out here; they can
+    # be added later in the final validation block.
+    radial_denominator = (
+        n_r - radial_interp_buffer_cells - radial_time_buffer_cells
+    )
+    grid_physical_size = n_r * r_escape / radial_denominator
 
     print(
         " -> Numerical spacetime contract: "
-        "data_t_final=7.75001, "
-        "bbh_runtime_t_final=8.00001, "
-        "slot_manager_t_min=-1000.00000, "
-        "r_escape=100.00000"
+        f"data_t_start={bbh_data_t_start:.5f}, "
+        f"data_t_final={bbh_data_t_final:.5f}, "
+        f"runtime_t_final={bbh_runtime_t_final:.5f}, "
+        f"grid_physical_size={grid_physical_size:.5f}, "
+        f"r_escape={r_escape:.5f}"
     )
 
-    # Step 5.5.b: Ensure the required numerical spacetime data file exists.
+    # Step 5.5.d: Define fixed metadata for the generated BBH dataset.
+    combined_format_magic = "NRPYRTSTACK4D"
+    combined_format_version = 1
+    source_format_version = 1
+    serialized_real_bytes = 8
+
+    num_grids = 1
+    payload_includes_ghost_zones = 0
+    target_basis = "Cartesian"
+
+    payload_format_name = "Cartesian g4DD+Gamma4UDD"
+    payload_layout = "time_major_stage1_aos"
+    payload_loop_order = "i2maj_i0fast"
+    point_record_real_count = 53
+    serialized_point_record_bytes = point_record_real_count * serialized_real_bytes
+    metric_component_count = 10
+    christoffel_component_count = 40
+
+    spatial_lookup_mode = "coordinate_table_only"
+    enable_axisymmetry = True
+    axisymmetry_axis = "z"
+    requires_axisymmetry_rotation = True
+
+    bbh_floating_point_precision = "double"
+    bbh_parallelization = "openmp"
+    enable_raytracing_outputs = True
+    bh1_mass = 0.5
+    bh2_mass = 0.5
+    bh1_posn_z = 0.5
+    bh2_posn_z = -0.5
+    gamma_driving_eta = 1.0
+    outer_bc_type = "radiation"
+
+    # Step 5.5.e: Build the required combined-bin metadata contract.
     combined_bin_location = os.path.abspath(
         os.path.join(
             args.outdir,
@@ -223,54 +427,54 @@ if __name__ == "__main__":
 
     required_combined_bin_metadata = {
         "combined_file": {
-            "format_magic": "NRPYRTSTACK4D",
-            "combined_format_version": 1,
-            "source_format_version": 1,
+            "format_magic": combined_format_magic,
+            "combined_format_version": combined_format_version,
+            "source_format_version": source_format_version,
             "endianness": "little",
-            "serialized_real_bytes": 8,
+            "serialized_real_bytes": serialized_real_bytes,
         },
         "grid": {
-            "CoordSystem": "Spherical",
-            "Nxx": [72, 12, 2],
-            "num_grids": 1,
-            "payload_includes_ghost_zones": 0,
-            "target_basis": "Cartesian",
-            "grid_physical_size": 7.5,
+            "CoordSystem": dataset_coord_system,
+            "Nxx": nxx,
+            "num_grids": num_grids,
+            "payload_includes_ghost_zones": payload_includes_ghost_zones,
+            "target_basis": target_basis,
+            "grid_physical_size": grid_physical_size,
         },
         "payload": {
-            "format_name": "Cartesian g4DD+Gamma4UDD",
-            "payload_layout": "time_major_stage1_aos",
-            "loop_order": "i2maj_i0fast",
-            "point_record_real_count": 53,
-            "point_record_bytes": 424,
-            "record_component_count": 53,
-            "metric_component_count": 10,
-            "christoffel_component_count": 40,
+            "format_name": payload_format_name,
+            "payload_layout": payload_layout,
+            "loop_order": payload_loop_order,
+            "point_record_real_count": point_record_real_count,
+            "point_record_bytes": serialized_point_record_bytes,
+            "record_component_count": point_record_real_count,
+            "metric_component_count": metric_component_count,
+            "christoffel_component_count": christoffel_component_count,
         },
         "time": {
-            "t_start": 0.0,
-            "t_final": 7.75001,
-            "dt": 0.25,
+            "t_start": bbh_data_t_start,
+            "t_final": bbh_data_t_final,
+            "dt": dt_grids,
             "absolute_tolerance": 1.0e-12,
         },
         "spatial_lookup": {
-            "spatial_lookup_mode": "coordinate_table_only",
-            "axisymmetry_enabled": True,
-            "axisymmetry_axis": "z",
-            "requires_axisymmetry_rotation": True,
+            "spatial_lookup_mode": spatial_lookup_mode,
+            "axisymmetry_enabled": enable_axisymmetry,
+            "axisymmetry_axis": axisymmetry_axis,
+            "requires_axisymmetry_rotation": requires_axisymmetry_rotation,
         },
         "two_blackholes_run": {
-            "floating_point_precision": "double",
-            "parallelization": "openmp",
-            "raytracing_outputs_enabled": True,
-            "BH1_mass": 0.5,
-            "BH2_mass": 0.5,
-            "BH1_posn_z": 0.5,
-            "BH2_posn_z": -0.5,
-            "GammaDriving_eta": 1.0,
-            "outer_bc_type": "radiation",
-            "runtime_t_final": 8.00001,
-            "diagnostics_output_every": 0.25,
+            "floating_point_precision": bbh_floating_point_precision,
+            "parallelization": bbh_parallelization,
+            "raytracing_outputs_enabled": enable_raytracing_outputs,
+            "BH1_mass": bh1_mass,
+            "BH2_mass": bh2_mass,
+            "BH1_posn_z": bh1_posn_z,
+            "BH2_posn_z": bh2_posn_z,
+            "GammaDriving_eta": gamma_driving_eta,
+            "outer_bc_type": outer_bc_type,
+            "runtime_t_final": bbh_runtime_t_final,
+            "diagnostics_output_every": dt_grids,
         },
         "generation": {
             "project_name": "two_blackholes_collide",
@@ -300,6 +504,7 @@ if __name__ == "__main__":
         },
     }
 
+    # Step 5.5.f: Ensure the required numerical spacetime data file exists.
     state_of_bin, combined_bin_location = ensure_required_combined_bin(
         required_metadata=required_combined_bin_metadata,
         combined_bin_location=combined_bin_location,
@@ -307,59 +512,21 @@ if __name__ == "__main__":
     print(f" -> Numerical spacetime data: {state_of_bin}")
     print(f" -> Combined raytracing data path: {combined_bin_location}")
 
+    # Step 5.5.g: Bind the validated dataset and photon CodeParameters.
     print(" -> Overriding desired CodeParameters before .par generation...")
 
-    # Bind the validated combined numerical-spacetime dataset into commondata.
     par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = (
         combined_bin_location
     )
+    par.glb_code_params_dict[
+        "numerical_spacetime_spatial_interp_order"
+    ].defaultvalue = numerical_spacetime_spatial_interp_order
+    par.glb_code_params_dict[
+        "numerical_spacetime_temporal_interp_order"
+    ].defaultvalue = numerical_spacetime_temporal_interp_order
 
-    # Batch Integrator & Numerical Limits
-    par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
-    par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
-    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 1.0
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
-
-    # Source Plane Geometric Mapping
-    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_center_z"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_z"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_r_max"].defaultvalue = 20.0
-    par.glb_code_params_dict["source_r_min"].defaultvalue = 6.0
-    par.glb_code_params_dict["source_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
-
-    # Camera Window Geometric Mapping
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
-    par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.2
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 50.0
-    par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["original_window_center_z"].defaultvalue = 10.0
-    par.glb_code_params_dict["window_height"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_width"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_tiles_width"].defaultvalue = 2
-    par.glb_code_params_dict["window_tiles_height"].defaultvalue = 2
-
-    # RKF45 Adaptive Control Tolerances
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-10
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-10
-    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
-
-    # Execution Initial Conditions
-    par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
-    par.glb_code_params_dict["scan_density"].defaultvalue = 500
+    for param_name, default_value in photon_code_param_defaults.items():
+        par.glb_code_params_dict[param_name].defaultvalue = default_value
 
     # Step 6: Generate C Code for Parameter Handling
     print(" -> Generating parameter handling code...")
