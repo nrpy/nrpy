@@ -199,22 +199,21 @@ if __name__ == "__main__":
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
 
-    # Step 5.5.a: Define the user-facing physical and numerical knobs.
+    # Step 5.5.a: Define the user-facing physical and numerical controls.
     #
     # This is the only block ordinary users should edit. Most entries are photon
     # CodeParameter defaults. The remaining entries define the numerical
     # spacetime dataset contract needed by the derived relationships below.
     photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
         # Execution Initial Conditions
-        "t_start": 10.0,
+        "t_start": 30.0,
         "scan_density": 500,
         # Batch Integrator & Numerical Limits
         "p_t_max": 100.0,
         "perform_normalization_check": True,
-        "r_escape": 150.0,
+        "r_escape": 15.0,
         "rkf45_max_delta_t": 1.0,
         "slot_manager_delta_t": 2.0,
-        "slot_manager_t_min": 0.0,  # t_end_photon
         # Source Plane Geometric Mapping
         "source_plane_center_x": -10.0,
         "source_plane_center_y": 0.0,
@@ -248,16 +247,26 @@ if __name__ == "__main__":
         "rkf45_h_max": 10.0,
         "rkf45_h_min": 1.0e-15,
     }
+    # These affect only the trusted BBH data-generation helper path.
+    # They are not photon CodeParameters and therefore must not be written
+    # through par.glb_code_params_dict below.
+    bbh_generation_defaults: Dict[str, int] = {
+        "convergence_factor": 1,
+    }
 
-    # Numerical-spacetime dataset knobs used by the radial and temporal contract.
+    # Numerical-spacetime dataset controls used by the radial and temporal
+    # contract.
     #
-    # Nxx[0] is the number of radial grid points in the generated numerical
-    # spacetime data. The radial relationship below solves for the physical
-    # radial extent, grid_physical_size, using Nxx[0] as fixed input.
+    # The trusted BBH example uses a fixed spherical base split of
+    # [72, 12, 2]. Users no longer choose the full Nxx list directly in this
+    # photon script. Instead, they choose convergence_factor above, and the
+    # actual generated BBH grid is derived as
     #
-    # dt_grids is the diagnostic cadence of the generated BBH spacetime data.
-    # It also sets the spacing of the time slices used by temporal interpolation.
-    Nxx = [720, 12, 2]
+    #   Nxx = [72 * convergence_factor, 12 * convergence_factor, 2].
+    #
+    # This keeps the pre-tested BBH angular/radial shape intact while allowing
+    # controlled uniform refinement of the non-symmetry directions.
+    base_bbh_nxx = [72, 12, 2]
     dt_grids = 0.25
 
     # eta in the radial relationship. This safety factor scales the radial
@@ -284,8 +293,19 @@ if __name__ == "__main__":
     r_escape = float(photon_code_param_defaults["r_escape"])
     rkf45_max_delta_t = float(photon_code_param_defaults["rkf45_max_delta_t"])
     slot_manager_delta_t = float(photon_code_param_defaults["slot_manager_delta_t"])
-    slot_manager_t_min = float(photon_code_param_defaults["slot_manager_t_min"])
     t_start_photon = float(photon_code_param_defaults["t_start"])
+    convergence_factor_raw = bbh_generation_defaults["convergence_factor"]
+    if not isinstance(convergence_factor_raw, (int, float)):
+        raise ValueError("convergence_factor must be numeric.")
+    convergence_factor_float = float(convergence_factor_raw)
+    if convergence_factor_float <= 0.0 or not convergence_factor_float.is_integer():
+        raise ValueError("convergence_factor must be a positive integer.")
+    convergence_factor = int(convergence_factor_float)
+    Nxx = [
+        base_bbh_nxx[0] * convergence_factor,
+        base_bbh_nxx[1] * convergence_factor,
+        base_bbh_nxx[2],
+    ]
 
     n_r = int(Nxx[0])
 
@@ -303,12 +323,18 @@ if __name__ == "__main__":
     # t_start_photon so the initial interpolation stencil is available.
     bbh_data_t_final = t_start_photon + temporal_halo
 
-    # The lower-time boundary is different. Reverse-ray-traced photons evolve
-    # toward smaller coordinate time, and the RKF45 time-window logic can move
-    # a photon below slot_manager_t_min by roughly rkf45_max_delta_t before the
-    # boundary is noticed. At that overshot time, temporal interpolation still
-    # needs the full halo below the photon time.
-    bbh_data_t_start = slot_manager_t_min - rkf45_max_delta_t - temporal_halo
+    # The BBH example is treated as always starting at coordinate time 0.0.
+    # Therefore the photon-side lower-time contract cannot be specified
+    # independently. Instead we solve the prior relationship
+    #
+    #   bbh_data_t_start = slot_manager_t_min - rkf45_max_delta_t - temporal_halo
+    #
+    # for slot_manager_t_min while fixing bbh_data_t_start = 0.0. This makes
+    # the photon stopping threshold the derived quantity and guarantees that no
+    # accepted photon step requires BBH data earlier than the first available
+    # slice.
+    bbh_data_t_start = 0.0
+    slot_manager_t_min = rkf45_max_delta_t + temporal_halo
 
     # The BBH runtime target is one diagnostic interval beyond the requested
     # combined-data final time so that the raytracing-data output sequence can
@@ -343,6 +369,11 @@ if __name__ == "__main__":
     #   R >= r_escape + (N + 1) * dr + T,
     #
     # where R is grid_physical_size, dr = R / n_r, and
+    #
+    #   n_r = 72 * convergence_factor,
+    #
+    # so equivalently dr = R / (72 * convergence_factor).
+    #
     # T = eta * (slot_manager_delta_t + rkf45_max_delta_t).
     #
     # The formula is implicit because dr itself depends on R. In addition, the
@@ -372,6 +403,9 @@ if __name__ == "__main__":
 
     print(" -> Numerical spacetime contract:")
     for name, value in [
+        ("convergence_factor", float(convergence_factor)),
+        ("n_r", float(n_r)),
+        ("slot_manager_t_min", slot_manager_t_min),
         ("data_t_start", bbh_data_t_start),
         ("data_t_final", bbh_data_t_final),
         ("runtime_t_final", bbh_runtime_t_final),
@@ -464,6 +498,7 @@ if __name__ == "__main__":
             "floating_point_precision": bbh_floating_point_precision,
             "parallelization": bbh_parallelization,
             "raytracing_outputs_enabled": enable_raytracing_outputs,
+            "convergence_factor": convergence_factor,
             "BH1_mass": bh1_mass,
             "BH2_mass": bh2_mass,
             "BH1_posn_z": bh1_posn_z,
@@ -502,6 +537,12 @@ if __name__ == "__main__":
     }
 
     # Step 5.5.f: Ensure the required numerical spacetime data file exists.
+    print(
+        " -> Checking for a compatible numerical spacetime .bin cache. "
+        "If validation takes more than a few seconds, the cached data were "
+        "missing or stale and the two_blackholes_collide pipeline is "
+        "regenerating them now."
+    )
     state_of_bin, combined_bin_location = ensure_required_combined_bin(
         required_metadata=required_combined_bin_metadata,
         combined_bin_location=combined_bin_location,
@@ -524,6 +565,7 @@ if __name__ == "__main__":
 
     for param_name, default_value in photon_code_param_defaults.items():
         par.glb_code_params_dict[param_name].defaultvalue = default_value
+    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = slot_manager_t_min
 
     # Step 6: Generate C Code for Parameter Handling
     print(" -> Generating parameter handling code...")

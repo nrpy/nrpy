@@ -39,10 +39,16 @@ parser.add_argument(
 )
 parser.add_argument(
     "--raytracing-outputs",
-    action="store_true",
+    nargs="?",
+    const=7.5,
+    default=None,
+    type=float,
+    metavar="GRID_PHYSICAL_SIZE",
     help=(
         "Enable Cartesian metric and Christoffel raytracing outputs on "
-        "diagnostics output steps. Currently supported only for OpenMP builds."
+        "diagnostics output steps. Optionally override grid_physical_size, "
+        "e.g. --raytracing-outputs 10.0. Currently supported only for "
+        "OpenMP builds."
     ),
 )
 args = parser.parse_args()
@@ -56,7 +62,7 @@ if parallelization not in ["openmp", "cuda"]:
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
     )
-if args.cuda and args.raytracing_outputs:
+if args.cuda and args.raytracing_outputs is not None:
     raise ValueError(
         "--raytracing-outputs is currently supported only for OpenMP builds."
     )
@@ -78,10 +84,12 @@ num_fisheye_transitions = (
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
-grid_physical_size = 7.5
+grid_physical_size = (
+    args.raytracing_outputs if args.raytracing_outputs is not None else 7.5
+)
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
-enable_raytracing_data_output = args.raytracing_outputs
+enable_raytracing_data_output = args.raytracing_outputs is not None
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],

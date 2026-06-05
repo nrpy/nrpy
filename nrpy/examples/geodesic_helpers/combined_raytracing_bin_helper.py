@@ -46,6 +46,7 @@ DEFAULT_METRIC_COMPONENT_COUNT = 10
 DEFAULT_CHRISTOFFEL_COMPONENT_COUNT = 40
 DEFAULT_TWO_BLACKHOLES_PROJECT_NAME = "two_blackholes_collide"
 DEFAULT_STAGE1_PATTERN = "raytracing_data_t*.bin"
+DEFAULT_SPHERICAL_BASE_NXX = [72, 12, 2]
 
 
 def _as_float(value: object) -> float:
@@ -108,7 +109,7 @@ def _normalize_required_metadata(
         },
         "grid": {
             "CoordSystem": cast(str, grid.get("CoordSystem", "Spherical")),
-            "Nxx": cast(List[int], grid.get("Nxx", [72, 12, 2])),
+            "Nxx": cast(List[int], grid.get("Nxx", DEFAULT_SPHERICAL_BASE_NXX)),
             "num_grids": cast(int, grid.get("num_grids", 1)),
             "payload_includes_ghost_zones": cast(
                 int,
@@ -200,6 +201,9 @@ def _normalize_required_metadata(
                 bool,
                 two_blackholes_run.get("raytracing_outputs_enabled", True),
             ),
+            "convergence_factor": _as_float(
+                two_blackholes_run.get("convergence_factor", 1.0)
+            ),
             "BH1_mass": _as_float(two_blackholes_run.get("BH1_mass", 0.5)),
             "BH2_mass": _as_float(two_blackholes_run.get("BH2_mass", 0.5)),
             "BH1_posn_z": _as_float(two_blackholes_run.get("BH1_posn_z", 0.5)),
@@ -282,6 +286,7 @@ def _normalize_required_metadata(
 def _validate_supported_generation(normalized: Dict[str, object]) -> None:
     grid = cast(Dict[str, object], normalized["grid"])
     run = cast(Dict[str, object], normalized["two_blackholes_run"])
+    convergence_factor = cast(float, run["convergence_factor"])
     if grid["CoordSystem"] != "Spherical":
         raise ValueError("This helper currently supports only CoordSystem='Spherical'.")
     if run["parallelization"] != "openmp":
@@ -297,6 +302,19 @@ def _validate_supported_generation(normalized: Dict[str, object]) -> None:
     if run["outer_bc_type"] != "radiation":
         raise ValueError(
             "This helper currently supports only outer_bc_type='radiation'."
+        )
+    if convergence_factor <= 0.0 or not convergence_factor.is_integer():
+        raise ValueError("convergence_factor must be a positive integer.")
+    convergence_factor_int = int(convergence_factor)
+    expected_nxx = [
+        DEFAULT_SPHERICAL_BASE_NXX[0] * convergence_factor_int,
+        DEFAULT_SPHERICAL_BASE_NXX[1] * convergence_factor_int,
+        DEFAULT_SPHERICAL_BASE_NXX[2],
+    ]
+    if list(cast(List[int], grid["Nxx"])) != expected_nxx:
+        raise ValueError(
+            "For the Spherical BBH example, grid['Nxx'] must equal "
+            f"{expected_nxx} when convergence_factor={convergence_factor_int}."
         )
 
 
@@ -538,8 +556,10 @@ def _build_parfile_replacements(normalized: Dict[str, object]) -> Dict[str, obje
     bh2_mass = cast(float, run["BH2_mass"])
     bh1_posn_z = cast(float, run["BH1_posn_z"])
     bh2_posn_z = cast(float, run["BH2_posn_z"])
+    convergence_factor = cast(float, run["convergence_factor"])
     mass_total = bh1_mass + bh2_mass
     return {
+        "convergence_factor": convergence_factor,
         "eta": cast(float, run["GammaDriving_eta"]),
         "BH1_mass": bh1_mass,
         "BH2_mass": bh2_mass,
@@ -667,6 +687,7 @@ def generate_required_combined_bin(
     """
     normalized = _normalize_required_metadata(required_metadata)
     generation = cast(Dict[str, object], normalized["generation"])
+    grid = cast(Dict[str, object], normalized["grid"])
     run = cast(Dict[str, object], normalized["two_blackholes_run"])
 
     combined_bin_path = Path(combined_bin_location).expanduser().resolve()
@@ -676,6 +697,7 @@ def generate_required_combined_bin(
         cast(str, generation["python_executable"]),
         cast(str, generation["two_blackholes_example_script"]),
         "--raytracing-outputs",
+        repr(cast(float, grid["grid_physical_size"])),
         "--floating_point_precision",
         cast(str, run["floating_point_precision"]),
     ]
