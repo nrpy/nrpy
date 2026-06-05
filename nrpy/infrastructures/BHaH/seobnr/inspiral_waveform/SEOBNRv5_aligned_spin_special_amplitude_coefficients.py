@@ -214,11 +214,11 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 
 // Step 1: Build combined time-frequency samples for projected-spin attachment fits.
 if (use_projected_attachment) {
-const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
-if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
-  exit(1);
-}
+  const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
+  if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
+    exit(1);
+  }
 if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
     commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL) {
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
@@ -457,18 +457,18 @@ else{
 
 // Step 3: Evaluate the attachment-time shift from projected spins at r_ISCO.
 if (use_projected_attachment) {
-REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
-omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
-const REAL chi1_projected_rISCO = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_rISCO, commondata->chi1_lnhat.acc);
-const REAL chi2_projected_rISCO = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_rISCO, commondata->chi2_lnhat.acc);
-{
-  const REAL chi1 = chi1_projected_rISCO;
-  const REAL chi2 = chi2_projected_rISCO;
+  REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
+  omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
+  const REAL chi1_projected_rISCO = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_rISCO, commondata->chi1_lnhat.acc);
+  const REAL chi2_projected_rISCO = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_rISCO, commondata->chi2_lnhat.acc);
+  {
+    const REAL chi1 = chi1_projected_rISCO;
+    const REAL chi2 = chi2_projected_rISCO;
 """
     body += projected_delta_t_code
     body += """
-  commondata->Delta_t = projected_Delta_t;
-} // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
+    commondata->Delta_t = projected_Delta_t;
+  } // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
 } // END IF: projected-spin Delta_t inputs are self-consistent
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
@@ -483,6 +483,13 @@ if (t_peak_55 > times[commondata->nsteps_fine - 1]){
   t_peak_55 = times[attachment_end_idx];
 }
 commondata->t_attach = t_peak_22;
+
+if (use_projected_attachment) {
+  REAL omega_attach = gsl_spline_eval(spline_Omega, t_peak_22, acc_Omega);
+  omega_attach = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_attach));
+  commondata->chi1 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_attach, commondata->chi1_lnhat.acc);
+  commondata->chi2 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_attach, commondata->chi2_lnhat.acc);
+} // END IF: projected-spin waveform inputs use attachment-time spin projections
 
 REAL dynamics_22[NUMVARS];
 REAL dynamics_55[NUMVARS];

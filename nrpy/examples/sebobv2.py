@@ -106,6 +106,7 @@ Main function for computing the SEBOBv2 waveform.
 commondata_struct_set_to_default(&commondata);
 // Step TBD: Overwrite default values to parfile values. Then overwrite parfile values with values set at cmd line.
 cmdline_input_and_parfile_parser(&commondata, argc, argv);
+__SANDBOX_SPIN_WARNING_BLOCK__
 // Step TBD: Overwrite default values of m1, m2, a6, and dSO.
 SEOBNRv5_quasi_precessing_spin_coefficients(&commondata);
 // Step: compute the spin dynamics
@@ -119,6 +120,23 @@ SEOBNRv5_aligned_spin_special_coefficients(&commondata);
 // Step TBD: Generate the waveform.
 SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
 """
+
+    sandbox_spin_warning_block = ""
+    if validate_sandbox:
+        sandbox_spin_warning_block = r"""
+if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
+    fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
+  fprintf(stderr,
+      "Warning: the optional coprecessing-rotation sandbox and projected-spin "
+      "attachment validation use chi1_x/y/z and chi2_x/y/z, while scalar "
+      "aligned-spin command-line inputs use chi1 and chi2. For self-consistent "
+      "precessing validation, set chi1=chi1_z and chi2=chi2_z; otherwise "
+      "the projected-spin attachment path falls back to scalar aligned-spin "
+      "behavior.\n");
+  fflush(stderr);
+} // END IF: scalar and vector spin parameters differ for sandbox validation
+"""
+    body = body.replace("__SANDBOX_SPIN_WARNING_BLOCK__", sandbox_spin_warning_block)
 
     if validate_sandbox:
         sandbox_diagnostics_flag = "1" if enable_sandbox_diagnostics else "0"
@@ -136,16 +154,6 @@ SEOBNRv5_aligned_spin_waveform_from_dynamics(&commondata);
   const int enable_sandbox_diagnostics = __SANDBOX_DIAGNOSTICS_FLAG__;
   const REAL sandbox_iota = 0.9;
   const REAL sandbox_varphi_0 = 0.3;
-
-  if (fabs(commondata.chi1 - commondata.chi1_z) > 1e-14 ||
-      fabs(commondata.chi2 - commondata.chi2_z) > 1e-14) {
-    fprintf(stderr,
-        "Warning: the optional coprecessing-rotation sandbox uses "
-        "chi1_x/y/z and chi2_x/y/z, while the current aligned-spin IMR "
-        "path uses chi1 and chi2. For a self-consistent sandbox "
-        "validation, set chi1=chi1_z and chi2=chi2_z.\n");
-    fflush(stderr);
-  } // END IF: scalar and vector spin parameters differ for sandbox validation
 
   REAL *real_buffers = (REAL *)calloc(2 * n_insp, sizeof(REAL));
   COMPLEX *complex_buffers = (COMPLEX *)calloc(7 * n_insp, sizeof(COMPLEX));
