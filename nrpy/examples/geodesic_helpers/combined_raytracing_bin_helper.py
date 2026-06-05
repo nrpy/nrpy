@@ -211,6 +211,12 @@ def _normalize_required_metadata(
                 str,
                 two_blackholes_run.get("outer_bc_type", "radiation"),
             ),
+            "runtime_t_final": _as_float(
+                two_blackholes_run.get(
+                    "runtime_t_final",
+                    _as_float(time.get("t_final", 7.5)),
+                )
+            ),
             "diagnostics_output_every": _as_float(
                 two_blackholes_run.get("diagnostics_output_every", 0.25)
             ),
@@ -387,6 +393,7 @@ def _combined_bin_matches(
     payload = cast(Dict[str, object], normalized["payload"])
     time = cast(Dict[str, object], normalized["time"])
     spatial_lookup = cast(Dict[str, object], normalized["spatial_lookup"])
+    run = cast(Dict[str, object], normalized["two_blackholes_run"])
 
     header = cast(crt.CombinedHeaderInfo, parsed_metadata["header"])
     metadata = cast(Dict[str, object], parsed_metadata["metadata"])
@@ -461,12 +468,15 @@ def _combined_bin_matches(
         abs_tol=cast(float, time["absolute_tolerance"]),
     ):
         return False
-    if not math.isclose(
-        slice_times[-1],
-        cast(float, time["t_final"]),
-        rel_tol=0.0,
-        abs_tol=cast(float, time["t_final_tolerance"]),
-    ):
+    required_t_final = cast(float, time["t_final"])
+    t_final_tolerance = cast(float, time["t_final_tolerance"])
+    runtime_t_final = cast(float, run["runtime_t_final"])
+    # The photon integrator needs coverage through required_t_final, but the
+    # BBH driver intentionally runs about one output interval longer because
+    # diagnostics are emitted before each forward step.
+    if slice_times[-1] < required_t_final - t_final_tolerance:
+        return False
+    if slice_times[-1] > runtime_t_final + t_final_tolerance:
         return False
     return True
 
@@ -533,7 +543,6 @@ def _rewrite_parfile(parfile_path: Path, replacements: Dict[str, object]) -> Non
 
 def _build_parfile_replacements(normalized: Dict[str, object]) -> Dict[str, object]:
     run = cast(Dict[str, object], normalized["two_blackholes_run"])
-    time = cast(Dict[str, object], normalized["time"])
     bh1_mass = cast(float, run["BH1_mass"])
     bh2_mass = cast(float, run["BH2_mass"])
     bh1_posn_z = cast(float, run["BH1_posn_z"])
@@ -546,7 +555,7 @@ def _build_parfile_replacements(normalized: Dict[str, object]) -> Dict[str, obje
         "BH1_posn_z": bh1_posn_z,
         "BH2_posn_z": bh2_posn_z,
         "outer_bc_type": cast(str, run["outer_bc_type"]),
-        "t_final": cast(float, time["t_final"]),
+        "t_final": cast(float, run["runtime_t_final"]),
         "diagnostics_output_every": cast(float, run["diagnostics_output_every"]),
         "bah_initial_grid_z_center[3]": (bh1_posn_z, bh2_posn_z, 0.0),
         "bah_M_scale[3]": (bh1_mass, bh2_mass, mass_total),
@@ -616,8 +625,9 @@ def check_combined_bin_metadata(
     The helper validates only lightweight compatibility metadata: fixed-header
     fields, JSON metadata, and slice-table times. Time gaps are required to be
     strictly positive; they are not required to be uniform. The first slice
-    must match ``t_start`` and the last slice must land within the configured
-    ``t_final`` tolerance.
+    must match ``t_start``. The last slice must cover the required photon-side
+    ``t_final`` and must not overshoot the BBH runtime stop time by more than
+    the configured tolerance.
 
     :param required_metadata: Metadata describing the required combined bin.
     :param combined_bin_location: Expected combined bin path.

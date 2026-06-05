@@ -297,11 +297,14 @@ def batch_integrator_numerical(
 
     // Host-bound struct managing temporal binning of photon trajectories $x^\mu$.
     TimeSlotManager tsm;
+    // The slot-manager upper bound is exclusive, so it must sit slightly above
+    // t_start; exact equality would reject the initial photon state.
+    const double slot_manager_t_max = commondata->t_start + 1.0e-5;
     // The main slot range is controlled by commondata, not by combined-file metadata.
     slot_manager_init(
         &tsm,
         commondata->slot_manager_t_min,
-        commondata->t_start + 1.0,
+        slot_manager_t_max,
         commondata->slot_manager_delta_t,
         num_rays);
 
