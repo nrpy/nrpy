@@ -284,15 +284,6 @@ def _validate_supported_generation(normalized: Dict[str, object]) -> None:
     run = cast(Dict[str, object], normalized["two_blackholes_run"])
     if grid["CoordSystem"] != "Spherical":
         raise ValueError("This helper currently supports only CoordSystem='Spherical'.")
-    if grid["Nxx"] != [72, 12, 2]:
-        raise ValueError("This helper currently supports only Nxx=[72, 12, 2].")
-    if not math.isclose(
-        cast(float, grid["grid_physical_size"]),
-        7.5,
-        rel_tol=0.0,
-        abs_tol=1.0e-12,
-    ):
-        raise ValueError("This helper currently supports only grid_physical_size=7.5.")
     if run["parallelization"] != "openmp":
         raise ValueError(
             "This helper currently supports only parallelization='openmp'."

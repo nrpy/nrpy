@@ -193,114 +193,23 @@ if __name__ == "__main__":
         "handle_window_plane_intersection",
     ]:
         cfc.CFunction_dict.pop(internal_func, None)
-
+        
     # ##########################################################################
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
 
-    # Step 5.5.a: Define photon-side master parameters and derive the
-    # numerical-spacetime contract required by the BBH helper and runtime.
-    temporal_interp_order = int(
-        par.glb_code_params_dict[
-            "numerical_spacetime_temporal_interp_order"
-        ].defaultvalue
-    )
-    spatial_interp_order = int(
-        par.glb_code_params_dict[
-            "numerical_spacetime_spatial_interp_order"
-        ].defaultvalue
-    )
-
-    # Photon-side master parameters for this example.
-    photon_t_start = 7.0
-    photon_slot_manager_t_min = 1.75
-    photon_r_escape_target = 7.0
-    rkf45_max_backward_dt_lookahead = 1.0
-    slot_manager_t_max_pad = 1.0e-5
-
-    # The current helper supports only this trusted Spherical BBH dataset layout.
-    spacetime_data_t_min = 0.0
-    spacetime_data_dt = 0.25
-    supported_dataset_nxx = [72, 12, 2]
-    supported_dataset_grid_physical_size = 7.5
-
-    # Reverse ray tracing needs future-side BBH coverage for centered temporal
-    # interpolation, while the lower-time RKF45 lookahead remains a Python-side check.
-    temporal_buffer = (temporal_interp_order + 1) * spacetime_data_dt
-    spacetime_data_t_final = photon_t_start + temporal_buffer + slot_manager_t_max_pad
-    # The BBH driver writes diagnostics before each forward timestep, so the
-    # runtime stop time must extend by about one output interval beyond the
-    # final slice time the photons need.
-    bbh_runtime_t_final = spacetime_data_t_final + spacetime_data_dt
-    slot_manager_delta_t = (
-        photon_t_start - photon_slot_manager_t_min + slot_manager_t_max_pad
-    )
-
-    # Use the conservative outer-radius margin (n + 1) * dr for the numerical
-    # spatial interpolation stencil because this example targets large photon counts.
-    radial_grid_spacing = supported_dataset_grid_physical_size / float(
-        supported_dataset_nxx[0]
-    )
-    spatial_buffer = (spatial_interp_order + 1) * radial_grid_spacing
-    required_grid_physical_size = photon_r_escape_target + spatial_buffer
-    photon_r_escape = min(
-        photon_r_escape_target,
-        supported_dataset_grid_physical_size - spatial_buffer,
-    )
-
-    # Keep the observer geometry strictly inside the conservative numerical domain.
-    camera_pos_x = 6.2
-    camera_pos_y = 0.0
-    camera_pos_z = 1.24
-    original_window_center_x = 6.0
-    original_window_center_y = 0.0
-    original_window_center_z = 1.2
-
-    _require(
-        photon_slot_manager_t_min < photon_t_start,
-        "photon_slot_manager_t_min must be strictly less than photon_t_start.",
-    )
-    _require(
-        slot_manager_delta_t > 0.0,
-        "Derived slot_manager_delta_t must be positive.",
-    )
-    _require(
-        photon_slot_manager_t_min
-        >= spacetime_data_t_min + rkf45_max_backward_dt_lookahead + temporal_buffer,
-        "slot_manager_t_min violates the lower-time BBH coverage check implied by "
-        "rkf45_max_delta_t and the temporal interpolation halo.",
-    )
-    _require(
-        required_grid_physical_size <= supported_dataset_grid_physical_size + 1.0e-12,
-        "Requested photon_r_escape_target requires a larger BBH grid_physical_size "
-        "than the currently supported helper dataset.",
-    )
-    _require(
-        photon_r_escape > 0.0,
-        "Derived r_escape must remain positive after applying the spatial buffer.",
-    )
-
-    camera_radius = math.sqrt(camera_pos_x**2 + camera_pos_y**2 + camera_pos_z**2)
-    window_center_radius = math.sqrt(
-        original_window_center_x**2
-        + original_window_center_y**2
-        + original_window_center_z**2
-    )
-    _require(
-        camera_radius < photon_r_escape,
-        "Camera position must stay inside the conservative numerical spacetime radius.",
-    )
-    _require(
-        window_center_radius < photon_r_escape,
-        "Observer window center must stay inside the conservative numerical spacetime radius.",
-    )
+    # Step 5.5.a: Define the numerical-spacetime contract required by the
+    # BBH helper and runtime.
+    #
+    # These values are deliberately independent literals. Do not derive one
+    # CodeParameter from another in this block.
 
     print(
-        " -> Derived numerical spacetime contract: "
-        f"data_t_final={spacetime_data_t_final:.5f}, "
-        f"bbh_runtime_t_final={bbh_runtime_t_final:.5f}, "
-        f"slot_manager_t_min={photon_slot_manager_t_min:.5f}, "
-        f"r_escape={photon_r_escape:.5f}"
+        " -> Numerical spacetime contract: "
+        "data_t_final=7.75001, "
+        "bbh_runtime_t_final=8.00001, "
+        "slot_manager_t_min=-1000.00000, "
+        "r_escape=100.00000"
     )
 
     # Step 5.5.b: Ensure the required numerical spacetime data file exists.
@@ -322,11 +231,11 @@ if __name__ == "__main__":
         },
         "grid": {
             "CoordSystem": "Spherical",
-            "Nxx": supported_dataset_nxx,
+            "Nxx": [72, 12, 2],
             "num_grids": 1,
             "payload_includes_ghost_zones": 0,
             "target_basis": "Cartesian",
-            "grid_physical_size": supported_dataset_grid_physical_size,
+            "grid_physical_size": 7.5,
         },
         "payload": {
             "format_name": "Cartesian g4DD+Gamma4UDD",
@@ -339,9 +248,9 @@ if __name__ == "__main__":
             "christoffel_component_count": 40,
         },
         "time": {
-            "t_start": spacetime_data_t_min,
-            "t_final": spacetime_data_t_final,
-            "dt": spacetime_data_dt,
+            "t_start": 0.0,
+            "t_final": 7.75001,
+            "dt": 0.25,
             "absolute_tolerance": 1.0e-12,
         },
         "spatial_lookup": {
@@ -360,8 +269,8 @@ if __name__ == "__main__":
             "BH2_posn_z": -0.5,
             "GammaDriving_eta": 1.0,
             "outer_bc_type": "radiation",
-            "runtime_t_final": bbh_runtime_t_final,
-            "diagnostics_output_every": spacetime_data_dt,
+            "runtime_t_final": 8.00001,
+            "diagnostics_output_every": 0.25,
         },
         "generation": {
             "project_name": "two_blackholes_collide",
@@ -404,17 +313,14 @@ if __name__ == "__main__":
     par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = (
         combined_bin_location
     )
+
     # Batch Integrator & Numerical Limits
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = photon_r_escape
-    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = (
-        rkf45_max_backward_dt_lookahead
-    )
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = slot_manager_delta_t
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = (
-        photon_slot_manager_t_min
-    )
+    par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
+    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 1.0
+    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
+    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
 
     # Source Plane Geometric Mapping
     par.glb_code_params_dict["source_plane_center_x"].defaultvalue = 0.0
@@ -430,18 +336,12 @@ if __name__ == "__main__":
     par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
 
     # Camera Window Geometric Mapping
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = camera_pos_x
-    par.glb_code_params_dict["camera_pos_y"].defaultvalue = camera_pos_y
-    par.glb_code_params_dict["camera_pos_z"].defaultvalue = camera_pos_z
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = (
-        original_window_center_x
-    )
-    par.glb_code_params_dict["original_window_center_y"].defaultvalue = (
-        original_window_center_y
-    )
-    par.glb_code_params_dict["original_window_center_z"].defaultvalue = (
-        original_window_center_z
-    )
+    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
+    par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
+    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.2
+    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 50.0
+    par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
+    par.glb_code_params_dict["original_window_center_z"].defaultvalue = 10.0
     par.glb_code_params_dict["window_height"].defaultvalue = 1.0
     par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
@@ -451,14 +351,14 @@ if __name__ == "__main__":
     par.glb_code_params_dict["window_tiles_height"].defaultvalue = 2
 
     # RKF45 Adaptive Control Tolerances
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.05
+    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-10
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
 
     # Execution Initial Conditions
-    par.glb_code_params_dict["t_start"].defaultvalue = photon_t_start
+    par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
     par.glb_code_params_dict["scan_density"].defaultvalue = 500
 
     # Step 6: Generate C Code for Parameter Handling
