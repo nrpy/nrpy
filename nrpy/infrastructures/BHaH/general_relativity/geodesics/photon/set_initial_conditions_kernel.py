@@ -96,7 +96,6 @@ batch_structs_c_code = r"""
         double *window_event_f_intersect; // Interpolated 9-component state vector at the window intersection.
     } PhotonStateSoA; // END STRUCT: PhotonStateSoA
 """
-Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
 
 
 def set_initial_conditions_kernel(spacetime_name: str) -> None:
@@ -105,6 +104,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
     """
+    if "photon_batch_structs" not in par.glb_extras_dict.get("BHaH_defines", {}):
+        Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
+
     # Register necessary global parameters
     par.register_CodeParameter(
         "int", __name__, "scan_density", 500, commondata=True, add_to_parfile=True

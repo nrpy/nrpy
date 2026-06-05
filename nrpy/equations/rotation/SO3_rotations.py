@@ -340,7 +340,7 @@ class SO3Expressions:
         :param R: Matrix.
         :return: trace(R).
         """
-        return cast(sp.Expr, R[0][0] + R[1][1] + R[2][2])
+        return R[0][0] + R[1][1] + R[2][2]
 
     @staticmethod
     def axis_angle_general_branch_axis(
