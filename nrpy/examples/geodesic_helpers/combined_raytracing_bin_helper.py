@@ -560,10 +560,20 @@ def _build_parfile_replacements(normalized: Dict[str, object]) -> Dict[str, obje
 
 def _run_subprocess(command: Sequence[str], cwd: Path, label: str) -> None:
     try:
-        subprocess.run(list(command), cwd=str(cwd), check=True)
+        subprocess.run(
+            list(command),
+            cwd=str(cwd),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     except subprocess.CalledProcessError as error:
+        output = error.stdout or ""
+        output_tail = "\n".join(output.splitlines()[-80:])
         raise RuntimeError(
-            f"{label} failed with exit code {error.returncode}: {list(command)!r}"
+            f"{label} failed with exit code {error.returncode}: {list(command)!r}\n"
+            f"Last subprocess output:\n{output_tail}"
         ) from error
 
 

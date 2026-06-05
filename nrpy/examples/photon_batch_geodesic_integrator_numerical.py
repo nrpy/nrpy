@@ -194,7 +194,7 @@ if __name__ == "__main__":
         "handle_window_plane_intersection",
     ]:
         cfc.CFunction_dict.pop(internal_func, None)
-        
+
     # ##########################################################################
     # Step 5.5: OVERRIDE DEFAULT CODE PARAMETERS
     # ##########################################################################
@@ -205,32 +205,35 @@ if __name__ == "__main__":
     # CodeParameter defaults. The remaining entries define the numerical
     # spacetime dataset contract needed by the derived relationships below.
     photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
+        # Execution Initial Conditions
+        "t_start": 10.0,
+        "scan_density": 500,
         # Batch Integrator & Numerical Limits
-        "p_t_max": 1000.0,
+        "p_t_max": 100.0,
         "perform_normalization_check": True,
-        "r_escape": 100.0,
+        "r_escape": 150.0,
         "rkf45_max_delta_t": 1.0,
-        "slot_manager_delta_t": 100.0,
-        "slot_manager_t_min": -1000.0,
+        "slot_manager_delta_t": 2.0,
+        "slot_manager_t_min": 0.0,  # t_end_photon
         # Source Plane Geometric Mapping
-        "source_plane_center_x": 0.0,
+        "source_plane_center_x": -10.0,
         "source_plane_center_y": 0.0,
         "source_plane_center_z": 0.0,
-        "source_plane_normal_x": 0.0,
+        "source_plane_normal_x": 1.0,
         "source_plane_normal_y": 0.0,
-        "source_plane_normal_z": 1.0,
-        "source_r_max": 20.0,
-        "source_r_min": 6.0,
+        "source_plane_normal_z": 0.0,
+        "source_r_max": 30.0,
+        "source_r_min": 0.0,
         "source_up_vec_x": 0.0,
         "source_up_vec_y": 1.0,
         "source_up_vec_z": 0.0,
         # Camera Window Geometric Mapping
-        "camera_pos_x": 51.0,
+        "camera_pos_x": 11.0,
         "camera_pos_y": 0.0,
-        "camera_pos_z": 10.2,
-        "original_window_center_x": 50.0,
+        "camera_pos_z": 0.0,
+        "original_window_center_x": 10.0,
         "original_window_center_y": 0.0,
-        "original_window_center_z": 10.0,
+        "original_window_center_z": 0.0,
         "window_height": 1.0,
         "window_up_vec_x": 0.0,
         "window_up_vec_y": 0.0,
@@ -239,25 +242,22 @@ if __name__ == "__main__":
         "window_tiles_width": 2,
         "window_tiles_height": 2,
         # RKF45 Adaptive Control Tolerances
-        "numerical_initial_h": 0.1,
-        "rkf45_absolute_error_tolerance": 1.0e-10,
-        "rkf45_error_tolerance": 1.0e-10,
+        "numerical_initial_h": 0.05,
+        "rkf45_absolute_error_tolerance": 1.0e-5,
+        "rkf45_error_tolerance": 1.0e-5,
         "rkf45_h_max": 10.0,
         "rkf45_h_min": 1.0e-15,
-        # Execution Initial Conditions
-        "t_start": 1000.0,
-        "scan_density": 500,
     }
 
     # Numerical-spacetime dataset knobs used by the radial and temporal contract.
     #
-    # nxx[0] is the number of radial grid points in the generated numerical
+    # Nxx[0] is the number of radial grid points in the generated numerical
     # spacetime data. The radial relationship below solves for the physical
-    # radial extent, grid_physical_size, using nxx[0] as fixed input.
+    # radial extent, grid_physical_size, using Nxx[0] as fixed input.
     #
     # dt_grids is the diagnostic cadence of the generated BBH spacetime data.
     # It also sets the spacing of the time slices used by temporal interpolation.
-    nxx = [72, 12, 2]
+    Nxx = [720, 12, 2]
     dt_grids = 0.25
 
     # eta in the radial relationship. This safety factor scales the radial
@@ -287,16 +287,14 @@ if __name__ == "__main__":
     slot_manager_t_min = float(photon_code_param_defaults["slot_manager_t_min"])
     t_start_photon = float(photon_code_param_defaults["t_start"])
 
-    n_r = int(nxx[0])
+    n_r = int(Nxx[0])
 
     # The temporal interpolation stencil has order N_t and uses 2*N_t + 1 time
     # slices. In the worst case, interpolation near a time boundary can require
     # N_t + 1 slices on one side of the photon time. We add one extra diagnostic
     # interval for boundary alignment, floating-point roundoff, and rare endpoint
     # cases in large photon batches, giving the halo (N_t + 2) * dt_grids.
-    temporal_halo = (
-        numerical_spacetime_temporal_interp_order + 2
-    ) * dt_grids
+    temporal_halo = (numerical_spacetime_temporal_interp_order + 2) * dt_grids
 
     # Photons are reverse ray traced from t_start_photon toward smaller
     # coordinate time. Therefore the upper-time boundary of the BBH data does
@@ -325,7 +323,7 @@ if __name__ == "__main__":
     # grid_physical_size = r_escape is not enough.
     #
     # Spatial interpolation of order N needs a far-side radial buffer of N + 1
-    # cells in the worst case. With n_r = nxx[0] and
+    # cells in the worst case. With n_r = Nxx[0] and
     # N = numerical_spacetime_spatial_interp_order, this buffer is represented
     # by radial_interp_buffer_cells.
     radial_interp_buffer_cells = numerical_spacetime_spatial_interp_order + 1
@@ -356,8 +354,8 @@ if __name__ == "__main__":
     # radial cells for the RKF45/time-slot overshoot.
     radial_buffer_denominator = r_escape + radial_overshoot_buffer
     radial_buffer_numerator = (
-        (n_r - radial_interp_buffer_cells) * radial_overshoot_buffer
-    )
+        n_r - radial_interp_buffer_cells
+    ) * radial_overshoot_buffer
     radial_time_buffer_cells = math.ceil(
         radial_buffer_numerator / radial_buffer_denominator
     )
@@ -369,19 +367,18 @@ if __name__ == "__main__":
     #
     # Guards for invalid user choices are intentionally left out here; they can
     # be added later in the final validation block.
-    radial_denominator = (
-        n_r - radial_interp_buffer_cells - radial_time_buffer_cells
-    )
+    radial_denominator = n_r - radial_interp_buffer_cells - radial_time_buffer_cells
     grid_physical_size = n_r * r_escape / radial_denominator
 
-    print(
-        " -> Numerical spacetime contract: "
-        f"data_t_start={bbh_data_t_start:.5f}, "
-        f"data_t_final={bbh_data_t_final:.5f}, "
-        f"runtime_t_final={bbh_runtime_t_final:.5f}, "
-        f"grid_physical_size={grid_physical_size:.5f}, "
-        f"r_escape={r_escape:.5f}"
-    )
+    print(" -> Numerical spacetime contract:")
+    for name, value in [
+        ("data_t_start", bbh_data_t_start),
+        ("data_t_final", bbh_data_t_final),
+        ("runtime_t_final", bbh_runtime_t_final),
+        ("grid_physical_size", grid_physical_size),
+        ("r_escape", r_escape),
+    ]:
+        print(f"      {name:<18} = {value:.5f}")
 
     # Step 5.5.d: Define fixed metadata for the generated BBH dataset.
     combined_format_magic = "NRPYRTSTACK4D"
@@ -435,7 +432,7 @@ if __name__ == "__main__":
         },
         "grid": {
             "CoordSystem": dataset_coord_system,
-            "Nxx": nxx,
+            "Nxx": Nxx,
             "num_grids": num_grids,
             "payload_includes_ghost_zones": payload_includes_ghost_zones,
             "target_basis": target_basis,
