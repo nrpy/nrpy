@@ -206,8 +206,8 @@ if __name__ == "__main__":
     # spacetime dataset contract needed by the derived relationships below.
     photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
         # Execution Initial Conditions
-        "t_start": 30.0,
-        "scan_density": 500,
+        "t_start": 69.0,
+        "scan_density": 100,
         # Batch Integrator & Numerical Limits
         "p_t_max": 100.0,
         "perform_normalization_check": True,
@@ -238,14 +238,17 @@ if __name__ == "__main__":
         "window_up_vec_y": 0.0,
         "window_up_vec_z": 1.0,
         "window_width": 1.0,
-        "window_tiles_width": 2,
-        "window_tiles_height": 2,
+        "window_tiles_width": 1,
+        "window_tiles_height": 1,
         # RKF45 Adaptive Control Tolerances
         "numerical_initial_h": 0.05,
         "rkf45_absolute_error_tolerance": 1.0e-5,
         "rkf45_error_tolerance": 1.0e-5,
         "rkf45_h_max": 10.0,
         "rkf45_h_min": 1.0e-15,
+        # Lagrange Interpolation Order
+        "numerical_spacetime_spatial_interp_order": 2,
+        "numerical_spacetime_temporal_interp_order": 2,
     }
     # These affect only the trusted BBH data-generation helper path.
     # They are not photon CodeParameters and therefore must not be written
@@ -628,7 +631,7 @@ if __name__ == "__main__":
     )
 
     compiler = "gcc"
-    cflags = ["-fopenmp", "-O3", "-DDEBUG", "-Wno-stringop-truncation"]
+    cflags = ["-fopenmp", "-O3", "-fno-omit-frame-pointer", "-DDEBUG", "-Wno-stringop-truncation"]
     libs = ["-lm"]
     ext = "c"
 

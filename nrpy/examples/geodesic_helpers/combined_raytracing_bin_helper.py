@@ -23,14 +23,19 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time as time_module
+from collections import deque
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, cast
+from typing import Callable, Deque, Dict, List, Optional, Sequence, TextIO, Tuple, cast
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from nrpy.infrastructures.BHaH.diagnostics import combine_raytracing_time_slices as crt
+from nrpy.infrastructures.BHaH.diagnostics import (
+    combine_raytracing_time_slices as crt,  # pylint: disable=wrong-import-position
+)
 
 STATE_ALREADY_CORRECT = ".bin already existed and was correct"
 STATE_REBUILT_STALE = (
@@ -47,6 +52,15 @@ DEFAULT_CHRISTOFFEL_COMPONENT_COUNT = 40
 DEFAULT_TWO_BLACKHOLES_PROJECT_NAME = "two_blackholes_collide"
 DEFAULT_STAGE1_PATTERN = "raytracing_data_t*.bin"
 DEFAULT_SPHERICAL_BASE_NXX = [72, 12, 2]
+SUBPROCESS_TAIL_LINE_COUNT = 80
+RUNTIME_PROGRESS_BAR_WIDTH = 28
+RUNTIME_PROGRESS_HEARTBEAT_SECONDS = 30.0
+RUNTIME_PROGRESS_LINE_PATTERN = re.compile(
+    r"It:\s*(?P<iteration>\d+)\s+"
+    r"t=(?P<current_time>[-+0-9.eE]+)\s*/\s*(?P<final_time>[-+0-9.eE]+)\s*"
+    r"=\s*(?P<percent>[-+0-9.eE]+)%.*?"
+    r"ETA\s+(?P<eta_hours>\d+)h(?P<eta_minutes>\d+)m(?P<eta_seconds>\d+)s"
+)
 
 
 def _as_float(value: object) -> float:
@@ -394,7 +408,7 @@ def _parse_combined_bin_metadata(combined_bin_path: Path) -> Dict[str, object]:
     }
 
 
-def _combined_bin_matches(
+def _combined_bin_matches(  # pylint: disable=too-many-return-statements
     normalized: Dict[str, object], parsed_metadata: Dict[str, object]
 ) -> bool:
     combined_file = cast(Dict[str, object], normalized["combined_file"])
@@ -578,7 +592,223 @@ def _build_parfile_replacements(normalized: Dict[str, object]) -> Dict[str, obje
     }
 
 
-def _run_subprocess(command: Sequence[str], cwd: Path, label: str) -> None:
+def _format_subprocess_failure(
+    command: Sequence[str],
+    label: str,
+    returncode: int,
+    output_tail_lines: Deque[str],
+) -> RuntimeError:
+    output_tail = "\n".join(output_tail_lines).strip()
+    if output_tail == "":
+        output_tail = "(no subprocess output captured)"
+    return RuntimeError(
+        f"{label} failed with exit code {returncode}: {list(command)!r}\n"
+        f"Last subprocess output:\n{output_tail}"
+    )
+
+
+def _sanitize_completed_line(completed_line: str) -> str:
+    return completed_line.replace("\x1b[2K", "").rstrip()
+
+
+def _consume_stream_text(
+    pending_text: str,
+    completed_line_handler: Callable[[str], None],
+    flush_partial_line: bool = False,
+) -> str:
+    line_start = 0
+    text_length = len(pending_text)
+    for index, character in enumerate(pending_text):
+        if character not in ("\n", "\r"):
+            continue
+        completed_line_handler(pending_text[line_start:index])
+        line_start = index + 1
+    remaining_text = pending_text[line_start:text_length]
+    if flush_partial_line and remaining_text != "":
+        completed_line_handler(remaining_text)
+        return ""
+    return remaining_text
+
+
+def _stream_pipe_lines(
+    pipe: TextIO, completed_line_handler: Callable[[str], None]
+) -> None:
+    pending_text = ""
+    while True:
+        chunk = pipe.read(256)
+        if chunk == "":
+            break
+        pending_text = _consume_stream_text(
+            pending_text + chunk,
+            completed_line_handler,
+        )
+    _consume_stream_text(pending_text, completed_line_handler, flush_partial_line=True)
+
+
+class _RuntimeProgressReporter:
+    """Render filtered runtime progress while retaining full failure tails."""
+
+    def __init__(self, runtime_t_final: float, diagnostics_output_every: float):
+        self.output_tail_lines: Deque[str] = deque(maxlen=SUBPROCESS_TAIL_LINE_COUNT)
+        self.runtime_t_final = runtime_t_final
+        self.diagnostics_output_every = diagnostics_output_every
+        self._display_lock = threading.Lock()
+        self._displayed_status_line = False
+        self._last_status_message = ""
+        self._last_status_update = time_module.monotonic()
+        self._start_time = self._last_status_update
+
+    def handle_completed_line(self, completed_line: str) -> None:
+        """
+        Parse a completed subprocess line and update the filtered display.
+
+        :param completed_line: One newline- or carriage-return-delimited line.
+        """
+        sanitized_line = _sanitize_completed_line(completed_line)
+        if sanitized_line == "":
+            return
+        with self._display_lock:
+            self.output_tail_lines.append(sanitized_line)
+            progress_message = self._build_progress_message(sanitized_line)
+            if progress_message is None:
+                return
+            self._write_status_locked(progress_message)
+
+    def maybe_emit_heartbeat(self) -> None:
+        """Emit a periodic status line if no fresh progress has appeared."""
+        with self._display_lock:
+            now = time_module.monotonic()
+            if now - self._last_status_update < RUNTIME_PROGRESS_HEARTBEAT_SECONDS:
+                return
+            if self._last_status_message != "":
+                self._write_status_locked(
+                    f"{self._last_status_message} (waiting for next update)"
+                )
+                return
+            elapsed_seconds = int(now - self._start_time)
+            self._write_status_locked(
+                "    [4/5] BBH evolution running... "
+                f"elapsed {elapsed_seconds}s; waiting for parseable progress"
+            )
+
+    def finish(self) -> None:
+        """End the in-place status line before the helper prints the next step."""
+        with self._display_lock:
+            if not self._displayed_status_line:
+                return
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._displayed_status_line = False
+
+    def _build_progress_message(self, sanitized_line: str) -> Optional[str]:
+        match = RUNTIME_PROGRESS_LINE_PATTERN.search(sanitized_line)
+        if match is None:
+            return None
+        current_time = float(match.group("current_time"))
+        percent_done = float(match.group("percent"))
+        iteration = int(match.group("iteration"))
+        eta_hours = int(match.group("eta_hours"))
+        eta_minutes = int(match.group("eta_minutes"))
+        eta_seconds = int(match.group("eta_seconds"))
+
+        clamped_fraction = max(0.0, min(percent_done / 100.0, 1.0))
+        filled_cells = int(round(clamped_fraction * RUNTIME_PROGRESS_BAR_WIDTH))
+        filled_cells = min(RUNTIME_PROGRESS_BAR_WIDTH, max(0, filled_cells))
+        progress_bar = "#" * filled_cells + "-" * (
+            RUNTIME_PROGRESS_BAR_WIDTH - filled_cells
+        )
+
+        total_diagnostics = max(
+            1,
+            int(
+                math.floor(
+                    self.runtime_t_final / self.diagnostics_output_every + 1.0e-12
+                )
+            )
+            + 1,
+        )
+        current_diagnostic = min(
+            total_diagnostics,
+            max(
+                1,
+                int(math.floor(current_time / self.diagnostics_output_every + 1.0e-12))
+                + 1,
+            ),
+        )
+        return (
+            f"    [4/5] BBH evolution [{progress_bar}] {percent_done:5.1f}% "
+            f"t={current_time:6.2f}/{self.runtime_t_final:.2f} "
+            f"diag~{current_diagnostic}/{total_diagnostics} "
+            f"ETA {eta_hours:02d}:{eta_minutes:02d}:{eta_seconds:02d} "
+            f"it={iteration}"
+        )
+
+    def _write_status_locked(self, status_message: str) -> None:
+        sys.stdout.write(f"\r\033[K{status_message}")
+        sys.stdout.flush()
+        self._displayed_status_line = True
+        self._last_status_message = status_message
+        self._last_status_update = time_module.monotonic()
+
+
+def _run_subprocess(
+    command: Sequence[str],
+    cwd: Path,
+    label: str,
+    stream_output: bool = False,
+    runtime_t_final: Optional[float] = None,
+    diagnostics_output_every: Optional[float] = None,
+) -> None:
+    if stream_output:
+        if runtime_t_final is None or diagnostics_output_every is None:
+            raise ValueError(
+                "Streaming runtime progress requires runtime_t_final and "
+                "diagnostics_output_every."
+            )
+        progress_reporter = _RuntimeProgressReporter(
+            runtime_t_final=runtime_t_final,
+            diagnostics_output_every=diagnostics_output_every,
+        )
+        with subprocess.Popen(
+            list(command),
+            cwd=str(cwd),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        ) as process:
+            if process.stdout is None or process.stderr is None:
+                process.kill()
+                raise RuntimeError(f"{label} could not attach to subprocess pipes.")
+
+            stdout_thread = threading.Thread(
+                target=_stream_pipe_lines,
+                args=(process.stdout, progress_reporter.handle_completed_line),
+            )
+            stderr_thread = threading.Thread(
+                target=_stream_pipe_lines,
+                args=(process.stderr, progress_reporter.handle_completed_line),
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            while True:
+                returncode = process.poll()
+                if returncode is not None:
+                    break
+                progress_reporter.maybe_emit_heartbeat()
+                time_module.sleep(0.2)
+            stdout_thread.join()
+            stderr_thread.join()
+        progress_reporter.finish()
+        if returncode != 0:
+            raise _format_subprocess_failure(
+                command,
+                label,
+                returncode,
+                progress_reporter.output_tail_lines,
+            )
+        return
+
     try:
         subprocess.run(
             list(command),
@@ -589,11 +819,15 @@ def _run_subprocess(command: Sequence[str], cwd: Path, label: str) -> None:
             text=True,
         )
     except subprocess.CalledProcessError as error:
-        output = error.stdout or ""
-        output_tail = "\n".join(output.splitlines()[-80:])
-        raise RuntimeError(
-            f"{label} failed with exit code {error.returncode}: {list(command)!r}\n"
-            f"Last subprocess output:\n{output_tail}"
+        captured_tail_lines: Deque[str] = deque(
+            (error.stdout or "").splitlines()[-SUBPROCESS_TAIL_LINE_COUNT:],
+            maxlen=SUBPROCESS_TAIL_LINE_COUNT,
+        )
+        raise _format_subprocess_failure(
+            command,
+            label,
+            error.returncode,
+            captured_tail_lines,
         ) from error
 
 
@@ -692,6 +926,7 @@ def generate_required_combined_bin(
 
     combined_bin_path = Path(combined_bin_location).expanduser().resolve()
     combined_bin_path.parent.mkdir(parents=True, exist_ok=True)
+    print(" -> Regenerating numerical spacetime cache via two_blackholes_collide...")
 
     codegen_command = [
         cast(str, generation["python_executable"]),
@@ -701,6 +936,7 @@ def generate_required_combined_bin(
         "--floating_point_precision",
         cast(str, run["floating_point_precision"]),
     ]
+    print("    [1/5] Generating the two_blackholes_collide project...")
     _run_subprocess(
         codegen_command, REPO_ROOT, "two_blackholes_collide.py code generation"
     )
@@ -710,19 +946,27 @@ def generate_required_combined_bin(
     parfile_path = project_dir / f"{executable_name}.par"
     executable_path = project_dir / executable_name
 
+    print("    [2/5] Rewriting runtime parameters in the generated parfile...")
     _rewrite_parfile(parfile_path, _build_parfile_replacements(normalized))
+    print("    [3/5] Building the generated two_blackholes_collide executable...")
     _run_subprocess(
         cast(List[str], generation["make_command"]),
         project_dir,
         "two_blackholes_collide make",
     )
+    print("    [4/5] Running the BBH evolution; live progress follows...")
     _run_subprocess(
         [str(executable_path), str(parfile_path)],
         project_dir,
         "two_blackholes_collide runtime evolution",
+        stream_output=True,
+        runtime_t_final=cast(float, run["runtime_t_final"]),
+        diagnostics_output_every=cast(float, run["diagnostics_output_every"]),
     )
+    print("    [5/5] Combining raytracing time slices into the final cache...")
     _combine_stage1_outputs(normalized, combined_bin_path)
     _write_manifest(_manifest_path(combined_bin_path), normalized)
+    print(" -> Numerical spacetime cache regeneration complete.")
     return str(combined_bin_path)
 
 
