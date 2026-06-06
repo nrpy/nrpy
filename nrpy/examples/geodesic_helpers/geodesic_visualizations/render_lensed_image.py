@@ -43,7 +43,7 @@ except ImportError:
 import numpy as np
 import numpy.typing as npt
 
-import nrpy.examples.geodesic_visualizations.blueprint_config_and_schema as cfg
+import nrpy.examples.geodesic_helpers.geodesic_visualizations.blueprint_config_and_schema as cfg
 
 # Global variables for zero-copy memory sharing across process workers
 _WORKER_SOURCE_TEX: Optional[npt.NDArray[np.float64]] = None

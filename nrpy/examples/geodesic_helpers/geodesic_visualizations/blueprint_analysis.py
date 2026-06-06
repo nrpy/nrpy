@@ -27,7 +27,7 @@ import numpy.typing as npt
 try:
     import blueprint_config_and_schema as cfg  # type: ignore
 except ImportError:
-    import nrpy.examples.geodesic_visualizations.blueprint_config_and_schema as cfg
+    import nrpy.examples.geodesic_helpers.geodesic_visualizations.blueprint_config_and_schema as cfg
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 

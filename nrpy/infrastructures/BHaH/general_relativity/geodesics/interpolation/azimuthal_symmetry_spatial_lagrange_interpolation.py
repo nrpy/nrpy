@@ -41,7 +41,7 @@ Author: Dalton J. Moone
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Union, cast
+from typing import Dict, List, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -73,6 +73,245 @@ typedef struct {
   double stored_phi_samples[2];
 } azimuthal_symmetry_spatial_lagrange_context_struct; // END STRUCT: azimuthal_symmetry_spatial_lagrange_context_struct
 """
+
+_AXIS_ROTATION_SIGNS: Tuple[int, int, int, int] = (1, -1, -1, 1)
+_METRIC_COMPONENT_ORDER: Tuple[Tuple[int, int], ...] = (
+    (0, 0),
+    (0, 1),
+    (0, 2),
+    (0, 3),
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (2, 2),
+    (2, 3),
+    (3, 3),
+)
+_GAMMA_COMPONENT_ORDER: Tuple[Tuple[int, int, int], ...] = tuple(
+    (alpha, mu, nu) for alpha in range(4) for mu in range(4) for nu in range(mu, 4)
+)
+_METRIC_COMPONENT_INDEX: Dict[Tuple[int, int], int] = {
+    component: idx for idx, component in enumerate(_METRIC_COMPONENT_ORDER)
+}
+_GAMMA_COMPONENT_INDEX: Dict[Tuple[int, int, int], int] = {
+    component: idx for idx, component in enumerate(_GAMMA_COMPONENT_ORDER)
+}
+
+
+def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
+    """
+    Return sparse source-index coefficients for one rotated Cartesian index.
+
+    Each returned tuple is `(source_index, sign, cos_power, sin_power)`, using
+    the active z-axis rotation convention emitted into the generated C helper.
+
+    :param output_index: Destination tensor index in `(t, x, y, z)` ordering.
+    :return: Sparse source-index contributions for the requested output index.
+    :raises ValueError: If `output_index` falls outside the 4D tensor range.
+    """
+    if output_index == 0:
+        return [(0, 1, 0, 0)]
+    if output_index == 1:
+        return [(1, 1, 1, 0), (2, -1, 0, 1)]
+    if output_index == 2:
+        return [(1, 1, 0, 1), (2, 1, 1, 0)]
+    if output_index == 3:
+        return [(3, 1, 0, 0)]
+    raise ValueError(f"Unsupported rotated tensor index: {output_index}")
+
+
+def _metric_component_index(mu: int, nu: int) -> int:
+    """
+    Return the serialized upper-triangular metric component index.
+
+    :param mu: First metric index.
+    :param nu: Second metric index.
+    :return: Serialized metric component index with symmetry applied.
+    """
+    if mu > nu:
+        mu, nu = nu, mu
+    return _METRIC_COMPONENT_INDEX[(mu, nu)]
+
+
+def _gamma_component_index(alpha: int, mu: int, nu: int) -> int:
+    """
+    Return the serialized Christoffel component index.
+
+    The lower Christoffel indices are symmetric in the serialized layout.
+
+    :param alpha: Upper Christoffel index.
+    :param mu: First lower Christoffel index.
+    :param nu: Second lower Christoffel index.
+    :return: Serialized Christoffel component index with lower symmetry applied.
+    """
+    if mu > nu:
+        mu, nu = nu, mu
+    return _GAMMA_COMPONENT_INDEX[(alpha, mu, nu)]
+
+
+def _format_scaled_source_term(
+    source_expr: str,
+    coefficient: int,
+    cos_power: int,
+    sin_power: int,
+) -> str:
+    """
+    Format one signed polynomial source term for emitted C code.
+
+    :param source_expr: Source array expression, such as `g4dd_ref[4]`.
+    :param coefficient: Integer prefactor after symbolic term collection.
+    :param cos_power: Power of `cos_delta`.
+    :param sin_power: Power of `sin_delta`.
+    :return: C expression for one signed monomial times one source component.
+    """
+    factors: List[str] = []
+    coefficient_abs = abs(coefficient)
+    if coefficient_abs != 1:
+        factors.append(f"{coefficient_abs}.0")
+    factors.extend(["cos_delta"] * cos_power)
+    factors.extend(["sin_delta"] * sin_power)
+    factors.append(source_expr)
+    term = " * ".join(factors)
+    if coefficient < 0:
+        return f"-{term}"
+    return term
+
+
+def _format_linear_combination(terms: List[str]) -> str:
+    """
+    Join signed terms into one readable C linear combination.
+
+    :param terms: Signed monomial terms.
+    :return: One C expression string.
+    :raises ValueError: If `terms` is empty.
+    """
+    if not terms:
+        raise ValueError("Cannot format an empty linear combination.")
+    expression = terms[0]
+    for term in terms[1:]:
+        if term.startswith("-"):
+            expression += f" {term}"
+        else:
+            expression += f" + {term}"
+    return expression
+
+
+def _build_metric_rotation_expression(mu: int, nu: int) -> str:
+    """
+    Build the direct serialized metric rotation expression for one component.
+
+    :param mu: First destination metric index.
+    :param nu: Second destination metric index.
+    :return: C expression for the rotated serialized metric component.
+    """
+    term_map: Dict[Tuple[int, int, int], int] = {}
+    for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
+        for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
+            source_idx = _metric_component_index(source_mu, source_nu)
+            term_key = (source_idx, cos_mu + cos_nu, sin_mu + sin_nu)
+            term_map[term_key] = term_map.get(term_key, 0) + sign_mu * sign_nu
+    terms: List[str] = []
+    for source_idx, cos_power, sin_power in sorted(term_map):
+        coefficient = term_map[(source_idx, cos_power, sin_power)]
+        if coefficient == 0:
+            continue
+        terms.append(
+            _format_scaled_source_term(
+                f"g4dd_ref[{source_idx}]",
+                coefficient,
+                cos_power,
+                sin_power,
+            )
+        )
+    return _format_linear_combination(terms)
+
+
+def _build_gamma_rotation_expression(alpha: int, mu: int, nu: int) -> str:
+    """
+    Build the direct serialized Christoffel rotation expression for one component.
+
+    :param alpha: Destination upper Christoffel index.
+    :param mu: First destination lower Christoffel index.
+    :param nu: Second destination lower Christoffel index.
+    :return: C expression for the rotated serialized Christoffel component.
+    """
+    term_map: Dict[Tuple[int, int, int], int] = {}
+    for source_alpha, sign_alpha, cos_alpha, sin_alpha in _rotation_source_terms(alpha):
+        for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
+            for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
+                source_idx = _gamma_component_index(source_alpha, source_mu, source_nu)
+                term_key = (
+                    source_idx,
+                    cos_alpha + cos_mu + cos_nu,
+                    sin_alpha + sin_mu + sin_nu,
+                )
+                term_map[term_key] = (
+                    term_map.get(term_key, 0) + sign_alpha * sign_mu * sign_nu
+                )
+    terms: List[str] = []
+    for source_idx, cos_power, sin_power in sorted(term_map):
+        coefficient = term_map[(source_idx, cos_power, sin_power)]
+        if coefficient == 0:
+            continue
+        terms.append(
+            _format_scaled_source_term(
+                f"gamma_ref[{source_idx}]",
+                coefficient,
+                cos_power,
+                sin_power,
+            )
+        )
+    return _format_linear_combination(terms)
+
+
+def _component_sign_for_pi_rotation(indices: Tuple[int, ...]) -> int:
+    """
+    Return the serialized tensor sign under a pi rotation about the z axis.
+
+    :param indices: Tensor indices contributing one serialized component.
+    :return: `+1` or `-1` for the component sign under the pi rotation.
+    """
+    sign = 1
+    for index in indices:
+        sign *= _AXIS_ROTATION_SIGNS[index]
+    return sign
+
+
+def _emit_pi_sign_array(array_name: str, component_signs: Tuple[int, ...]) -> str:
+    """
+    Emit one static C sign table used by the stencil-plane fast path.
+
+    :param array_name: Name of the generated C array.
+    :param component_signs: Serialized component signs under a pi rotation.
+    :return: One C declaration string.
+    """
+    sign_str = ", ".join(f"{sign}.0" for sign in component_signs)
+    array_len = len(component_signs)
+    return f"static const REAL {array_name}[{array_len}] = " f"{{{sign_str}}};"
+
+
+def _emit_direct_metric_rotation_assignments() -> str:
+    """
+    Emit all direct serialized metric rotation assignments for the C helper.
+
+    :return: Multiline C code assigning every rotated metric component.
+    """
+    return "\n".join(
+        f"  g4dd_rot[{idx}] = {_build_metric_rotation_expression(mu, nu)};"
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+
+
+def _emit_direct_gamma_rotation_assignments() -> str:
+    """
+    Emit all direct serialized Christoffel rotation assignments for the C helper.
+
+    :return: Multiline C code assigning every rotated Christoffel component.
+    """
+    return "\n".join(
+        f"  gamma_rot[{idx}] = {_build_gamma_rotation_expression(alpha, mu, nu)};"
+        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER)
+    )
 
 
 def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
@@ -176,8 +415,24 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "<stdint.h>",
         "interpolation_lagrange_uniform.h",
     ]
+    metric_pi_signs = tuple(
+        _component_sign_for_pi_rotation(component)
+        for component in _METRIC_COMPONENT_ORDER
+    )
+    gamma_pi_signs = tuple(
+        _component_sign_for_pi_rotation(component)
+        for component in _GAMMA_COMPONENT_ORDER
+    )
+    metric_pi_sign_array = _emit_pi_sign_array("g4dd_pi_sign", metric_pi_signs)
+    gamma_pi_sign_array = _emit_pi_sign_array(
+        "gamma4udd_pi_sign",
+        gamma_pi_signs,
+    )
+    direct_metric_assignments = _emit_direct_metric_rotation_assignments()
+    direct_gamma_assignments = _emit_direct_gamma_rotation_assignments()
 
-    prefunc = r"""
+    prefunc = (
+        r"""
 /**
  * Map one raw extended-grid stencil node back into the stored payload.
  *
@@ -286,6 +541,58 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_map_extended_node
 
 /**
+ * Accumulate one serialized tensor record onto the common stored phi plane.
+ *
+ * The remap logic guarantees that the payload contributes either from the same
+ * stored phi plane or from the opposite plane separated by pi. The same-plane
+ * case is an identity, while the opposite-plane case is diagonal in Cartesian
+ * components and therefore reduces to serialized sign flips.
+ *
+ * @param weight Weighted 2D Lagrange coefficient for this stencil node.
+ * @param apply_pi_shift Whether the node came from the opposite stored plane.
+ * @param[in] tensor_record Serialized payload record beginning at the metric fields.
+ * @param[out] tensor_ref Accumulator on the selected common stored phi plane.
+ */
+static void azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(
+    const REAL weight,
+    const int apply_pi_shift,
+    const double *restrict tensor_record,
+    REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT]) {
+  const double *restrict gamma_record =
+      tensor_record + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+  {metric_pi_sign_array}
+  {gamma_pi_sign_array}
+
+  // Step 1: Same-plane nodes need only weighted accumulation.
+  if (apply_pi_shift == 0) {
+    for (int comp = 0;
+         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+         comp++) {
+      tensor_ref[comp] += weight * (REAL)tensor_record[comp];
+    } // END LOOP: for comp over serialized metric payload components
+    for (int comp = 0;
+         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
+         comp++) {
+      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] +=
+          weight * (REAL)gamma_record[comp];
+    } // END LOOP: for comp over serialized Christoffel payload components
+  } else {
+    // Step 2: Opposite-plane nodes differ only by the pi-rotation sign pattern.
+    for (int comp = 0;
+         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+         comp++) {
+      tensor_ref[comp] += weight * g4dd_pi_sign[comp] * (REAL)tensor_record[comp];
+    } // END LOOP: for comp over pi-rotated serialized metric components
+    for (int comp = 0;
+         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
+         comp++) {
+      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] +=
+          weight * gamma4udd_pi_sign[comp] * (REAL)gamma_record[comp];
+    } // END LOOP: for comp over pi-rotated serialized Christoffel components
+  } // END IF: choose same-plane or opposite-plane accumulation path
+} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane
+
+/**
  * Rotate Cartesian-basis metric and Christoffel components about the z axis.
  *
  * The payload stores tensors on one of exactly two native reference azimuthal
@@ -316,111 +623,27 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
     const REAL gamma_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT],
     REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
     REAL gamma_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT]) {
-  REAL g_ref[4][4] = {{0}};
-  REAL g_dst[4][4] = {{0}};
-  REAL gamma_ref_full[4][4][4] = {{{0}}};
-  REAL gamma_dst_full[4][4][4] = {{{0}}};
-  REAL rotation_matrix[4][4] = {{0}};
-  REAL rotation_matrix_transpose[4][4] = {{0}};
   const REAL cos_delta = cos(delta_phi);
   const REAL sin_delta = sin(delta_phi);
-  int gamma_index = 0;
 
-  // Step 1: Unpack the stored upper-triangular metric components.
-  g_ref[0][0] = g4dd_ref[0];
-  g_ref[0][1] = g_ref[1][0] = g4dd_ref[1];
-  g_ref[0][2] = g_ref[2][0] = g4dd_ref[2];
-  g_ref[0][3] = g_ref[3][0] = g4dd_ref[3];
-  g_ref[1][1] = g4dd_ref[4];
-  g_ref[1][2] = g_ref[2][1] = g4dd_ref[5];
-  g_ref[1][3] = g_ref[3][1] = g4dd_ref[6];
-  g_ref[2][2] = g4dd_ref[7];
-  g_ref[2][3] = g_ref[3][2] = g4dd_ref[8];
-  g_ref[3][3] = g4dd_ref[9];
-
-  // Step 2: Unpack the serialized Christoffels, mirroring lower-index symmetry.
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = mu; nu < 4; nu++) {
-        gamma_ref_full[alpha][mu][nu] = gamma_ref[gamma_index];
-        gamma_ref_full[alpha][nu][mu] = gamma_ref[gamma_index];
-        gamma_index++;
-      } // END LOOP: for nu over upper-triangular lower-index Christoffel entries
-    } // END LOOP: for mu over lower Christoffel index rows
-  } // END LOOP: for alpha over upper Christoffel index
-
-  // Step 3: Build the active z-axis rotation matrix in Cartesian components.
-  rotation_matrix[0][0] = 1.0;
-  rotation_matrix[1][1] = cos_delta;
-  rotation_matrix[1][2] = -sin_delta;
-  rotation_matrix[2][1] = sin_delta;
-  rotation_matrix[2][2] = cos_delta;
-  rotation_matrix[3][3] = 1.0;
-
-  // Step 4: For pure rotations, the inverse acting on lower indices is Lambda^T.
-  for (int a = 0; a < 4; a++) {
-    for (int b = 0; b < 4; b++) {
-      rotation_matrix_transpose[a][b] = rotation_matrix[b][a];
-    } // END LOOP: for b over rotation-matrix columns
-  } // END LOOP: for a over rotation-matrix rows
-
-  // Step 5: Rotate the covariant metric with the lower-index transform.
-  for (int mu = 0; mu < 4; mu++) {
-    for (int nu = 0; nu < 4; nu++) {
-      REAL sum = 0.0;
-      for (int a = 0; a < 4; a++) {
-        for (int b = 0; b < 4; b++) {
-          sum += rotation_matrix_transpose[a][mu] *
-                 rotation_matrix_transpose[b][nu] * g_ref[a][b];
-        } // END LOOP: for b over source metric columns
-      } // END LOOP: for a over source metric rows
-      g_dst[mu][nu] = sum;
-    } // END LOOP: for nu over destination metric columns
-  } // END LOOP: for mu over destination metric rows
-
-  // Step 6: Rotate the connection with one upper and two lower tensor factors.
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = 0; nu < 4; nu++) {
-        REAL sum = 0.0;
-        for (int b = 0; b < 4; b++) {
-          for (int g = 0; g < 4; g++) {
-            for (int d = 0; d < 4; d++) {
-              sum += rotation_matrix[alpha][b] *
-                     rotation_matrix_transpose[g][mu] *
-                     rotation_matrix_transpose[d][nu] *
-                     gamma_ref_full[b][g][d];
-            } // END LOOP: for d over source lower Christoffel column index
-          } // END LOOP: for g over source lower Christoffel row index
-        } // END LOOP: for b over source upper Christoffel index
-        gamma_dst_full[alpha][mu][nu] = sum;
-      } // END LOOP: for nu over destination lower Christoffel column index
-    } // END LOOP: for mu over destination lower Christoffel row index
-  } // END LOOP: for alpha over destination upper Christoffel index
-
-  // Step 7: Repack into the writer's serialized ordering.
-  g4dd_rot[0] = g_dst[0][0];
-  g4dd_rot[1] = g_dst[0][1];
-  g4dd_rot[2] = g_dst[0][2];
-  g4dd_rot[3] = g_dst[0][3];
-  g4dd_rot[4] = g_dst[1][1];
-  g4dd_rot[5] = g_dst[1][2];
-  g4dd_rot[6] = g_dst[1][3];
-  g4dd_rot[7] = g_dst[2][2];
-  g4dd_rot[8] = g_dst[2][3];
-  g4dd_rot[9] = g_dst[3][3];
-
-  gamma_index = 0;
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = mu; nu < 4; nu++) {
-        gamma_rot[gamma_index] = gamma_dst_full[alpha][mu][nu];
-        gamma_index++;
-      } // END LOOP: for nu over serialized upper-triangular Christoffel entries
-    } // END LOOP: for mu over serialized Christoffel row index
-  } // END LOOP: for alpha over serialized Christoffel upper index
+  // Step 1: Rotate only the serialized outputs required by the caller.
+{direct_metric_assignments}
+{direct_gamma_assignments}
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_about_z
-"""
+""".replace("{metric_pi_sign_array}", metric_pi_sign_array)
+        .replace(
+            "{gamma_pi_sign_array}",
+            gamma_pi_sign_array,
+        )
+        .replace(
+            "{direct_metric_assignments}",
+            direct_metric_assignments,
+        )
+        .replace(
+            "{direct_gamma_assignments}",
+            direct_gamma_assignments,
+        )
+    )
 
     cfunc_type = "int"
     name = "azimuthal_symmetry_spatial_lagrange_interpolation"
@@ -568,10 +791,6 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
     const double *restrict slice_payload = slice_payloads[which_slice];
     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT] = {0};
-    REAL g4dd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL gamma4udd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
-    REAL g4dd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL gamma4udd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
 
     // Step 5.a: Read, basis-align, and accumulate the weighted stencil nodes for this slice.
     for (int v = 0; v < interp_order; v++) {
@@ -583,39 +802,12 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
                     AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
             3ULL;
         const REAL weight = normalization_2d * coeff_theta[v] * coeff_r[u];
-        const REAL node_phi_ref =
-            (REAL)context->stored_phi_samples[mapped_phi_plane[v][u]];
+        const int apply_pi_shift = mapped_phi_plane[v][u] != phi_plane;
 
-        for (int comp = 0;
-             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-             comp++) {
-          g4dd_node_ref[comp] = (REAL)tensor_record[comp];
-        } // END LOOP: for comp over serialized metric payload components
-        for (int comp = 0;
-             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
-             comp++) {
-          gamma4udd_node_ref[comp] = (REAL)tensor_record[
-              AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
-        } // END LOOP: for comp over serialized Christoffel payload components
-
-        // Rotate each remapped node back to the selected stored reference
-        // plane so weighted accumulation never mixes Cartesian bases from
-        // different azimuthal orientations.
-        azimuthal_symmetry_spatial_lagrange_rotate_about_z(
-            phi_ref - node_phi_ref, g4dd_node_ref, gamma4udd_node_ref,
-            g4dd_node_common, gamma4udd_node_common);
-
-        for (int comp = 0;
-             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-             comp++) {
-          tensor_ref[comp] += weight * g4dd_node_common[comp];
-        } // END LOOP: for comp over metric components on the common reference plane
-        for (int comp = 0;
-             comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
-             comp++) {
-          tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] +=
-              weight * gamma4udd_node_common[comp];
-        } // END LOOP: for comp over Christoffel components on the common reference plane
+        // Same-plane nodes accumulate directly. Opposite-plane nodes differ
+        // only by the diagonal pi-rotation sign pattern in Cartesian basis.
+        azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(
+            weight, apply_pi_shift, tensor_record, tensor_ref);
       } // END LOOP: for u over radial stencil nodes
     } // END LOOP: for v over theta stencil nodes
 

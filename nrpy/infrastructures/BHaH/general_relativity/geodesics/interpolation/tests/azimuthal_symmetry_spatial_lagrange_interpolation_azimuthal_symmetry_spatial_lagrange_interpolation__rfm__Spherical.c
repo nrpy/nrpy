@@ -97,6 +97,47 @@ static int azimuthal_symmetry_spatial_lagrange_map_extended_node(const params_st
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_map_extended_node
 
 /**
+ * Accumulate one serialized tensor record onto the common stored phi plane.
+ *
+ * The remap logic guarantees that the payload contributes either from the same
+ * stored phi plane or from the opposite plane separated by pi. The same-plane
+ * case is an identity, while the opposite-plane case is diagonal in Cartesian
+ * components and therefore reduces to serialized sign flips.
+ *
+ * @param weight Weighted 2D Lagrange coefficient for this stencil node.
+ * @param apply_pi_shift Whether the node came from the opposite stored plane.
+ * @param[in] tensor_record Serialized payload record beginning at the metric fields.
+ * @param[out] tensor_ref Accumulator on the selected common stored phi plane.
+ */
+static void azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(
+    const REAL weight, const int apply_pi_shift, const double *restrict tensor_record,
+    REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT]) {
+  const double *restrict gamma_record = tensor_record + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+  static const REAL g4dd_pi_sign[10] = {1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0};
+  static const REAL gamma4udd_pi_sign[40] = {1.0,  -1.0, -1.0, 1.0,  1.0,  1.0,  -1.0, 1.0, -1.0, 1.0,  -1.0, 1.0,  1.0, -1.0,
+                                             -1.0, -1.0, 1.0,  -1.0, 1.0,  -1.0, -1.0, 1.0, 1.0,  -1.0, -1.0, -1.0, 1.0, -1.0,
+                                             1.0,  -1.0, 1.0,  -1.0, -1.0, 1.0,  1.0,  1.0, -1.0, 1.0,  -1.0, 1.0};
+
+  // Step 1: Same-plane nodes need only weighted accumulation.
+  if (apply_pi_shift == 0) {
+    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+      tensor_ref[comp] += weight * (REAL)tensor_record[comp];
+    } // END LOOP: for comp over serialized metric payload components
+    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * (REAL)gamma_record[comp];
+    } // END LOOP: for comp over serialized Christoffel payload components
+  } else {
+    // Step 2: Opposite-plane nodes differ only by the pi-rotation sign pattern.
+    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+      tensor_ref[comp] += weight * g4dd_pi_sign[comp] * (REAL)tensor_record[comp];
+    } // END LOOP: for comp over pi-rotated serialized metric components
+    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * gamma4udd_pi_sign[comp] * (REAL)gamma_record[comp];
+    } // END LOOP: for comp over pi-rotated serialized Christoffel components
+  } // END IF: choose same-plane or opposite-plane accumulation path
+} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane
+
+/**
  * Rotate Cartesian-basis metric and Christoffel components about the z axis.
  *
  * The payload stores tensors on one of exactly two native reference azimuthal
@@ -126,105 +167,85 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(const REAL delta_
                                                                const REAL gamma_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT],
                                                                REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
                                                                REAL gamma_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT]) {
-  REAL g_ref[4][4] = {{0}};
-  REAL g_dst[4][4] = {{0}};
-  REAL gamma_ref_full[4][4][4] = {{{0}}};
-  REAL gamma_dst_full[4][4][4] = {{{0}}};
-  REAL rotation_matrix[4][4] = {{0}};
-  REAL rotation_matrix_transpose[4][4] = {{0}};
   const REAL cos_delta = cos(delta_phi);
   const REAL sin_delta = sin(delta_phi);
-  int gamma_index = 0;
 
-  // Step 1: Unpack the stored upper-triangular metric components.
-  g_ref[0][0] = g4dd_ref[0];
-  g_ref[0][1] = g_ref[1][0] = g4dd_ref[1];
-  g_ref[0][2] = g_ref[2][0] = g4dd_ref[2];
-  g_ref[0][3] = g_ref[3][0] = g4dd_ref[3];
-  g_ref[1][1] = g4dd_ref[4];
-  g_ref[1][2] = g_ref[2][1] = g4dd_ref[5];
-  g_ref[1][3] = g_ref[3][1] = g4dd_ref[6];
-  g_ref[2][2] = g4dd_ref[7];
-  g_ref[2][3] = g_ref[3][2] = g4dd_ref[8];
-  g_ref[3][3] = g4dd_ref[9];
-
-  // Step 2: Unpack the serialized Christoffels, mirroring lower-index symmetry.
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = mu; nu < 4; nu++) {
-        gamma_ref_full[alpha][mu][nu] = gamma_ref[gamma_index];
-        gamma_ref_full[alpha][nu][mu] = gamma_ref[gamma_index];
-        gamma_index++;
-      } // END LOOP: for nu over upper-triangular lower-index Christoffel entries
-    } // END LOOP: for mu over lower Christoffel index rows
-  } // END LOOP: for alpha over upper Christoffel index
-
-  // Step 3: Build the active z-axis rotation matrix in Cartesian components.
-  rotation_matrix[0][0] = 1.0;
-  rotation_matrix[1][1] = cos_delta;
-  rotation_matrix[1][2] = -sin_delta;
-  rotation_matrix[2][1] = sin_delta;
-  rotation_matrix[2][2] = cos_delta;
-  rotation_matrix[3][3] = 1.0;
-
-  // Step 4: For pure rotations, the inverse acting on lower indices is Lambda^T.
-  for (int a = 0; a < 4; a++) {
-    for (int b = 0; b < 4; b++) {
-      rotation_matrix_transpose[a][b] = rotation_matrix[b][a];
-    } // END LOOP: for b over rotation-matrix columns
-  } // END LOOP: for a over rotation-matrix rows
-
-  // Step 5: Rotate the covariant metric with the lower-index transform.
-  for (int mu = 0; mu < 4; mu++) {
-    for (int nu = 0; nu < 4; nu++) {
-      REAL sum = 0.0;
-      for (int a = 0; a < 4; a++) {
-        for (int b = 0; b < 4; b++) {
-          sum += rotation_matrix_transpose[a][mu] * rotation_matrix_transpose[b][nu] * g_ref[a][b];
-        } // END LOOP: for b over source metric columns
-      } // END LOOP: for a over source metric rows
-      g_dst[mu][nu] = sum;
-    } // END LOOP: for nu over destination metric columns
-  } // END LOOP: for mu over destination metric rows
-
-  // Step 6: Rotate the connection with one upper and two lower tensor factors.
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = 0; nu < 4; nu++) {
-        REAL sum = 0.0;
-        for (int b = 0; b < 4; b++) {
-          for (int g = 0; g < 4; g++) {
-            for (int d = 0; d < 4; d++) {
-              sum += rotation_matrix[alpha][b] * rotation_matrix_transpose[g][mu] * rotation_matrix_transpose[d][nu] * gamma_ref_full[b][g][d];
-            } // END LOOP: for d over source lower Christoffel column index
-          } // END LOOP: for g over source lower Christoffel row index
-        } // END LOOP: for b over source upper Christoffel index
-        gamma_dst_full[alpha][mu][nu] = sum;
-      } // END LOOP: for nu over destination lower Christoffel column index
-    } // END LOOP: for mu over destination lower Christoffel row index
-  } // END LOOP: for alpha over destination upper Christoffel index
-
-  // Step 7: Repack into the writer's serialized ordering.
-  g4dd_rot[0] = g_dst[0][0];
-  g4dd_rot[1] = g_dst[0][1];
-  g4dd_rot[2] = g_dst[0][2];
-  g4dd_rot[3] = g_dst[0][3];
-  g4dd_rot[4] = g_dst[1][1];
-  g4dd_rot[5] = g_dst[1][2];
-  g4dd_rot[6] = g_dst[1][3];
-  g4dd_rot[7] = g_dst[2][2];
-  g4dd_rot[8] = g_dst[2][3];
-  g4dd_rot[9] = g_dst[3][3];
-
-  gamma_index = 0;
-  for (int alpha = 0; alpha < 4; alpha++) {
-    for (int mu = 0; mu < 4; mu++) {
-      for (int nu = mu; nu < 4; nu++) {
-        gamma_rot[gamma_index] = gamma_dst_full[alpha][mu][nu];
-        gamma_index++;
-      } // END LOOP: for nu over serialized upper-triangular Christoffel entries
-    } // END LOOP: for mu over serialized Christoffel row index
-  } // END LOOP: for alpha over serialized Christoffel upper index
+  // Step 1: Rotate only the serialized outputs required by the caller.
+  g4dd_rot[0] = g4dd_ref[0];
+  g4dd_rot[1] = cos_delta * g4dd_ref[1] - sin_delta * g4dd_ref[2];
+  g4dd_rot[2] = sin_delta * g4dd_ref[1] + cos_delta * g4dd_ref[2];
+  g4dd_rot[3] = g4dd_ref[3];
+  g4dd_rot[4] = cos_delta * cos_delta * g4dd_ref[4] - 2.0 * cos_delta * sin_delta * g4dd_ref[5] + sin_delta * sin_delta * g4dd_ref[7];
+  g4dd_rot[5] = cos_delta * sin_delta * g4dd_ref[4] - sin_delta * sin_delta * g4dd_ref[5] + cos_delta * cos_delta * g4dd_ref[5] -
+                cos_delta * sin_delta * g4dd_ref[7];
+  g4dd_rot[6] = cos_delta * g4dd_ref[6] - sin_delta * g4dd_ref[8];
+  g4dd_rot[7] = sin_delta * sin_delta * g4dd_ref[4] + 2.0 * cos_delta * sin_delta * g4dd_ref[5] + cos_delta * cos_delta * g4dd_ref[7];
+  g4dd_rot[8] = sin_delta * g4dd_ref[6] + cos_delta * g4dd_ref[8];
+  g4dd_rot[9] = g4dd_ref[9];
+  gamma_rot[0] = gamma_ref[0];
+  gamma_rot[1] = cos_delta * gamma_ref[1] - sin_delta * gamma_ref[2];
+  gamma_rot[2] = sin_delta * gamma_ref[1] + cos_delta * gamma_ref[2];
+  gamma_rot[3] = gamma_ref[3];
+  gamma_rot[4] = cos_delta * cos_delta * gamma_ref[4] - 2.0 * cos_delta * sin_delta * gamma_ref[5] + sin_delta * sin_delta * gamma_ref[7];
+  gamma_rot[5] = cos_delta * sin_delta * gamma_ref[4] - sin_delta * sin_delta * gamma_ref[5] + cos_delta * cos_delta * gamma_ref[5] -
+                 cos_delta * sin_delta * gamma_ref[7];
+  gamma_rot[6] = cos_delta * gamma_ref[6] - sin_delta * gamma_ref[8];
+  gamma_rot[7] = sin_delta * sin_delta * gamma_ref[4] + 2.0 * cos_delta * sin_delta * gamma_ref[5] + cos_delta * cos_delta * gamma_ref[7];
+  gamma_rot[8] = sin_delta * gamma_ref[6] + cos_delta * gamma_ref[8];
+  gamma_rot[9] = gamma_ref[9];
+  gamma_rot[10] = cos_delta * gamma_ref[10] - sin_delta * gamma_ref[20];
+  gamma_rot[11] = cos_delta * cos_delta * gamma_ref[11] - cos_delta * sin_delta * gamma_ref[12] - cos_delta * sin_delta * gamma_ref[21] +
+                  sin_delta * sin_delta * gamma_ref[22];
+  gamma_rot[12] = cos_delta * sin_delta * gamma_ref[11] + cos_delta * cos_delta * gamma_ref[12] - sin_delta * sin_delta * gamma_ref[21] -
+                  cos_delta * sin_delta * gamma_ref[22];
+  gamma_rot[13] = cos_delta * gamma_ref[13] - sin_delta * gamma_ref[23];
+  gamma_rot[14] = cos_delta * cos_delta * cos_delta * gamma_ref[14] - 2.0 * cos_delta * cos_delta * sin_delta * gamma_ref[15] +
+                  cos_delta * sin_delta * sin_delta * gamma_ref[17] - cos_delta * cos_delta * sin_delta * gamma_ref[24] +
+                  2.0 * cos_delta * sin_delta * sin_delta * gamma_ref[25] - sin_delta * sin_delta * sin_delta * gamma_ref[27];
+  gamma_rot[15] = cos_delta * cos_delta * sin_delta * gamma_ref[14] - cos_delta * sin_delta * sin_delta * gamma_ref[15] +
+                  cos_delta * cos_delta * cos_delta * gamma_ref[15] - cos_delta * cos_delta * sin_delta * gamma_ref[17] -
+                  cos_delta * sin_delta * sin_delta * gamma_ref[24] + sin_delta * sin_delta * sin_delta * gamma_ref[25] -
+                  cos_delta * cos_delta * sin_delta * gamma_ref[25] + cos_delta * sin_delta * sin_delta * gamma_ref[27];
+  gamma_rot[16] = cos_delta * cos_delta * gamma_ref[16] - cos_delta * sin_delta * gamma_ref[18] - cos_delta * sin_delta * gamma_ref[26] +
+                  sin_delta * sin_delta * gamma_ref[28];
+  gamma_rot[17] = cos_delta * sin_delta * sin_delta * gamma_ref[14] + 2.0 * cos_delta * cos_delta * sin_delta * gamma_ref[15] +
+                  cos_delta * cos_delta * cos_delta * gamma_ref[17] - sin_delta * sin_delta * sin_delta * gamma_ref[24] -
+                  2.0 * cos_delta * sin_delta * sin_delta * gamma_ref[25] - cos_delta * cos_delta * sin_delta * gamma_ref[27];
+  gamma_rot[18] = cos_delta * sin_delta * gamma_ref[16] + cos_delta * cos_delta * gamma_ref[18] - sin_delta * sin_delta * gamma_ref[26] -
+                  cos_delta * sin_delta * gamma_ref[28];
+  gamma_rot[19] = cos_delta * gamma_ref[19] - sin_delta * gamma_ref[29];
+  gamma_rot[20] = sin_delta * gamma_ref[10] + cos_delta * gamma_ref[20];
+  gamma_rot[21] = cos_delta * sin_delta * gamma_ref[11] - sin_delta * sin_delta * gamma_ref[12] + cos_delta * cos_delta * gamma_ref[21] -
+                  cos_delta * sin_delta * gamma_ref[22];
+  gamma_rot[22] = sin_delta * sin_delta * gamma_ref[11] + cos_delta * sin_delta * gamma_ref[12] + cos_delta * sin_delta * gamma_ref[21] +
+                  cos_delta * cos_delta * gamma_ref[22];
+  gamma_rot[23] = sin_delta * gamma_ref[13] + cos_delta * gamma_ref[23];
+  gamma_rot[24] = cos_delta * cos_delta * sin_delta * gamma_ref[14] - 2.0 * cos_delta * sin_delta * sin_delta * gamma_ref[15] +
+                  sin_delta * sin_delta * sin_delta * gamma_ref[17] + cos_delta * cos_delta * cos_delta * gamma_ref[24] -
+                  2.0 * cos_delta * cos_delta * sin_delta * gamma_ref[25] + cos_delta * sin_delta * sin_delta * gamma_ref[27];
+  gamma_rot[25] = cos_delta * sin_delta * sin_delta * gamma_ref[14] - sin_delta * sin_delta * sin_delta * gamma_ref[15] +
+                  cos_delta * cos_delta * sin_delta * gamma_ref[15] - cos_delta * sin_delta * sin_delta * gamma_ref[17] +
+                  cos_delta * cos_delta * sin_delta * gamma_ref[24] - cos_delta * sin_delta * sin_delta * gamma_ref[25] +
+                  cos_delta * cos_delta * cos_delta * gamma_ref[25] - cos_delta * cos_delta * sin_delta * gamma_ref[27];
+  gamma_rot[26] = cos_delta * sin_delta * gamma_ref[16] - sin_delta * sin_delta * gamma_ref[18] + cos_delta * cos_delta * gamma_ref[26] -
+                  cos_delta * sin_delta * gamma_ref[28];
+  gamma_rot[27] = sin_delta * sin_delta * sin_delta * gamma_ref[14] + 2.0 * cos_delta * sin_delta * sin_delta * gamma_ref[15] +
+                  cos_delta * cos_delta * sin_delta * gamma_ref[17] + cos_delta * sin_delta * sin_delta * gamma_ref[24] +
+                  2.0 * cos_delta * cos_delta * sin_delta * gamma_ref[25] + cos_delta * cos_delta * cos_delta * gamma_ref[27];
+  gamma_rot[28] = sin_delta * sin_delta * gamma_ref[16] + cos_delta * sin_delta * gamma_ref[18] + cos_delta * sin_delta * gamma_ref[26] +
+                  cos_delta * cos_delta * gamma_ref[28];
+  gamma_rot[29] = sin_delta * gamma_ref[19] + cos_delta * gamma_ref[29];
+  gamma_rot[30] = gamma_ref[30];
+  gamma_rot[31] = cos_delta * gamma_ref[31] - sin_delta * gamma_ref[32];
+  gamma_rot[32] = sin_delta * gamma_ref[31] + cos_delta * gamma_ref[32];
+  gamma_rot[33] = gamma_ref[33];
+  gamma_rot[34] = cos_delta * cos_delta * gamma_ref[34] - 2.0 * cos_delta * sin_delta * gamma_ref[35] + sin_delta * sin_delta * gamma_ref[37];
+  gamma_rot[35] = cos_delta * sin_delta * gamma_ref[34] - sin_delta * sin_delta * gamma_ref[35] + cos_delta * cos_delta * gamma_ref[35] -
+                  cos_delta * sin_delta * gamma_ref[37];
+  gamma_rot[36] = cos_delta * gamma_ref[36] - sin_delta * gamma_ref[38];
+  gamma_rot[37] = sin_delta * sin_delta * gamma_ref[34] + 2.0 * cos_delta * sin_delta * gamma_ref[35] + cos_delta * cos_delta * gamma_ref[37];
+  gamma_rot[38] = sin_delta * gamma_ref[36] + cos_delta * gamma_ref[38];
+  gamma_rot[39] = gamma_ref[39];
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_about_z
 
 /**
@@ -391,10 +412,6 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
     const double *restrict slice_payload = slice_payloads[which_slice];
     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT] = {0};
-    REAL g4dd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL gamma4udd_node_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
-    REAL g4dd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL gamma4udd_node_common[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
 
     // Step 5.a: Read, basis-align, and accumulate the weighted stencil nodes for this slice.
     for (int v = 0; v < interp_order; v++) {
@@ -402,27 +419,11 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
         const double *restrict tensor_record =
             slice_payload + mapped_point_index[v][u] * (uint64_t)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT + 3ULL;
         const REAL weight = normalization_2d * coeff_theta[v] * coeff_r[u];
-        const REAL node_phi_ref = (REAL)context->stored_phi_samples[mapped_phi_plane[v][u]];
+        const int apply_pi_shift = mapped_phi_plane[v][u] != phi_plane;
 
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
-          g4dd_node_ref[comp] = (REAL)tensor_record[comp];
-        } // END LOOP: for comp over serialized metric payload components
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
-          gamma4udd_node_ref[comp] = (REAL)tensor_record[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
-        } // END LOOP: for comp over serialized Christoffel payload components
-
-        // Rotate each remapped node back to the selected stored reference
-        // plane so weighted accumulation never mixes Cartesian bases from
-        // different azimuthal orientations.
-        azimuthal_symmetry_spatial_lagrange_rotate_about_z(phi_ref - node_phi_ref, g4dd_node_ref, gamma4udd_node_ref, g4dd_node_common,
-                                                           gamma4udd_node_common);
-
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
-          tensor_ref[comp] += weight * g4dd_node_common[comp];
-        } // END LOOP: for comp over metric components on the common reference plane
-        for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
-          tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * gamma4udd_node_common[comp];
-        } // END LOOP: for comp over Christoffel components on the common reference plane
+        // Same-plane nodes accumulate directly. Opposite-plane nodes differ
+        // only by the diagonal pi-rotation sign pattern in Cartesian basis.
+        azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(weight, apply_pi_shift, tensor_record, tensor_ref);
       } // END LOOP: for u over radial stencil nodes
     } // END LOOP: for v over theta stencil nodes
 

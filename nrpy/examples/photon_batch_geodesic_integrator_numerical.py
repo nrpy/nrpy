@@ -207,7 +207,7 @@ if __name__ == "__main__":
     photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
         # Execution Initial Conditions
         "t_start": 69.0,
-        "scan_density": 100,
+        "scan_density": 500,
         # Batch Integrator & Numerical Limits
         "p_t_max": 100.0,
         "perform_normalization_check": True,
