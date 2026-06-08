@@ -55,6 +55,7 @@ DEFAULT_SPHERICAL_BASE_NXX = [72, 12, 2]
 SUBPROCESS_TAIL_LINE_COUNT = 80
 RUNTIME_PROGRESS_BAR_WIDTH = 28
 RUNTIME_PROGRESS_HEARTBEAT_SECONDS = 30.0
+RUNTIME_PROGRESS_MIN_UPDATE_SECONDS = 0.2
 RUNTIME_PROGRESS_LINE_PATTERN = re.compile(
     r"It:\s*(?P<iteration>\d+)\s+"
     r"t=(?P<current_time>[-+0-9.eE]+)\s*/\s*(?P<final_time>[-+0-9.eE]+)\s*"
@@ -657,6 +658,7 @@ class _RuntimeProgressReporter:
         self._last_status_message = ""
         self._last_status_update = time_module.monotonic()
         self._start_time = self._last_status_update
+        self._pending_status_message = ""
 
     def handle_completed_line(self, completed_line: str) -> None:
         """
@@ -672,13 +674,23 @@ class _RuntimeProgressReporter:
             progress_message = self._build_progress_message(sanitized_line)
             if progress_message is None:
                 return
-            self._write_status_locked(progress_message)
+            self._pending_status_message = progress_message
+            now = time_module.monotonic()
+            if (
+                self._last_status_message == ""
+                or now - self._last_status_update
+                >= RUNTIME_PROGRESS_MIN_UPDATE_SECONDS
+            ):
+                self._write_status_locked(progress_message)
 
     def maybe_emit_heartbeat(self) -> None:
         """Emit a periodic status line if no fresh progress has appeared."""
         with self._display_lock:
             now = time_module.monotonic()
             if now - self._last_status_update < RUNTIME_PROGRESS_HEARTBEAT_SECONDS:
+                return
+            if self._pending_status_message != "":
+                self._write_status_locked(self._pending_status_message)
                 return
             if self._last_status_message != "":
                 self._write_status_locked(
@@ -696,6 +708,8 @@ class _RuntimeProgressReporter:
         with self._display_lock:
             if not self._displayed_status_line:
                 return
+            if self._pending_status_message != "":
+                self._write_status_locked(self._pending_status_message)
             sys.stdout.write("\n")
             sys.stdout.flush()
             self._displayed_status_line = False

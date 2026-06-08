@@ -206,16 +206,16 @@ if __name__ == "__main__":
     # spacetime dataset contract needed by the derived relationships below.
     photon_code_param_defaults: Dict[str, Union[bool, float, int]] = {
         # Execution Initial Conditions
-        "t_start": 69.0,
+        "t_start": 70.0,
         "scan_density": 500,
         # Batch Integrator & Numerical Limits
         "p_t_max": 100.0,
         "perform_normalization_check": True,
-        "r_escape": 15.0,
+        "r_escape": 20.0,
         "rkf45_max_delta_t": 1.0,
         "slot_manager_delta_t": 2.0,
         # Source Plane Geometric Mapping
-        "source_plane_center_x": -10.0,
+        "source_plane_center_x": -100.0,
         "source_plane_center_y": 0.0,
         "source_plane_center_z": 0.0,
         "source_plane_normal_x": 1.0,
@@ -227,10 +227,10 @@ if __name__ == "__main__":
         "source_up_vec_y": 1.0,
         "source_up_vec_z": 0.0,
         # Camera Window Geometric Mapping
-        "camera_pos_x": 11.0,
+        "camera_pos_x": 15.0,
         "camera_pos_y": 0.0,
         "camera_pos_z": 0.0,
-        "original_window_center_x": 10.0,
+        "original_window_center_x": 14.0,
         "original_window_center_y": 0.0,
         "original_window_center_z": 0.0,
         "window_height": 1.0,
@@ -238,8 +238,8 @@ if __name__ == "__main__":
         "window_up_vec_y": 0.0,
         "window_up_vec_z": 1.0,
         "window_width": 1.0,
-        "window_tiles_width": 1,
-        "window_tiles_height": 1,
+        "window_tiles_width": 2,
+        "window_tiles_height": 2,
         # RKF45 Adaptive Control Tolerances
         "numerical_initial_h": 0.05,
         "rkf45_absolute_error_tolerance": 1.0e-5,
@@ -253,8 +253,10 @@ if __name__ == "__main__":
     # These affect only the trusted BBH data-generation helper path.
     # They are not photon CodeParameters and therefore must not be written
     # through par.glb_code_params_dict below.
-    bbh_generation_defaults: Dict[str, int] = {
+    bbh_generation_defaults: Dict[str, Union[int, float]] = {
         "convergence_factor": 1,
+        "bh1_posn_z": 5.0,
+        "bh2_posn_z": -5.0,
     }
 
     # Numerical-spacetime dataset controls used by the radial and temporal
@@ -304,6 +306,8 @@ if __name__ == "__main__":
     if convergence_factor_float <= 0.0 or not convergence_factor_float.is_integer():
         raise ValueError("convergence_factor must be a positive integer.")
     convergence_factor = int(convergence_factor_float)
+    bh1_posn_z = float(bbh_generation_defaults["bh1_posn_z"])
+    bh2_posn_z = float(bbh_generation_defaults["bh2_posn_z"])
     Nxx = [
         base_bbh_nxx[0] * convergence_factor,
         base_bbh_nxx[1] * convergence_factor,
@@ -445,8 +449,6 @@ if __name__ == "__main__":
     enable_raytracing_outputs = True
     bh1_mass = 0.5
     bh2_mass = 0.5
-    bh1_posn_z = 0.5
-    bh2_posn_z = -0.5
     gamma_driving_eta = 1.0
     outer_bc_type = "radiation"
 
@@ -631,7 +633,13 @@ if __name__ == "__main__":
     )
 
     compiler = "gcc"
-    cflags = ["-fopenmp", "-O3", "-fno-omit-frame-pointer", "-DDEBUG", "-Wno-stringop-truncation"]
+    cflags = [
+        "-fopenmp",
+        "-O3",
+        "-fno-omit-frame-pointer",
+        "-DDEBUG",
+        "-Wno-stringop-truncation",
+    ]
     libs = ["-lm"]
     ext = "c"
 

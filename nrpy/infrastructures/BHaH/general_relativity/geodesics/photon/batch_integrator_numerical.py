@@ -293,6 +293,13 @@ def batch_integrator_numerical(
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
     }} // END LOOP: for s over 2 to instantiate the double-buffered operational arrays
 
+    // Scratchpad array holding the terminal normalization diagnostic outputs.
+    normalization_constraint_t *d_norm_bundle = NULL;
+
+    if (commondata->perform_normalization_check) {{
+        {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
+    }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
+
     // Event-detection kernels write final physical plane intersections directly to results_buffer.
 
     // Host-bound struct managing temporal binning of photon trajectories $x^\mu$.
@@ -1058,13 +1065,131 @@ def batch_integrator_numerical(
         // TERMINAL NORMALIZATION DIAGNOSTIC
         //==========================================
         if (commondata->perform_normalization_check) {{
-            printf("\n[INFO] perform_normalization_check is enabled, but the numerical ");
-            printf("final-time regrouped normalization diagnostic is not implemented ");
-            printf("in this first-pass batch_integrator_numerical update.\n");
-            printf("[INFO] TODO: build final-time slot grouping, map numerical windows ");
-            printf("slot-by-slot, run metric-only numerical_interpolation(), and report ");
-            printf("max |g_mu_nu p^mu p^nu| with skip counters.\n");
-        }}
+            TimeSlotManager norm_tsm;
+            int normalization_failure_mode = 0;
+            long int normalization_failure_ray = -1;
+            int normalization_failure_slot = -1;
+            slot_manager_init(
+                &norm_tsm,
+                commondata->slot_manager_t_min,
+                slot_manager_t_max,
+                commondata->slot_manager_delta_t,
+                num_rays);
+
+            double max_err_norm = 0.0;
+            long int worst_ray_norm = -1;
+
+            for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {{
+                const int norm_slot_idx = slot_get_index(
+                    &norm_tsm, all_photons_host.f[0 * num_rays + norm_ray]);
+                if (norm_slot_idx < 0) {{
+                    normalization_failure_mode = 1;
+                    normalization_failure_ray = norm_ray;
+                    break;
+                }} // END IF: norm_slot_idx < 0 to abort on an invalid terminal slot
+                slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
+            }} // END LOOP: for norm_ray over num_rays to populate the terminal slot manager
+
+            for (int norm_slot_idx = norm_tsm.num_slots - 1;
+                 norm_slot_idx >= 0 && normalization_failure_mode == 0;
+                 --norm_slot_idx) {{
+                if (norm_tsm.slot_counts[norm_slot_idx] <= 0) {{
+                    continue;
+                }} // END IF: norm_tsm.slot_counts[norm_slot_idx] <= 0 to skip an empty terminal slot
+
+                if (time_window_manager_numerical_mmap_for_slot(
+                        &numerical_window, &norm_tsm, norm_slot_idx) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+                    normalization_failure_mode = 2;
+                    normalization_failure_slot = norm_slot_idx;
+                    break;
+                }} // END IF: terminal normalization mmap fails
+
+                while (norm_tsm.slot_counts[norm_slot_idx] > 0 &&
+                       normalization_failure_mode == 0) {{
+                    const long int chunk_size = NRPYMIN(
+                        (long int)BUNDLE_CAPACITY, norm_tsm.slot_counts[norm_slot_idx]);
+                    slot_remove_chunk(
+                        &norm_tsm, norm_slot_idx, chunk_buffer[0], chunk_size);
+
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
+                        for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                            const long int master_idx = chunk_buffer[0][norm_i];
+                            f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
+                                all_photons_host.f[norm_k * num_rays + master_idx];
+                        }} // END LOOP: for norm_i over chunk_size to pack the terminal state bundle
+                    }} // END LOOP: for norm_k over 9 to pack the terminal state components
+
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
+                        {memcpy_cpu("d_f_bundle[0] + norm_k * BUNDLE_CAPACITY", "f_bridge[0] + norm_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
+                    }} // END LOOP: for norm_k over 9 to copy the terminal state bundle to the CPU scratchpad
+
+                    numerical_interpolation(
+                        commondata,
+                        &numerical_params,
+                        &spatial_context,
+                        &numerical_window,
+                        d_f_bundle[0],
+                        d_metric_bundle[0],
+                        NULL,
+                        chunk_size,
+                        0);
+
+                    normalization_constraint_photon(
+                        d_f_bundle[0],
+                        d_metric_bundle[0],
+                        d_norm_bundle,
+                        chunk_size,
+                        0);
+
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                        const double current_norm_err = fabs(d_norm_bundle[norm_i].C);
+                        if (!isfinite(current_norm_err)) {{
+                            normalization_failure_mode = 3;
+                            normalization_failure_ray = chunk_buffer[0][norm_i];
+                            break;
+                        }} // END IF: current_norm_err is non-finite
+                        if (current_norm_err > max_err_norm) {{
+                            max_err_norm = current_norm_err;
+                            worst_ray_norm = chunk_buffer[0][norm_i];
+                        }} // END IF: current_norm_err > max_err_norm
+                    }} // END LOOP: for norm_i over chunk_size to scan constraint values
+                }} // END WHILE: norm_tsm.slot_counts[norm_slot_idx] > 0 to process the terminal slot
+            }} // END LOOP: for norm_slot_idx down to 0 to process all terminal slots
+
+            slot_manager_free(&norm_tsm);
+
+            if (normalization_failure_mode != 0) {{
+                if (normalization_failure_mode == 1) {{
+                    fprintf(stderr,
+                            "ERROR: terminal normalization diagnostic could not bin photon %ld.\n",
+                            normalization_failure_ray);
+                }} else if (normalization_failure_mode == 2) {{
+                    fprintf(stderr,
+                            "ERROR: failed to map numerical time window for terminal normalization slot %d.\n",
+                            normalization_failure_slot);
+                }} else if (normalization_failure_mode == 3) {{
+                    fprintf(stderr,
+                            "ERROR: terminal normalization diagnostic produced a non-finite constraint for photon %ld.\n",
+                            normalization_failure_ray);
+                }} // END ELSE IF: normalization_failure_mode == 3 to report a non-finite terminal constraint
+                time_window_manager_numerical_free(&numerical_window);
+                slot_manager_free(&tsm);
+                exit(1);
+            }} // END IF: normalization_failure_mode != 0 to abort terminal normalization diagnostics
+
+            printf("\n=================================================\n");
+            printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
+            printf("=================================================\n");
+            printf(
+                "  Max Absolute Error (Normalization Constraint |g_mu_nu p^mu p^nu|): %e (Ray %ld)\n",
+                max_err_norm,
+                worst_ray_norm);
+        }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization constraint
+
+        if (commondata->perform_normalization_check) {{
+            {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
+        }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
 
         // Loop iterator $s$ purging the double-buffered arrays across both CPU buffers.
         for (int s = 0; s < 2; ++s) {{
