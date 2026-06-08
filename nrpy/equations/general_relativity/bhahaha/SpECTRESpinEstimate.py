@@ -189,7 +189,7 @@ class SpECTRESpinEstimateClass:
         )
 
         # Inverse 2-metric and sqrt(det q)
-        self._SE_qUU, self._detq2 = ixp.symm_matrix_inverter2x2(self._SE_qDD_expr)
+        self._SE_qUU, self._detq2 = ixp.symm_matrix_inverter2x2(self._SE_qDD)
         self._sqrtq = sp.sqrt(self._detq2)
 
         # 2D Levi-Civita tensor with configurable orientation
@@ -289,7 +289,7 @@ class SpECTRESpinEstimateClass:
             raise ValueError("xMeasU must have length 3.")
         rr = self._rfm.xx[0]
         for expr in xMeasU:
-            if rr in sp.Integer(expr).free_symbols:
+            if rr in expr.free_symbols: # Normally would use spympify on `expr`, but that goes against NRPy standards and they should be SymPy expressions anyway
                 raise ValueError(
                     "MeasurementFrame coordinate depends explicitly on xx[0]. "
                     "Provide on-surface expressions using (theta, phi, h) only."
@@ -389,9 +389,7 @@ class SpECTRESpinEstimateClass:
         # Induced metric q_AB
         for A in range(2):
             for B in range(2):
-                assignments[cast(sp.Symbol, self._SE_qDD[A][B])] = self._SE_qDD_expr[A][
-                    B
-                ]
+                assignments[cast(sp.Symbol, self._SE_qDD[A][B])] = self._SE_qDD_expr[A][B]
 
         # X_B
         for B in range(2):
