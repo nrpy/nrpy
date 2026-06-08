@@ -2,11 +2,10 @@
 Helper functions for validating and generating combined raytracing bins.
 
 This module provides a small helper layer for numerical geodesic examples that
-need a combined spacetime ``.bin`` file before code generation proceeds. The
-helper checks whether a cached combined file exists, validates only the
-lightweight metadata needed for compatibility, regenerates the file through the
-existing two-black-hole example when needed, and writes a small JSON sidecar
-manifest next to the generated ``.bin``.
+need a combined spacetime ``.bin`` file before runtime. The helper can write a
+lightweight deferred JSON request, validate whether a cached combined file
+exists, regenerate the file through the existing two-black-hole example when
+needed, and write a small JSON sidecar manifest next to the generated ``.bin``.
 
 The helper intentionally contains no photon-specific logic. Its only job is to
 ensure that the required combined numerical spacetime data file exists and
@@ -16,10 +15,13 @@ Author: OpenAI
         support **at** openai **dot** com
 """
 
+import argparse
+import copy
 import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,7 +31,20 @@ from collections import deque
 from pathlib import Path
 from typing import Callable, Deque, Dict, List, Optional, Sequence, TextIO, Tuple, cast
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+
+def _find_repo_root() -> Path:
+    current_path = Path(__file__).resolve()
+    for candidate in [current_path.parent] + list(current_path.parents):
+        if (candidate / "nrpy" / "examples").is_dir() and (
+            candidate / "nrpy" / "infrastructures"
+        ).is_dir():
+            return candidate
+    raise RuntimeError(
+        f"Could not locate the NRPy repository root from {Path(__file__).resolve()}."
+    )
+
+
+REPO_ROOT = _find_repo_root()
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -44,6 +59,8 @@ STATE_REBUILT_STALE = (
 STATE_GENERATED_MISSING = ".bin file didn't exist and was generated"
 
 MANIFEST_VERSION = 1
+REQUEST_FORMAT = "nrpy_combined_raytracing_bin_request"
+REQUEST_FORMAT_VERSION = 1
 DEFAULT_POINT_RECORD_REAL_COUNT = 53
 DEFAULT_POINT_RECORD_BYTES = 424
 DEFAULT_RECORD_COMPONENT_COUNT = 53
@@ -56,6 +73,8 @@ SUBPROCESS_TAIL_LINE_COUNT = 80
 RUNTIME_PROGRESS_BAR_WIDTH = 28
 RUNTIME_PROGRESS_HEARTBEAT_SECONDS = 30.0
 RUNTIME_PROGRESS_MIN_UPDATE_SECONDS = 0.2
+RUNTIME_PROGRESS_TERMINAL_MARGIN_COLUMNS = 2
+RUNTIME_PROGRESS_MIN_TERMINAL_COLUMNS = 20
 RUNTIME_PROGRESS_LINE_PATTERN = re.compile(
     r"It:\s*(?P<iteration>\d+)\s+"
     r"t=(?P<current_time>[-+0-9.eE]+)\s*/\s*(?P<final_time>[-+0-9.eE]+)\s*"
@@ -70,6 +89,21 @@ def _as_float(value: object) -> float:
     return float(value)
 
 
+def _resolve_repo_path(path_string: str) -> Path:
+    path = Path(path_string).expanduser()
+    if path.is_absolute():
+        return path.resolve()
+    return (REPO_ROOT / path).resolve()
+
+
+def _relativize_repo_path(path_string: str) -> str:
+    resolved_path = Path(path_string).expanduser().resolve()
+    try:
+        return str(resolved_path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(resolved_path)
+
+
 def _normalize_required_metadata(
     required_metadata: Dict[str, object],
 ) -> Dict[str, object]:
@@ -81,20 +115,18 @@ def _normalize_required_metadata(
     two_blackholes_run = cast(
         Dict[str, object], required_metadata["two_blackholes_run"]
     )
-    generation = cast(Dict[str, object], required_metadata["generation"])
+    generation = cast(Dict[str, object], required_metadata.get("generation", {}))
 
     project_name = cast(
         str,
         generation.get("project_name", DEFAULT_TWO_BLACKHOLES_PROJECT_NAME),
     )
-    project_dir = (REPO_ROOT / "project" / project_name).resolve()
-    stage1_dir = Path(
+    project_dir = _resolve_repo_path(
+        cast(str, generation.get("project_dir", f"project/{project_name}"))
+    )
+    stage1_dir = _resolve_repo_path(
         cast(str, generation.get("stage1_raytracing_output_dir", str(project_dir)))
-    ).expanduser()
-    if not stage1_dir.is_absolute():
-        stage1_dir = (REPO_ROOT / stage1_dir).resolve()
-    else:
-        stage1_dir = stage1_dir.resolve()
+    )
 
     normalized = {
         "combined_file": {
@@ -246,42 +278,27 @@ def _normalize_required_metadata(
             ),
             "make_command": cast(List[str], generation.get("make_command", ["make"])),
             "two_blackholes_example_script": str(
-                Path(
+                _resolve_repo_path(
                     cast(
                         str,
                         generation.get(
                             "two_blackholes_example_script",
-                            str(
-                                REPO_ROOT
-                                / "nrpy"
-                                / "examples"
-                                / "two_blackholes_collide.py"
-                            ),
+                            "nrpy/examples/two_blackholes_collide.py",
                         ),
                     )
                 )
-                .expanduser()
-                .resolve()
             ),
             "combine_raytracing_time_slices_script": str(
-                Path(
+                _resolve_repo_path(
                     cast(
                         str,
                         generation.get(
                             "combine_raytracing_time_slices_script",
-                            str(
-                                REPO_ROOT
-                                / "nrpy"
-                                / "infrastructures"
-                                / "BHaH"
-                                / "diagnostics"
-                                / "combine_raytracing_time_slices.py"
-                            ),
+                            "nrpy/infrastructures/BHaH/diagnostics/"
+                            "combine_raytracing_time_slices.py",
                         ),
                     )
                 )
-                .expanduser()
-                .resolve()
             ),
             "project_dir": str(project_dir),
             "stage1_raytracing_output_dir": str(stage1_dir),
@@ -646,6 +663,28 @@ def _stream_pipe_lines(
     _consume_stream_text(pending_text, completed_line_handler, flush_partial_line=True)
 
 
+def _fit_status_message_to_terminal_width(status_message: str) -> str:
+    """
+    Fit a runtime status message to the current terminal width.
+
+    :param status_message: The full untruncated status message.
+    :return: A terminal-safe display string.
+    """
+    if not sys.stdout.isatty():
+        return status_message
+
+    terminal_columns = shutil.get_terminal_size(fallback=(120, 24)).columns
+    usable_columns = max(
+        RUNTIME_PROGRESS_MIN_TERMINAL_COLUMNS,
+        terminal_columns - RUNTIME_PROGRESS_TERMINAL_MARGIN_COLUMNS,
+    )
+    if len(status_message) <= usable_columns:
+        return status_message
+    if usable_columns <= 3:
+        return status_message[:usable_columns]
+    return status_message[: usable_columns - 3] + "..."
+
+
 class _RuntimeProgressReporter:
     """Render filtered runtime progress while retaining full failure tails."""
 
@@ -659,6 +698,7 @@ class _RuntimeProgressReporter:
         self._last_status_update = time_module.monotonic()
         self._start_time = self._last_status_update
         self._pending_status_message = ""
+        self._stdout_is_tty = sys.stdout.isatty()
 
     def handle_completed_line(self, completed_line: str) -> None:
         """
@@ -678,8 +718,7 @@ class _RuntimeProgressReporter:
             now = time_module.monotonic()
             if (
                 self._last_status_message == ""
-                or now - self._last_status_update
-                >= RUNTIME_PROGRESS_MIN_UPDATE_SECONDS
+                or now - self._last_status_update >= RUNTIME_PROGRESS_MIN_UPDATE_SECONDS
             ):
                 self._write_status_locked(progress_message)
 
@@ -690,17 +729,19 @@ class _RuntimeProgressReporter:
             if now - self._last_status_update < RUNTIME_PROGRESS_HEARTBEAT_SECONDS:
                 return
             if self._pending_status_message != "":
-                self._write_status_locked(self._pending_status_message)
+                self._write_status_locked(self._pending_status_message, force=True)
                 return
             if self._last_status_message != "":
                 self._write_status_locked(
-                    f"{self._last_status_message} (waiting for next update)"
+                    f"{self._last_status_message} (waiting for next update)",
+                    force=True,
                 )
                 return
             elapsed_seconds = int(now - self._start_time)
             self._write_status_locked(
                 "    [4/5] BBH evolution running... "
-                f"elapsed {elapsed_seconds}s; waiting for parseable progress"
+                f"elapsed {elapsed_seconds}s; waiting for parseable progress",
+                force=True,
             )
 
     def finish(self) -> None:
@@ -709,9 +750,10 @@ class _RuntimeProgressReporter:
             if not self._displayed_status_line:
                 return
             if self._pending_status_message != "":
-                self._write_status_locked(self._pending_status_message)
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+                self._write_status_locked(self._pending_status_message, force=True)
+            if self._stdout_is_tty:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
             self._displayed_status_line = False
 
     def _build_progress_message(self, sanitized_line: str) -> Optional[str]:
@@ -757,8 +799,19 @@ class _RuntimeProgressReporter:
             f"it={iteration}"
         )
 
-    def _write_status_locked(self, status_message: str) -> None:
-        sys.stdout.write(f"\r\033[K{status_message}")
+    def _write_status_locked(self, status_message: str, force: bool = False) -> None:
+        display_message = _fit_status_message_to_terminal_width(status_message)
+        if self._stdout_is_tty:
+            sys.stdout.write(f"\r\033[2K{display_message}")
+        else:
+            if (
+                not force
+                and self._last_status_message != ""
+                and time_module.monotonic() - self._last_status_update
+                < RUNTIME_PROGRESS_HEARTBEAT_SECONDS
+            ):
+                return
+            sys.stdout.write(f"{display_message}\n")
         sys.stdout.flush()
         self._displayed_status_line = True
         self._last_status_message = status_message
@@ -882,6 +935,86 @@ def _combine_stage1_outputs(
     else:
         command.append("--no-axisymmetry")
     _run_subprocess(command, REPO_ROOT, "combine_raytracing_time_slices.py")
+
+
+def write_required_combined_bin_request(
+    required_metadata: Dict[str, object],
+    combined_bin_location: str,
+    request_json_location: str,
+) -> str:
+    """
+    Write a JSON request for deferred combined raytracing `.bin` generation.
+
+    This function rewrites machine-specific path fields into repo-relative
+    paths and writes the request file, but it does not generate the heavy
+    combined `.bin` cache.
+
+    :param required_metadata: Metadata describing the required combined bin.
+    :param combined_bin_location: Final combined bin path.
+    :param request_json_location: JSON request path to write.
+    :return: Absolute path to the written JSON request file.
+    """
+    request_metadata = copy.deepcopy(required_metadata)
+    generation = cast(Dict[str, object], request_metadata.get("generation", {}))
+    generation.pop("python_executable", None)
+    for path_key in (
+        "two_blackholes_example_script",
+        "combine_raytracing_time_slices_script",
+        "stage1_raytracing_output_dir",
+        "project_dir",
+    ):
+        path_value = generation.get(path_key)
+        if isinstance(path_value, str):
+            generation[path_key] = _relativize_repo_path(path_value)
+    request_json_path = Path(request_json_location).expanduser().resolve()
+    request_json_path.parent.mkdir(parents=True, exist_ok=True)
+
+    request_payload = {
+        "request_format": REQUEST_FORMAT,
+        "request_format_version": REQUEST_FORMAT_VERSION,
+        "combined_bin_location": _relativize_repo_path(combined_bin_location),
+        "required_metadata": request_metadata,
+    }
+
+    temp_fd, temp_name = tempfile.mkstemp(
+        prefix=f"{request_json_path.name}.tmp.",
+        dir=str(request_json_path.parent),
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(temp_fd, "w", encoding="utf-8") as file_pointer:
+            json.dump(request_payload, file_pointer, indent=2, sort_keys=True)
+            file_pointer.write("\n")
+            file_pointer.flush()
+            os.fsync(file_pointer.fileno())
+        os.replace(temp_path, request_json_path)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
+
+    return str(request_json_path)
+
+
+def ensure_required_combined_bin_from_request(
+    request_json_location: str,
+) -> Tuple[str, str]:
+    """
+    Ensure that the combined raytracing `.bin` requested by a JSON file exists.
+
+    :param request_json_location: Path to a JSON request file produced by
+        ``write_required_combined_bin_request``.
+    :return: Tuple ``(state_of_bin, combined_bin_location)``.
+    """
+    request_json_path = Path(request_json_location).expanduser().resolve()
+    with request_json_path.open("r", encoding="utf-8") as file_pointer:
+        request_payload = cast(Dict[str, object], json.load(file_pointer))
+
+    return ensure_required_combined_bin(
+        required_metadata=cast(Dict[str, object], request_payload["required_metadata"]),
+        combined_bin_location=str(
+            _resolve_repo_path(cast(str, request_payload["combined_bin_location"]))
+        ),
+    )
 
 
 def check_combined_bin_metadata(
@@ -1031,13 +1164,49 @@ def ensure_required_combined_bin(
     return STATE_REBUILT_STALE, final_path
 
 
-if __name__ == "__main__":
+def _run_doctests() -> int:
     import doctest
 
     results = doctest.testmod()
-
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
+        return 1
+    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    return 0
+
+
+def _run_cli() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate or generate a combined raytracing .bin from a deferred "
+            "JSON request file."
+        )
+    )
+    parser.add_argument(
+        "request_json",
+        nargs="?",
+        help=(
+            "Path to the deferred numerical-spacetime data request JSON file. "
+            "If omitted, doctests are run."
+        ),
+    )
+    parser.add_argument(
+        "--doctest",
+        action="store_true",
+        help="Run doctests instead of preparing numerical spacetime data.",
+    )
+    args = parser.parse_args()
+
+    if args.doctest or args.request_json is None:
+        return _run_doctests()
+
+    state_of_bin, combined_bin_location = ensure_required_combined_bin_from_request(
+        args.request_json
+    )
+    print(f"Numerical spacetime data: {state_of_bin}")
+    print(f"Combined raytracing data path: {combined_bin_location}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_run_cli())

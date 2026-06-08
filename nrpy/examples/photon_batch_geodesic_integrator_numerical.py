@@ -33,7 +33,7 @@ import nrpy.params as par
 # Physics/Math Generators (Symbolic definitions of geodesics)
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
 from nrpy.examples.geodesic_helpers.combined_raytracing_bin_helper import (
-    ensure_required_combined_bin,
+    write_required_combined_bin_request,
 )
 
 # NRPy BlackHoles@Home (BHaH) infrastructure modules for C project management
@@ -238,23 +238,24 @@ if __name__ == "__main__":
         "window_up_vec_y": 0.0,
         "window_up_vec_z": 1.0,
         "window_width": 1.0,
-        "window_tiles_width": 2,
-        "window_tiles_height": 2,
+        "window_tiles_width": 1,
+        "window_tiles_height": 1,
         # RKF45 Adaptive Control Tolerances
         "numerical_initial_h": 0.05,
-        "rkf45_absolute_error_tolerance": 1.0e-5,
-        "rkf45_error_tolerance": 1.0e-5,
+        "rkf45_absolute_error_tolerance": 1.0e-08,
+        "rkf45_error_tolerance": 1.0e-08,
         "rkf45_h_max": 10.0,
         "rkf45_h_min": 1.0e-15,
         # Lagrange Interpolation Order
-        "numerical_spacetime_spatial_interp_order": 2,
-        "numerical_spacetime_temporal_interp_order": 2,
+        "numerical_spacetime_spatial_interp_order": 4,
+        "numerical_spacetime_temporal_interp_order": 4,
     }
     # These affect only the trusted BBH data-generation helper path.
     # They are not photon CodeParameters and therefore must not be written
     # through par.glb_code_params_dict below.
     bbh_generation_defaults: Dict[str, Union[int, float]] = {
         "convergence_factor": 1,
+        "dt_grids": 0.1,
         "bh1_posn_z": 5.0,
         "bh2_posn_z": -5.0,
     }
@@ -272,7 +273,6 @@ if __name__ == "__main__":
     # This keeps the pre-tested BBH angular/radial shape intact while allowing
     # controlled uniform refinement of the non-symmetry directions.
     base_bbh_nxx = [72, 12, 2]
-    dt_grids = 0.25
 
     # eta in the radial relationship. This safety factor scales the radial
     # RKF45/time-slot overshoot estimate, but it is not a temporal endpoint
@@ -281,14 +281,10 @@ if __name__ == "__main__":
     radial_overshoot_safety_factor = 1.0
 
     numerical_spacetime_spatial_interp_order = int(
-        par.glb_code_params_dict[
-            "numerical_spacetime_spatial_interp_order"
-        ].defaultvalue
+        photon_code_param_defaults["numerical_spacetime_spatial_interp_order"]
     )
     numerical_spacetime_temporal_interp_order = int(
-        par.glb_code_params_dict[
-            "numerical_spacetime_temporal_interp_order"
-        ].defaultvalue
+        photon_code_param_defaults["numerical_spacetime_temporal_interp_order"]
     )
 
     # Step 5.5.b: Derive the numerical-spacetime time-window relationships.
@@ -306,6 +302,7 @@ if __name__ == "__main__":
     if convergence_factor_float <= 0.0 or not convergence_factor_float.is_integer():
         raise ValueError("convergence_factor must be a positive integer.")
     convergence_factor = int(convergence_factor_float)
+    dt_grids = float(bbh_generation_defaults["dt_grids"])
     bh1_posn_z = float(bbh_generation_defaults["bh1_posn_z"])
     bh2_posn_z = float(bbh_generation_defaults["bh2_posn_z"])
     Nxx = [
@@ -541,21 +538,25 @@ if __name__ == "__main__":
         },
     }
 
-    # Step 5.5.f: Ensure the required numerical spacetime data file exists.
+    # Step 5.5.f: Write the deferred numerical spacetime data request.
     print(
-        " -> Checking for a compatible numerical spacetime .bin cache. "
-        "If validation takes more than a few seconds, the cached data were "
-        "missing or stale and the two_blackholes_collide pipeline is "
-        "regenerating them now."
+        " -> Writing a deferred numerical spacetime data request. "
+        "The heavy two_blackholes_collide pipeline will run only when the "
+        "copied helper script is executed from the generated photon project."
     )
-    state_of_bin, combined_bin_location = ensure_required_combined_bin(
+    required_bin_request_location = os.path.join(
+        project_dir,
+        "numerical_spacetime_data_request.json",
+    )
+    write_required_combined_bin_request(
         required_metadata=required_combined_bin_metadata,
         combined_bin_location=combined_bin_location,
+        request_json_location=required_bin_request_location,
     )
-    print(f" -> Numerical spacetime data: {state_of_bin}")
-    print(f" -> Combined raytracing data path: {combined_bin_location}")
+    print(f" -> Numerical spacetime data request: {required_bin_request_location}")
+    print(f" -> Expected combined raytracing data path: {combined_bin_location}")
 
-    # Step 5.5.g: Bind the validated dataset and photon CodeParameters.
+    # Step 5.5.g: Bind the expected dataset path and photon CodeParameters.
     print(" -> Overriding desired CodeParameters before .par generation...")
 
     par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = (
@@ -672,12 +673,19 @@ if __name__ == "__main__":
     config_src = os.path.join(vis_dir, "blueprint_config_and_schema.py")
     render_src = os.path.join(vis_dir, "render_lensed_image.py")
     blueprint_analysis_src = os.path.join(vis_dir, "blueprint_analysis.py")
+    combined_helper_src = os.path.join(
+        "nrpy",
+        "examples",
+        "geodesic_helpers",
+        "combined_raytracing_bin_helper.py",
+    )
 
     for script_src in (
         vis_script_src,
         config_src,
         render_src,
         blueprint_analysis_src,
+        combined_helper_src,
     ):
         shutil.copy(script_src, project_dir)
 
@@ -700,6 +708,8 @@ if __name__ == "__main__":
 
     # Set the baseline pixel resolution for the output render.
     c_pixel_width = 600
+    data_request_file = "numerical_spacetime_data_request.json"
+    data_prep_command = f"python3 combined_raytracing_bin_helper.py {data_request_file}"
 
     vis_command = (
         f"python3 visualize_lensed_image.py "
@@ -712,12 +722,15 @@ if __name__ == "__main__":
         f"--pixel_width {c_pixel_width}"
     )
 
-    print(
-        f"Finished! Now go into {project_dir} and type `make` to build, then ./{exec_name} to run."
-    )
+    print(f"Finished! Now go into {project_dir}.")
     print(
         f"    Parameter file can be found at {os.path.join(project_dir, f'{project_name}.par')}\n"
     )
+    print("    To prepare the required numerical spacetime data, run:")
+    print(f"    {data_prep_command}\n")
+    print("    Then build and run the photon executable:")
+    print("    make")
+    print(f"    ./{exec_name}\n")
     print(
         "    To generate the lensed image after running the C executable, ensure you have the required Python packages:"
     )
