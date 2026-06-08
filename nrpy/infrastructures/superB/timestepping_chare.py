@@ -542,7 +542,7 @@ class Timestepping : public CBase_Timestepping {
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
     void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
     void send_nonlocalinnerbc_idx3srcpts_toreceiv();
-    void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int *restrict globalidx3_srcpts);
+    void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const long long *restrict globalidx3_srcpts);
     void send_nonlocalinnerbc_data(const int type_gfs, const int grid);
     void set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid);
     void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
@@ -1233,7 +1233,8 @@ void Timestepping::send_wavespeed_at_outer_boundary(const int grid) {
   const int pt_at_outer_boundary_i0 = Nxx_plus_2NGHOSTS0 - NGHOSTS - 1;
   const int pt_at_outer_boundary_i1 = NGHOSTS;
   const int pt_at_outer_boundary_i2 = Nxx_plus_2NGHOSTS2 / 2 ;
-  const int pt_at_outer_boundary_idx3 =  IDX3(pt_at_outer_boundary_i0, pt_at_outer_boundary_i1, pt_at_outer_boundary_i2);
+  const int64_t pt_at_outer_boundary_idx3 =  IDX3GENERAL_64(pt_at_outer_boundary_i0, pt_at_outer_boundary_i1, pt_at_outer_boundary_i2,
+                                                             Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
   const int idx3_this_chare = IDX3_OF_CHARE(thisIndex.x, thisIndex.y, thisIndex.z);
 
   if (globalidx3pt_to_chareidx3(pt_at_outer_boundary_idx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
@@ -1280,7 +1281,7 @@ void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
   int grid = 0;
   const int tot_num_src_chares = griddata_chare[grid].nonlocalinnerbcstruct.tot_num_src_chares;
   const int *restrict idx3_of_src_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_src_chares;
-  int **restrict globalidx3_srcpts = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts;
+  int64_t **restrict globalidx3_srcpts = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts;
   const int *restrict num_srcpts_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_each_chare;
 
   const int Nchare0 = commondata.Nchare0;
@@ -1301,11 +1302,11 @@ void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
 """
 
     file_output_str += r"""
-void Timestepping::process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int *restrict globalidx3_srcpts) {
+void Timestepping::process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const long long *restrict globalidx3_srcpts) {
   // Unpack griddata_chare[grid].nonlocalinnerbcstruct
   int grid = 0;
   const int *restrict idx3chare_to_dst_chare_id = griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_dst_chare_id;
-  int **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
+  int64_t **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
 
   const int dst_chare_id_val = idx3chare_to_dst_chare_id[idx3_of_sendingchare];
   for (int count = 0; count < num_srcpts; count++) {
@@ -1332,7 +1333,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
   const int tot_num_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares;
   const int *restrict idx3_of_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_dst_chares;
   const int *restrict num_srcpts_tosend_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_tosend_each_chare;
-  int **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
+  int64_t **restrict globalidx3_srcpts_tosend = griddata_chare[grid].nonlocalinnerbcstruct.globalidx3_srcpts_tosend;
 
   const REAL *restrict gfs = nullptr;
   int NUM_GFS;
@@ -1346,9 +1347,9 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
     REAL *restrict tmpBuffer_innerbc_send = griddata_chare[grid].tmpBuffers.tmpBuffer_innerbc_send[which_dst_chare];
     for (int which_gf = 0; which_gf < NUM_GFS; which_gf++) {
       for (int which_srcpt = 0; which_srcpt < num_srcpts_tosend_each_chare[which_dst_chare]; which_srcpt++) {
-        const int globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
+        const int64_t globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
         int globali, globalj, globalk;
-        REVERSE_IDX3GENERAL(globalidx3srcpt, Nxx_plus_2NGHOSTS0_global, Nxx_plus_2NGHOSTS1_global, globali, globalj, globalk);
+        REVERSE_IDX3GENERAL_64(globalidx3srcpt, Nxx_plus_2NGHOSTS0_global, Nxx_plus_2NGHOSTS1_global, globali, globalj, globalk);
         const int locali = MAP_GLOBAL_TO_LOCAL_IDX0(thisIndex.x, globali, Nxx0);
         const int localj = MAP_GLOBAL_TO_LOCAL_IDX1(thisIndex.y, globalj, Nxx1);
         const int localk = MAP_GLOBAL_TO_LOCAL_IDX2(thisIndex.z, globalk, Nxx2);
@@ -1546,7 +1547,7 @@ def output_timestepping_ci(
       }
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
         for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares; iter++) {
-          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]) {
+          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, long long globalidx3_srcpts[num_srcpts]) {
             serial {
               process_nonlocalinnerbc_idx3srcpt_tosend(idx3_of_sendingchare, num_srcpts, globalidx3_srcpts);
             }
@@ -2021,7 +2022,7 @@ def output_timestepping_ci(
     }
 """
     file_output_str += r"""
-    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int globalidx3_srcpts[num_srcpts]);"""
+    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, long long globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         Butcher_dict,
         MoL_method,

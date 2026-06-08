@@ -295,7 +295,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_y[i].i0;
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
@@ -321,7 +321,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_y[i].i0;
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           int localidx3 = globalidx3pt_to_localidx3pt(
@@ -362,7 +362,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_z[i].i0;
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
@@ -388,7 +388,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_z[i].i0;
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           int localidx3 = globalidx3pt_to_localidx3pt(

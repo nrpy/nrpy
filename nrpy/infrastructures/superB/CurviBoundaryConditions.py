@@ -110,8 +110,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     int num_inner_chare = 0;
     int num_inner_chare_nonlocal = 0;
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
-      const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
-      const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
+      const int64_t dstpt = bcstruct->inner_bc_array[pt].dstpt;
+      const int64_t srcpt = bcstruct->inner_bc_array[pt].srcpt;
       const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
                                                              Nchare1, Nchare2);
       const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
@@ -138,8 +138,8 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
     int count_nonlocalinnerbc_srcpt_eachchare[tot_num_chares]= {0};
     int count_nonlocalinnerbc_dstpt_eachchare[tot_num_chares]= {0};
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
-      const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
-      const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
+      const int64_t dstpt = bcstruct->inner_bc_array[pt].dstpt;
+      const int64_t srcpt = bcstruct->inner_bc_array[pt].srcpt;
       const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
                                                              Nchare1, Nchare2);
       const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
@@ -212,15 +212,15 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
         }
     }
     // Allocate memory for globalidx3_srcpts
-    nonlocalinnerbcstruct->globalidx3_srcpts = (int **)malloc(nonlocalinnerbcstruct->tot_num_src_chares * sizeof(int *));
+    nonlocalinnerbcstruct->globalidx3_srcpts = (int64_t **)malloc(nonlocalinnerbcstruct->tot_num_src_chares * sizeof(int64_t *));
     for (int src_chare_id = 0; src_chare_id < nonlocalinnerbcstruct->tot_num_src_chares; src_chare_id++) {
-      nonlocalinnerbcstruct->globalidx3_srcpts[src_chare_id] = (int *restrict)malloc(sizeof(int) * nonlocalinnerbcstruct->num_srcpts_each_chare[src_chare_id]);
+      nonlocalinnerbcstruct->globalidx3_srcpts[src_chare_id] = (int64_t *restrict)malloc(sizeof(int64_t) * nonlocalinnerbcstruct->num_srcpts_each_chare[src_chare_id]);
     }
     // Set globalidx3_srcpts and bcstruct_chare->inner_bc_array_nonlocal
     int count_nonlocalinnerbc_srcpt_each_src_chare[nonlocalinnerbcstruct->tot_num_src_chares] = {0};
     for (int pt = 0; pt < bcstruct->bc_info.num_inner_boundary_points; pt++) {
-      const int dstpt = bcstruct->inner_bc_array[pt].dstpt;
-      const int srcpt = bcstruct->inner_bc_array[pt].srcpt;
+      const int64_t dstpt = bcstruct->inner_bc_array[pt].dstpt;
+      const int64_t srcpt = bcstruct->inner_bc_array[pt].srcpt;
       const int dst_owner = globalidx3pt_to_chareidx3(dstpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
                                                              Nchare1, Nchare2);
       const int src_owner = globalidx3pt_to_chareidx3(srcpt, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0,
@@ -272,9 +272,9 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
       }
     }
     // Allocate memory for globalidx3_srcpts_tosend
-    nonlocalinnerbcstruct->globalidx3_srcpts_tosend = (int **)malloc(nonlocalinnerbcstruct->tot_num_dst_chares * sizeof(int *));
+    nonlocalinnerbcstruct->globalidx3_srcpts_tosend = (int64_t **)malloc(nonlocalinnerbcstruct->tot_num_dst_chares * sizeof(int64_t *));
     for (int dst_chare_id = 0; dst_chare_id < nonlocalinnerbcstruct->tot_num_dst_chares; dst_chare_id++) {
-      nonlocalinnerbcstruct->globalidx3_srcpts_tosend[dst_chare_id] = (int *restrict)malloc(sizeof(int) * nonlocalinnerbcstruct->num_srcpts_tosend_each_chare[dst_chare_id]);
+      nonlocalinnerbcstruct->globalidx3_srcpts_tosend[dst_chare_id] = (int64_t *restrict)malloc(sizeof(int64_t) * nonlocalinnerbcstruct->num_srcpts_tosend_each_chare[dst_chare_id]);
     }
   }
 
@@ -392,8 +392,8 @@ def CurviBoundaryConditions_register_C_functions(
 // Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 
 typedef struct __innerpt_bc_struct__ {
-  int dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
-  int srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
+  int64_t dstpt;  // dstpt is the 3D grid index IDX3S(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+  int64_t srcpt;  // srcpt is the 3D grid index (a la IDX3S) to which the inner boundary point maps
   int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
 } innerpt_bc_struct;
 
