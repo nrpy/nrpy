@@ -40,7 +40,7 @@ Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
 @param omegas - Array to store the calculated angular frequencies.
 """
     cfunc_type = "void"
-    name = "BOB_aligned_spin_NQC_rhs"
+    name = "BOB_aligned_spin_NQC_rhs_HM"
     params = (
         "commondata_struct *restrict commondata , REAL (*amps)[3] , REAL (*omegas)[2]"
     )
@@ -53,6 +53,19 @@ REAL *wNR = malloc(NUMMODES * sizeof(REAL));
 SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, hNR);
 SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
 
+if (hNR == NULL){
+    fprintf(stderr, "Error: in BOB_aligned_spin_NQC_rhs_higher_modes(), malloc() failed for hNR\\n");
+    exit(EXIT_FAILURE);
+}
+if (wNR == NULL){
+    fprintf(stderr, "Error: in BOB_aligned_spin_NQC_rhs_higher_modes(), malloc() failed for wNR\\n");
+    exit(EXIT_FAILURE);
+}
+const REAL m1 = commondata->m1;
+const REAL m2 = commondata->m2;
+const REAL M = m1 + m2;
+const REAL nu = m1 * m1/ (M * M);
+
 //compute
 """
     declare_HM_input_symbols = ""
@@ -61,18 +74,14 @@ SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
     nqc_rhs_labels = []
     for lm in modes:
         # amplitude and derivatives at t_0
-        declare_HM_input_symbols += (
-            f"const REAL {wf.modewise_input_symbols[lm][0]} = hNR[HNR{lm[0]}{lm[1]}];\n"
-        )
+        declare_HM_input_symbols += f"const REAL {wf.modewise_input_symbols[lm][0]} = nu * hNR[HNR{lm[0]}{lm[1]}];\n"
         nqc_rhs_quantities.append(wf.hdot_t_attach_lm[lm])
         nqc_rhs_labels.append(f"const REAL hdot_{lm[0]}{lm[1]}_t_attach")
         nqc_rhs_quantities.append(wf.hddot_t_attach_lm[lm])
         nqc_rhs_labels.append(f"const REAL hddot_{lm[0]}{lm[1]}_t_attach")
 
         # frequency at t_0
-        declare_HM_input_symbols += (
-            f"const REAL {wf.modewise_input_symbols[lm][1]} = fabs(wNR[HNR{lm[0]}{lm[1]}]);\n"
-        )
+        declare_HM_input_symbols += f"const REAL {wf.modewise_input_symbols[lm][1]} = fabs(wNR[HNR{lm[0]}{lm[1]}]);\n"
         nqc_rhs_quantities.append(wf.wdot_t_attach_lm[lm])
         nqc_rhs_labels.append(f"const REAL wdot_{lm[0]}{lm[1]}_t_attach")
 

@@ -102,27 +102,14 @@ if (phase_unwrapped == NULL){
 REAL radius, omega, prstar;
 size_t i;
 """
-    for lm in modes:
-        body+=f"""
-double complex h{lm[0]}{lm[1]};
-
-for (i = 0; i < commondata->nsteps_fine; i++){{
+    body += """
+for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
-  h{lm[0]}{lm[1]} = commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})];
-  hamp[i] = cabs(h{lm[0]}{lm[1]});
-  phase[i] = carg(h{lm[0]}{lm[1]});
-  times[i] = commondata->dynamics_fine[IDX(i,TIME)];
-  Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
-  Q2[i] = Q1[i] / r[i];
-  Q3[i] = Q2[i] / sqrt(r[i]);
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-}}
-SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
-"""
-        body += """
+}
 // Find t_ISCO:
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
@@ -166,31 +153,48 @@ commondata->t_attach = t_peak;
 size_t N = 5;
 size_t left = NRPYMAX(peak_idx, N) - N;
 size_t right = NRPYMIN(peak_idx + N , commondata->nsteps_fine);
-REAL Q_cropped1[right - left], Q_cropped2[right - left], Q_cropped3[right - left], P_cropped1[right - left], P_cropped2[right - left];
-REAL t_cropped[right-left], phase_cropped[right - left], amp_cropped[right-left];
-for (i = left; i < right; i++){
-  t_cropped[i - left] = times[i];
-  phase_cropped[i - left] = phase_unwrapped[i];
-  amp_cropped[i - left] = hamp[i];
-  Q_cropped1[i - left] = Q1[i];
-  Q_cropped2[i - left] = Q2[i];
-  Q_cropped3[i - left] = Q3[i];
-  P_cropped1[i - left] = P1[i];
-  P_cropped2[i - left] = P2[i];
-}
-gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
-if (acc == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
-  exit(1);
-}
-gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
-if (spline == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
-  exit(1);
-}
 """
     for lm in modes:
         body += f"""
+double complex h{lm[0]}{lm[1]};
+
+for (i = 0; i < commondata->nsteps_fine; i++){{
+  prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
+  r[i] = commondata->dynamics_fine[IDX(i,R)];
+  Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
+  h{lm[0]}{lm[1]} = commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})];
+  hamp[i] = cabs(h{lm[0]}{lm[1]});
+  phase[i] = carg(h{lm[0]}{lm[1]});
+  times[i] = commondata->dynamics_fine[IDX(i,TIME)];
+  Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
+  Q2[i] = Q1[i] / r[i];
+  Q3[i] = Q2[i] / sqrt(r[i]);
+}}
+SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
+
+REAL Q{lm[0]}{lm[1]}_cropped1[right - left], Q{lm[0]}{lm[1]}_cropped2[right - left], Q{lm[0]}{lm[1]}_cropped3[right - left], P{lm[0]}{lm[1]}_cropped1[right - left], P{lm[0]}{lm[1]}_cropped2[right - left];
+REAL t_cropped{lm[0]}{lm[1]}[right-left], phase_cropped{lm[0]}{lm[1]}[right - left], amp_cropped{lm[0]}{lm[1]}[right-left];
+for (i = left; i < right; i++){{
+  t_cropped{lm[0]}{lm[1]}[i - left] = times[i];
+  phase_cropped{lm[0]}{lm[1]}[i - left] = phase_unwrapped[i];
+  amp_cropped{lm[0]}{lm[1]}[i - left] = hamp[i];
+  Q{lm[0]}{lm[1]}_cropped1[i - left] = Q1[i];
+  Q{lm[0]}{lm[1]}_cropped2[i - left] = Q2[i];
+  Q{lm[0]}{lm[1]}_cropped3[i - left] = Q3[i];
+  P{lm[0]}{lm[1]}_cropped1[i - left] = P1[i];
+  P{lm[0]}{lm[1]}_cropped2[i - left] = P2[i];
+}}
+gsl_interp_accel *restrict acc{lm[0]}{lm[1]} = gsl_interp_accel_alloc();
+if (acc{lm[0]}{lm[1]} == NULL){{
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+  exit(1);
+}}
+gsl_spline *restrict spline{lm[0]}{lm[1]} = gsl_spline_alloc(gsl_interp_cspline, right - left);
+if (spline{lm[0]}{lm[1]} == NULL){{
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+  exit(1);
+}}
+
 gsl_matrix *restrict Q{lm[0]}{lm[1]} = gsl_matrix_alloc (3, 3);
 if (Q{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
@@ -201,32 +205,32 @@ if (P{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
 }}
-gsl_spline_init(spline,t_cropped, Q_cropped1,right-left);
-gsl_matrix_set(Q{lm[0]}{lm[1]},0,0,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},1,0,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},2,0,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, Q{lm[0]}{lm[1]}_cropped1,right-left);
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,0,gsl_spline_eval(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,0,gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,0,gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
 
-gsl_spline_init(spline,t_cropped, Q_cropped2,right-left);
-gsl_interp_accel_reset(acc);
-gsl_matrix_set(Q{lm[0]}{lm[1]},0,1,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},1,1,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},2,1,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, Q{lm[0]}{lm[1]}_cropped2,right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,1,gsl_spline_eval(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,1,gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,1,gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
 
-gsl_spline_init(spline,t_cropped, Q_cropped3,right-left);
-gsl_interp_accel_reset(acc);
-gsl_matrix_set(Q{lm[0]}{lm[1]},0,2,gsl_spline_eval(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},1,2,gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(Q{lm[0]}{lm[1]},2,2,gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, Q{lm[0]}{lm[1]}_cropped3,right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+gsl_matrix_set(Q{lm[0]}{lm[1]},0,2,gsl_spline_eval(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},1,2,gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(Q{lm[0]}{lm[1]},2,2,gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
 
-gsl_spline_init(spline,t_cropped, P_cropped1,right-left);
-gsl_interp_accel_reset(acc);
-gsl_matrix_set(P{lm[0]}{lm[1]},0,0,-gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(P{lm[0]}{lm[1]},1,0,-gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, P{lm[0]}{lm[1]}_cropped1,right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+gsl_matrix_set(P{lm[0]}{lm[1]},0,0,-gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(P{lm[0]}{lm[1]},1,0,-gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
 
-gsl_spline_init(spline,t_cropped, P_cropped2,right-left);
-gsl_interp_accel_reset(acc);
-gsl_matrix_set(P{lm[0]}{lm[1]},0,1,-gsl_spline_eval_deriv(spline, t_peak, acc));
-gsl_matrix_set(P{lm[0]}{lm[1]},1,1,-gsl_spline_eval_deriv2(spline, t_peak, acc));
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, P{lm[0]}{lm[1]}_cropped2,right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+gsl_matrix_set(P{lm[0]}{lm[1]},0,1,-gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
+gsl_matrix_set(P{lm[0]}{lm[1]},1,1,-gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]}));
 
 gsl_vector *restrict A{lm[0]}{lm[1]} = gsl_vector_alloc(3);
 if (A{lm[0]}{lm[1]} == NULL){{
@@ -238,49 +242,52 @@ if (O{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }}
+
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, amp_cropped{lm[0]}{lm[1]},right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+const REAL amp_insp{lm[0]}{lm[1]} = gsl_spline_eval(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]});
+const REAL ampdot_insp{lm[0]}{lm[1]} = gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]});
+const REAL ampddot_insp{lm[0]}{lm[1]} = gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]});
+
+gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, phase_cropped{lm[0]}{lm[1]},right-left);
+gsl_interp_accel_reset(acc{lm[0]}{lm[1]});
+REAL omega_insp{lm[0]}{lm[1]} = gsl_spline_eval_deriv(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]});
+REAL omegadot_insp{lm[0]}{lm[1]} =  gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]}, t_peak, acc{lm[0]}{lm[1]});
+
+gsl_spline_free(spline{lm[0]}{lm[1]});
+gsl_interp_accel_free(acc{lm[0]}{lm[1]});
+
+if (omega_insp{lm[0]}{lm[1]} * omegadot_insp{lm[0]}{lm[1]} > 0.0){{
+  omega_insp{lm[0]}{lm[1]} = fabs(omega_insp{lm[0]}{lm[1]});
+  omegadot_insp{lm[0]}{lm[1]} = fabs(omegadot_insp{lm[0]}{lm[1]});
+}}
+else{{
+  omega_insp{lm[0]}{lm[1]} = fabs(omega_insp{lm[0]}{lm[1]});
+  omegadot_insp{lm[0]}{lm[1]} = -fabs(omegadot_insp{lm[0]}{lm[1]});
+}}
 """
-    body +="""
-gsl_spline_init(spline,t_cropped, amp_cropped,right-left);
-gsl_interp_accel_reset(acc);
-const REAL amp_insp = gsl_spline_eval(spline, t_peak, acc);
-const REAL ampdot_insp = gsl_spline_eval_deriv(spline, t_peak, acc);
-const REAL ampddot_insp = gsl_spline_eval_deriv2(spline, t_peak, acc);
 
-gsl_spline_init(spline,t_cropped, phase_cropped,right-left);
-gsl_interp_accel_reset(acc);
-REAL omega_insp = gsl_spline_eval_deriv(spline, t_peak, acc);
-REAL omegadot_insp =  gsl_spline_eval_deriv2(spline, t_peak, acc);
-
-gsl_spline_free(spline);
-gsl_interp_accel_free(acc);
-
-if (omega_insp * omegadot_insp > 0.0){
-  omega_insp = fabs(omega_insp);
-  omegadot_insp = fabs(omegadot_insp);
-}
-else{
-  omega_insp = fabs(omega_insp);
-  omegadot_insp = -fabs(omegadot_insp);
-}
-
-REAL omegas[NUMMODES][2] , amps[NUMMODES][3];
-REAL a_nqc[NUMMODES][3], b_nqc[NUMMODES][2];
-"""
     if not use_numerical_relativity_nqc:
         body += """
-BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
+REAL omegas[NUMMODES][2] , amps[NUMMODES][3];
+REAL a_nqc[NUMMODES][3], b_nqc[NUMMODES][2];
+
+BOB_aligned_spin_NQC_rhs_HM(commondata,amps,omegas);
 """
-    else:
-        body += """
-SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
-"""
+    #     else:
+    #         body += """
+    # //currently no higher modes exist for nr informed higher modes
+    # REAL omegas[2] , amps[3];
+
+    # SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
+    # """
     for lm in modes:
         body += f"""
-gsl_vector_set(A{lm[0]}{lm[1]} , 0 , amps[HNR{lm[0]}{lm[1]}][0] - amp_insp);
-gsl_vector_set(A{lm[0]}{lm[1]} , 1 , amps[HNR{lm[0]}{lm[1]}][1] - ampdot_insp);
-gsl_vector_set(A{lm[0]}{lm[1]} , 2 , amps[HNR{lm[0]}{lm[1]}][2] - ampddot_insp);
-gsl_vector_set(O{lm[0]}{lm[1]} , 0 , omegas[HNR{lm[0]}{lm[1]}][0] - omega_insp);
-gsl_vector_set(O{lm[0]}{lm[1]} , 1 , omegas[HNR{lm[0]}{lm[1]}][1] - omegadot_insp);
+gsl_vector_set(A{lm[0]}{lm[1]} , 0 , amps[HNR{lm[0]}{lm[1]}][0] - amp_insp{lm[0]}{lm[1]});
+gsl_vector_set(A{lm[0]}{lm[1]} , 1 , amps[HNR{lm[0]}{lm[1]}][1] - ampdot_insp{lm[0]}{lm[1]});
+gsl_vector_set(A{lm[0]}{lm[1]} , 2 , amps[HNR{lm[0]}{lm[1]}][2] - ampddot_insp{lm[0]}{lm[1]});
+gsl_vector_set(O{lm[0]}{lm[1]} , 0 , omegas[HNR{lm[0]}{lm[1]}][0] - omega_insp{lm[0]}{lm[1]});
+gsl_vector_set(O{lm[0]}{lm[1]} , 1 , omegas[HNR{lm[0]}{lm[1]}][1] - omegadot_insp{lm[0]}{lm[1]});
 
 gsl_vector *restrict a{lm[0]}{lm[1]} = gsl_vector_alloc (3);
 if (a{lm[0]}{lm[1]} == NULL){{
@@ -293,8 +300,8 @@ if (p_A{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }}
-gsl_linalg_LU_decomp(Q, p_A{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
-gsl_linalg_LU_solve(Q, p_A{lm[0]}{lm[1]}, A{lm[0]}{lm[1]}, a{lm[0]}{lm[1]});
+gsl_linalg_LU_decomp(Q{lm[0]}{lm[1]}, p_A{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
+gsl_linalg_LU_solve(Q{lm[0]}{lm[1]}, p_A{lm[0]}{lm[1]}, A{lm[0]}{lm[1]}, a{lm[0]}{lm[1]});
 gsl_permutation_free(p_A{lm[0]}{lm[1]});
 
 a_nqc[HNR{lm[0]}{lm[1]}][0] = gsl_vector_get(a{lm[0]}{lm[1]},0);
@@ -315,8 +322,8 @@ if (p_B{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }}
-gsl_linalg_LU_decomp(P, p_B{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
-gsl_linalg_LU_solve (P, p_B{lm[0]}{lm[1]}, O{lm[0]}{lm[1]}, b{lm[0]}{lm[1]});
+gsl_linalg_LU_decomp(P{lm[0]}{lm[1]}, p_B{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
+gsl_linalg_LU_solve (P{lm[0]}{lm[1]}, p_B{lm[0]}{lm[1]}, O{lm[0]}{lm[1]}, b{lm[0]}{lm[1]});
 gsl_permutation_free (p_B{lm[0]}{lm[1]});
 
 b_nqc[HNR{lm[0]}{lm[1]}][0]= gsl_vector_get(b{lm[0]}{lm[1]},0);
@@ -324,10 +331,14 @@ b_nqc[HNR{lm[0]}{lm[1]}][1] = gsl_vector_get(b{lm[0]}{lm[1]},1);
 
 gsl_vector_free(b{lm[0]}{lm[1]});
 gsl_vector_free(O{lm[0]}{lm[1]});
+gsl_matrix_free(P{lm[0]}{lm[1]});
+gsl_matrix_free(Q{lm[0]}{lm[1]});
+
+
 """
+
     body += """
-gsl_matrix_free(P);
-gsl_matrix_free(Q);
+    
 free(times);
 free(Q1);
 free(Q2);
@@ -339,6 +350,7 @@ free(Omega);
 free(hamp);
 free(phase);
 free(phase_unwrapped);
+    
 
 // apply the nqc correction
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;

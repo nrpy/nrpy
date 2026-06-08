@@ -558,8 +558,9 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
     obj = SEOBNR_aligned_spin_constants()
     test_dict = obj.__dict__.copy()
-    if "hNR" in test_dict:
-        del test_dict["hNR"]
+    for skipped_key in ["hNR", "omegaNR"]:
+        if skipped_key in test_dict:
+            del test_dict[skipped_key]
     test_dict.update(
         {
             "hNR_22": obj.hNR["(2 , 2)"],
@@ -569,6 +570,13 @@ if __name__ == "__main__":
             "hNR_43": obj.hNR["(4 , 3)"],
             "hNR_55": obj.hNR["(5 , 5)"],
             "hNR_32": obj.hNR["(3 , 2)"],
+            "omegaNR_22": obj.omegaNR["(2 , 2)"],
+            "omegaNR_33": obj.omegaNR["(3 , 3)"],
+            "omegaNR_21": obj.omegaNR["(2 , 1)"],
+            "omegaNR_44": obj.omegaNR["(4 , 4)"],
+            "omegaNR_43": obj.omegaNR["(4 , 3)"],
+            "omegaNR_55": obj.omegaNR["(5 , 5)"],
+            "omegaNR_32": obj.omegaNR["(3 , 2)"],
         }
     )
     results_dict = ve.process_dictionary_of_expressions(
