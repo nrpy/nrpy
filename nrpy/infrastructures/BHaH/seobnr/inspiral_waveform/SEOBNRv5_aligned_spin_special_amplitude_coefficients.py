@@ -110,12 +110,12 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
         return None
 
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
-    projected_risco_code = ccg.c_codegen(
-        [v5_const.rISCO],
-        ["const REAL projected_r_ISCO"],
+    projected_remnant_code = ccg.c_codegen(
+        [v5_const.M_f, v5_const.a_f, v5_const.rISCO],
+        ["commondata->M_f", "commondata->a_f", "commondata->r_ISCO"],
         verbose=False,
         include_braces=False,
-        cse_varprefix="projected_risco",
+        cse_varprefix="projected_remnant",
     )
     projected_delta_t_code = ccg.c_codegen(
         [v5_const.Delta_t],
@@ -195,6 +195,7 @@ const REAL chiA = (chi1 - chi2) / 2;
 const int use_projected_attachment =
     fabs(commondata->chi1 - commondata->chi1_z) <= 1e-14 &&
     fabs(commondata->chi2 - commondata->chi2_z) <= 1e-14;
+commondata->projected_attachment_active = false;
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_HNRFITS];
 double complex inspiral_modes[NUMMODES];
@@ -214,108 +215,153 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 
 // Step 1: Build combined time-frequency samples for projected-spin attachment fits.
 if (use_projected_attachment) {
+  commondata->projected_attachment_active = true;
   const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
   if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
     exit(1);
   }
-if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
-    commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
-  exit(1);
-}
-
-REAL *restrict times_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
-if (times_combined == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times_combined\\n");
-  exit(1);
-}
-REAL *restrict Omega_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
-if (Omega_combined == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_combined\\n");
-  exit(1);
-}
-REAL *restrict u_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
-if (u_rlow == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for u_rlow\\n");
-  exit(1);
-}
-REAL *restrict t_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
-if (t_rlow == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_rlow\\n");
-  exit(1);
-}
-for (i = 0; i < commondata->nsteps_low; i++){
-  const REAL r_low_i = commondata->dynamics_low[IDX(i,R)];
-  if (r_low_i <= 0.0) {
-    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), nonpositive low-dynamics radius in projected attachment inputs\\n");
+  if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
+      commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
     exit(1);
   }
-  u_rlow[i] = 1.0 / r_low_i;
-  t_rlow[i] = commondata->dynamics_low[IDX(i,TIME)];
-  times_combined[i] = t_rlow[i];
-  Omega_combined[i] = commondata->dynamics_low[IDX(i,OMEGA)];
-} // END LOOP: for i over low-dynamics projected attachment samples
-for (i = 0; i < commondata->nsteps_fine; i++){
-  const size_t dst_idx = commondata->nsteps_low + i;
-  times_combined[dst_idx] = times[i];
-  Omega_combined[dst_idx] = Omega[i];
-} // END LOOP: for i over fine-dynamics projected attachment samples
-REAL u_r10M = 0.1;
-if (u_r10M < u_rlow[0]) {
-  fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies before the low-dynamics projected-spin reference domain; using first available low-dynamics point\\n");
-  u_r10M = u_rlow[0];
-}
-if (u_r10M > u_rlow[commondata->nsteps_low - 1]) {
-  fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies after the low-dynamics projected-spin reference domain; using last available low-dynamics point\\n");
-  u_r10M = u_rlow[commondata->nsteps_low - 1];
-}
 
-gsl_interp_accel *restrict acc_t_of_u = gsl_interp_accel_alloc();
-if (acc_t_of_u == NULL) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_t_of_u\\n");
-  exit(1);
-}
-gsl_spline *restrict spline_t_of_u = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_low);
-if (spline_t_of_u == NULL) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_t_of_u\\n");
-  exit(1);
-}
-gsl_spline_init(spline_t_of_u,u_rlow,t_rlow,commondata->nsteps_low);
+  REAL *restrict times_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
+  if (times_combined == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times_combined\\n");
+    exit(1);
+  }
+  REAL *restrict Omega_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
+  if (Omega_combined == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_combined\\n");
+    exit(1);
+  }
+  REAL *restrict u_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
+  if (u_rlow == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for u_rlow\\n");
+    exit(1);
+  }
+  REAL *restrict t_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
+  if (t_rlow == NULL){
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_rlow\\n");
+    exit(1);
+  }
+  for (i = 0; i < commondata->nsteps_low; i++){
+    const REAL r_low_i = commondata->dynamics_low[IDX(i,R)];
+    if (r_low_i <= 0.0) {
+      fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), nonpositive low-dynamics radius in projected attachment inputs\\n");
+      exit(1);
+    }
+    u_rlow[i] = 1.0 / r_low_i;
+    t_rlow[i] = commondata->dynamics_low[IDX(i,TIME)];
+    times_combined[i] = t_rlow[i];
+    Omega_combined[i] = commondata->dynamics_low[IDX(i,OMEGA)];
+  } // END LOOP: for i over low-dynamics projected attachment samples
+  for (i = 0; i < commondata->nsteps_fine; i++){
+    const size_t dst_idx = commondata->nsteps_low + i;
+    times_combined[dst_idx] = times[i];
+    Omega_combined[dst_idx] = Omega[i];
+  } // END LOOP: for i over fine-dynamics projected attachment samples
+  REAL u_r10M = 0.1;
+  if (u_r10M < u_rlow[0]) {
+    fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies before the low-dynamics projected-spin reference domain; using first available low-dynamics point\\n");
+    u_r10M = u_rlow[0];
+  }
+  if (u_r10M > u_rlow[commondata->nsteps_low - 1]) {
+    fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies after the low-dynamics projected-spin reference domain; using last available low-dynamics point\\n");
+    u_r10M = u_rlow[commondata->nsteps_low - 1];
+  }
 
-gsl_interp_accel *restrict acc_Omega_combined = gsl_interp_accel_alloc();
-if (acc_Omega_combined == NULL) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_Omega_combined\\n");
-  exit(1);
-}
-gsl_spline *restrict spline_Omega_combined = gsl_spline_alloc(gsl_interp_cspline, nsteps_combined);
-if (spline_Omega_combined == NULL) {
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_Omega_combined\\n");
-  exit(1);
-}
-gsl_spline_init(spline_Omega_combined,times_combined,Omega_combined,nsteps_combined);
+  gsl_interp_accel *restrict acc_t_of_u = gsl_interp_accel_alloc();
+  if (acc_t_of_u == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_t_of_u\\n");
+    exit(1);
+  }
+  gsl_spline *restrict spline_t_of_u = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_low);
+  if (spline_t_of_u == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_t_of_u\\n");
+    exit(1);
+  }
+  gsl_spline_init(spline_t_of_u,u_rlow,t_rlow,commondata->nsteps_low);
 
-const REAL t_r10M = gsl_spline_eval(spline_t_of_u, u_r10M, acc_t_of_u);
-REAL omega_r10M = gsl_spline_eval(spline_Omega_combined, t_r10M, acc_Omega_combined);
-omega_r10M = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_r10M));
-const REAL chi1_projected_r10 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_r10M, commondata->chi1_lnhat.acc);
-const REAL chi2_projected_r10 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_r10M, commondata->chi2_lnhat.acc);
-{
-  const REAL chi1 = chi1_projected_r10;
-  const REAL chi2 = chi2_projected_r10;
+  gsl_interp_accel *restrict acc_Omega_combined = gsl_interp_accel_alloc();
+  if (acc_Omega_combined == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_Omega_combined\\n");
+    exit(1);
+  }
+  gsl_spline *restrict spline_Omega_combined = gsl_spline_alloc(gsl_interp_cspline, nsteps_combined);
+  if (spline_Omega_combined == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_Omega_combined\\n");
+    exit(1);
+  }
+  gsl_spline_init(spline_Omega_combined,times_combined,Omega_combined,nsteps_combined);
+
+  const REAL t_r10M = gsl_spline_eval(spline_t_of_u, u_r10M, acc_t_of_u);
+  REAL omega_r10M = gsl_spline_eval(spline_Omega_combined, t_r10M, acc_Omega_combined);
+  omega_r10M = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_r10M));
+  const REAL chi1_projected_r10 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_r10M, commondata->chi1_lnhat.acc);
+  const REAL chi2_projected_r10 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_r10M, commondata->chi2_lnhat.acc);
+  {
+    const REAL chi1 = chi1_projected_r10;
+    const REAL chi2 = chi2_projected_r10;
 """
-    body += projected_risco_code
+    body += projected_remnant_code
     body += """
-  commondata->r_ISCO = projected_r_ISCO;
-} // END BLOCK: projected-spin r_ISCO evaluation at r=10M
-gsl_spline_free(spline_t_of_u);
-gsl_interp_accel_free(acc_t_of_u);
-gsl_spline_free(spline_Omega_combined);
-gsl_interp_accel_free(acc_Omega_combined);
-free(times_combined);
-free(Omega_combined);
-free(u_rlow);
-free(t_rlow);
+  } // END BLOCK: projected-spin remnant evaluation at r=10M
+  const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
+    -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
+    -0.986, -0.984, -0.982, -0.98, -0.975, -0.97, -0.96, -0.95, -0.94, -0.92, -0.9, -0.88, -0.86, -0.84,
+    -0.82, -0.8, -0.78, -0.76, -0.74, -0.72, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3,
+    -0.25, -0.2, -0.15, -0.1, -0.05, 0., 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6,
+    0.65, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9, 0.92, 0.94, 0.95, 0.96, 0.97,
+    0.975, 0.98, 0.982, 0.984, 0.986, 0.988, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.9975, 0.998,
+    0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
+  };
+  const REAL reomegaqnm22[107] = { 0.2915755,0.291581,0.2915866,0.2915976,0.2916086,0.2916142,0.2916197,0.2916252,
+    0.2916307,0.2916362,0.2916638,0.2916915,0.2917191,0.2917744,0.2918297,0.291885,0.2919958,0.2921067,0.2922178,0.2923289,
+    0.2924403,0.2925517,0.2926633,0.292943,0.2932235,0.2937871,0.2943542,0.2949249,0.2960772,0.2972442,0.2984264,0.299624,
+    0.3008375,0.3020672,0.3033134,0.3045767,0.3058573,0.3071558,0.3084726,0.3098081,0.3132321,0.316784,0.3204726,0.3243073,
+    0.3282986,0.3324579,0.336798,0.3413329,0.3460786,0.3510526,0.3562748,0.3617677,0.3675569,0.3736717,0.3801456,0.3870175,
+    0.394333,0.4021453,0.4105179,0.4195267,0.4292637,0.4398419,0.4514022,0.464123,0.4782352,0.4940448,0.5119692,0.5326002,
+    0.5417937,0.5516303,0.5622007,0.5736164,0.586017,0.5995803,0.6145391,0.631206,0.6500179,0.6716143,0.6969947,0.7278753,
+    0.74632,0.7676741,0.7932082,0.8082349,0.8254294,0.8331,0.8413426,0.8502722,0.8600456,0.8708927,0.8830905,0.8969183,0.9045305,
+    0.912655,0.9213264,0.9258781,0.9305797,0.9354355,0.9364255,0.937422,0.9384248,0.9394341,0.9404498,0.9425009,0.9445784,
+    0.9456271,0.9466825 };
+  const REAL imomegaqnm22[107] = { 0.0880269,0.0880272,0.0880274,0.088028,0.0880285,0.0880288,0.088029,0.0880293,
+    0.0880296,0.0880298,0.0880311,0.0880325,0.0880338,0.0880364,0.0880391,0.0880417,0.088047,0.0880523,0.0880575,0.0880628,0.088068,
+    0.0880733,0.0880785,0.0880915,0.0881045,0.0881304,0.088156,0.0881813,0.0882315,0.0882807,0.0883289,0.0883763,0.0884226,0.0884679,
+    0.0885122,0.0885555,0.0885976,0.0886386,0.0886785,0.0887172,0.0888085,0.0888917,0.0889663,0.0890315,0.0890868,0.0891313,0.0891643,
+    0.0891846,0.0891911,0.0891825,0.0891574,0.0891138,0.0890496,0.0889623,0.0888489,0.0887057,0.0885283,0.0883112,0.0880477,0.0877293,
+    0.0873453,0.086882,0.0863212,0.0856388,0.0848021,0.0837652,0.0824618,0.0807929,0.0799908,0.0790927,0.0780817,0.0769364,0.0756296,
+    0.0741258,0.072378,0.0703215,0.0678642,0.0648692,0.0611186,0.0562313,0.053149,0.0494336,0.0447904,0.0419586,0.0386302,0.0371155,
+    0.0354677,0.033659,0.0316517,0.0293904,0.0268082,0.0238377,0.0221857,0.0204114,0.0185063,0.0175021,0.016462,0.015385,0.0151651,
+    0.0149437,0.0147207,0.0144962,0.0142701,0.0138132,0.0133501,0.0131161,0.0128806 };
+  gsl_interp_accel *restrict acc_qnm = gsl_interp_accel_alloc();
+  if (acc_qnm == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_qnm\\n");
+    exit(1);
+  }
+  gsl_spline *restrict spline_qnm = gsl_spline_alloc(gsl_interp_cspline, 107);
+  if (spline_qnm == NULL) {
+    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_qnm\\n");
+    exit(1);
+  }
+  gsl_spline_init(spline_qnm, afinallist, reomegaqnm22, 107);
+  commondata->omega_qnm = gsl_spline_eval(spline_qnm, commondata->a_f, acc_qnm) / commondata->M_f;
+  gsl_spline_init(spline_qnm, afinallist, imomegaqnm22, 107);
+  gsl_interp_accel_reset(acc_qnm);
+  commondata->tau_qnm = 1.0 / (gsl_spline_eval(spline_qnm, commondata->a_f, acc_qnm) / commondata->M_f);
+  gsl_spline_free(spline_qnm);
+  gsl_interp_accel_free(acc_qnm);
+  gsl_spline_free(spline_t_of_u);
+  gsl_interp_accel_free(acc_t_of_u);
+  gsl_spline_free(spline_Omega_combined);
+  gsl_interp_accel_free(acc_Omega_combined);
+  free(times_combined);
+  free(Omega_combined);
+  free(u_rlow);
+  free(t_rlow);
 } // END IF: projected-spin attachment inputs are self-consistent
 
 // construct splines of dynamical variables

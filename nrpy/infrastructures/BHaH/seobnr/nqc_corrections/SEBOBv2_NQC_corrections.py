@@ -112,60 +112,72 @@ for (i = 0; i < commondata->nsteps_fine; i++){
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 // Find t_ISCO:
 
-if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
-  commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-}
-else{
-  const REAL dt_ISCO = 0.001;
-  const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
-  REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
-  if (t_zoom == NULL){
-    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for t_zoom\\n");
-    exit(1);
+REAL t_peak = commondata->t_attach;
+size_t peak_idx = 0;
+if (commondata->projected_attachment_active) {
+  REAL min_abs_dt = fabs(times[0] - t_peak);
+  for (i = 1; i < commondata->nsteps_fine; i++) {
+    const REAL abs_dt = fabs(times[i] - t_peak);
+    if (abs_dt < min_abs_dt) {
+      min_abs_dt = abs_dt;
+      peak_idx = i;
+    }
+  } // END LOOP: for i over fine-dynamics samples nearest to projected attachment
+} else {
+  if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
+    commondata->t_ISCO = times[commondata->nsteps_fine - 1];
   }
-  REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
-  if (minus_r_zoom == NULL){
-    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
-    exit(1);
-  }
-  gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
-  if (acc_r == NULL){
-    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
-    exit(1);
-  }
-  gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
-  if (spline_r == NULL){
-    fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
-    exit(1);
-  }
-  gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
-  for (i = 0; i < N_zoom; i++){
-    t_zoom[i] = times[0] + i * dt_ISCO;
-    minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }
-  const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
-  commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
+  else{
+    const REAL dt_ISCO = 0.001;
+    const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
+    REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+    if (t_zoom == NULL){
+      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for t_zoom\\n");
+      exit(1);
+    }
+    REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+    if (minus_r_zoom == NULL){
+      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
+      exit(1);
+    }
+    gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+    if (acc_r == NULL){
+      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+      exit(1);
+    }
+    gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+    if (spline_r == NULL){
+      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+      exit(1);
+    }
+    gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
+    for (i = 0; i < N_zoom; i++){
+      t_zoom[i] = times[0] + i * dt_ISCO;
+      minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
+    }
+    const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
+    commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
 
-  gsl_interp_accel_free(acc_r);
-  gsl_spline_free(spline_r);
-  free(t_zoom);
-  free(minus_r_zoom);
-}
+    gsl_interp_accel_free(acc_r);
+    gsl_spline_free(spline_r);
+    free(t_zoom);
+    free(minus_r_zoom);
+  }
 
-REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
-size_t peak_idx;
-// if t_peak > the last point of the ODE trajector,
-// use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
-// gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
-// resulting in a singular matrix.
-if (t_peak > times[commondata->nsteps_fine - 1]){
-  t_peak = times[commondata->nsteps_fine - 2];
-  peak_idx = commondata->nsteps_fine - 2;
-}
-else{
-  peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
-}
-commondata->t_attach = t_peak;
+  t_peak = commondata->t_ISCO - commondata->Delta_t;
+  // if t_peak > the last point of the ODE trajector,
+  // use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
+  // gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
+  // resulting in a singular matrix.
+  if (t_peak > times[commondata->nsteps_fine - 1]){
+    t_peak = times[commondata->nsteps_fine - 2];
+    peak_idx = commondata->nsteps_fine - 2;
+  }
+  else{
+    peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
+  }
+  commondata->t_attach = t_peak;
+} // END ELSE: scalar aligned-spin NQC attachment selection
 // Compute t_p and Omega_0 in BOB
 //not needed anymore
 //BOB_v2_find_tp_Omega0(commondata);
