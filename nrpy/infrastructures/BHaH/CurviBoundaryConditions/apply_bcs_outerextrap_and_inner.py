@@ -120,7 +120,7 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only() -> str:
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
+                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "default",
         },
@@ -203,7 +203,7 @@ def generate_prefunc__apply_bcs_outerextrap_and_inner_only_specific_gfs() -> str
         comments=comments,
         launch_dict={
             "blocks_per_grid": [
-                "MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
+                "NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir -1) / threads_in_x_dir)"
             ],
             "stream": "default",
         },

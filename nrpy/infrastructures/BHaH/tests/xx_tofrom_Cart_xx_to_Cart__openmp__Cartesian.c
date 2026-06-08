@@ -20,4 +20,4 @@ void xx_to_Cart__rfm__Cartesian(const params_struct *restrict params, const REAL
     xCart[1] = params->Cart_originy + xx1;
     xCart[2] = params->Cart_originz + xx2;
   }
-} // END FUNCTION xx_to_Cart__rfm__Cartesian
+} // END FUNCTION: xx_to_Cart__rfm__Cartesian

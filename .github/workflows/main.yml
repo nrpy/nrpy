@@ -35,7 +35,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -U -r requirements.txt
+          pip install -U -r requirements.txt matplotlib
           if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" && "${{ matrix.python-version }}" != "3.9.19" ]]; then
             pip install -U -r requirements-dev.txt
             pip install git+https://github.com/sympy/sympy.git
@@ -354,11 +354,11 @@ jobs:
           python -m nrpy.examples.sebobv1_jax
 
   codegen-mac:
-    # updated to macos-14 as requested
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
+        os: [ 'macos-14', 'macos-26' ]
         # Dropped 3.6/3.7 because macos-14 is Apple Silicon (ARM64).
         # Python < 3.8 has poor/no support for ARM64 and causes architecture mismatches
         # with Homebrew libraries (like GSL) which are installed as ARM64.
@@ -447,7 +447,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: '6fd5472a2f5f5fdf372231ca22a11b64daf08b17'
+          ref: '785467615d63669a98fe85c6686c2388a324139e'
           path: trusted_code
 
       - name: Build trusted sebob executable
@@ -546,7 +546,7 @@ jobs:
       - name: Checkout trusted commit code
         uses: actions/checkout@v4
         with:
-          ref: '6fd5472a2f5f5fdf372231ca22a11b64daf08b17'
+          ref: '785467615d63669a98fe85c6686c2388a324139e'
           path: trusted_code
 
       - name: Build trusted sebob executable

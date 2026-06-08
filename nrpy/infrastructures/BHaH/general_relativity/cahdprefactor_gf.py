@@ -72,7 +72,7 @@ REAL dsmin0, dsmin1, dsmin2;
             ["dsmin0", "dsmin1", "dsmin2"],
             include_braces=False,
         )
-        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = C_CAHD * CFL_FACTOR * MIN(dsmin0, MIN(dsmin1, dsmin2));"""
+        loop_body += """auxevol_gfs[IDX4(CAHDPREFACTORGF, i0, i1, i2)] = C_CAHD * CFL_FACTOR * NRPYMIN(dsmin0, NRPYMIN(dsmin1, dsmin2));"""
 
         # Find symbols stored in params
         param_symbols, commondata_symbols = (
@@ -110,7 +110,7 @@ REAL dsmin0, dsmin1, dsmin2;
             arg_dict_host,
             parallelization=parallelization,
             comments=desc,
-            cfunc_type="void",
+            cfunc_type="static void",
             launchblock_with_braces=False,
             thread_tiling_macro_suffix="CAHD",
         )

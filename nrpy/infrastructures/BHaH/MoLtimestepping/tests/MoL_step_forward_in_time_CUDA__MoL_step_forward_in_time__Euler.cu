@@ -20,7 +20,7 @@ __global__ static void rk_substep_None_gpu(const size_t streamid, REAL *restrict
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(dt, y_nplus1_running_total_gfsL, y_n_gfsL);
     WriteCUDA(&y_n_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_None_gpu
+} // END FUNCTION: rk_substep_None_gpu
 
 /**
  * Runge-Kutta function for substep None.
@@ -41,7 +41,7 @@ static void rk_substep_None__launcher(params_struct *restrict params, REAL *rest
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_None_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, y_n_gfs, y_nplus1_running_total_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_None_gpu failure");
-} // END FUNCTION rk_substep_None__launcher
+} // END FUNCTION: rk_substep_None__launcher
 
 /**
  * Method of Lines (MoL) for "Euler" method: Step forward one full timestep.
@@ -79,4 +79,4 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // Increment the timestep n:
   commondata->nn++;
-} // END FUNCTION MoL_step_forward_in_time
+} // END FUNCTION: MoL_step_forward_in_time

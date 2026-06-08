@@ -7,6 +7,8 @@ returned quantities may be non-conserved diagnostics.
 It supports both massive and photon particles.
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
+
 
 --------------------------------------------------------------------------------
 List of Assumptions
@@ -210,7 +212,7 @@ class GeodesicDiagnostics:
         L_y = z * p_x - x * p_z
         L_z = x * p_y - y * p_x
 
-        return [cast(sp.Expr, L_x), cast(sp.Expr, L_y), cast(sp.Expr, L_z)]
+        return [L_x, L_y, L_z]
 
     def compute_carter_constant_KerrSchild_Cartesian(
         self,

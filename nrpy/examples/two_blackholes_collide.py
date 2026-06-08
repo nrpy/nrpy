@@ -37,6 +37,14 @@ parser.add_argument(
     help="Floating point precision (e.g. float, double).",
     default="double",
 )
+parser.add_argument(
+    "--raytracing-outputs",
+    action="store_true",
+    help=(
+        "Enable Cartesian metric and Christoffel raytracing outputs on "
+        "diagnostics output steps. Currently supported only for OpenMP builds."
+    ),
+)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
@@ -47,6 +55,10 @@ if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
+    )
+if args.cuda and args.raytracing_outputs:
+    raise ValueError(
+        "--raytracing-outputs is currently supported only for OpenMP builds."
     )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -69,31 +81,38 @@ GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
 t_final = 1.0 * grid_physical_size
+enable_raytracing_data_output = args.raytracing_outputs
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
     "Cartesian": [64, 64, 64],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
+    "GeneralRFM_fisheyeN2": [128, 128, 128],
 }
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
 # Fisheye parameters
 fisheye_param_defaults: dict[str, float] = {}
-if num_fisheye_transitions is not None:
-    for i in range(num_fisheye_transitions + 1):
-        fisheye_param_defaults[f"fisheye_a{i}"] = float(2**i)
-    fisheye_param_defaults["fisheye_phys_L"] = grid_physical_size
 if num_fisheye_transitions == 1:
-    fisheye_param_defaults.update(
-        {
-            "fisheye_a0": 1.0,
-            "fisheye_a1": 2.0,
-            "fisheye_phys_L": grid_physical_size,
-            "fisheye_phys_r_trans1": 8.0,
-            "fisheye_phys_w_trans1": 2.0,
-        }
-    )
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 1.5,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 2.0,
+        "fisheye_phys_w_trans1": 1.0,
+    }
+elif num_fisheye_transitions == 2:
+    fisheye_param_defaults = {
+        "fisheye_phys_a0": 1.0,
+        "fisheye_phys_a1": 2.0,
+        "fisheye_phys_a2": 4.0,
+        "fisheye_phys_L": grid_physical_size,
+        "fisheye_phys_r_trans1": 1.5,
+        "fisheye_phys_w_trans1": 0.8,
+        "fisheye_phys_r_trans2": 4.5,
+        "fisheye_phys_w_trans2": 1.5,
+    }
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
@@ -189,17 +208,6 @@ BHaH.numerical_grids_and_timestep.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-BHaH.diagnostics.diagnostics.register_all_diagnostics(
-    project_dir=project_dir,
-    set_of_CoordSystems=set_of_CoordSystems,
-    default_diagnostics_out_every=diagnostics_output_every,
-    enable_nearest_diagnostics=True,
-    enable_interp_diagnostics=False,
-    enable_volume_integration_diagnostics=True,
-    enable_free_auxevol=False,
-    enable_psi4_diagnostics=False,
-    enable_bhahaha=enable_bhahaha,
-)
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
 )
@@ -242,6 +250,20 @@ BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunctio
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
+)
+BHaH.diagnostics.diagnostics.register_all_diagnostics(
+    project_dir=project_dir,
+    set_of_CoordSystems=set_of_CoordSystems,
+    default_diagnostics_out_every=diagnostics_output_every,
+    enable_nearest_diagnostics=True,
+    enable_interp_diagnostics=False,
+    enable_volume_integration_diagnostics=True,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
+    enable_free_auxevol=False,
+    enable_psi4_diagnostics=False,
+    enable_bhahaha=enable_bhahaha,
+    enable_raytracing_data_output=enable_raytracing_data_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -331,10 +353,6 @@ if enable_bhahaha:
     par.adjust_CodeParam_default(
         "bah_Theta_L2_times_M_tolerance",
         [2e-4, 2e-4, 2e-4],
-    )
-    par.adjust_CodeParam_default(
-        "bah_Nphi_array_multigrid",
-        [2, 2, 2],
     )
     par.adjust_CodeParam_default(
         "bah_Nr_interp_max",

@@ -43,7 +43,7 @@ __global__ static void apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu(con
                                                         1.0 * gfs[IDX4pt(gfs_to_sync[which_gf], idx_offset3)];
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu
 /**
  * Apply BCs to pure boundary points
  */
@@ -66,7 +66,7 @@ static void apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(const pa
         const size_t threads_in_y_dir = BHAH_THREADS_IN_Y_DIR_CURVIBC_EXTRAP;
         const size_t threads_in_z_dir = BHAH_THREADS_IN_Z_DIR_CURVIBC_EXTRAP;
         dim3 threads_per_block(threads_in_x_dir, threads_in_y_dir, threads_in_z_dir);
-        dim3 blocks_per_grid(MAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir), 1, 1);
+        dim3 blocks_per_grid(NRPYMAX(1U, (num_pure_outer_boundary_points + threads_in_x_dir - 1) / threads_in_x_dir), 1, 1);
         size_t sm = 0;
         size_t streamid = params->grid_idx % NUM_STREAMS;
         apply_bcs_outerextrap_and_inner_only_specific_gfs_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(
@@ -75,7 +75,7 @@ static void apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(const pa
       }
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher
 
 /**
  * *Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
@@ -112,4 +112,4 @@ void apply_bcs_outerextrap_and_inner_specific_gfs(const commondata_struct *restr
   //              populated first; hence this being
   //              STEP 2 OF 2.
   apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
-} // END FUNCTION apply_bcs_outerextrap_and_inner_specific_gfs
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_specific_gfs

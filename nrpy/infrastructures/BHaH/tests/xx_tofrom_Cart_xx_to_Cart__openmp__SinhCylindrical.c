@@ -26,4 +26,4 @@ void xx_to_Cart__rfm__SinhCylindrical(const params_struct *restrict params, cons
     xCart[1] = params->Cart_originy + tmp2 * sin(xx1);
     xCart[2] = params->AMPLZ * (exp(tmp3 * xx2) - exp(-tmp3 * xx2)) / (exp(tmp3) - exp(-tmp3)) + params->Cart_originz;
   }
-} // END FUNCTION xx_to_Cart__rfm__SinhCylindrical
+} // END FUNCTION: xx_to_Cart__rfm__SinhCylindrical

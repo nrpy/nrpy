@@ -40,7 +40,7 @@ class CFunction:
     /**
      * just a test... testing 1,2,3
      */
-    void main() { return 0; } // END FUNCTION main
+    void main() { return 0; } // END FUNCTION: main
     <BLANKLINE>
     >>> print(func.function_prototype)
     void main();
@@ -265,7 +265,7 @@ class CFunction:
         if self.include_CodeParameters_h:
             CodeParameters_file_name = (
                 "set_CodeParameters-simd.h"
-                if self.enable_simd or "simd_width" in self.body
+                if self.enable_simd or "SIMD_WIDTH" in self.body
                 else "set_CodeParameters.h"
             )
             include_Cparams_str = f'#include "{CodeParameters_file_name}"\n'
@@ -299,7 +299,7 @@ class CFunction:
         )
         # self.body: Strip leading & trailing newlines, then add a single newline at the end of string. --v
         newline = "\n"  # Need to use newline variable due to Python <= 3.8 being unable to handle backslashes in f-strings.
-        complete_func += f"{function_prototype.replace(';', '')} {{{newline}{include_Cparams_str}{self.body.strip(newline) + newline}}} // END FUNCTION {self.name}{newline}"
+        complete_func += f"{function_prototype.replace(';', '')} {{{newline}{include_Cparams_str}{self.body.strip(newline) + newline}}} // END FUNCTION: {self.name}{newline}"
         # self.postfunc: Strip leading & trailing newlines, then add newlines at start and end.
         complete_func += "\n" + self.postfunc.strip("\n") + "\n"
 
@@ -379,9 +379,12 @@ def register_CFunction(
     :raises ValueError: If the name is already registered in CFunction_dict.
 
     DocTests:
+        >>> CFunction_dict.clear()
+        >>> _ = register_CFunction(name="test_func", desc="test", body="return;")
         >>> register_CFunction(name="test_func", desc="test", body="return;")
-        >>> "test_func" in CFunction_dict
-        True
+        Traceback (most recent call last):
+        ...
+        ValueError: Error: already registered test_func in CFunction_dict.
     """
     actual_subdirectory, actual_name = function_name_and_subdir_with_CoordSystem(
         subdirectory, name, CoordSystem_for_wrapper_func

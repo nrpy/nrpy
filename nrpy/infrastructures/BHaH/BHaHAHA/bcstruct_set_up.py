@@ -18,45 +18,41 @@ import nrpy.c_function as cfc
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 from nrpy.infrastructures import BHaH
 
 
-# Set unit-vector dot products (=parity) for each of the 28 parity condition types
+# Set unit-vector dot products (=parity) for each of the 10 base parity condition types.
 def parity_conditions_symbolic_dot_products(
     CoordSystem: str,
 ) -> str:
     """
-    Set unit-vector dot products (parity) for each of the 28 parity condition types.
+    Set unit-vector dot products (parity) for each of the 10 base parity condition types.
 
     :param CoordSystem: The coordinate system for which to calculate the parity conditions.
-    :return: C code string representing the unit vector dot products for the 28 parity conditions.
+    :return: C code string representing the unit vector dot products for the 10 parity conditions.
+    :raises ValueError: If the coordinate system is GeneralRFM-based.
     """
     rfm = refmetric.reference_metric[CoordSystem]
     if rfm.CoordSystem.startswith("GeneralRFM"):
-        outstr = """/*
-NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
-     twenty-eight parity conditions, in given coordinate system.
-     Needed for automatically determining sign of tensor across coordinate boundary.
-Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
-*/
-"""
-        return (
-            outstr
-            + "\n".join([f"REAL_parity_array[{i}] = 1.0;" for i in range(28)])
-            + "\n"
-        )
-    parity = ixp.zerorank1(dimension=28)
+        raise ValueError("BHaHAHA does not support GeneralRFM coordinate systems.")
+    parity = ixp.zerorank1(dimension=10)
     UnitVectors_inner = ixp.zerorank2()
     xx0_inbounds, xx1_inbounds, xx2_inbounds = sp.symbols(
         "xx0_inbounds xx1_inbounds xx2_inbounds", real=True
     )
+    inbounds_replacements = {
+        sp.Symbol("xx0"): xx0_inbounds,
+        sp.Symbol("xx1"): xx1_inbounds,
+        sp.Symbol("xx2"): xx2_inbounds,
+    }
     for i in range(3):
         for j in range(3):
-            UnitVectors_inner[i][j] = (
-                rfm.UnitVectors[i][j]
-                .subs(rfm.xx[0], xx0_inbounds)
-                .subs(rfm.xx[1], xx1_inbounds)
-                .subs(rfm.xx[2], xx2_inbounds)
+            UnitVectors_inner[i][j] = rfm.UnitVectors[i][j].xreplace(
+                inbounds_replacements
             )
     # Type 0: scalar
     parity[0] = sp.sympify(1)
@@ -81,25 +77,12 @@ Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
             parity[count] = parity[i + 1] * parity[j + 1]
             count = count + 1
 
-    # Handling special case of partial_k gamma_{ij}: 6*3 parities = 18
-    # Types 10-12: partial_{0-2} gamma_{00}
-    # Types 13-15: partial_{0-2} gamma_{01}
-    # Types 16-18: partial_{0-2} gamma_{02}
-    # Types 19-21: partial_{0-2} gamma_{11}
-    # Types 22-24: partial_{0-2} gamma_{12}
-    # Types 25-27: partial_{0-2} gamma_{22}
-    for k in range(3):
-        for i in range(3):
-            for j in range(i, 3):
-                parity[count] = parity[i + 1] * parity[j + 1] * parity[k + 1]
-                count = count + 1
-
     lhs_strings = []
-    for i in range(28):
+    for i in range(10):
         lhs_strings.append("REAL_parity_array[" + str(i) + "]")
     outstr = """/*
 NRPy Curvilinear Boundary Conditions: Unit vector dot products for all
-     twenty-eight parity conditions, in given coordinate system.
+     ten base parity conditions, in given coordinate system.
      Needed for automatically determining the sign of tensors across coordinate boundaries.
 Documented in: Tutorial-Start_to_Finish-Curvilinear_BCs.ipynb
 */
@@ -137,47 +120,34 @@ def BHaH_defines_set_gridfunction_defines_with_parity_types(
     outstr = """
 /* PARITY TYPES FOR SRC GRID GRIDFUNCTIONS. */
 """
+    parity_conditions2: Dict[Tuple[int, int], int] = {}
+    count = 4
+    for i in range(3):
+        for j in range(i, 3):
+            parity_conditions2[(i, j)] = count
+            count = count + 1
+
     parity_type: List[int] = []
     for name, rank in list_of_gf_names_ranks:
         parity_type__orig_len = len(parity_type)
-        if rank == 0:
+        if name.startswith("src_partial_D_WW"):
+            parity_type.append(0)
+        elif name.startswith("src_partial_D_hDD"):
+            idx0 = int(name[-2])
+            idx1 = int(name[-1])
+            parity_value = parity_conditions2.get((idx0, idx1))
+            if parity_value is not None:
+                parity_type.append(parity_value)
+        elif rank == 0:
             parity_type.append(0)
         elif rank == 1:
             parity_type.append(int(name[-1]) + 1)
         elif rank == 2:
             idx0 = int(name[-2])
             idx1 = int(name[-1])
-            parity_conditions2: Dict[Tuple[int, int], int] = {}
-            count = 4
-            for i in range(3):
-                for j in range(i, 3):
-                    parity_conditions2[(i, j)] = count
-                    count = count + 1
             parity_value = parity_conditions2.get((idx0, idx1))
             if parity_value is not None:
                 parity_type.append(parity_value)
-        elif rank == 3:
-            idx0 = int(name[-3])
-            idx1 = int(name[-2])
-            idx2 = int(name[-1])
-            # Handling special case of partial_k gamma_{ij}: 6*3 parities = 18
-            # Types 10-12: partial_{0-2} gamma_{00}
-            # Types 13-15: partial_{0-2} gamma_{01}
-            # Types 16-18: partial_{0-2} gamma_{02}
-            # Types 19-21: partial_{0-2} gamma_{11}
-            # Types 22-24: partial_{0-2} gamma_{12}
-            # Types 25-27: partial_{0-2} gamma_{22}
-            parity_conditions3: Dict[Tuple[int, int, int], int] = {}
-            count = 10
-            for k in range(3):
-                for i in range(3):
-                    for j in range(i, 3):
-                        parity_conditions3[(k, i, j)] = count
-                        count = count + 1
-            parity_value = parity_conditions3.get((idx0, idx1, idx2))
-            if parity_value is not None:
-                parity_type.append(parity_value)
-
         if len(parity_type) == parity_type__orig_len:
             raise ValueError(
                 f"Error: Could not figure out parity type for {grid_name} gridfunction: {name}, with rank = {rank}"
@@ -213,6 +183,7 @@ def Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
 
     :return: Body of the C code.
 
+    :raises ValueError: If the coordinate system is GeneralRFM-based.
     :raises RuntimeError: If the conversion back to Cartesian coordinates does not match the original coordinates, indicating an error in the mapping process.
     """
     desc = """EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt():
@@ -241,7 +212,7 @@ and consistency in the transformation.
 """
     cfunc_type = "static int"
     name = "EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt"
-    params = """const commondata_struct *restrict commondata, REAL *restrict xx[3],
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
 const int i0, const int i1, const int i2,
 REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     body = r"""
@@ -274,41 +245,64 @@ REAL x0x1x2_inbounds[3], int i0i1i2_inbounds[3]"""
     # Load up the EigenCoordinate corresponding to reference_metric::CoordSystem
     rfm_orig = refmetric.reference_metric[CoordSystem]
     if rfm_orig.CoordSystem.startswith("GeneralRFM"):
-        rfm = rfm_orig
-    else:
-        rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
+        raise ValueError("BHaHAHA does not support GeneralRFM coordinate systems.")
+    rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
 
-    xx_to_Cart_eigen = ccg.c_codegen(
-        [rfm.xx_to_Cart[0], rfm.xx_to_Cart[1], rfm.xx_to_Cart[2]],
-        ["xCart[0]", "xCart[1]", "xCart[2]"],
-    )
-    xx_to_Cart_orig = ccg.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx", "yCart_from_xx", "zCart_from_xx"],
-        include_braces=False,
-    )
-    xx_to_Cart_inbounds = ccg.c_codegen(
-        [rfm_orig.xx_to_Cart[0], rfm_orig.xx_to_Cart[1], rfm_orig.xx_to_Cart[2]],
-        ["xCart_from_xx_inbounds", "yCart_from_xx_inbounds", "zCart_from_xx_inbounds"],
-        include_braces=False,
-    )
-    cart_to_xx_eigen = ""
-    if not rfm.CoordSystem.startswith("GeneralRFM"):
-        cart_to_xx_eigen = ccg.c_codegen(
-            [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]],
-            ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+    xx_to_cart_eigen_func = f"xx_to_Cart_no_origin__rfm__{rfm.CoordSystem}"
+    xx_to_cart_orig_func = f"xx_to_Cart_no_origin__rfm__{rfm_orig.CoordSystem}"
+
+    # Step 1.a: Sanity check: First make sure that rfm.Cart_to_xx has been set.
+    if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
+        raise RuntimeError(
+            rf"""ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for
+reference_metric::CoordSystem = {CoordSystem}. Boundary conditions in curvilinear coordinates REQUIRE this to be set."""
         )
 
-    # Step 1: Output C code for the Eigen-Coordinate mapping from xx->Cartesian':
+    # Step 1.b: Set up inline Cart_to_xx code and any CodeParameter definitions it needs.
+    cart_to_xx_exprs = [rfm.Cart_to_xx[0], rfm.Cart_to_xx[1], rfm.Cart_to_xx[2]]
+    cart_to_xx_eigen = ccg.c_codegen(
+        cart_to_xx_exprs,
+        ["Cart_to_xx0_inbounds", "Cart_to_xx1_inbounds", "Cart_to_xx2_inbounds"],
+    )
+    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        cart_to_xx_exprs
+    )
+    param_definitions = ""
+    if param_symbols:
+        param_definitions += generate_definition_header(
+            param_symbols, var_access="params->"
+        )
+    if commondata_symbols:
+        if param_definitions:
+            param_definitions += "\n"
+        param_definitions += generate_definition_header(
+            commondata_symbols, var_access="commondata->"
+        )
+
+    # Step 1.c: Output C code for the Eigen-Coordinate mapping from xx->Cartesian.
+    if param_symbols:
+        body += rf"""
+  if (params == NULL) {{
+    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: coordinate map needs params, but params == NULL.\n");
+    return BCSTRUCT_EIGENCOORD_FAILURE;
+  }}
+"""
+    else:
+        body += r"""
+  (void)params;
+"""
+    if param_definitions:
+        body += f"{param_definitions}\n"
     body += f"""
 // Step 1: Convert the (curvilinear) coordinate (x0,x1,x2) to Cartesian coordinates
 REAL xCart[3];  // where (x,y,z) is output
 {{
     // xx_to_Cart for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):
-    REAL xx0 = xx[0][i0];
-    REAL xx1 = xx[1][i1];
-    REAL xx2 = xx[2][i2];
-""" + xx_to_Cart_eigen + "}\n"
+    const REAL xx_at_point[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+    if ({xx_to_cart_eigen_func}(commondata, params, xx_at_point, xCart) != BHAHAHA_SUCCESS)
+      return BCSTRUCT_EIGENCOORD_FAILURE;
+}} // END BLOCK: Step 1 origin-free xx-to-Cart map
+"""
     body += r"""
 REAL Cartx = xCart[0];
 REAL Carty = xCart[1];
@@ -325,24 +319,9 @@ REAL Cartz = xCart[2];
   //      appropriate parity condition (+/- 1).
 REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
 """
-    # Step 2.a/2.b: Cartesian->xx map
-    if rfm.CoordSystem.startswith("GeneralRFM"):
-        body += f"""
-  // BHaHAHA bcstruct_set_up() currently supports spherical eigencoordinates only.
-  // Fail explicitly for GeneralRFM* instead of emitting code paths that require params.
-  return BCSTRUCT_EIGENCOORD_FAILURE;
-"""
-    else:
-        # Step 2.a: Sanity check: First make sure that rfm.Cart_to_xx has been set. Error out if not!
-        if rfm.Cart_to_xx[0] == 0 or rfm.Cart_to_xx[1] == 0 or rfm.Cart_to_xx[2] == 0:
-            raise RuntimeError(
-                f"ERROR: rfm.Cart_to_xx[], which maps Cartesian -> xx, has not been set for "
-                f"reference_metric::CoordSystem = {CoordSystem}. "
-                "Boundary conditions in curvilinear coordinates REQUIRE this to be set."
-            )
-        # Step 2.b: Output C code for the Eigen-Coordinate mapping from Cartesian->xx:
-        body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
-        body += cart_to_xx_eigen
+    # Step 2.a: Output C code for the Eigen-Coordinate mapping from Cartesian->xx.
+    body += f"  // Cart_to_xx for EigenCoordinate {rfm.CoordSystem} (original coord = {rfm_orig.CoordSystem}):\n"
+    body += cart_to_xx_eigen
     body += r"""
   // Next compute xxmin[i]. By definition,
   //    xx[i][j] = xxmin[i] + ((REAL)(j-NGHOSTS) + (1.0/2.0))*dxxi;
@@ -372,37 +351,34 @@ REAL Cart_to_xx0_inbounds, Cart_to_xx1_inbounds, Cart_to_xx2_inbounds;
   REAL xCart_from_xx, yCart_from_xx, zCart_from_xx;
   {{
     // xx_to_Cart for Coordinate {rfm_orig.CoordSystem}:
-    REAL xx0 = xx[0][i0];
-    REAL xx1 = xx[1][i1];
-    REAL xx2 = xx[2][i2];
-"""
-    body += xx_to_Cart_orig
-
-    body += f"""  }}
+    const REAL xx_at_point[3] = {{xx[0][i0], xx[1][i1], xx[2][i2]}};
+    REAL xCart_from_xx_arr[3];
+    if ({xx_to_cart_orig_func}(commondata, params, xx_at_point, xCart_from_xx_arr) != BHAHAHA_SUCCESS)
+      return BCSTRUCT_EIGENCOORD_FAILURE;
+    xCart_from_xx = xCart_from_xx_arr[0];
+    yCart_from_xx = xCart_from_xx_arr[1];
+    zCart_from_xx = xCart_from_xx_arr[2];
+  }} // END BLOCK: Step 3.a origin-free xx-to-Cart map
 
   // Step 3.b: Compute {{x,y,z}}Cart_from_xx_inbounds, as a
   //           function of i0_inbounds,i1_inbounds,i2_inbounds
   REAL xCart_from_xx_inbounds, yCart_from_xx_inbounds, zCart_from_xx_inbounds;
   {{
     // xx_to_Cart_inbounds for Coordinate {rfm_orig.CoordSystem}:
-    REAL xx0 = xx[0][i0_inbounds];
-    REAL xx1 = xx[1][i1_inbounds];
-    REAL xx2 = xx[2][i2_inbounds];
+    const REAL xx_at_point[3] = {{xx[0][i0_inbounds], xx[1][i1_inbounds], xx[2][i2_inbounds]}};
+    REAL xCart_from_xx_inbounds_arr[3];
+    if ({xx_to_cart_orig_func}(commondata, params, xx_at_point, xCart_from_xx_inbounds_arr) != BHAHAHA_SUCCESS)
+      return BCSTRUCT_EIGENCOORD_FAILURE;
+    xCart_from_xx_inbounds = xCart_from_xx_inbounds_arr[0];
+    yCart_from_xx_inbounds = xCart_from_xx_inbounds_arr[1];
+    zCart_from_xx_inbounds = xCart_from_xx_inbounds_arr[2];
+  }} // END BLOCK: Step 3.b origin-free xx-to-Cart map
 """
-    body += xx_to_Cart_inbounds
 
-    body += r"""  }
-
+    body += rf"""
   // Step 3.c: Compare xCart_from_xx to xCart_from_xx_inbounds;
   //           they should be identical!!!
-"""
-    if par.parval_from_str("fp_type") == "float":
-        body += r"""
-#define EPS_REL 1e-6
-"""
-    else:
-        body += r"""
-#define EPS_REL 1e-8
+#define EPS_REL {'1e-6' if par.parval_from_str("fp_type") == "float" else '1e-8'}
 """
     body += r"""
   const REAL norm_factor = sqrt(xCart_from_xx*xCart_from_xx + yCart_from_xx*yCart_from_xx + zCart_from_xx*zCart_from_xx) + 1e-15;
@@ -450,38 +426,134 @@ def Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem: str) -> str:
     """
     Generate C code for setting the parity for an inner boundary point in a given coordinate system.
 
-    This function computes the parity conditions for all 10 tensor types supported by NRPy, plus 18 for h_{ij,k}.
-    at a single grid point on the inner boundary.
+    This function computes the base parity conditions and partial-derivative
+    Jacobian parities at a single grid point on the inner boundary, using
+    closed-form analytic expressions for the coordinate-map Jacobian emitted
+    via nrpy.c_codegen. The stored convention is
+    deriv_jacobian[dst][src] = dxx_inbounds[src] / dxx_ghost[dst].
 
     :param CoordSystem: Coordinate system in which to set the parity conditions.
     :return: Full C function code as a string.
+    :raises ValueError: If the coordinate system is GeneralRFM-based.
     """
-    desc = """set_parity_for_inner_boundary_single_pt():
-Given (x0,x1,x2)=(xx0,xx1,xx2) and
-(x0,x1,x2)'=(x0x1x2_inbounds[0],x0x1x2_inbounds[1],x0x1x2_inbounds[2])
-(see description of
-EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt()
-above for more details), here we compute the parity conditions
-for all 10 tensor types supported by NRPy, plus 18 for h_{ij,k}."""
+    rfm_orig = refmetric.reference_metric[CoordSystem]
+    if rfm_orig.CoordSystem.startswith("GeneralRFM"):
+        raise ValueError("BHaHAHA does not support GeneralRFM coordinate systems.")
+    rfm = refmetric.reference_metric[rfm_orig.EigenCoord]
+
+    # Step 1: Build the analytic chain-rule Jacobian of the inner-boundary map
+    # xx_g -> Cart(xx_g) -> xx_inbounds(Cart):
+    #
+    #   raw_J^src_dst(xx_g) = sum_m  Jinv[src][m] |_{xx = xx_inbounds}
+    #                                * Jfwd[m][dst] |_{xx = xx_g}
+    #
+    # where Jfwd = rfm.Jac_dUCart_dDrfmUD (dCart/dxx) and
+    #       Jinv = rfm.Jac_dUrfm_dDCartUD (dxx/dCart).
+    xx_in = sp.symbols("xx0_inbounds xx1_inbounds xx2_inbounds", real=True)
+    inbounds_subs = {rfm.xx[i]: xx_in[i] for i in range(3)}
+
+    raw_deriv_jacobian_exprs = ixp.zerorank2()
+    for src_dirn in range(3):
+        for dst_dirn in range(3):
+            for m in range(3):
+                jinv_lm_at_inbounds = sp.sympify(
+                    rfm.Jac_dUrfm_dDCartUD[src_dirn][m]
+                ).xreplace(inbounds_subs)
+                jfwd_mk_at_xx_g = sp.sympify(rfm.Jac_dUCart_dDrfmUD[m][dst_dirn])
+                raw_deriv_jacobian_exprs[src_dirn][dst_dirn] += (
+                    jinv_lm_at_inbounds * jfwd_mk_at_xx_g
+                )
+
+    # Step 2: Store with the explicit BHaHAHA convention
+    # deriv_jacobian[dst][src] = dxx_inbounds[src] / dxx_ghost[dst].
+    deriv_jacobian_exprs = ixp.zerorank2()
+    for dst_dirn in range(3):
+        for src_dirn in range(3):
+            deriv_jacobian_exprs[dst_dirn][src_dirn] = raw_deriv_jacobian_exprs[
+                src_dirn
+            ][dst_dirn]
+    jac_exprs_flat = [
+        deriv_jacobian_exprs[dst][src] for dst in range(3) for src in range(3)
+    ]
+    jac_lhs_flat = [
+        f"deriv_jacobian_real[{dst}][{src}]" for dst in range(3) for src in range(3)
+    ]
+    # Step 3: Emit any CodeParameter/commondata definitions needed by the Jacobian.
+    jac_param_symbols, jac_commondata_symbols = (
+        get_params_commondata_symbols_from_expr_list(jac_exprs_flat)
+    )
+    jac_param_defs = ""
+    if jac_param_symbols:
+        jac_param_defs += generate_definition_header(
+            jac_param_symbols, var_access="params->"
+        )
+    if jac_commondata_symbols:
+        if jac_param_defs:
+            jac_param_defs += "\n"
+        jac_param_defs += generate_definition_header(
+            jac_commondata_symbols, var_access="commondata->"
+        )
+    jac_param_guard = ""
+    params_unused = "(void)params;"
+    if jac_param_symbols:
+        params_unused = ""
+        jac_param_guard = rf"""
+  if (params == NULL) {{
+    fprintf(stderr, "Error in {rfm_orig.CoordSystem}: derivative-Jacobian map needs params, but params == NULL.\n");
+    return BCSTRUCT_SET_PARITY_ERROR;
+  }}
+"""
+    # Step 4: Generate the C assignments and select the parity quantization tolerance.
+    jac_assigns = ccg.c_codegen(
+        jac_exprs_flat,
+        jac_lhs_flat,
+        include_braces=False,
+        verbose=False,
+        enable_cse=True,
+        cse_varprefix="deriv_jac_",
+    )
+    jac_tol = "1e-6" if par.parval_from_str("fp_type") == "float" else "1e-12"
+
+    desc = """Compute base-field parities and partial-derivative Jacobian parities for one inner-boundary point.
+
+1. Convert the symbolic base parity expressions to signed integer parity data
+   using unit-vector dot products in the selected reference-metric coordinate system.
+2. Evaluate the closed-form coordinate Jacobian for stored partial derivatives.
+   The stored convention is
+   deriv_jacobian[dst][src] = dxx_inbounds[src] / dxx_ghost[dst].
+   Both chain-rule factors are SymPy expressions emitted at codegen time via
+   nrpy.c_codegen.
+
+The derivative Jacobian must reduce to a signed permutation matrix. If it does
+not, then the inner-boundary map is not representable by parity-only derivative
+boundary conditions and the function returns an error instead of applying an
+incorrect sign.
+
+@param[in] commondata Pointer to common grid and boundary-condition data.
+@param[in] params Pointer to coordinate-map parameters, or NULL when the selected map has no params dependency.
+@param xx0 Original point's x0 coordinate.
+@param xx1 Original point's x1 coordinate.
+@param xx2 Original point's x2 coordinate.
+@param[in] x0x1x2_inbounds Interior point coordinates associated with the mapped Cartesian location.
+@param idx Index into innerpt_bc_arr for the boundary point being populated.
+@param[in,out] innerpt_bc_arr Inner-boundary metadata array to update in place.
+@return BHAHAHA_SUCCESS on success, or BCSTRUCT_SET_PARITY_ERROR if a parity sanity check fails.
+"""
     cfunc_type = "static int"
     name = "set_parity_for_inner_boundary_single_pt"
     params = """const commondata_struct *restrict commondata,
+            const params_struct *restrict params,
             const REAL xx0,const REAL xx1,const REAL xx2,  const REAL x0x1x2_inbounds[3], const int idx,
             innerpt_bc_struct *restrict innerpt_bc_arr"""
-    if par.parval_from_str("fp_type") == "float":
-        body = r"""
-#define EPS_REL 1e-6
-"""
-    else:
-        body = r"""
-#define EPS_REL 1e-8
-"""
-    body += rf"""
+    body = rf"""
+#define EPS_REL {'1e-6' if par.parval_from_str("fp_type") == "float" else '1e-8'}
+(void)commondata;
+{params_unused}
 const REAL xx0_inbounds = x0x1x2_inbounds[0];
 const REAL xx1_inbounds = x0x1x2_inbounds[1];
 const REAL xx2_inbounds = x0x1x2_inbounds[2];
 
-REAL REAL_parity_array[28];
+REAL REAL_parity_array[10];
 {{
     // Evaluate dot products needed for setting parity
     //     conditions at a given point (xx0,xx1,xx2),
@@ -489,7 +561,7 @@ REAL REAL_parity_array[28];
     {parity_conditions_symbolic_dot_products(CoordSystem)}
 }}
     // Next perform sanity check on parity array output: should be +1 or -1 to within 8 significant digits:
-    for(int whichparity=0; whichparity<28; whichparity++) {{
+    for(int whichparity=0; whichparity<10; whichparity++) {{
         if( fabs(REAL_parity_array[whichparity]) < 1 - EPS_REL || fabs(REAL_parity_array[whichparity]) > 1 + EPS_REL ) {{
             fprintf(stderr,"Error at point (%e %e %e), which maps to (%e %e %e).\n",
                 xx0,xx1,xx2, xx0_inbounds,xx1_inbounds,xx2_inbounds);
@@ -499,7 +571,50 @@ REAL REAL_parity_array[28];
         }}
         innerpt_bc_arr[idx].parity[whichparity] = 1;
         if(REAL_parity_array[whichparity] < 0) innerpt_bc_arr[idx].parity[whichparity] = -1;
-    }} // END for(int whichparity=0;whichparity<28;whichparity++)
+    }} // END LOOP: for whichparity over parity directions
+
+#define JAC_TOL {jac_tol}
+{jac_param_guard}
+    {{
+{jac_param_defs}
+      REAL deriv_jacobian_real[3][3];
+{jac_assigns}
+      for (int dst_dirn = 0; dst_dirn < 3; dst_dirn++) {{
+        for (int src_dirn = 0; src_dirn < 3; src_dirn++) {{
+          const REAL v = deriv_jacobian_real[dst_dirn][src_dirn];
+          int8_t jac_parity;
+          if (fabs(v - 1.0) < JAC_TOL)
+            jac_parity = 1;
+          else if (fabs(v + 1.0) < JAC_TOL)
+            jac_parity = -1;
+          else if (fabs(v) < JAC_TOL)
+            jac_parity = 0;
+          else {{
+            fprintf(stderr,
+                    "Error at point (%e %e %e), which maps to (%e %e %e): analytic deriv Jacobian[%d][%d]=%.15e is not a parity value.\n",
+                    xx0, xx1, xx2, xx0_inbounds, xx1_inbounds, xx2_inbounds, dst_dirn, src_dirn, (double)v);
+            return BCSTRUCT_SET_PARITY_ERROR;
+          }} // END ELSE: Jacobian entry is not parity-compatible
+          innerpt_bc_arr[idx].deriv_jacobian[dst_dirn][src_dirn] = jac_parity;
+        }} // END LOOP: for src_dirn over mapped source derivative directions
+      }} // END LOOP: for dst_dirn over destination derivative directions
+    }} // END BLOCK: analytic derivative-Jacobian quantization
+
+    for (int dst_dirn = 0; dst_dirn < 3; dst_dirn++) {{
+      int row_nonzero = 0;
+      int col_nonzero = 0;
+      for (int src_dirn = 0; src_dirn < 3; src_dirn++) {{
+        if (innerpt_bc_arr[idx].deriv_jacobian[dst_dirn][src_dirn] != 0) row_nonzero++;
+        if (innerpt_bc_arr[idx].deriv_jacobian[src_dirn][dst_dirn] != 0) col_nonzero++;
+      }} // END LOOP: for src_dirn over signed-permutation checks
+      if (row_nonzero != 1 || col_nonzero != 1) {{
+        fprintf(stderr,
+                "Error at point (%e %e %e), which maps to (%e %e %e): derivative Jacobian is not a signed permutation.\n",
+                xx0, xx1, xx2, xx0_inbounds, xx1_inbounds, xx2_inbounds);
+        return BCSTRUCT_SET_PARITY_ERROR;
+      }} // END IF: derivative Jacobian is not a signed permutation
+    }} // END LOOP: for dst_dirn over signed-permutation rows and columns
+#undef JAC_TOL
   return BHAHAHA_SUCCESS;
 #undef EPS_REL
 """
@@ -527,6 +642,7 @@ def register_CFunction_bcstruct_set_up(
     This function sets up the inner and outer boundary points on the computational grid for the given coordinate system.
 
     :param CoordSystem: The coordinate system for which boundary conditions are to be set up.
+    :raises ValueError: If the coordinate system is GeneralRFM-based.
     """
     # Step 1: Register contributions of this function to BHaH_defines.h
     BHaH_defines = r"""
@@ -534,7 +650,8 @@ def register_CFunction_bcstruct_set_up(
 typedef struct {
   int dstpt;         // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
   int srcpt;         // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
-  int8_t parity[28]; // parity[28] is a calculation of dot products for the 28 independent parity types
+  int8_t parity[10]; // parity[10] is a calculation of dot products for the 10 independent base parity types
+  int8_t deriv_jacobian[3][3]; // deriv_jacobian[dst][src] = dxx_inbounds[src] / dxx_ghost[dst]
 } innerpt_bc_struct;
 
 typedef struct {
@@ -585,9 +702,99 @@ typedef struct {
             is_commondata=True,
         )
 
-    # Step 3: Register bcstruct_set_up().
+    # Step 3: Generate local helper functions and register bcstruct_set_up().
+    if CoordSystem.startswith("GeneralRFM"):
+        raise ValueError("BHaHAHA does not support GeneralRFM coordinate systems.")
+
     includes = ["BHaH_defines.h"]
-    prefunc = Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
+    # Step 3.a: Determine the coordinate maps needed by the local helper functions.
+    rfm_orig = refmetric.reference_metric[CoordSystem]
+    helper_coord_systems = [CoordSystem]
+    eigen_coord_system = rfm_orig.EigenCoord
+    if eigen_coord_system not in helper_coord_systems:
+        helper_coord_systems.append(eigen_coord_system)
+
+    # Step 3.b: Generate BHaHAHA-local origin-free xx-to-Cart helpers.
+    prefunc = ""
+    for helper_coord_system in helper_coord_systems:
+        # Step 3.c: Build the symbolic map and its parameter dependencies.
+        rfm_helper = refmetric.reference_metric[helper_coord_system]
+        map_exprs = list(rfm_helper.xx_to_Cart)
+        param_symbols, commondata_symbols = (
+            get_params_commondata_symbols_from_expr_list(map_exprs)
+        )
+        param_definitions = ""
+        if param_symbols:
+            param_definitions = generate_definition_header(
+                param_symbols, var_access="params->"
+            )
+        commondata_definitions = ""
+        if commondata_symbols:
+            commondata_definitions = generate_definition_header(
+                commondata_symbols, var_access="commondata->"
+            )
+        map_codegen = ccg.c_codegen(
+            map_exprs,
+            ["xCart[0]", "xCart[1]", "xCart[2]"],
+            include_braces=False,
+            verbose=False,
+        )
+
+        # Step 3.d: Emit the local static C helper directly into this C file.
+        desc_helper = f"""Compute origin-free Cartesian coordinates from {helper_coord_system} coordinates for BHaHAHA inner-boundary setup.
+
+This helper intentionally omits Cartesian-origin offsets and remains local to bah_bcstruct_set_up.c.
+
+@param[in] commondata Pointer to common grid and boundary-condition data.
+@param[in] params Pointer to coordinate-map parameters, or NULL when the selected map has no params dependency.
+@param[in] xx Local coordinate vector.
+@param[out] xCart Origin-free Cartesian coordinate vector.
+@return BHAHAHA_SUCCESS on success, or BCSTRUCT_EIGENCOORD_FAILURE if required params are unavailable.
+"""
+        cfunc_type_helper = "static int"
+        name_helper = f"xx_to_Cart_no_origin__rfm__{helper_coord_system}"
+        params_helper = """const commondata_struct *restrict commondata,
+                           const params_struct *restrict params,
+                           const REAL xx[3], REAL xCart[3]"""
+        body_helper = ""
+        if commondata_definitions:
+            body_helper += f"{commondata_definitions}\n"
+        else:
+            body_helper += r"""
+  (void)commondata;
+"""
+        if param_symbols:
+            body_helper += rf"""
+  if (params == NULL) {{
+    fprintf(stderr, "Error in {helper_coord_system}: xx_to_Cart_no_origin needs params, but params == NULL.\n");
+    return BCSTRUCT_EIGENCOORD_FAILURE;
+  }}
+{param_definitions}
+"""
+        else:
+            body_helper += r"""
+  (void)params;
+"""
+        body_helper += rf"""
+  const REAL xx0 = xx[0];
+  const REAL xx1 = xx[1];
+  const REAL xx2 = xx[2];
+{map_codegen}
+  return BHAHAHA_SUCCESS;
+"""
+        cf_helper = cfc.CFunction(
+            subdirectory=helper_coord_system,
+            desc=desc_helper,
+            cfunc_type=cfunc_type_helper,
+            name=name_helper,
+            params=params_helper,
+            include_CodeParameters_h=False,
+            body=body_helper,
+        )
+        prefunc += cf_helper.full_function
+
+    # Step 3.e: Generate helper functions that map inner-boundary points and set parities.
+    prefunc += Cfunction__EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(
         CoordSystem
     )
     prefunc += Cfunction__set_parity_for_inner_boundary_single_pt(CoordSystem)
@@ -597,7 +804,8 @@ typedef struct {
 *    typedef struct {
 *      int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
 *      int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
-*      int8_t parity[28];  // parity[28] is a calculation of dot products for the 28 independent parity types
+*      int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent base parity types
+*      int8_t deriv_jacobian[3][3];  // deriv_jacobian[dst][src] = dxx_inbounds[src] / dxx_ghost[dst]
 *    } innerpt_bc_struct;
 *  At each ghostzone (i.e., each point within NGHOSTS points from grid boundary):
 *    Call EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt().
@@ -650,12 +858,13 @@ typedef struct {
 *    wasteful, but only in memory, not in CPU."""
     cfunc_type = "int"
     name = "bcstruct_set_up"
-    params = """const commondata_struct *restrict commondata, REAL *restrict xx[3],
+    params = """const commondata_struct *restrict commondata, const params_struct *restrict params, REAL *restrict xx[3],
                 bc_struct *restrict bcstruct"""
     body = r"""
   const int Nxx_plus_2NGHOSTS0 = commondata->bcstruct_Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = commondata->bcstruct_Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = commondata->bcstruct_Nxx_plus_2NGHOSTS2;
+  const params_struct *restrict bc_params = params;
   ////////////////////////////////////////
   // STEP 1: SET UP INNER BOUNDARY STRUCTS
   {
@@ -667,7 +876,7 @@ typedef struct {
       if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS)) {
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
-        if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
+        if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, bc_params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
 #pragma omp critical
           {
             error_flag = true;
@@ -702,7 +911,7 @@ typedef struct {
       if (!IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NGHOSTS)) {
         REAL x0x1x2_inbounds[3];
         int i0i1i2_inbounds[3];
-        if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
+        if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, bc_params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
           return BCSTRUCT_EIGENCOORD_FAILURE;
         }
         if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
@@ -711,7 +920,7 @@ typedef struct {
           bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0, i1, i2);
           bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0], i0i1i2_inbounds[1], i0i1i2_inbounds[2]);
           // printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
-          if (set_parity_for_inner_boundary_single_pt(commondata, xx[0][i0], xx[1][i1], xx[2][i2], x0x1x2_inbounds, which_inner,
+          if (set_parity_for_inner_boundary_single_pt(commondata, bc_params, xx[0][i0], xx[1][i1], xx[2][i2], x0x1x2_inbounds, which_inner,
                                                       bcstruct->inner_bc_array)) {
             return BCSTRUCT_SET_PARITY_ERROR;
           }
@@ -800,7 +1009,7 @@ typedef struct {
     }
     face++;
     ////////////////////////
-  } // END LOOP over ghostzones
+  } // END LOOP: for which_gz over ghost zones
 
   for (int which_gz = 0; which_gz < NGHOSTS; which_gz++)
     for (int dirn = 0; dirn < 3; dirn++) {
@@ -818,7 +1027,7 @@ typedef struct {
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
-          if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
+          if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, bc_params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
             return BCSTRUCT_EIGENCOORD_FAILURE;
           }
           if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
@@ -831,7 +1040,7 @@ typedef struct {
             idx2d++;
           }
         }
-      } // END LOOP over lower faces
+      } // END BLOCK: lower face boundary points
       // UPPER FACE: dirn=0 -> x0max; dirn=1 -> x1max; dirn=2 -> x2max
       {
         const int face = dirn * 2 + 1;
@@ -843,7 +1052,7 @@ typedef struct {
                    bcstruct->bc_info.bc_loop_bounds[which_gz][face][4], bcstruct->bc_info.bc_loop_bounds[which_gz][face][5]) {
           REAL x0x1x2_inbounds[3];
           int i0i1i2_inbounds[3];
-          if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
+          if (EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt(commondata, bc_params, xx, i0, i1, i2, x0x1x2_inbounds, i0i1i2_inbounds)) {
             return BCSTRUCT_EIGENCOORD_FAILURE;
           }
           if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
@@ -856,9 +1065,9 @@ typedef struct {
             idx2d++;
           }
         }
-      } // END LOOP over upper faces
+      } // END BLOCK: upper face boundary points
       bcstruct->bc_info.num_pure_outer_boundary_points[which_gz][dirn] = idx2d;
-    } // END LOOPS over directions and ghost zone layers.
+    } // END LOOP: for dirn over directions and which_gz over ghost zone layers
 
   return BHAHAHA_SUCCESS;
 """

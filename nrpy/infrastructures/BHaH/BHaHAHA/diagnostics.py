@@ -24,9 +24,6 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
     Register the C function for diagnostics in the simulation.
 
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
-
-    DocTests:
-    >>> env = register_CFunction_diagnostics()
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -80,8 +77,8 @@ the apparent horizon in the BHaHAHA simulation. Diagnostics are performed
 at specified iteration intervals and may include interpolation, centroid
 calculations, norm evaluations, and detailed final iteration analyses.
 
-@param commondata Pointer to the common data structure containing simulation parameters and state.
-@param griddata Pointer to the grid data structure containing grid-related parameters and functions.
+@param[in,out] commondata Pointer to the common data structure containing simulation parameters and state.
+@param[in,out] griddata Pointer to the grid data structure containing grid-related parameters and functions.
 
 @note This function updates the error_flag within commondata based on diagnostic outcomes."""
     cfunc_type = "void"
@@ -112,7 +109,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
       // Exit diagnostics if interpolation fails.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
-    } // END BLOCK: Interpolation and grid size setup
+    } // END BLOCK: prepare interpolated horizon data and local grid extents
 
     // Calculate area centroid and theta norms for the apparent horizon.
     bah_diagnostics_area_centroid_and_Theta_norms(commondata, griddata);
@@ -128,7 +125,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
                commondata->bhahaha_params_and_data->Theta_L2_times_M_tolerance);
         printf("#Iter |min_r |max_r |maxsrch_r|Linf_Theta|L2_Theta|      Area      |   M_irr   |Nth|Nph|N_Theta_eval|\n");
         printf("#-----|------|------|---------|----------|--------|----------------|-----------|---|---|------------|\n");
-      } // END IF nn == 0
+      } // END IF: nn == 0
 
       // Access the diagnostics structure for current iteration values.
       bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
@@ -143,7 +140,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
              commondata->max_radius_wrt_grid_center, r_max_interior, bhahaha_diags->Theta_Linf_times_M, bhahaha_diags->Theta_L2_times_M,
              bhahaha_diags->area, sqrt(bhahaha_diags->area / (16 * M_PI)), griddata[0].params.Nxx1, griddata[0].params.Nxx2,
              bhahaha_diags->Theta_eval_points_counter);
-    } // END IF verbosity level == 2
+    } // END IF: verbosity level == 2
 
     // Verify that the minimum coordinate radius meets the required threshold.
     if (commondata->min_radius_wrt_grid_center < 3.0 * commondata->external_input_dxx0) {
@@ -176,7 +173,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
           printf("#(%5.5e, %5.5e) = (Area, M_irr)\n", bhahaha_diags->area, sqrt(bhahaha_diags->area / (16 * M_PI)));
           printf("#(%+4.4e, %+4.4e, %+4.4e) = (x, y, z) centroid, wrt input grid origin\n", bhahaha_diags->x_centroid_wrt_coord_origin,
                  bhahaha_diags->y_centroid_wrt_coord_origin, bhahaha_diags->z_centroid_wrt_coord_origin);
-        } // END IF verbosity_level > 0, then print the diagnostics
+        } // END IF: verbosity_level > 0, then print the diagnostics
 
         REAL x_center, y_center, z_center, r_min, r_max;
         bah_xyz_center_r_minmax(commondata->bhahaha_params_and_data, &x_center, &y_center, &z_center, &r_min, &r_max);
@@ -223,10 +220,10 @@ calculations, norm evaluations, and detailed final iteration analyses.
           // Display spin_z based on (xz/xy, yz/xy) ratios
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
-        } // END IF verbosity level > 0
-      } // END compute, store, and (optionally) print final diagnostics
-    } // END IF final iteration
-  } // END IF output diagnostics
+        } // END IF: verbosity level > 0
+      } // END BLOCK: compute final diagnostics and update stored horizon history
+    } // END IF: final iteration
+  } // END IF: output diagnostics
 """
     cfc.register_CFunction(
         subdirectory="",
@@ -244,11 +241,12 @@ calculations, norm evaluations, and detailed final iteration analyses.
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 
     if results.failed > 0:
-        raise RuntimeError(
-            f"Doctest failed: {results.failed} of {results.attempted} test(s)"
-        )
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

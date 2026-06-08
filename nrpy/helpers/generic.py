@@ -2,9 +2,9 @@
 """
 Generic helper functions used throughout NRPy.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
-        Dave Kirby (super-fast uniq function)
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Dave Kirby
 """
 
 import inspect
@@ -47,7 +47,7 @@ def clang_format(c_code_str: str) -> str:
     :raises RuntimeError: If clang-format encounters any error.
     :raises OSError: If clang-format is not installed / not found on PATH.
 
-    Doctest:
+    Doctests:
     >>> print(clang_format(r'''int main() { printf("Hello, World!"); for(int i=0;i<10;i++) for(int j=i;j<10;j++) printf("%d %d\\n",i,j); return 0; }'''))
     int main() {
       printf("Hello, World!");

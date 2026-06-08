@@ -81,7 +81,7 @@ def register_CFunctions(
       BHAH_FREE(gridfuncs->y_nplus1_running_total_gfs);
       BHAH_FREE(gridfuncs->k_odd_gfs);
       BHAH_FREE(gridfuncs->k_even_gfs);
-    } // END FUNCTION MoL_free_intermediate_stage_gfs
+    } // END FUNCTION: MoL_free_intermediate_stage_gfs
     <BLANKLINE>
     >>> print(cfc.CFunction_dict["MoL_malloc_intermediate_stage_gfs"].full_function) # doctest: +ELLIPSIS
     #include "BHaH_defines.h"
@@ -115,7 +115,7 @@ def register_CFunctions(
       BHAH_MALLOC(gridfuncs->y_nplus1_running_total_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       BHAH_MALLOC(gridfuncs->k_odd_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
       BHAH_MALLOC(gridfuncs->k_even_gfs, sizeof(REAL) * NUM_EVOL_GFS * Nxx_plus_2NGHOSTS_tot);
-    } // END FUNCTION MoL_malloc_intermediate_stage_gfs
+    } // END FUNCTION: MoL_malloc_intermediate_stage_gfs
     <BLANKLINE>
     """
     # fmt: off

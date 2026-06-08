@@ -21,9 +21,6 @@ def register_CFunction_diagnostics_file_output() -> Union[None, pcg.NRPyEnv_type
     Register the C function for outputting diagnostic files in the simulation.
 
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
-
-    DocTests:
-    >>> env = register_CFunction_diagnostics_file_output()
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -42,13 +39,13 @@ Operations performed:
 4. Outputs diagnostic metrics, including geometric properties and spin magnitudes.
 5. Writes horizon surface data in a separate file, in a gnuplot-compatible format.
 
-@param diags                     Pointer to the BHaHAHA data structure containing diagnostic info.
-@param bhahaha_params_and_data   Pointer to the BHaHAHA data structure containing horizon parameters and data.
+@param[in] diags                 Pointer to the BHaHAHA data structure containing diagnostic info.
+@param[in] bhahaha_params_and_data Pointer to the BHaHAHA data structure containing horizon parameters and data.
 @param N_horizons                Total number of horizons being tracked.
 @param x_center_input            x-position on the global grid input into BHaHAHA.
 @param y_center_input            y-position on the global grid input into BHaHAHA.
 @param z_center_input            z-position on the global grid input into BHaHAHA.
-@param output_directory          Path where all output files will be written (e.g., ".", "/path/to/dir/", etc.).
+@param[in] output_directory      Path where all output files will be written (e.g., ".", "/path/to/dir/", etc.).
 """
     cfunc_type = "void"
     name = "diagnostics_file_output"
@@ -78,7 +75,7 @@ Operations performed:
   if (fileptr == NULL) {
     fprintf(stderr, "Can't open BH-diagnostics output file \"%s\" for writing/appending!\n", file_name_buffer);
     return;
-  } // END IF problem opening file
+  } // END IF: problem opening file
 
   // Determine if file is newly created by checking its size.
   fseek(fileptr, 0, SEEK_END);
@@ -112,7 +109,7 @@ Operations performed:
     fprintf(fileptr, "# column 23 = Spin y-component (based on spin function Omega)\n");
     fprintf(fileptr, "# column 24 = Spin z-component (based on spin function Omega)\n");
     fflush(fileptr);
-  } // END IF file size zero -> need to write header
+  } // END IF: file size zero -> need to write header
 
   // Calculate irreducible mass from horizon area.
   REAL M_irr = sqrt(diags->area / (16.0 * M_PI));
@@ -171,7 +168,7 @@ Operations performed:
   if (fileptr == NULL) {
     fprintf(stderr, "Can't open horizon surface data output file \"%s\" for writing!\n", file_name_buffer);
     return;
-  } // END IF problem opening file
+  } // END IF: problem opening file
 
   // Write headers for the gnuplot-compatible horizon surface data file.
   fprintf(fileptr, "# gnuplot-compatible horizon surface data, at time %.3f.\n", bhahaha_params_and_data->time_external_input);
@@ -213,16 +210,16 @@ Operations performed:
         first_x = x;
         first_y = y;
         first_z = z;
-      } // END IF iphi==0
+      } // END IF: iphi == 0
 
       // Output the Cartesian coordinates.
       fprintf(fileptr, "%.10e %.10e %.10e\n", x, y, z);
-    } // END LOOP over phi
+    } // END LOOP: for iphi over phi
 
     // Close the loop by reprinting the first point of this theta-ring.
     fprintf(fileptr, "%.10e %.10e %.10e\n", first_x, first_y, first_z);
     fprintf(fileptr, "\n"); // Blank line to separate slices in gnuplot format
-  } // END LOOP over theta
+  } // END LOOP: for itheta over theta
 
   fflush(fileptr);
   fclose(fileptr);
@@ -242,11 +239,12 @@ Operations performed:
 
 if __name__ == "__main__":
     import doctest
+    import sys
 
     results = doctest.testmod()
 
     if results.failed > 0:
-        raise RuntimeError(
-            f"Doctest failed: {results.failed} of {results.attempted} test(s)"
-        )
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

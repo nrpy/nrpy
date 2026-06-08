@@ -78,6 +78,182 @@ This comprehensive set of routines is crucial for efficient data management and 
     # prefunc contains most of the C++ source code for the PUP routines.
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
+    enable_bhahaha = "bah_max_num_horizons" in par.glb_code_params_dict
+
+    prefunc = ""
+    if enable_bhahaha:
+        prefunc += r"""
+/**
+ * Validate the configured number of BHaHAHA horizons for PUP.
+ *
+ * @param[in] commondata Common simulation data.
+ * @return Number of horizons to serialize.
+ */
+static int pup_bhahaha_num_horizons(const commondata_struct &commondata) {
+  const int max_horizons = (int)(sizeof(commondata.bhahaha_params_and_data) / sizeof(commondata.bhahaha_params_and_data[0]));
+  if (commondata.bah_max_num_horizons < 0 || commondata.bah_max_num_horizons > max_horizons) {
+    fprintf(stderr, "PUP error: bah_max_num_horizons=%d exceeds compiled horizon capacity %d.\n",
+            commondata.bah_max_num_horizons, max_horizons);
+    exit(EXIT_FAILURE);
+  } // END IF: invalid BHaHAHA horizon count
+  return commondata.bah_max_num_horizons;
+} // END FUNCTION: pup_bhahaha_num_horizons
+
+/**
+ * Compute the number of stored points in a serialized horizon shape.
+ *
+ * @param[in] commondata Common simulation data.
+ * @return Number of angular shape points.
+ */
+static int pup_bhahaha_shape_points(const commondata_struct &commondata) {
+  const int n = commondata.bah_num_resolutions_multigrid - 1;
+  if (n < 0 || n >= MAX_RESOLUTIONS || commondata.bah_Ntheta_array_multigrid[n] <= 0 || commondata.bah_Nphi_array_multigrid[n] <= 0) {
+    fprintf(stderr, "PUP error: invalid BHaHAHA horizon-shape dimensions for multigrid level %d.\n", n);
+    exit(EXIT_FAILURE);
+  } // END IF: invalid BHaHAHA shape dimensions
+  return commondata.bah_Ntheta_array_multigrid[n] * commondata.bah_Nphi_array_multigrid[n];
+} // END FUNCTION: pup_bhahaha_shape_points
+
+/**
+ * Compute the serialized size of the optional BHaHAHA input metric workspace.
+ *
+ * @param[in] commondata Common simulation data.
+ * @param[in] bp Horizon-specific BHaHAHA state.
+ * @return Number of REAL entries in the input metric workspace.
+ */
+static int pup_bhahaha_input_metric_points(const commondata_struct &commondata, const bhahaha_params_and_data_struct &bp) {
+  if (bp.Nr_external_input <= 0) {
+    return 0;
+  } // END IF: no external input radial points
+  const int n = bp.num_resolutions_multigrid - 1;
+  if (n < 0 || n >= MAX_RESOLUTIONS || bp.Ntheta_array_multigrid[n] <= 0 || bp.Nphi_array_multigrid[n] <= 0) {
+    fprintf(stderr, "PUP error: invalid BHaHAHA input-metric dimensions for multigrid level %d.\n", n);
+    exit(EXIT_FAILURE);
+  } // END IF: invalid BHaHAHA input metric dimensions
+  (void)commondata;
+  // Must match the input_metric_data allocation shape in superB/BHaH_implementation.py.
+  return NUM_EXT_INPUT_CARTESIAN_GFS * bp.Nr_external_input * bp.Ntheta_array_multigrid[n] * bp.Nphi_array_multigrid[n];
+} // END FUNCTION: pup_bhahaha_input_metric_points
+
+/**
+ * PUP an optional REAL array without reading destination storage on unpack.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] array Pointer to the optional array pointer.
+ * @param length Number of REAL entries to serialize.
+ * @param[in] name Allocation/error label.
+ */
+static void pup_optional_REAL_array(PUP::er &p, REAL **array, const int length, const char *name) {
+  int has_array = 0;
+  if (!p.isUnpacking()) {
+    has_array = (*array != NULL) ? 1 : 0;
+  } // END IF: computing optional REAL array presence while packing
+  p | has_array;
+  if (has_array != 0) {
+    if (length < 0) {
+      fprintf(stderr, "PUP error: negative array length for %s.\n", name);
+      exit(EXIT_FAILURE);
+    } // END IF: invalid optional REAL array length
+    if (p.isUnpacking()) {
+      *array = (REAL *restrict)malloc(sizeof(REAL) * length);
+      if (*array == NULL && length > 0) {
+        fprintf(stderr, "PUP error: malloc failed for %s.\n", name);
+        exit(EXIT_FAILURE);
+      } // END IF: optional REAL array allocation failed
+    } // END IF: unpacking optional REAL array
+    PUParray(p, *array, length);
+  } else if (p.isUnpacking()) {
+    *array = NULL;
+  } // END ELSE IF: unpacking absent optional REAL array
+} // END FUNCTION: pup_optional_REAL_array
+
+/**
+ * PUP allocation state for the optional BHaHAHA input metric workspace.
+ *
+ * The workspace payload is intentionally not serialized here. At the normal
+ * migration/checkpoint wait point, BHaHAHA_transform_BSSN_to_ADM() has not yet
+ * filled this scratch buffer; it will be recomputed after interpolation data
+ * are restored.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] bp Horizon-specific BHaHAHA state.
+ * @param[in] commondata Common simulation data.
+ */
+static void pup_bhahaha_input_metric_workspace(PUP::er &p, bhahaha_params_and_data_struct &bp, const commondata_struct &commondata) {
+  int has_input_metric_data = 0;
+  if (!p.isUnpacking()) {
+    has_input_metric_data = (bp.input_metric_data != NULL) ? 1 : 0;
+  } // END IF: computing input metric workspace presence while packing
+  p | has_input_metric_data;
+  if (p.isUnpacking()) {
+    if (has_input_metric_data != 0) {
+      const int npts = pup_bhahaha_input_metric_points(commondata, bp);
+      bp.input_metric_data = (REAL *restrict)malloc(sizeof(REAL) * npts);
+      if (bp.input_metric_data == NULL && npts > 0) {
+        fprintf(stderr, "PUP error: malloc failed for BHaHAHA input_metric_data.\n");
+        exit(EXIT_FAILURE);
+      } // END IF: input metric workspace allocation failed
+    } else {
+      bp.input_metric_data = NULL;
+    } // END ELSE: absent input metric workspace on unpack
+  } // END IF: unpacking input metric workspace
+} // END FUNCTION: pup_bhahaha_input_metric_workspace
+
+/**
+ * PUP one BHaHAHA horizon parameter-and-data record.
+ *
+ * @param[in,out] p Charm++ PUP serializer.
+ * @param[in,out] bp Horizon-specific BHaHAHA state.
+ * @param[in] commondata Common simulation data.
+ */
+static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_data_struct &bp, const commondata_struct &commondata) {
+  p | bp.time_external_input;
+  p | bp.iteration_external_input;
+  p | bp.Nr_external_input;
+  p | bp.r_min_external_input;
+  p | bp.dr_external_input;
+  p | bp.num_resolutions_multigrid;
+  PUParray(p, bp.Ntheta_array_multigrid, MAX_RESOLUTIONS);
+  PUParray(p, bp.Nphi_array_multigrid, MAX_RESOLUTIONS);
+  p | bp.use_fixed_radius_guess_on_full_sphere;
+  p | bp.cfl_factor;
+  p | bp.M_scale;
+  p | bp.eta_damping_times_M;
+  p | bp.KO_strength;
+  p | bp.max_iterations;
+  p | bp.Theta_Linf_times_M_tolerance;
+  p | bp.Theta_L2_times_M_tolerance;
+  p | bp.which_horizon;
+  p | bp.num_horizons;
+  p | bp.verbosity_level;
+  p | bp.enable_eta_varying_alg_for_precision_common_horizon;
+  p | bp.t_m1;
+  p | bp.t_m2;
+  p | bp.t_m3;
+  p | bp.r_min_m1;
+  p | bp.r_min_m2;
+  p | bp.r_min_m3;
+  p | bp.r_max_m1;
+  p | bp.r_max_m2;
+  p | bp.r_max_m3;
+  p | bp.x_center_m1;
+  p | bp.x_center_m2;
+  p | bp.x_center_m3;
+  p | bp.y_center_m1;
+  p | bp.y_center_m2;
+  p | bp.y_center_m3;
+  p | bp.z_center_m1;
+  p | bp.z_center_m2;
+  p | bp.z_center_m3;
+
+  pup_optional_REAL_array(p, &bp.prev_horizon_m1, pup_bhahaha_shape_points(commondata), "prev_horizon_m1");
+  pup_optional_REAL_array(p, &bp.prev_horizon_m2, pup_bhahaha_shape_points(commondata), "prev_horizon_m2");
+  pup_optional_REAL_array(p, &bp.prev_horizon_m3, pup_bhahaha_shape_points(commondata), "prev_horizon_m3");
+  pup_bhahaha_input_metric_workspace(p, bp, commondata);
+} // END FUNCTION: pup_bhahaha_params_and_data_struct
+
+"""
+
     # PUP routine for commondata_struct
     commondata_lines = []
     for name, param in par.glb_code_params_dict.items():
@@ -85,11 +261,17 @@ This comprehensive set of routines is crucial for efficient data management and 
             commondata_lines += generate_pup_serialization_lines_for_CodeParams(
                 name, param, "commondata"
             )
-    prefunc = """// PUP routine for struct commondata_struct
+    prefunc += """// PUP routine for struct commondata_struct
     void pup_commondata_struct(PUP::er &p, commondata_struct &commondata) {
     """
     prefunc += "// PUP commondata struct\n"
     prefunc += "".join(sorted(commondata_lines))
+    if enable_bhahaha:
+        prefunc += """
+  const int num_horizons = pup_bhahaha_num_horizons(commondata);
+  for (int h = 0; h < num_horizons; h++)
+    pup_bhahaha_params_and_data_struct(p, commondata.bhahaha_params_and_data[h], commondata);
+"""
     prefunc += "}\n"
 
     # PUP routine for params_struct
@@ -227,10 +409,8 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
             )
         elif gridfunctions == "auxevol_gfs":
             prefunc += rf"""
-  if (strstr(params.CoordSystemName, "Spherical") != NULL) {{
-    if(NUM_AUXEVOL_GFS > 0) {{
-      PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
-    }}
+  if(NUM_AUXEVOL_GFS > 0) {{
+    PUParray(p, gridfuncs.auxevol_gfs, {num_gfs} * Nxx_plus_2NGHOSTS_tot);
   }}"""
     prefunc += """
 }
@@ -238,16 +418,11 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
     # PUP routine for charecomm_struct
     prefunc += """
 // PUP routine for struct charecomm_struct
-void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params, const params_struct &params_chare) {
-  const int ntot = params.Nxx_plus_2NGHOSTS0 * params.Nxx_plus_2NGHOSTS1 * params.Nxx_plus_2NGHOSTS2;
+void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params_chare) {
   const int ntotchare = params_chare.Nxx_plus_2NGHOSTS0 * params_chare.Nxx_plus_2NGHOSTS1 * params_chare.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
-    cc.globalidx3pt_to_chareidx3 = (int *restrict)malloc(sizeof(int) * ntot);
-    cc.globalidx3pt_to_localidx3pt = (int *restrict)malloc(sizeof(int) * ntot);
     cc.localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
   }
-  PUParray(p, cc.globalidx3pt_to_chareidx3, ntot);
-  PUParray(p, cc.globalidx3pt_to_localidx3pt, ntot);
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
 
@@ -264,6 +439,12 @@ void pup_diagnostic_struct(PUP::er &p, diagnostic_struct &ds, const params_struc
   p | ds.num_diagnostic_1d_z_pts;
   p | ds.num_diagnostic_2d_xy_pts;
   p | ds.num_diagnostic_2d_yz_pts;
+  p | ds.sizeinbytes_per_pt_1d;
+  p | ds.sizeinbytes_per_pt_2d;
+  p | ds.totsizeinbytes_1d_y;
+  p | ds.totsizeinbytes_1d_z;
+  p | ds.totsizeinbytes_2d_xy;
+  p | ds.totsizeinbytes_2d_yz;
 
   if (p.isUnpacking()) {
     ds.localidx3_diagnostic_1d_y_pt = (int *restrict)malloc(sizeof(int) * ds.num_diagnostic_1d_y_pts);
@@ -414,7 +595,8 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     # PUP routine for griddata struct
     prefunc += """
 // PUP routine for struct griddata
-// During time evolution, need params from griddata which is used to unpack charecomm_struct in griddata_chare and xx for diagnostics.
+// During time evolution, need params from griddata for xx used by diagnostics;
+// charecomm_struct now unpacks from gd.params within griddata_chare.
 void pup_griddata(PUP::er &p, griddata_struct &gd) {
   pup_params_struct(p, gd.params);
   if (p.isUnpacking()) {
@@ -431,7 +613,7 @@ void pup_griddata(PUP::er &p, griddata_struct &gd) {
     prefunc += """
 // PUP routine for struct griddata_chare
 // For unpacking order is important; unpacked structs are used for unpacking the subsequent structs.
-void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &params, const commondata_struct &commondata) {
+void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const commondata_struct &commondata) {
 
   pup_params_struct(p, gd.params);
 
@@ -446,7 +628,7 @@ void pup_griddata_chare(PUP::er &p, griddata_struct &gd, const params_struct &pa
 
   pup_diagnostic_struct(p, gd.diagnosticstruct, gd.params);
 
-  pup_charecomm_struct(p, gd.charecommstruct, params, gd.params);
+  pup_charecomm_struct(p, gd.charecommstruct, gd.params);
 
   pup_bc_struct(p, gd.bcstruct);
 

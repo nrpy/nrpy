@@ -19,8 +19,6 @@ def register_CFunction_poisoning_check_inputs() -> None:
     This function checks the inputs of a `bhahaha_params_and_data_struct` by verifying
     that `REAL` numbers are not `NaN`, pointers are not `NULL`, and integers are not `-100`.
     If any poisoned values are detected, it errors out with a useful error message.
-
-    >>> register_CFunction_poisoning_check_inputs()
     """
     includes = [
         "stdio.h",

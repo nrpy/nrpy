@@ -36,7 +36,7 @@ static void apply_bcs_outerextrap_and_inner_only_specific_gfs_host(const params_
                                                         1.0 * gfs[IDX4pt(gfs_to_sync[which_gf], idx_offset3)];
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs_host
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only_specific_gfs_host
 /**
  * Apply BCs to pure boundary points
  */
@@ -54,7 +54,7 @@ static void apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher(const pa
       }
     }
   }
-} // END FUNCTION apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_only_specific_gfs__launcher
 
 /**
  * *Suppose the outer boundary point is at the i0=max(i0) face. Then we fit known data at i0-3, i0-2, and i0-1
@@ -91,4 +91,4 @@ void apply_bcs_outerextrap_and_inner_specific_gfs(const commondata_struct *restr
   //              populated first; hence this being
   //              STEP 2 OF 2.
   apply_bcs_inner_only_specific_gfs(commondata, params, bcstruct, gfs, num_gfs, gfs_to_sync);
-} // END FUNCTION apply_bcs_outerextrap_and_inner_specific_gfs
+} // END FUNCTION: apply_bcs_outerextrap_and_inner_specific_gfs

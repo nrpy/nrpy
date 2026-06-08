@@ -260,7 +260,7 @@ class ReferenceMetric:
             self.ghatDDdDD = cast(
                 List[List[List[List[sp.Expr]]]],
                 gri.register_gridfunctions_for_single_rankN(
-                    "ghatDDdDD", rank=4, symmetry="sym01sym23", group="AUXEVOL"
+                    "ghatDDdDD", rank=4, symmetry="sym01_sym23", group="AUXEVOL"
                 ),
             )
         elif not enable_rfm_precompute:
@@ -1148,17 +1148,23 @@ class ReferenceMetric:
             # fmt: on
         if self.CoordSystem == "LWedgeHSinhSph":
             # Lower-wedge HoleySinhSpherical
-            # This rotates the wedge 90-degrees clockwise along the y-axis, causing x_old=-z_new and z_old=x_new
-            #   Thus, x_new = z_old, y_new = y_old, z_new = -x_old
+            # The LWedge is the z-reflection of the UWedge: for every point (x,y,z)
+            # covered by the UWedge at internal coordinates (theta, phi), the LWedge
+            # covers the point (x, y, -z) at internal coordinates (theta, -phi).
+            # This ensures the combined ring+wedge system has exact z-reflection
+            # symmetry, consistent with the ring being axisymmetric about z.
+            #
+            # Rotation matrix R_L = P_z * R_y(-90) * P_y (det = +1, proper rotation):
+            #   x_new = -z_old, y_new = -y_old, z_new = -x_old
 
-            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            # Lower wedge: x_new = -z_old, y_new = -y_old, z_new = -x_old
             self.Cart_to_xx[0] = SINHW * sp.asinh(
                 r_ito_Cart * sp.sinh(1 / SINHW) / AMPL
             )
             # Cart_to_xx[1] = sp.acos(Cartz / rr)
-            self.Cart_to_xx[1] = sp.acos(self.Cartx / r_ito_Cart)
+            self.Cart_to_xx[1] = sp.acos(-self.Cartx / r_ito_Cart)
             # Cart_to_xx[2] = sp.atan2(Carty, Cartx)
-            self.Cart_to_xx[2] = sp.atan2(self.Carty, -self.Cartz)
+            self.Cart_to_xx[2] = sp.atan2(-self.Carty, -self.Cartz)
 
             # Now define xCart, yCart, and zCart in terms of x0,xx[1],xx[2].
             #   Note that the relation between r and x0 is not necessarily trivial in SinhSpherical coordinates. See above.
@@ -1167,10 +1173,10 @@ class ReferenceMetric:
             # xx_to_Cart[1] = xxSph[0] * sp.sin(xxSph[1]) * sp.sin(xxSph[2])
             # xx_to_Cart[2] = xxSph[0] * sp.cos(xxSph[1])
 
-            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            # Lower wedge: x_new = -z_old, y_new = -y_old, z_new = -x_old
             # fmt: off
-            self.xx_to_Cart[0] = +self.xxSph[0] * sp.cos(self.xxSph[1])
-            self.xx_to_Cart[1] = +self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.sin(self.xxSph[2])
+            self.xx_to_Cart[0] = -self.xxSph[0] * sp.cos(self.xxSph[1])
+            self.xx_to_Cart[1] = -self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.sin(self.xxSph[2])
             self.xx_to_Cart[2] = -self.xxSph[0] * sp.sin(self.xxSph[1]) * sp.cos(self.xxSph[2])
 
             # Set the unit vectors
@@ -1179,11 +1185,11 @@ class ReferenceMetric:
             #                [sp.cos(xxSph[1])*sp.cos(xxSph[2]), sp.cos(xxSph[1])*sp.sin(xxSph[2]), -sp.sin(xxSph[1])],
             #                [                -sp.sin(xxSph[2]),                  sp.cos(xxSph[2]),  sp.sympify(0)   ]]
 
-            # Lower wedge: x_new = z_old, y_new = y_old, z_new = -x_old
+            # Lower wedge: x_new = -z_old, y_new = -y_old, z_new = -x_old
             xxS = self.xxSph
-            self.UnitVectors = [[+sp.cos(xxS[1]), sp.sin(xxS[1]) * sp.sin(xxS[2]), -sp.sin(xxS[1]) * sp.cos(xxS[2])],
-                                [-sp.sin(xxS[1]), sp.cos(xxS[1]) * sp.sin(xxS[2]), -sp.cos(xxS[1]) * sp.cos(xxS[2])],
-                                [sp.sympify(0), sp.cos(xxS[2]), +sp.sin(xxS[2])]]
+            self.UnitVectors = [[-sp.cos(xxS[1]), -sp.sin(xxS[1]) * sp.sin(xxS[2]), -sp.sin(xxS[1]) * sp.cos(xxS[2])],
+                                [+sp.sin(xxS[1]), -sp.cos(xxS[1]) * sp.sin(xxS[2]), -sp.cos(xxS[1]) * sp.cos(xxS[2])],
+                                [sp.sympify(0), -sp.cos(xxS[2]), +sp.sin(xxS[2])]]
             # fmt: on
 
     def spherical_like(self) -> None:

@@ -21,7 +21,6 @@ They are used to evolve the spins and angular momenta in the SEOBNRv5PHM model
 (see Section III.C-G of https://arxiv.org/pdf/2303.18143 for the full list of terms)
 and are used in the SEBOBv2 formalism described in Mahesh, McWilliams, and Etienne,
 "Spinning Effective-to-Backwards-One Body".
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:

@@ -39,7 +39,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach() -> (
     modes = [(2, 2), (2, 1), (3, 3), (3, 2), (4, 4), (4, 3), (5, 5)]
 
     for l, m in modes:
-        hNR.append(cast(sp.Expr, const.hNR[f"({l} , {m})"]))
+        hNR.append(const.hNR[f"({l} , {m})"])
         hNR_labels.append(f"const REAL hNR{l}{m}")
 
     hNR_code = ccg.c_codegen(

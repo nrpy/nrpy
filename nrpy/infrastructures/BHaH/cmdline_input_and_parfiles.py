@@ -20,15 +20,15 @@ import nrpy.params as par
 # Each C helper function and template is isolated in its own constant for maximum clarity and modularity.
 
 _C_DEFINES = r"""#define LINE_SIZE 1024 // Define the max size of a line
-#define PARAM_SIZE 128 // Define the max param string size
+#define PARAM_SIZE LINE_SIZE // Define the max param token string size
 """
 
 _C_TRIM_SPACE_FUNC = r"""
 /**
  * Trims leading and trailing whitespace from a string.
  *
- * @param str - The input string to be trimmed.
- * @return - A pointer to the trimmed string.
+ * @param[in,out] str The input string to be trimmed.
+ * @return Pointer to the trimmed string.
  *
  * This function removes any leading and trailing whitespace characters from the input string.
  * It modifies the original string by inserting a null terminator after the last non-space character.
@@ -59,9 +59,9 @@ _C_SAFE_COPY_FUNC = r"""
 /**
  * Safely copies a source string to a destination buffer, preventing buffer overflows.
  *
- * @param dest - The destination buffer where the string will be copied.
- * @param src - The source string to be copied.
- * @param size - The size of the destination buffer.
+ * @param[out] dest The destination buffer where the string will be copied.
+ * @param[in] src The source string to be copied.
+ * @param size The size of the destination buffer.
  *
  * This function ensures that the source string fits within the destination buffer.
  * It checks for NULL pointers and verifies that the source string does not exceed the buffer size.
@@ -110,8 +110,8 @@ _C_FIND_PARAM_DESCRIPTOR_FUNC = r"""
 /**
  * Searches for a parameter descriptor by its name.
  *
- * @param param_name - The name of the parameter to search for.
- * @return - A pointer to the corresponding param_descriptor if found; otherwise, NULL.
+ * @param[in] param_name The name of the parameter to search for.
+ * @return Pointer to the corresponding param_descriptor if found; otherwise, NULL.
  *
  * This function iterates through the param_table to find a descriptor that matches the given
  * parameter name. It facilitates parameter validation and assignment during parsing.
@@ -130,9 +130,9 @@ _C_PARSE_PARAM_FUNC = r"""
 /**
  * Parses a parameter string to extract the parameter name and array size if applicable.
  *
- * @param param_str - The input parameter string, potentially containing array notation.
- * @param param_name - Buffer to store the extracted parameter name.
- * @param array_size - Pointer to store the extracted array size; set to 0 for scalar parameters.
+ * @param[in] param_str The input parameter string, potentially containing array notation.
+ * @param[out] param_name Buffer to store the extracted parameter name.
+ * @param[out] array_size Pointer to store the extracted array size; set to 0 for scalar parameters.
  *
  * This function analyzes the parameter string to determine if it represents an array. If array
  * notation (e.g., param[10]) is detected, it extracts the base parameter name and the specified
@@ -144,6 +144,10 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
   if (bracket_start != NULL) {
     // It's an array parameter
     size_t name_len = bracket_start - param_str;
+    if (name_len >= PARAM_SIZE) {
+      fprintf(stderr, "Error: Parameter name is too long in %s.\n", param_str);
+      exit(1);
+    } // END IF (name_len >= PARAM_SIZE): Check for parameter-name buffer overflow
     strncpy(param_name, param_str, name_len);
     param_name[name_len] = '\0';
     const char *bracket_end = strchr(bracket_start + 1, ']');
@@ -153,6 +157,10 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     } // END IF (bracket_end == NULL): Check for missing closing bracket in parameter
     char size_str[16];
     size_t size_len = bracket_end - bracket_start - 1;
+    if (size_len == 0 || size_len >= sizeof(size_str)) {
+      fprintf(stderr, "Error: Invalid array size in parameter %s.\n", param_name);
+      exit(1);
+    } // END IF (size_len == 0 || size_len >= sizeof(size_str)): Check array-size buffer bounds
     strncpy(size_str, bracket_start + 1, size_len);
     size_str[size_len] = '\0';
     *array_size = atoi(size_str);
@@ -165,7 +173,7 @@ static void parse_param(const char *param_str, char *param_name, int *array_size
     safe_copy(param_name, param_str, PARAM_SIZE);
     *array_size = 0;
   } // END IF (bracket_start != NULL): Distinguish between array and scalar parameter
-} // END FUNCTION parse_param
+} // END FUNCTION: parse_param
 """
 
 _C_PARSE_VALUE_FUNC = r"""
@@ -206,7 +214,7 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     safe_copy(values[0], trimmed, PARAM_SIZE);
     *value_count = 1;
   } // END IF (value_str[0] == '{'): Handle array and scalar values
-} // END FUNCTION parse_value
+} // END FUNCTION: parse_value
 """
 
 _C_READ_INTEGER_FUNC = r"""
@@ -216,13 +224,13 @@ static void read_integer(const char *value, int *result, const char *param_name)
   errno = 0; // To detect overflow
   long int_val = strtol(value, &endptr, 10);
 
-  if (endptr == value || *endptr != '\0' || errno == ERANGE) {
+  if (endptr == value || *endptr != '\0' || errno == ERANGE || int_val < INT_MIN || int_val > INT_MAX) {
     fprintf(stderr, "Error: Invalid integer value for %s: %s.\n", param_name, value);
     exit(1);
-  } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate integer conversion and check for errors
+  } // END IF: Validate integer conversion and int range
 
   *result = (int)int_val;
-} // END FUNCTION read_integer
+} // END FUNCTION: read_integer
 """
 
 _C_READ_REAL_FUNC = r"""
@@ -238,32 +246,37 @@ static void read_REAL(const char *value, REAL *result, const char *param_name) {
   } // END IF (endptr == value || *endptr != '\0' || errno == ERANGE): Validate double conversion and check for errors
 
   *result = (REAL)double_val;
-} // END FUNCTION read_REAL
+} // END FUNCTION: read_REAL
 """
 
 _C_READ_CHARARRAY_FUNC = r"""
 // Function to read a character array
 static void read_chararray(const char *value, char *result, const char *param_name, size_t size) {
-  // Remove surrounding quotes if present
-  size_t len = strlen(value);
-  char trimmed_value[PARAM_SIZE];
-  if (value[0] == '"' && value[len - 1] == '"') {
-    if (len - 2 >= size) {
-      fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
-      exit(1);
-    } // END IF (len - 2 >= size): Check for buffer overflow before trimming quotes
-    strncpy(trimmed_value, value + 1, len - 2);
-    trimmed_value[len - 2] = '\0';
-  } else {
-    safe_copy(trimmed_value, value, PARAM_SIZE);
-  } // END IF: Determine if surrounding quotes exist and handle accordingly
+  if (value == NULL) {
+    fprintf(stderr, "Error: NULL character-array value for %s.\n", param_name);
+    exit(1);
+  } // END IF (value == NULL): Check for missing input value
+  if (size == 0) {
+    fprintf(stderr, "Error: Destination size is zero for %s.\n", param_name);
+    exit(1);
+  } // END IF (size == 0): Check for invalid destination buffer size
 
-  if (strlen(trimmed_value) >= size) {
+  const char *copy_start = value;
+  size_t copy_len = strlen(value);
+  if (copy_len >= 2 &&
+      ((value[0] == '"' && value[copy_len - 1] == '"') ||
+       (value[0] == '\'' && value[copy_len - 1] == '\''))) {
+    copy_start = value + 1;
+    copy_len -= 2;
+  } // END IF: Remove surrounding single or double quotes if present
+
+  if (copy_len >= size) {
     fprintf(stderr, "Error: Buffer overflow detected for %s.\n", param_name);
     exit(1);
-  } // END IF (strlen(trimmed_value) >= size): Check for buffer overflow after trimming
-  safe_copy(result, trimmed_value, size);
-} // END FUNCTION read_chararray
+  } // END IF (copy_len >= size): Check for buffer overflow after trimming
+  memcpy(result, copy_start, copy_len);
+  result[copy_len] = '\0';
+} // END FUNCTION: read_chararray
 """
 
 _C_READ_BOOLEAN_FUNC = r"""
@@ -304,7 +317,7 @@ static void read_boolean(const char *value, bool *result, const char *param_name
 
   // Free the allocated memory for the lowercase copy of the value
   free(lower_value);
-} // END FUNCTION read_boolean
+} // END FUNCTION: read_boolean
 """
 
 # endregion
@@ -390,6 +403,33 @@ def _process_parameters_for_c_parser() -> Tuple[List[CParameter], Set[str]]:
         param_index += 1
 
     return parameters_list, needed_readers
+
+
+def _validate_cmdline_inputs(
+    cmdline_inputs: List[str], parameters_list: List[CParameter]
+) -> None:
+    """
+    Validate that requested command-line inputs can be steered safely.
+
+    :param cmdline_inputs: A list of steerable command-line input names.
+    :param parameters_list: A list of CParameter objects.
+    :raises ValueError: If an input is duplicated, unsupported, or an array parameter.
+    """
+    parameter_dict = {c_param.name: c_param for c_param in parameters_list}
+    seen: Set[str] = set()
+    for name in cmdline_inputs:
+        if name in seen:
+            raise ValueError(f"Duplicate command-line input '{name}'.")
+        seen.add(name)
+        c_param = parameter_dict.get(name)
+        if c_param is None:
+            raise ValueError(
+                f"Command-line input '{name}' is not a supported commondata parfile CodeParameter."
+            )
+        if c_param.enum_type in ("PARAM_REAL_ARRAY", "PARAM_INT_ARRAY"):
+            raise ValueError(
+                f"Command-line input '{name}' has array type '{c_param.original_cparam_type}', which is not supported."
+            )
 
 
 def _generate_c_usage_function(project_name: str, cmdline_inputs: List[str]) -> str:
@@ -683,12 +723,14 @@ def _generate_c_body(
     }}
 }}
 
-    // Handling options 3 and 4: Overwriting steerable parameters
-    if (option == 3 || option == 4) {{
-        // For options 3 and 4, we extract the last arguments as steerable parameters
-{steerable_c_code.rstrip()}
-    }} // END IF (option == 3 || option == 4)
   }} // END WHILE LOOP over all lines in the file
+
+  // Handling options 3 and 4: Overwriting steerable parameters
+  if (option == 3 || option == 4) {{
+      // For options 3 and 4, we extract the last arguments as steerable parameters
+{steerable_c_code.rstrip()}
+  }} // END IF (option == 3 || option == 4)
+
   fclose(file); // Close the parameter file.
 """
     return body
@@ -711,12 +753,62 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     :param project_name: Name of the project. Used for file naming and error messaging.
     :param cmdline_inputs: Optional list of command-line inputs that can be used to overwrite specific
                            parameters defined in the parameter file.
+
+    Doctests:
+    >>> par.glb_code_params_dict.clear()
+    >>> cfc.CFunction_dict.clear()
+    >>> _mode = par.register_CodeParameter(
+    ...     "char[32]", "CodeParameters_c_files", "runtime_mode", "default",
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False
+    ... )
+    >>> register_CFunction_cmdline_input_and_parfile_parser(
+    ...     "example_project", cmdline_inputs=["runtime_mode"]
+    ... )
+    >>> generated = cfc.CFunction_dict["cmdline_input_and_parfile_parser"].full_function
+    >>> "read_chararray(argv[argc - number_of_steerable_parameters + 0]" in generated
+    True
+    >>> "commondata->runtime_mode" in generated
+    True
+    >>> "Remove surrounding single or double quotes" in generated
+    True
+    >>> generated.find("// Handling options 3 and 4") > generated.find(
+    ...     "} // END WHILE LOOP over all lines in the file"
+    ... )
+    True
+    >>> "PARAM_SIZE LINE_SIZE" in generated
+    True
+    >>> try:
+    ...     register_CFunction_cmdline_input_and_parfile_parser(
+    ...         "example_project", cmdline_inputs=["runtime_mode", "runtime_mode"]
+    ...     )
+    ... except ValueError as err:
+    ...     print(err)
+    Duplicate command-line input 'runtime_mode'.
+    >>> try:
+    ...     register_CFunction_cmdline_input_and_parfile_parser(
+    ...         "example_project", cmdline_inputs=["missing_input"]
+    ...     )
+    ... except ValueError as err:
+    ...     print(err)
+    Command-line input 'missing_input' is not a supported commondata parfile CodeParameter.
+    >>> _array = par.register_CodeParameter(
+    ...     "REAL[2]", "CodeParameters_c_files", "runtime_array", 0.0,
+    ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False
+    ... )
+    >>> try:
+    ...     register_CFunction_cmdline_input_and_parfile_parser(
+    ...         "example_project", cmdline_inputs=["runtime_array"]
+    ...     )
+    ... except ValueError as err:
+    ...     print(err)
+    Command-line input 'runtime_array' has array type 'REAL[2]', which is not supported.
     """
     if cmdline_inputs is None:
         cmdline_inputs = []
 
     # Step 1: Analyze parameters and determine C generation requirements.
     parameters_list, needed_readers = _process_parameters_for_c_parser()
+    _validate_cmdline_inputs(cmdline_inputs, parameters_list)
 
     # Step 2: Generate the C preamble with all helper functions.
     prefunc = _generate_c_preamble(
@@ -733,6 +825,7 @@ def register_CFunction_cmdline_input_and_parfile_parser(
             "<string.h>",
             "<ctype.h>",
             "<errno.h>",
+            "<limits.h>",
             "<stdbool.h>",
         ],
         prefunc=prefunc,
@@ -746,9 +839,9 @@ help information, reading different parameter files, and overwriting steerable p
 with provided convergence factors. The function ensures that all parameters are valid,
 correctly formatted, and not duplicated.
 
-@param commondata - Pointer to the commondata_struct to be populated.
-@param argc - The argument count from the command-line input.
-@param argv - The argument vector containing command-line arguments.""",
+@param[in,out] commondata Pointer to the commondata_struct to be populated.
+@param argc The argument count from the command-line input.
+@param[in] argv The argument vector containing command-line arguments.""",
         cfunc_type="void",
         name="cmdline_input_and_parfile_parser",
         params="commondata_struct *restrict commondata, int argc, const char *argv[]",
@@ -933,7 +1026,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     >>> # Clear any existing CFunction_dict if necessary
     >>> cfc.CFunction_dict.clear()
     >>> # Setup project directory
-    >>> project_dir = Path("/tmp/tmp_BHaH_parfile")
+    >>> project_dir = Path(".tmp_BHaH_parfile")
     >>> if project_dir.exists():
     ...     shutil.rmtree(project_dir)
     >>> project_dir.mkdir(parents=True, exist_ok=True)
@@ -967,6 +1060,7 @@ def generate_default_parfile(project_dir: str, project_name: str) -> None:
     pi_three_sigfigs = 3.14                      # (REAL) Pi to three significant figures
     string = "cheese"                            # (char[100]) A string parameter
     <BLANKLINE>
+    >>> shutil.rmtree(project_dir)
     """
     parfile_output_by_module: Dict[str, List[str]] = defaultdict(list)
     sorted_params = sorted(

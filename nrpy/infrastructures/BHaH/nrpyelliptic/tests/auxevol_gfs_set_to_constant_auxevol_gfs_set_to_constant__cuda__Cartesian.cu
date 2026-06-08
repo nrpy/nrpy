@@ -94,7 +94,7 @@ __device__ static void auxevol_gfs_single_point_gpu(const size_t streamid, const
            (-7.0 / 4.0 * P0_y * tmp50 - P0_y * tmp58 + (3.0 / 2.0) * P0_z * tmp23 * xx1 - 7.0 / 4.0 * P1_y * tmp51 - P1_y * tmp59 +
             (3.0 / 2.0) * P1_z * tmp25 * xx1 - tmp0 * tmp18 * tmp53 + tmp11 * tmp12 * tmp47 + tmp11 * tmp21 * tmp47 * xx1 - tmp11 * tmp46 * tmp53 +
             tmp17 * tmp43 * tmp8 * xx1 - tmp22 * tmp5 * tmp53 - tmp40 * tmp53 * tmp8 + tmp43 * tmp8 * tmp9 - tmp55));
-} // END FUNCTION auxevol_gfs_single_point_gpu
+} // END FUNCTION: auxevol_gfs_single_point_gpu
 
 /**
  * Kernel: auxevol_gfs_all_points_gpu.
@@ -128,10 +128,10 @@ __global__ static void auxevol_gfs_all_points_gpu(const size_t streamid, const R
         auxevol_gfs_single_point_gpu(streamid, xx0, xx1, xx2, &in_gfs[IDX4(PSI_BACKGROUNDGF, i0, i1, i2)],
                                      &in_gfs[IDX4(ADD_TIMES_AUUGF, i0, i1, i2)]);
 
-      } // END LOOP: for (int i0 = tid0; i0 < Nxx_plus_2NGHOSTS0; i0 += stride0)
-    } // END LOOP: for (int i1 = tid1; i1 < Nxx_plus_2NGHOSTS1; i1 += stride1)
-  } // END LOOP: for (int i2 = tid2; i2 < Nxx_plus_2NGHOSTS2; i2 += stride2)
-} // END FUNCTION auxevol_gfs_all_points_gpu
+      } // END LOOP: for i0 over [tid0, Nxx_plus_2NGHOSTS0)
+    } // END LOOP: for i1 over [tid1, Nxx_plus_2NGHOSTS1)
+  } // END LOOP: for i2 over [tid2, Nxx_plus_2NGHOSTS2)
+} // END FUNCTION: auxevol_gfs_all_points_gpu
 
 /**
  * Kernel: variable_wavespeed_gfs_all_points_gpu.
@@ -176,12 +176,12 @@ __global__ static void variable_wavespeed_gfs_all_points_gpu(const size_t stream
         const REAL dsmin2 = d_params[streamid].dxx2;
 
         // Set local wavespeed
-        in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;
+        in_gfs[IDX4(VARIABLE_WAVESPEEDGF, i0, i1, i2)] = MINIMUM_GLOBAL_WAVESPEED * NRPYMIN(dsmin0, NRPYMIN(dsmin1, dsmin2)) / dt;
 
-      } // END LOOP: for (int i0 = tid0+NGHOSTS; i0 < Nxx_plus_2NGHOSTS0 - NGHOSTS; i0 += stride0)
-    } // END LOOP: for (int i1 = tid1+NGHOSTS; i1 < Nxx_plus_2NGHOSTS1 - NGHOSTS; i1 += stride1)
-  } // END LOOP: for (int i2 = tid2+NGHOSTS; i2 < Nxx_plus_2NGHOSTS2 - NGHOSTS; i2 += stride2)
-} // END FUNCTION variable_wavespeed_gfs_all_points_gpu
+      } // END LOOP: for i0 over [tid0+NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)
+    } // END LOOP: for i1 over [tid1+NGHOSTS, Nxx_plus_2NGHOSTS1 - NGHOSTS)
+  } // END LOOP: for i2 over [tid2+NGHOSTS, Nxx_plus_2NGHOSTS2 - NGHOSTS)
+} // END FUNCTION: variable_wavespeed_gfs_all_points_gpu
 
 /**
  * Call functions that set up all AUXEVOL gridfunctions.
@@ -227,4 +227,4 @@ void auxevol_gfs_set_to_constant__rfm__Cartesian(commondata_struct *restrict com
     cudaCheckErrors(cudaKernel, "auxevol_gfs_all_points_gpu failure");
   }
 
-} // END FUNCTION auxevol_gfs_set_to_constant__rfm__Cartesian
+} // END FUNCTION: auxevol_gfs_set_to_constant__rfm__Cartesian

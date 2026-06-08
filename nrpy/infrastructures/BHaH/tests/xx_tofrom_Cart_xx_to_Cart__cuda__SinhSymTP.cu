@@ -28,4 +28,4 @@ __host__ __device__ void xx_to_Cart__rfm__SinhSymTP(const params_struct *restric
     xCart[2] = params->Cart_originz +
                sqrt(((params->AMAX) * (params->AMAX)) * ((tmp3) * (tmp3)) / ((tmp1) * (tmp1)) + ((params->bScale) * (params->bScale))) * cos(xx1);
   }
-} // END FUNCTION xx_to_Cart__rfm__SinhSymTP
+} // END FUNCTION: xx_to_Cart__rfm__SinhSymTP

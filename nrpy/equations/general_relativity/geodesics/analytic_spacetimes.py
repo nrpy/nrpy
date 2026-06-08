@@ -7,6 +7,8 @@ It is designed to integrate with nrpy's CodeParameter system.
 
 
 Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
+
 """
 
 # Step 0.a: Import standard Python modules

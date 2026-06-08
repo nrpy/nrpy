@@ -1,4 +1,4 @@
-# BHaHAHA/area.py
+# equations/general_relativity/bhahaha/area.py
 """
 Calculate various geometric properties of a surface embedded in a 3D spherical space.
 
@@ -17,7 +17,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, cast
+from typing import Dict, List, cast
 
 import sympy as sp
 
@@ -34,7 +34,7 @@ def area() -> sp.Expr:
 
     This is Eq 33 of Lin & Novak, https://arxiv.org/pdf/gr-qc/0702038v2
 
-    DocTests:
+    Doctests:
     >>> expr = area()
     Setting up reference_metric[Spherical]...
     Setting up ExpansionFunctionThetaClass[Spherical]...
@@ -50,6 +50,7 @@ def area() -> sp.Expr:
         for j in range(3):
             physgammahatDD[i][j] = Th.gammaDD[i][j] / rfm.ReDD[i][j]
     h = sp.Symbol("hh", real=True)
+    xx0 = sp.Symbol("xx0")
     h_dD = ixp.declarerank1("hh_dD")
     term1a = (
         physgammahatDD[0][0] * h_dD[1] ** 2
@@ -67,7 +68,7 @@ def area() -> sp.Expr:
         + physgammahatDD[0][2] * h * h_dD[1] * sp.sin(rfm.xx[1])
         + physgammahatDD[1][2] * h**2 * sp.sin(rfm.xx[1])
     )
-    area_element = sp.sqrt(term1a * term1b - term2**2).replace(sp.sympify("xx0"), h)
+    area_element = sp.sqrt(term1a * term1b - term2**2).xreplace({xx0: h})
     return cast(sp.Expr, area_element)
 
 
@@ -77,7 +78,7 @@ def area2() -> sp.Expr:
 
     This is Eq 24 of Hui & Lin, https://arxiv.org/pdf/2404.16511
 
-    DocTests:
+    Doctests:
     >>> expr = area2()
     >>> isinstance(expr, sp.Expr)
     True
@@ -86,6 +87,7 @@ def area2() -> sp.Expr:
     """
     Th = ExpansionFunctionTheta["Spherical"]
     h = sp.Symbol("hh", real=True)
+    xx0 = sp.Symbol("xx0")
     h_dD = ixp.declarerank1("hh_dD")
     term1a = (
         Th.gammaDD[0][0] * h_dD[1] ** 2
@@ -103,7 +105,7 @@ def area2() -> sp.Expr:
         + Th.gammaDD[0][2] * h_dD[1]
         + Th.gammaDD[1][2]
     )
-    area_element = sp.sqrt((term1a * term1b - term2**2).replace(sp.sympify("xx0"), h))
+    area_element = sp.sqrt(term1a * term1b - term2**2).xreplace({xx0: h})
     return cast(sp.Expr, area_element)
 
 
@@ -140,7 +142,7 @@ def compute_q2DD() -> List[List[sp.Expr]]:
     2. Use these derivatives to construct the induced metric qDD by summing over the ambient metric components gamma_{kl}.
     3. Extract the 2x2 sub-matrix q2DD from qDD, which includes only the angular components (theta, phi).
 
-    DocTests:
+    Doctests:
     >>> q2 = compute_q2DD()
     >>> isinstance(q2, list)
     True
@@ -214,7 +216,7 @@ def area3() -> sp.Expr:
     where q2DD is the induced 2x2 metric tensor on the surface parameterized by (theta, phi).
     This metric tensor is derived from the embedding of the surface into the 3D spherical space.
 
-    DocTests:
+    Doctests:
     >>> expr = area3()
     >>> isinstance(expr, sp.Expr)
     True
@@ -222,12 +224,14 @@ def area3() -> sp.Expr:
     :return: The symbolic expression for the differential area element.
     """
     q2DD = compute_q2DD()
+    h = sp.Symbol("hh", real=True)
+    xx0 = sp.Symbol("xx0")
     # Computing the determinant of the 2x2 induced metric tensor q2DD, the _ variable is q2UU, ignored.
     _, q2det = ixp.symm_matrix_inverter2x2(q2DD)
 
     # Returning the square root of the determinant, which represents the area element
     # Replace the placeholder variable "xx0" with the actual radius function h
-    area_element = sp.sqrt(q2det.replace(sp.sympify("xx0"), sp.Symbol("hh")))
+    area_element = sp.sqrt(q2det.xreplace({xx0: h}))
     return cast(sp.Expr, area_element)
 
 
@@ -235,7 +239,7 @@ def spin_NewtonRaphson() -> sp.Expr:
     """
     Compute the Newton-Raphson iteration for spin calculations based on Eq 5.2 from Alcubierre et al arXiv:gr-qc/0411149.
 
-    DocTests:
+    Doctests:
     >>> expr = spin_NewtonRaphson()
     >>> isinstance(expr, sp.Expr)
     True
@@ -244,25 +248,23 @@ def spin_NewtonRaphson() -> sp.Expr:
     """
     # Define symbols for calculation
     x, Cr, E, K = sp.symbols("x C_r E K")
+    elliptic_arg = -(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2
+    elliptic_replacements = {
+        sp.elliptic_e(elliptic_arg): E,
+        sp.elliptic_k(elliptic_arg): K,
+    }
 
     # Define the function f(x) based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149,
     # where x = (a/m)^2. Given Cr, the spin x is found when this expression equals zero.
-    f_of_x = ((1 + sp.sqrt(1 - x**2)) / sp.pi) * sp.elliptic_e(
-        -(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2
-    ) - Cr
+    f_of_x = ((1 + sp.sqrt(1 - x**2)) / sp.pi) * sp.elliptic_e(elliptic_arg) - Cr
 
-    # Differentiate the function f(x) with respect to x and simplify
-    fprime_of_x = sp.diff(f_of_x, x).simplify()
+    # Differentiate the function f(x) with respect to x.
+    fprime_of_x = sp.diff(f_of_x, x)
 
     # Substitute elliptic functions with symbols E and K.
     # In the C code, E(x) & K(x) are computed and stored in symbols E & K, respectively.
-    fprime_of_x = fprime_of_x.subs(
-        {
-            sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E,
-            sp.elliptic_k(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): K,
-        }
-    )
-    f_of_x = f_of_x.subs({sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E})
+    fprime_of_x = fprime_of_x.xreplace(elliptic_replacements)
+    f_of_x = f_of_x.xreplace({sp.elliptic_e(elliptic_arg): E})
 
     # Return the Newton-Raphson iteration formula
     return cast(sp.Expr, x - f_of_x / fprime_of_x)
@@ -272,7 +274,7 @@ def spin_HalleysMethod() -> sp.Expr:
     """
     Compute Halley's method iteration for spin calculations based on Eq 5.2 from Alcubierre et al arXiv:gr-qc/0411149.
 
-    DocTests:
+    Doctests:
     >>> expr = spin_HalleysMethod()
     >>> isinstance(expr, sp.Expr)
     True
@@ -281,12 +283,15 @@ def spin_HalleysMethod() -> sp.Expr:
     """
     # Define symbols for calculation
     x, Cr, E, K = sp.symbols("x C_r E K")
+    elliptic_arg = -(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2
+    elliptic_replacements = {
+        sp.elliptic_e(elliptic_arg): E,
+        sp.elliptic_k(elliptic_arg): K,
+    }
 
     # Define the function f(x) based on Eq 5.2 of Alcubierre et al arXiv:gr-qc/0411149,
     # where x = (a/m)^2. Given Cr, the spin x is found when this expression equals zero.
-    f_of_x = ((1 + sp.sqrt(1 - x**2)) / sp.pi) * sp.elliptic_e(
-        -(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2
-    ) - Cr
+    f_of_x = ((1 + sp.sqrt(1 - x**2)) / sp.pi) * sp.elliptic_e(elliptic_arg) - Cr
 
     # Differentiate the function f(x) with respect to x and simplify
     fp_of_x = sp.diff(f_of_x, x)
@@ -295,21 +300,9 @@ def spin_HalleysMethod() -> sp.Expr:
 
     # Substitute elliptic functions with symbols E and K.
     # In the C code, E(x) & K(x) are computed and stored in symbols E & K, respectively.
-    fpp_of_x = fpp_of_x.subs(
-        {
-            sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E,
-            sp.elliptic_k(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): K,
-        }
-    ).simplify()
-    fp_of_x = fp_of_x.subs(
-        {
-            sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E,
-            sp.elliptic_k(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): K,
-        }
-    ).simplify()
-    f_of_x = f_of_x.subs(
-        {sp.elliptic_e(-(x**2) / (1 + sp.sqrt(1 - x**2)) ** 2): E}
-    ).simplify()
+    fpp_of_x = fpp_of_x.xreplace(elliptic_replacements)
+    fp_of_x = fp_of_x.xreplace(elliptic_replacements)
+    f_of_x = f_of_x.xreplace({sp.elliptic_e(elliptic_arg): E})
 
     # Return the Halley's iteration formula
     return cast(
@@ -323,7 +316,7 @@ def circumferential_arclength(direction: str) -> sp.Expr:
 
     The calculation is performed in spherical coordinates, along a specific circumferential direction.
 
-    DocTests:
+    Doctests:
     >>> arclength_theta = circumferential_arclength("theta")
     >>> isinstance(arclength_theta, sp.Expr)
     True
@@ -340,53 +333,109 @@ def circumferential_arclength(direction: str) -> sp.Expr:
     :raises ValueError: If an invalid direction is specified.
     """
     q2DD = compute_q2DD()
+    h = sp.Symbol("hh", real=True)
+    xx0 = sp.Symbol("xx0")
 
     if direction == "theta":
         # Differential arclength in the theta direction
         q_theta_theta = q2DD[0][0]
-        arclength_expr = sp.sqrt(
-            q_theta_theta.replace(sp.sympify("xx0"), sp.Symbol("hh"))
-        )
+        arclength_expr = sp.sqrt(q_theta_theta.xreplace({xx0: h}))
     elif direction == "phi":
         # Differential arclength in the phi direction
         q_phi_phi = q2DD[1][1]
-        arclength_expr = sp.sqrt(q_phi_phi.replace(sp.sympify("xx0"), sp.Symbol("hh")))
+        arclength_expr = sp.sqrt(q_phi_phi.xreplace({xx0: h}))
     else:
         raise ValueError("Invalid direction specified. Use 'theta' or 'phi'.")
 
     return cast(sp.Expr, arclength_expr)
 
 
+def circumference_metric_roots() -> List[sp.Expr]:
+    """
+    Compute the induced-metric ingredients for proper-circumference integrals.
+
+    We return `sqrt(q_{theta theta})`, `sqrt(q_{phi phi})`, and `q_{theta phi}`
+    on the surface `r = h(theta, phi)`.
+
+    Doctests:
+    >>> roots = circumference_metric_roots()
+    >>> len(roots)
+    3
+    >>> all(isinstance(expr, sp.Expr) for expr in roots)
+    True
+
+    :return: A list containing `sqrt(q_{theta theta})`, `sqrt(q_{phi phi})`, and `q_{theta phi}`.
+    """
+    Th = ExpansionFunctionTheta["Spherical"]
+    h = sp.Symbol("hh", real=True)
+    xx0 = sp.Symbol("xx0")
+    h_dD = ixp.declarerank1("hh_dD")
+
+    qtt = (
+        Th.gammaDD[0][0] * h_dD[1] ** 2
+        + 2 * Th.gammaDD[0][1] * h_dD[1]
+        + Th.gammaDD[1][1]
+    )
+    qpp = (
+        Th.gammaDD[0][0] * h_dD[2] ** 2
+        + 2 * Th.gammaDD[0][2] * h_dD[2]
+        + Th.gammaDD[2][2]
+    )
+    qtp = (
+        Th.gammaDD[0][0] * h_dD[1] * h_dD[2]
+        + Th.gammaDD[0][1] * h_dD[2]
+        + Th.gammaDD[0][2] * h_dD[1]
+        + Th.gammaDD[1][2]
+    )
+    return [
+        sp.sqrt(qtt.xreplace({xx0: h})),
+        sp.sqrt(qpp.xreplace({xx0: h})),
+        qtp.xreplace({xx0: h}),
+    ]
+
+
 if __name__ == "__main__":
     import doctest
+    import os
     import sys
 
     import nrpy.validate_expressions.validate_expressions as ve
 
-    # Run doctests
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    # Validate expressions for the area functions
     ve.assert_equal(area(), area2())
     ve.assert_equal(area(), area3())
-    ve.assert_equal(area2(), area3())
 
-    # Validation expression in Mathematica:
-    # f= (1 + Sqrt[1 - x ^ 2]) / Pi * EllipticE[-x^2 / (1 + Sqrt[1 - x^2])^2] - Cr; CForm[FullSimplify[x - f/D[f, x]]]
-    # so
-    x_main, Cr_main = sp.symbols("x C_r")
-    trusted_spin_expr = (
-        x_main
-        * (
-            -(Cr_main * sp.pi * sp.sqrt(1 - x_main**2))
-            + (1 + sp.sqrt(1 - x_main**2)) * sp.Symbol("K")
-        )
-    ) / (
-        (-1 + x_main**2 - sp.sqrt(1 - x_main**2)) * sp.Symbol("E")
-        + (1 + sp.sqrt(1 - x_main**2)) * sp.Symbol("K")
+    export_only: Dict[str, sp.Expr] = {
+        "area": area(),
+        "area2": area2(),
+        "area3": area3(),
+        "spin_NewtonRaphson": spin_NewtonRaphson(),
+        "spin_HalleysMethod": spin_HalleysMethod(),
+        "circumferential_arclength_theta": circumferential_arclength("theta"),
+        "circumferential_arclength_phi": circumferential_arclength("phi"),
+    }
+    validation_q2DD = compute_q2DD()
+    for row_idx in range(2):
+        for col_idx in range(2):
+            export_only[f"q2DD_{row_idx}{col_idx}"] = validation_q2DD[row_idx][col_idx]
+    circumference_roots = circumference_metric_roots()
+    export_only["circumference_metric_root_qtt"] = circumference_roots[0]
+    export_only["circumference_metric_root_qpp"] = circumference_roots[1]
+    export_only["circumference_metric_qtp"] = circumference_roots[2]
+
+    results_dict = ve.process_dictionary_of_expressions(
+        export_only, fixed_mpfs_for_free_symbols=True
     )
-    ve.assert_equal(spin_NewtonRaphson(), trusted_spin_expr)
+    ve.compare_or_generate_trusted_results(
+        os.path.abspath(__file__),
+        os.getcwd(),
+        f"{os.path.splitext(os.path.basename(__file__))[0]}_Spherical",
+        results_dict,
+    )

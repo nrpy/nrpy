@@ -19,8 +19,6 @@ from typing import Any, cast
 import sympy as sp
 from appdirs import user_cache_dir  # type: ignore
 
-import nrpy.params as par
-
 
 def get_hash(unique_id: str) -> str:
     """
@@ -29,7 +27,7 @@ def get_hash(unique_id: str) -> str:
     :param unique_id: A unique identifier to be hashed.
     :return: The SHA-256 hash string.
 
-    DocTests:
+    Doctests:
     >>> get_hash("test_id") == hashlib.sha256("test_id".encode("utf-8")).hexdigest()
     True
     """
@@ -43,26 +41,13 @@ def cache_file(unique_id: str) -> Path:
     :param unique_id: A unique identifier for generating the file path.
     :return: The cache file path.
 
-    DocTests:
+    Doctests:
     >>> cache_file("test_id").name == f"{get_hash('test_id')}.nrpycache"
     True
     """
     if not Path(user_cache_dir("nrpy")).exists():
         Path(user_cache_dir("nrpy")).mkdir(parents=True, exist_ok=True)
     return Path(user_cache_dir("nrpy")) / f"{get_hash(unique_id)}.nrpycache"
-
-
-def NRPy_params_checksum() -> str:
-    """
-    Generate a checksum of NRPy parameters stored in par.glb_params_dict.
-
-    :return: The checksum string.
-
-    DocTests:
-    >>> isinstance(NRPy_params_checksum(), str)
-    True
-    """
-    return get_hash(str(pickle.dumps(dict(sorted(par.glb_params_dict.items())))))
 
 
 def is_cached(unique_id: str) -> bool:
@@ -72,7 +57,7 @@ def is_cached(unique_id: str) -> bool:
     :param unique_id: A unique identifier to check for.
     :return: True if the file exists, False otherwise.
 
-    DocTests:
+    Doctests:
     >>> # Assuming "nonexistent_id" is not cached
     >>> is_cached("nonexistent_id")
     False
@@ -87,7 +72,7 @@ def read_cached(unique_id: str) -> Any:
     :param unique_id: A unique identifier to read data for.
     :return: The data read from the cache file.
 
-    DocTests:
+    Doctests:
     >>> write_cached('test_read', {'data': 123})
     >>> read_cached('test_read') == {'data': 123}
     True
@@ -105,7 +90,7 @@ def write_cached(unique_id: str, data: Any) -> None:
     :param unique_id: A unique identifier to write data for.
     :param data: The data to be written to the cache.
 
-    DocTests:
+    Doctests:
     >>> write_cached('test_write', {'value': 456})
     >>> read_cached('test_write') == {'value': 456}
     True
@@ -123,7 +108,7 @@ def cached_simplify(expr: sp.Basic) -> sp.Expr:
     :param expr: SymPy expression to be simplified.
     :return: Simplified SymPy expression.
 
-    DocTests:
+    Doctests:
     >>> x = sp.symbols('x')
     >>> expr = sp.sympify("x**2 + 2*x + 1")
     >>> simplified_expr = cached_simplify(expr)

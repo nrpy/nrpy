@@ -69,7 +69,7 @@ def generate_prefunc_variable_wavespeed_gfs_all_points(
     variable_wavespeed_memaccess = gri.BHaHGridFunction.access_gf("variable_wavespeed")
 
     dsmin_computation_str += f"""\n// Set local wavespeed
-        {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * MIN(dsmin0, MIN(dsmin1, dsmin2)) / dt;\n"""
+        {variable_wavespeed_memaccess} = MINIMUM_GLOBAL_WAVESPEED * NRPYMIN(dsmin0, NRPYMIN(dsmin1, dsmin2)) / dt;\n"""
 
     loop_body = BHaH.simple_loop.simple_loop(
         loop_body="\n" + dsmin_computation_str,

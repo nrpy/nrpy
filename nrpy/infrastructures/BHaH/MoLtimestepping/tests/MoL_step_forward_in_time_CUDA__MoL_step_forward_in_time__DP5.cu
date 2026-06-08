@@ -24,7 +24,7 @@ __global__ static void rk_substep_1_gpu(const size_t streamid, REAL *restrict k1
     const REAL_CUDA_ARRAY __rk_exp_0 = FusedMulAddCUDA(RK_Rational_1_5, MulCUDA(k1_gfsL, dt), y_n_gfsL);
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_1_gpu
+} // END FUNCTION: rk_substep_1_gpu
 
 /**
  * Runge-Kutta function for substep 1.
@@ -45,7 +45,7 @@ static void rk_substep_1__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_1_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, y_n_gfs, next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_1_gpu failure");
-} // END FUNCTION rk_substep_1__launcher
+} // END FUNCTION: rk_substep_1__launcher
 
 /**
  * Kernel: rk_substep_2_gpu.
@@ -67,7 +67,7 @@ __global__ static void rk_substep_2_gpu(const size_t streamid, REAL *restrict k1
         FusedMulAddCUDA(RK_Rational_3_40, MulCUDA(k1_gfsL, dt), FusedMulAddCUDA(RK_Rational_9_40, MulCUDA(k2_gfsL, dt), y_n_gfsL));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_2_gpu
+} // END FUNCTION: rk_substep_2_gpu
 
 /**
  * Runge-Kutta function for substep 2.
@@ -88,7 +88,7 @@ static void rk_substep_2__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_2_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, y_n_gfs, next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_2_gpu failure");
-} // END FUNCTION rk_substep_2__launcher
+} // END FUNCTION: rk_substep_2__launcher
 
 /**
  * Kernel: rk_substep_3_gpu.
@@ -118,7 +118,7 @@ __global__ static void rk_substep_3_gpu(const size_t streamid, REAL *restrict k1
         FusedMulAddCUDA(RK_Rational_44_45, MulCUDA(k1_gfsL, dt), NegFusedMulAddCUDA(RK_Rational_56_15, MulCUDA(k2_gfsL, dt), y_n_gfsL)));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_3_gpu
+} // END FUNCTION: rk_substep_3_gpu
 
 /**
  * Runge-Kutta function for substep 3.
@@ -139,7 +139,7 @@ static void rk_substep_3__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_3_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, y_n_gfs, next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_3_gpu failure");
-} // END FUNCTION rk_substep_3__launcher
+} // END FUNCTION: rk_substep_3__launcher
 
 /**
  * Kernel: rk_substep_4_gpu.
@@ -175,7 +175,7 @@ __global__ static void rk_substep_4_gpu(const size_t streamid, REAL *restrict k1
                                                            NegFusedMulAddCUDA(RK_Rational_212_729, MulCUDA(k4_gfsL, dt), y_n_gfsL))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_4_gpu
+} // END FUNCTION: rk_substep_4_gpu
 
 /**
  * Runge-Kutta function for substep 4.
@@ -197,7 +197,7 @@ static void rk_substep_4__launcher(params_struct *restrict params, REAL *restric
   rk_substep_4_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, y_n_gfs, next_y_input_gfs,
                                                                                   dt);
   cudaCheckErrors(cudaKernel, "rk_substep_4_gpu failure");
-} // END FUNCTION rk_substep_4__launcher
+} // END FUNCTION: rk_substep_4__launcher
 
 /**
  * Kernel: rk_substep_5_gpu.
@@ -239,7 +239,7 @@ __global__ static void rk_substep_5_gpu(const size_t streamid, REAL *restrict k1
                                                                            NegFusedMulAddCUDA(RK_Rational_355_33, MulCUDA(k2_gfsL, dt), y_n_gfsL)))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_5_gpu
+} // END FUNCTION: rk_substep_5_gpu
 
 /**
  * Runge-Kutta function for substep 5.
@@ -262,7 +262,7 @@ static void rk_substep_5__launcher(params_struct *restrict params, REAL *restric
   rk_substep_5_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k2_gfs, k3_gfs, k4_gfs, k5_gfs, y_n_gfs,
                                                                                   next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_5_gpu failure");
-} // END FUNCTION rk_substep_5__launcher
+} // END FUNCTION: rk_substep_5__launcher
 
 /**
  * Kernel: rk_substep_6_gpu.
@@ -304,7 +304,7 @@ __global__ static void rk_substep_6_gpu(const size_t streamid, REAL *restrict k1
                                                                         NegFusedMulAddCUDA(RK_Rational_2187_6784, MulCUDA(k5_gfsL, dt), y_n_gfsL)))));
     WriteCUDA(&next_y_input_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_6_gpu
+} // END FUNCTION: rk_substep_6_gpu
 
 /**
  * Runge-Kutta function for substep 6.
@@ -327,7 +327,7 @@ static void rk_substep_6__launcher(params_struct *restrict params, REAL *restric
   rk_substep_6_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs,
                                                                                   next_y_input_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_6_gpu failure");
-} // END FUNCTION rk_substep_6__launcher
+} // END FUNCTION: rk_substep_6__launcher
 
 /**
  * Kernel: rk_substep_7_gpu.
@@ -368,7 +368,7 @@ __global__ static void rk_substep_7_gpu(const size_t streamid, REAL *restrict k1
                                                                         NegFusedMulAddCUDA(RK_Rational_2187_6784, MulCUDA(k5_gfsL, dt), y_n_gfsL)))));
     WriteCUDA(&y_n_gfs[i], __rk_exp_0);
   }
-} // END FUNCTION rk_substep_7_gpu
+} // END FUNCTION: rk_substep_7_gpu
 
 /**
  * Runge-Kutta function for substep 7.
@@ -389,7 +389,7 @@ static void rk_substep_7__launcher(params_struct *restrict params, REAL *restric
   size_t streamid = params->grid_idx % NUM_STREAMS;
   rk_substep_7_gpu<<<blocks_per_grid, threads_per_block, sm, streams[streamid]>>>(streamid, k1_gfs, k3_gfs, k4_gfs, k5_gfs, k6_gfs, y_n_gfs, dt);
   cudaCheckErrors(cudaKernel, "rk_substep_7_gpu failure");
-} // END FUNCTION rk_substep_7__launcher
+} // END FUNCTION: rk_substep_7__launcher
 
 /**
  * Method of Lines (MoL) for "DP5" method: Step forward one full timestep.
@@ -603,4 +603,4 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
 
   // Increment the timestep n:
   commondata->nn++;
-} // END FUNCTION MoL_step_forward_in_time
+} // END FUNCTION: MoL_step_forward_in_time

@@ -68,6 +68,7 @@ def register_CFunction_diagnostic_gfs_set(
     gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
     gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
     gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
+    gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
     if enable_psi4:
         gri.register_gridfunctions(names="DIAG_PSI4_RE", desc="Psi4_Re", group="DIAG")
         gri.register_gridfunctions(names="DIAG_PSI4_IM", desc="Psi4_Im", group="DIAG")
@@ -158,7 +159,7 @@ def register_CFunction_diagnostic_gfs_set(
         body += """
     // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
     // Set psi4 gridfunctions
-    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, diagnostic_gfs[grid]);
+    psi4(commondata, params, (REAL * restrict*)griddata[grid].xx, y_n_gfs, auxevol_gfs, diagnostic_gfs[grid]);
     const int inner_bc_apply_gfs[] = {DIAG_PSI4_REGF, DIAG_PSI4_IMGF};
     const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
     apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
@@ -180,6 +181,7 @@ def register_CFunction_diagnostic_gfs_set(
       const int idx3 = IDX3(i0, i1, i2);
       diagnostic_gfs[grid][IDX4pt(DIAG_LAPSEGF, idx3)] = y_n_gfs[IDX4pt(ALPHAGF, idx3)];
       diagnostic_gfs[grid][IDX4pt(DIAG_WGF, idx3)] = y_n_gfs[IDX4pt(CFGF, idx3)];
+      diagnostic_gfs[grid][IDX4pt(DIAG_GRIDINDEXGF, idx3)] = (REAL)grid;
     } // END LOOP over all gridpoints to set lapse/W diagnostics
   } // END LOOP over grids
 """

@@ -148,19 +148,24 @@ class LorentzBoost:
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
-        # Declare indexed expression for tensor to be boosted
-        boosted_tensorDD = ixp.zerorank2(dimension=4)
+        # Step 1: Ttilde_{mu nu} = (Lambda^-1)^rho_mu T_{rho nu}.
+        tensorDD_after_first_index_boost = ixp.zerorank2(dimension=4)
+        for mu1 in range(4):
+            for nu2 in range(4):
+                for nu1 in range(4):
+                    tensorDD_after_first_index_boost[mu1][nu2] += (
+                        InverseLorentzMatrix[nu1][mu1] * tensorDD[nu1][nu2]
+                    )
 
-        # Perform Lorentz transformation
+        # Step 2: T'_{mu nu} = (Lambda^-1)^rho_nu Ttilde_{mu rho}.
+        boosted_tensorDD = ixp.zerorank2(dimension=4)
         for mu1 in range(4):
             for mu2 in range(4):
-                for nu1 in range(4):
-                    for nu2 in range(4):
-                        boosted_tensorDD[mu1][mu2] += (
-                            InverseLorentzMatrix[nu1][mu1]
-                            * InverseLorentzMatrix[nu2][mu2]
-                            * tensorDD[nu1][nu2]
-                        )
+                for nu2 in range(4):
+                    boosted_tensorDD[mu1][mu2] += (
+                        InverseLorentzMatrix[nu2][mu2]
+                        * tensorDD_after_first_index_boost[mu1][nu2]
+                    )
         return boosted_tensorDD
 
     def boost_tensorDDD(
@@ -176,22 +181,37 @@ class LorentzBoost:
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
-        # Declare indexed expression for tensor to be boosted
-        boosted_tensorDDD = ixp.zerorank3(dimension=4)
+        # Step 1: Ttilde_{mu nu lambda} = (Lambda^-1)^rho_mu T_{rho nu lambda}.
+        tensorDDD_after_first_index_boost = ixp.zerorank3(dimension=4)
+        for mu1 in range(4):
+            for nu2 in range(4):
+                for nu3 in range(4):
+                    for nu1 in range(4):
+                        tensorDDD_after_first_index_boost[mu1][nu2][nu3] += (
+                            InverseLorentzMatrix[nu1][mu1] * tensorDDD[nu1][nu2][nu3]
+                        )
 
-        # Perform Lorentz transformation
+        # Step 2: Ttilde_{mu nu lambda} = (Lambda^-1)^rho_nu Ttilde_{mu rho lambda}.
+        tensorDDD_after_second_index_boost = ixp.zerorank3(dimension=4)
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for nu3 in range(4):
+                    for nu2 in range(4):
+                        tensorDDD_after_second_index_boost[mu1][mu2][nu3] += (
+                            InverseLorentzMatrix[nu2][mu2]
+                            * tensorDDD_after_first_index_boost[mu1][nu2][nu3]
+                        )
+
+        # Step 3: T'_{mu nu lambda} = (Lambda^-1)^rho_lambda Ttilde_{mu nu rho}.
+        boosted_tensorDDD = ixp.zerorank3(dimension=4)
         for mu1 in range(4):
             for mu2 in range(4):
                 for mu3 in range(4):
-                    for nu1 in range(4):
-                        for nu2 in range(4):
-                            for nu3 in range(4):
-                                boosted_tensorDDD[mu1][mu2][mu3] += (
-                                    InverseLorentzMatrix[nu1][mu1]
-                                    * InverseLorentzMatrix[nu2][mu2]
-                                    * InverseLorentzMatrix[nu3][mu3]
-                                    * tensorDDD[nu1][nu2][nu3]
-                                )
+                    for nu3 in range(4):
+                        boosted_tensorDDD[mu1][mu2][mu3] += (
+                            InverseLorentzMatrix[nu3][mu3]
+                            * tensorDDD_after_second_index_boost[mu1][mu2][nu3]
+                        )
         return boosted_tensorDDD
 
     def boost_tensorDDDD(
@@ -207,25 +227,55 @@ class LorentzBoost:
         # Declare inverse Lorentz matrix locally
         InverseLorentzMatrix = self.InverseLorentzMatrix
 
-        # Declare indexed expression for tensor to be boosted
-        boosted_tensorDDDD = ixp.zerorank4(dimension=4)
+        # Step 1: Ttilde_{mu nu lambda kappa} = (Lambda^-1)^rho_mu T_{rho nu lambda kappa}.
+        tensorDDDD_after_first_index_boost = ixp.zerorank4(dimension=4)
+        for mu1 in range(4):
+            for nu2 in range(4):
+                for nu3 in range(4):
+                    for nu4 in range(4):
+                        for nu1 in range(4):
+                            tensorDDDD_after_first_index_boost[mu1][nu2][nu3][nu4] += (
+                                InverseLorentzMatrix[nu1][mu1]
+                                * tensorDDDD[nu1][nu2][nu3][nu4]
+                            )
 
-        # Perform Lorentz transformation
+        # Step 2: Ttilde_{mu nu lambda kappa} = (Lambda^-1)^rho_nu Ttilde_{mu rho lambda kappa}.
+        tensorDDDD_after_second_index_boost = ixp.zerorank4(dimension=4)
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for nu3 in range(4):
+                    for nu4 in range(4):
+                        for nu2 in range(4):
+                            tensorDDDD_after_second_index_boost[mu1][mu2][nu3][nu4] += (
+                                InverseLorentzMatrix[nu2][mu2]
+                                * tensorDDDD_after_first_index_boost[mu1][nu2][nu3][nu4]
+                            )
+
+        # Step 3: Ttilde_{mu nu lambda kappa} = (Lambda^-1)^rho_lambda Ttilde_{mu nu rho kappa}.
+        tensorDDDD_after_third_index_boost = ixp.zerorank4(dimension=4)
+        for mu1 in range(4):
+            for mu2 in range(4):
+                for mu3 in range(4):
+                    for nu4 in range(4):
+                        for nu3 in range(4):
+                            tensorDDDD_after_third_index_boost[mu1][mu2][mu3][nu4] += (
+                                InverseLorentzMatrix[nu3][mu3]
+                                * tensorDDDD_after_second_index_boost[mu1][mu2][nu3][
+                                    nu4
+                                ]
+                            )
+
+        # Step 4: T'_{mu nu lambda kappa} = (Lambda^-1)^rho_kappa Ttilde_{mu nu lambda rho}.
+        boosted_tensorDDDD = ixp.zerorank4(dimension=4)
         for mu1 in range(4):
             for mu2 in range(4):
                 for mu3 in range(4):
                     for mu4 in range(4):
-                        for nu1 in range(4):
-                            for nu2 in range(4):
-                                for nu3 in range(4):
-                                    for nu4 in range(4):
-                                        boosted_tensorDDDD[mu1][mu2][mu3][mu4] += (
-                                            InverseLorentzMatrix[nu1][mu1]
-                                            * InverseLorentzMatrix[nu2][mu2]
-                                            * InverseLorentzMatrix[nu3][mu3]
-                                            * InverseLorentzMatrix[nu4][mu4]
-                                            * tensorDDDD[nu1][nu2][nu3][nu4]
-                                        )
+                        for nu4 in range(4):
+                            boosted_tensorDDDD[mu1][mu2][mu3][mu4] += (
+                                InverseLorentzMatrix[nu4][mu4]
+                                * tensorDDDD_after_third_index_boost[mu1][mu2][mu3][nu4]
+                            )
         return boosted_tensorDDDD
 
 
@@ -261,7 +311,7 @@ if __name__ == "__main__":
 
     # Extend input_dict with the symbolic expressions for the boosted quantities
     input_dict["boosted_vU"] = lb.boost_vectorU(vU)
-    input_dict["boosted_vD"] = lb.boost_vectorU(vD)
+    input_dict["boosted_vD"] = lb.boost_vectorD(vD)
     input_dict["inverse_boosted_vU"] = lb.inverse_boost_vectorU(vU)
     input_dict["boosted_tDD"] = lb.boost_tensorDD(tDD)
     input_dict["boosted_tDDD"] = lb.boost_tensorDDD(tDDD)

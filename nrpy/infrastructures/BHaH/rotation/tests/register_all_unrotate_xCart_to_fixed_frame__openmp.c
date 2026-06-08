@@ -65,4 +65,4 @@ void unrotate_xCart_to_fixed_frame(const commondata_struct commondata, REAL xCar
   xCart[0] = R[0][0] * x_in[0] + R[0][1] * x_in[1] + R[0][2] * x_in[2];
   xCart[1] = R[1][0] * x_in[0] + R[1][1] * x_in[1] + R[1][2] * x_in[2];
   xCart[2] = R[2][0] * x_in[0] + R[2][1] * x_in[1] + R[2][2] * x_in[2];
-} // END FUNCTION unrotate_xCart_to_fixed_frame
+} // END FUNCTION: unrotate_xCart_to_fixed_frame

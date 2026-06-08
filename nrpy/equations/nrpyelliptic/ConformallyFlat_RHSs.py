@@ -2,10 +2,10 @@
 Construct symbolic expressions for the right-hand-side of the hyperbolic relaxation equation.
 Curvilinear coordinates are supported using a reference-metric formalism.
 
-Authors: Thiago Assumpção; assumpcaothiago **at** gmail **dot* com
-         Zachariah B. Etienne; zachetie **at** gmail **dot* com
-
-License: BSD 2-Clause
+Authors: Thiago Assumpção
+         assumpcaothiago **at** gmail **dot* com
+         Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
 """
 
 # Step P1: Import needed modules:
@@ -68,13 +68,13 @@ class HyperbolicRelaxationCurvilinearRHSs:
         else:
             uu, vv = sp.symbols("uu vv", real=True)
 
-        # Step 4a: Declare the rank-1 indexed expression \partial_{i} u,
+        # Step 4.a: Declare the rank-1 indexed expression \partial_{i} u,
         #          Derivative variables like these must have an underscore
         #          in them, so the finite difference module can parse the
         #          variable name properly.
         uu_dD = ixp.declarerank1("uu_dD")
 
-        # Step 4b: Declare the rank-2 indexed expression \partial_{ij} u,
+        # Step 4.b: Declare the rank-2 indexed expression \partial_{ij} u,
         #          which is symmetric about interchange of indices i and j
         #          Derivative variables like these must have an underscore
         #          in them, so the finite difference module can parse the
@@ -108,9 +108,9 @@ class HyperbolicRelaxationCurvilinearRHSs:
             )[0]
 
         # Step 6: Define right-hand sides for the evolution.
-        # Step 6a: uu_rhs = vv - eta_damping*uu:
+        # Step 6.a: uu_rhs = vv - eta_damping*uu:
         self.uu_rhs = vv - eta_damping * uu
-        # Step 6b: The right-hand side of the \partial_t v equation
+        # Step 6.b: The right-hand side of the \partial_t v equation
         #          is given by:
         #          \hat{g}^{ij} \partial_i \partial_j u - \hat{\Gamma}^i \partial_i u.
         #          ^^^^^^^^^^^^ PART 1 ^^^^^^^^^^^^^^^^ ^^^^^^^^^^ PART 2 ^^^^^^^^^^^

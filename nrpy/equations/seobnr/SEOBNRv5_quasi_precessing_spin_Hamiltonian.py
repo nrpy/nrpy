@@ -19,7 +19,6 @@ and canonical variables (r, phi, pr, pphi). This implementation is based on
 the SEOBNRv5HM model (see Section III.A of https://arxiv.org/pdf/2303.18143 for the full list of terms)
 and is used in the SEBOBv2 formalism described in Mahesh, McWilliams, and Etienne,
 "Spinning Effective-to-Backwards-One Body".
-License: BSD 2-Clause
 """
 
 # Step P1: Import needed modules:
@@ -68,8 +67,6 @@ class SEOBNRv5_quasi_precessing_spin_Hamiltonian_quantities:
                         needed for waveform and flux calculations.
 
 
-        Inputs: 'm1', 'm2', 'r', 'phi', 'prstar', 'pphi', 'chi1_x', 'chi1_y', 'chi1_z', 'chi1_l', 'chi1_ln', 'chi2_x', 'chi2_y', 'chi2_z', 'chi2_l', 'chi2_ln', 'a6', and 'dSO'
-        Outputs: 'xi' and 'Hreal'
         """
         (
             m1,

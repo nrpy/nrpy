@@ -187,7 +187,7 @@ def register_CFunction_numgrid__evol_set_up() -> None:
     commondata->bcstruct_Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
     commondata->bcstruct_Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
     commondata->bcstruct_Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-    bah_bcstruct_set_up(commondata, griddata[grid].xx, &griddata[grid].bcstruct);
+    bah_bcstruct_set_up(commondata, params, griddata[grid].xx, &griddata[grid].bcstruct);
   }
 
   // Step 9: Initialize time-stepping parameters

@@ -27,7 +27,7 @@ Authors: Zachariah B. Etienne (lead maintainer)
 
 import os
 import warnings
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, cast
 
 import sympy as sp
 
@@ -147,7 +147,7 @@ MAYBE_UNUSED params_struct *restrict params = &griddata[grid].params;
 const REAL time_start = commondata->time;
 """
 
-    Butcher = Butcher_dict[MoL_method][0]
+    Butcher = cast(List[List[sp.Expr]], Butcher_dict[MoL_method][0])
     if Butcher[-1][0] != "":
         raise ValueError(
             "Adaptive order Butcher tables are currently not supported in MoL."
@@ -282,7 +282,7 @@ const REAL time_start = commondata->time;
                 else:
                     RK_lhs = next_y_input
 
-                RK_rhs = y_n
+                RK_rhs: sp.Expr = y_n
                 for m in range(s + 1):
                     k_mp1_gfs = sp.Symbol("k" + str(m + 1) + "_gfsL")
                     if Butcher[s + 1][m + 1] != 0:
@@ -457,14 +457,14 @@ const int stride0 = blockDim.x * gridDim.x; \
     else:
         prefunc = r"""
 #define LOOP_ALL_GFS_GPS(ii) \
-_Pragma("omp parallel for") \
+_Pragma("omp parallel for simd") \
   for(int (ii)=0;(ii)<params->Nxx_plus_2NGHOSTS0*params->Nxx_plus_2NGHOSTS1*params->Nxx_plus_2NGHOSTS2*NUM_EVOL_GFS;(ii)++)
 """
         if enable_intrinsics:
             warnings.warn(
                 "SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked."
             )
-            prefunc = prefunc.replace("(ii)++", "(ii) += (simd_width)")
+            prefunc = prefunc.replace("(ii)++", "(ii) += (SIMD_WIDTH)")
 
     prefunc += BHaH.MoLtimestepping.rk_substep.construct_RK_functions_prefunc()
 

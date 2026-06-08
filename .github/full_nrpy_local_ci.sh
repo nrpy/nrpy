@@ -54,13 +54,15 @@ failed_tests=()
 
 # Find all relevant Python files recursively and store them in a temporary file
 echo "Locating Python files..."
-find . -type f -name '*.py' \
+find . -type d -path '*/.*' -prune -o \
+  -type f -name '*.py' \
   ! -name '__init__.py' \
   ! -path './project/*' \
   ! -path './build/*' \
   ! -path '*/tests/*' \
   ! -path '*manga*' \
-  ! -path './nrpy/examples/visualization_scripts/*' > python_files.txt
+  ! -path './nrpy/examples/visualization_scripts/*' \
+  -print > python_files.txt
 
 # Count total number of Python files
 total_files=$(wc -l < python_files.txt)
@@ -223,7 +225,7 @@ for script in "${cuda_example_scripts[@]}"; do
   IFS=' ' read -r script_path project_path <<< "$script"
   echo ""
   echo "Running CUDA-enabled Python script: $script_path"
-  PYTHONPATH=.:$PYTHONPATH python "$script_path" --parallelization cuda
+  PYTHONPATH=.:$PYTHONPATH python "$script_path" --cuda
   if [[ $? -ne 0 ]]; then
     echo "Error: Python script $script_path failed."
     exit 1
