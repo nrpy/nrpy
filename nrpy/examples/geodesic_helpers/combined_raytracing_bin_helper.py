@@ -210,7 +210,7 @@ def _normalize_required_metadata(
                 time.get(
                     "t_final_tolerance",
                     (
-                        0.6 * _as_float(time["dt"])
+                        1.0 * _as_float(time["dt"])
                         if "dt" in time
                         else time.get("absolute_tolerance", 1.0e-12)
                     ),

@@ -255,7 +255,7 @@ if __name__ == "__main__":
     # through par.glb_code_params_dict below.
     bbh_generation_defaults: Dict[str, Union[int, float]] = {
         "convergence_factor": 1,
-        "dt_grids": 0.1,
+        "dt_grids": 0.01,
         "bh1_posn_z": 5.0,
         "bh2_posn_z": -5.0,
     }
