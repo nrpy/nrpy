@@ -519,13 +519,15 @@ if (use_projected_attachment) {
 
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
-const size_t attachment_end_idx = use_projected_attachment ? commondata->nsteps_fine - 1 : commondata->nsteps_fine - 2;
+// GSL natural-cubic NQC splines have zero second derivative at endpoints, so
+// keep the attachment point inside the fine-dynamics domain.
+const size_t attachment_end_idx = commondata->nsteps_fine - 2;
 
-if (t_peak_22 > times[commondata->nsteps_fine - 1]){
+if (t_peak_22 >= times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[attachment_end_idx];
   t_peak_55 = t_peak_22;
 }
-if (t_peak_55 > times[commondata->nsteps_fine - 1]){
+if (t_peak_55 >= times[commondata->nsteps_fine - 1]){
   t_peak_55 = times[attachment_end_idx];
 }
 commondata->t_attach = t_peak_22;

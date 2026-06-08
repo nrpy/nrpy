@@ -115,14 +115,20 @@ SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 REAL t_peak = commondata->t_attach;
 size_t peak_idx = 0;
 if (commondata->projected_attachment_active) {
-  REAL min_abs_dt = fabs(times[0] - t_peak);
-  for (i = 1; i < commondata->nsteps_fine; i++) {
-    const REAL abs_dt = fabs(times[i] - t_peak);
-    if (abs_dt < min_abs_dt) {
-      min_abs_dt = abs_dt;
-      peak_idx = i;
-    }
-  } // END LOOP: for i over fine-dynamics samples nearest to projected attachment
+  if (t_peak >= times[commondata->nsteps_fine - 1]) {
+    t_peak = times[commondata->nsteps_fine - 2];
+    peak_idx = commondata->nsteps_fine - 2;
+    commondata->t_attach = t_peak;
+  } else {
+    REAL min_abs_dt = fabs(times[0] - t_peak);
+    for (i = 1; i < commondata->nsteps_fine; i++) {
+      const REAL abs_dt = fabs(times[i] - t_peak);
+      if (abs_dt < min_abs_dt) {
+        min_abs_dt = abs_dt;
+        peak_idx = i;
+      }
+    } // END LOOP: for i over fine-dynamics samples nearest to projected attachment
+  } // END ELSE: projected attachment is endpoint-safe
 } else {
   if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
     commondata->t_ISCO = times[commondata->nsteps_fine - 1];
