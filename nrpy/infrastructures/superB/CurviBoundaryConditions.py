@@ -288,7 +288,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0;
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
-          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
+          const int64_t globalidx3 = IDX3GENERAL_64(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (globalidx3pt_to_chareidx3(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0, Nchare1,
                                               Nchare2) == idx3_this_chare) {
             num_pure_outer_boundary_points_chare++;
@@ -308,7 +308,7 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const short i0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i0;
           const short i1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i1;
           const short i2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].i2;
-          const int globalidx3 =  IDX3GENERAL(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
+          const int64_t globalidx3 = IDX3GENERAL_64(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (globalidx3pt_to_chareidx3(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0, Nchare1,
                                               Nchare2) == idx3_this_chare) {
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
