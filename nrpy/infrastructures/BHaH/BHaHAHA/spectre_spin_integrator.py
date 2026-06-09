@@ -49,7 +49,7 @@ def register_CFunction_diagnostics_spectre_spin(
     for name in gf_names:
         gri.register_gridfunctions("AUXEVOL", name)
 
-    lhss_precompute = gf_names
+    lhss_precompute = [f"auxevol_gfs[IDX4S({name}GF, i0, i1, i2)]" for name in gf_names]
     rhss_precompute = list(gf_assignments.values())
     
     # Generate the C code
