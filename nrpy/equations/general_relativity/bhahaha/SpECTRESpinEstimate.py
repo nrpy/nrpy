@@ -183,10 +183,21 @@ class SpECTRESpinEstimateClass:
                 self._SE_qDD_expr[A][B] = val
 
         # First and second derivatives of q_AB (to be provided by codegen)
-        self._SE_qDD_dD = ixp.declarerank3("SE_qDD_dD", dimension=2)
-        self._SE_qDD_dDD = ixp.declarerank4(
-            "SE_qDD_dDD", symmetry="sym01_sym23", dimension=2
-        )
+        # Indices for the partials of the 2-D gridfunctions are pushed forward by 1 so that NRPy takes the (θ, φ)/(1, 2) derivatives
+        # instead of (r, θ)/(0, 1) in the Spherical coords
+        self._SE_qDD_dD = ixp.zerorank3(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                for C in range(2):
+                    self._SE_qDD_dD[A][B][C] = sp.Symbol(f"SE_qDD_dD{min(A,B)}{max(A,B)}{C+1}", real=True)
+        self._SE_qDD_dDD = ixp.zerorank4(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                for C in range(2):
+                    for D in range(2):
+                        self._SE_qDD_dDD[A][B][C][D] = sp.Symbol(
+                            f"SE_qDD_dDD{min(A,B)}{max(A,B)}{min(C+1,D+1)}{max(C+1,D+1)}", real=True
+                        )
 
         # Inverse 2-metric and sqrt(det q)
         self._SE_qUU, self._detq2 = ixp.symm_matrix_inverter2x2(self._SE_qDD)
@@ -207,21 +218,26 @@ class SpECTRESpinEstimateClass:
                     val += self._eADU[B][i] * self._KDD[i][j] * self._sU[j]
             self._SE_XD_expr[B] = val
 
-        # Derivatives of X_B (to be provided by codegen)
-        self._SE_XD_dD = ixp.declarerank2("SE_XD_dD", dimension=2)
+        # Derivatives of X_B
+        self._SE_XD_dD = ixp.zerorank2(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                self._SE_XD_dD[A][B] = sp.Symbol(f"SE_XD_dD{A}{B+1}", real=True)
 
         # Scalars for eigenproblem (z and y_aux fields)
         self._SE_zeta = sp.Symbol("SE_zeta", real=True)
-        self._SE_zeta_dD = ixp.declarerank1("SE_zeta_dD", dimension=2)
-        self._SE_zeta_dDD = ixp.declarerank2(
-            "SE_zeta_dDD", symmetry="sym01", dimension=2
-        )
+        self._SE_zeta_dD = [sp.Symbol(f"SE_zeta_dD{A+1}", real=True) for A in range(2)]
+        self._SE_zeta_dDD = ixp.zerorank2(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                self._SE_zeta_dDD[A][B] = sp.Symbol(f"SE_zeta_dDD{min(A+1,B+1)}{max(A+1,B+1)}", real=True)
 
         self._SE_y_aux = sp.Symbol("SE_y_aux", real=True)
-        self._SE_y_aux_dD = ixp.declarerank1("SE_y_aux_dD", dimension=2)
-        self._SE_y_aux_dDD = ixp.declarerank2(
-            "SE_y_aux_dDD", symmetry="sym01", dimension=2
-        )
+        self._SE_y_aux_dD = [sp.Symbol(f"SE_y_aux_dD{A+1}", real=True) for A in range(2)]
+        self._SE_y_aux_dDD = ixp.zerorank2(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                self._SE_y_aux_dDD[A][B] = sp.Symbol(f"SE_y_aux_dDD{min(A+1,B+1)}{max(A+1,B+1)}", real=True)
 
         # Placeholders; will be defined in _build_intrinsic_ops_and_omega.
         self._R: sp.Expr = sp.Integer(0)
@@ -257,7 +273,10 @@ class SpECTRESpinEstimateClass:
             self._SE_flux_densityU_expr[A] = tmp
 
         # Derivatives of flux; used for div(R grad z)
-        self._SE_flux_densityU_dD = ixp.declarerank2("SE_flux_densityU_dD", dimension=2)
+        self._SE_flux_densityU_dD = ixp.zerorank2(dimension=2)
+        for A in range(2):
+            for B in range(2):
+                self._SE_flux_densityU_dD[A][B] = sp.Symbol(f"SE_flux_densityU_dD{A}{B+1}", real=True)
 
         flux_div = sp.Integer(0)
         for A in range(2):
