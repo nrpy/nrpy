@@ -151,18 +151,23 @@ class SpECTRESpinEstimateClass:
         theta = self._rfm.xx[1]
         phi = self._rfm.xx[2]
 
-        # Horizon shape and angular derivatives
+        # Horizon shape and angular derivatives.
         self._h = sp.Symbol("hh", real=True)
-        self._h_dD = [sp.Symbol(f"hh_dD{A+1}", real=True) for A in range(2)]
+        self._h_dD = ixp.declarerank1("hh_dD")
 
-        # Reuse the calculations from ExpansionsFunctionTheta for the 3-metric, extrinsic curvature, and unit normal
-        Th = ExpansionFunctionTheta[
-        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+        theta_calc = ExpansionFunctionTheta[
+            (
+                f"{self.CoordSystem}_rfm_precompute"
+                if enable_rfm_precompute
+                else self.CoordSystem
+            )
         ]
+
+        # Metric, extrinsic curvature, and unit normal reuse the standard
+        # BHaHAHA symbolic construction from the evolved and AUXEVOL fields.
         self._gammaDD = theta_calc.gammaDD
         self._KDD = theta_calc.KDD
         self._sU = theta_calc.sU
-        # Scalar potential that arises from making the surface rotation field divergence-free
         self._zU = ixp.declarerank1("zU", dimension=3)
 
         # Tangent vectors e_A^i in (r, theta, phi) basis:
@@ -171,10 +176,10 @@ class SpECTRESpinEstimateClass:
         self._eADU: List[List[sp.Expr]] = [
             [sp.Integer(0) for _ in range(3)] for __ in range(2)
         ]
-        self._eADU[0][0] = self._h_dD[0]
+        self._eADU[0][0] = self._h_dD[1]
         self._eADU[0][1] = sp.Integer(1)
         self._eADU[0][2] = sp.Integer(0)
-        self._eADU[1][0] = self._h_dD[1]
+        self._eADU[1][0] = self._h_dD[2]
         self._eADU[1][1] = sp.Integer(0)
         self._eADU[1][2] = sp.Integer(1)
 
@@ -190,21 +195,12 @@ class SpECTRESpinEstimateClass:
                 self._SE_qDD_expr[A][B] = val
 
         # First and second derivatives of q_AB (to be provided by codegen)
-        # Indices for the partials of the 2-D gridfunctions are pushed forward by 1 so that NRPy takes the (θ, φ)/(1, 2) derivatives
-        # instead of (r, θ)/(0, 1) in the Spherical coords
-        self._SE_qDD_dD = ixp.zerorank3(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                for C in range(2):
-                    self._SE_qDD_dD[A][B][C] = sp.Symbol(f"SE_qDD_dD{min(A,B)}{max(A,B)}{C+1}", real=True)
-        self._SE_qDD_dDD = ixp.zerorank4(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                for C in range(2):
-                    for D in range(2):
-                        self._SE_qDD_dDD[A][B][C][D] = sp.Symbol(
-                            f"SE_qDD_dDD{min(A,B)}{max(A,B)}{min(C+1,D+1)}{max(C+1,D+1)}", real=True
-                        )
+        self._SE_qDD_dD = ixp.declarerank3(
+            "SE_qDD_dD", symmetry="sym01", dimension=3
+        )
+        self._SE_qDD_dDD = ixp.declarerank4(
+            "SE_qDD_dDD", symmetry="sym01_sym23", dimension=3
+        )
 
         # Inverse 2-metric and sqrt(det q)
         self._SE_qUU, self._detq2 = ixp.symm_matrix_inverter2x2(self._SE_qDD)
@@ -225,26 +221,21 @@ class SpECTRESpinEstimateClass:
                     val += self._eADU[B][i] * self._KDD[i][j] * self._sU[j]
             self._SE_XD_expr[B] = val
 
-        # Derivatives of X_B
-        self._SE_XD_dD = ixp.zerorank2(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                self._SE_XD_dD[A][B] = sp.Symbol(f"SE_XD_dD{A}{B+1}", real=True)
+        # Derivatives of X_B (to be provided by codegen)
+        self._SE_XD_dD = ixp.declarerank2("SE_XD_dD", dimension=3)
 
         # Scalars for eigenproblem (z and y_aux fields)
         self._SE_zeta = sp.Symbol("SE_zeta", real=True)
-        self._SE_zeta_dD = [sp.Symbol(f"SE_zeta_dD{A+1}", real=True) for A in range(2)]
-        self._SE_zeta_dDD = ixp.zerorank2(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                self._SE_zeta_dDD[A][B] = sp.Symbol(f"SE_zeta_dDD{min(A+1,B+1)}{max(A+1,B+1)}", real=True)
+        self._SE_zeta_dD = ixp.declarerank1("SE_zeta_dD", dimension=3)
+        self._SE_zeta_dDD = ixp.declarerank2(
+            "SE_zeta_dDD", symmetry="sym01", dimension=3
+        )
 
         self._SE_y_aux = sp.Symbol("SE_y_aux", real=True)
-        self._SE_y_aux_dD = [sp.Symbol(f"SE_y_aux_dD{A+1}", real=True) for A in range(2)]
-        self._SE_y_aux_dDD = ixp.zerorank2(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                self._SE_y_aux_dDD[A][B] = sp.Symbol(f"SE_y_aux_dDD{min(A+1,B+1)}{max(A+1,B+1)}", real=True)
+        self._SE_y_aux_dD = ixp.declarerank1("SE_y_aux_dD", dimension=3)
+        self._SE_y_aux_dDD = ixp.declarerank2(
+            "SE_y_aux_dDD", symmetry="sym01", dimension=3
+        )
 
         # Placeholders; will be defined in _build_intrinsic_ops_and_omega.
         self._R: sp.Expr = sp.Integer(0)
@@ -276,18 +267,22 @@ class SpECTRESpinEstimateClass:
         for A in range(2):
             tmp = sp.Integer(0)
             for B in range(2):
-                tmp += self._sqrtq * self._R * self._SE_qUU[A][B] * self._SE_zeta_dD[B]
+                tmp += (
+                    self._sqrtq
+                    * self._R
+                    * self._SE_qUU[A][B]
+                    * self._SE_zeta_dD[B + 1]
+                )
             self._SE_flux_densityU_expr[A] = tmp
 
         # Derivatives of flux; used for div(R grad z)
-        self._SE_flux_densityU_dD = ixp.zerorank2(dimension=2)
-        for A in range(2):
-            for B in range(2):
-                self._SE_flux_densityU_dD[A][B] = sp.Symbol(f"SE_flux_densityU_dD{A}{B+1}", real=True)
+        self._SE_flux_densityU_dD = ixp.declarerank2(
+            "SE_flux_densityU_dD", dimension=3
+        )
 
         flux_div = sp.Integer(0)
         for A in range(2):
-            flux_div += self._SE_flux_densityU_dD[A][A]
+            flux_div += self._SE_flux_densityU_dD[A][A + 1]
         # div_R_grad_z = (1/sqrt(q)) * partial_A ( sqrt(q) R q^{AB} z_,B )
         self._div_R_grad_z = flux_div / self._sqrtq
 
@@ -346,7 +341,7 @@ class SpECTRESpinEstimateClass:
         omega_sum = sp.Integer(0)
         for A in range(2):
             for B in range(2):
-                covXB = self._SE_XD_dD[B][A]
+                covXB = self._SE_XD_dD[B][A + 1]
                 for C in range(2):
                     covXB += -self._GammaU2DD[C][A][B] * self._SE_XD[C]
                 omega_sum += self._eps2UU[A][B] * covXB
@@ -396,7 +391,9 @@ class SpECTRESpinEstimateClass:
         out["omega_constraint_integrand"] = self._Omega
         return out
 
-    def get_gridfunction_assignments(self) -> Dict[sp.Symbol, sp.Expr]:
+    def get_gridfunction_assignments(
+        self, include_flux_density: bool = True
+    ) -> Dict[sp.Symbol, sp.Expr]:
         """
         Return mapping of gridfunctions to their defining expressions.
 
@@ -407,6 +404,8 @@ class SpECTRESpinEstimateClass:
         - Generating all required derivatives of the registered gridfunctions.
         - Ensuring a consistent finite-difference stencil across all uses.
 
+        :param include_flux_density: Whether to include the flux-density
+            assignments, which depend on derivatives of SE_qDD and SE_zeta.
         :return: Dictionary mapping SymPy symbols (gridfunctions) to their
             defining SymPy expressions.
         """
@@ -421,11 +420,12 @@ class SpECTRESpinEstimateClass:
         for B in range(2):
             assignments[cast(sp.Symbol, self._SE_XD[B])] = self._SE_XD_expr[B]
 
-        # Flux density for div(R grad z)
-        for A in range(2):
-            assignments[cast(sp.Symbol, self._SE_flux_densityU[A])] = (
-                self._SE_flux_densityU_expr[A]
-            )
+        if include_flux_density:
+            # Flux density for div(R grad z)
+            for A in range(2):
+                assignments[cast(sp.Symbol, self._SE_flux_densityU[A])] = (
+                    self._SE_flux_densityU_expr[A]
+                )
 
         return assignments
 
@@ -663,7 +663,7 @@ class SpECTRESpinEstimateClass:
                             tmp += (
                                 -self._SE_qUU[A][E]
                                 * self._SE_qUU[B][F]
-                                * self._SE_qDD_dD[E][F][C]
+                                * self._SE_qDD_dD[E][F][C + 1]
                             )
                     self._SE_qUUdD[A][B][C] = tmp
 
@@ -678,9 +678,9 @@ class SpECTRESpinEstimateClass:
                             sp.Rational(1, 2)
                             * self._SE_qUU[C][D]
                             * (
-                                self._SE_qDD_dD[B][D][A]
-                                + self._SE_qDD_dD[A][D][B]
-                                - self._SE_qDD_dD[A][B][D]
+                                self._SE_qDD_dD[B][D][A + 1]
+                                + self._SE_qDD_dD[A][D][B + 1]
+                                - self._SE_qDD_dD[A][B][D + 1]
                             )
                         )
                     self._GammaU2DD[C][A][B] = val
@@ -694,14 +694,14 @@ class SpECTRESpinEstimateClass:
                         term = sp.Integer(0)
                         for D in range(2):
                             bracket = (
-                                self._SE_qDD_dD[B][D][A]
-                                + self._SE_qDD_dD[A][D][B]
-                                - self._SE_qDD_dD[A][B][D]
+                                self._SE_qDD_dD[B][D][A + 1]
+                                + self._SE_qDD_dD[A][D][B + 1]
+                                - self._SE_qDD_dD[A][B][D + 1]
                             )
                             d_bracket = (
-                                self._SE_qDD_dDD[B][D][A][E]
-                                + self._SE_qDD_dDD[A][D][B][E]
-                                - self._SE_qDD_dDD[A][B][D][E]
+                                self._SE_qDD_dDD[B][D][A + 1][E + 1]
+                                + self._SE_qDD_dDD[A][D][B + 1][E + 1]
+                                - self._SE_qDD_dDD[A][B][D + 1][E + 1]
                             )
                             term += sp.Rational(1, 2) * (
                                 self._SE_qUUdD[C][D][E] * bracket
@@ -751,7 +751,7 @@ class SpECTRESpinEstimateClass:
         omega_sum = sp.Integer(0)
         for A in range(2):
             for B in range(2):
-                covXB = self._SE_XD_dD[B][A]
+                covXB = self._SE_XD_dD[B][A + 1]
                 for C in range(2):
                     covXB += -self._GammaU2DD[C][A][B] * self._SE_XD[C]
                 omega_sum += self._eps2UU[A][B] * covXB
@@ -764,11 +764,11 @@ class SpECTRESpinEstimateClass:
         self._laplacian_of_y = sp.Integer(0)
         for A in range(2):
             for B in range(2):
-                term_z = self._SE_zeta_dDD[A][B]
-                term_y = self._SE_y_aux_dDD[A][B]
+                term_z = self._SE_zeta_dDD[A + 1][B + 1]
+                term_y = self._SE_y_aux_dDD[A + 1][B + 1]
                 for C in range(2):
-                    term_z += -self._GammaU2DD[C][A][B] * self._SE_zeta_dD[C]
-                    term_y += -self._GammaU2DD[C][A][B] * self._SE_y_aux_dD[C]
+                    term_z += -self._GammaU2DD[C][A][B] * self._SE_zeta_dD[C + 1]
+                    term_y += -self._GammaU2DD[C][A][B] * self._SE_y_aux_dD[C + 1]
                 self._laplacian_of_z += self._SE_qUU[A][B] * term_z
                 self._laplacian_of_y += self._SE_qUU[A][B] * term_y
 
