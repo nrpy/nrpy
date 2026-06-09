@@ -34,7 +34,7 @@ def register_CFunction_diagnostics_spectre_spin(
     Compute the SpECTRE-style spin vector diagnostic and store it in the diagnostics struct.
     """
     cfunc_type = "int"
-    name = "diagnostics_spectre_spin"
+    cfunc_name = "diagnostics_spectre_spin"
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
 
     # Step 1: Get an instance of the symbolic calculator.
@@ -162,8 +162,10 @@ def register_CFunction_diagnostics_spectre_spin(
 #pragma omp for
     for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
         const REAL weight2 = weights[(i2 - NGHOSTS) % weight_stencil_size];
+        const REAL xx2 = xx[2][i2];
         for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
             const REAL weight1 = weights[(i1 - NGHOSTS) % weight_stencil_size];
+            const REAL xx1 = xx[1][i1];
             // The horizon is a 2D surface, so we loop over a single radial index i0.
             // All quantities are evaluated on this surface.
             for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
@@ -215,8 +217,6 @@ def register_CFunction_diagnostics_spectre_spin(
 
 // Step 6: Compute the spin vector from the integrated quantities.
 bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
-const REAL dxx1 = params->dxx1;
-const REAL dxx2 = params->dxx2;
 
 const REAL A = A_sum * dxx1 * dxx2;
 const REAL R0 = R0_sum * dxx1 * dxx2;
@@ -242,7 +242,7 @@ return BHAHAHA_SUCCESS;
         includes=includes,
         desc=desc,
         cfunc_type=cfunc_type,
-        name=name,
+        name=cfunc_name,
         params=params,
         include_CodeParameters_h=False,
         body=clang_format(body),
