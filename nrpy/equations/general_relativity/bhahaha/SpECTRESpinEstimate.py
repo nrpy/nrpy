@@ -155,7 +155,7 @@ class SpECTRESpinEstimateClass:
         self._h = sp.Symbol("hh", real=True)
         self._h_dD = ixp.declarerank1("hh_dD")
 
-        theta_calc = ExpansionFunctionTheta[
+        Th = ExpansionFunctionTheta[
             (
                 f"{self.CoordSystem}_rfm_precompute"
                 if enable_rfm_precompute
@@ -165,9 +165,9 @@ class SpECTRESpinEstimateClass:
 
         # Metric, extrinsic curvature, and unit normal reuse the standard
         # BHaHAHA symbolic construction from the evolved and AUXEVOL fields.
-        self._gammaDD = theta_calc.gammaDD
-        self._KDD = theta_calc.KDD
-        self._sU = theta_calc.sU
+        self._gammaDD = Th.gammaDD
+        self._KDD = Th.KDD
+        self._sU = Th.sU
         self._zU = ixp.declarerank1("zU", dimension=3)
 
         # Tangent vectors e_A^i in (r, theta, phi) basis:
