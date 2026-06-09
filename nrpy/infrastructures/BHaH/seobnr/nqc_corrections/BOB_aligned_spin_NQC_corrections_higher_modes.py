@@ -105,6 +105,7 @@ size_t i;
     body += """
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
+  times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   P1[i] = -prstar / r[i] /Omega[i];
@@ -119,9 +120,25 @@ else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (t_zoom == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for t_zoom\\n");
+  exit(1);
+}
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
+  if (minus_r_zoom == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for minus_r_zoom\\n");
+  exit(1);
+}
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
+  if (acc_r == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for acc_r\\n");
+  exit(1);
+}
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
+  if (spline_r == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for spline_r\\n");
+  exit(1);
+}
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
@@ -165,7 +182,6 @@ for (i = 0; i < commondata->nsteps_fine; i++){{
   h{lm[0]}{lm[1]} = commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})];
   hamp[i] = cabs(h{lm[0]}{lm[1]});
   phase[i] = carg(h{lm[0]}{lm[1]});
-  times[i] = commondata->dynamics_fine[IDX(i,TIME)];
   Q1[i] = hamp[i] * prstar * prstar / (r[i] * r[i] * Omega[i] * Omega[i]);
   Q2[i] = Q1[i] / r[i];
   Q3[i] = Q2[i] / sqrt(r[i]);
@@ -266,21 +282,18 @@ else{{
   omegadot_insp{lm[0]}{lm[1]} = -fabs(omegadot_insp{lm[0]}{lm[1]});
 }}
 """
+    if use_numerical_relativity_nqc:
+        raise ValueError(
+            "NR informed higher mode NQC corrections are not currently implemented"
+        )
 
-    if not use_numerical_relativity_nqc:
-        body += """
+    body += """
 REAL omegas[NUMMODES][2] , amps[NUMMODES][3];
 REAL a_nqc[NUMMODES][3], b_nqc[NUMMODES][2];
 
 BOB_aligned_spin_NQC_rhs_HM(commondata,amps,omegas);
 """
-    #     else:
-    #         body += """
-    # //currently no higher modes exist for nr informed higher modes
-    # REAL omegas[2] , amps[3];
 
-    # SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
-    # """
     for lm in modes:
         body += f"""
 gsl_vector_set(A{lm[0]}{lm[1]} , 0 , amps[HNR{lm[0]}{lm[1]}][0] - amp_insp{lm[0]}{lm[1]});
@@ -355,6 +368,10 @@ free(phase_unwrapped);
 // apply the nqc correction
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
+if (commondata->waveform_inspiral == NULL){
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for commondata->waveform_inspiral\\n");
+  exit(1);
+}
 for (i = 0; i < commondata->nsteps_low; i++){
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
 }

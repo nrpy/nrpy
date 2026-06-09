@@ -49,9 +49,6 @@ Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
 REAL *hNR = malloc(NUMMODES * sizeof(REAL));
 REAL *wNR = malloc(NUMMODES * sizeof(REAL));
 
-//compute hNR and wNR at t_attach
-SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, hNR);
-SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
 
 if (hNR == NULL){
     fprintf(stderr, "Error: in BOB_aligned_spin_NQC_rhs_higher_modes(), malloc() failed for hNR\\n");
@@ -61,10 +58,15 @@ if (wNR == NULL){
     fprintf(stderr, "Error: in BOB_aligned_spin_NQC_rhs_higher_modes(), malloc() failed for wNR\\n");
     exit(EXIT_FAILURE);
 }
+
+//compute hNR and wNR at t_attach
+SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, hNR);
+SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
+
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL M = m1 + m2;
-const REAL nu = m1 * m1/ (M * M);
+const REAL nu = m1 * m2/ (M * M);
 
 //compute
 """
