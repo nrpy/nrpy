@@ -189,13 +189,26 @@ int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata
       return 1;
   } // END LOOP: for i over physical transition inputs
 
+  REAL approx_R[NTRANS];
+  REAL approx_s[NTRANS];
+  for (int i = 0; i < NTRANS; i++) {
+    approx_R[i] = r_trans[i];
+    approx_s[i] = (REAL)0.5 * w_trans[i];
+  } // END LOOP: for i over approximate transition inputs
+  const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
+  if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
+    return 1;
+  const REAL approx_c = L / approx_rbar_L;
+  if (!(isfinite(approx_c)) || !(approx_c > (REAL)0.0))
+    return 1;
+
   REAL x[NUNK];
   for (int i = 0; i < NTRANS; i++) {
-    x[2 * i + 0] = r_trans[i];
-    x[2 * i + 1] = (REAL)0.5 * w_trans[i];
+    x[2 * i + 0] = r_trans[i] / approx_c;
+    x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   } // END LOOP: for i over initial Newton guess
 
-  const REAL tol = (REAL)1e-12;
+  const REAL tol = (REAL)1e-10;
   const int max_iter = 80;
   const REAL eps = (REAL)1e-6;
 
@@ -360,13 +373,26 @@ static int write_fisheye_grid_txt(const char *fname) {
       return 1;
   } // END LOOP: for i over standalone fisheye plateau factors
 
+  REAL approx_R[NTRANS];
+  REAL approx_s[NTRANS];
+  for (int i = 0; i < NTRANS; i++) {
+    approx_R[i] = r_trans[i];
+    approx_s[i] = (REAL)0.5 * w_trans[i];
+  } // END LOOP: for i over standalone approximate transition inputs
+  const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
+  if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
+    return 1;
+  const REAL approx_c = L / approx_rbar_L;
+  if (!(isfinite(approx_c)) || !(approx_c > (REAL)0.0))
+    return 1;
+
   REAL x[NUNK];
   for (int i = 0; i < NTRANS; i++) {
-    x[2 * i + 0] = r_trans[i];
-    x[2 * i + 1] = (REAL)0.5 * w_trans[i];
+    x[2 * i + 0] = r_trans[i] / approx_c;
+    x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   } // END LOOP: for i over standalone initial Newton guess
   REAL c = (REAL)1.0;
-  const REAL tol = (REAL)1e-12;
+  const REAL tol = (REAL)1e-10;
   const int max_iter = 60;
 
   int converged = 0;
