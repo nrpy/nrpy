@@ -377,6 +377,28 @@ class GeneralRFMFisheye:
             s_list=self.s_list,
         )
 
+    def radius_map_and_derivs_for_inverse(
+        self, r: sp.Expr
+    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+        """
+        Return a codegen-stable scaled radial map and its first 3 derivatives.
+
+        This interface is intended for numerical inversion. The radial value uses
+        a stable log-cosh representation, while the derivatives retain their
+        explicit closed forms.
+
+        :param r: Radial coordinate.
+        :return: (rbar, drbar, d2rbar, d3rbar)
+        """
+        rb0 = _radius_map_unscaled(
+            r=r,
+            a_list=self.a_list,
+            R_list=self.R_list,
+            s_list=self.s_list,
+        )
+        _, rb1, rb2, rb3 = self.radius_map_unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
+
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
     """
@@ -401,11 +423,26 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     :param s: Transition width parameter.
     :return: The kernel value G(r; R, s).
     """
-    # G(r; R, s) = s/(2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
+    # Use a stable log(cosh(.)) representation so large-|x| inputs stay finite.
+    ap = (r + R) / s
+    am = (r - R) / s
     return cast(
         sp.Expr,
-        (s / (2 * sp.tanh(R / s)))
-        * sp.log(sp.cosh((r + R) / s) / sp.cosh((r - R) / s)),
+        (s / (2 * sp.tanh(R / s))) * (_logcosh_stable(ap) - _logcosh_stable(am)),
+    )
+
+
+def _logcosh_stable(x: sp.Expr) -> sp.Expr:
+    """
+    Compute log(cosh(x)) in a numerically stable symbolic form.
+
+    :param x: Input expression.
+    :return: Stable expression equal to log(cosh(x)).
+    """
+    abs_x = sp.Abs(x)
+    return cast(
+        sp.Expr,
+        abs_x + sp.log(sp.Integer(1) + sp.exp(-2 * abs_x)) - sp.log(sp.Integer(2)),
     )
 
 
@@ -433,7 +470,7 @@ def _radius_map_unscaled(
         delta_a = a_list[i] - a_list[i + 1]
         rb += delta_a * _G_kernel(r=r, R=R_i, s=s_i)
 
-    return rb
+    return cast(sp.Expr, rb)
 
 
 def _G_and_derivs_closed_form(
