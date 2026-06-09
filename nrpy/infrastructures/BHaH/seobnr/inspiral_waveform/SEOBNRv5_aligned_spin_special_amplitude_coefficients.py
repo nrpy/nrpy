@@ -110,12 +110,12 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
         return None
 
     v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
-    projected_remnant_code = ccg.c_codegen(
-        [v5_const.M_f, v5_const.a_f, v5_const.rISCO],
-        ["commondata->M_f", "commondata->a_f", "commondata->r_ISCO"],
+    projected_reference_code = ccg.c_codegen(
+        [v5_const.M_f, v5_const.rISCO],
+        ["commondata->M_f", "commondata->r_ISCO"],
         verbose=False,
         include_braces=False,
-        cse_varprefix="projected_remnant",
+        cse_varprefix="projected_reference",
     )
     projected_delta_t_code = ccg.c_codegen(
         [v5_const.Delta_t],
@@ -132,7 +132,127 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
 @param commondata - Common data structure containing the model parameters.
 """
     cfunc_type = "void"
-    prefunc = "#include<complex.h>"
+    prefunc = r"""
+#include<complex.h>
+
+/**
+ * Clamp a value to the closed interval [lo, hi].
+ *
+ * @param[in] x Value to clamp.
+ * @param[in] lo Lower bound.
+ * @param[in] hi Upper bound.
+ * @return Clamped value.
+ */
+static inline REAL seobnr_clamp_real(const REAL x, const REAL lo, const REAL hi) {
+  return fmin(hi, fmax(lo, x));
+} // END FUNCTION: seobnr_clamp_real
+
+/**
+ * Compute the Kerr ISCO radius used by the HBR2016 final-spin fit.
+ *
+ * @param[in] a Dimensionless spin parameter.
+ * @return Kerr ISCO radius.
+ */
+static inline REAL seobnr_hbr2016_kerr_isco_radius(const REAL a) {
+  const REAL a_ceil_one = 0.5 * (a + 1.0 - fabs(a - 1.0));
+  const REAL z1 = 1.0 + cbrt(1.0 - a_ceil_one * a_ceil_one) *
+      (cbrt(1.0 + a_ceil_one) + cbrt(1.0 - a_ceil_one));
+  const REAL z2 = sqrt(3.0 * a_ceil_one * a_ceil_one + z1 * z1);
+  const REAL a_sign = (a_ceil_one > 0.0) - (a_ceil_one < 0.0);
+  return 3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2)) * a_sign;
+} // END FUNCTION: seobnr_hbr2016_kerr_isco_radius
+
+/**
+ * Compute the HBR2016 M3J4 orbital angular-momentum fit ell.
+ *
+ * @param[in] m1 Mass of body 1.
+ * @param[in] m2 Mass of body 2.
+ * @param[in] chi1z Spin of body 1 projected on the orbital angular momentum.
+ * @param[in] chi2z Spin of body 2 projected on the orbital angular momentum.
+ * @return HBR2016 fitted ell value.
+ */
+static inline REAL seobnr_hbr2016_ell_m3j4(
+    const REAL m1,
+    const REAL m2,
+    const REAL chi1z,
+    const REAL chi2z) {
+  const REAL q = m2 / m1;
+  const REAL nu = m1 * m2 / ((m1 + m2) * (m1 + m2));
+  const REAL atot = (chi1z + chi2z * q * q) / ((1.0 + q) * (1.0 + q));
+  const REAL xi = 0.474046;
+  const REAL aeff = atot + xi * nu * (chi1z + chi2z);
+  const REAL r_isco_eff = seobnr_hbr2016_kerr_isco_radius(aeff);
+  const REAL l_isco_eff = (2.0 / (3.0 * sqrt(3.0))) *
+      (1.0 + 2.0 * sqrt(3.0 * r_isco_eff - 2.0));
+  const REAL e_isco_eff = sqrt(1.0 - 2.0 / (3.0 * r_isco_eff));
+  const REAL aeff2 = aeff * aeff;
+  const REAL aeff3 = aeff2 * aeff;
+  const REAL aeff4 = aeff3 * aeff;
+  const REAL nu2 = nu * nu;
+  const REAL nu3 = nu2 * nu;
+  const REAL ksum = -5.97723 + 3.39221 * aeff + 4.48865 * aeff2 - 5.77101 * aeff3
+      - 13.0459 * aeff4 + nu * (35.1278 - 72.9336 * aeff - 86.0036 * aeff2
+      + 93.7371 * aeff3 + 200.975 * aeff4) + nu2 * (-146.822 + 387.184 * aeff
+      + 447.009 * aeff2 - 467.383 * aeff3 - 884.339 * aeff4) + nu3 * (223.911
+      - 648.502 * aeff - 697.177 * aeff2 + 753.738 * aeff3 + 1166.89 * aeff4);
+  return fabs(l_isco_eff - 2.0 * atot * (e_isco_eff - 1.0) + nu * ksum);
+} // END FUNCTION: seobnr_hbr2016_ell_m3j4
+
+/**
+ * Compute the HBR2016 M3J4 precessing final-spin magnitude.
+ *
+ * @param[in] m1 Mass of body 1.
+ * @param[in] m2 Mass of body 2.
+ * @param[in] chi1_x Cartesian spin component of body 1.
+ * @param[in] chi1_y Cartesian spin component of body 1.
+ * @param[in] chi1_z Cartesian spin component of body 1.
+ * @param[in] chi2_x Cartesian spin component of body 2.
+ * @param[in] chi2_y Cartesian spin component of body 2.
+ * @param[in] chi2_z Cartesian spin component of body 2.
+ * @param[in] lnhat_x Cartesian unit orbital-angular-momentum component.
+ * @param[in] lnhat_y Cartesian unit orbital-angular-momentum component.
+ * @param[in] lnhat_z Cartesian unit orbital-angular-momentum component.
+ * @return Precessing final-spin magnitude.
+ */
+static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
+    const REAL m1,
+    const REAL m2,
+    const REAL chi1_x,
+    const REAL chi1_y,
+    const REAL chi1_z,
+    const REAL chi2_x,
+    const REAL chi2_y,
+    const REAL chi2_z,
+    const REAL lnhat_x,
+    const REAL lnhat_y,
+    const REAL lnhat_z) {
+  const REAL eps = 0.024;
+  const REAL q = m2 / m1;
+  const REAL q2 = q * q;
+  const REAL chi1_mag = sqrt(chi1_x * chi1_x + chi1_y * chi1_y + chi1_z * chi1_z);
+  const REAL chi2_mag = sqrt(chi2_x * chi2_x + chi2_y * chi2_y + chi2_z * chi2_z);
+  const REAL chi1_lnhat = chi1_x * lnhat_x + chi1_y * lnhat_y + chi1_z * lnhat_z;
+  const REAL chi2_lnhat = chi2_x * lnhat_x + chi2_y * lnhat_y + chi2_z * lnhat_z;
+  const REAL cos_beta = chi1_mag > 0.0 ? seobnr_clamp_real(chi1_lnhat / chi1_mag, -1.0, 1.0) : 1.0;
+  const REAL cos_gamma = chi2_mag > 0.0 ? seobnr_clamp_real(chi2_lnhat / chi2_mag, -1.0, 1.0) : 1.0;
+  const REAL sin_beta = sqrt(fmax(0.0, 1.0 - cos_beta * cos_beta));
+  const REAL sin_gamma = sqrt(fmax(0.0, 1.0 - cos_gamma * cos_gamma));
+  const REAL cos_betas = cos_beta * cos(eps * sin_beta) - sin_beta * sin(eps * sin_beta);
+  const REAL cos_gammas = cos_gamma * cos(eps * sin_gamma) - sin_gamma * sin(eps * sin_gamma);
+  const REAL spin_dot = chi1_x * chi2_x + chi1_y * chi2_y + chi1_z * chi2_z;
+  const REAL cos_alpha = (chi1_mag > 0.0 && chi2_mag > 0.0)
+      ? seobnr_clamp_real(spin_dot / (chi1_mag * chi2_mag), -1.0, 1.0) : 1.0;
+  const REAL ell = seobnr_hbr2016_ell_m3j4(m1, m2, chi1_mag * cos_betas, chi2_mag * cos_gammas);
+  REAL sqrt_arg = chi1_mag * chi1_mag + chi2_mag * chi2_mag * q2 * q2
+      + 2.0 * chi1_mag * chi2_mag * q2 * cos_alpha
+      + 2.0 * (chi1_mag * cos_betas + chi2_mag * q2 * cos_gammas) * ell * q
+      + ell * ell * q2;
+  if (sqrt_arg < 0.0) {
+    sqrt_arg = 0.0;
+  } // END IF: roundoff drives final-spin square-root argument negative
+  return sqrt(sqrt_arg) / ((1.0 + q) * (1.0 + q));
+} // END FUNCTION: seobnr_hbr2016_precessing_final_spin_m3j4
+"""
     name = "SEOBNRv5_aligned_spin_special_coefficients"
     params = "commondata_struct *restrict commondata"
     body = """
@@ -222,7 +342,16 @@ if (use_projected_attachment) {
     exit(1);
   }
   if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
-      commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL) {
+      commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL ||
+      commondata->chi1_x_spline.spline == NULL || commondata->chi1_x_spline.acc == NULL ||
+      commondata->chi1_y_spline.spline == NULL || commondata->chi1_y_spline.acc == NULL ||
+      commondata->chi1_z_spline.spline == NULL || commondata->chi1_z_spline.acc == NULL ||
+      commondata->chi2_x_spline.spline == NULL || commondata->chi2_x_spline.acc == NULL ||
+      commondata->chi2_y_spline.spline == NULL || commondata->chi2_y_spline.acc == NULL ||
+      commondata->chi2_z_spline.spline == NULL || commondata->chi2_z_spline.acc == NULL ||
+      commondata->lnhat_x.spline == NULL || commondata->lnhat_x.acc == NULL ||
+      commondata->lnhat_y.spline == NULL || commondata->lnhat_y.acc == NULL ||
+      commondata->lnhat_z.spline == NULL || commondata->lnhat_z.acc == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
     exit(1);
   }
@@ -302,13 +431,27 @@ if (use_projected_attachment) {
   omega_r10M = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_r10M));
   const REAL chi1_projected_r10 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_r10M, commondata->chi1_lnhat.acc);
   const REAL chi2_projected_r10 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_r10M, commondata->chi2_lnhat.acc);
+  const REAL chi1_r10_x = gsl_spline_eval(commondata->chi1_x_spline.spline, omega_r10M, commondata->chi1_x_spline.acc);
+  const REAL chi1_r10_y = gsl_spline_eval(commondata->chi1_y_spline.spline, omega_r10M, commondata->chi1_y_spline.acc);
+  const REAL chi1_r10_z = gsl_spline_eval(commondata->chi1_z_spline.spline, omega_r10M, commondata->chi1_z_spline.acc);
+  const REAL chi2_r10_x = gsl_spline_eval(commondata->chi2_x_spline.spline, omega_r10M, commondata->chi2_x_spline.acc);
+  const REAL chi2_r10_y = gsl_spline_eval(commondata->chi2_y_spline.spline, omega_r10M, commondata->chi2_y_spline.acc);
+  const REAL chi2_r10_z = gsl_spline_eval(commondata->chi2_z_spline.spline, omega_r10M, commondata->chi2_z_spline.acc);
+  const REAL lnhat_r10_x = gsl_spline_eval(commondata->lnhat_x.spline, omega_r10M, commondata->lnhat_x.acc);
+  const REAL lnhat_r10_y = gsl_spline_eval(commondata->lnhat_y.spline, omega_r10M, commondata->lnhat_y.acc);
+  const REAL lnhat_r10_z = gsl_spline_eval(commondata->lnhat_z.spline, omega_r10M, commondata->lnhat_z.acc);
   {
     const REAL chi1 = chi1_projected_r10;
     const REAL chi2 = chi2_projected_r10;
 """
-    body += projected_remnant_code
+    body += projected_reference_code
     body += """
-  } // END BLOCK: projected-spin remnant evaluation at r=10M
+  } // END BLOCK: projected-spin reference evaluation at r=10M
+  commondata->a_f = seobnr_hbr2016_precessing_final_spin_m3j4(
+      m1, m2,
+      chi1_r10_x, chi1_r10_y, chi1_r10_z,
+      chi2_r10_x, chi2_r10_y, chi2_r10_z,
+      lnhat_r10_x, lnhat_r10_y, lnhat_r10_z);
   const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
     -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
     -0.986, -0.984, -0.982, -0.98, -0.975, -0.97, -0.96, -0.95, -0.94, -0.92, -0.9, -0.88, -0.86, -0.84,
