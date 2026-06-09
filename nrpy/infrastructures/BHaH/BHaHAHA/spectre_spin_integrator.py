@@ -23,10 +23,20 @@ def register_CFunction_diagnostics_spectre_spin(
     enable_rfm_precompute: bool = False,
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
-    """ Register a C function that computes the SpECTRE-style spin vector and stores it in the diagnostics struct. """
+    """
+    Register a C function that computes the SpECTRE-style spin vector.
+
+    :param CoordSystem: The coordinate system to use, defaults to "Spherical".
+    :param enable_rfm_precompute: Whether to enable RFM precompute.
+    :param enable_fd_functions: Whether to enable finite-difference functions.
+    :return: An NRPyEnv_type object if registration is successful, otherwise None.
+    """
 
     if pcg.pcg_registration_phase():
-        pcg.register_func_call(f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}", locals())
+        pcg.register_func_call(
+            f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}",
+            locals(),
+        )
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -35,36 +45,57 @@ def register_CFunction_diagnostics_spectre_spin(
     """
     cfunc_type = "int"
     cfunc_name = "diagnostics_spectre_spin"
-    params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
 
     # Step 1: Get an instance of the symbolic calculator.
     spin_calc = SpECTRESpinEstimate[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
     ]
 
-    # Retrieve the intermediate expressions
-    gf_assignments = spin_calc.get_gridfunction_assignments()
-    gf_names = [str(sym) for sym in gf_assignments.keys()]
-    # Register them as actual memory-backed gridfunctions
-    for name in gf_names:
-        gri.register_gridfunctions("AUXEVOL", name)
+    # Step 2: Register the memory-backed gridfunctions needed by the diagnostic.
+    _ = gri.register_gridfunctions_for_single_rank2(
+        "SE_qDD",
+        symmetry="sym01",
+        dimension=2,
+        group="AUXEVOL",
+        gf_array_name="auxevol_gfs",
+    )
+    _ = gri.register_gridfunctions_for_single_rank1(
+        "SE_XD",
+        dimension=2,
+        group="AUXEVOL",
+        gf_array_name="auxevol_gfs",
+    )
+    _ = gri.register_gridfunctions_for_single_rank1(
+        "zU",
+        dimension=3,
+        group="AUXEVOL",
+        gf_array_name="auxevol_gfs",
+    )
 
-    lhss_precompute = [f"auxevol_gfs[IDX4S({name}GF, i0, i1, i2)]" for name in gf_names]
+    gf_assignments = spin_calc.get_gridfunction_assignments(include_flux_density=False)
+    gf_names = [str(sym) for sym in gf_assignments.keys()]
+
+    lhss_precompute = [
+        gri.BHaHGridFunction.access_gf(gf_name, gf_array_name="auxevol_gfs")
+        for gf_name in gf_names
+    ]
     rhss_precompute = list(gf_assignments.values())
-    
-    # Generate the C code
+
+    # Step 3: Generate C code for intermediate surface fields.
     precompute_c_code = ccg.c_codegen(
         rhss_precompute,
         lhss_precompute,
         enable_fd_codegen=True,
-        enable_fd_functions=enable_fd_functions
+        enable_fd_functions=enable_fd_functions,
     )
-    
 
-    # Step 2: Retrieve the dictionary of all per-point integrands.
+    # Step 4: Retrieve the dictionary of all per-point integrands.
     integrands_dict = spin_calc.get_public_integrands()
 
-    # Step 3: Extract the symbolic expressions we need to integrate.
+    # Step 5: Extract the symbolic expressions we need to integrate.
     # According to the SpECTRESpinEstimate documentation, we need to integrate:
     # - 1 (for the Area A)
     # - x^i (for the centroid XU)
@@ -86,12 +117,20 @@ def register_CFunction_diagnostics_spectre_spin(
     integrand_c_vars = [
         "const REAL area_density",
         "const REAL A_integrand",
-        "const REAL XU0_integrand", "const REAL XU1_integrand", "const REAL XU2_integrand",
+        "const REAL XU0_integrand",
+        "const REAL XU1_integrand",
+        "const REAL XU2_integrand",
         "const REAL R0_integrand",
-        "const REAL XRU0_integrand", "const REAL XRU1_integrand", "const REAL XRU2_integrand",
+        "const REAL XRU0_integrand",
+        "const REAL XRU1_integrand",
+        "const REAL XRU2_integrand",
         "const REAL O0_integrand",
-        "const REAL XOU0_integrand", "const REAL XOU1_integrand", "const REAL XOU2_integrand",
-        "const REAL ZOU0_integrand", "const REAL ZOU1_integrand", "const REAL ZOU2_integrand",
+        "const REAL XOU0_integrand",
+        "const REAL XOU1_integrand",
+        "const REAL XOU2_integrand",
+        "const REAL ZOU0_integrand",
+        "const REAL ZOU1_integrand",
+        "const REAL ZOU2_integrand",
         "const REAL Oabs_integrand",
     ]
 
@@ -107,7 +146,7 @@ def register_CFunction_diagnostics_spectre_spin(
         integrands_dict["abs_omega_integrand"],
     ]
 
-    # Step 4: Construct the body of the C function.
+    # Step 6: Construct the body of the C function.
     body = r"""
     const int grid=0;
     const params_struct *restrict params = &griddata[grid].params;
@@ -146,9 +185,9 @@ def register_CFunction_diagnostics_spectre_spin(
 """
     body += precompute_c_code
     body += r"""
-            }
-        }
-    }
+            } // END LOOP: for i0 over radial horizon-grid points
+        } // END LOOP: for i1 over theta horizon-grid points
+    } // END LOOP: for i2 over phi horizon-grid points
     // Private accumulators for each thread
     REAL A_sum_private = 0.0;
     REAL XU_sum_private[3] = {0.0, 0.0, 0.0};
@@ -170,7 +209,7 @@ def register_CFunction_diagnostics_spectre_spin(
             // All quantities are evaluated on this surface.
             for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
 """
-    # Step 5: Generate C code for all integrands and the area density.
+    # Step 7: Generate C code for all integrands and the area density.
     # enable_fd_codegen=True tells c_codegen to automatically handle all
     # finite difference derivatives of gridfunctions.
     body += ccg.c_codegen(
@@ -195,9 +234,9 @@ def register_CFunction_diagnostics_spectre_spin(
                 R0_sum_private   += R0_integrand * dA_unscaled;
                 O0_sum_private   += O0_integrand * dA_unscaled;
                 Oabs_sum_private += Oabs_integrand * dA_unscaled;
-            } // END LOOP i0
-        } // END LOOP i1
-    } // END LOOP i2
+            } // END LOOP: for i0 over radial horizon-grid points
+        } // END LOOP: for i1 over theta horizon-grid points
+    } // END LOOP: for i2 over phi horizon-grid points
 
     // Use a critical section for the final reduction from private to shared sums
     #pragma omp critical
@@ -212,10 +251,10 @@ def register_CFunction_diagnostics_spectre_spin(
         R0_sum   += R0_sum_private;
         O0_sum   += O0_sum_private;
         Oabs_sum += Oabs_sum_private;
-    } // END OMP CRITICAL
-} // END OMP PARALLEL
+    } // END OMP CRITICAL: update shared spin-diagnostic sums
+} // END OMP PARALLEL: precompute and integrate spin diagnostic
 
-// Step 6: Compute the spin vector from the integrated quantities.
+// Step 8: Compute the spin vector from the integrated quantities.
 bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
 
 const REAL A = A_sum * dxx1 * dxx2;
