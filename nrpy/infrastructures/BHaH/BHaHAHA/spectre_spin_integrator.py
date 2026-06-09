@@ -37,8 +37,28 @@ def register_CFunction_diagnostics_spectre_spin(
     params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
 
     # Step 1: Get an instance of the symbolic calculator.
-    suffix = ("_rfm_precompute" if enable_rfm_precompute else "")
-    spin_calc = SpECTRESpinEstimate[CoordSystem + suffix]
+    spin_calc = SpECTRESpinEstimate[
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+    ]
+
+    # Retrieve the intermediate expressions
+    gf_assignments = spin_calc.get_gridfunction_assignments()
+    gf_names = [str(sym) for sym in assignments.keys()]
+    # Register them as actual memory-backed gridfunctions
+    for name in gf_names:
+        gri.register_gridfunctions("AUXEVOL", name)
+
+    lhss_precompute = [f"auxevol_gfs[IDX4S({name}GF, i0, i1, i2)]" for name in gf_names]
+    rhss_precompute = list(assignments.values())
+    
+    # Generate the C code
+    precompute_c_code = ccg.c_codegen(
+        rhss_precompute,
+        lhss_precompute,
+        enable_fd_codegen=True,
+        enable_fd_functions=enable_fd_functions
+    )
+    
 
     # Step 2: Retrieve the dictionary of all per-point integrands.
     integrands_dict = spin_calc.get_public_integrands()
@@ -118,6 +138,16 @@ def register_CFunction_diagnostics_spectre_spin(
 
 #pragma omp parallel
 {
+#pragma omp for
+    for (int i2 = 0; i2 < Nxx2 + 2 * NGHOSTS; i2++) {
+        for (int i1 = 0; i1 < Nxx1 + 2 * NGHOSTS; i1++) {
+            for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
+"""
+    body += precompute_c_code
+    body += r"""
+            }
+        }
+    }
     // Private accumulators for each thread
     REAL A_sum_private = 0.0;
     REAL XU_sum_private[3] = {0.0, 0.0, 0.0};
