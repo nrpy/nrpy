@@ -89,6 +89,9 @@ import sympy as sp
 
 import nrpy.indexedexp as ixp
 import nrpy.reference_metric as refmetric
+from nrpy.equations.general_relativity.bhahaha.ExpansionFunctionTheta import (
+    ExpansionFunctionTheta,
+)
 
 
 class SpECTRESpinEstimateClass:
@@ -148,14 +151,18 @@ class SpECTRESpinEstimateClass:
         theta = self._rfm.xx[1]
         phi = self._rfm.xx[2]
 
-        # Horizon shape and derivatives
+        # Horizon shape and angular derivatives
         self._h = sp.Symbol("hh", real=True)
-        self._h_dD = ixp.declarerank1("hh_dD", dimension=2)
+        self._h_dD = [sp.Symbol(f"hh_dD{A+1}", real=True) for A in range(2)]
 
-        # Metric, extrinsic curvature, unit normal, and eigenmodes zU[alpha]
-        self._gammaDD = ixp.declarerank2("gammaDD", symmetry="sym01", dimension=3)
-        self._KDD = ixp.declarerank2("KDD", symmetry="sym01", dimension=3)
-        self._sU = ixp.declarerank1("sU", dimension=3)
+        # Reuse the calculations from ExpansionsFunctionTheta for the 3-metric, extrinsic curvature, and unit normal
+        Th = ExpansionFunctionTheta[
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+        ]
+        self._gammaDD = theta_calc.gammaDD
+        self._KDD = theta_calc.KDD
+        self._sU = theta_calc.sU
+        # Scalar potential that arises from making the surface rotation field divergence-free
         self._zU = ixp.declarerank1("zU", dimension=3)
 
         # Tangent vectors e_A^i in (r, theta, phi) basis:
