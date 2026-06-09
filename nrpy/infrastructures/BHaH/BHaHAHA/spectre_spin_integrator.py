@@ -8,6 +8,7 @@ from typing import Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 from nrpy.helpers.generic import clang_format
 
