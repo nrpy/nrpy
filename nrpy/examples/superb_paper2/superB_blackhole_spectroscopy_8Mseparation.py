@@ -2,17 +2,16 @@
 
 Black hole spectroscopy example.
 
-Specifically, evolve Brill-Lindquist initial data forward in time
-  and monitors the ringing of the merged black hole over time via
-  psi4.
+Specifically, evolve TwoPunctures/Bowen-York puncture initial data forward in time and
+  monitor the ringing of the merged black hole over time via psi4.
 This example sets up a complete C code for solving the GR field
   equations in curvilinear coordinates on a cell-centered grid,
   using a reference metric approach.
 
-Author: Zachariah B. Etienne
-        zachetie **at** gmail **dot* com
-        Nishita Jadoo
-        njadoo **at** uidaho **dot* edu
+Authors: Zachariah B. Etienne
+         zachetie **at** gmail **dot* com
+         Nishita Jadoo
+         njadoo **at** uidaho **dot* edu
 
 Note: This is the superB version.
 
@@ -22,14 +21,22 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Dict
 
 #########################################################
-# STEP 1: Import needed Python modules, then set codegen
+# Step 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
+from nrpy.infrastructures.BHaH.fisheye import phys_params_to_fisheye
+from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
+from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
+    ID_persist_struct,
+    TwoPunctures_lib,
+)
+from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -80,7 +87,7 @@ default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_x_posn = +4.0
 default_BH2_x_posn = -4.0
 # Fisheye parameters
-fisheye_param_defaults: dict[str, float] = {}
+fisheye_param_defaults: Dict[str, float] = {}
 fisheye_param_defaults = {
     "fisheye_phys_a0": 1.0,
     "fisheye_phys_a1": 2.0,
@@ -144,7 +151,7 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 if enable_BHaHAHA:
     #########################################################
-    # STEP 2: Declare core C functions & register each to
+    # Step 2: Declare core C functions & register each to
     #         cfc.CFunction_dict["function_name"]
     try:
         # Attempt to run as a script path
@@ -189,18 +196,16 @@ if enable_BHaHAHA:
     superB.horizon_finder_chare.output_horizon_finder_h_cpp_ci(project_dir=project_dir)
 
 #########################################################
-# STEP 2: Declare core C functions & register each to
+# Step 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
-BHaH.general_relativity.NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
-BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions(
-    enable_xy_plane=True
-)
-superB.initial_data.register_CFunction_initial_data(
+NRPyPN_quasicircular_momenta.register_CFunction_NRPyPN_quasicircular_momenta()
+TwoPunctures_lib.register_C_functions(enable_xy_plane=True)
+initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
     enable_checkpointing=False,
-    ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
+    ID_persist_struct_str=ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
 TP_solve(&ID_persist);
@@ -292,7 +297,7 @@ if enable_psi4:
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
 # Does not need to be parallelized.
-BHaH.fisheye.phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
+phys_params_to_fisheye.register_CFunction_fisheye_params_from_physical_N(
     num_transitions=num_fisheye_transitions
 )
 if enable_psi4:
@@ -427,7 +432,7 @@ if enable_BHaHAHA:
     par.adjust_CodeParam_default("bah_verbosity_level", 1)
 
 #########################################################
-# STEP 3: Generate header files, register C functions and
+# Step 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
@@ -465,7 +470,7 @@ if enable_CAHD:
     cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
 }\n"""
 
-superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
+timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_params_struct_set_to_default=(
         BHaH.fisheye.phys_params_to_fisheye.build_post_params_struct_set_to_default_hook(
             num_transitions=num_fisheye_transitions,
