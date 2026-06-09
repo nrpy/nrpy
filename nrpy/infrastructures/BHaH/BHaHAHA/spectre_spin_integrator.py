@@ -43,13 +43,13 @@ def register_CFunction_diagnostics_spectre_spin(
 
     # Retrieve the intermediate expressions
     gf_assignments = spin_calc.get_gridfunction_assignments()
-    gf_names = [str(sym) for sym in assignments.keys()]
+    gf_names = [str(sym) for sym in gf_assignments.keys()]
     # Register them as actual memory-backed gridfunctions
     for name in gf_names:
         gri.register_gridfunctions("AUXEVOL", name)
 
     lhss_precompute = [f"auxevol_gfs[IDX4S({name}GF, i0, i1, i2)]" for name in gf_names]
-    rhss_precompute = list(assignments.values())
+    rhss_precompute = list(gf_assignments.values())
     
     # Generate the C code
     precompute_c_code = ccg.c_codegen(
