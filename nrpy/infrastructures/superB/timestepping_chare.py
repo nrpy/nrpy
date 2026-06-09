@@ -542,7 +542,7 @@ class Timestepping : public CBase_Timestepping {
     void send_neighbor_data(const int type_gfs, const int dir, const int grid);
     void process_ghost(const int type_ghost, const int type_gfs, const int len_tmpBuffer, const REAL *restrict tmpBuffer, const int grid);
     void send_nonlocalinnerbc_idx3srcpts_toreceiv();
-    void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const long long *restrict globalidx3_srcpts);
+    void process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int64_t *restrict globalidx3_srcpts);
     void send_nonlocalinnerbc_data(const int type_gfs, const int grid);
     void set_tmpBuffer_innerbc_receiv(const int src_chare_idx3, const int len_tmpBuffer, const REAL *restrict vals, const int grid);
     void process_nonlocalinnerbc(const int type_gfs, const int grid);"""
@@ -1302,7 +1302,7 @@ void Timestepping::send_nonlocalinnerbc_idx3srcpts_toreceiv() {
 """
 
     file_output_str += r"""
-void Timestepping::process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const long long *restrict globalidx3_srcpts) {
+void Timestepping::process_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, const int64_t *restrict globalidx3_srcpts) {
   // Unpack griddata_chare[grid].nonlocalinnerbcstruct
   int grid = 0;
   const int *restrict idx3chare_to_dst_chare_id = griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_dst_chare_id;
@@ -1547,7 +1547,7 @@ def output_timestepping_ci(
       }
       if (griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares > 0) {
         for (iter = 0; iter < griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares; iter++) {
-          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, long long globalidx3_srcpts[num_srcpts]) {
+          when receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int64_t globalidx3_srcpts[num_srcpts]) {
             serial {
               process_nonlocalinnerbc_idx3srcpt_tosend(idx3_of_sendingchare, num_srcpts, globalidx3_srcpts);
             }
@@ -2022,7 +2022,7 @@ def output_timestepping_ci(
     }
 """
     file_output_str += r"""
-    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, long long globalidx3_srcpts[num_srcpts]);"""
+    entry void receiv_nonlocalinnerbc_idx3srcpt_tosend(int idx3_of_sendingchare, int num_srcpts, int64_t globalidx3_srcpts[num_srcpts]);"""
     file_output_str += generate_entry_methods_for_receiv_nonlocalinnerbc_for_gf_types(
         Butcher_dict,
         MoL_method,
