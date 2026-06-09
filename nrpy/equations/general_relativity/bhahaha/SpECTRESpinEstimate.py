@@ -159,9 +159,9 @@ class SpECTRESpinEstimateClass:
         Th = ExpansionFunctionTheta[
         CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
         ]
-        self._gammaDD = theta_calc.gammaDD
-        self._KDD = theta_calc.KDD
-        self._sU = theta_calc.sU
+        self._gammaDD = Th.gammaDD
+        self._KDD = Th.KDD
+        self._sU = Th.sU
         # Scalar potential that arises from making the surface rotation field divergence-free
         self._zU = ixp.declarerank1("zU", dimension=3)
 
