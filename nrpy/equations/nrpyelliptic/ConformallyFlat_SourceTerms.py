@@ -260,7 +260,7 @@ def ADD_conf_cartesian(
     ADD_conf_cart = ixp.zerorank2()
     for i in range(dimension):
         for j in range(dimension):
-            delta_ij = sp.sympify(0) if i == j else sp.sympify(1)
+            delta_ij = sp.sympify(1) if i == j else sp.sympify(0)
             ADD_conf_cart[i][j] = (
                 VD_cart_dD[i][j]
                 + VD_cart_dD[j][i]
