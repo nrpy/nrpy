@@ -25,6 +25,7 @@ def register_CFunction_BOB_aligned_spin_NQC_corrections_higher_modes(
     Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEOBNRv5 waveform.
 
     :param use_numerical_relativity_nqc: Flag to specify if NQCs are informed by NR fits or BOB
+    :raises ValueError: if higher order NR-informed nqc corrections are called
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -46,57 +47,57 @@ Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral wa
     body = """
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for times\\n");
   exit(1);
 }
 REAL *restrict Q1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q1 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q1\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for Q1\\n");
   exit(1);
 }
 REAL *restrict Q2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q2 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q2\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for Q2\\n");
   exit(1);
 }
 REAL *restrict Q3 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q3 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Q3\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for Q3\\n");
   exit(1);
 }
 REAL *restrict P1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P1 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for P1\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for P1\\n");
   exit(1);
 }
 REAL *restrict P2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P2 == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for P2\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for P2\\n");
   exit(1);
 }
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (r == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for r\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for r\\n");
   exit(1);
 }
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for Omega\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for Omega\\n");
   exit(1);
 }
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (hamp == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for hamp\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for hamp\\n");
   exit(1);
 }
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for phase\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for phase\\n");
   exit(1);
 }
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase_unwrapped == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for phase_unwrapped\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for phase_unwrapped\\n");
   exit(1);
 }
 REAL radius, omega, prstar;
@@ -121,22 +122,22 @@ else{
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (t_zoom == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for t_zoom\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for t_zoom\\n");
   exit(1);
 }
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (minus_r_zoom == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for minus_r_zoom\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for minus_r_zoom\\n");
   exit(1);
 }
   gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
   if (acc_r == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for acc_r\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for acc_r\\n");
   exit(1);
 }
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_r == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for spline_r\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for spline_r\\n");
   exit(1);
 }
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
@@ -202,23 +203,23 @@ for (i = left; i < right; i++){{
 }}
 gsl_interp_accel *restrict acc{lm[0]}{lm[1]} = gsl_interp_accel_alloc();
 if (acc{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_interp_accel_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_spline *restrict spline{lm[0]}{lm[1]} = gsl_spline_alloc(gsl_interp_cspline, right - left);
 if (spline{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_spline_alloc() failed to initialize\\n");
   exit(1);
 }}
 
 gsl_matrix *restrict Q{lm[0]}{lm[1]} = gsl_matrix_alloc (3, 3);
 if (Q{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_matrix *restrict P{lm[0]}{lm[1]} = gsl_matrix_alloc (2, 2);
 if (P{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_spline_init(spline{lm[0]}{lm[1]},t_cropped{lm[0]}{lm[1]}, Q{lm[0]}{lm[1]}_cropped1,right-left);
@@ -250,12 +251,12 @@ gsl_matrix_set(P{lm[0]}{lm[1]},1,1,-gsl_spline_eval_deriv2(spline{lm[0]}{lm[1]},
 
 gsl_vector *restrict A{lm[0]}{lm[1]} = gsl_vector_alloc(3);
 if (A{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_vector *restrict O{lm[0]}{lm[1]} = gsl_vector_alloc(2);
 if (O{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }}
 
@@ -304,13 +305,13 @@ gsl_vector_set(O{lm[0]}{lm[1]} , 1 , omegas[HNR{lm[0]}{lm[1]}][1] - omegadot_ins
 
 gsl_vector *restrict a{lm[0]}{lm[1]} = gsl_vector_alloc (3);
 if (a{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }}
 int s{lm[0]}{lm[1]};
 gsl_permutation *restrict p_A{lm[0]}{lm[1]} = gsl_permutation_alloc (3);
 if (p_A{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_linalg_LU_decomp(Q{lm[0]}{lm[1]}, p_A{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
@@ -327,12 +328,12 @@ gsl_vector_free(A{lm[0]}{lm[1]});
 
 gsl_vector *restrict b{lm[0]}{lm[1]} = gsl_vector_alloc(2);
 if (b{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_permutation * p_B{lm[0]}{lm[1]} = gsl_permutation_alloc(2);
 if (p_B{lm[0]}{lm[1]} == NULL){{
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
 }}
 gsl_linalg_LU_decomp(P{lm[0]}{lm[1]}, p_B{lm[0]}{lm[1]}, &s{lm[0]}{lm[1]});
@@ -369,7 +370,7 @@ free(phase_unwrapped);
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
 if (commondata->waveform_inspiral == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for commondata->waveform_inspiral\\n");
+  fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed to for commondata->waveform_inspiral\\n");
   exit(1);
 }
 for (i = 0; i < commondata->nsteps_low; i++){

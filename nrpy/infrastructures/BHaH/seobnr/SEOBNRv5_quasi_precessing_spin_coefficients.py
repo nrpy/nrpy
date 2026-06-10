@@ -352,7 +352,7 @@ const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.99
   0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
 };
 
-// NOTE: imomegaqnm_* tables store the positive damping rate |Im(ω)|.
+// NOTE: imomegaqnm_* tables store the positive damping rate |Im(omega)|.
 const REAL reomegaqnm_l2m2[107] = {
   0.2915755, 0.2915810, 0.2915866, 0.2915976, 0.2916086, 0.2916142, 0.2916197, 0.2916252,
   0.2916307, 0.2916362, 0.2916638, 0.2916915, 0.2917191, 0.2917744, 0.2918297, 0.2918850,

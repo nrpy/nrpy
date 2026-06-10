@@ -2,9 +2,9 @@
 Construct the BOB merger-ringdown (l,m) = (2,2), (3,3), (4,4), (5,5), (2,1), (3,2), (4,3) modes and NQC correction factors for aligned-spin binaries.
 
 Authors: Siddharth Mahesh
-sm0193 at mix dot wvu dot edu
-Zachariah B. Etienne
-zachetie at gmail *dot com
+        sm0193 at mix dot wvu dot edu
+        Zachariah B. Etienne
+        zachetie at gmail *dot com
 
 The Backwards-One Body (BOB) formalism is a first principles merger-ringdown model that
 maps the properties of null congruences in the spacetime of the remnant black hole to
@@ -88,16 +88,18 @@ class BOB_aligned_spin_waveform_quantities_higher_modes:
             k = (Omega_qnm**4 - Omega_0**4) / (1 - sp.tanh((t_0 - t_p) / tau_qnm))
             kappa_m = Omega_0 * Omega_0 / Omega_qnm
             kappa_p = Omega_qnm
+            one_half = sp.Rational(1, 2)
+            one_quarter = sp.Rational(1, 4)
             Omega = (
                 Omega_0**4
                 + k * (sp.tanh((t - t_p) / tau_qnm) - sp.tanh((t_0 - t_p) / tau_qnm))
-            ) ** (1 / 4)
+            ) ** (one_quarter)
             Omega_0_over_kappa_p = Omega_0 / kappa_p
             Omega_0_over_kappa_m = Omega_0 / kappa_m
             Omega_over_kappa_p = Omega / kappa_p
             Omega_over_kappa_m = Omega / kappa_m
             arctanh_m = (
-                0.5
+                one_half
                 * kappa_m
                 * tau_qnm
                 * sp.log(
@@ -107,7 +109,7 @@ class BOB_aligned_spin_waveform_quantities_higher_modes:
                 )
             )
             arctanh_p = (
-                0.5
+                one_half
                 * kappa_p
                 * tau_qnm
                 * sp.log(
