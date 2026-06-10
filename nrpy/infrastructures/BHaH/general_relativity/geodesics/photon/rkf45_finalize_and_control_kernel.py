@@ -106,8 +106,8 @@ def rkf45_finalize_and_control_kernel(
     # The companion time_window_manager_numerical() helper owns and registers
     # the shared lookahead and slot-lattice CodeParameters before this kernel
     # consumes them.
-    real_param_names.extend(["rkf45_safety_factor", "numerical_initial_h"])
-    real_param_defaults.extend([0.9, 1.0])
+    real_param_names.append("numerical_initial_h")
+    real_param_defaults.append(1.0)
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -369,7 +369,7 @@ static inline int rkf45_checked_floor_to_long(
     // UNIFIED ADAPTIVE CONTROL LOGIC
     //==========================================
     // Evaluates the mathematically optimal adaptive step size $h$ for subsequent integration.
-    double safety = {cd_access}rkf45_safety_factor; // Safety factor for step-size scaling.
+    const double safety = 0.9; // Fixed RKF45 damping factor for next-step scaling.
     double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step $h$.
 
     double h_new = MulCUDA(safety, MulCUDA(h_local, factor)); // The candidate new step size $h$.

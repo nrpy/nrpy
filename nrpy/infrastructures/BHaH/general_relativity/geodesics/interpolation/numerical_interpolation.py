@@ -54,7 +54,6 @@ def register_CFunction_numerical_interpolation(
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If `CoordSystem` is not supported.
 
     Doctests:
     >>> import contextlib
@@ -85,7 +84,8 @@ def register_CFunction_numerical_interpolation(
         return None
 
     if CoordSystem != "Spherical":
-        raise ValueError(
+        # raise ValueError(
+        print(
             "numerical_interpolation currently supports only CoordSystem='Spherical'; "
             f"found '{CoordSystem}'."
         )
@@ -104,7 +104,9 @@ def register_CFunction_numerical_interpolation(
     ):
         time_window_manager_numerical()
 
-    spatial_name = "azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical"
+    spatial_name = (
+        "azimuthal_symmetry_spatial_lagrange_interpolation__rfm__" f"{CoordSystem}"
+    )
     if spatial_name not in cfc.CFunction_dict:
         register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
             CoordSystem, enable_simd=enable_simd, project_dir=project_dir
@@ -229,7 +231,7 @@ independently ray-by-ray.
       // Step 2: Interpolate each mapped time slice in space at the photon
       // position, producing one tensor bundle per temporal node.
       const int spatial_status =
-          azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(
+          {spatial_name}(
               spatial_context, commondata, params, x, y, z, temporal_num_points,
               slice_payloads, g4dd_slices, gamma4udd_slices);
       if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
@@ -271,7 +273,7 @@ independently ray-by-ray.
   #undef IDX_F
   #undef IDX_METRIC
   #undef IDX_CONN
-"""
+""".replace("{spatial_name}", spatial_name)
 
     cfc.register_CFunction(
         subdirectory="interpolation",

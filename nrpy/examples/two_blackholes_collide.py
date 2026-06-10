@@ -38,17 +38,39 @@ parser.add_argument(
     default="double",
 )
 parser.add_argument(
-    "--raytracing-outputs",
-    nargs="?",
-    const=7.5,
+    "--raytracing-spacetime",
+    nargs=3,
     default=None,
     type=float,
-    metavar="GRID_PHYSICAL_SIZE",
+    metavar=("T_FINAL", "GRID_PHYSICAL_SIZE", "DIAGNOSTICS_OUTPUT_EVERY"),
     help=(
-        "Enable Cartesian metric and Christoffel raytracing outputs on "
-        "diagnostics output steps. Optionally override grid_physical_size, "
-        "e.g. --raytracing-outputs 10.0. Currently supported only for "
+        "Enable metric and Christoffel raytracing spacetime outputs and set "
+        "t_final, grid_physical_size, and diagnostics_output_every, e.g. "
+        "--raytracing-spacetime 10.0 7.5 0.25. Currently supported only for "
         "OpenMP builds."
+    ),
+)
+parser.add_argument(
+    "--raytracing-coord-system",
+    type=str,
+    default=None,
+    help=(
+        "Override the code-generation coordinate system used for raytracing "
+        "data outputs, e.g. Spherical or SinhSpherical. Used only with "
+        "--raytracing-spacetime."
+    ),
+)
+parser.add_argument(
+    "--raytracing-Nxx",
+    dest="raytracing_nxx",
+    nargs=3,
+    type=int,
+    default=None,
+    metavar=("NXX0", "NXX1", "NXX2"),
+    help=(
+        "Override the base Nxx used for the selected raytracing coordinate "
+        "system, e.g. --raytracing-Nxx 124 412 2. Used only with "
+        "--raytracing-spacetime."
     ),
 )
 args = parser.parse_args()
@@ -62,10 +84,25 @@ if parallelization not in ["openmp", "cuda"]:
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
     )
-if args.cuda and args.raytracing_outputs is not None:
+# Raytracing data output is enabled only when --raytracing-spacetime is supplied.
+enable_raytracing_data_output = args.raytracing_spacetime is not None
+
+if fp_type not in ("float", "double"):
+    raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
+if enable_raytracing_data_output and fp_type != "double":
     raise ValueError(
-        "--raytracing-outputs is currently supported only for OpenMP builds."
+        "--raytracing-spacetime currently requires "
+        "--floating_point_precision double."
     )
+
+if args.cuda and enable_raytracing_data_output:
+    raise ValueError(
+        "--raytracing-spacetime is currently supported only for OpenMP builds."
+    )
+if args.raytracing_coord_system is not None and not enable_raytracing_data_output:
+    raise ValueError("--raytracing-coord-system requires --raytracing-spacetime.")
+if args.raytracing_nxx is not None and not enable_raytracing_data_output:
+    raise ValueError("--raytracing-Nxx requires --raytracing-spacetime.")
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
@@ -73,7 +110,11 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "two_blackholes_collide"
-CoordSystem = "Spherical"
+CoordSystem = (
+    args.raytracing_coord_system
+    if args.raytracing_coord_system is not None
+    else "Spherical"
+)
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
 num_fisheye_transitions = (
@@ -84,12 +125,24 @@ num_fisheye_transitions = (
 LapseEvolutionOption = "OnePlusLog"
 ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
-grid_physical_size = (
-    args.raytracing_outputs if args.raytracing_outputs is not None else 7.5
-)
-diagnostics_output_every = 0.25
-t_final = 1.0 * grid_physical_size
-enable_raytracing_data_output = args.raytracing_outputs is not None
+if enable_raytracing_data_output:
+    t_final = args.raytracing_spacetime[0]
+    grid_physical_size = args.raytracing_spacetime[1]
+    diagnostics_output_every = args.raytracing_spacetime[2]
+else:
+    t_final = 7.5
+    grid_physical_size = 7.5
+    diagnostics_output_every = 0.25
+
+if enable_raytracing_data_output and t_final <= 0.0:
+    raise ValueError("--raytracing-spacetime T_FINAL must be positive.")
+if enable_raytracing_data_output and grid_physical_size <= 0.0:
+    raise ValueError("--raytracing-spacetime GRID_PHYSICAL_SIZE must be positive.")
+if enable_raytracing_data_output and diagnostics_output_every <= 0.0:
+    raise ValueError(
+        "--raytracing-spacetime DIAGNOSTICS_OUTPUT_EVERY must be positive."
+    )
+
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
@@ -97,10 +150,29 @@ Nxx_dict = {
     "GeneralRFM_fisheyeN1": [128, 128, 128],
     "GeneralRFM_fisheyeN2": [128, 128, 128],
 }
+if CoordSystem not in Nxx_dict:
+    raise ValueError(
+        f"Unsupported raytracing coordinate system '{CoordSystem}'. "
+        f"Choose one of {sorted(Nxx_dict)}."
+    )
+if enable_raytracing_data_output:
+    if args.raytracing_nxx is None:
+        raise ValueError(
+            "--raytracing-Nxx NXX0 NXX1 NXX2 is required when "
+            "--raytracing-spacetime is used."
+        )
+
+    nxx_override = list(args.raytracing_nxx)
+    if any(nxx_value <= 0 for nxx_value in nxx_override):
+        raise ValueError("--raytracing-Nxx values must all be positive.")
+    if nxx_override[2] != 2:
+        raise ValueError("The numerical photon pipeline currently requires NXX2 == 2.")
+    Nxx_dict[CoordSystem] = nxx_override
 default_BH1_mass = default_BH2_mass = 0.5
 default_BH1_z_posn = +0.5
 default_BH2_z_posn = -0.5
-# Fisheye parameters
+# Fisheye parameter defaults derived from grid_physical_size when a
+# GeneralRFM_fisheyeN* coordinate system is selected.
 fisheye_param_defaults: dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
@@ -442,7 +514,62 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     ),
 )
 
-print(
-    f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
-)
+if enable_raytracing_data_output:
+    copy_files(
+        package="nrpy.infrastructures.BHaH.diagnostics",
+        filenames_list=["combine_raytracing_time_slices.py"],
+        project_dir=project_dir,
+        subdirectory="",
+    )
+    raytracing_combined_bin_name = (
+        f"{project_name}_"
+        f"{str(t_final).replace('-', 'm').replace('.', 'p')}_"
+        f"{str(grid_physical_size).replace('-', 'm').replace('.', 'p')}_"
+        f"{CoordSystem}_"
+        f"{Nxx_dict[CoordSystem][0]}_{Nxx_dict[CoordSystem][1]}_{Nxx_dict[CoordSystem][2]}.bin"
+    )
+    combined_output_path = os.path.join(
+        "..", "raytracing_data", raytracing_combined_bin_name
+    )
+    axisymmetry_flag = ""
+    if CoordSystem == "Spherical":
+        axisymmetry_flag = " \\\n  --axisymmetry-enabled"
+    script_path = os.path.join(project_dir, "run_raytracing_data_pipeline.sh")
+    script_text = f"""#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Building {project_name}..."
+make
+
+echo "Running ./{project_name}..."
+./{project_name}
+
+echo "Combining raytracing time slices..."
+python3 combine_raytracing_time_slices.py \\
+  --input-dir . \\
+  --pattern "raytracing_data_t????????.bin" \\
+  --output "{combined_output_path}"{axisymmetry_flag}
+
+echo "Combined raytracing data written to:"
+echo "{combined_output_path}"
+"""
+    with open(script_path, "w", encoding="utf-8") as script_file:
+        script_file.write(script_text)
+    os.chmod(script_path, 0o755)
+    print(
+        f"Finished! Now go into project/{project_name} and run "
+        "`./run_raytracing_data_pipeline.sh`."
+    )
+    print(
+        "    Single-time-slice raytracing_data_t########.bin files will remain "
+        f"in project/{project_name}/."
+    )
+    print(
+        "    Combined raytracing .bin output will be written to "
+        f"project/raytracing_data/{raytracing_combined_bin_name}"
+    )
+else:
+    print(
+        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+    )
 print(f"    Parameter file can be found in {project_name}.par")

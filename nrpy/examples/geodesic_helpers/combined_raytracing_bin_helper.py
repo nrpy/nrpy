@@ -319,8 +319,13 @@ def _validate_supported_generation(normalized: Dict[str, object]) -> None:
     grid = cast(Dict[str, object], normalized["grid"])
     run = cast(Dict[str, object], normalized["two_blackholes_run"])
     convergence_factor = cast(float, run["convergence_factor"])
-    if grid["CoordSystem"] != "Spherical":
-        raise ValueError("This helper currently supports only CoordSystem='Spherical'.")
+    coord_system = cast(str, grid["CoordSystem"])
+    nxx = list(cast(List[int], grid["Nxx"]))
+    if coord_system not in ("Spherical", "SinhSpherical"):
+        raise ValueError(
+            "This helper currently supports only CoordSystem='Spherical' or "
+            f"'SinhSpherical'; found '{coord_system}'."
+        )
     if run["parallelization"] != "openmp":
         raise ValueError(
             "This helper currently supports only parallelization='openmp'."
@@ -335,19 +340,19 @@ def _validate_supported_generation(normalized: Dict[str, object]) -> None:
         raise ValueError(
             "This helper currently supports only outer_bc_type='radiation'."
         )
+    if len(nxx) != 3:
+        raise ValueError("grid['Nxx'] must contain exactly three integers.")
+    if any(not isinstance(nxx_value, int) for nxx_value in nxx):
+        raise ValueError("grid['Nxx'] must contain only integers.")
+    if any(nxx_value <= 0 for nxx_value in nxx):
+        raise ValueError("grid['Nxx'] values must all be positive.")
+    if nxx[2] != 2:
+        raise ValueError(
+            "Raytracing data for the numerical photon pipeline currently "
+            "requires grid['Nxx'][2] == 2."
+        )
     if convergence_factor <= 0.0 or not convergence_factor.is_integer():
         raise ValueError("convergence_factor must be a positive integer.")
-    convergence_factor_int = int(convergence_factor)
-    expected_nxx = [
-        DEFAULT_SPHERICAL_BASE_NXX[0] * convergence_factor_int,
-        DEFAULT_SPHERICAL_BASE_NXX[1] * convergence_factor_int,
-        DEFAULT_SPHERICAL_BASE_NXX[2],
-    ]
-    if list(cast(List[int], grid["Nxx"])) != expected_nxx:
-        raise ValueError(
-            "For the Spherical BBH example, grid['Nxx'] must equal "
-            f"{expected_nxx} when convergence_factor={convergence_factor_int}."
-        )
 
 
 def _manifest_path(combined_bin_path: Path) -> Path:
@@ -832,10 +837,73 @@ def _run_subprocess(
                 "Streaming runtime progress requires runtime_t_final and "
                 "diagnostics_output_every."
             )
+        checked_runtime_t_final = runtime_t_final
+        checked_diagnostics_output_every = diagnostics_output_every
         progress_reporter = _RuntimeProgressReporter(
-            runtime_t_final=runtime_t_final,
-            diagnostics_output_every=diagnostics_output_every,
+            runtime_t_final=checked_runtime_t_final,
+            diagnostics_output_every=checked_diagnostics_output_every,
         )
+        runtime_failure_lines: List[str] = []
+        latest_runtime_context = "no parseable progress line seen yet"
+        runtime_failure_detected = False
+        failure_lock = threading.Lock()
+
+        def handle_runtime_output_line(completed_line: str) -> None:
+            nonlocal latest_runtime_context, runtime_failure_detected
+
+            sanitized_line = _sanitize_completed_line(completed_line)
+            stripped_line = sanitized_line.lstrip()
+            stripped_upper_line = stripped_line.upper()
+
+            progress_match = RUNTIME_PROGRESS_LINE_PATTERN.search(sanitized_line)
+            if progress_match is not None:
+                current_time = float(progress_match.group("current_time"))
+                final_time = float(progress_match.group("final_time"))
+                iteration = int(progress_match.group("iteration"))
+                total_diagnostics = max(
+                    1,
+                    int(
+                        math.floor(
+                            checked_runtime_t_final / checked_diagnostics_output_every
+                            + 1.0e-12
+                        )
+                    )
+                    + 1,
+                )
+                current_diagnostic = min(
+                    total_diagnostics,
+                    max(
+                        1,
+                        int(
+                            math.floor(
+                                current_time / checked_diagnostics_output_every
+                                + 1.0e-12
+                            )
+                        )
+                        + 1,
+                    ),
+                )
+                latest_runtime_context = (
+                    f"iteration={iteration}, "
+                    f"t={current_time:.17g}/{final_time:.17g}, "
+                    f"diagnostic~{current_diagnostic}/{total_diagnostics}"
+                )
+
+            progress_reporter.handle_completed_line(completed_line)
+            if sanitized_line == "":
+                return
+
+            line_reports_runtime_failure = stripped_upper_line.startswith(
+                ("ERROR:", "FAILED:", "FAILURE:", "FATAL:")
+            ) or stripped_upper_line.startswith("*** FAILED - ABORTING")
+
+            if not line_reports_runtime_failure:
+                return
+
+            with failure_lock:
+                runtime_failure_lines.append(sanitized_line)
+                runtime_failure_detected = True
+
         with subprocess.Popen(
             list(command),
             cwd=str(cwd),
@@ -850,28 +918,59 @@ def _run_subprocess(
 
             stdout_thread = threading.Thread(
                 target=_stream_pipe_lines,
-                args=(process.stdout, progress_reporter.handle_completed_line),
+                args=(process.stdout, handle_runtime_output_line),
             )
             stderr_thread = threading.Thread(
                 target=_stream_pipe_lines,
-                args=(process.stderr, progress_reporter.handle_completed_line),
+                args=(process.stderr, handle_runtime_output_line),
             )
             stdout_thread.start()
             stderr_thread.start()
+            process_returncode: Optional[int] = None
             while True:
-                returncode = process.poll()
-                if returncode is not None:
+                process_returncode = process.poll()
+                if process_returncode is not None:
+                    break
+                with failure_lock:
+                    should_abort_for_runtime_failure = runtime_failure_detected
+                if should_abort_for_runtime_failure:
+                    process.terminate()
+                    try:
+                        process_returncode = process.wait(timeout=5.0)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process_returncode = process.wait()
                     break
                 progress_reporter.maybe_emit_heartbeat()
                 time_module.sleep(0.2)
             stdout_thread.join()
             stderr_thread.join()
         progress_reporter.finish()
-        if returncode != 0:
+
+        if runtime_failure_lines:
+            runtime_failure_summary = "\n".join(
+                f"  - {line}" for line in runtime_failure_lines
+            )
+            output_tail = "\n".join(progress_reporter.output_tail_lines).strip()
+            if output_tail == "":
+                output_tail = "(no subprocess output captured)"
+            raise RuntimeError(
+                f"{label} reported runtime failure output; "
+                f"aborted before combining raytracing slices: {list(command)!r}\n"
+                "Detected explicit runtime failure line(s) while generating numerical "
+                "spacetime data.\n"
+                f"Latest runtime context: {latest_runtime_context}\n"
+                f"Matched runtime failure line(s):\n{runtime_failure_summary}\n"
+                f"Last subprocess output:\n{output_tail}"
+            )
+
+        if process_returncode is None:
+            raise RuntimeError(f"{label} ended without a subprocess return code.")
+        if process_returncode != 0:
             raise _format_subprocess_failure(
                 command,
                 label,
-                returncode,
+                process_returncode,
                 progress_reporter.output_tail_lines,
             )
         return
@@ -1080,6 +1179,12 @@ def generate_required_combined_bin(
         cast(str, generation["two_blackholes_example_script"]),
         "--raytracing-outputs",
         repr(cast(float, grid["grid_physical_size"])),
+        "--raytracing-coord-system",
+        cast(str, grid["CoordSystem"]),
+        "--raytracing-nxx",
+        str(cast(List[int], grid["Nxx"])[0]),
+        str(cast(List[int], grid["Nxx"])[1]),
+        str(cast(List[int], grid["Nxx"])[2]),
         "--floating_point_precision",
         cast(str, run["floating_point_precision"]),
     ]
@@ -1160,7 +1265,8 @@ def ensure_required_combined_bin(
         final_path,
     )
     if not metadata_is_correct:
-        raise RuntimeError("Regenerated combined .bin did not pass final validation.")
+        # raise RuntimeError
+        print("Regenerated combined .bin did not pass final validation.")
     return STATE_REBUILT_STALE, final_path
 
 

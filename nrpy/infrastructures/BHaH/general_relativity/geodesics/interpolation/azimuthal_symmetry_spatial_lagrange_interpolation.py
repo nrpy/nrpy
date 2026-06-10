@@ -385,14 +385,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES,
     )
 
-    # Step 1: Validate high-level code-generation assumptions.
-    if CoordSystem != "Spherical":
-        raise ValueError(
-            "azimuthal_symmetry_spatial_lagrange_interpolation is currently implemented only "
-            f"for CoordSystem='Spherical'; found '{CoordSystem}'."
-        )
-
-    # Step 2: Ensure required helper headers are copied into the project.
+    # Ensure required helper headers are copied into the project.
     if not enable_simd:
         copy_files(
             package="nrpy.helpers",

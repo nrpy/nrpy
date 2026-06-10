@@ -375,13 +375,6 @@ def register_all_diagnostics(
                 "CoordSystem. The generated exporters also require "
                 "commondata->NUMGRIDS == 1 at runtime."
             )
-        CoordSystem = next(iter(set_of_CoordSystems))
-        if CoordSystem not in ("Cartesian", "Spherical"):
-            raise ValueError(
-                "Raytracing binary exporters currently support only Cartesian "
-                "and Spherical coordinate systems. Extend the serialized "
-                f"metadata contract before enabling them for {CoordSystem}."
-            )
 
     _register_CFunction_diagnostics(
         default_diagnostics_out_every=default_diagnostics_out_every,
@@ -394,8 +387,9 @@ def register_all_diagnostics(
         enable_raytracing_data_output=enable_raytracing_data_output,
     )
     if enable_raytracing_data_output:
+        raytracing_coord_system = next(iter(set_of_CoordSystems))
         output_raytracing_data.register_CFunction_output_raytracing_data(
-            CoordSystem=CoordSystem,
+            CoordSystem=raytracing_coord_system,
             enable_rfm_precompute=enable_rfm_precompute,
             enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
         )

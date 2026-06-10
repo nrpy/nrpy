@@ -341,7 +341,6 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
-    par.glb_code_params_dict["rkf45_safety_factor"].defaultvalue = 0.9
     # ---------------------------------------------------------
     # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
     # ---------------------------------------------------------

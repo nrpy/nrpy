@@ -106,12 +106,6 @@ def register_CFunction_output_raytracing_data(
             "enable_RbarDD_gridfunctions must be a bool, "
             f"got {type(enable_RbarDD_gridfunctions).__name__}"
         )
-    if CoordSystem not in ("Cartesian", "Spherical"):
-        raise ValueError(
-            "Raytracing binary exporters currently support only Cartesian "
-            "and Spherical coordinate systems. Extend the serialized "
-            f"metadata contract before enabling them for {CoordSystem}."
-        )
     if not enable_rfm_precompute:
         raise ValueError(
             "Raytracing binary exporters currently require "

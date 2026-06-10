@@ -158,7 +158,7 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
     printf("Initial Step Size (h_initial): %.2f\\n", commondata.numerical_initial_h);
     printf("Min / Max Step (h_min / h_max): %e / %.2f\\n", commondata.rkf45_h_min, commondata.rkf45_h_max);
     printf("Abs / Rel Tolerance: %e / %e\\n", commondata.rkf45_absolute_error_tolerance, commondata.rkf45_error_tolerance);
-    printf("Safety Factor: %.2f\\n", commondata.rkf45_safety_factor);
+    printf("Adaptive Step Damping: 0.90\\n");
     printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
     printf("{diagnostic_flag_label}: %d\\n", commondata.{diagnostic_flag_name});
     printf("Slot Manager (Delta t / Min t): %.2f / %.2f\\n", commondata.slot_manager_delta_t, commondata.slot_manager_t_min);
