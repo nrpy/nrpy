@@ -22,10 +22,10 @@ try:
     import blueprint_config_and_schema as cfg  # type: ignore
     import render_lensed_image as rli  # type: ignore
 except ImportError:
-    from nrpy.examples.geodesic_helpers.geodesic_visualizations import (
+    from nrpy.examples.geodesic_visualizations import (
         blueprint_config_and_schema as cfg,
     )
-    from nrpy.examples.geodesic_helpers.geodesic_visualizations import (
+    from nrpy.examples.geodesic_visualizations import (
         render_lensed_image as rli,
     )
 

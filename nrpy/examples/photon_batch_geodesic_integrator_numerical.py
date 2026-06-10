@@ -32,9 +32,6 @@ import nrpy.params as par
 
 # Physics/Math Generators (Symbolic definitions of geodesics)
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
-from nrpy.examples.geodesic_helpers.combined_raytracing_bin_helper import (
-    write_required_combined_bin_request,
-)
 
 # NRPy BlackHoles@Home (BHaH) infrastructure modules for C project management
 from nrpy.infrastructures.BHaH import BHaH_defines_h
@@ -393,7 +390,7 @@ if __name__ == "__main__":
 
     # Define the directory containing the visualization assets relative to the repository root
     vis_dir = os.path.join(
-        "nrpy", "examples", "geodesic_helpers", "geodesic_visualizations"
+        "nrpy", "examples", "geodesic_visualizations"
     )
 
     # Locate the visualization script
@@ -404,7 +401,6 @@ if __name__ == "__main__":
     combined_helper_src = os.path.join(
         "nrpy",
         "examples",
-        "geodesic_helpers",
         "combined_raytracing_bin_helper.py",
     )
 
