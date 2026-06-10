@@ -4,18 +4,19 @@ Needs: Integrands built in equations/general_relativity/bhahaha/SpECTRESpinEstim
 
 Author: Ralston Graves
 """
+
 from typing import Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-from nrpy.helpers.generic import clang_format
 
 # Import the SpECTRESpinEstimate factory from the other module
 from nrpy.equations.general_relativity.bhahaha.SpECTRESpinEstimate import (
     SpECTRESpinEstimate,
 )
+from nrpy.helpers.generic import clang_format
 
 
 def register_CFunction_diagnostics_spectre_spin(
@@ -31,7 +32,6 @@ def register_CFunction_diagnostics_spectre_spin(
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
     """
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(
             f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}",
@@ -181,6 +181,7 @@ def register_CFunction_diagnostics_spectre_spin(
 #pragma omp for
     for (int i2 = 0; i2 < Nxx2 + 2 * NGHOSTS; i2++) {
         for (int i1 = 0; i1 < Nxx1 + 2 * NGHOSTS; i1++) {
+            const REAL xx1 = xx[1][i1];
             for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
 """
     body += precompute_c_code
@@ -225,12 +226,18 @@ def register_CFunction_diagnostics_spectre_spin(
                 
                 // Accumulate into thread-private variables
                 A_sum_private += A_integrand * dA_unscaled;
-                for(int i=0; i<3; ++i) {
-                    XU_sum_private[i]  += (&XU0_integrand)[i] * dA_unscaled;
-                    XRU_sum_private[i] += (&XRU0_integrand)[i] * dA_unscaled;
-                    XOU_sum_private[i] += (&XOU0_integrand)[i] * dA_unscaled;
-                    ZOU_sum_private[i] += (&ZOU0_integrand)[i] * dA_unscaled;
-                }
+                XU_sum_private[0] += XU0_integrand * dA_unscaled;
+                XU_sum_private[1] += XU1_integrand * dA_unscaled;
+                XU_sum_private[2] += XU2_integrand * dA_unscaled;
+                XRU_sum_private[0] += XRU0_integrand * dA_unscaled;
+                XRU_sum_private[1] += XRU1_integrand * dA_unscaled;
+                XRU_sum_private[2] += XRU2_integrand * dA_unscaled;
+                XOU_sum_private[0] += XOU0_integrand * dA_unscaled;
+                XOU_sum_private[1] += XOU1_integrand * dA_unscaled;
+                XOU_sum_private[2] += XOU2_integrand * dA_unscaled;
+                ZOU_sum_private[0] += ZOU0_integrand * dA_unscaled;
+                ZOU_sum_private[1] += ZOU1_integrand * dA_unscaled;
+                ZOU_sum_private[2] += ZOU2_integrand * dA_unscaled;
                 R0_sum_private   += R0_integrand * dA_unscaled;
                 O0_sum_private   += O0_integrand * dA_unscaled;
                 Oabs_sum_private += Oabs_integrand * dA_unscaled;
