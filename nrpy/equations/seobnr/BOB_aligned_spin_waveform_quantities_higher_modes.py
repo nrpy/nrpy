@@ -44,16 +44,13 @@ class BOB_aligned_spin_waveform_quantities_higher_modes:
         initializes class variables like mass parameters, spin parameters, and
         various coefficients required for the waveforms's amplitude and phase.
         The key outputs of the BOB_aligned_spin_waveform_quantities_higher_modes class are:
-            - 'h' : the amplitude of the merger-ringdown (l,m) mode.
-            - 'phi' : the phase of the merger-ringdown (l,m) mode.
-            - 'h_t_attach' : the NR-fitted strain amplitude of the (l,m) mode
+            - 'h_lm' : the amplitude of the merger-ringdown (l,m) mode.
+            - 'phi_lm' : the phase of the merger-ringdown (l,m) mode.
+            - 'hdot_t_attach_lm' : the BOB-derived time derivative of the strain amplitude (l,m) mode
                                 at the NQC attachment time.
-            - 'hddot_t_attach' : the BOB-derived second time derivative of the strain amplitude (l,m) mode
+            - 'hddot_t_attach_lm' : the BOB-derived second time derivative of the strain amplitude (l,m) mode
                                 at the NQC attachment time.
-            - 'w_t_attach' : the NR-fitted angular frequency of the (l,m) mode
-                                at the NQC attachment time.
-                                (Equation C29 of https://arxiv.org/pdf/2303.18039)
-            - 'wdot_t_attach' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
+            - 'wdot_t_attach_lm' : the BOB-derived first time derivative of the angular frequency of the (l=2,m=2) mode
                                 at the NQC attachment time.
 
         :return None:
