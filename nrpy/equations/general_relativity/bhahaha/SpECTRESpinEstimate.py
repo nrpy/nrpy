@@ -219,17 +219,24 @@ class SpECTRESpinEstimateClass:
         self._SE_qDD_dDD = ixp.declarerank4(
             "SE_qDD_dDD", symmetry="sym01_sym23", dimension=3
         )
-
-        # TODO: Might need to make qDD 3-D. Seems to be working for now, but see explanation and commented-out fixes below 
-        # `self._SE_qDD` was updated to be 3-D so the indexes work correctly for taking derivatives. Since the 3x3 matrix it represents is singular (only the angular-angular components are actually nonzero because in reality the induced metric is 2-D and has no radial component), we have to make a temporary 2x2 gridfunction to apply the inverter
+      
+        # TODO: Might need to make qDD 3-D. Seems to be working for now, but see
+        # explanation and commented-out fixes below.
+        # `self._SE_qDD` was updated to be 3-D so the indexes work correctly for
+        # taking derivatives. Since the 3x3 matrix it represents is singular
+        # (only the angular-angular components are actually nonzero because in
+        # reality the induced metric is 2-D and has no radial component),
+        # we have to make a temporary 2x2 gridfunction to apply the inverter.
       
         # Inverse 2-metric and sqrt(det q)
         self._SE_qUU, self._detq2 = ixp.symm_matrix_inverter2x2(self._SE_qDD)
+
         # self._detq2 = (self._SE_qDD[0][0] * self._SE_qDD[1][1]) - (self._SE_qDD[0][1] * self._SE_qDD[1][0])
         # temp_q2DD = ixp.zerorank2(dimension=2)
         # for A in range(2):
         #   for B in range(2):
         #     temp_q2DD[A][B] = self._SE_qDD[A+1][B+1]
+
         self._sqrtq = sp.sqrt(self._detq2)
 
         # 2D Levi-Civita tensor with configurable orientation
