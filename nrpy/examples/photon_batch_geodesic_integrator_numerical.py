@@ -100,19 +100,21 @@ if __name__ == "__main__":
             "--raytracing-spacetime T_FINAL GRID_PHYSICAL_SIZE "
             "DIAGNOSTICS_OUTPUT_EVERY "
             "--raytracing-coord-system CoordSystem "
-            "--raytracing-Nxx NXX0 NXX1 NXX2\n\n"
+            "--raytracing-Nxx NXX0 NXX1 NXX2 "
+            "[--raytracing-sinhw SINHW]\n\n"
             "Then rerun this photon script using the .bin filename printed "
             "to the terminal by two_blackholes_collide.py, e.g.:\n"
             "python3 photon_batch_geodesic_integrator_numerical.py "
-            "--bin_name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_72_12_2.bin "
+            "--bin-name "
+            "two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_sinhw_0p4_72_12_2.bin "
             "--dataset-coord-system SinhSpherical "
-            "--dataset-grid-physical-size 7.5 "
+            "--dataset-grid-size 7.5 "
             "--dataset-sinhw 0.4"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--bin_name",
+        "--bin-name",
         type=str,
         required=True,
         help=(
@@ -132,11 +134,12 @@ if __name__ == "__main__":
         required=True,
         choices=refmetric.supported_CoordSystems,
         help=(
-            "Coordinate system used when generating the numerical spacetime " "dataset."
+            "Coordinate system used when generating the numerical spacetime "
+            "dataset. Required by the spatial interpolation pipeline."
         ),
     )
     parser.add_argument(
-        "--dataset-grid-physical-size",
+        "--dataset-grid-size",
         type=float,
         required=True,
         help=(
@@ -161,15 +164,15 @@ if __name__ == "__main__":
 
     _require(
         os.path.basename(args.bin_name) == args.bin_name,
-        "--bin_name must be a filename only, not a path.",
+        "--bin-name must be a filename only, not a path.",
     )
     _require(
         args.bin_name.endswith(".bin"),
-        "--bin_name must name a numerical spacetime .bin file.",
+        "--bin-name must name a numerical spacetime .bin file.",
     )
     _require(
-        args.dataset_grid_physical_size > 0.0,
-        "--dataset-grid-physical-size must be positive.",
+        args.dataset_grid_size > 0.0,
+        "--dataset-grid-size must be positive.",
     )
     if args.dataset_coord_system == "SinhSpherical":
         _require(
@@ -302,13 +305,13 @@ if __name__ == "__main__":
 
     # Step 5.5.a: Match the dataset reference-metric defaults used by the
     # combined numerical spacetime file before metadata overrides Nxx/dxx/xxmin/xxmax.
-    par.adjust_CodeParam_default("grid_physical_size", args.dataset_grid_physical_size)
+    par.adjust_CodeParam_default("grid_physical_size", args.dataset_grid_size)
     rfm = refmetric.reference_metric[dataset_coord_system]
     for param_name, grid_size_mapping in rfm.grid_physical_size_dict.items():
         if grid_size_mapping == "grid_physical_size":
-            par.adjust_CodeParam_default(param_name, args.dataset_grid_physical_size)
+            par.adjust_CodeParam_default(param_name, args.dataset_grid_size)
         elif grid_size_mapping == "-grid_physical_size":
-            par.adjust_CodeParam_default(param_name, -args.dataset_grid_physical_size)
+            par.adjust_CodeParam_default(param_name, -args.dataset_grid_size)
         else:
             raise ValueError(
                 f"Unsupported grid_physical_size mapping '{grid_size_mapping}' "
@@ -401,7 +404,7 @@ if __name__ == "__main__":
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
     print(f" -> Dataset coordinate system: {dataset_coord_system}")
-    print(f" -> Dataset grid physical size: {args.dataset_grid_physical_size}")
+    print(f" -> Dataset grid size: {args.dataset_grid_size}")
     if args.dataset_sinhw is not None:
         print(f" -> Dataset SINHW: {args.dataset_sinhw}")
 

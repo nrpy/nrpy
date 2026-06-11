@@ -73,6 +73,27 @@ parser.add_argument(
         "--raytracing-spacetime."
     ),
 )
+parser.add_argument(
+    "--raytracing-sinhw",
+    type=float,
+    default=None,
+    help=(
+        "Override the SinhSpherical SINHW value used for raytracing data "
+        "outputs. Used only with --raytracing-spacetime and "
+        "--raytracing-coord-system SinhSpherical."
+    ),
+)
+parser.add_argument(
+    "--raytracing-bhs",
+    nargs=4,
+    type=float,
+    default=None,
+    metavar=("Z_1", "Z_2", "M_1", "M_2"),
+    help=(
+        "Override the black hole z positions and masses, e.g. "
+        "--raytracing-bhs 0.5 -0.5 0.5 0.5."
+    ),
+)
 args = parser.parse_args()
 
 # Code-generation-time parameters:
@@ -103,6 +124,8 @@ if args.raytracing_coord_system is not None and not enable_raytracing_data_outpu
     raise ValueError("--raytracing-coord-system requires --raytracing-spacetime.")
 if args.raytracing_nxx is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-Nxx requires --raytracing-spacetime.")
+if args.raytracing_sinhw is not None and not enable_raytracing_data_output:
+    raise ValueError("--raytracing-sinhw requires --raytracing-spacetime.")
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
@@ -168,9 +191,27 @@ if enable_raytracing_data_output:
     if nxx_override[2] != 2:
         raise ValueError("The numerical photon pipeline currently requires NXX2 == 2.")
     Nxx_dict[CoordSystem] = nxx_override
-default_BH1_mass = default_BH2_mass = 0.5
-default_BH1_z_posn = +0.5
-default_BH2_z_posn = -0.5
+sinh_width = None
+if CoordSystem == "SinhSpherical":
+    sinh_width = args.raytracing_sinhw if args.raytracing_sinhw is not None else 0.4
+    if sinh_width <= 0.0:
+        raise ValueError("--raytracing-sinhw must be positive.")
+elif args.raytracing_sinhw is not None:
+    raise ValueError(
+        "--raytracing-sinhw is supported only for "
+        "--raytracing-coord-system SinhSpherical."
+    )
+if args.raytracing_bhs is None:
+    default_BH1_z_posn = +0.5
+    default_BH2_z_posn = -0.5
+    default_BH1_mass = default_BH2_mass = 0.5
+else:
+    default_BH1_z_posn = args.raytracing_bhs[0]
+    default_BH2_z_posn = args.raytracing_bhs[1]
+    default_BH1_mass = args.raytracing_bhs[2]
+    default_BH2_mass = args.raytracing_bhs[3]
+    if default_BH1_mass <= 0.0 or default_BH2_mass <= 0.0:
+        raise ValueError("--raytracing-bhs masses M_1 and M_2 must be positive.")
 # Fisheye parameter defaults derived from grid_physical_size when a
 # GeneralRFM_fisheyeN* coordinate system is selected.
 fisheye_param_defaults: dict[str, float] = {}
@@ -403,7 +444,7 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
-    par.adjust_CodeParam_default("SINHW", 0.4)
+    par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
@@ -521,12 +562,20 @@ if enable_raytracing_data_output:
         project_dir=project_dir,
         subdirectory="",
     )
+    sinhw_suffix = ""
+    if CoordSystem == "SinhSpherical":
+        sinhw_suffix = f"sinhw_{str(sinh_width).replace('-', 'm').replace('.', 'p')}_"
     raytracing_combined_bin_name = (
         f"{project_name}_"
         f"{str(t_final).replace('-', 'm').replace('.', 'p')}_"
         f"{str(grid_physical_size).replace('-', 'm').replace('.', 'p')}_"
         f"{str(diagnostics_output_every).replace('-', 'm').replace('.', 'p')}_"
+        f"z1_{str(default_BH1_z_posn).replace('-', 'm').replace('.', 'p')}_"
+        f"z2_{str(default_BH2_z_posn).replace('-', 'm').replace('.', 'p')}_"
+        f"m1_{str(default_BH1_mass).replace('-', 'm').replace('.', 'p')}_"
+        f"m2_{str(default_BH2_mass).replace('-', 'm').replace('.', 'p')}_"
         f"{CoordSystem}_"
+        f"{sinhw_suffix}"
         f"{Nxx_dict[CoordSystem][0]}_{Nxx_dict[CoordSystem][1]}_{Nxx_dict[CoordSystem][2]}.bin"
     )
     combined_output_path = os.path.join(
