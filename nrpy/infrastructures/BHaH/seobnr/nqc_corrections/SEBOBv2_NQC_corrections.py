@@ -3,6 +3,8 @@ Set up C function library for SEBOBv2 NQC attachment routines.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
+        Suchindram Dasgupta
+        sd00113 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -126,7 +128,7 @@ if (commondata->projected_attachment_active) {
       if (abs_dt < min_abs_dt) {
         min_abs_dt = abs_dt;
         peak_idx = i;
-      }
+      } // END IF: projected attachment sample is closer to t_peak
     } // END LOOP: for i over fine-dynamics samples nearest to projected attachment
   } // END ELSE: projected attachment is endpoint-safe
 } else {
@@ -175,10 +177,10 @@ if (commondata->projected_attachment_active) {
   // use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
   // gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
   // resulting in a singular matrix.
-  if (t_peak > times[commondata->nsteps_fine - 1]){
+  if (t_peak >= times[commondata->nsteps_fine - 1]){
     t_peak = times[commondata->nsteps_fine - 2];
     peak_idx = commondata->nsteps_fine - 2;
-  }
+  } // END IF: scalar NQC t_peak reaches fine-dynamics endpoint
   else{
     peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
   }

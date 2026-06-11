@@ -3,6 +3,8 @@ Set up C function library for the SEOBNR aligned spin expressions.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
+        Suchindram Dasgupta
+        sd00113 **at** mix **dot** wvu **dot** edu
         Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -199,40 +201,56 @@ static inline REAL seobnr_hbr2016_ell_m3j4(
 } // END FUNCTION: seobnr_hbr2016_ell_m3j4
 
 /**
- * Compute the HBR2016 M3J4 precessing final-spin magnitude.
+ * Compute the signed HBR2016 M3J4 nonprecessing final spin.
  *
  * @param[in] m1 Mass of body 1.
  * @param[in] m2 Mass of body 2.
+ * @param[in] chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
+ * @param[in] chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
+ * @return Signed nonprecessing final spin.
+ */
+static inline REAL seobnr_hbr2016_nonprecessing_final_spin_m3j4(
+    const REAL m1,
+    const REAL m2,
+    const REAL chi1_lnhat,
+    const REAL chi2_lnhat) {
+  const REAL q = m2 / m1;
+  const REAL atot = (chi1_lnhat + chi2_lnhat * q * q) / ((1.0 + q) * (1.0 + q));
+  const REAL ell = seobnr_hbr2016_ell_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
+  return atot + ell / (1.0 / q + 2.0 + q);
+} // END FUNCTION: seobnr_hbr2016_nonprecessing_final_spin_m3j4
+
+/**
+ * Compute the signed HBR2016 M3J4 precessing final spin.
+ *
+ * @param[in] m1 Mass of body 1.
+ * @param[in] m2 Mass of body 2.
+ * @param[in] chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
+ * @param[in] chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
  * @param[in] chi1_x Cartesian spin component of body 1.
  * @param[in] chi1_y Cartesian spin component of body 1.
  * @param[in] chi1_z Cartesian spin component of body 1.
  * @param[in] chi2_x Cartesian spin component of body 2.
  * @param[in] chi2_y Cartesian spin component of body 2.
  * @param[in] chi2_z Cartesian spin component of body 2.
- * @param[in] lnhat_x Cartesian unit orbital-angular-momentum component.
- * @param[in] lnhat_y Cartesian unit orbital-angular-momentum component.
- * @param[in] lnhat_z Cartesian unit orbital-angular-momentum component.
- * @return Precessing final-spin magnitude.
+ * @return Signed precessing final spin.
  */
 static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
     const REAL m1,
     const REAL m2,
+    const REAL chi1_lnhat,
+    const REAL chi2_lnhat,
     const REAL chi1_x,
     const REAL chi1_y,
     const REAL chi1_z,
     const REAL chi2_x,
     const REAL chi2_y,
-    const REAL chi2_z,
-    const REAL lnhat_x,
-    const REAL lnhat_y,
-    const REAL lnhat_z) {
+    const REAL chi2_z) {
   const REAL eps = 0.024;
   const REAL q = m2 / m1;
   const REAL q2 = q * q;
   const REAL chi1_mag = sqrt(chi1_x * chi1_x + chi1_y * chi1_y + chi1_z * chi1_z);
   const REAL chi2_mag = sqrt(chi2_x * chi2_x + chi2_y * chi2_y + chi2_z * chi2_z);
-  const REAL chi1_lnhat = chi1_x * lnhat_x + chi1_y * lnhat_y + chi1_z * lnhat_z;
-  const REAL chi2_lnhat = chi2_x * lnhat_x + chi2_y * lnhat_y + chi2_z * lnhat_z;
   const REAL cos_beta = chi1_mag > 0.0 ? seobnr_clamp_real(chi1_lnhat / chi1_mag, -1.0, 1.0) : 1.0;
   const REAL cos_gamma = chi2_mag > 0.0 ? seobnr_clamp_real(chi2_lnhat / chi2_mag, -1.0, 1.0) : 1.0;
   const REAL sin_beta = sqrt(fmax(0.0, 1.0 - cos_beta * cos_beta));
@@ -247,10 +265,12 @@ static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
       + 2.0 * chi1_mag * chi2_mag * q2 * cos_alpha
       + 2.0 * (chi1_mag * cos_betas + chi2_mag * q2 * cos_gammas) * ell * q
       + ell * ell * q2;
-  if (sqrt_arg < 0.0) {
+  if (sqrt_arg < 0.0)
     sqrt_arg = 0.0;
-  } // END IF: roundoff drives final-spin square-root argument negative
-  return sqrt(sqrt_arg) / ((1.0 + q) * (1.0 + q));
+  const REAL final_spin_nonprecessing =
+      seobnr_hbr2016_nonprecessing_final_spin_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
+  const REAL sign_final_spin = final_spin_nonprecessing < 0.0 ? -1.0 : 1.0;
+  return sign_final_spin * sqrt(sqrt_arg) / ((1.0 + q) * (1.0 + q));
 } // END FUNCTION: seobnr_hbr2016_precessing_final_spin_m3j4
 """
     name = "SEOBNRv5_aligned_spin_special_coefficients"
@@ -340,7 +360,7 @@ if (use_projected_attachment) {
   if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
     exit(1);
-  }
+  } // END IF: insufficient dynamics samples for projected attachment inputs
   if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
       commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL ||
       commondata->chi1_x_spline.spline == NULL || commondata->chi1_x_spline.acc == NULL ||
@@ -348,40 +368,37 @@ if (use_projected_attachment) {
       commondata->chi1_z_spline.spline == NULL || commondata->chi1_z_spline.acc == NULL ||
       commondata->chi2_x_spline.spline == NULL || commondata->chi2_x_spline.acc == NULL ||
       commondata->chi2_y_spline.spline == NULL || commondata->chi2_y_spline.acc == NULL ||
-      commondata->chi2_z_spline.spline == NULL || commondata->chi2_z_spline.acc == NULL ||
-      commondata->lnhat_x.spline == NULL || commondata->lnhat_x.acc == NULL ||
-      commondata->lnhat_y.spline == NULL || commondata->lnhat_y.acc == NULL ||
-      commondata->lnhat_z.spline == NULL || commondata->lnhat_z.acc == NULL) {
+      commondata->chi2_z_spline.spline == NULL || commondata->chi2_z_spline.acc == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), projected-spin splines are unavailable\\n");
     exit(1);
-  }
+  } // END IF: projected-spin remnant splines are unavailable
 
   REAL *restrict times_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
   if (times_combined == NULL){
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times_combined\\n");
     exit(1);
-  }
+  } // END IF: times_combined allocation failed
   REAL *restrict Omega_combined = (REAL *)malloc(nsteps_combined*sizeof(REAL));
   if (Omega_combined == NULL){
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_combined\\n");
     exit(1);
-  }
+  } // END IF: Omega_combined allocation failed
   REAL *restrict u_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
   if (u_rlow == NULL){
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for u_rlow\\n");
     exit(1);
-  }
+  } // END IF: u_rlow allocation failed
   REAL *restrict t_rlow = (REAL *)malloc(commondata->nsteps_low*sizeof(REAL));
   if (t_rlow == NULL){
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_rlow\\n");
     exit(1);
-  }
+  } // END IF: t_rlow allocation failed
   for (i = 0; i < commondata->nsteps_low; i++){
     const REAL r_low_i = commondata->dynamics_low[IDX(i,R)];
     if (r_low_i <= 0.0) {
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), nonpositive low-dynamics radius in projected attachment inputs\\n");
       exit(1);
-    }
+    } // END IF: low-dynamics projected attachment radius is nonpositive
     u_rlow[i] = 1.0 / r_low_i;
     t_rlow[i] = commondata->dynamics_low[IDX(i,TIME)];
     times_combined[i] = t_rlow[i];
@@ -396,34 +413,34 @@ if (use_projected_attachment) {
   if (u_r10M < u_rlow[0]) {
     fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies before the low-dynamics projected-spin reference domain; using first available low-dynamics point\\n");
     u_r10M = u_rlow[0];
-  }
+  } // END IF: r=10M lies before projected-spin reference domain
   if (u_r10M > u_rlow[commondata->nsteps_low - 1]) {
     fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies after the low-dynamics projected-spin reference domain; using last available low-dynamics point\\n");
     u_r10M = u_rlow[commondata->nsteps_low - 1];
-  }
+  } // END IF: r=10M lies after projected-spin reference domain
 
   gsl_interp_accel *restrict acc_t_of_u = gsl_interp_accel_alloc();
   if (acc_t_of_u == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_t_of_u\\n");
     exit(1);
-  }
+  } // END IF: acc_t_of_u allocation failed
   gsl_spline *restrict spline_t_of_u = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_low);
   if (spline_t_of_u == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_t_of_u\\n");
     exit(1);
-  }
+  } // END IF: spline_t_of_u allocation failed
   gsl_spline_init(spline_t_of_u,u_rlow,t_rlow,commondata->nsteps_low);
 
   gsl_interp_accel *restrict acc_Omega_combined = gsl_interp_accel_alloc();
   if (acc_Omega_combined == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_Omega_combined\\n");
     exit(1);
-  }
+  } // END IF: acc_Omega_combined allocation failed
   gsl_spline *restrict spline_Omega_combined = gsl_spline_alloc(gsl_interp_cspline, nsteps_combined);
   if (spline_Omega_combined == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_Omega_combined\\n");
     exit(1);
-  }
+  } // END IF: spline_Omega_combined allocation failed
   gsl_spline_init(spline_Omega_combined,times_combined,Omega_combined,nsteps_combined);
 
   const REAL t_r10M = gsl_spline_eval(spline_t_of_u, u_r10M, acc_t_of_u);
@@ -437,9 +454,6 @@ if (use_projected_attachment) {
   const REAL chi2_r10_x = gsl_spline_eval(commondata->chi2_x_spline.spline, omega_r10M, commondata->chi2_x_spline.acc);
   const REAL chi2_r10_y = gsl_spline_eval(commondata->chi2_y_spline.spline, omega_r10M, commondata->chi2_y_spline.acc);
   const REAL chi2_r10_z = gsl_spline_eval(commondata->chi2_z_spline.spline, omega_r10M, commondata->chi2_z_spline.acc);
-  const REAL lnhat_r10_x = gsl_spline_eval(commondata->lnhat_x.spline, omega_r10M, commondata->lnhat_x.acc);
-  const REAL lnhat_r10_y = gsl_spline_eval(commondata->lnhat_y.spline, omega_r10M, commondata->lnhat_y.acc);
-  const REAL lnhat_r10_z = gsl_spline_eval(commondata->lnhat_z.spline, omega_r10M, commondata->lnhat_z.acc);
   {
     const REAL chi1 = chi1_projected_r10;
     const REAL chi2 = chi2_projected_r10;
@@ -448,10 +462,9 @@ if (use_projected_attachment) {
     body += """
   } // END BLOCK: projected-spin reference evaluation at r=10M
   commondata->a_f = seobnr_hbr2016_precessing_final_spin_m3j4(
-      m1, m2,
+      m1, m2, chi1_projected_r10, chi2_projected_r10,
       chi1_r10_x, chi1_r10_y, chi1_r10_z,
-      chi2_r10_x, chi2_r10_y, chi2_r10_z,
-      lnhat_r10_x, lnhat_r10_y, lnhat_r10_z);
+      chi2_r10_x, chi2_r10_y, chi2_r10_z);
   const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
     -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
     -0.986, -0.984, -0.982, -0.98, -0.975, -0.97, -0.96, -0.95, -0.94, -0.92, -0.9, -0.88, -0.86, -0.84,
@@ -484,17 +497,19 @@ if (use_projected_attachment) {
   if (acc_qnm == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_qnm\\n");
     exit(1);
-  }
+  } // END IF: acc_qnm allocation failed
   gsl_spline *restrict spline_qnm = gsl_spline_alloc(gsl_interp_cspline, 107);
   if (spline_qnm == NULL) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_qnm\\n");
     exit(1);
-  }
+  } // END IF: spline_qnm allocation failed
+  const REAL a_f_qnm = (commondata->a_f < afinallist[0]) ? afinallist[0] :
+      ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
   gsl_spline_init(spline_qnm, afinallist, reomegaqnm22, 107);
-  commondata->omega_qnm = gsl_spline_eval(spline_qnm, commondata->a_f, acc_qnm) / commondata->M_f;
+  commondata->omega_qnm = gsl_spline_eval(spline_qnm, a_f_qnm, acc_qnm) / commondata->M_f;
   gsl_spline_init(spline_qnm, afinallist, imomegaqnm22, 107);
   gsl_interp_accel_reset(acc_qnm);
-  commondata->tau_qnm = 1.0 / (gsl_spline_eval(spline_qnm, commondata->a_f, acc_qnm) / commondata->M_f);
+  commondata->tau_qnm = 1.0 / (gsl_spline_eval(spline_qnm, a_f_qnm, acc_qnm) / commondata->M_f);
   gsl_spline_free(spline_qnm);
   gsl_interp_accel_free(acc_qnm);
   gsl_spline_free(spline_t_of_u);
@@ -610,17 +625,17 @@ else{
   if (N_zoom == 0) {
     fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), fine dynamics time interval is too short for t_ISCO search\\n");
     exit(1);
-  }
+  } // END IF: fine-dynamics interval is too short for t_ISCO search
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (t_zoom == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\\n");
       exit(1);
-    }
+    } // END IF: t_zoom allocation failed
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (minus_r_zoom == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
       exit(1);
-    }
+    } // END IF: minus_r_zoom allocation failed
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
@@ -669,10 +684,9 @@ const size_t attachment_end_idx = commondata->nsteps_fine - 2;
 if (t_peak_22 >= times[commondata->nsteps_fine - 1]){
   t_peak_22 = times[attachment_end_idx];
   t_peak_55 = t_peak_22;
-}
-if (t_peak_55 >= times[commondata->nsteps_fine - 1]){
+} // END IF: t_peak_22 reaches fine-dynamics endpoint
+if (t_peak_55 >= times[commondata->nsteps_fine - 1])
   t_peak_55 = times[attachment_end_idx];
-}
 commondata->t_attach = t_peak_22;
 
 if (use_projected_attachment) {
