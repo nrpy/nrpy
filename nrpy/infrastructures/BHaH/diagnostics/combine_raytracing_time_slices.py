@@ -1,16 +1,17 @@
 """
-Combine stage-1 raytracing time-slice files into one immutable container.
+Combine raytracing time-slice files into one immutable container.
 
 This module parses the binary files written by
 ``nrpy.infrastructures.BHaH.diagnostics.output_raytracing_data``, validates
 their headers strictly, sorts the inputs by physical simulation time, and
 writes one read-only combined container for downstream raytracing.
 
-The combined file stores only copied stage-1 point-record payloads plus the
-metadata needed for stage 3 to locate time slices and recover the payload-local
-logical-grid indexing convention. It does not recompute metric data,
-Christoffels, or coordinate transforms, and it does not build a true spatial
-index.
+The combined file stores only copied input-slice point-record payloads plus the
+metadata needed by downstream readers to locate time slices and recover the
+payload-local logical-grid indexing convention, including the signed half-open
+logical-grid window for ghost-zone-aware payloads. It does not recompute
+metric data, Christoffels, or coordinate transforms, and it does not build a
+true spatial index.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -27,13 +28,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Sequence, Set, Tuple, cast
 
-STAGE1_MAGIC = "NRPYRTDATA4D"
-STAGE1_HEADER_LABEL = "NRPy RT spacetime data"
-STAGE1_FORMAT_NAME = "Cartesian g4DD+Gamma4UDD"
-STAGE1_TARGET_BASIS = "Cartesian"
-STAGE1_LOOP_ORDER = "i2maj_i0fast"
-STAGE1_FORMAT_VERSION = 1
-STAGE1_HEADER_SIZE = 2568
+INPUT_SLICE_MAGIC = "NRPYRTDATA4D"
+INPUT_SLICE_HEADER_LABEL = "NRPy RT spacetime data"
+INPUT_SLICE_FORMAT_NAME = "Cartesian g4DD+Gamma4UDD"
+INPUT_SLICE_TARGET_BASIS = "Cartesian"
+INPUT_SLICE_LOOP_ORDER = "i2maj_i0fast"
+INPUT_SLICE_HEADER_SIZE = 2564
 
 COMBINED_MAGIC = b"NRPYRTSTACK4D\0\0\0"
 GEOMETRY_MAGIC = b"NRPYRTGEOMV1\0\0\0\0"
@@ -54,7 +54,7 @@ RECORD_COMPONENT_COUNT = 53
 METRIC_COMPONENT_COUNT = 10
 CHRISTOFFEL_COMPONENT_COUNT = 40
 
-RECORD_LAYOUT_TIME_MAJOR_STAGE1_AOS = 1
+RECORD_LAYOUT_TIME_MAJOR_SLICE_AOS = 1
 
 SPATIAL_LOOKUP_NATIVE_LOGICAL_GRID = 1
 SPATIAL_LOOKUP_COORDINATE_TABLE_ONLY = 2
@@ -149,9 +149,9 @@ CHRISTOFFEL_COMPONENT_NAMES = RECORD_COMPONENT_NAMES[13:]
 
 
 @dataclass(frozen=True)
-class Stage1Info:
+class InputSliceInfo:
     """
-    Parsed stage-1 file metadata and offsets.
+    Parsed input-slice file metadata and offsets.
 
     This record mirrors the on-disk header plus the separately stored physical
     simulation time so later validation and combined-file layout code can work
@@ -160,7 +160,6 @@ class Stage1Info:
 
     path: Path
     magic: str
-    format_version: int
     header_size: int
     output_index: int
     num_grids: int
@@ -231,7 +230,7 @@ class SliceEntry:
     One fixed-width slice-table entry for the combined container.
 
     Each entry records the sorted simulation time together with the absolute
-    payload offset and provenance offsets from the original stage-1 file.
+    payload offset and provenance offsets from the original input-slice file.
     """
 
     output_index: int
@@ -254,8 +253,9 @@ class AxisymmetryMetadata:
     """
     Reader-facing axisymmetry contract stored in combined metadata.
 
-    Stage 2 records only conventions here. Stage 3 remains responsible for any
-    interpolation and arbitrary-phi tensor rotation logic.
+    The combined container records only conventions here. Downstream readers
+    remain responsible for any interpolation and arbitrary-phi tensor rotation
+    logic.
     """
 
     enabled: bool
@@ -292,7 +292,7 @@ class CombinedHeaderInfo:
 
     magic: str
     combined_format_version: int
-    source_format_version: int
+    reserved_source_u32: int
     endian_tag: int
     header_flags: int
     fixed_header_bytes: int
@@ -458,6 +458,17 @@ def _read_u64(fp: BinaryIO, label: str) -> int:
     return cast(int, struct.unpack("<Q", _read_exact(fp, 8, label))[0])
 
 
+def _read_i64(fp: BinaryIO, label: str) -> int:
+    """
+    Read one little-endian int64.
+
+    :param fp: Open binary file object.
+    :param label: Human-readable label for error reporting.
+    :return: Parsed integer value.
+    """
+    return cast(int, struct.unpack("<q", _read_exact(fp, 8, label))[0])
+
+
 def _read_f64(fp: BinaryIO, label: str) -> float:
     """
     Read one little-endian float64.
@@ -538,11 +549,11 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description=(
-            "Combine stage-1 raytracing time-slice files into one immutable "
+            "Combine raytracing time-slice files into one immutable "
             "stacked container."
         )
     )
-    parser.add_argument("input_files", nargs="*", help="Explicit input stage-1 files.")
+    parser.add_argument("input_files", nargs="*", help="Explicit input slice files.")
     parser.add_argument(
         "--output",
         default="combined_raytracing_data.bin",
@@ -630,7 +641,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phi-samples",
         default=None,
-        help="Comma-separated stored phi sample values; if omitted, derive them from the stage-1 native grid.",
+        help="Comma-separated stored phi sample values; if omitted, derive them from the input native grid.",
     )
     parser.add_argument(
         "--requires-axisymmetry-rotation",
@@ -678,20 +689,19 @@ def discover_input_paths(args: argparse.Namespace) -> List[Path]:
     return sorted(resolved.values())
 
 
-def parse_stage1_file(path: Path) -> Stage1Info:
+def parse_input_slice_file(path: Path) -> InputSliceInfo:
     """
-    Parse one stage-1 raytracing output file exactly.
+    Parse one raytracing slice file exactly.
 
-    :param path: Stage-1 binary file path.
+    :param path: Input binary file path.
     :return: Parsed header and simulation-time metadata.
     :raises RuntimeError: If the file is truncated or internally inconsistent.
     """
-    # Step 1: Read the fixed-width header exactly in the stage-1 writer order.
+    # Step 1: Read the fixed-width header exactly in the writer order.
     actual_file_size = path.stat().st_size
     with path.open("rb") as fp:
-        magic = _read_fixed_string(fp, 16, "stage-1 magic")
+        magic = _read_fixed_string(fp, 16, "input magic")
 
-        format_version = _read_u32(fp, "format_version")
         header_size = _read_u32(fp, "header_size")
         output_index = _read_u32(fp, "output_index")
         num_grids = _read_u32(fp, "num_grids")
@@ -750,14 +760,14 @@ def parse_stage1_file(path: Path) -> Stage1Info:
             _read_u64(fp, "payload_i2_count"),
         )
         payload_i_start = (
-            _read_u64(fp, "payload_i0_start"),
-            _read_u64(fp, "payload_i1_start"),
-            _read_u64(fp, "payload_i2_start"),
+            _read_i64(fp, "payload_i0_start"),
+            _read_i64(fp, "payload_i1_start"),
+            _read_i64(fp, "payload_i2_start"),
         )
         payload_i_end = (
-            _read_u64(fp, "payload_i0_end"),
-            _read_u64(fp, "payload_i1_end"),
-            _read_u64(fp, "payload_i2_end"),
+            _read_i64(fp, "payload_i0_end"),
+            _read_i64(fp, "payload_i1_end"),
+            _read_i64(fp, "payload_i2_end"),
         )
 
         dxx = (
@@ -809,7 +819,7 @@ def parse_stage1_file(path: Path) -> Stage1Info:
         # Step 2: Confirm the parsed header consumed the exact advertised size.
         if fp.tell() != header_size:
             raise RuntimeError(
-                f"{path}: parsed stage-1 header length {fp.tell()} did not match "
+                f"{path}: parsed input header length {fp.tell()} did not match "
                 f"header_size={header_size}."
             )
 
@@ -817,10 +827,9 @@ def parse_stage1_file(path: Path) -> Stage1Info:
         fp.seek(simulation_time_offset)
         simulation_time = _read_f64(fp, "simulation_time")
 
-    return Stage1Info(
+    return InputSliceInfo(
         path=path,
         magic=magic,
-        format_version=format_version,
         header_size=header_size,
         output_index=output_index,
         num_grids=num_grids,
@@ -863,43 +872,38 @@ def parse_stage1_file(path: Path) -> Stage1Info:
     )
 
 
-def validate_stage1_file_internal(info: Stage1Info) -> None:
+def validate_input_slice_file_internal(info: InputSliceInfo) -> None:
     """
-    Validate one parsed stage-1 file against the documented schema.
+    Validate one parsed input slice against the documented schema.
 
-    :param info: Parsed stage-1 file metadata.
+    :param info: Parsed input-slice metadata.
     :raises RuntimeError: If the file fails validation.
     """
-    if info.magic != STAGE1_MAGIC:
+    if info.magic != INPUT_SLICE_MAGIC:
         raise RuntimeError(f"{info.path}: unexpected magic '{info.magic}'.")
-    if info.format_version != STAGE1_FORMAT_VERSION:
+    if info.header_size != INPUT_SLICE_HEADER_SIZE:
         raise RuntimeError(
-            f"{info.path}: expected format_version={STAGE1_FORMAT_VERSION}, "
-            f"found {info.format_version}."
-        )
-    if info.header_size != STAGE1_HEADER_SIZE:
-        raise RuntimeError(
-            f"{info.path}: expected header_size={STAGE1_HEADER_SIZE}, "
+            f"{info.path}: expected header_size={INPUT_SLICE_HEADER_SIZE}, "
             f"found {info.header_size}."
         )
-    if info.header_label != STAGE1_HEADER_LABEL:
+    if info.header_label != INPUT_SLICE_HEADER_LABEL:
         raise RuntimeError(
-            f"{info.path}: expected header_label='{STAGE1_HEADER_LABEL}', "
+            f"{info.path}: expected header_label='{INPUT_SLICE_HEADER_LABEL}', "
             f"found '{info.header_label}'."
         )
-    if info.format_name != STAGE1_FORMAT_NAME:
+    if info.format_name != INPUT_SLICE_FORMAT_NAME:
         raise RuntimeError(
-            f"{info.path}: expected format_name='{STAGE1_FORMAT_NAME}', "
+            f"{info.path}: expected format_name='{INPUT_SLICE_FORMAT_NAME}', "
             f"found '{info.format_name}'."
         )
-    if info.target_basis != STAGE1_TARGET_BASIS:
+    if info.target_basis != INPUT_SLICE_TARGET_BASIS:
         raise RuntimeError(
-            f"{info.path}: expected target_basis='{STAGE1_TARGET_BASIS}', "
+            f"{info.path}: expected target_basis='{INPUT_SLICE_TARGET_BASIS}', "
             f"found '{info.target_basis}'."
         )
-    if info.loop_order != STAGE1_LOOP_ORDER:
+    if info.loop_order != INPUT_SLICE_LOOP_ORDER:
         raise RuntimeError(
-            f"{info.path}: expected loop_order='{STAGE1_LOOP_ORDER}', "
+            f"{info.path}: expected loop_order='{INPUT_SLICE_LOOP_ORDER}', "
             f"found '{info.loop_order}'."
         )
     if info.num_grids != 1:
@@ -939,20 +943,14 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
             f"{info.path}: point_record_bytes must be {POINT_RECORD_BYTES}, "
             f"found {info.point_record_bytes}."
         )
-    if info.payload_includes_ghost_zones != 0:
-        raise RuntimeError(f"{info.path}: payload_includes_ghost_zones must be 0.")
+    if info.payload_includes_ghost_zones != 1:
+        raise RuntimeError(f"{info.path}: payload_includes_ghost_zones must be 1.")
     if info.record_component_names != RECORD_COMPONENT_NAMES:
-        raise RuntimeError(
-            f"{info.path}: record component names do not match v1 schema."
-        )
+        raise RuntimeError(f"{info.path}: record component names do not match .")
     if info.metric_component_names != METRIC_COMPONENT_NAMES:
-        raise RuntimeError(
-            f"{info.path}: metric component names do not match v1 schema."
-        )
+        raise RuntimeError(f"{info.path}: metric component names do not match .")
     if info.christoffel_component_names != CHRISTOFFEL_COMPONENT_NAMES:
-        raise RuntimeError(
-            f"{info.path}: Christoffel component names do not match v1 schema."
-        )
+        raise RuntimeError(f"{info.path}: Christoffel component names do not match .")
     if info.output_index < 0:
         raise RuntimeError(f"{info.path}: output_index must be nonnegative.")
     if info.point_record_count <= 0:
@@ -993,15 +991,15 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
             f"{info.path}: actual size {info.actual_file_size} did not match "
             f"total_file_bytes={info.total_file_bytes}."
         )
-    # Step 4: Enforce the stage-1 v1 interior-only payload convention. The
-    #         combined format records payload_i_start/count/end for reader
-    #         clarity, but this v1 combiner intentionally rejects future
-    #         stage-1 variants with ghost zones, partial domains, or shifted
-    #         payload windows.
-    if info.payload_i_count != info.Nxx:
+    # Step 4: Enforce the full logical-grid payload convention.
+    #         The exporter writes one record for every logical-grid point,
+    #         including ghost zones. Accept either the corrected signed
+    #         logical-grid window or the legacy zero-based storage window, but
+    #         require both to describe the same full ghost-aware extent.
+    if info.payload_i_count != info.Nxx_plus_2NGHOSTS:
         raise RuntimeError(
             f"{info.path}: payload_i_count={info.payload_i_count} did not equal "
-            f"Nxx={info.Nxx}."
+            f"Nxx_plus_2NGHOSTS={info.Nxx_plus_2NGHOSTS}."
         )
     expected_nxx_plus_2nghosts = tuple(count + 2 * info.NGHOSTS for count in info.Nxx)
     if info.Nxx_plus_2NGHOSTS != expected_nxx_plus_2nghosts:
@@ -1009,20 +1007,49 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
             f"{info.path}: Nxx_plus_2NGHOSTS={info.Nxx_plus_2NGHOSTS} did not equal "
             f"Nxx + 2 * NGHOSTS = {expected_nxx_plus_2nghosts}."
         )
-    expected_payload_i_start = (info.NGHOSTS, info.NGHOSTS, info.NGHOSTS)
-    if info.payload_i_start != expected_payload_i_start:
-        raise RuntimeError(
-            f"{info.path}: payload_i_start={info.payload_i_start} did not equal "
-            f"(NGHOSTS, NGHOSTS, NGHOSTS)={expected_payload_i_start}."
-        )
-    expected_payload_i_end = tuple(
-        start + count
-        for start, count in zip(info.payload_i_start, info.payload_i_count)
+    expected_payload_i_start, expected_payload_i_end = (
+        get_expected_input_payload_window(info.Nxx, info.NGHOSTS)
     )
-    if info.payload_i_end != expected_payload_i_end:
+    legacy_payload_i_start = (0, 0, 0)
+    legacy_payload_i_end = info.Nxx_plus_2NGHOSTS
+    uses_signed_logical_window = (
+        info.payload_i_start == expected_payload_i_start
+        and info.payload_i_end == expected_payload_i_end
+    )
+    uses_legacy_storage_window = (
+        info.payload_i_start == legacy_payload_i_start
+        and info.payload_i_end == legacy_payload_i_end
+    )
+    if not uses_signed_logical_window and not uses_legacy_storage_window:
         raise RuntimeError(
-            f"{info.path}: payload_i_end={info.payload_i_end} did not equal "
-            f"payload_i_start + payload_i_count = {expected_payload_i_end}."
+            f"{info.path}: payload_i_start/end=({info.payload_i_start}, "
+            f"{info.payload_i_end}) matched neither the signed logical-grid "
+            f"window ({expected_payload_i_start}, {expected_payload_i_end}) nor "
+            f"the legacy zero-based storage window "
+            f"({legacy_payload_i_start}, {legacy_payload_i_end})."
+        )
+    expected_payload_i_count = tuple(
+        end - start
+        for start, end in zip(expected_payload_i_start, expected_payload_i_end)
+    )
+    actual_payload_i_count = tuple(
+        end - start for start, end in zip(info.payload_i_start, info.payload_i_end)
+    )
+    if actual_payload_i_count != expected_payload_i_count:
+        raise RuntimeError(
+            f"{info.path}: payload_i_end - payload_i_start = "
+            f"{actual_payload_i_count} did not equal "
+            f"{expected_payload_i_count}."
+        )
+    if info.payload_i_count != actual_payload_i_count:
+        raise RuntimeError(
+            f"{info.path}: payload_i_count={info.payload_i_count} did not equal "
+            f"payload_i_end - payload_i_start = {actual_payload_i_count}."
+        )
+    if info.payload_i_count != expected_payload_i_count:
+        raise RuntimeError(
+            f"{info.path}: payload_i_count={info.payload_i_count} did not equal "
+            f"the signed logical-grid payload extent = {expected_payload_i_count}."
         )
     for field_name in ("dxx", "invdxx", "xxmin", "xxmax", "cart_origin"):
         values = getattr(info, field_name)
@@ -1036,17 +1063,33 @@ def validate_stage1_file_internal(info: Stage1Info) -> None:
         raise RuntimeError(f"{info.path}: simulation_time must be finite.")
 
 
-def validate_stage1_compatible(base: Stage1Info, other: Stage1Info) -> None:
+def get_expected_input_payload_window(
+    Nxx: Tuple[int, int, int], NGHOSTS: int
+) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
     """
-    Validate that two stage-1 files are container-compatible.
+    Compute the signed logical-grid payload window for a full ghost-aware slice.
 
-    :param base: Reference stage-1 file metadata.
-    :param other: Candidate stage-1 file metadata.
+    :param Nxx: Interior grid extents in each native/logical direction.
+    :param NGHOSTS: Number of ghost zones on each side.
+    :return: ``(payload_i_start, payload_i_end)`` for the half-open window.
+    """
+    payload_i_start = (-NGHOSTS, -NGHOSTS, -NGHOSTS)
+    payload_i_end = tuple(count + NGHOSTS for count in Nxx)
+    return payload_i_start, cast(Tuple[int, int, int], payload_i_end)
+
+
+def validate_input_slice_compatible(
+    base: InputSliceInfo, other: InputSliceInfo
+) -> None:
+    """
+    Validate that two input files are container-compatible.
+
+    :param base: Reference input-file metadata.
+    :param other: Candidate input-file metadata.
     :raises RuntimeError: If any required field differs.
     """
     comparable_fields = (
         "magic",
-        "format_version",
         "num_grids",
         "serialized_real_bytes",
         "file_is_little_endian",
@@ -1062,8 +1105,6 @@ def validate_stage1_compatible(base: Stage1Info, other: Stage1Info) -> None:
         "Nxx_plus_2NGHOSTS",
         "NGHOSTS",
         "payload_i_count",
-        "payload_i_start",
-        "payload_i_end",
         "dxx",
         "invdxx",
         "xxmin",
@@ -1087,11 +1128,11 @@ def validate_stage1_compatible(base: Stage1Info, other: Stage1Info) -> None:
             )
 
 
-def validate_sorted_slices(infos: Sequence[Stage1Info]) -> None:
+def validate_sorted_slices(infos: Sequence[InputSliceInfo]) -> None:
     """
     Validate uniqueness and strict time ordering after sorting.
 
-    :param infos: Stage-1 infos sorted by simulation_time.
+    :param infos: Input-slice infos sorted by simulation_time.
     :raises RuntimeError: If times or output indices are duplicated.
     """
     seen_indices: Set[int] = set()
@@ -1114,27 +1155,27 @@ def validate_sorted_slices(infos: Sequence[Stage1Info]) -> None:
         previous_time = info.simulation_time
 
 
-def _native_phi_samples(info: Stage1Info) -> Tuple[float, ...]:
+def _native_phi_samples(info: InputSliceInfo) -> Tuple[float, ...]:
     """
-    Compute stored phi-plane locations from the native stage-1 grid.
+    Compute stored phi-plane locations from the native input grid.
 
-    :param info: Parsed stage-1 header info.
+    :param info: Parsed input header info.
     :return: Tuple of native cell-centered phi samples.
     """
     return tuple(
         info.xxmin[2] + (float(phi_index) + 0.5) * info.dxx[2]
-        for phi_index in range(info.payload_i_count[2])
+        for phi_index in range(info.Nxx[2])
     )
 
 
 def determine_axisymmetry_metadata(
-    args: argparse.Namespace, base: Stage1Info
+    args: argparse.Namespace, base: InputSliceInfo
 ) -> AxisymmetryMetadata:
     """
-    Build axisymmetry metadata from CLI options and stage-1 grid metadata.
+    Build axisymmetry metadata from CLI options and input-grid metadata.
 
     :param args: Parsed CLI namespace.
-    :param base: Reference stage-1 file whose native grid defines the payload.
+    :param base: Reference input file whose native grid defines the payload.
     :return: Axisymmetry metadata record.
     :raises ValueError: If axisymmetry metadata is internally inconsistent.
     """
@@ -1161,7 +1202,7 @@ def determine_axisymmetry_metadata(
     expected_phi_samples: Tuple[float, ...] = _native_phi_samples(base)
     if len(expected_phi_samples) != 2:
         raise ValueError(
-            "Axisymmetry metadata currently requires the stage-1 payload to store "
+            "Axisymmetry metadata currently requires the input payload to store "
             f"exactly two native phi planes; found {len(expected_phi_samples)}."
         )
 
@@ -1179,10 +1220,10 @@ def determine_axisymmetry_metadata(
     if len(set(phi_samples)) != len(phi_samples):
         raise ValueError("Phi samples must be unique.")
     if len(phi_samples) != len(expected_phi_samples):
-        raise ValueError("Phi sample count does not match the stage-1 payload.")
+        raise ValueError("Phi sample count does not match the input payload.")
     for got_phi, expected_phi in zip(phi_samples, expected_phi_samples):
         if not math.isclose(got_phi, expected_phi, rel_tol=0.0, abs_tol=1.0e-14):
-            raise ValueError("Phi samples do not match the stage-1 native grid.")
+            raise ValueError("Phi samples do not match the input native grid.")
     return AxisymmetryMetadata(
         enabled=True,
         symmetry_axis=args.axisymmetry_axis,
@@ -1238,7 +1279,7 @@ def determine_spatial_lookup_mode(
     return SPATIAL_LOOKUP_MODE_IDS[mode_name], mode_name
 
 
-def extract_coordinate_table_from_first_slice(base: Stage1Info) -> bytes:
+def extract_coordinate_table_from_first_slice(base: InputSliceInfo) -> bytes:
     """
     Build the GeometryBlock coordinate table from the first slice payload.
 
@@ -1289,13 +1330,13 @@ def _compute_cartesian_bbox_from_coordinate_table(
 
 
 def validate_coordinate_table_against_slice(
-    coordinate_table: bytes, info: Stage1Info
+    coordinate_table: bytes, info: InputSliceInfo
 ) -> None:
     """
     Validate that later slices reuse the same coordinates as the first slice.
 
     :param coordinate_table: Coordinate table bytes from the first slice.
-    :param info: Later stage-1 slice to validate.
+    :param info: Later input slice to validate.
     :raises RuntimeError: If a coordinate record is truncated or any x,y,z triple differs.
     """
     with info.path.open("rb") as fp:
@@ -1312,25 +1353,25 @@ def validate_coordinate_table_against_slice(
 
 
 def build_geometry_block(
-    base: Stage1Info,
-    infos: Sequence[Stage1Info],
+    base: InputSliceInfo,
+    infos: Sequence[InputSliceInfo],
     args: argparse.Namespace,
     spatial_lookup_mode_id: int,
 ) -> GeometryBlockData:
     """
     Build GeometryBlockV1 bytes and derived geometry metadata.
 
-    :param base: First stage-1 slice metadata.
-    :param infos: Sorted stage-1 slice metadata.
+    :param base: First input-slice metadata.
+    :param infos: Sorted input-slice metadata.
     :param args: Parsed CLI namespace.
     :param spatial_lookup_mode_id: Declared reader lookup mode id.
     :return: Geometry block bytes plus derived summary values.
     :raises RuntimeError: If geometry-header packing or coordinate validation fails.
     """
     # Step 1: Optionally cache one Cartesian coordinate table. This is not a
-    #         true spatial index; it exists so stage 3 can validate or build
-    #         its own lookup structure for the nonuniform Cartesian embedding
-    #         without scanning the time-major payload.
+    #         true spatial index; it exists so downstream readers can validate
+    #         or build their own lookup structure for the nonuniform Cartesian
+    #         embedding without scanning the time-major payload.
     if args.include_coordinate_table:
         coordinate_table = extract_coordinate_table_from_first_slice(base)
         if args.validate_coordinate_table:
@@ -1432,8 +1473,8 @@ def build_geometry_block(
 
 
 def compute_layout(
-    base: Stage1Info,
-    infos: Sequence[Stage1Info],
+    base: InputSliceInfo,
+    infos: Sequence[InputSliceInfo],
     metadata_bytes_len: int,
     geometry_block_bytes_len: int,
     args: argparse.Namespace,
@@ -1441,8 +1482,8 @@ def compute_layout(
     """
     Compute the combined container layout.
 
-    :param base: Reference stage-1 file metadata.
-    :param infos: Sorted stage-1 slice metadata.
+    :param base: Reference input-file metadata.
+    :param infos: Sorted input-slice metadata.
     :param metadata_bytes_len: Metadata JSON byte count.
     :param geometry_block_bytes_len: Geometry block byte count.
     :param args: Parsed CLI namespace.
@@ -1480,13 +1521,13 @@ def compute_layout(
 
 
 def build_slice_entries(
-    base: Stage1Info, infos: Sequence[Stage1Info], layout: Layout
+    base: InputSliceInfo, infos: Sequence[InputSliceInfo], layout: Layout
 ) -> List[SliceEntry]:
     """
     Build sorted SliceTableV1 entries.
 
-    :param base: Reference stage-1 file metadata.
-    :param infos: Sorted stage-1 slice metadata.
+    :param base: Reference input-file metadata.
+    :param infos: Sorted input-slice metadata.
     :param layout: Final combined container layout.
     :return: Slice table entries.
     """
@@ -1515,8 +1556,8 @@ def build_slice_entries(
 
 
 def build_metadata_json(
-    base: Stage1Info,
-    infos: Sequence[Stage1Info],
+    base: InputSliceInfo,
+    infos: Sequence[InputSliceInfo],
     layout: Layout,
     axisymmetry: AxisymmetryMetadata,
     geometry_data: GeometryBlockData,
@@ -1526,8 +1567,8 @@ def build_metadata_json(
     """
     Build deterministic JSON metadata for the combined container.
 
-    :param base: Reference stage-1 file metadata.
-    :param infos: Sorted stage-1 slice metadata.
+    :param base: Reference input-file metadata.
+    :param infos: Sorted input-slice metadata.
     :param layout: Final combined layout.
     :param axisymmetry: Axisymmetry metadata.
     :param geometry_data: Derived geometry metadata.
@@ -1536,12 +1577,14 @@ def build_metadata_json(
     :return: UTF-8 encoded deterministic JSON metadata.
     """
     # Step 1: Emit a verbose, deterministic schema description for readers and debugging.
+    normalized_payload_i_start, normalized_payload_i_end = (
+        get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
+    )
     metadata = {
         "combined_format_name": "NRPY raytracing stacked time-slice container",
         "combined_format_version": COMBINED_FORMAT_VERSION,
-        "source_format_name": "NRPY stage-1 raytracing data",
-        "source_format_version": base.format_version,
-        "payload_layout": "time_major_stage1_aos",
+        "input_file_type": "NRPY raytracing slice data",
+        "payload_layout": "time_major_slice_aos",
         "record_dtype": "<f8",
         "record_component_count": base.record_component_count,
         "point_record_real_count": base.point_record_real_count,
@@ -1598,11 +1641,11 @@ def build_metadata_json(
         },
         "time_lookup_contract": {
             "slice_table_order": "strictly increasing simulation_time",
-            "interpolation_owner": "stage3",
+            "interpolation_owner": "downstream_reader",
             "note": (
-                "Stage 2 stores sorted times only. Stage 3 must choose the "
-                "lower-inclusive or upper-inclusive bracketing convention used "
-                "by the photon integrator."
+                "This container stores sorted times only. Downstream readers "
+                "must choose the lower-inclusive or upper-inclusive bracketing "
+                "convention used by the photon integrator."
             ),
         },
         "fixed_header_field_meanings": {
@@ -1616,8 +1659,8 @@ def build_metadata_json(
             "Nxx_plus_2NGHOSTS": list(base.Nxx_plus_2NGHOSTS),
             "NGHOSTS": base.NGHOSTS,
             "payload_i_count": list(base.payload_i_count),
-            "payload_i_start": list(base.payload_i_start),
-            "payload_i_end": list(base.payload_i_end),
+            "payload_i_start": list(normalized_payload_i_start),
+            "payload_i_end": list(normalized_payload_i_end),
             "native_xxmin": list(base.xxmin),
             "native_xxmax": list(base.xxmax),
             "native_dxx": list(base.dxx),
@@ -1627,8 +1670,9 @@ def build_metadata_json(
         "grid_point_position_convention": {
             "id": GRID_POINT_POSITION_CONVENTION_ID,
             "meaning": (
-                "Point records correspond to exported interior logical-grid "
-                "points with payload-local indices j = i - payload_i_start."
+                "Point records correspond to exported full logical-grid "
+                "points, including ghost zones, with low-side ghost zones "
+                "addressed by negative logical indices."
             ),
         },
         "cartesian_bounds": (
@@ -1641,7 +1685,7 @@ def build_metadata_json(
             else None
         ),
         "reader_offset_contract": {
-            "record_layout_id": "time_major_stage1_aos",
+            "record_layout_id": "time_major_slice_aos",
             "lookup_precondition": (
                 "The i0,i1,i2 indices must already be native/logical grid "
                 "indices. Do not compute them using Cartesian x,y,z with "
@@ -1653,6 +1697,10 @@ def build_metadata_json(
                 "j2 = i2 - payload_i_start[2]; "
                 "point_index = j0 + payload_i_count[0] * "
                 "(j1 + payload_i_count[1] * j2)"
+            ),
+            "payload_window_convention": (
+                "payload_i_start/payload_i_end define a half-open logical-grid "
+                "window whose low-side ghost zones use negative indices."
             ),
             "record_offset_formula": (
                 "record_offset = slice_table[s].payload_offset + "
@@ -1752,7 +1800,7 @@ def pack_slice_entry(entry: SliceEntry) -> bytes:
 
 
 def pack_fixed_header(
-    base: Stage1Info,
+    base: InputSliceInfo,
     layout: Layout,
     axisymmetry: AxisymmetryMetadata,
     spatial_lookup_mode_id: int,
@@ -1761,7 +1809,7 @@ def pack_fixed_header(
     """
     Pack the fixed 4096-byte combined container header.
 
-    :param base: Reference stage-1 file metadata.
+    :param base: Reference input-file metadata.
     :param layout: Final combined layout.
     :param axisymmetry: Axisymmetry metadata.
     :param spatial_lookup_mode_id: Declared reader lookup mode id.
@@ -1770,6 +1818,9 @@ def pack_fixed_header(
     :raises RuntimeError: If the packed header exceeds its fixed allocation.
     """
     # Step 1: Pack only the hot-path numeric fields needed for direct offset math.
+    normalized_payload_i_start, normalized_payload_i_end = (
+        get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
+    )
     header = bytearray()
     header.extend(COMBINED_MAGIC)
     header.extend(
@@ -1777,9 +1828,7 @@ def pack_fixed_header(
             "<I", _require_u32(COMBINED_FORMAT_VERSION, "combined_format_version")
         )
     )
-    header.extend(
-        struct.pack("<I", _require_u32(base.format_version, "source_format_version"))
-    )
+    header.extend(struct.pack("<I", 0))
     header.extend(struct.pack("<I", _require_u32(ENDIAN_TAG, "endian_tag")))
     header.extend(struct.pack("<I", _require_u32(HEADER_FLAGS_V1, "header_flags")))
     header.extend(
@@ -1894,7 +1943,7 @@ def pack_fixed_header(
     header.extend(struct.pack("<I", _require_u32(base.NGHOSTS, "NGHOSTS")))
     header.extend(
         struct.pack(
-            "<I", _require_u32(RECORD_LAYOUT_TIME_MAJOR_STAGE1_AOS, "record_layout_id")
+            "<I", _require_u32(RECORD_LAYOUT_TIME_MAJOR_SLICE_AOS, "record_layout_id")
         )
     )
     header.extend(
@@ -1939,13 +1988,19 @@ def pack_fixed_header(
     header.extend(
         struct.pack(
             "<3q",
-            *[_require_i64(value, "payload_i_start") for value in base.payload_i_start],
+            *[
+                _require_i64(value, "payload_i_start")
+                for value in normalized_payload_i_start
+            ],
         )
     )
     header.extend(
         struct.pack(
             "<3q",
-            *[_require_i64(value, "payload_i_end") for value in base.payload_i_end],
+            *[
+                _require_i64(value, "payload_i_end")
+                for value in normalized_payload_i_end
+            ],
         )
     )
     header.extend(struct.pack("<3d", *base.dxx))
@@ -1967,9 +2022,9 @@ def copy_payload(
     dst_offset: int,
 ) -> None:
     """
-    Copy one stage-1 payload region into the combined output.
+    Copy one input payload region into the combined output.
 
-    :param src_path: Source stage-1 path.
+    :param src_path: Source input-slice path.
     :param src_offset: Source payload offset.
     :param num_bytes: Number of bytes to copy.
     :param dst_file: Open destination file.
@@ -2006,8 +2061,8 @@ def _fsync_parent_directory(path: Path) -> None:
 
 def write_combined_file_atomically(
     output_path: Path,
-    base: Stage1Info,
-    infos: Sequence[Stage1Info],
+    base: InputSliceInfo,
+    infos: Sequence[InputSliceInfo],
     layout: Layout,
     metadata_bytes: bytes,
     geometry_data: GeometryBlockData,
@@ -2020,8 +2075,8 @@ def write_combined_file_atomically(
     Write the combined container atomically.
 
     :param output_path: Final destination path.
-    :param base: Reference stage-1 metadata.
-    :param infos: Sorted stage-1 metadata.
+    :param base: Reference input metadata.
+    :param infos: Sorted input metadata.
     :param layout: Final layout.
     :param metadata_bytes: Metadata JSON bytes.
     :param geometry_data: Geometry block bytes and summary metadata.
@@ -2060,7 +2115,7 @@ def write_combined_file_atomically(
                 out.write(pack_slice_entry(entry))
             out.seek(layout.geometry_block_offset)
             out.write(geometry_data.block_bytes)
-            # Step 3: Copy only the stage-1 payload region for each sorted slice.
+            # Step 3: Copy only the input payload region for each sorted slice.
             for slice_index, info in enumerate(infos):
                 copy_payload(
                     src_path=info.path,
@@ -2149,7 +2204,7 @@ def _unpack_fixed_header(header_bytes: bytes) -> CombinedHeaderInfo:
     return CombinedHeaderInfo(
         magic=magic,
         combined_format_version=combined_u32[0],
-        source_format_version=combined_u32[1],
+        reserved_source_u32=combined_u32[1],
         endian_tag=combined_u32[2],
         header_flags=combined_u32[3],
         fixed_header_bytes=combined_u64[0],
@@ -2304,8 +2359,8 @@ def inspect_combined_file(path: Path) -> None:
             raise RuntimeError(f"{path}: combined magic was invalid.")
         if header.combined_format_version != COMBINED_FORMAT_VERSION:
             raise RuntimeError(f"{path}: unsupported combined_format_version.")
-        if header.source_format_version != STAGE1_FORMAT_VERSION:
-            raise RuntimeError(f"{path}: unsupported source_format_version.")
+        if header.reserved_source_u32 not in (0, 1):
+            raise RuntimeError(f"{path}: reserved source field was invalid.")
         if header.endian_tag != ENDIAN_TAG:
             raise RuntimeError(f"{path}: endian_tag was invalid.")
         if header.header_flags != HEADER_FLAGS_V1:
@@ -2314,7 +2369,7 @@ def inspect_combined_file(path: Path) -> None:
             raise RuntimeError(f"{path}: fixed_header_bytes was invalid.")
         if header.slice_table_entry_bytes != SLICE_TABLE_ENTRY_BYTES:
             raise RuntimeError(f"{path}: slice_table_entry_bytes was invalid.")
-        if header.record_layout_id != RECORD_LAYOUT_TIME_MAJOR_STAGE1_AOS:
+        if header.record_layout_id != RECORD_LAYOUT_TIME_MAJOR_SLICE_AOS:
             raise RuntimeError(f"{path}: record_layout_id was invalid.")
         if header.serialized_real_bytes != SERIALIZED_REAL_BYTES:
             raise RuntimeError(f"{path}: serialized_real_bytes was invalid.")
@@ -2332,7 +2387,7 @@ def inspect_combined_file(path: Path) -> None:
             raise RuntimeError(f"{path}: file_is_little_endian was invalid.")
         if header.time_variable_is_f64 != 1:
             raise RuntimeError(f"{path}: time_variable_is_f64 was invalid.")
-        if header.payload_includes_ghost_zones != 0:
+        if header.payload_includes_ghost_zones != 1:
             raise RuntimeError(f"{path}: payload_includes_ghost_zones was invalid.")
         if header.num_grids != 1:
             raise RuntimeError(f"{path}: num_grids was invalid.")
@@ -2526,7 +2581,6 @@ def inspect_combined_file(path: Path) -> None:
     # Step 3: Print a concise human-readable summary for quick inspection.
     print(f"magic: {header.magic}")
     print(f"combined_format_version: {header.combined_format_version}")
-    print(f"source_format_version: {header.source_format_version}")
     print(f"total_file_bytes: {header.total_file_bytes}")
     print(f"num_time_slices: {header.num_time_slices}")
     if times:
@@ -2596,16 +2650,16 @@ def main() -> None:
     :return: None.
     :raises RuntimeError: If discovery, validation, layout, or output writing fails.
     """
-    # Step 1: Dispatch inspect mode before any stage-1 discovery or validation.
+    # Step 1: Dispatch inspect mode before any input discovery or validation.
     args = parse_args()
     if args.inspect:
         inspect_combined_file(Path(args.inspect))
         return
 
-    # Step 2: Parse and validate every stage-1 source against one strict schema.
+    # Step 2: Parse and validate every input source against one strict schema.
     input_paths = discover_input_paths(args)
     if not input_paths:
-        raise RuntimeError("No input stage-1 raytracing files found.")
+        raise RuntimeError("No input raytracing files found.")
 
     output_path = Path(args.output).resolve()
     if output_path in input_paths:
@@ -2615,14 +2669,14 @@ def main() -> None:
             f"Output file {output_path} exists. Use --force to overwrite."
         )
 
-    infos = [parse_stage1_file(path) for path in input_paths]
+    infos = [parse_input_slice_file(path) for path in input_paths]
     for info in infos:
-        validate_stage1_file_internal(info)
+        validate_input_slice_file_internal(info)
     infos.sort(key=lambda info: info.simulation_time)
     validate_sorted_slices(infos)
     base = infos[0]
     for info in infos[1:]:
-        validate_stage1_compatible(base, info)
+        validate_input_slice_compatible(base, info)
 
     # Step 3: Build the side metadata blocks before computing the final layout.
     axisymmetry = determine_axisymmetry_metadata(args, base)

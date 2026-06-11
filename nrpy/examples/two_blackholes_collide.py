@@ -525,6 +525,7 @@ if enable_raytracing_data_output:
         f"{project_name}_"
         f"{str(t_final).replace('-', 'm').replace('.', 'p')}_"
         f"{str(grid_physical_size).replace('-', 'm').replace('.', 'p')}_"
+        f"{str(diagnostics_output_every).replace('-', 'm').replace('.', 'p')}_"
         f"{CoordSystem}_"
         f"{Nxx_dict[CoordSystem][0]}_{Nxx_dict[CoordSystem][1]}_{Nxx_dict[CoordSystem][2]}.bin"
     )

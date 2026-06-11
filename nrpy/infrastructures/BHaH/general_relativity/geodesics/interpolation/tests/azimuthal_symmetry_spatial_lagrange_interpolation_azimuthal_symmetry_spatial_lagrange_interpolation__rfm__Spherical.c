@@ -4,138 +4,61 @@
 #include <stdint.h>
 
 /**
- * Map one raw extended-grid stencil node back into the stored payload.
+ * Map one full-payload storage-grid index triplet to the serialized point order.
  *
- * The interpolation coefficients are always built on the raw uniform stencil.
- * This helper only recovers the in-domain payload index for one raw node by
- * applying the dataset-specific spherical reflection rules directly. The key
- * idea is that the polynomial nodes stay on the mathematically uniform
- * extended stencil, while only the payload reads are reflected back into the
- * stored two-plane data.
+ * The combined numerical payload stores one point record for every storage-grid
+ * location, including ghost zones, in i2-major, i0-fast order. For the current
+ * writer contract the raw stencil indices are already storage indices, so this
+ * helper only validates bounds and converts them to the serialized payload
+ * point-record index.
  *
  * @param[in] params Generated BHaH parameter struct.
- * @param[in] r_ext Raw stencil radial coordinate, possibly outside the interior.
- * @param[in] theta_ext Raw stencil polar coordinate, possibly outside the interior.
- * @param[in] i2_base Logical phi index for the selected stored reference plane.
- * @param[out] i0i1i2_map In-domain logical payload index recovered by reflection.
- * @return Status code indicating whether the mapped node lands inside the payload.
+ * @param i0_storage Storage-grid x0 index, including ghost zones.
+ * @param i1_storage Storage-grid x1 index, including ghost zones.
+ * @param i2_storage Storage-grid x2 index, including ghost zones.
+ * @param[out] point_index Serialized zero-based point-record index.
+ * @return Status code indicating whether the storage indices lie inside the payload.
  */
-static int azimuthal_symmetry_spatial_lagrange_map_extended_node(const params_struct *restrict params, const REAL r_ext, const REAL theta_ext,
-                                                                 const int i2_base, int i0i1i2_map[3]) {
-  const int payload_i0_start = NGHOSTS;
-  const int payload_i0_end = NGHOSTS + params->Nxx0;
-  const int payload_i1_start = NGHOSTS;
-  const int payload_i1_end = NGHOSTS + params->Nxx1;
-  const int payload_i2_start = NGHOSTS;
-  const int payload_i2_end = NGHOSTS + params->Nxx2;
-  const REAL theta_tol = (REAL)1.0e-12;
-  const REAL r_endpoint_tol = (REAL)(1.0e-12 * fmax(1.0, fabs((double)params->dxx0)));
-  const REAL theta_endpoint_tol = (REAL)(1.0e-12 * fmax(1.0, fabs((double)params->dxx1)));
-  const REAL theta_max_supported = (REAL)(params->xxmin1 + (((payload_i1_end - 1 - NGHOSTS) + 0.5) * params->dxx1));
-  const REAL r_max_supported = (REAL)(params->xxmin0 + (((payload_i0_end - 1 - NGHOSTS) + 0.5) * params->dxx0));
-  REAL r_map = r_ext;
-  REAL theta_map = theta_ext;
-  REAL theta_index_map = theta_ext;
-  int phi_toggle = 0;
-  int i0_map;
-  int i1_map;
-  int i2_map;
+static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(const params_struct *restrict params, const int i0_storage,
+                                                                                     const int i1_storage, const int i2_storage,
+                                                                                     uint64_t *restrict point_index) {
+  const int payload_i0_count = params->Nxx_plus_2NGHOSTS0;
+  const int payload_i1_count = params->Nxx_plus_2NGHOSTS1;
+  const int payload_i2_count = params->Nxx_plus_2NGHOSTS2;
 
-  // Step 1: Reflect negative-radius raw nodes through the origin.
-  if (r_map < (REAL)0.0) {
-    r_map = -r_map;
-    theta_map = (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI - theta_map;
-    phi_toggle ^= 1;
-  } // END IF: raw stencil node crossed the inner radial boundary
-
-  // Step 2: Fold theta back into the physical [0, pi] range.
-  if (theta_map < (REAL)0.0) {
-    theta_map = -theta_map;
-    phi_toggle ^= 1;
-  } else if (theta_map > (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI) {
-    theta_map = (REAL)(2.0 * AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI) - theta_map;
-    phi_toggle ^= 1;
-  } // END IF: raw stencil node crossed a polar boundary
-
-  // Step 3: Only accept theta values that now land inside the physical range.
-  if (theta_map < -theta_tol || theta_map > (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI + theta_tol) {
+  if (i0_storage < 0 || i0_storage >= payload_i0_count || i1_storage < 0 || i1_storage >= payload_i1_count || i2_storage < 0 ||
+      i2_storage >= payload_i2_count) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: reflected theta remained materially out of range
-  if (theta_map < (REAL)0.0) {
-    theta_map = (REAL)0.0;
-  } else if (theta_map > (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI) {
-    theta_map = (REAL)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI;
-  } // END IF: theta exceeded the physical range only by roundoff
+  } // END IF: storage-grid stencil node lay outside the full payload
 
-  // Step 4: Repair only small endpoint roundoff before converting to logical indices.
-  if (r_map > r_max_supported && fabs((double)(r_map - r_max_supported)) <= r_endpoint_tol) {
-    r_map = r_max_supported;
-  } // END IF: radial coordinate landed on the last stored cell center to roundoff
-  theta_index_map = theta_map;
-  if (theta_index_map > theta_max_supported && theta_index_map <= theta_max_supported + (REAL)(0.5 * params->dxx1) + theta_endpoint_tol) {
-    theta_index_map = theta_max_supported;
-  } // END IF: theta landed in the last physical half-cell and should read the endpoint payload cell
-
-  // Step 5: Convert the reflected coordinates and phi toggle to payload indices.
-  i0_map = (int)((r_map - params->xxmin0) / params->dxx0 + (REAL)NGHOSTS);
-  i1_map = (int)((theta_index_map - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
-  if (phi_toggle == 0) {
-    i2_map = i2_base;
-  } else {
-    i2_map = payload_i2_end - 1 - (i2_base - payload_i2_start);
-  } // END IF: apply the pi shift through the stored two-plane layout
-
-  // Step 6: Confirm that the remapped logical index lies inside the stored payload.
-  if (i0_map < payload_i0_start || i0_map >= payload_i0_end || i1_map < payload_i1_start || i1_map >= payload_i1_end || i2_map < payload_i2_start ||
-      i2_map >= payload_i2_end) {
-    return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: reflected stencil node could not be supported by the payload
-  i0i1i2_map[0] = i0_map;
-  i0i1i2_map[1] = i1_map;
-  i0i1i2_map[2] = i2_map;
+  *point_index = (uint64_t)i0_storage + (uint64_t)payload_i0_count * ((uint64_t)i1_storage + (uint64_t)payload_i1_count * (uint64_t)i2_storage);
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
-} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_map_extended_node
+} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices
 
 /**
- * Accumulate one serialized tensor record onto the common stored phi plane.
+ * Accumulate one serialized tensor record onto the selected stored phi plane.
  *
- * The remap logic guarantees that the payload contributes either from the same
- * stored phi plane or from the opposite plane separated by pi. The same-plane
- * case is an identity, while the opposite-plane case is diagonal in Cartesian
- * components and therefore reduces to serialized sign flips.
+ * The ghost-zone-aware payload already stores Cartesian-basis tensor records at
+ * the storage-grid location that the raw stencil node requested. After the
+ * direct payload read no additional per-node axisymmetry transform is needed
+ * before weighted accumulation on the selected stored phi plane.
  *
  * @param weight Weighted 2D Lagrange coefficient for this stencil node.
- * @param apply_pi_shift Whether the node came from the opposite stored plane.
  * @param[in] tensor_record Serialized payload record beginning at the metric fields.
  * @param[out] tensor_ref Accumulator on the selected common stored phi plane.
  */
-static void azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(
-    const REAL weight, const int apply_pi_shift, const double *restrict tensor_record,
-    REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT]) {
+static void
+azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct(const REAL weight, const double *restrict tensor_record,
+                                                                    REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT]) {
   const double *restrict gamma_record = tensor_record + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-  static const REAL g4dd_pi_sign[10] = {1.0, -1.0, -1.0, 1.0, 1.0, 1.0, -1.0, 1.0, -1.0, 1.0};
-  static const REAL gamma4udd_pi_sign[40] = {1.0,  -1.0, -1.0, 1.0,  1.0,  1.0,  -1.0, 1.0, -1.0, 1.0,  -1.0, 1.0,  1.0, -1.0,
-                                             -1.0, -1.0, 1.0,  -1.0, 1.0,  -1.0, -1.0, 1.0, 1.0,  -1.0, -1.0, -1.0, 1.0, -1.0,
-                                             1.0,  -1.0, 1.0,  -1.0, -1.0, 1.0,  1.0,  1.0, -1.0, 1.0,  -1.0, 1.0};
 
-  // Step 1: Same-plane nodes need only weighted accumulation.
-  if (apply_pi_shift == 0) {
-    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
-      tensor_ref[comp] += weight * (REAL)tensor_record[comp];
-    } // END LOOP: for comp over serialized metric payload components
-    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
-      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * (REAL)gamma_record[comp];
-    } // END LOOP: for comp over serialized Christoffel payload components
-  } else {
-    // Step 2: Opposite-plane nodes differ only by the pi-rotation sign pattern.
-    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
-      tensor_ref[comp] += weight * g4dd_pi_sign[comp] * (REAL)tensor_record[comp];
-    } // END LOOP: for comp over pi-rotated serialized metric components
-    for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
-      tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * gamma4udd_pi_sign[comp] * (REAL)gamma_record[comp];
-    } // END LOOP: for comp over pi-rotated serialized Christoffel components
-  } // END IF: choose same-plane or opposite-plane accumulation path
-} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane
+  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+    tensor_ref[comp] += weight * (REAL)tensor_record[comp];
+  } // END LOOP: for comp over serialized metric payload components
+  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+    tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * (REAL)gamma_record[comp];
+  } // END LOOP: for comp over serialized Christoffel payload components
+} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct
 
 /**
  * Rotate Cartesian-basis metric and Christoffel components about the z axis.
@@ -252,19 +175,20 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(const REAL delta_
  * Interpolate Cartesian geodesic tensors at one spatial position.
  *
  * The caller supplies a trusted spatial context and already-mapped time-slice
- * payload pointers. The helper builds one native `(r, theta)` stencil, remaps the
- * payload-read indices once with explicit spherical reflections, reads tensor
- * components directly from mapped payload memory for each requested slice,
- * rotates each remapped node back to one common stored phi plane, interpolates
- * there, rotates to the target azimuth, and writes flat per-slice outputs.
+ * payload pointers. The helper builds one native `(r, theta)` stencil, converts
+ * each raw storage-grid stencil node to the corresponding full-payload point
+ * record index once, reads tensor components directly from mapped payload memory
+ * for each requested slice, interpolates on the selected stored phi plane,
+ * rotates to the target azimuth, and writes flat per-slice outputs.
  *
  * This helper assumes the stored payload has constant native grid spacing in
  * `r` and `theta`, and that axisymmetry is represented by exactly two stored phi
  * planes. It therefore performs no interpolation in `phi`: it interpolates only
- * on the uniform `(r, theta)` stencil. Reflected nodes that land on the opposite
- * stored phi plane are first rotated back to the selected stored reference plane
- * before weighted accumulation, and the final interpolated Cartesian-basis
- * tensors are then rotated from that reference plane to the target azimuth.
+ * on the uniform `(r, theta)` stencil. The payload is expected to include
+ * ghost-zone point records, and those records are treated as authoritative
+ * Cartesian-basis tensor values at their storage-grid locations. The final
+ * interpolated Cartesian-basis tensors are then rotated from the selected stored
+ * reference plane to the target azimuth.
  *
  * @param[in] context Trusted spatial context.
  * @param[in] commondata Common runtime parameters.
@@ -279,8 +203,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(const REAL delta_
  * @return Status code indicating success or the interpolation failure reason.
  *
  * @note Each `slice_payloads` entry must point to the beginning of one mapped
- * 3D-grid payload and remain valid for the duration of this call. The spatial
- * stencil half-width is read from
+ * ghost-zone-inclusive 3D-grid payload and remain valid for the duration of this
+ * call. The spatial stencil half-width is read from
  * `commondata->numerical_spacetime_spatial_interp_order`; the actual number of
  * radial and polar Lagrange nodes is `2*n+1`.
  */
@@ -307,8 +231,6 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   const long int interp_order_long = 2L * (long int)n_interp_ghosts + 1L;
   const REAL phi0 = (REAL)context->stored_phi_samples[0];
   const REAL phi1 = (REAL)context->stored_phi_samples[1];
-  const REAL r_max_supported = (REAL)(params->xxmin0 + (((params->Nxx0 - 1) + 0.5) * params->dxx0));
-  const REAL r_support_tol = (REAL)(1.0e-12 * fmax(1.0, fabs((double)r_max_supported)));
   int phi_plane;
   int i2_base;
   REAL phi_ref = 0.0;
@@ -340,7 +262,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
   }
   if (n_interp_ghosts < 0 || n_interp_ghosts > AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH ||
-      interp_order_long > (long int)params->Nxx0 || interp_order_long > (long int)params->Nxx1) {
+      interp_order_long > (long int)params->Nxx_plus_2NGHOSTS0 || interp_order_long > (long int)params->Nxx_plus_2NGHOSTS1) {
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
   }
 
@@ -361,23 +283,21 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   REAL coeff_r[interp_order];
   REAL coeff_theta[interp_order];
   uint64_t mapped_point_index[interp_order][interp_order];
-  int mapped_phi_plane[interp_order][interp_order];
+  int i0_storage_stencil[interp_order];
+  int i1_storage_stencil[interp_order];
   const REAL normalization_2d = pow((REAL)(params->dxx0 * params->dxx1), -(interp_order - 1));
 
   for (int u = 0; u < interp_order; u++) {
     const int i0_raw = center_idx[0] + (u - n_interp_ghosts);
-    // Keep the polynomial nodes on the raw extended grid, even if the later
-    // payload reads are recovered back into the interior.
+    i0_storage_stencil[u] = i0_raw;
+    // Keep the polynomial nodes on the raw extended storage grid.
     src_r_stencil[u] = (REAL)(params->xxmin0 + (((i0_raw - NGHOSTS) + 0.5) * params->dxx0));
   } // END LOOP: for u over radial stencil nodes
   for (int v = 0; v < interp_order; v++) {
     const int i1_raw = center_idx[1] + (v - n_interp_ghosts);
+    i1_storage_stencil[v] = i1_raw;
     src_theta_stencil[v] = (REAL)(params->xxmin1 + (((i1_raw - NGHOSTS) + 0.5) * params->dxx1));
   } // END LOOP: for v over theta stencil nodes
-
-  if (src_r_stencil[interp_order - 1] > r_max_supported + r_support_tol) {
-    return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: largest raw radial stencil node exceeded the supported payload radius
 
   compute_inv_denom(interp_order, inv_denom);
   compute_diffs_xi(interp_order, target_r, src_r_stencil, diffs_r);
@@ -385,28 +305,15 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   compute_lagrange_basis_coeffs_xi(interp_order, inv_denom, diffs_r, coeff_r);
   compute_lagrange_basis_coeffs_xi(interp_order, inv_denom, diffs_theta, coeff_theta);
 
-  // Step 4: Map each raw stencil node once for this photon target.
+  // Step 4: Convert each raw storage-grid stencil node to one payload point index.
   for (int v = 0; v < interp_order; v++) {
-    const REAL theta_ext = src_theta_stencil[v];
-
     for (int u = 0; u < interp_order; u++) {
-      const REAL r_ext = src_r_stencil[u];
-      int i0i1i2_map[3] = {-1, -1, -1};
-
-      const int map_status = azimuthal_symmetry_spatial_lagrange_map_extended_node(params, r_ext, theta_ext, i2_base, i0i1i2_map);
-      if (map_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
-        return map_status;
-      }
-      const uint64_t j0 = (uint64_t)(i0i1i2_map[0] - NGHOSTS);
-      const uint64_t j1 = (uint64_t)(i0i1i2_map[1] - NGHOSTS);
-      const uint64_t j2 = (uint64_t)(i0i1i2_map[2] - NGHOSTS);
-      const int mapped_phi = i0i1i2_map[2] - NGHOSTS;
-      mapped_point_index[v][u] = j0 + (uint64_t)params->Nxx0 * (j1 + (uint64_t)params->Nxx1 * j2);
-      if (mapped_phi < 0 || mapped_phi >= 2)
-        return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-      mapped_phi_plane[v][u] = mapped_phi;
-    } // END LOOP: for u over radial stencil nodes during remap precompute
-  } // END LOOP: for v over theta stencil nodes during remap precompute
+      const int index_status = azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
+          params, i0_storage_stencil[u], i1_storage_stencil[v], i2_base, &mapped_point_index[v][u]);
+      if (index_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
+        return index_status;
+    } // END LOOP: for u over radial stencil nodes during payload-index precompute
+  } // END LOOP: for v over theta stencil nodes during payload-index precompute
 
   // Step 5: Interpolate each requested time slice independently.
   for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
@@ -419,11 +326,8 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
         const double *restrict tensor_record =
             slice_payload + mapped_point_index[v][u] * (uint64_t)AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT + 3ULL;
         const REAL weight = normalization_2d * coeff_theta[v] * coeff_r[u];
-        const int apply_pi_shift = mapped_phi_plane[v][u] != phi_plane;
 
-        // Same-plane nodes accumulate directly. Opposite-plane nodes differ
-        // only by the diagonal pi-rotation sign pattern in Cartesian basis.
-        azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_to_common_plane(weight, apply_pi_shift, tensor_record, tensor_ref);
+        azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct(weight, tensor_record, tensor_ref);
       } // END LOOP: for u over radial stencil nodes
     } // END LOOP: for v over theta stencil nodes
 

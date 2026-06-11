@@ -57,7 +57,7 @@ def register_CFunction_output_raytracing_data(
     enable_RbarDD_gridfunctions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Construct and register the stage-1 Cartesian raytracing binary exporter.
+    Construct and register the Cartesian raytracing binary exporter.
 
     The generated C helper writes one binary file per diagnostics output with
     filename pattern ``./raytracing_data_t########.bin``. Each file contains
@@ -70,11 +70,16 @@ def register_CFunction_output_raytracing_data(
     3. The 40 unique four-Christoffel components ``Gamma4UDD`` with the lower
        pair serialized in upper-triangular order.
 
-    In v1, the exporter evaluates only interior points. This keeps the
+    The exporter still evaluates only interior points. This keeps the
     finite-difference derivative path consistent with the current BHaH
     infrastructure and avoids writing connection data at points where the
-    centered stencil would step beyond the available storage. The header
-    records that ghost-zone points are excluded from the payload.
+    centered stencil would step beyond the available storage. The exporter
+    computes Cartesian coordinates on the full logical grid, then fills only
+    the tensor fields in ghost-zone payload records by mirroring the existing
+    BHaH outer-extrapolation ordering and then copying inner-boundary mappings
+    from ``bcstruct``. The payload-local ordering remains zero-based storage
+    order, while the serialized payload window now exposes the corresponding
+    logical-grid half-open interval ``[-NGHOSTS, Nxx + NGHOSTS)``.
 
     :param CoordSystem: Coordinate system used by the evolved BSSN state.
     :param enable_rfm_precompute: Whether the generated project uses
@@ -86,8 +91,6 @@ def register_CFunction_output_raytracing_data(
     :raises ValueError: If ``CoordSystem`` is not a string.
     :raises ValueError: If ``enable_rfm_precompute`` is not a bool.
     :raises ValueError: If ``enable_RbarDD_gridfunctions`` is not a bool.
-    :raises ValueError: If ``CoordSystem`` is not currently supported by the
-        raytracing binary exporter.
     :raises ValueError: If ``enable_rfm_precompute`` is False.
     :raises ValueError: If ``enable_RbarDD_gridfunctions`` is False.
     :raises ValueError: If the generated project uses CUDA parallelization.
@@ -217,10 +220,9 @@ def register_CFunction_output_raytracing_data(
     num_metric_components = len(metric_components)
     num_gamma_components = len(christoffel_components)
     num_record_components = len(record_component_names)
-    format_version = 1
     point_record_real_count = 3 + num_metric_components + num_gamma_components
     point_record_bytes = 8 * point_record_real_count
-    num_u32_header_fields = 20
+    num_u32_header_fields = 19
     num_u64_header_fields = 15
     num_f64_header_fields = 15
     cf_convention_bytes = format_name_bytes
@@ -273,16 +275,15 @@ def register_CFunction_output_raytracing_data(
   MAYBE_UNUSED const REAL xx2 = xx[2][i2];
   const int idx3 = IDX3(i0, i1, i2);
   const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
-      i0, i1, i2, NGHOSTS, Nxx0, Nxx1, Nxx2);
+      i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
+      payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+      (uint64_t)Nxx_plus_2NGHOSTS1_u32, (uint64_t)Nxx_plus_2NGHOSTS2_u32);
   const uint64_t base_index = point_index * (uint64_t)point_record_real_count;
   const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
   const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
   const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
   MAYBE_UNUSED const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
   const REAL *restrict in_gfs = y_n_gfs;
-  const REAL xOrig[3] = {{xx0, xx1, xx2}};
-  REAL xCart[3];
-  xx_to_Cart(params, xOrig, xCart);
 
 {ccg.c_codegen(
         expr_list,
@@ -292,9 +293,6 @@ def register_CFunction_output_raytracing_data(
         enable_fd_functions=False,
         include_braces=False,
     )}
-  payload_buffer[base_index + 0] = (double)xCart[0];
-  payload_buffer[base_index + 1] = (double)xCart[1];
-  payload_buffer[base_index + 2] = (double)xCart[2];
 """
     component_index = 3
     for _, name in metric_components:
@@ -344,7 +342,8 @@ This function writes at most one binary file per diagnostics output to:
 where the eight-digit index is the diagnostics output index. Each file is
 written to a unique temporary sibling path and then installed at the final
 path without overwriting an existing file. The payload stores the physical
-simulation time and one point record per exported interior logical-grid point.
+simulation time and one point record per full logical-grid point, including
+ghost zones.
 
 Each point record contains:
   - Cartesian coordinates x, y, z,
@@ -363,11 +362,16 @@ auxiliary data using:
   rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
 
 where rhs_gfs is a temporary EVOL-sized scratch buffer allocated inside this
-function. The header explicitly records that only interior logical-grid points
-are exported in v1, so ghost-zone points are not serialized. Point records are
+function. The exporter evaluates Cartesian coordinates on the full logical
+grid and evaluates the Cartesian tensors only on interior logical-grid points.
+It then fills pure outer ghost-zone tensor fields using the existing BHaH
+2nd-order extrapolation ordering and copies inner-boundary ghost-zone tensor
+fields from their mapped source records in ``bcstruct``. Point records are
 first assembled into a deterministic in-memory payload buffer using the
-documented logical-grid ordering, then written to disk after the interior loop
-completes.
+documented logical-grid ordering, then written to disk after the ghost-fill
+phase completes. The serialized payload metadata exposes the logical-grid
+half-open interval ``[-NGHOSTS, Nxx + NGHOSTS)`` while preserving the
+underlying zero-based storage order.
 
 @param[in] commondata  Global simulation metadata used in output naming and headers
 @param[in] griddata  Host-side per-grid runtime state to export
@@ -562,6 +566,21 @@ static void raytracing_data_write_u64_or_abort(
 } // END FUNCTION: raytracing_data_write_u64_or_abort
 
 /**
+ * Write an int64_t value in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param value  Value to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_i64_or_abort(
+    FILE *restrict fp,
+    const int64_t value,
+    const char *restrict label
+) {
+  raytracing_data_write_u64_or_abort(fp, (uint64_t)value, label);
+} // END FUNCTION: raytracing_data_write_i64_or_abort
+
+/**
  * Write a binary64 value in little-endian byte order.
  *
  * @param[in,out] fp  File pointer.
@@ -651,38 +670,46 @@ static void raytracing_data_write_fixed_length_string_or_abort(
 } // END FUNCTION: raytracing_data_write_fixed_length_string_or_abort
 
 /**
- * Map interior logical-grid indices to the payload-local point-record order.
+ * Map logical-grid indices to the payload-local point-record order.
  *
  * @param i0  Logical x0 index including ghost zones.
  * @param i1  Logical x1 index including ghost zones.
  * @param i2  Logical x2 index including ghost zones.
- * @param nghosts  Number of ghost zones on each side.
- * @param Nxx0  Interior point count in the x0 direction.
- * @param Nxx1  Interior point count in the x1 direction.
- * @param Nxx2  Interior point count in the x2 direction.
+ * @param payload_i0_start  Logical x0 start index of the half-open payload window.
+ * @param payload_i1_start  Logical x1 start index of the half-open payload window.
+ * @param payload_i2_start  Logical x2 start index of the half-open payload window.
+ * @param payload_i0_count  Full logical-grid point count in the x0 direction.
+ * @param payload_i1_count  Full logical-grid point count in the x1 direction.
+ * @param payload_i2_count  Full logical-grid point count in the x2 direction.
  * @return The zero-based payload-local point index in i2-major, i0-fast order.
  */
 static uint64_t raytracing_data_point_index_from_logical_indices(
     const int i0,
     const int i1,
     const int i2,
-    const int nghosts,
-    const uint32_t Nxx0,
-    const uint32_t Nxx1,
-    const uint32_t Nxx2
+    const int64_t payload_i0_start,
+    const int64_t payload_i1_start,
+    const int64_t payload_i2_start,
+    const uint64_t payload_i0_count,
+    const uint64_t payload_i1_count,
+    const uint64_t payload_i2_count
 ) {
-  if (i0 < nghosts || i1 < nghosts || i2 < nghosts) {
+  const int64_t j0_signed = (int64_t)i0 - payload_i0_start;
+  const int64_t j1_signed = (int64_t)i1 - payload_i1_start;
+  const int64_t j2_signed = (int64_t)i2 - payload_i2_start;
+  if (j0_signed < 0 || j1_signed < 0 || j2_signed < 0) {
     raytracing_data_abort_with_message(
-        "Error: output_raytracing_data received logical indices below NGHOSTS.");
-  } // END IF: logical indices must start at the interior payload origin
-  const uint32_t j0 = (uint32_t)(i0 - nghosts);
-  const uint32_t j1 = (uint32_t)(i1 - nghosts);
-  const uint32_t j2 = (uint32_t)(i2 - nghosts);
-  if (j0 >= Nxx0 || j1 >= Nxx1 || j2 >= Nxx2) {
+        "Error: output_raytracing_data logical indices fell below the payload window.");
+  } // END IF: logical indices must not fall below the documented payload window
+  const uint64_t j0 = (uint64_t)j0_signed;
+  const uint64_t j1 = (uint64_t)j1_signed;
+  const uint64_t j2 = (uint64_t)j2_signed;
+  if (j0 >= payload_i0_count || j1 >= payload_i1_count ||
+      j2 >= payload_i2_count) {
     raytracing_data_abort_with_message(
         "Error: output_raytracing_data logical indices exceeded payload bounds.");
-  } // END IF: logical indices must stay within the documented interior payload
-  return (uint64_t)j0 + (uint64_t)Nxx0 * ((uint64_t)j1 + (uint64_t)Nxx1 * (uint64_t)j2);
+  } // END IF: logical indices must stay within the documented payload
+  return j0 + payload_i0_count * (j1 + payload_i1_count * j2);
 } // END FUNCTION: raytracing_data_point_index_from_logical_indices
 
 """
@@ -698,6 +725,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   raytracing_data_validate_binary64_output_or_abort();
 
   const params_struct *restrict params = &griddata[0].params;
+  const bc_struct *restrict bcstruct = &griddata[0].bcstruct;
   const rfm_struct *restrict rfmstruct = griddata[0].rfmstruct;
   const REAL *restrict y_n_gfs = griddata[0].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[0].gridfuncs.auxevol_gfs;
@@ -706,7 +734,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
       griddata[0].xx[1],
       griddata[0].xx[2],
   }};
-  const uint32_t format_version = {format_version}U;
   const uint32_t header_size = {header_size_bytes}U;
   const uint32_t output_index =
       raytracing_data_u32_from_nonnegative_int_or_abort(
@@ -718,7 +745,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const uint32_t christoffel_component_count = {num_gamma_components}U;
   const uint32_t point_record_real_count = {point_record_real_count}U;
   const uint32_t point_record_bytes = {point_record_bytes}U;
-  const uint32_t payload_includes_ghost_zones = 0U;
+  const uint32_t payload_includes_ghost_zones = 1U;
   const uint32_t file_is_little_endian = 1U;
   const uint32_t time_variable_is_f64 = 1U;
   const uint32_t reserved_u32 = 0U;
@@ -738,9 +765,12 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
       raytracing_data_u32_from_nonnegative_int_or_abort(
           params->Nxx_plus_2NGHOSTS2, "Nxx_plus_2NGHOSTS2");
   const uint64_t point_record_count = raytracing_data_mul_u64_or_abort(
-      raytracing_data_mul_u64_or_abort((uint64_t)Nxx0, (uint64_t)Nxx1, "Nxx0*Nxx1"),
-      (uint64_t)Nxx2,
-      "interior point count");
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+          (uint64_t)Nxx_plus_2NGHOSTS1_u32,
+          "Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1"),
+      (uint64_t)Nxx_plus_2NGHOSTS2_u32,
+      "full logical-grid point count");
   const uint64_t point_records_bytes = raytracing_data_mul_u64_or_abort(
       point_record_count,
       (uint64_t)point_record_bytes,
@@ -760,6 +790,12 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const size_t payload_value_count =
       raytracing_data_size_t_from_u64_or_abort(
           payload_value_count_u64, "point-record payload value count");
+  const int64_t payload_i0_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i1_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i2_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i0_end = (int64_t)Nxx0 + (int64_t)NGHOSTS;
+  const int64_t payload_i1_end = (int64_t)Nxx1 + (int64_t)NGHOSTS;
+  const int64_t payload_i2_end = (int64_t)Nxx2 + (int64_t)NGHOSTS;
   SET_NXX_PLUS_2NGHOSTS_VARS(0);
   const double dxx[3] = {{
       (double)params->dxx0,
@@ -904,7 +940,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
 
   // Step 1: Write the fixed-size file header in documented little-endian field order.
   raytracing_data_write_or_abort(fp, magic, sizeof(char), 16, "magic");
-  raytracing_data_write_u32_or_abort(fp, format_version, "format_version");
   raytracing_data_write_u32_or_abort(fp, header_size, "header_size");
   raytracing_data_write_u32_or_abort(fp, output_index, "output_index");
   raytracing_data_write_u32_or_abort(fp, num_grids, "num_grids");
@@ -934,18 +969,18 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   raytracing_data_write_u64_or_abort(fp, point_records_bytes, "point_records_bytes");
   raytracing_data_write_u64_or_abort(fp, total_file_bytes, "total_file_bytes");
   raytracing_data_write_u64_or_abort(fp, (uint64_t)NGHOSTS, "NGHOSTS");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)Nxx0, "payload_i0_count");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)Nxx1, "payload_i1_count");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)Nxx2, "payload_i2_count");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)NGHOSTS, "payload_i0_start");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)NGHOSTS, "payload_i1_start");
-  raytracing_data_write_u64_or_abort(fp, (uint64_t)NGHOSTS, "payload_i2_start");
   raytracing_data_write_u64_or_abort(
-      fp, (uint64_t)(params->Nxx_plus_2NGHOSTS0 - NGHOSTS), "payload_i0_end");
+      fp, (uint64_t)Nxx_plus_2NGHOSTS0_u32, "payload_i0_count");
   raytracing_data_write_u64_or_abort(
-      fp, (uint64_t)(params->Nxx_plus_2NGHOSTS1 - NGHOSTS), "payload_i1_end");
+      fp, (uint64_t)Nxx_plus_2NGHOSTS1_u32, "payload_i1_count");
   raytracing_data_write_u64_or_abort(
-      fp, (uint64_t)(params->Nxx_plus_2NGHOSTS2 - NGHOSTS), "payload_i2_end");
+      fp, (uint64_t)Nxx_plus_2NGHOSTS2_u32, "payload_i2_count");
+  raytracing_data_write_i64_or_abort(fp, payload_i0_start, "payload_i0_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i1_start, "payload_i1_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i2_start, "payload_i2_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i0_end, "payload_i0_end");
+  raytracing_data_write_i64_or_abort(fp, payload_i1_end, "payload_i1_end");
+  raytracing_data_write_i64_or_abort(fp, payload_i2_end, "payload_i2_end");
 
   for (int i = 0; i < 3; i++)
     raytracing_data_write_f64_or_abort(fp, dxx[i], "dxx");
@@ -1003,16 +1038,100 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   // Step 2: Write the physical simulation time.
   raytracing_data_write_f64_or_abort(fp, (double)commondata->time, "simulation_time");
 
-  // Step 3: Evaluate Cartesian coordinates, metric, and Christoffels into the payload buffer.
+  // Step 3: Evaluate Cartesian coordinates on the full logical grid.
+  for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+    for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+      for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+        const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
+            i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
+            payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+            (uint64_t)Nxx_plus_2NGHOSTS1_u32, (uint64_t)Nxx_plus_2NGHOSTS2_u32);
+        const uint64_t base_index =
+            point_index * (uint64_t)point_record_real_count;
+        const REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+        REAL xCart[3];
+        xx_to_Cart(params, xOrig, xCart);
+
+        payload_buffer[base_index + 0] = (double)xCart[0];
+        payload_buffer[base_index + 1] = (double)xCart[1];
+        payload_buffer[base_index + 2] = (double)xCart[2];
+      } // END LOOP: for i0 over full logical-grid x0 indices
+    } // END LOOP: for i1 over full logical-grid x1 indices
+  } // END LOOP: for i2 over full logical-grid x2 indices
+
+  // Step 4: Evaluate Cartesian metric and Christoffels into the interior payload records.
 """
     body += loop
     body += r"""
 
-  // Step 4: Serialize the payload buffer using the documented little-endian binary64 layout.
+  // Step 5: Fill pure outer and inner ghost-zone tensor fields in payload space.
+  //         Inner-boundary source records may map to outer-boundary records, so
+  //         this phase preserves the canonical BHaH outer-then-inner ordering.
+  const bc_info_struct *restrict bc_info = &bcstruct->bc_info;
+  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
+    for (int dirn = 0; dirn < 3; dirn++) {
+      const int num_pure_outer_boundary_points =
+          bc_info->num_pure_outer_boundary_points[which_gz][dirn];
+      if (num_pure_outer_boundary_points <= 0)
+        continue;
+
+      const size_t gz_idx = (size_t)dirn + 3U * (size_t)which_gz;
+      const outerpt_bc_struct *restrict pure_outer_bc_array =
+          bcstruct->pure_outer_bc_array[gz_idx];
+
+#pragma omp parallel for schedule(static)
+      for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
+        const short i0 = pure_outer_bc_array[idx2d].i0;
+        const short i1 = pure_outer_bc_array[idx2d].i1;
+        const short i2 = pure_outer_bc_array[idx2d].i2;
+        const short FACEX0 = pure_outer_bc_array[idx2d].FACEX0;
+        const short FACEX1 = pure_outer_bc_array[idx2d].FACEX1;
+        const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
+        const int idx_offset0 = IDX3(i0, i1, i2);
+        const int idx_offset1 =
+            IDX3(i0 + FACEX0, i1 + FACEX1, i2 + FACEX2);
+        const int idx_offset2 =
+            IDX3(i0 + 2 * FACEX0, i1 + 2 * FACEX1, i2 + 2 * FACEX2);
+        const int idx_offset3 =
+            IDX3(i0 + 3 * FACEX0, i1 + 3 * FACEX1, i2 + 3 * FACEX2);
+        const size_t base_offset0 =
+            (size_t)idx_offset0 * (size_t)point_record_real_count;
+        const size_t base_offset1 =
+            (size_t)idx_offset1 * (size_t)point_record_real_count;
+        const size_t base_offset2 =
+            (size_t)idx_offset2 * (size_t)point_record_real_count;
+        const size_t base_offset3 =
+            (size_t)idx_offset3 * (size_t)point_record_real_count;
+
+        for (size_t comp = 3; comp < (size_t)point_record_real_count; comp++) {
+          payload_buffer[base_offset0 + comp] =
+              +3.0 * payload_buffer[base_offset1 + comp]
+              - 3.0 * payload_buffer[base_offset2 + comp]
+              + 1.0 * payload_buffer[base_offset3 + comp];
+        } // END LOOP: for comp over serialized tensor payload components
+      } // END LOOP: for idx2d over pure outer boundary points on this face/layer
+    } // END LOOP: for dirn over pure outer boundary directions
+  } // END LOOP: for which_gz over pure outer ghost-zone layers
+
+#pragma omp parallel for schedule(static)
+  for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+    const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
+    const size_t dst_base_offset =
+        (size_t)bc->dstpt * (size_t)point_record_real_count;
+    const size_t src_base_offset =
+        (size_t)bc->srcpt * (size_t)point_record_real_count;
+
+    for (size_t comp = 3; comp < (size_t)point_record_real_count; comp++) {
+      payload_buffer[dst_base_offset + comp] =
+          payload_buffer[src_base_offset + comp];
+    } // END LOOP: for comp over serialized tensor payload components
+  } // END LOOP: for pt over inner boundary ghost-zone points
+
+  // Step 6: Serialize the payload buffer using the documented little-endian binary64 layout.
   raytracing_data_write_f64_array_or_abort(
       fp, payload_buffer, payload_value_count, "point-record payload");
 
-  // Step 5: Finalize the file and install it without overwriting an existing output.
+  // Step 7: Finalize the file and install it without overwriting an existing output.
   BHAH_FREE(payload_buffer);
   BHAH_FREE(rhs_gfs);
 

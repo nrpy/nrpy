@@ -18,17 +18,16 @@ Author: Dalton J. Moone
 # ##############################################################################
 
 import argparse
-import math
 import os
 import shutil
 import sys
-from typing import Dict, Union
 
 import sympy as sp
 
 # NRPy core and helper modules for C code generation
 import nrpy.c_function as cfc
 import nrpy.params as par
+import nrpy.reference_metric as refmetric
 
 # Physics/Math Generators (Symbolic definitions of geodesics)
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
@@ -69,7 +68,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
 
 # Establish the script directory for reliable relative path resolution
 script_dir = os.path.dirname(os.path.abspath(__file__))
-repo_root = os.path.dirname(os.path.dirname(script_dir))
 
 
 def _require(condition: bool, message: str) -> None:
@@ -91,7 +89,36 @@ def _require(condition: bool, message: str) -> None:
 if __name__ == "__main__":
     # Step 1: Configure command-line arguments for the generation pipeline
     parser = argparse.ArgumentParser(
-        description="Generate the Split-Pipeline Photon Geodesic Integrator (Numerical)."
+        description=(
+            "Generate the Split-Pipeline Photon Geodesic Integrator "
+            "(Numerical). Requires a numerical spacetime .bin file generated "
+            "by two_blackholes_collide.py."
+        ),
+        epilog=(
+            "To generate the desired numerical spacetime data, run:\n"
+            "python3 two_blackholes_collide.py "
+            "--raytracing-spacetime T_FINAL GRID_PHYSICAL_SIZE "
+            "DIAGNOSTICS_OUTPUT_EVERY "
+            "--raytracing-coord-system CoordSystem "
+            "--raytracing-Nxx NXX0 NXX1 NXX2\n\n"
+            "Then rerun this photon script using the .bin filename printed "
+            "to the terminal by two_blackholes_collide.py, e.g.:\n"
+            "python3 photon_batch_geodesic_integrator_numerical.py "
+            "--bin_name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_72_12_2.bin "
+            "--dataset-coord-system SinhSpherical "
+            "--dataset-grid-physical-size 7.5 "
+            "--dataset-sinhw 0.4"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--bin_name",
+        type=str,
+        required=True,
+        help=(
+            "Name of the numerical spacetime .bin file inside "
+            "project/raytracing_data."
+        ),
     )
     parser.add_argument(
         "--outdir",
@@ -99,7 +126,61 @@ if __name__ == "__main__":
         default="project",
         help="The parent directory where the generated C project will reside.",
     )
+    parser.add_argument(
+        "--dataset-coord-system",
+        type=str,
+        required=True,
+        choices=refmetric.supported_CoordSystems,
+        help=(
+            "Coordinate system used when generating the numerical spacetime " "dataset."
+        ),
+    )
+    parser.add_argument(
+        "--dataset-grid-physical-size",
+        type=float,
+        required=True,
+        help=(
+            "Physical grid size used when generating the numerical spacetime "
+            "dataset."
+        ),
+    )
+    parser.add_argument(
+        "--dataset-sinhw",
+        type=float,
+        default=None,
+        help=(
+            "SinhSpherical SINHW value used when generating the numerical "
+            "spacetime dataset. Used only with --dataset-coord-system "
+            "SinhSpherical."
+        ),
+    )
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
     args = parser.parse_args()
+
+    _require(
+        os.path.basename(args.bin_name) == args.bin_name,
+        "--bin_name must be a filename only, not a path.",
+    )
+    _require(
+        args.bin_name.endswith(".bin"),
+        "--bin_name must name a numerical spacetime .bin file.",
+    )
+    _require(
+        args.dataset_grid_physical_size > 0.0,
+        "--dataset-grid-physical-size must be positive.",
+    )
+    if args.dataset_coord_system == "SinhSpherical":
+        _require(
+            args.dataset_sinhw is not None,
+            "--dataset-sinhw is required for --dataset-coord-system SinhSpherical.",
+        )
+    else:
+        _require(
+            args.dataset_sinhw is None,
+            "--dataset-sinhw is supported only for --dataset-coord-system SinhSpherical.",
+        )
 
     # Step 2: Define strict project constants and simulation targets
     project_name = "photon_batch_geodesic_integrator_numerical"
@@ -111,7 +192,7 @@ if __name__ == "__main__":
     integrator_mode = "Numerical"
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
-    dataset_coord_system = "SinhSpherical"
+    dataset_coord_system = args.dataset_coord_system
     enable_simd = False
 
     # Step 3: Initialize the project directory and select the infrastructure backend
@@ -122,6 +203,9 @@ if __name__ == "__main__":
     # Instruct NRPy to emit the CPU/OpenMP BHaH pipeline used by the numerical integrator.
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
+    par.set_parval_from_str(
+        "CoordSystem_to_register_CodeParameters", dataset_coord_system
+    )
 
     # Step 4: Build the generic symbolic photon equations consumed by the
     # runtime numerical metric and Christoffel interpolation pipeline.
@@ -206,9 +290,9 @@ if __name__ == "__main__":
     # handled outside this photon script.
     numerical_spacetime_bin_path = os.path.abspath(
         os.path.join(
-            args.outdir,
+            "project",
             "raytracing_data",
-            "combined_raytracing_data.bin",
+            args.bin_name,
         )
     )
 
@@ -216,36 +300,55 @@ if __name__ == "__main__":
         numerical_spacetime_bin_path
     )
 
-    # Lagrange interpolation orders used by the numerical spacetime interpolator.
+    # Step 5.5.a: Match the dataset reference-metric defaults used by the
+    # combined numerical spacetime file before metadata overrides Nxx/dxx/xxmin/xxmax.
+    par.adjust_CodeParam_default("grid_physical_size", args.dataset_grid_physical_size)
+    rfm = refmetric.reference_metric[dataset_coord_system]
+    for param_name, grid_size_mapping in rfm.grid_physical_size_dict.items():
+        if grid_size_mapping == "grid_physical_size":
+            par.adjust_CodeParam_default(param_name, args.dataset_grid_physical_size)
+        elif grid_size_mapping == "-grid_physical_size":
+            par.adjust_CodeParam_default(param_name, -args.dataset_grid_physical_size)
+        else:
+            raise ValueError(
+                f"Unsupported grid_physical_size mapping '{grid_size_mapping}' "
+                f"for {dataset_coord_system}:{param_name}"
+            )
+    if dataset_coord_system == "SinhSpherical":
+        par.adjust_CodeParam_default("SINHW", args.dataset_sinhw)
+
+    # --------------------------------------------------------------------------
+    #  Lagrange interpolation orders used by the numerical spacetime interpolator
+    # --------------------------------------------------------------------------
     par.glb_code_params_dict[
         "numerical_spacetime_spatial_interp_order"
-    ].defaultvalue = 2
+    ].defaultvalue = 3
     par.glb_code_params_dict[
         "numerical_spacetime_temporal_interp_order"
-    ].defaultvalue = 2
+    ].defaultvalue = 3
 
     # --------------------------------------------------------------------------
     # Execution Initial Conditions
     # --------------------------------------------------------------------------
-    par.glb_code_params_dict["t_start"].defaultvalue = 25.0
+    par.glb_code_params_dict["t_start"].defaultvalue = 100.0
     par.glb_code_params_dict["scan_density"].defaultvalue = 100
 
     # --------------------------------------------------------------------------
     # Batch Integrator & Numerical Limits
     # --------------------------------------------------------------------------
-    par.glb_code_params_dict["p_t_max"].defaultvalue = 100.0
+    par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 7.5
+    par.glb_code_params_dict["r_escape"].defaultvalue = 40.0
 
     # Maximum coordinate-time step allowed by the RKF45 controller when using
     # numerical spacetime data. This protects the time-window manager from
     # accepting steps that jump across too much numerical data at once.
-    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 1.0
+    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 0.5
 
     # Time-slot manager parameters. These must be chosen consistently with the
     # time range covered by numerical_spacetime_bin_path.
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 2.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = 2.0
+    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = 5.0
 
     # --------------------------------------------------------------------------
     # Source Plane Geometric Mapping
@@ -268,11 +371,11 @@ if __name__ == "__main__":
     # --------------------------------------------------------------------------
     # Camera Window Geometric Mapping
     # --------------------------------------------------------------------------
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 7.0
+    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 11.0
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
     par.glb_code_params_dict["camera_pos_z"].defaultvalue = 0.0
 
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 6.5
+    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 10.0
     par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
     par.glb_code_params_dict["original_window_center_z"].defaultvalue = 0.0
 
@@ -297,6 +400,10 @@ if __name__ == "__main__":
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1.0e-15
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
+    print(f" -> Dataset coordinate system: {dataset_coord_system}")
+    print(f" -> Dataset grid physical size: {args.dataset_grid_physical_size}")
+    if args.dataset_sinhw is not None:
+        print(f" -> Dataset SINHW: {args.dataset_sinhw}")
 
     # Step 6: Generate C Code for Parameter Handling
     print(" -> Generating parameter handling code...")
@@ -389,9 +496,7 @@ if __name__ == "__main__":
     # ##########################################################################
 
     # Define the directory containing the visualization assets relative to the repository root
-    vis_dir = os.path.join(
-        "nrpy", "examples", "geodesic_visualizations"
-    )
+    vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
 
     # Locate the visualization script
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
@@ -409,7 +514,6 @@ if __name__ == "__main__":
         config_src,
         render_src,
         blueprint_analysis_src,
-        combined_helper_src,
     ):
         shutil.copy(script_src, project_dir)
 

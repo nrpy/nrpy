@@ -319,8 +319,12 @@ def batch_integrator_numerical(
     NumericalTimeWindowManager numerical_window;
     time_window_manager_numerical_set_inert(&numerical_window);
 
-    params_struct numerical_params;
-    memset(&numerical_params, 0, sizeof(params_struct));
+    // Seed the runtime params with generator-time defaults so coordinate-map
+    // parameters like AMPL and SINHW remain valid after metadata overlay.
+    commondata_struct commondata_for_params_defaults = *commondata;
+    griddata_struct dummy_griddata[MAXNUMGRIDS];
+    params_struct_set_to_default(&commondata_for_params_defaults, dummy_griddata);
+    params_struct numerical_params = dummy_griddata[0].params;
 
     if (commondata->numerical_spacetime_bin_path[0] == '\0') {{
         fprintf(stderr,
@@ -1083,10 +1087,8 @@ def batch_integrator_numerical(
                 const int norm_slot_idx = slot_get_index(
                     &norm_tsm, all_photons_host.f[0 * num_rays + norm_ray]);
                 if (norm_slot_idx < 0) {{
-                    normalization_failure_mode = 1;
-                    normalization_failure_ray = norm_ray;
-                    break;
-                }} // END IF: norm_slot_idx < 0 to abort on an invalid terminal slot
+                    continue;
+                }} // END IF: norm_slot_idx < 0 to skip terminal states outside the numerical time domain
                 slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
             }} // END LOOP: for norm_ray over num_rays to populate the terminal slot manager
 

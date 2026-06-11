@@ -654,9 +654,10 @@ def time_window_manager_numerical() -> None:
       uint64_t expected_point_record_count = 1ULL;
       for (int dirn = 0; dirn < 3; dirn++) {
         if (ntwm->Nxx[dirn] == 0ULL ||
-            ntwm->Nxx[dirn] > UINT64_MAX / expected_point_record_count ||
             ntwm->Nxx_plus_2NGHOSTS[dirn] !=
                 ntwm->Nxx[dirn] + 2ULL * (uint64_t)ntwm->nghosts ||
+            ntwm->Nxx_plus_2NGHOSTS[dirn] >
+                UINT64_MAX / expected_point_record_count ||
             !isfinite(ntwm->dxx[dirn]) || ntwm->dxx[dirn] <= 0.0 ||
             !isfinite(ntwm->invdxx[dirn]) || ntwm->invdxx[dirn] <= 0.0 ||
             !isfinite(ntwm->xxmin[dirn]) || !isfinite(ntwm->xxmax[dirn]) ||
@@ -665,12 +666,12 @@ def time_window_manager_numerical() -> None:
           time_window_manager_numerical_free(ntwm);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         } // END IF: combined-file grid metadata was not numerically usable
-        expected_point_record_count *= ntwm->Nxx[dirn];
+        expected_point_record_count *= ntwm->Nxx_plus_2NGHOSTS[dirn];
       } // END LOOP: for dirn over combined-file grid metadata during validation
       if (ntwm->point_record_count != expected_point_record_count) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: point-record count disagreed with combined-file grid dimensions
+      } // END IF: point-record count disagreed with ghost-aware combined-file grid dimensions
 
       const uint64_t expected_payload_bytes =
           ntwm->point_record_count * expected_point_record_bytes;
