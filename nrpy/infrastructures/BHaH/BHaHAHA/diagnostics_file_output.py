@@ -128,7 +128,8 @@ Operations performed:
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
