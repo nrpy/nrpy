@@ -11,12 +11,13 @@ import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
-
-# Import the SpECTRESpinEstimate factory from the other module
 from nrpy.equations.general_relativity.bhahaha.SpECTRESpinEstimate import (
     SpECTRESpinEstimate,
 )
 from nrpy.helpers.generic import clang_format
+from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
+    APPLY_PARITY_BRANCHLESS_PREFUNC,
+)
 
 
 def register_CFunction_diagnostics_spectre_spin(
@@ -31,6 +32,8 @@ def register_CFunction_diagnostics_spectre_spin(
     :param enable_rfm_precompute: Whether to enable RFM precompute.
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
+    :raises ValueError: If a precompute gridfunction has an unsupported rank.
+
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(
@@ -83,6 +86,32 @@ def register_CFunction_diagnostics_spectre_spin(
         for gf_name in gf_names
     ]
     rhss_precompute = list(gf_assignments.values())
+    gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
+
+    parity_conditions_rank2 = {
+        (0, 0): 4,
+        (0, 1): 5,
+        (0, 2): 6,
+        (1, 1): 7,
+        (1, 2): 8,
+        (2, 2): 9,
+    }
+    parity_entries = []
+    for gf_name, gf_macro in zip(gf_names, gf_macros):
+        gf = gri.glb_gridfcs_dict[gf_name]
+        if gf.rank == 0:
+            parity_value = 0
+        elif gf.rank == 1:
+            parity_value = int(gf.name[-1]) + 1
+        elif gf.rank == 2:
+            parity_value = parity_conditions_rank2[(int(gf.name[-2]), int(gf.name[-1]))]
+        else:
+            raise ValueError(
+                f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
+            )
+        parity_entries.append(f"  [{gf_macro}] = {parity_value},")
+    parity_table_entries = "\n".join(parity_entries)
+    selected_precompute_gfs = ", ".join(gf_macros)
 
     # Step 3: Generate C code for intermediate surface fields.
     precompute_c_code = ccg.c_codegen(
@@ -146,6 +175,52 @@ def register_CFunction_diagnostics_spectre_spin(
         integrands_dict["abs_omega_integrand"],
     ]
 
+    prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
+static const int8_t spectre_spin_auxevol_gf_parity[NUM_AUXEVOL_GFS] = {{
+{parity_table_entries}
+}};
+
+/**
+ * Apply inner boundary conditions to selected AUXEVOL gridfunctions.
+ *
+ * The spin diagnostic precomputes SE_qDD and SE_XD on physical angular points
+ * before generated finite-difference code differentiates those fields. This
+ * helper fills their angular ghost zones for every active radial horizon slab.
+ *
+ * @param[in] bcstruct Boundary metadata for inner curvilinear points.
+ * @param[in,out] auxevol_gfs AUXEVOL gridfunction storage.
+ * @param Nxx0 Number of active radial horizon slabs.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param[in] which_gfs Selected AUXEVOL gridfunction indices.
+ * @param num_gfs Number of selected gridfunctions.
+ * @param[in] auxevol_gf_parity Parity table indexed by AUXEVOL gridfunction.
+ */
+static void apply_inner_bc_for_selected_auxevol_gfs(const bc_struct *restrict bcstruct, REAL *restrict auxevol_gfs, const int Nxx0,
+                                                    const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                                    const int Nxx_plus_2NGHOSTS2, const int *restrict which_gfs, const int num_gfs,
+                                                    const int8_t *restrict auxevol_gf_parity) {{
+  const bc_info_struct *bc_info = &bcstruct->bc_info;
+
+#pragma omp parallel for collapse(2)
+  for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
+    for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {{
+      const int which_gf = which_gfs[gf_idx];
+      const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
+      const int dstpt = bc->dstpt;
+      const int dst_i0 = dstpt % Nxx_plus_2NGHOSTS0;
+
+      if (dst_i0 < NGHOSTS || dst_i0 >= NGHOSTS + Nxx0)
+        continue;
+
+      const int8_t p = bc->parity[auxevol_gf_parity[which_gf]];
+      auxevol_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(auxevol_gfs[IDX4pt(which_gf, bc->srcpt)], p);
+    }} // END LOOP: for pt over inner boundary points
+  }} // END LOOP: for selected AUXEVOL gridfunctions
+}} // END FUNCTION: apply_inner_bc_for_selected_auxevol_gfs
+"""
+
     # Step 6: Construct the body of the C function.
     body = r"""
     const int grid=0;
@@ -176,39 +251,49 @@ def register_CFunction_diagnostics_spectre_spin(
     int weight_stencil_size;
     bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights, &weight_stencil_size);
 
-#pragma omp parallel
-{
-#pragma omp for
-    for (int i2 = 0; i2 < Nxx2 + 2 * NGHOSTS; i2++) {
-        for (int i1 = 0; i1 < Nxx1 + 2 * NGHOSTS; i1++) {
+    // Precompute SE_qDD and SE_XD only where generated finite-difference
+    // stencils are valid.
+#pragma omp parallel for
+    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
+        const REAL xx2 = xx[2][i2];
+        for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
             const REAL xx1 = xx[1][i1];
-            for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
+            for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
 """
     body += precompute_c_code
-    body += r"""
-            } // END LOOP: for i0 over radial horizon-grid points
-        } // END LOOP: for i1 over theta horizon-grid points
-    } // END LOOP: for i2 over phi horizon-grid points
+    body += rf"""
+            }} // END LOOP: for i0 over active radial horizon-grid slabs
+        }} // END LOOP: for i1 over physical theta horizon-grid points
+    }} // END LOOP: for i2 over physical phi horizon-grid points
+
+    {{
+        const int spectre_spin_precompute_gfs[{len(gf_macros)}] = {{{selected_precompute_gfs}}};
+        apply_inner_bc_for_selected_auxevol_gfs(
+            &griddata[grid].bcstruct, auxevol_gfs, Nxx0, Nxx_plus_2NGHOSTS0,
+            Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+            spectre_spin_precompute_gfs, {len(gf_macros)}, spectre_spin_auxevol_gf_parity);
+    }} // END BLOCK: fill SE_qDD and SE_XD ghost zones before differentiating them
+
+#pragma omp parallel
+{{
     // Private accumulators for each thread
     REAL A_sum_private = 0.0;
-    REAL XU_sum_private[3] = {0.0, 0.0, 0.0};
+    REAL XU_sum_private[3] = {{0.0, 0.0, 0.0}};
     REAL R0_sum_private = 0.0;
-    REAL XRU_sum_private[3] = {0.0, 0.0, 0.0};
+    REAL XRU_sum_private[3] = {{0.0, 0.0, 0.0}};
     REAL O0_sum_private = 0.0;
-    REAL XOU_sum_private[3] = {0.0, 0.0, 0.0};
-    REAL ZOU_sum_private[3] = {0.0, 0.0, 0.0};
+    REAL XOU_sum_private[3] = {{0.0, 0.0, 0.0}};
+    REAL ZOU_sum_private[3] = {{0.0, 0.0, 0.0}};
     REAL Oabs_sum_private = 0.0;
 
 #pragma omp for
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
+    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {{
         const REAL weight2 = weights[(i2 - NGHOSTS) % weight_stencil_size];
         const REAL xx2 = xx[2][i2];
-        for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
+        for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {{
             const REAL weight1 = weights[(i1 - NGHOSTS) % weight_stencil_size];
             const REAL xx1 = xx[1][i1];
-            // The horizon is a 2D surface, so we loop over a single radial index i0.
-            // All quantities are evaluated on this surface.
-            for (int i0 = NGHOSTS; i0 < NGHOSTS + 1; i0++) {
+            for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {{
 """
     # Step 7: Generate C code for all integrands and the area density.
     # enable_fd_codegen=True tells c_codegen to automatically handle all
@@ -241,9 +326,9 @@ def register_CFunction_diagnostics_spectre_spin(
                 R0_sum_private   += R0_integrand * dA_unscaled;
                 O0_sum_private   += O0_integrand * dA_unscaled;
                 Oabs_sum_private += Oabs_integrand * dA_unscaled;
-            } // END LOOP: for i0 over radial horizon-grid points
-        } // END LOOP: for i1 over theta horizon-grid points
-    } // END LOOP: for i2 over phi horizon-grid points
+            } // END LOOP: for i0 over active radial horizon-grid slabs
+        } // END LOOP: for i1 over physical theta horizon-grid points
+    } // END LOOP: for i2 over physical phi horizon-grid points
 
     // Use a critical section for the final reduction from private to shared sums
     #pragma omp critical
@@ -259,22 +344,58 @@ def register_CFunction_diagnostics_spectre_spin(
         O0_sum   += O0_sum_private;
         Oabs_sum += Oabs_sum_private;
     } // END OMP CRITICAL: update shared spin-diagnostic sums
-} // END OMP PARALLEL: precompute and integrate spin diagnostic
+} // END OMP PARALLEL: integrate spin diagnostic
 
 // Step 8: Compute the spin vector from the integrated quantities.
 bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
 
-const REAL A = A_sum * dxx1 * dxx2;
-const REAL R0 = R0_sum * dxx1 * dxx2;
-const REAL XRU[3] = {XRU_sum[0] * dxx1 * dxx2, XRU_sum[1] * dxx1 * dxx2, XRU_sum[2] * dxx1 * dxx2};
-const REAL XOU[3] = {XOU_sum[0] * dxx1 * dxx2, XOU_sum[1] * dxx1 * dxx2, XOU_sum[2] * dxx1 * dxx2};
-const REAL ZOU[3] = {ZOU_sum[0] * dxx1 * dxx2, ZOU_sum[1] * dxx1 * dxx2, ZOU_sum[2] * dxx1 * dxx2};
+const REAL surface_weight = dxx1 * dxx2;
+const REAL spin_norm_tolerance = 1.0e-14;
+const REAL A = A_sum * surface_weight;
+const REAL XU[3] = {
+    XU_sum[0] * surface_weight,
+    XU_sum[1] * surface_weight,
+    XU_sum[2] * surface_weight};
+const REAL R0 = R0_sum * surface_weight;
+const REAL XRU[3] = {
+    XRU_sum[0] * surface_weight,
+    XRU_sum[1] * surface_weight,
+    XRU_sum[2] * surface_weight};
+const REAL O0 = O0_sum * surface_weight;
+const REAL XOU[3] = {
+    XOU_sum[0] * surface_weight,
+    XOU_sum[1] * surface_weight,
+    XOU_sum[2] * surface_weight};
+const REAL ZOU[3] = {
+    ZOU_sum[0] * surface_weight,
+    ZOU_sum[1] * surface_weight,
+    ZOU_sum[2] * surface_weight};
+const REAL Oabs = Oabs_sum * surface_weight;
 
-const REAL spin_U[3] = {
-    (XOU[0] - ZOU[0] * (XRU[0] / R0)) / A,
-    (XOU[1] - ZOU[1] * (XRU[1] / R0)) / A,
-    (XOU[2] - ZOU[2] * (XRU[2] / R0)) / A
-};
+REAL spin_U[3] = {0.0, 0.0, 0.0};
+
+if (fabs(A) > spin_norm_tolerance) {
+    REAL x0U[3], xRcorrU[3], IU[3], SalphaU[3];
+
+    for (int i = 0; i < 3; i++) {
+        x0U[i] = XU[i] / A;
+        xRcorrU[i] = (XRU[i] - x0U[i] * R0) / (8.0 * M_PI);
+        IU[i] = XOU[i] - (x0U[i] + xRcorrU[i]) * O0;
+        SalphaU[i] = ZOU[i] / (8.0 * M_PI);
+    } // END LOOP: for i over spatial spin-vector components
+
+    const REAL normI = sqrt(IU[0] * IU[0] + IU[1] * IU[1] + IU[2] * IU[2]);
+    const REAL Salpha_norm = sqrt(SalphaU[0] * SalphaU[0] + SalphaU[1] * SalphaU[1] + SalphaU[2] * SalphaU[2]);
+    const REAL S = Salpha_norm;
+
+    if (Oabs > spin_norm_tolerance && normI > spin_norm_tolerance) {
+        for (int i = 0; i < 3; i++)
+            spin_U[i] = S * IU[i] / normI;
+    } else if (Salpha_norm > spin_norm_tolerance) {
+        for (int i = 0; i < 3; i++)
+            spin_U[i] = S * SalphaU[i] / Salpha_norm;
+    } // END ELSE IF: use z_alpha fallback direction when nominal direction is unsafe
+} // END IF: area is safe for centroid reduction
 
 bhahaha_diags->spin_chi_x_spectre = spin_U[0];
 bhahaha_diags->spin_chi_y_spectre = spin_U[1];
@@ -286,6 +407,7 @@ return BHAHAHA_SUCCESS;
     cfc.register_CFunction(
         subdirectory="",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=cfunc_name,
@@ -294,3 +416,16 @@ return BHAHAHA_SUCCESS;
         body=clang_format(body),
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
