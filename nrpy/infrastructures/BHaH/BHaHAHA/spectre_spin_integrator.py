@@ -88,6 +88,7 @@ def register_CFunction_diagnostics_spectre_spin(
     rhss_precompute = list(gf_assignments.values())
     gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
 
+    surface_to_ambient_index = {0: 1, 1: 2}
     parity_conditions_rank2 = {
         (0, 0): 4,
         (0, 1): 5,
@@ -101,6 +102,12 @@ def register_CFunction_diagnostics_spectre_spin(
         gf = gri.glb_gridfcs_dict[gf_name]
         if gf.rank == 0:
             parity_value = 0
+        elif gf.name.startswith("SE_XD"):
+            parity_value = surface_to_ambient_index[int(gf.name[-1])] + 1
+        elif gf.name.startswith("SE_qDD"):
+            idx0 = surface_to_ambient_index[int(gf.name[-2])]
+            idx1 = surface_to_ambient_index[int(gf.name[-1])]
+            parity_value = parity_conditions_rank2[(idx0, idx1)]
         elif gf.rank == 1:
             parity_value = int(gf.name[-1]) + 1
         elif gf.rank == 2:
