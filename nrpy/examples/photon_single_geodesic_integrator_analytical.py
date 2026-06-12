@@ -1,26 +1,11 @@
 # nrpy/examples/photon_single_geodesic_integrator_analytical.py
 r"""
-Defines a complete C project for integrating photon geodesics in curved spacetime.
+Generate a standalone C project for integrating a single photon geodesic.
 
-Project: NRPy Standalone Geodesic Integrator
-Description:
-    This module is a standalone C application that evolves the trajectory
-    of a massless photon test particle. Structure of Arrays (SoA) layouts
-    minimize memory divergence during parallel execution. Memory is
-    dynamically allocated to mimic batch pipeline layouts. Struct mapping
-    establishes the SoA layout required by the downstream conserved
-    quantities kernel. Pre-computing the metric solves the quadratic
-    Hamiltonian constraint for temporal momentum. Deep copying preserves
-    the anchor state to prevent read-after-write hazards during the
-    RKF45 tableau evaluation.
-
-Physics Context:
-    The simulation solves the geodesic equation for a photon:
-        $d(p^\mu)/d(\lambda) = -\Gamma^\mu_{\alpha \beta} p^\alpha p^\beta$
-    subject to the normalization constraint $p^\mu p_\mu = 0$.
-
-    Numerical fidelity is validated by monitoring constants of motion
-    associated with the spacetime's symmetries (Killing vectors and tensors).
+The generated project evolves one massless test particle in an analytic
+spacetime using the split RKF45 photon pipeline. It writes trajectory samples
+and reports normalization and conserved-quantity diagnostics while preserving
+the Structure of Arrays layout expected by the shared geodesic kernels.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -30,18 +15,19 @@ import os
 import shutil
 
 import nrpy.c_function as cfc
-import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
-import nrpy.infrastructures.BHaH.CodeParameters as CPs
-import nrpy.infrastructures.BHaH.Makefile_helpers as Makefile
 import nrpy.params as par
 from nrpy.equations.general_relativity.geodesics.analytic_spacetimes import (
     Analytic_Spacetimes,
 )
 from nrpy.equations.general_relativity.geodesics.geodesics import Geodesic_Equations
-from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
-
-# Split-Pipeline Physics and Math Kernels
+from nrpy.infrastructures.BHaH import (
+    BHaH_defines_h,
+)
+from nrpy.infrastructures.BHaH import CodeParameters as CPs
+from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
+from nrpy.infrastructures.BHaH import (
+    cmdline_input_and_parfiles,
+)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     connections,
     conserved_quantities,
@@ -58,222 +44,289 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
 
 
 def register_struct_definitions() -> None:
-    """Register the Structure of Arrays (SoA) and diagnostic structures into the global C headers."""
-    termination_enum_def = """
-    // Defines the specific exit condition for a photon's integration loop.
+    """Register the termination enum and shared photon-state SoA definition."""
+    termination_enum_def = r"""
+    // Compatibility names retained because shared photon kernels reference
+    // termination_type_t together with ACTIVE/REJECTED failure states.
     typedef enum {
-        ACTIVE = 0,                        // 0: Photon is currently undergoing integration.
-        REJECTED,                          // 1: Photon RKF45 step was rejected.
-        FAILURE_RKF45_REJECTION_LIMIT      // 2: Adaptive step-size rejected too many consecutive times.
-    } termination_type_t;
+      ACTIVE = 0,
+      REJECTED,
+      FAILURE_RKF45_REJECTION_LIMIT
+    } termination_type_t; // END ENUM: termination_type_t
     """
-    Bdefines_h.register_BHaH_defines("termination_type_t", termination_enum_def)
+    BHaH_defines_h.register_BHaH_defines("termination_type_t", termination_enum_def)
 
     photon_soa_def = r"""
-    // ==========================================
-    // Flattened SoA Struct (Master Storage)
-    // ==========================================
+    // Compatibility name retained because shared geodesic kernels expect PhotonStateSoA.
     typedef struct {
-        double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
-        double *affine_param; // Current affine parameter $\lambda$ for the trajectory.
-    } PhotonStateSoA;
+      double *f;            // Flattened state vector: t, x, y, z, p_t, p_x, p_y, p_z, aux.
+      double *affine_param; // Current affine parameter lambda.
+    } PhotonStateSoA; // END STRUCT: PhotonStateSoA
     """
-    Bdefines_h.register_BHaH_defines("PhotonStateSoA", photon_soa_def)
+    BHaH_defines_h.register_BHaH_defines("PhotonStateSoA", photon_soa_def)
 
 
-def main_c(spacetime: str, particle: str) -> None:
+def register_CFunction_photon_single_main(spacetime: str, particle: str) -> None:
     """
-    Define the main() function orchestrating the single-ray RKF45 integrator.
+    Register the generated C main() function for the photon geodesic integrator.
 
     :param spacetime: The specific background spacetime descriptor.
     :param particle: The type of test particle being integrated.
     """
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "string.h", "stdlib.h"]
+    includes = [
+        "math.h",
+        "stdio.h",
+        "stdlib.h",
+        "BHaH_defines.h",
+        "BHaH_function_prototypes.h",
+    ]
 
-    desc = """@brief Main driver function for the photon geodesic integrator.
-    Detailed algorithm: Initializes memory for a single ray using SoA layouts and
-    executes the discrete RKF45 stages via isolated kernels. Evaluates boundary
-    constraints and verifies the numerical fidelity using Hamiltonian constraints
-    and conserved quantities."""
+    desc = """Drive the single-photon geodesic integration example.
+
+Initializes one photon state, evolves it with the split RKF45 pipeline,
+writes trajectory samples, and reports final normalization and
+conserved-quantity diagnostics.
+
+@param argc Number of command-line arguments.
+@param argv Command-line argument array.
+@return EXIT_SUCCESS on successful completion; EXIT_FAILURE if setup fails.
+"""
 
     cfunc_type = "int"
     name = "main"
     params = "int argc, const char *argv[]"
 
-    body = f"""
+    body = rf"""
     // ==========================================
     // STRUCTURAL SETUP & PARAMETERS
     // ==========================================
-    commondata_struct commondata; // Global parameters struct governing spacetime and numerics.
+    commondata_struct commondata;
     commondata_struct_set_to_default(&commondata);
-    commondata.M_scale = 1.0; // The mass $M$ of the central black hole.
-    commondata.a_spin = 0.9; // The dimensionless spin $a$ of the central black hole.
 
-    double r_escape = 150.0; // The threshold radial boundary $r_{{escape}}$ for exiting the simulation.
-    double p_t_max = 1000.0; // The upper limit for the temporal momentum $p_t$ to prevent numerical blowup.
+    commondata.M_scale = 1.0;
+    commondata.a_spin = 0.9;
 
-    printf("Starting Split-Pipeline Geodesic Integrator...\\n");
-    printf("spacetime: {spacetime}, M=%.2f, a=%.2f\\n", commondata.M_scale, commondata.a_spin);
+    const double r_escape = 150.0;
+    const double p_t_max = 1000.0;
+    const long int num_rays = 1;
+    const long int chunk_size = 1;
+    const int stream_idx = 0;
+    const int max_steps = 200000;
+    const char *status_names[] = {{
+      "ACTIVE",
+      "REJECTED",
+      "FAILURE_RKF45_REJECTION_LIMIT"
+    }};
+
+    int exit_status = EXIT_SUCCESS;
+    FILE *fp = NULL;
+
+    printf("Starting Split-Pipeline Geodesic Integrator...\n");
+    printf("spacetime: {spacetime}, M=%.2f, a=%.2f\n", commondata.M_scale, commondata.a_spin);
 
     // ==========================================
-    // GLOBAL MEMORY ALLOCATION (HOST)
+    // GLOBAL MEMORY ALLOCATION
     // ==========================================
-    long int num_rays = 1; // Total number of global photon trajectories.
-    long int chunk_size = 1; // Number of active rays in the current batch processing chunk.
-    int stream_idx = 0; // Hardware stream index for synchronized execution.
+    double *f = NULL;
+    double *f_base = NULL;
+    double *f_temp = NULL;
+    double *metric = NULL;
+    double *connection = NULL;
+    double *k_bundle = NULL;
+    double *affine_param = NULL;
+    double *h = NULL;
+    int *rejection_retries = NULL;
+    termination_type_t *status = NULL;
 
-    double *f = (double *)malloc(9 * sizeof(double));            // Persistent 9-component state vector $f^\\mu$.
-    double *f_base = (double *)malloc(9 * sizeof(double));       // The anchor state $f^\\mu_{{base}}$ preserved across all RKF45 stages.
-    double *f_temp = (double *)malloc(9 * sizeof(double));       // Intermediate RKF45 state buffer $f^\\mu_{{temp}}$.
-    double *metric = (double *)malloc(10 * sizeof(double)); // The 10 independent components of the symmetric metric $g_{{\\mu\\nu}}$.
-    double *connection = (double *)malloc(40 * sizeof(double)); // The 40 independent Christoffel symbols $\\Gamma^\\alpha_{{\\beta\\gamma}}$.
-    double *k_bundle = (double *)malloc(6 * 9 * sizeof(double)); // The derivative bundle storing all 6 RKF45 $k_n$ stages.
+    BHAH_MALLOC(f, 9 * sizeof(double));
+    BHAH_MALLOC(f_base, 9 * sizeof(double));
+    BHAH_MALLOC(f_temp, 9 * sizeof(double));
+    BHAH_MALLOC(metric, 10 * sizeof(double));
+    BHAH_MALLOC(connection, 40 * sizeof(double));
+    BHAH_MALLOC(k_bundle, 6 * 9 * sizeof(double));
+    BHAH_MALLOC(affine_param, sizeof(double));
+    BHAH_MALLOC(h, sizeof(double));
+    BHAH_MALLOC(rejection_retries, sizeof(int));
+    BHAH_MALLOC(status, sizeof(termination_type_t));
 
-    double *affine_param = (double *)malloc(sizeof(double)); // The affine parameter $\\lambda$ accumulated along the geodesic.
-    double *h = (double *)malloc(sizeof(double)); // The adaptive integration step size $h$.
-    int *rejection_retries = (int *)malloc(sizeof(int)); // Counter for step rejections due to truncation error limits.
-    termination_type_t *status = (termination_type_t *)malloc(sizeof(termination_type_t)); // The integration status flag for the current ray.
+    if (f == NULL || f_base == NULL || f_temp == NULL || metric == NULL ||
+        connection == NULL || k_bundle == NULL || affine_param == NULL ||
+        h == NULL || rejection_retries == NULL || status == NULL) {{
+      fprintf(stderr, "Error: failed to allocate photon state buffers.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    }} // END IF: photon buffer allocation failed
 
-    PhotonStateSoA all_photons; // Master struct holding array pointers for the global dataset.
+    PhotonStateSoA all_photons;
     all_photons.f = f;
     all_photons.affine_param = affine_param;
 
     // ==========================================
     // INITIAL CONDITIONS
     // ==========================================
-    f[0] = 0.0;   // The coordinate time $t$.
-    f[1] = 4.0123;  // The spatial coordinate $x$.
-    f[2] = 0.0;   // The spatial coordinate $y$.
-    f[3] = 0.0;   // The spatial coordinate $z$.
+    f[0] = 0.0;
+    f[1] = 4.0123;
+    f[2] = 0.0;
+    f[3] = 0.0;
 
-    f[5] = -0.5641;  // The spatial momentum $p_x$.
-    f[6] = 0.7171;  // The spatial momentum $p_y$.
-    f[7] = 0.0;   // The spatial momentum $p_z$.
-    f[8] = 0.0;   // The auxiliary path length integral $L$.
+    f[5] = -0.5641;
+    f[6] = 0.7171;
+    f[7] = 0.0;
+    f[8] = 0.0;
 
-    *affine_param = 0.0; // Initialize affine parameter $\\lambda$ at the source.
-    *h = 0.1; // Establish initial step size guess $h$.
-    *rejection_retries = 0; // Reset error retries.
-    *status = 0; // Set initial condition to ACTIVE.
+    *affine_param = 0.0;
+    *h = 0.1;
+    *rejection_retries = 0;
+    *status = ACTIVE;
 
     // ==========================================
-    // METRIC INTERPOLATION & TEMPORAL MOMENTUM REVERSAL
+    // INITIAL METRIC EVALUATION
     // ==========================================
-    interpolation_kernel_{spacetime}(&commondata, f, metric, NULL, chunk_size, stream_idx);
+    interpolation_kernel_{spacetime}(
+      &commondata, f, metric, NULL, chunk_size, stream_idx
+    );
     p0_reverse_kernel(f, metric, chunk_size, stream_idx);
 
-    printf("Initial State:\\n");
-    printf("  Pos (%.4f, %.4f, %.4f)\\n", f[1], f[2], f[3]);
-    printf("  Mom (%.4f, %.4f, %.4f, %.4f)\\n", f[4], f[5], f[6], f[7]);
+    printf("Initial State:\n");
+    printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
+    printf("  Mom (%.4f, %.4f, %.4f, %.4f)\n", f[4], f[5], f[6], f[7]);
 
     // ==========================================
-    // INITIAL CONSERVED QUANTITIES EXTRACTION
+    // PRE-INTEGRATION DIAGNOSTICS
     // ==========================================
-    conserved_quantities_t cq_init; // Struct instance to store the baseline constants of motion.
-    calculate_conserved_quantities_universal_{spacetime}_{particle}(&commondata, &all_photons, num_rays, &cq_init);
+    conserved_quantities_t cq_init;
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(
+      &commondata, &all_photons, num_rays, &cq_init
+    );
 
-    FILE *fp = fopen("trajectory.txt", "w"); // File pointer for trajectory data offloading.
+    fp = fopen("trajectory.txt", "w");
     if (fp == NULL) {{
-        fprintf(stderr, "Error: Could not open trajectory.txt for writing.\\n");
-        return 1;
-    }}
-    fprintf(fp, "# lambda t x y z p_t p_x p_y p_z aux\\n");
+      fprintf(stderr, "Error: could not open trajectory.txt for writing.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    }} // END IF: trajectory output file could not be opened
+    fprintf(fp, "# lambda t x y z p_t p_x p_y p_z aux\n");
 
     // ==========================================
     // MODULAR SPLIT-PIPELINE INTEGRATION LOOP
     // ==========================================
-    int steps = 0; // Iteration counter tracking successful integration steps.
-    int max_steps = 200000; // Hard ceiling preventing runaway numerical loops.
+    int steps = 0;
 
     while (steps < max_steps) {{
+      for (int i = 0; i < 9; i++) {{
+        f_base[i] = f[i];
+        f_temp[i] = f[i];
+      }} // END LOOP: copy the current state into RKF45 work buffers
 
-        for (int i = 0; i < 9; i++) {{
-        f_base[i] = f[i]; // The anchor state component $f^\\mu_{{base}}$.
-        f_temp[i] = f[i]; // The intermediate scratchpad state component $f^\\mu_{{temp}}$.
-        }}
+      for (int stage = 1; stage <= 6; stage++) {{
+        interpolation_kernel_{spacetime}(
+          &commondata, f_temp, metric, connection, chunk_size, stream_idx
+        );
+        calculate_ode_rhs_kernel(
+          f_temp, metric, connection, k_bundle, stage, chunk_size, stream_idx
+        );
 
-        // ==========================================
-        // EXECUTE 6-STAGE RKF45 TABLEAU
-        // ==========================================
-        for (int stage = 1; stage <= 6; stage++) {{
-            interpolation_kernel_{spacetime}(&commondata, f_temp, metric, connection, chunk_size, stream_idx);
-            calculate_ode_rhs_kernel(f_temp, metric, connection, k_bundle, stage, chunk_size, stream_idx);
+        if (stage < 6)
+          rkf45_stage_update(
+            f, k_bundle, h, stage, chunk_size, f_temp, stream_idx
+          );
+      }} // END LOOP: execute RKF45 stages 1 through 6
 
-            if (stage < 6) {{
-                rkf45_stage_update(f, k_bundle, h, stage, chunk_size, f_temp, stream_idx);
-            }}
-        }} // END LOOP: for stage over 6 to execute RKF45 stages
+      rkf45_finalize_and_control(
+        &commondata,
+        f,
+        f_base,
+        k_bundle,
+        h,
+        status,
+        affine_param,
+        rejection_retries,
+        chunk_size,
+        stream_idx
+      );
 
-        // ==========================================
-        // FINALIZE STEP AND CONTROL ADAPTIVE STEP SIZE
-        // ==========================================
-        rkf45_finalize_and_control(&commondata, f, f_base, k_bundle, h, status, affine_param, rejection_retries, chunk_size, stream_idx);
+      if (*rejection_retries == 0) {{
+        fprintf(
+          fp,
+          "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+          *affine_param,
+          f[0],
+          f[1],
+          f[2],
+          f[3],
+          f[4],
+          f[5],
+          f[6],
+          f[7],
+          f[8]
+        );
+        steps++;
+      }} // END IF: accepted step written to the trajectory file
 
-        // ==========================================
-        // WRITE OUTPUT & CHECK BREAK CONDITIONS
-        // ==========================================
-        if (*rejection_retries == 0) {{
-            fprintf(fp, "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\\n",
-                    *affine_param, f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8]);
-            steps++;
-        }} // END IF: successful step to write output
+      const double r2 = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
+      if (r2 > r_escape * r_escape) {{
+        printf("Particle escaped to r > %.2f.\n", r_escape);
+        break;
+      }} // END IF: particle crossed the escape radius
 
-        double r2 = f[1]*f[1] + f[2]*f[2] + f[3]*f[3]; // The squared Cartesian radius $r^2$ from the origin.
-        if (r2 > (r_escape * r_escape)) {{
-            printf("particle escaped to r > %.2f.\\n", r_escape);
-            break;
-        }}
+      if (fabs(f[4]) > p_t_max) {{
+        printf("Temporal momentum |p_t| exceeded numerical limit.\n");
+        break;
+      }} // END IF: temporal momentum exceeded the configured bound
 
-        if (fabs(f[4]) > p_t_max) {{
-            printf("Temporal momentum $|p_t|$ exceeded numerical limit.\\n");
-            break;
-        }}
+      if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
+        printf(
+          "Integration terminated with status: %s (%d)\n",
+          status_names[*status],
+          *status
+        );
+        break;
+      }} // END IF: RKF45 rejection limit was reached
+    }} // END WHILE: integrate the photon geodesic
 
-        if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
-            const char *status_names[] = {{
-                "ACTIVE",
-                "REJECTED",
-                "FAILURE_RKF45_REJECTION_LIMIT"
-            }};
-            printf("Integration terminated organically with status: %s (%d)\\n", status_names[*status], *status);
-            break;
-        }} // END IF: integration failure limit reached
-    }} // END WHILE: integrate photon geodesic
-
-    fclose(fp);
-    printf("Integration finished after %d steps. Final lambda = %.4f\\n", steps, *affine_param);
+    printf(
+      "Integration finished after %d steps. Final lambda = %.4f\n",
+      steps,
+      *affine_param
+    );
 
     // ==========================================
-    // POST-INTEGRATION ERROR DIAGNOSTICS
+    // POST-INTEGRATION DIAGNOSTICS
     // ==========================================
-    conserved_quantities_t cq_final; // Struct holding constants of motion evaluated at the trajectory boundary.
-    calculate_conserved_quantities_universal_{spacetime}_{particle}(&commondata, &all_photons, num_rays, &cq_final);
+    conserved_quantities_t cq_final;
+    calculate_conserved_quantities_universal_{spacetime}_{particle}(
+      &commondata, &all_photons, num_rays, &cq_final
+    );
 
-    normalization_constraint_t norm_final; // Struct tracking the residual of the Hamiltonian null constraint $p^\\mu p_\\mu = 0$.
-    interpolation_kernel_{spacetime}(&commondata, f, metric, NULL, chunk_size, stream_idx);
-    normalization_constraint_photon(f, metric, &norm_final, chunk_size, stream_idx);
+    normalization_constraint_t norm_final;
+    interpolation_kernel_{spacetime}(
+      &commondata, f, metric, NULL, chunk_size, stream_idx
+    );
+    normalization_constraint_photon(
+      f, metric, &norm_final, chunk_size, stream_idx
+    );
 
-    printf("\\nFinal Normalization Constraint: |C| = %.4e\\n", fabs(norm_final.C));
-    printf("Conservation Absolute Errors:\\n");
-    printf("  Delta E  = %.4e\\n", fabs(cq_final.E - cq_init.E));
-    printf("  Delta Lz = %.4e\\n", fabs(cq_final.Lz - cq_init.Lz));
-    printf("  Delta Q  = %.4e\\n", fabs(cq_final.Q - cq_init.Q));
+    printf("\nFinal normalization constraint: |C| = %.4e\n", fabs(norm_final.C));
+    printf("Conservation Absolute Errors:\n");
+    printf("  Delta E  = %.4e\n", fabs(cq_final.E - cq_init.E));
+    printf("  Delta Lz = %.4e\n", fabs(cq_final.Lz - cq_init.Lz));
+    printf("  Delta Q  = %.4e\n", fabs(cq_final.Q - cq_init.Q));
 
-    // ==========================================
-    // MEMORY CLEANUP
-    // ==========================================
-    free(f);
-    free(f_base);
-    free(f_temp);
-    free(metric);
-    free(connection);
-    free(k_bundle);
-    free(affine_param);
-    free(h);
-    free(rejection_retries);
-    free(status);
+    cleanup:
+    if (fp != NULL)
+      fclose(fp);
+    BHAH_FREE(f);
+    BHAH_FREE(f_base);
+    BHAH_FREE(f_temp);
+    BHAH_FREE(metric);
+    BHAH_FREE(connection);
+    BHAH_FREE(k_bundle);
+    BHAH_FREE(affine_param);
+    BHAH_FREE(h);
+    BHAH_FREE(rejection_retries);
+    BHAH_FREE(status);
 
-    return 0;
+    return exit_status;
     """
 
     cfc.register_CFunction(
@@ -287,29 +340,31 @@ def main_c(spacetime: str, particle: str) -> None:
 
 
 if __name__ == "__main__":
+    # Step 1: Select the BHaH OpenMP backend for this example.
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
 
+    # Step 2: Define project-level constants and output paths.
     project_name = "photon_single_geodesic_integrator_analytical"
-    project_dir = os.path.join("project", project_name)
+    project_dir = os.path.abspath(os.path.join("project", project_name))
+    parfile_path = os.path.join(project_dir, f"{project_name}.par")
 
     SPACETIME = "KerrSchild_Cartesian"
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
-    enable_parallel_codegen = True
 
-    if os.path.exists(project_dir):
-        shutil.rmtree(project_dir)
+    # Step 3: Recreate the generated project directory.
+    shutil.rmtree(project_dir, ignore_errors=True)
     os.makedirs(project_dir, exist_ok=True)
 
+    # Step 4: Acquire symbolic data for the selected spacetime.
     print(f"Acquiring symbolic data for {GEO_KEY}...")
     metric_data = Analytic_Spacetimes[SPACETIME]
     geodesic_data = Geodesic_Equations[GEO_KEY]
 
+    # Step 5: Register the shared physics and diagnostics kernels.
     print("Registering Split-Pipeline Physics Kernels...")
     register_struct_definitions()
-
-    # 1. Fundamental Tensors
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
     conserved_quantities.conserved_quantities(SPACETIME, PARTICLE)
@@ -317,7 +372,6 @@ if __name__ == "__main__":
         geodesic_data.norm_constraint_expr, PARTICLE
     )
 
-    # 2. Split-Pipeline Modular Kernels
     if geodesic_data.p0_photon is None:
         raise ValueError(f"p0_photon is None for {GEO_KEY}")
     p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
@@ -328,32 +382,28 @@ if __name__ == "__main__":
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
 
-    # Execute the user-provided main_c implementation
-    main_c(SPACETIME, PARTICLE)
+    # Step 5.a: Register the single-ray C main function.
+    register_CFunction_photon_single_main(SPACETIME, PARTICLE)
 
-    # Native NRPy Cleanup
+    # Step 5.b: Remove helper registrations emitted only through other kernels.
+    # The generated main() calls the metric and connection logic through shared
+    # kernels, so emitting standalone wrappers here would add redundant source
+    # files and prototypes.
     for internal_func in [f"g4DD_metric_{SPACETIME}", f"connections_{SPACETIME}"]:
         cfc.CFunction_dict.pop(internal_func, None)
 
-    # Set relevent Code paramters
+    # Step 6: Set relevant CodeParameter defaults.
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
     par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
-    # ---------------------------------------------------------
-    # PART 1: PARALLEL CODE GENERATION & PARAMETER SETUP
-    # ---------------------------------------------------------
-    if enable_parallel_codegen:
-        pcg.do_parallel_codegen()
 
+    # Step 7: Generate headers, default parameters, and the Makefile.
     print("Generating header files and Makefile...")
-
-    # A. CodeParameters Headers
     CPs.write_CodeParameters_h_files(set_commondata_only=True, project_dir=project_dir)
     CPs.register_CFunctions_params_commondata_struct_set_to_default()
 
-    # B. Parameter File Defaults (required by infrastructure, even if unused)
     cmdline_input_and_parfiles.generate_default_parfile(
         project_dir=project_dir, project_name=project_name
     )
@@ -361,41 +411,49 @@ if __name__ == "__main__":
         project_name=project_name
     )
 
-    # Required macros for single-ray integration
-    macro_defs = """
+    macro_defs = r"""
     #ifndef BUNDLE_CAPACITY
     #define BUNDLE_CAPACITY 1
     #endif
     """
-    Bdefines_h.register_BHaH_defines("gpu_batch_macros", macro_defs)
+    BHaH_defines_h.register_BHaH_defines("single_photon_macros", macro_defs)
 
+    # BHAH_MALLOC expects an assignable lvalue, so keep direct forwarding in
+    # the compatibility wrappers below.
     cpu_macros = {
-        "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))",
-        "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))",
-        "BHAH_MALLOC_DEVICE(a, sz)": "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)",
-        "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)",
-        "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))",
-        "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))",
-        "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))",
-        "FusedMulAddCUDA(a, b, c)": "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))",
-        "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)",
-        "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)",
-        "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)",
-        "BHAH_HD_FUNC": "#define BHAH_HD_FUNC",
-        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline",
-        "BHAH_WARP_ATOMIC_ADD(ptr, val)": '#define BHAH_WARP_ATOMIC_ADD(ptr, val) _Pragma("omp atomic") *(ptr) += (val)\n',
-        "GLOBAL_COMMONDATA_EXTERN": "// Commondata passed by reference, no global needed.",
-        "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)",
+        "ReadCUDA(ptr)": "#define ReadCUDA(ptr) (*(ptr))\n",
+        "WriteCUDA(ptr, val)": "#define WriteCUDA(ptr, val) (*(ptr) = (val))\n",
+        "BHAH_MALLOC_DEVICE(a, sz)": (
+            "#define BHAH_MALLOC_DEVICE(a, sz) BHAH_MALLOC(a, sz)\n"
+        ),
+        "BHAH_FREE_DEVICE(a)": "#define BHAH_FREE_DEVICE(a) BHAH_FREE(a)\n",
+        "MulCUDA(a, b)": "#define MulCUDA(a, b) ((a) * (b))\n",
+        "DivCUDA(a, b)": "#define DivCUDA(a, b) ((a) / (b))\n",
+        "AddCUDA(a, b)": "#define AddCUDA(a, b) ((a) + (b))\n",
+        "FusedMulAddCUDA(a, b, c)": (
+            "#define FusedMulAddCUDA(a, b, c) ((a) * (b) + (c))\n"
+        ),
+        "AbsCUDA(val)": "#define AbsCUDA(val) fabs(val)\n",
+        "SqrtCUDA(val)": "#define SqrtCUDA(val) sqrt(val)\n",
+        "PowCUDA(a, b)": "#define PowCUDA(a, b) pow(a, b)\n",
+        "BHAH_HD_FUNC": "#define BHAH_HD_FUNC\n",
+        "BHAH_HD_INLINE": "#define BHAH_HD_INLINE static inline\n",
+        "BHAH_WARP_ATOMIC_ADD(ptr, val)": (
+            "#define BHAH_WARP_ATOMIC_ADD(ptr, val) "
+            '_Pragma("omp atomic") *(ptr) += (val)\n'
+        ),
+        "GLOBAL_COMMONDATA_EXTERN": (
+            "// Commondata is passed by reference in this OpenMP example.\n"
+        ),
+        "BHAH_DEVICE_SYNC()": "#define BHAH_DEVICE_SYNC() do {} while(0)\n",
     }
 
-    # C. BHaH Defines
-    Bdefines_h.output_BHaH_defines_h(
+    BHaH_defines_h.output_BHaH_defines_h(
         project_dir=project_dir,
         enable_rfm_precompute=False,
         supplemental_defines_dict=cpu_macros,
     )
 
-    # D. Makefile
     addl_cflags = [
         "-fopenmp",
         "-O3",
@@ -403,7 +461,6 @@ if __name__ == "__main__":
         "-Wno-stringop-truncation",
     ]
     addl_libs = ["-lm"]
-
     Makefile.output_CFunctions_function_prototypes_and_construct_Makefile(
         project_dir=project_dir,
         project_name=project_name,
@@ -415,35 +472,30 @@ if __name__ == "__main__":
         src_code_file_ext="c",
     )
 
-    # ---------------------------------------------------------
-    # PART 2: FINALIZE
-    # ---------------------------------------------------------
-
-    # Define the directory containing the visualization assets relative to the repository root
-    vis_dir = os.path.join(
-        "nrpy", "examples", "geodesic_visualizations"
-    )
-
-    # Locate the visualization script
+    # Step 8: Copy the trajectory-visualization helper and print usage.
+    vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
     vis_script_src = os.path.join(vis_dir, "visualize_trajectory.py")
 
-    # Copy the visualization script into the generated project directory
     if os.path.exists(vis_script_src):
         shutil.copy(vis_script_src, project_dir)
     else:
         print(
-            f"Warning: Visualization script not found at {vis_script_src}. Please ensure it exists."
+            f"Warning: Visualization script not found at {vis_script_src}. "
+            "Please ensure it exists."
         )
 
     print(
-        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+        f"Finished! Now go into {project_dir} and type `make` to build, "
+        f"then ./{project_name} to run."
     )
-    print(f"    Parameter file can be found in {project_name}.par\n")
+    print(f"    Parameter file can be found at {parfile_path}\n")
     print(
-        "    To generate the trajectory plot after running the C executable, ensure you have the required Python packages:"
+        "    To generate the trajectory plot after running the C executable, "
+        "ensure you have the required Python packages:"
     )
     print("    pip install matplotlib numpy\n")
     print(
-        "    Then, execute the visualization script directly from the project directory:"
+        "    Then, execute the visualization script directly from the "
+        "project directory:"
     )
     print("    python3 visualize_trajectory.py --particle_type Photon\n")

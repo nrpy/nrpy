@@ -96,196 +96,6 @@ _GAMMA_COMPONENT_INDEX: Dict[Tuple[int, int, int], int] = {
 }
 
 
-def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
-    """
-    Return sparse source-index coefficients for one rotated Cartesian index.
-
-    Each returned tuple is `(source_index, sign, cos_power, sin_power)`, using
-    the active z-axis rotation convention emitted into the generated C helper.
-
-    :param output_index: Destination tensor index in `(t, x, y, z)` ordering.
-    :return: Sparse source-index contributions for the requested output index.
-    :raises ValueError: If `output_index` falls outside the 4D tensor range.
-    """
-    if output_index == 0:
-        return [(0, 1, 0, 0)]
-    if output_index == 1:
-        return [(1, 1, 1, 0), (2, -1, 0, 1)]
-    if output_index == 2:
-        return [(1, 1, 0, 1), (2, 1, 1, 0)]
-    if output_index == 3:
-        return [(3, 1, 0, 0)]
-    raise ValueError(f"Unsupported rotated tensor index: {output_index}")
-
-
-def _metric_component_index(mu: int, nu: int) -> int:
-    """
-    Return the serialized upper-triangular metric component index.
-
-    :param mu: First metric index.
-    :param nu: Second metric index.
-    :return: Serialized metric component index with symmetry applied.
-    """
-    if mu > nu:
-        mu, nu = nu, mu
-    return _METRIC_COMPONENT_INDEX[(mu, nu)]
-
-
-def _gamma_component_index(alpha: int, mu: int, nu: int) -> int:
-    """
-    Return the serialized Christoffel component index.
-
-    The lower Christoffel indices are symmetric in the serialized layout.
-
-    :param alpha: Upper Christoffel index.
-    :param mu: First lower Christoffel index.
-    :param nu: Second lower Christoffel index.
-    :return: Serialized Christoffel component index with lower symmetry applied.
-    """
-    if mu > nu:
-        mu, nu = nu, mu
-    return _GAMMA_COMPONENT_INDEX[(alpha, mu, nu)]
-
-
-def _format_scaled_source_term(
-    source_expr: str,
-    coefficient: int,
-    cos_power: int,
-    sin_power: int,
-) -> str:
-    """
-    Format one signed polynomial source term for emitted C code.
-
-    :param source_expr: Source array expression, such as `g4dd_ref[4]`.
-    :param coefficient: Integer prefactor after symbolic term collection.
-    :param cos_power: Power of `cos_delta`.
-    :param sin_power: Power of `sin_delta`.
-    :return: C expression for one signed monomial times one source component.
-    """
-    factors: List[str] = []
-    coefficient_abs = abs(coefficient)
-    if coefficient_abs != 1:
-        factors.append(f"{coefficient_abs}.0")
-    factors.extend(["cos_delta"] * cos_power)
-    factors.extend(["sin_delta"] * sin_power)
-    factors.append(source_expr)
-    term = " * ".join(factors)
-    if coefficient < 0:
-        return f"-{term}"
-    return term
-
-
-def _format_linear_combination(terms: List[str]) -> str:
-    """
-    Join signed terms into one readable C linear combination.
-
-    :param terms: Signed monomial terms.
-    :return: One C expression string.
-    :raises ValueError: If `terms` is empty.
-    """
-    if not terms:
-        raise ValueError("Cannot format an empty linear combination.")
-    expression = terms[0]
-    for term in terms[1:]:
-        if term.startswith("-"):
-            expression += f" {term}"
-        else:
-            expression += f" + {term}"
-    return expression
-
-
-def _build_metric_rotation_expression(mu: int, nu: int) -> str:
-    """
-    Build the direct serialized metric rotation expression for one component.
-
-    :param mu: First destination metric index.
-    :param nu: Second destination metric index.
-    :return: C expression for the rotated serialized metric component.
-    """
-    term_map: Dict[Tuple[int, int, int], int] = {}
-    for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-        for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
-            source_idx = _metric_component_index(source_mu, source_nu)
-            term_key = (source_idx, cos_mu + cos_nu, sin_mu + sin_nu)
-            term_map[term_key] = term_map.get(term_key, 0) + sign_mu * sign_nu
-    terms: List[str] = []
-    for source_idx, cos_power, sin_power in sorted(term_map):
-        coefficient = term_map[(source_idx, cos_power, sin_power)]
-        if coefficient == 0:
-            continue
-        terms.append(
-            _format_scaled_source_term(
-                f"g4dd_ref[{source_idx}]",
-                coefficient,
-                cos_power,
-                sin_power,
-            )
-        )
-    return _format_linear_combination(terms)
-
-
-def _build_gamma_rotation_expression(alpha: int, mu: int, nu: int) -> str:
-    """
-    Build the direct serialized Christoffel rotation expression for one component.
-
-    :param alpha: Destination upper Christoffel index.
-    :param mu: First destination lower Christoffel index.
-    :param nu: Second destination lower Christoffel index.
-    :return: C expression for the rotated serialized Christoffel component.
-    """
-    term_map: Dict[Tuple[int, int, int], int] = {}
-    for source_alpha, sign_alpha, cos_alpha, sin_alpha in _rotation_source_terms(alpha):
-        for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-            for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
-                source_idx = _gamma_component_index(source_alpha, source_mu, source_nu)
-                term_key = (
-                    source_idx,
-                    cos_alpha + cos_mu + cos_nu,
-                    sin_alpha + sin_mu + sin_nu,
-                )
-                term_map[term_key] = (
-                    term_map.get(term_key, 0) + sign_alpha * sign_mu * sign_nu
-                )
-    terms: List[str] = []
-    for source_idx, cos_power, sin_power in sorted(term_map):
-        coefficient = term_map[(source_idx, cos_power, sin_power)]
-        if coefficient == 0:
-            continue
-        terms.append(
-            _format_scaled_source_term(
-                f"gamma_ref[{source_idx}]",
-                coefficient,
-                cos_power,
-                sin_power,
-            )
-        )
-    return _format_linear_combination(terms)
-
-
-def _emit_direct_metric_rotation_assignments() -> str:
-    """
-    Emit all direct serialized metric rotation assignments for the C helper.
-
-    :return: Multiline C code assigning every rotated metric component.
-    """
-    return "\n".join(
-        f"  g4dd_rot[{idx}] = {_build_metric_rotation_expression(mu, nu)};"
-        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-    )
-
-
-def _emit_direct_gamma_rotation_assignments() -> str:
-    """
-    Emit all direct serialized Christoffel rotation assignments for the C helper.
-
-    :return: Multiline C code assigning every rotated Christoffel component.
-    """
-    return "\n".join(
-        f"  gamma_rot[{idx}] = {_build_gamma_rotation_expression(alpha, mu, nu)};"
-        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER)
-    )
-
-
 def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     CoordSystem: str,
     enable_simd: bool,
@@ -300,10 +110,13 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     each supplied slice. The companion temporal interpolation helper then
     consumes those per-slice tensors and interpolates them in physical time.
 
-    :param CoordSystem: Coordinate system used by the source dataset.
+    :param CoordSystem: Coordinate system used by the source dataset; must be
+        `"Spherical"` or `"SinhSpherical"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If `CoordSystem` is not a supported dataset-specific
+        value.
 
     Doctests:
     >>> import contextlib
@@ -356,7 +169,15 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES,
     )
 
-    # Ensure required helper headers are copied into the project.
+    # Step 1: Validate high-level code-generation assumptions.
+    if CoordSystem not in ("Spherical", "SinhSpherical"):
+        raise ValueError(
+            "azimuthal_symmetry_spatial_lagrange_interpolation is currently implemented only "
+            "for CoordSystem in ('Spherical', 'SinhSpherical'); "
+            f"found '{CoordSystem}'."
+        )
+
+    # Step 2: Ensure required helper headers are copied into the project.
     if not enable_simd:
         copy_files(
             package="nrpy.helpers",
@@ -379,6 +200,8 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "<stdint.h>",
         "interpolation_lagrange_uniform.h",
     ]
+    # Step 3: Precompute wrapped direct-rotation assignments and use
+    # placeholder replacement so the brace-heavy C templates stay readable.
     direct_metric_assignments = _emit_direct_metric_rotation_assignments()
     direct_gamma_assignments = _emit_direct_gamma_rotation_assignments()
 
@@ -397,7 +220,9 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
  * @param i1_storage Storage-grid x1 index, including ghost zones.
  * @param i2_storage Storage-grid x2 index, including ghost zones.
  * @param[out] point_index Serialized zero-based point-record index.
- * @return Status code indicating whether the storage indices lie inside the payload.
+ * @return `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS` if the storage
+ * indices are inside the full payload, otherwise
+ * `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL`.
  */
 static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(
     const params_struct *restrict params,
@@ -411,9 +236,8 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
 
   if (i0_storage < 0 || i0_storage >= payload_i0_count ||
       i1_storage < 0 || i1_storage >= payload_i1_count ||
-      i2_storage < 0 || i2_storage >= payload_i2_count) {
+      i2_storage < 0 || i2_storage >= payload_i2_count)
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: storage-grid stencil node lay outside the full payload
 
   *point_index =
       (uint64_t)i0_storage +
@@ -433,7 +257,8 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
  *
  * @param weight Weighted 2D Lagrange coefficient for this stencil node.
  * @param[in] tensor_record Serialized payload record beginning at the metric fields.
- * @param[out] tensor_ref Accumulator on the selected common stored phi plane.
+ * @param[in,out] tensor_ref Spatial interpolation accumulator on the
+ * selected common stored phi plane.
  */
 static void azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct(
     const REAL weight,
@@ -444,15 +269,13 @@ static void azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct(
 
   for (int comp = 0;
        comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-       comp++) {
+       comp++)
     tensor_ref[comp] += weight * (REAL)tensor_record[comp];
-  } // END LOOP: for comp over serialized metric payload components
   for (int comp = 0;
        comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
-       comp++) {
+       comp++)
     tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] +=
         weight * (REAL)gamma_record[comp];
-  } // END LOOP: for comp over serialized Christoffel payload components
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct
 
 /**
@@ -511,6 +334,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
                 const double *const *restrict slice_payloads,
                 REAL *restrict g4dd_out,
                 REAL *restrict gamma4udd_out"""
+    # Step 4: Use placeholder replacement for the inverse-map symbol so the
+    # raw C body can keep ordinary braces instead of escaped f-string braces.
     body = r"""
   // Step 1: Bind the trusted parsed context.
   const REAL xCart[3] = {x, y, z};
@@ -594,7 +419,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   for (int u = 0; u < interp_order; u++) {
     const int i0_raw = center_idx[0] + (u - n_interp_ghosts);
     i0_storage_stencil[u] = i0_raw;
-    // Keep the polynomial nodes on the raw extended storage grid.
+    // Keep the polynomial nodes on raw ghost-zone-inclusive storage-grid
+    // indices.
     src_r_stencil[u] =
         (REAL)(params->xxmin0 + (((i0_raw - NGHOSTS) + 0.5) * params->dxx0));
   } // END LOOP: for u over radial stencil nodes
@@ -632,7 +458,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
     const double *restrict slice_payload = slice_payloads[which_slice];
     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT] = {0};
 
-    // Step 5.a: Read, basis-align, and accumulate the weighted stencil nodes for this slice.
+    // Step 5.a: Read ghost-zone-aware payload records and directly accumulate
+    // the weighted stencil nodes for this slice.
     for (int v = 0; v < interp_order; v++) {
       for (int u = 0; u < interp_order; u++) {
         const double *restrict tensor_record =
@@ -688,7 +515,11 @@ reference plane to the target azimuth.
 @param[in] slice_payloads Mapped slice payload pointers.
 @param[out] g4dd_out Flat metric output.
 @param[out] gamma4udd_out Flat Christoffel output.
-@return Status code indicating success or the interpolation failure reason.
+@return `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS` on success,
+`AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET` for invalid target
+coordinates, or
+`AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL` for
+unsupported stencil or payload geometry.
 
 @note Each `slice_payloads` entry must point to the beginning of one mapped
 ghost-zone-inclusive 3D-grid payload and remain valid for the duration of this
@@ -710,6 +541,209 @@ radial and polar Lagrange nodes is `2*n+1`.
         body=body,
     )
     return pcg.NRPyEnv()
+
+
+# These Python-side helpers pre-expand wrapped tensor-rotation assignments so
+# the emitted C stays reviewable without changing the formulas.
+
+
+def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
+    """
+    Return sparse source-index coefficients for one rotated Cartesian index.
+
+    Each returned tuple is `(source_index, sign, cos_power, sin_power)`, using
+    the active z-axis rotation convention emitted into the generated C helper.
+
+    :param output_index: Destination tensor index in `(t, x, y, z)` ordering.
+    :return: Sparse source-index contributions for the requested output index.
+    :raises ValueError: If `output_index` falls outside the 4D tensor range.
+    """
+    if output_index == 0:
+        return [(0, 1, 0, 0)]
+    if output_index == 1:
+        return [(1, 1, 1, 0), (2, -1, 0, 1)]
+    if output_index == 2:
+        return [(1, 1, 0, 1), (2, 1, 1, 0)]
+    if output_index == 3:
+        return [(3, 1, 0, 0)]
+    raise ValueError(f"Unsupported rotated tensor index: {output_index}")
+
+
+def _metric_component_index(mu: int, nu: int) -> int:
+    """
+    Return the serialized upper-triangular metric component index.
+
+    :param mu: First metric index.
+    :param nu: Second metric index.
+    :return: Serialized metric component index with symmetry applied.
+    """
+    if mu > nu:
+        mu, nu = nu, mu
+    return _METRIC_COMPONENT_INDEX[(mu, nu)]
+
+
+def _gamma_component_index(alpha: int, mu: int, nu: int) -> int:
+    """
+    Return the serialized Christoffel component index.
+
+    The lower Christoffel indices are symmetric in the serialized layout.
+
+    :param alpha: Upper Christoffel index.
+    :param mu: First lower Christoffel index.
+    :param nu: Second lower Christoffel index.
+    :return: Serialized Christoffel component index with lower symmetry applied.
+    """
+    if mu > nu:
+        mu, nu = nu, mu
+    return _GAMMA_COMPONENT_INDEX[(alpha, mu, nu)]
+
+
+def _format_scaled_source_term(
+    source_expr: str,
+    coefficient: int,
+    cos_power: int,
+    sin_power: int,
+) -> str:
+    """
+    Format one signed polynomial source term for emitted C code.
+
+    :param source_expr: Source array expression, such as `g4dd_ref[4]`.
+    :param coefficient: Integer prefactor after symbolic term collection.
+    :param cos_power: Power of `cos_delta`.
+    :param sin_power: Power of `sin_delta`.
+    :return: C expression for one signed monomial times one source component.
+    """
+    factors: List[str] = []
+    coefficient_abs = abs(coefficient)
+    if coefficient_abs != 1:
+        factors.append(f"{coefficient_abs}.0")
+    factors.extend(["cos_delta"] * cos_power)
+    factors.extend(["sin_delta"] * sin_power)
+    factors.append(source_expr)
+    term = " * ".join(factors)
+    if coefficient < 0:
+        return f"-{term}"
+    return term
+
+
+def _emit_wrapped_assignment(lhs: str, terms: List[str]) -> str:
+    """
+    Emit one wrapped C assignment from signed monomial terms.
+
+    :param lhs: Left-hand-side C lvalue.
+    :param terms: Signed monomial terms in emitted order.
+    :return: One wrapped C assignment string.
+    :raises ValueError: If `terms` is empty.
+    """
+    if not terms:
+        raise ValueError("Cannot emit an assignment from an empty term list.")
+    lines = [f"  {lhs} = {terms[0]}"]
+    for term in terms[1:]:
+        if term.startswith("-"):
+            lines.append(f"      - {term[1:]}")
+        else:
+            lines.append(f"      + {term}")
+    lines[-1] += ";"
+    return "\n".join(lines)
+
+
+def _build_metric_rotation_terms(mu: int, nu: int) -> List[str]:
+    """
+    Build signed monomial terms for one rotated serialized metric component.
+
+    :param mu: First destination metric index.
+    :param nu: Second destination metric index.
+    :return: Signed monomial terms for the rotated serialized metric component.
+    """
+    term_map: Dict[Tuple[int, int, int], int] = {}
+    for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
+        for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
+            source_idx = _metric_component_index(source_mu, source_nu)
+            term_key = (source_idx, cos_mu + cos_nu, sin_mu + sin_nu)
+            term_map[term_key] = term_map.get(term_key, 0) + sign_mu * sign_nu
+    terms: List[str] = []
+    for source_idx, cos_power, sin_power in sorted(term_map):
+        coefficient = term_map[(source_idx, cos_power, sin_power)]
+        if coefficient == 0:
+            continue
+        terms.append(
+            _format_scaled_source_term(
+                f"g4dd_ref[{source_idx}]",
+                coefficient,
+                cos_power,
+                sin_power,
+            )
+        )
+    return terms
+
+
+def _build_gamma_rotation_terms(alpha: int, mu: int, nu: int) -> List[str]:
+    """
+    Build signed monomial terms for one rotated serialized Christoffel component.
+
+    :param alpha: Destination upper Christoffel index.
+    :param mu: First destination lower Christoffel index.
+    :param nu: Second destination lower Christoffel index.
+    :return: Signed monomial terms for the rotated serialized Christoffel
+        component.
+    """
+    term_map: Dict[Tuple[int, int, int], int] = {}
+    for source_alpha, sign_alpha, cos_alpha, sin_alpha in _rotation_source_terms(alpha):
+        for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
+            for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
+                source_idx = _gamma_component_index(source_alpha, source_mu, source_nu)
+                term_key = (
+                    source_idx,
+                    cos_alpha + cos_mu + cos_nu,
+                    sin_alpha + sin_mu + sin_nu,
+                )
+                term_map[term_key] = (
+                    term_map.get(term_key, 0) + sign_alpha * sign_mu * sign_nu
+                )
+    terms: List[str] = []
+    for source_idx, cos_power, sin_power in sorted(term_map):
+        coefficient = term_map[(source_idx, cos_power, sin_power)]
+        if coefficient == 0:
+            continue
+        terms.append(
+            _format_scaled_source_term(
+                f"gamma_ref[{source_idx}]",
+                coefficient,
+                cos_power,
+                sin_power,
+            )
+        )
+    return terms
+
+
+def _emit_direct_metric_rotation_assignments() -> str:
+    """
+    Emit all direct serialized metric rotation assignments for the C helper.
+
+    :return: Multiline C code assigning every rotated metric component.
+    """
+    return "\n".join(
+        _emit_wrapped_assignment(
+            f"g4dd_rot[{idx}]",
+            _build_metric_rotation_terms(mu, nu),
+        )
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+
+
+def _emit_direct_gamma_rotation_assignments() -> str:
+    """
+    Emit all direct serialized Christoffel rotation assignments for the C helper.
+
+    :return: Multiline C code assigning every rotated Christoffel component.
+    """
+    return "\n".join(
+        _emit_wrapped_assignment(
+            f"gamma_rot[{idx}]",
+            _build_gamma_rotation_terms(alpha, mu, nu),
+        )
+        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER)
+    )
 
 
 if __name__ == "__main__":

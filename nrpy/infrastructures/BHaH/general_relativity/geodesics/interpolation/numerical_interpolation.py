@@ -34,6 +34,12 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimut
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
     register_CFunction_temporal_lagrange_interpolation,
 )
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
+    time_window_manager_numerical,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
+    time_slot_manager_helpers,
+)
 
 
 def register_CFunction_numerical_interpolation(
@@ -50,10 +56,12 @@ def register_CFunction_numerical_interpolation(
     slot-based window and then interpolates every ray in one chunk against that
     shared mapped data.
 
-    :param CoordSystem: Coordinate system used by the mapped numerical dataset.
+    :param CoordSystem: Coordinate system used by the mapped numerical dataset;
+        must be `"Spherical"` or `"SinhSpherical"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If `CoordSystem` is not supported.
 
     Doctests:
     >>> import contextlib
@@ -83,19 +91,12 @@ def register_CFunction_numerical_interpolation(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    if CoordSystem != "Spherical":
-        # raise ValueError(
-        print(
-            "numerical_interpolation currently supports only CoordSystem='Spherical'; "
+    if CoordSystem not in ("Spherical", "SinhSpherical"):
+        raise ValueError(
+            "numerical_interpolation currently supports only CoordSystem in "
+            "('Spherical', 'SinhSpherical'); "
             f"found '{CoordSystem}'."
         )
-
-    from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (  # pylint: disable=import-outside-toplevel
-        time_window_manager_numerical,
-    )
-    from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
-        time_slot_manager_helpers,
-    )
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
@@ -219,9 +220,9 @@ independently ray-by-ray.
     REAL g4dd_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
     REAL gamma4udd_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
 
-      // Step 1: Recover the mapped temporal stencil and exact physical slice
-      // times for this photon from the slot-level numerical window shared by
-      // the whole chunk.
+    // Step 1: Recover the mapped temporal stencil and exact physical slice
+    // times for this photon from the slot-level numerical window shared by
+    // the whole chunk.
     const int window_status = time_window_manager_numerical_stencil_for_time(
         numerical_window, (double)t, temporal_half_width, slice_indices,
         slice_times, slice_payloads);

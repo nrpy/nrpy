@@ -1,5 +1,5 @@
 """
-Register a C function that exports Cartesian raytracing data during evolution.
+Register a C function that exports Cartesian-output-basis raytracing data.
 
 This module generates a BHaH diagnostics helper that, on each scheduled output
 step, recomputes same-slice Ricci/RHS data, evaluates the Cartesian covariant
@@ -57,12 +57,13 @@ def register_CFunction_output_raytracing_data(
     enable_RbarDD_gridfunctions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Construct and register the Cartesian raytracing binary exporter.
+    Construct and register the Cartesian-output-basis raytracing binary exporter.
 
     The generated C helper writes one binary file per diagnostics output with
     filename pattern ``./raytracing_data_t########.bin``. Each file contains
     a fixed-size self-describing header, the physical simulation time, and one
-    point record per exported logical-grid point. Each point record stores:
+    point record per full logical-grid point, including ghost zones. Each
+    point record stores:
 
     1. Cartesian coordinates ``(x, y, z)``.
     2. The 10 unique covariant four-metric components ``g4DD`` in a fixed
@@ -70,16 +71,17 @@ def register_CFunction_output_raytracing_data(
     3. The 40 unique four-Christoffel components ``Gamma4UDD`` with the lower
        pair serialized in upper-triangular order.
 
-    The exporter still evaluates only interior points. This keeps the
-    finite-difference derivative path consistent with the current BHaH
-    infrastructure and avoids writing connection data at points where the
-    centered stencil would step beyond the available storage. The exporter
-    computes Cartesian coordinates on the full logical grid, then fills only
-    the tensor fields in ghost-zone payload records by mirroring the existing
-    BHaH outer-extrapolation ordering and then copying inner-boundary mappings
-    from ``bcstruct``. The payload-local ordering remains zero-based storage
-    order, while the serialized payload window now exposes the corresponding
-    logical-grid half-open interval ``[-NGHOSTS, Nxx + NGHOSTS)``.
+    The exporter evaluates Cartesian tensor expressions only on interior
+    points. This keeps the finite-difference derivative path consistent with
+    the current BHaH infrastructure and avoids writing connection data at
+    points where the centered stencil would step beyond the available
+    storage. Cartesian coordinates are evaluated on the full logical grid.
+    Ghost-zone tensor payload records are then filled using the existing BHaH
+    boundary ordering: pure outer ghost zones are extrapolated first, and
+    inner-boundary records are copied from their mapped source records in
+    ``bcstruct``. The payload-local ordering remains zero-based storage order,
+    while the serialized payload window exposes the corresponding logical-grid
+    half-open interval ``[-NGHOSTS, Nxx + NGHOSTS)``.
 
     :param CoordSystem: Coordinate system used by the evolved BSSN state.
     :param enable_rfm_precompute: Whether the generated project uses
@@ -243,7 +245,7 @@ def register_CFunction_output_raytracing_data(
     )
     cf_convention = cast(str, par.parval_from_str("EvolvedConformalFactor_cf"))
 
-    # Step 1: Validate every fixed-width string before generating the C exporter.
+    # Step 5.a: Validate every fixed-width string before generating the C exporter.
     _validate_fixed_width_string(header_label, header_label_bytes, "header_label")
     _validate_fixed_width_string(format_name, format_name_bytes, "format_name")
     _validate_fixed_width_string(target_basis_name, basis_name_bytes, "target_basis")
@@ -333,7 +335,7 @@ def register_CFunction_output_raytracing_data(
         "BHaH_function_prototypes.h",
     ]
     desc = """
-Export final Cartesian metric and Christoffel data for raytracing.
+Export final Cartesian-basis metric and Christoffel data for raytracing.
 
 This function writes at most one binary file per diagnostics output to:
 
@@ -366,11 +368,11 @@ function. The exporter evaluates Cartesian coordinates on the full logical
 grid and evaluates the Cartesian tensors only on interior logical-grid points.
 It then fills pure outer ghost-zone tensor fields using the existing BHaH
 2nd-order extrapolation ordering and copies inner-boundary ghost-zone tensor
-fields from their mapped source records in ``bcstruct``. Point records are
+fields from their mapped source records in bcstruct. Point records are
 first assembled into a deterministic in-memory payload buffer using the
 documented logical-grid ordering, then written to disk after the ghost-fill
 phase completes. The serialized payload metadata exposes the logical-grid
-half-open interval ``[-NGHOSTS, Nxx + NGHOSTS)`` while preserving the
+half-open interval [-NGHOSTS, Nxx + NGHOSTS) while preserving the
 underlying zero-based storage order.
 
 @param[in] commondata  Global simulation metadata used in output naming and headers
@@ -672,9 +674,9 @@ static void raytracing_data_write_fixed_length_string_or_abort(
 /**
  * Map logical-grid indices to the payload-local point-record order.
  *
- * @param i0  Logical x0 index including ghost zones.
- * @param i1  Logical x1 index including ghost zones.
- * @param i2  Logical x2 index including ghost zones.
+ * @param i0  Signed logical x0 index in the payload window.
+ * @param i1  Signed logical x1 index in the payload window.
+ * @param i2  Signed logical x2 index in the payload window.
  * @param payload_i0_start  Logical x0 start index of the half-open payload window.
  * @param payload_i1_start  Logical x1 start index of the half-open payload window.
  * @param payload_i2_start  Logical x2 start index of the half-open payload window.
@@ -1038,7 +1040,10 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   // Step 2: Write the physical simulation time.
   raytracing_data_write_f64_or_abort(fp, (double)commondata->time, "simulation_time");
 
-  // Step 3: Evaluate Cartesian coordinates on the full logical grid.
+  // Step 3: Evaluate Cartesian coordinates on the full logical grid. This
+  //         loop is handwritten instead of generated by simple_loop()
+  //         because it covers the full ghost-aware storage window and
+  //         initializes payload coordinates before the interior tensor loop.
   for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
     for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
       for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
@@ -1059,12 +1064,12 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     } // END LOOP: for i1 over full logical-grid x1 indices
   } // END LOOP: for i2 over full logical-grid x2 indices
 
-  // Step 4: Evaluate Cartesian metric and Christoffels into the interior payload records.
+  // Step 4: Evaluate Cartesian metric and Christoffels into interior tensor payload records.
 """
     body += loop
     body += r"""
 
-  // Step 5: Fill pure outer and inner ghost-zone tensor fields in payload space.
+  // Step 5: Fill tensor fields for pure outer and inner ghost-zone payload records.
   //         Inner-boundary source records may map to outer-boundary records, so
   //         this phase preserves the canonical BHaH outer-then-inner ordering.
   const bc_info_struct *restrict bc_info = &bcstruct->bc_info;
@@ -1084,16 +1089,16 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
         const short i0 = pure_outer_bc_array[idx2d].i0;
         const short i1 = pure_outer_bc_array[idx2d].i1;
         const short i2 = pure_outer_bc_array[idx2d].i2;
-        const short FACEX0 = pure_outer_bc_array[idx2d].FACEX0;
-        const short FACEX1 = pure_outer_bc_array[idx2d].FACEX1;
-        const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
+        const short face_x0 = pure_outer_bc_array[idx2d].FACEX0;
+        const short face_x1 = pure_outer_bc_array[idx2d].FACEX1;
+        const short face_x2 = pure_outer_bc_array[idx2d].FACEX2;
         const int idx_offset0 = IDX3(i0, i1, i2);
         const int idx_offset1 =
-            IDX3(i0 + FACEX0, i1 + FACEX1, i2 + FACEX2);
+            IDX3(i0 + face_x0, i1 + face_x1, i2 + face_x2);
         const int idx_offset2 =
-            IDX3(i0 + 2 * FACEX0, i1 + 2 * FACEX1, i2 + 2 * FACEX2);
+            IDX3(i0 + 2 * face_x0, i1 + 2 * face_x1, i2 + 2 * face_x2);
         const int idx_offset3 =
-            IDX3(i0 + 3 * FACEX0, i1 + 3 * FACEX1, i2 + 3 * FACEX2);
+            IDX3(i0 + 3 * face_x0, i1 + 3 * face_x1, i2 + 3 * face_x2);
         const size_t base_offset0 =
             (size_t)idx_offset0 * (size_t)point_record_real_count;
         const size_t base_offset1 =

@@ -41,6 +41,14 @@ GEOMETRY_MAGIC = b"NRPYRTGEOMV1\0\0\0\0"
 COMBINED_FORMAT_VERSION = 1
 GEOMETRY_FORMAT_VERSION = 1
 ENDIAN_TAG = 0x01020304
+# Accept the old source-format-version value when inspecting combined files so
+# older containers remain readable after the field was repurposed as reserved.
+RESERVED_SOURCE_U32 = 0
+LEGACY_SOURCE_FORMAT_VERSION_V1 = 1
+ACCEPTED_RESERVED_SOURCE_U32_VALUES = (
+    RESERVED_SOURCE_U32,
+    LEGACY_SOURCE_FORMAT_VERSION_V1,
+)
 
 FIXED_HEADER_BYTES = 4096
 DEFAULT_ALIGNMENT = 4096
@@ -641,7 +649,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--phi-samples",
         default=None,
-        help="Comma-separated stored phi sample values; if omitted, derive them from the input native grid.",
+        help=(
+            "Comma-separated stored phi sample values; if omitted, "
+            "derive them from the input native grid."
+        ),
     )
     parser.add_argument(
         "--requires-axisymmetry-rotation",
@@ -946,11 +957,20 @@ def validate_input_slice_file_internal(info: InputSliceInfo) -> None:
     if info.payload_includes_ghost_zones != 1:
         raise RuntimeError(f"{info.path}: payload_includes_ghost_zones must be 1.")
     if info.record_component_names != RECORD_COMPONENT_NAMES:
-        raise RuntimeError(f"{info.path}: record component names do not match .")
+        raise RuntimeError(
+            f"{info.path}: record component names do not match the "
+            "input-slice schema."
+        )
     if info.metric_component_names != METRIC_COMPONENT_NAMES:
-        raise RuntimeError(f"{info.path}: metric component names do not match .")
+        raise RuntimeError(
+            f"{info.path}: metric component names do not match the "
+            "input-slice schema."
+        )
     if info.christoffel_component_names != CHRISTOFFEL_COMPONENT_NAMES:
-        raise RuntimeError(f"{info.path}: Christoffel component names do not match .")
+        raise RuntimeError(
+            f"{info.path}: Christoffel component names do not match the "
+            "input-slice schema."
+        )
     if info.output_index < 0:
         raise RuntimeError(f"{info.path}: output_index must be nonnegative.")
     if info.point_record_count <= 0:
@@ -1008,7 +1028,7 @@ def validate_input_slice_file_internal(info: InputSliceInfo) -> None:
             f"Nxx + 2 * NGHOSTS = {expected_nxx_plus_2nghosts}."
         )
     expected_payload_i_start, expected_payload_i_end = (
-        get_expected_input_payload_window(info.Nxx, info.NGHOSTS)
+        _get_expected_input_payload_window(info.Nxx, info.NGHOSTS)
     )
     legacy_payload_i_start = (0, 0, 0)
     legacy_payload_i_end = info.Nxx_plus_2NGHOSTS
@@ -1063,7 +1083,7 @@ def validate_input_slice_file_internal(info: InputSliceInfo) -> None:
         raise RuntimeError(f"{info.path}: simulation_time must be finite.")
 
 
-def get_expected_input_payload_window(
+def _get_expected_input_payload_window(
     Nxx: Tuple[int, int, int], NGHOSTS: int
 ) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
     """
@@ -1120,6 +1140,10 @@ def validate_input_slice_compatible(
         "metric_component_names",
         "christoffel_component_names",
     )
+    # payload_i_start/end are intentionally not compared verbatim here. Each
+    # slice has already been validated to describe the same full ghost-aware
+    # extent, and accepted legacy zero-based windows are normalized to the
+    # signed logical-grid window in the combined container metadata/header.
     for field_name in comparable_fields:
         if getattr(base, field_name) != getattr(other, field_name):
             raise RuntimeError(
@@ -1202,7 +1226,7 @@ def determine_axisymmetry_metadata(
     expected_phi_samples: Tuple[float, ...] = _native_phi_samples(base)
     if len(expected_phi_samples) != 2:
         raise ValueError(
-            "Axisymmetry metadata currently requires the input payload to store "
+            "Axisymmetry metadata currently requires the native interior grid to store "
             f"exactly two native phi planes; found {len(expected_phi_samples)}."
         )
 
@@ -1220,7 +1244,7 @@ def determine_axisymmetry_metadata(
     if len(set(phi_samples)) != len(phi_samples):
         raise ValueError("Phi samples must be unique.")
     if len(phi_samples) != len(expected_phi_samples):
-        raise ValueError("Phi sample count does not match the input payload.")
+        raise ValueError("Phi sample count does not match the native interior grid.")
     for got_phi, expected_phi in zip(phi_samples, expected_phi_samples):
         if not math.isclose(got_phi, expected_phi, rel_tol=0.0, abs_tol=1.0e-14):
             raise ValueError("Phi samples do not match the input native grid.")
@@ -1578,7 +1602,7 @@ def build_metadata_json(
     """
     # Step 1: Emit a verbose, deterministic schema description for readers and debugging.
     normalized_payload_i_start, normalized_payload_i_end = (
-        get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
+        _get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
     )
     metadata = {
         "combined_format_name": "NRPY raytracing stacked time-slice container",
@@ -1700,7 +1724,10 @@ def build_metadata_json(
             ),
             "payload_window_convention": (
                 "payload_i_start/payload_i_end define a half-open logical-grid "
-                "window whose low-side ghost zones use negative indices."
+                "window whose low-side ghost zones use negative indices. "
+                "Legacy zero-based input payload windows may be accepted for "
+                "compatibility, but the combined container records the "
+                "normalized signed logical-grid window."
             ),
             "record_offset_formula": (
                 "record_offset = slice_table[s].payload_offset + "
@@ -1819,7 +1846,7 @@ def pack_fixed_header(
     """
     # Step 1: Pack only the hot-path numeric fields needed for direct offset math.
     normalized_payload_i_start, normalized_payload_i_end = (
-        get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
+        _get_expected_input_payload_window(base.Nxx, base.NGHOSTS)
     )
     header = bytearray()
     header.extend(COMBINED_MAGIC)
@@ -1828,7 +1855,9 @@ def pack_fixed_header(
             "<I", _require_u32(COMBINED_FORMAT_VERSION, "combined_format_version")
         )
     )
-    header.extend(struct.pack("<I", 0))
+    header.extend(
+        struct.pack("<I", _require_u32(RESERVED_SOURCE_U32, "reserved_source_u32"))
+    )
     header.extend(struct.pack("<I", _require_u32(ENDIAN_TAG, "endian_tag")))
     header.extend(struct.pack("<I", _require_u32(HEADER_FLAGS_V1, "header_flags")))
     header.extend(
@@ -2359,7 +2388,7 @@ def inspect_combined_file(path: Path) -> None:
             raise RuntimeError(f"{path}: combined magic was invalid.")
         if header.combined_format_version != COMBINED_FORMAT_VERSION:
             raise RuntimeError(f"{path}: unsupported combined_format_version.")
-        if header.reserved_source_u32 not in (0, 1):
+        if header.reserved_source_u32 not in ACCEPTED_RESERVED_SOURCE_U32_VALUES:
             raise RuntimeError(f"{path}: reserved source field was invalid.")
         if header.endian_tag != ENDIAN_TAG:
             raise RuntimeError(f"{path}: endian_tag was invalid.")

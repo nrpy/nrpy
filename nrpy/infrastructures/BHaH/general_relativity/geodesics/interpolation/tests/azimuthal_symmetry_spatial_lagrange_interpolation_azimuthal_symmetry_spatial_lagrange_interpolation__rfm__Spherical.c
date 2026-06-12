@@ -17,7 +17,9 @@
  * @param i1_storage Storage-grid x1 index, including ghost zones.
  * @param i2_storage Storage-grid x2 index, including ghost zones.
  * @param[out] point_index Serialized zero-based point-record index.
- * @return Status code indicating whether the storage indices lie inside the payload.
+ * @return `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS` if the storage
+ * indices are inside the full payload, otherwise
+ * `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL`.
  */
 static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices(const params_struct *restrict params, const int i0_storage,
                                                                                      const int i1_storage, const int i2_storage,
@@ -27,9 +29,8 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
   const int payload_i2_count = params->Nxx_plus_2NGHOSTS2;
 
   if (i0_storage < 0 || i0_storage >= payload_i0_count || i1_storage < 0 || i1_storage >= payload_i1_count || i2_storage < 0 ||
-      i2_storage >= payload_i2_count) {
+      i2_storage >= payload_i2_count)
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-  } // END IF: storage-grid stencil node lay outside the full payload
 
   *point_index = (uint64_t)i0_storage + (uint64_t)payload_i0_count * ((uint64_t)i1_storage + (uint64_t)payload_i1_count * (uint64_t)i2_storage);
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
@@ -45,19 +46,18 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
  *
  * @param weight Weighted 2D Lagrange coefficient for this stencil node.
  * @param[in] tensor_record Serialized payload record beginning at the metric fields.
- * @param[out] tensor_ref Accumulator on the selected common stored phi plane.
+ * @param[in,out] tensor_ref Spatial interpolation accumulator on the
+ * selected common stored phi plane.
  */
 static void
 azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct(const REAL weight, const double *restrict tensor_record,
                                                                     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT]) {
   const double *restrict gamma_record = tensor_record + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
 
-  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++) {
+  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT; comp++)
     tensor_ref[comp] += weight * (REAL)tensor_record[comp];
-  } // END LOOP: for comp over serialized metric payload components
-  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++) {
+  for (int comp = 0; comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT; comp++)
     tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp] += weight * (REAL)gamma_record[comp];
-  } // END LOOP: for comp over serialized Christoffel payload components
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_tensor_record_direct
 
 /**
@@ -200,7 +200,11 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(const REAL delta_
  * @param[in] slice_payloads Mapped slice payload pointers.
  * @param[out] g4dd_out Flat metric output.
  * @param[out] gamma4udd_out Flat Christoffel output.
- * @return Status code indicating success or the interpolation failure reason.
+ * @return `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS` on success,
+ * `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET` for invalid target
+ * coordinates, or
+ * `AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL` for
+ * unsupported stencil or payload geometry.
  *
  * @note Each `slice_payloads` entry must point to the beginning of one mapped
  * ghost-zone-inclusive 3D-grid payload and remain valid for the duration of this
@@ -290,7 +294,8 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   for (int u = 0; u < interp_order; u++) {
     const int i0_raw = center_idx[0] + (u - n_interp_ghosts);
     i0_storage_stencil[u] = i0_raw;
-    // Keep the polynomial nodes on the raw extended storage grid.
+    // Keep the polynomial nodes on raw ghost-zone-inclusive storage-grid
+    // indices.
     src_r_stencil[u] = (REAL)(params->xxmin0 + (((i0_raw - NGHOSTS) + 0.5) * params->dxx0));
   } // END LOOP: for u over radial stencil nodes
   for (int v = 0; v < interp_order; v++) {
@@ -320,7 +325,8 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
     const double *restrict slice_payload = slice_payloads[which_slice];
     REAL tensor_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT] = {0};
 
-    // Step 5.a: Read, basis-align, and accumulate the weighted stencil nodes for this slice.
+    // Step 5.a: Read ghost-zone-aware payload records and directly accumulate
+    // the weighted stencil nodes for this slice.
     for (int v = 0; v < interp_order; v++) {
       for (int u = 0; u < interp_order; u++) {
         const double *restrict tensor_record =

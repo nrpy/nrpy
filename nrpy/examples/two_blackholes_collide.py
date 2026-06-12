@@ -6,17 +6,22 @@ this example sets up a complete C code for solving the GR field
   equations in curvilinear coordinates on a cell-centered grid,
   using a reference metric approach.
 
+Optionally, this script can generate metric and Christoffel spacetime
+data for raytracing workflows and write a helper script that combines
+raytracing time slices.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
 #########################################################
-# STEP 1: Import needed Python modules, then set codegen
+# Step 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import argparse
 import os
 import shutil
 import subprocess
+from typing import Dict
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -24,7 +29,10 @@ from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 
 parser = argparse.ArgumentParser(
-    description="NRPyElliptic Solver for Conformally Flat BBH initial data"
+    description=(
+        "Generate a BHaH two-black-hole collision example with optional "
+        "raytracing spacetime outputs."
+    )
 )
 parser.add_argument(
     "--cuda",
@@ -47,7 +55,7 @@ parser.add_argument(
         "Enable metric and Christoffel raytracing spacetime outputs and set "
         "t_final, grid_physical_size, and diagnostics_output_every, e.g. "
         "--raytracing-spacetime 10.0 7.5 0.25. Currently supported only for "
-        "OpenMP builds."
+        "OpenMP builds with double precision."
     ),
 )
 parser.add_argument(
@@ -55,9 +63,9 @@ parser.add_argument(
     type=str,
     default=None,
     help=(
-        "Override the code-generation coordinate system used for raytracing "
-        "data outputs, e.g. Spherical or SinhSpherical. Used only with "
-        "--raytracing-spacetime."
+        "Override the generated project's coordinate system when "
+        "--raytracing-spacetime is enabled, e.g. Spherical or "
+        "SinhSpherical."
     ),
 )
 parser.add_argument(
@@ -68,9 +76,10 @@ parser.add_argument(
     default=None,
     metavar=("NXX0", "NXX1", "NXX2"),
     help=(
-        "Override the base Nxx used for the selected raytracing coordinate "
-        "system, e.g. --raytracing-Nxx 124 412 2. Used only with "
-        "--raytracing-spacetime."
+        "Set the required base Nxx for the selected generated-project "
+        "coordinate system, e.g. --raytracing-Nxx 124 412 2. Required with "
+        "--raytracing-spacetime. The raytracing data pipeline currently "
+        "requires NXX2 == 2."
     ),
 )
 parser.add_argument(
@@ -78,9 +87,9 @@ parser.add_argument(
     type=float,
     default=None,
     help=(
-        "Override the SinhSpherical SINHW value used for raytracing data "
-        "outputs. Used only with --raytracing-spacetime and "
-        "--raytracing-coord-system SinhSpherical."
+        "Override the SinhSpherical SINHW value used by the generated "
+        "project. Defaults to 0.4. Used only with --raytracing-spacetime "
+        "and --raytracing-coord-system SinhSpherical."
     ),
 )
 parser.add_argument(
@@ -90,22 +99,24 @@ parser.add_argument(
     default=None,
     metavar=("Z_1", "Z_2", "M_1", "M_2"),
     help=(
-        "Override the black hole z positions and masses, e.g. "
+        "Override the generated project's black-hole z positions and masses, "
+        "e.g. "
         "--raytracing-bhs 0.5 -0.5 0.5 0.5."
     ),
 )
 args = parser.parse_args()
 
-# Code-generation-time parameters:
+# Step 1.a: Validate command-line inputs and select build settings.
 fp_type = args.floating_point_precision.lower()
-# Default to openmp; override with cuda if --cuda is set
+# Default to OpenMP; override with CUDA if --cuda is set.
 parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
     raise ValueError(
         f"Invalid parallelization strategy: {parallelization}. "
         "Choose 'openmp' or 'cuda'."
     )
-# Raytracing data output is enabled only when --raytracing-spacetime is supplied.
+# Raytracing spacetime output requires OpenMP, double precision, and
+# consistent raytracing-specific option combinations.
 enable_raytracing_data_output = args.raytracing_spacetime is not None
 
 if fp_type not in ("float", "double"):
@@ -131,7 +142,7 @@ par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
 
-# Code-generation-time parameters:
+# Step 1.b: Set code-generation-time parameters.
 project_name = "two_blackholes_collide"
 CoordSystem = (
     args.raytracing_coord_system
@@ -175,7 +186,7 @@ Nxx_dict = {
 }
 if CoordSystem not in Nxx_dict:
     raise ValueError(
-        f"Unsupported raytracing coordinate system '{CoordSystem}'. "
+        f"Unsupported coordinate system '{CoordSystem}'. "
         f"Choose one of {sorted(Nxx_dict)}."
     )
 if enable_raytracing_data_output:
@@ -189,7 +200,7 @@ if enable_raytracing_data_output:
     if any(nxx_value <= 0 for nxx_value in nxx_override):
         raise ValueError("--raytracing-Nxx values must all be positive.")
     if nxx_override[2] != 2:
-        raise ValueError("The numerical photon pipeline currently requires NXX2 == 2.")
+        raise ValueError("The raytracing data pipeline currently requires NXX2 == 2.")
     Nxx_dict[CoordSystem] = nxx_override
 sinh_width = None
 if CoordSystem == "SinhSpherical":
@@ -204,7 +215,8 @@ elif args.raytracing_sinhw is not None:
 if args.raytracing_bhs is None:
     default_BH1_z_posn = +0.5
     default_BH2_z_posn = -0.5
-    default_BH1_mass = default_BH2_mass = 0.5
+    default_BH1_mass = 0.5
+    default_BH2_mass = 0.5
 else:
     default_BH1_z_posn = args.raytracing_bhs[0]
     default_BH2_z_posn = args.raytracing_bhs[1]
@@ -214,7 +226,7 @@ else:
         raise ValueError("--raytracing-bhs masses M_1 and M_2 must be positive.")
 # Fisheye parameter defaults derived from grid_physical_size when a
 # GeneralRFM_fisheyeN* coordinate system is selected.
-fisheye_param_defaults: dict[str, float] = {}
+fisheye_param_defaults: Dict[str, float] = {}
 if num_fisheye_transitions == 1:
     fisheye_param_defaults = {
         "fisheye_phys_a0": 1.0,
@@ -239,8 +251,10 @@ fd_order = 4
 radiation_BC_fd_order = 4
 separate_Ricci_and_BSSN_RHS = True
 enable_parallel_codegen = True
-enable_rfm_precompute = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
-enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no longer supporting disabled
+# Disabled RFM precomputation is no longer supported.
+enable_rfm_precompute = True
+# Disabled intrinsics are no longer supported.
+enable_intrinsics = True
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
@@ -273,7 +287,7 @@ par.set_parval_from_str("fd_order", fd_order)
 par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 
 #########################################################
-# STEP 2: Declare core C functions & register each to
+# Step 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 if enable_bhahaha:
     try:
@@ -438,12 +452,13 @@ BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
-# STEP 3: Generate header files, register C functions and
+# Step 3: Generate header files, register C functions and
 #         command line parameters, set up boundary conditions,
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
+    assert sinh_width is not None
     par.adjust_CodeParam_default("SINHW", sinh_width)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
@@ -509,7 +524,7 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 
-# Set griddata struct used for calculations to griddata_device for certain parallelizations
+# Use griddata_device for calculations under parallelizations that require it.
 compute_griddata = "griddata_device" if parallelization == "cuda" else "griddata"
 post_params_struct_set_to_default = ""
 if num_fisheye_transitions is not None:
@@ -556,36 +571,59 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
 )
 
 if enable_raytracing_data_output:
+    # Copy the raytracing time-slice combiner into the generated project.
     copy_files(
         package="nrpy.infrastructures.BHaH.diagnostics",
         filenames_list=["combine_raytracing_time_slices.py"],
         project_dir=project_dir,
         subdirectory="",
     )
+
+    # Build a reproducible combined-output filename from raytracing parameters.
+    def _format_output_name_value(value: float) -> str:
+        return str(value).replace("-", "neg").replace(".", "p")
+
+    t_final_name = _format_output_name_value(t_final)
+    grid_physical_size_name = _format_output_name_value(grid_physical_size)
+    diagnostics_output_every_name = _format_output_name_value(diagnostics_output_every)
+    bh1_z_name = _format_output_name_value(default_BH1_z_posn)
+    bh2_z_name = _format_output_name_value(default_BH2_z_posn)
+    bh1_mass_name = _format_output_name_value(default_BH1_mass)
+    bh2_mass_name = _format_output_name_value(default_BH2_mass)
+    nxx0, nxx1, nxx2 = Nxx_dict[CoordSystem]
+
     sinhw_suffix = ""
     if CoordSystem == "SinhSpherical":
-        sinhw_suffix = f"sinhw_{str(sinh_width).replace('-', 'm').replace('.', 'p')}_"
+        assert sinh_width is not None
+        sinh_width_name = _format_output_name_value(sinh_width)
+        sinhw_suffix = f"sinhw_{sinh_width_name}_"
+
     raytracing_combined_bin_name = (
         f"{project_name}_"
-        f"{str(t_final).replace('-', 'm').replace('.', 'p')}_"
-        f"{str(grid_physical_size).replace('-', 'm').replace('.', 'p')}_"
-        f"{str(diagnostics_output_every).replace('-', 'm').replace('.', 'p')}_"
-        f"z1_{str(default_BH1_z_posn).replace('-', 'm').replace('.', 'p')}_"
-        f"z2_{str(default_BH2_z_posn).replace('-', 'm').replace('.', 'p')}_"
-        f"m1_{str(default_BH1_mass).replace('-', 'm').replace('.', 'p')}_"
-        f"m2_{str(default_BH2_mass).replace('-', 'm').replace('.', 'p')}_"
+        f"{t_final_name}_"
+        f"{grid_physical_size_name}_"
+        f"{diagnostics_output_every_name}_"
+        f"z1_{bh1_z_name}_"
+        f"z2_{bh2_z_name}_"
+        f"M1_{bh1_mass_name}_"
+        f"M2_{bh2_mass_name}_"
         f"{CoordSystem}_"
         f"{sinhw_suffix}"
-        f"{Nxx_dict[CoordSystem][0]}_{Nxx_dict[CoordSystem][1]}_{Nxx_dict[CoordSystem][2]}.bin"
+        f"{nxx0}_{nxx1}_{nxx2}.bin"
     )
     combined_output_path = os.path.join(
         "..", "raytracing_data", raytracing_combined_bin_name
     )
-    axisymmetry_flag = ""
+
     if CoordSystem == "Spherical":
-        axisymmetry_flag = " \\\n  --axisymmetry-enabled"
+        axisymmetry_argument = r""" \
+  --axisymmetry-enabled"""
+    else:
+        axisymmetry_argument = ""
+
+    # Generate a helper script that builds, runs, and combines time slices.
     script_path = os.path.join(project_dir, "run_raytracing_data_pipeline.sh")
-    script_text = f"""#!/usr/bin/env bash
+    script_text = rf"""#!/usr/bin/env bash
 set -euo pipefail
 
 echo "Building {project_name}..."
@@ -595,10 +633,10 @@ echo "Running ./{project_name}..."
 ./{project_name}
 
 echo "Combining raytracing time slices..."
-python3 combine_raytracing_time_slices.py \\
-  --input-dir . \\
-  --pattern "raytracing_data_t????????.bin" \\
-  --output "{combined_output_path}"{axisymmetry_flag}
+python3 combine_raytracing_time_slices.py \
+  --input-dir . \
+  --pattern "raytracing_data_t????????.bin" \
+  --output "{combined_output_path}"{axisymmetry_argument}
 
 echo "Combined raytracing data written to:"
 echo "{combined_output_path}"
@@ -606,6 +644,8 @@ echo "{combined_output_path}"
     with open(script_path, "w", encoding="utf-8") as script_file:
         script_file.write(script_text)
     os.chmod(script_path, 0o755)
+
+    # Report the generated run instructions and output paths.
     print(
         f"Finished! Now go into project/{project_name} and run "
         "`./run_raytracing_data_pipeline.sh`."
@@ -620,6 +660,7 @@ echo "{combined_output_path}"
     )
 else:
     print(
-        f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
+        f"Finished! Now go into project/{project_name} and type `make` "
+        f"to build, then ./{project_name} to run."
     )
 print(f"    Parameter file can be found in {project_name}.par")

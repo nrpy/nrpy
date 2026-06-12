@@ -151,8 +151,8 @@ def register_CFunction_temporal_lagrange_interpolation(
 
 The caller supplies flat per-slice spatial-interpolation outputs for the
 configured temporal stencil, plus the corresponding physical `slice_times`.
-This helper assumes those times are trusted and strictly increasing, derives
-the actual number of time nodes from
+This helper assumes those times are trusted, finite, and strictly increasing,
+derives the actual number of time nodes from
 `commondata->numerical_spacetime_temporal_interp_order`, builds one shared
 nonuniform barycentric Lagrange basis in time from the exact physical
 `slice_times`, and interpolates each serialized `g4DD` and `Gamma4UDD`
@@ -169,16 +169,19 @@ upper-triangular order, i.e.
 Gamma4UDD012, ..., Gamma4UDD333`.
 
 @param[in] commondata Common runtime parameters.
-@param[in] slice_times Trusted physical coordinate times for the supplied slices.
+@param[in] slice_times Trusted, finite, strictly increasing physical coordinate
+times for the supplied slices.
 @param[in] g4dd_slices Flat per-slice metric components in kernel order.
 @param[in] gamma4udd_slices Flat per-slice Christoffel components in kernel order.
 @param[in] t_target Target physical coordinate time.
 @param[out] g4dd_out Final interpolated metric components.
 @param[out] gamma4udd_out Final interpolated Christoffel components.
-@return Status code indicating success or invalid runtime interpolation order.
+@return `TEMPORAL_LAGRANGE_INTERP_SUCCESS` on success, or
+`TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER` if the configured interpolation
+half-width is outside the supported range.
 
-@note Callers must provide trusted, strictly increasing physical `slice_times`,
-not abstract slot indices.
+@note Callers must provide trusted, finite, strictly increasing physical
+`slice_times`, not abstract slot indices.
 """
     cfunc_type = "int"
     name = "temporal_lagrange_interpolation"
@@ -190,7 +193,8 @@ not abstract slot indices.
                 REAL *restrict g4dd_out,
                 REAL *restrict gamma4udd_out"""
     body = r"""
-  // Step 1: Build the shared 1D Lagrange basis in physical time.
+  // Step 1: Build the shared nonuniform barycentric Lagrange basis in
+  // normalized physical time.
   const int temporal_half_width =
       commondata->numerical_spacetime_temporal_interp_order;
   if (temporal_half_width < 0 ||
@@ -206,11 +210,11 @@ not abstract slot indices.
   const REAL normalized_t_target = (t_target - time_origin) / time_scale;
 
   // Step 1.a: Normalize temporal nodes to one O(1) interval.
-  for (int i = 0; i < interp_order; i++) {
+  for (int i = 0; i < interp_order; i++)
     normalized_slice_times[i] = (slice_times[i] - time_origin) / time_scale;
-  } // END LOOP: for i over temporal nodes while normalizing times
 
-  // Step 1.b: Build barycentric interpolation weights after all nodes exist.
+  // Step 1.b: Build barycentric interpolation weights from the normalized
+  // temporal nodes.
   for (int i = 0; i < interp_order; i++) {
     REAL weight_denom = 1.0;
     for (int j = 0; j < interp_order; j++) {
@@ -234,9 +238,8 @@ not abstract slot indices.
   } // END LOOP: for i over temporal nodes while checking for an exact target match
 
   if (exact_node >= 0) {
-    for (int i = 0; i < interp_order; i++) {
+    for (int i = 0; i < interp_order; i++)
       coeff_t[i] = (i == exact_node) ? 1.0 : 0.0;
-    } // END LOOP: for i over temporal nodes while building an exact-match basis
   } else {
     REAL barycentric_sum = 0.0;
 
@@ -247,9 +250,8 @@ not abstract slot indices.
       barycentric_sum += weighted_term;
     } // END LOOP: for i over temporal nodes while summing barycentric terms
 
-    for (int i = 0; i < interp_order; i++) {
+    for (int i = 0; i < interp_order; i++)
       coeff_t[i] /= barycentric_sum;
-    } // END LOOP: for i over temporal nodes while normalizing barycentric coefficients
   } // END ELSE: target time required a full barycentric basis evaluation
 
   // Step 2: Interpolate the serialized metric components independently in time.
