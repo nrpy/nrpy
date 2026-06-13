@@ -48,7 +48,7 @@ def time_window_manager_numerical() -> None:
     Doctests:
     >>> time_window_manager_numerical()
     >>> generated = par.glb_extras_dict["BHaH_defines"]["time_window_manager_numerical"]
-    >>> "time_window_manager_numerical_load_and_validate_slice_times" in generated
+    >>> "time_window_manager_numerical_load_and_validate_slice_table" in generated
     True
     >>> "time_window_manager_numerical_lower_bound_slice_time" in generated
     True
@@ -141,6 +141,7 @@ def time_window_manager_numerical() -> None:
     // the slot itself because it includes temporal-interpolation halo slices
     // and lower-time RKF45 lookahead.
 #include <fcntl.h>
+#include <errno.h>
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
@@ -151,25 +152,24 @@ def time_window_manager_numerical() -> None:
 #include <unistd.h>
 
 #define TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES 4096ULL
-#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES 128ULL
+#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES 96ULL
 
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_SLICE_TABLE_OFFSET 64U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NUM_TIME_SLICES 80U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIRST_PAYLOAD_OFFSET 104U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_BYTES_PER_SLICE 112U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_STRIDE_BYTES 120U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_POINT_RECORD_COUNT 144U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_POINT_RECORD_BYTES 160U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NUM_GRIDS 188U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NGHOSTS 192U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NXX 220U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NXX_PLUS_2NGHOSTS 244U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_DXX 340U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_INVDXX 364U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_XXMIN 388U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_XXMAX 412U
-#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_CART_ORIGIN 436U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES 16U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_ALIGNMENT_BYTES 24U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_METADATA_OFFSET 32U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_METADATA_BYTES 40U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_SLICE_TABLE_OFFSET 48U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_SLICE_TABLE_ENTRY_BYTES 56U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NUM_TIME_SLICES 64U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIRST_PAYLOAD_OFFSET 72U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_BYTES_TOTAL 80U
+#define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_TOTAL_FILE_BYTES 88U
+
 #define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME 8U
+#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_PAYLOAD_OFFSET 16U
+#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_PAYLOAD_BYTES 24U
+#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_POINT_RECORD_COUNT 32U
+#define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_POINT_RECORD_BYTES 40U
 
 #define TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS 0
 #define TIME_WINDOW_MANAGER_NUMERICAL_ERROR 1
@@ -180,28 +180,27 @@ def time_window_manager_numerical() -> None:
       int fd; // Open read-only file descriptor for the combined numerical .bin file.
       long int page_size; // Runtime page size used for mmap offset alignment.
 
+      uint64_t alignment_bytes; // Combined-file payload alignment.
+      uint64_t metadata_offset; // Absolute byte offset of the JSON metadata block.
+      uint64_t metadata_bytes; // Length in bytes of the JSON metadata block.
       uint64_t num_time_slices; // Number of stored 3D grids.
       uint64_t slice_table_offset; // Absolute byte offset of the slice table.
+      uint64_t slice_table_entry_bytes; // Fixed byte size of one slice-table entry.
       uint64_t first_payload_offset; // Absolute byte offset of slice 0 payload.
-      uint64_t payload_bytes_per_slice; // Valid bytes in one 3D-grid payload.
-      uint64_t payload_stride_bytes; // Byte stride between adjacent slice payloads.
-      uint64_t point_record_count; // Number of point records in one payload.
-      uint32_t point_record_bytes; // Bytes in one point record.
-      uint32_t num_grids; // Writer-side grid count stored in the combined header.
-      uint32_t nghosts; // Writer-side NGHOSTS stored in the combined header.
-      uint64_t Nxx[3]; // Interior point counts stored in the combined header.
-      uint64_t Nxx_plus_2NGHOSTS[3]; // Full logical-grid counts stored in the combined header.
-      double dxx[3]; // Native coordinate spacings stored in the combined header.
-      double invdxx[3]; // Reciprocal native coordinate spacings stored in the combined header.
-      double xxmin[3]; // Native lower bounds stored in the combined header.
-      double xxmax[3]; // Native upper bounds stored in the combined header.
-      double cart_origin[3]; // Cartesian grid origin stored in the combined header.
+      uint64_t payload_bytes_total; // Total byte span of the payload region.
+      uint64_t total_file_bytes; // Combined-file size recorded in the header.
+      uint32_t nghosts; // Writer-side NGHOSTS stored in JSON metadata.
+      uint64_t Nxx[3]; // Interior point counts stored in JSON metadata.
+      uint64_t Nxx_plus_2NGHOSTS[3]; // Full logical-grid counts stored in JSON metadata.
+      double dxx[3]; // Native coordinate spacings stored in JSON metadata.
+      double invdxx[3]; // Reciprocal native coordinate spacings stored in JSON metadata.
+      double xxmin[3]; // Native lower bounds stored in JSON metadata.
+      double xxmax[3]; // Native upper bounds stored in JSON metadata.
+      double cart_origin[3]; // Cartesian grid origin stored in JSON metadata.
 
       double *slice_times; // Exact physical coordinate times cached from the slice table.
-      double first_time; // Smallest cached physical slice time.
-      double last_time; // Largest cached physical slice time.
-      double min_slice_dt; // Smallest positive spacing between adjacent cached slice times.
-      double max_slice_dt; // Largest positive spacing between adjacent cached slice times.
+      uint64_t *slice_payload_offsets; // Per-slice payload offsets cached from the slice table.
+      uint64_t *slice_payload_bytes; // Per-slice payload byte counts cached from the slice table.
 
       int temporal_interp_half_width; // Centered temporal interpolation half-width n.
       int temporal_interp_num_points; // Number of temporal interpolation points, 2n + 1.
@@ -212,30 +211,29 @@ def time_window_manager_numerical() -> None:
       uint64_t mapped_file_offset; // Page-aligned file offset passed to mmap().
       size_t mapped_length_bytes; // Length passed to mmap()/munmap().
       const unsigned char *mapped_base; // Pointer returned by mmap(), or NULL.
-      const unsigned char *active_payload_base; // Pointer to mapped_first_slice payload.
     } NumericalTimeWindowManager; // END STRUCT: NumericalTimeWindowManager
 
     //==========================================
     // NUMERICAL WINDOW LOW-LEVEL READ HELPERS
     //==========================================
-    // These helpers assume the trusted combined container uses native little-endian f64/u64/u32 fields.
+    // These helpers assume the trusted combined container uses native little-endian f64/u64 fields.
     static inline uint64_t time_window_manager_numerical_load_u64(const unsigned char *bytes) {
       uint64_t value;
       memcpy(&value, bytes, sizeof(uint64_t));
       return value;
     } // END FUNCTION: time_window_manager_numerical_load_u64
 
-    static inline uint32_t time_window_manager_numerical_load_u32(const unsigned char *bytes) {
-      uint32_t value;
-      memcpy(&value, bytes, sizeof(uint32_t));
-      return value;
-    } // END FUNCTION: time_window_manager_numerical_load_u32
-
     static inline double time_window_manager_numerical_load_f64(const unsigned char *bytes) {
       double value;
       memcpy(&value, bytes, sizeof(double));
       return value;
     } // END FUNCTION: time_window_manager_numerical_load_f64
+
+    static inline const char *time_window_manager_numerical_skip_json_ws(const char *cursor) {
+      while (*cursor == ' ' || *cursor == '\n' || *cursor == '\r' || *cursor == '\t')
+        cursor++;
+      return cursor;
+    } // END FUNCTION: time_window_manager_numerical_skip_json_ws
 
     /**
      * Read exactly nbytes from one absolute file offset.
@@ -263,84 +261,353 @@ def time_window_manager_numerical() -> None:
     } // END FUNCTION: time_window_manager_numerical_read_exact_at
 
     /**
-     * Cache and validate the exact physical times of all stored slices.
+     * Read one JSON section from the trusted metadata block.
+     *
+     * @param[in] json_buffer NUL-terminated metadata bytes.
+     * @param metadata_bytes Number of valid bytes in json_buffer, excluding the NUL terminator.
+     * @param[in] section_key Exact JSON-section prefix ending in '{'.
+     * @param[out] section_begin First byte inside the section object.
+     * @param[out] section_end Closing brace of the section object.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_find_json_section(
+        const char *json_buffer,
+        const size_t metadata_bytes,
+        const char *section_key,
+        const char **section_begin,
+        const char **section_end) {
+      const char *match = strstr(json_buffer, section_key);
+      if (match == NULL || section_begin == NULL || section_end == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      const char *cursor = match + strlen(section_key);
+      if ((size_t)(cursor - json_buffer) > metadata_bytes)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      *section_begin = cursor;
+
+      int brace_depth = 1;
+      while ((size_t)(cursor - json_buffer) < metadata_bytes) {
+        if (*cursor == '{') {
+          brace_depth++;
+        } else if (*cursor == '}') {
+          brace_depth--;
+          if (brace_depth == 0) {
+            *section_end = cursor;
+            return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+          } // END IF: matching closing brace for the requested JSON section was found
+        } // END ELSE IF: JSON brace nesting depth decreased while scanning the section
+        cursor++;
+      } // END WHILE: scanning the trusted metadata block for the section terminator
+      return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+    } // END FUNCTION: time_window_manager_numerical_find_json_section
+
+    /**
+     * Parse one uint64_t scalar from a trusted JSON section.
+     *
+     * @param[in] section_begin First byte inside the section object.
+     * @param[in] section_end Closing brace of the section object.
+     * @param[in] key_prefix Exact key prefix ending in ':'.
+     * @param[out] value Destination scalar.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_parse_json_u64(
+        const char *section_begin,
+        const char *section_end,
+        const char *key_prefix,
+        uint64_t *value) {
+      const char *cursor = strstr(section_begin, key_prefix);
+      if (cursor == NULL || cursor >= section_end || value == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      cursor = time_window_manager_numerical_skip_json_ws(cursor + strlen(key_prefix));
+
+      errno = 0;
+      char *parse_end = NULL;
+      const unsigned long long parsed_value = strtoull(cursor, &parse_end, 10);
+      if (errno != 0 || parse_end == cursor || parse_end > section_end)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      *value = (uint64_t)parsed_value;
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: time_window_manager_numerical_parse_json_u64
+
+    /**
+     * Parse one uint64_t array of length three from a trusted JSON section.
+     *
+     * @param[in] section_begin First byte inside the section object.
+     * @param[in] section_end Closing brace of the section object.
+     * @param[in] key_prefix Exact key prefix ending in '['.
+     * @param[out] values Destination array of length three.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_parse_json_u64_array3(
+        const char *section_begin,
+        const char *section_end,
+        const char *key_prefix,
+        uint64_t values[3]) {
+      const char *cursor = strstr(section_begin, key_prefix);
+      if (cursor == NULL || cursor >= section_end || values == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      cursor += strlen(key_prefix);
+
+      for (int dirn = 0; dirn < 3; dirn++) {
+        cursor = time_window_manager_numerical_skip_json_ws(cursor);
+        errno = 0;
+        char *parse_end = NULL;
+        const unsigned long long parsed_value = strtoull(cursor, &parse_end, 10);
+        if (errno != 0 || parse_end == cursor || parse_end > section_end)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        values[dirn] = (uint64_t)parsed_value;
+        cursor = time_window_manager_numerical_skip_json_ws(parse_end);
+        const char expected_delimiter = (dirn < 2) ? ',' : ']';
+        if (*cursor != expected_delimiter)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        cursor++;
+      } // END LOOP: for dirn over one trusted uint64_t JSON array
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: time_window_manager_numerical_parse_json_u64_array3
+
+    /**
+     * Parse one double array of length three from a trusted JSON section.
+     *
+     * @param[in] section_begin First byte inside the section object.
+     * @param[in] section_end Closing brace of the section object.
+     * @param[in] key_prefix Exact key prefix ending in '['.
+     * @param[out] values Destination array of length three.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_parse_json_f64_array3(
+        const char *section_begin,
+        const char *section_end,
+        const char *key_prefix,
+        double values[3]) {
+      const char *cursor = strstr(section_begin, key_prefix);
+      if (cursor == NULL || cursor >= section_end || values == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      cursor += strlen(key_prefix);
+
+      for (int dirn = 0; dirn < 3; dirn++) {
+        cursor = time_window_manager_numerical_skip_json_ws(cursor);
+        errno = 0;
+        char *parse_end = NULL;
+        const double parsed_value = strtod(cursor, &parse_end);
+        if (errno != 0 || parse_end == cursor || parse_end > section_end ||
+            !isfinite(parsed_value)) {
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        } // END IF: one trusted double JSON array entry could not be parsed
+        values[dirn] = parsed_value;
+        cursor = time_window_manager_numerical_skip_json_ws(parse_end);
+        const char expected_delimiter = (dirn < 2) ? ',' : ']';
+        if (*cursor != expected_delimiter)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        cursor++;
+      } // END LOOP: for dirn over one trusted double JSON array
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: time_window_manager_numerical_parse_json_f64_array3
+
+    /**
+     * Load first-slice grid metadata from the trusted JSON metadata block.
      *
      * @param[in,out] ntwm Numerical time-window manager.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      */
-    static inline int time_window_manager_numerical_load_and_validate_slice_times(
+    static inline int time_window_manager_numerical_load_grid_metadata(
         NumericalTimeWindowManager *ntwm) {
-      unsigned char time_bytes[sizeof(double)];
+      if (ntwm == NULL || ntwm->fd < 0 ||
+          ntwm->metadata_bytes == 0ULL ||
+          ntwm->metadata_bytes > (uint64_t)(SIZE_MAX - 1U)) {
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: metadata block dimensions were not usable
+
+      const size_t buffer_bytes = (size_t)ntwm->metadata_bytes + 1U;
+      char *metadata_buffer = (char *)malloc(buffer_bytes);
+      if (metadata_buffer == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      if (time_window_manager_numerical_read_exact_at(
+              ntwm->fd, metadata_buffer, (size_t)ntwm->metadata_bytes,
+              ntwm->metadata_offset) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        free(metadata_buffer);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: JSON metadata block could not be read
+      metadata_buffer[ntwm->metadata_bytes] = '\0';
+
+      const char *section_begin = NULL;
+      const char *section_end = NULL;
+      if (time_window_manager_numerical_find_json_section(
+              metadata_buffer, (size_t)ntwm->metadata_bytes,
+              "\"first_slice_grid_metadata\":{",
+              &section_begin, &section_end) !=
+          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        free(metadata_buffer);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: first-slice grid metadata was missing from the trusted JSON block
+
+      uint64_t nghosts = 0ULL;
+      if (time_window_manager_numerical_parse_json_u64(
+              section_begin, section_end, "\"NGHOSTS\":", &nghosts) !=
+          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          nghosts > (uint64_t)UINT32_MAX) {
+        free(metadata_buffer);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: first-slice NGHOSTS metadata was invalid
+      ntwm->nghosts = (uint32_t)nghosts;
+
+      if (time_window_manager_numerical_parse_json_u64_array3(
+              section_begin, section_end, "\"Nxx\":[", ntwm->Nxx) !=
+          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_u64_array3(
+              section_begin, section_end, "\"Nxx_plus_2NGHOSTS\":[",
+              ntwm->Nxx_plus_2NGHOSTS) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_f64_array3(
+              section_begin, section_end, "\"dxx\":[", ntwm->dxx) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_f64_array3(
+              section_begin, section_end, "\"invdxx\":[", ntwm->invdxx) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_f64_array3(
+              section_begin, section_end, "\"xxmin\":[", ntwm->xxmin) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_f64_array3(
+              section_begin, section_end, "\"xxmax\":[", ntwm->xxmax) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS ||
+          time_window_manager_numerical_parse_json_f64_array3(
+              section_begin, section_end, "\"cart_origin\":[", ntwm->cart_origin) !=
+              TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        free(metadata_buffer);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: one or more trusted first-slice grid arrays could not be parsed
+
+      free(metadata_buffer);
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: time_window_manager_numerical_load_grid_metadata
+
+    /**
+     * Cache and validate the slice table fields needed for interpolation.
+     *
+     * @param[in,out] ntwm Numerical time-window manager.
+     * @param expected_point_record_count Required point-record count for each payload.
+     * @param expected_point_record_bytes Required point-record size for each payload.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_load_and_validate_slice_table(
+        NumericalTimeWindowManager *ntwm,
+        const uint64_t expected_point_record_count,
+        const uint64_t expected_point_record_bytes) {
+      unsigned char entry_bytes[TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES];
       double *slice_times = NULL;
-      double first_time = 0.0;
-      double last_time = 0.0;
-      double min_slice_dt = 0.0;
-      double max_slice_dt = 0.0;
+      uint64_t *slice_payload_offsets = NULL;
+      uint64_t *slice_payload_bytes = NULL;
       double previous_time = 0.0;
+      uint64_t previous_payload_end = 0ULL;
 
       if (ntwm == NULL || ntwm->fd < 0 || ntwm->num_time_slices < 2ULL ||
           ntwm->slice_times != NULL ||
-          ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(double))) {
+          ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(double)) ||
+          ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(uint64_t))) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice-time cache prerequisites were not satisfied
+      } // END IF: slice-table cache prerequisites were not satisfied
 
-      slice_times = (double *)malloc(
-          (size_t)ntwm->num_time_slices * sizeof(double));
-      if (slice_times == NULL)
+      slice_times = (double *)malloc((size_t)ntwm->num_time_slices * sizeof(double));
+      slice_payload_offsets =
+          (uint64_t *)malloc((size_t)ntwm->num_time_slices * sizeof(uint64_t));
+      slice_payload_bytes =
+          (uint64_t *)malloc((size_t)ntwm->num_time_slices * sizeof(uint64_t));
+      if (slice_times == NULL || slice_payload_offsets == NULL ||
+          slice_payload_bytes == NULL) {
+        free(slice_times);
+        free(slice_payload_offsets);
+        free(slice_payload_bytes);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: slice-table caches could not be allocated
 
       for (uint64_t slice_index = 0ULL; slice_index < ntwm->num_time_slices; slice_index++) {
-        const uint64_t time_offset =
-            ntwm->slice_table_offset +
-            slice_index * TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES +
-            TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME;
+        const uint64_t entry_offset =
+            ntwm->slice_table_offset + slice_index * ntwm->slice_table_entry_bytes;
         if (time_window_manager_numerical_read_exact_at(
-                ntwm->fd, time_bytes, sizeof(double), time_offset) !=
-            TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                ntwm->fd, entry_bytes,
+                (size_t)TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES,
+                entry_offset) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
           free(slice_times);
+          free(slice_payload_offsets);
+          free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: slice time could not be read during exact-time cache population
+        } // END IF: one slice-table entry could not be read
 
-        const double this_time = time_window_manager_numerical_load_f64(time_bytes);
-        if (!isfinite(this_time)) {
+        const double this_time = time_window_manager_numerical_load_f64(
+            entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME);
+        const uint64_t payload_offset = time_window_manager_numerical_load_u64(
+            entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_PAYLOAD_OFFSET);
+        const uint64_t payload_bytes = time_window_manager_numerical_load_u64(
+            entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_PAYLOAD_BYTES);
+        const uint64_t point_record_count = time_window_manager_numerical_load_u64(
+            entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_POINT_RECORD_COUNT);
+        const uint64_t point_record_bytes = time_window_manager_numerical_load_u64(
+            entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_POINT_RECORD_BYTES);
+
+        if (!isfinite(this_time) ||
+            point_record_count == 0ULL ||
+            point_record_bytes != expected_point_record_bytes ||
+            point_record_count != expected_point_record_count ||
+            payload_bytes == 0ULL ||
+            payload_offset < ntwm->first_payload_offset ||
+            payload_offset % ntwm->alignment_bytes != 0ULL) {
           free(slice_times);
+          free(slice_payload_offsets);
+          free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: cached slice time was not finite
+        } // END IF: one slice-table entry contained invalid interpolation metadata
+        if (point_record_count > UINT64_MAX / point_record_bytes ||
+            payload_bytes != point_record_count * point_record_bytes) {
+          free(slice_times);
+          free(slice_payload_offsets);
+          free(slice_payload_bytes);
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        } // END IF: one slice payload size disagreed with point-record metadata
+        if (payload_offset > ntwm->total_file_bytes - payload_bytes) {
+          free(slice_times);
+          free(slice_payload_offsets);
+          free(slice_payload_bytes);
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        } // END IF: one slice payload exceeded the combined container bounds
+        if (slice_index == 0ULL) {
+          if (payload_offset != ntwm->first_payload_offset) {
+            free(slice_times);
+            free(slice_payload_offsets);
+            free(slice_payload_bytes);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: first slice-table entry disagreed with fixed-header navigation
+        } else {
+          const double slice_dt = this_time - previous_time;
+          if (!isfinite(slice_dt) || slice_dt <= 0.0 ||
+              payload_offset < previous_payload_end) {
+            free(slice_times);
+            free(slice_payload_offsets);
+            free(slice_payload_bytes);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: slice times or payload offsets were not strictly increasing
+        } // END ELSE: additional slices allow monotonicity checks
 
         slice_times[slice_index] = this_time;
-        if (slice_index > 0ULL) {
-          const double slice_dt = this_time - previous_time;
-          if (!isfinite(slice_dt) || slice_dt <= 0.0) {
-            free(slice_times);
-            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-          } // END IF: cached slice times were not strictly increasing
-          if (slice_index == 1ULL) {
-            min_slice_dt = slice_dt;
-            max_slice_dt = slice_dt;
-          } else {
-            min_slice_dt = fmin(min_slice_dt, slice_dt);
-            max_slice_dt = fmax(max_slice_dt, slice_dt);
-          } // END ELSE: update cached adjacent-slice spacing extrema
-        } // END IF: enough cached slice times exist to form one adjacent spacing
+        slice_payload_offsets[slice_index] = payload_offset;
+        slice_payload_bytes[slice_index] = payload_bytes;
         previous_time = this_time;
-      } // END LOOP: for slice_index over slice-table times during exact-time cache population
-      first_time = slice_times[0];
-      last_time = slice_times[ntwm->num_time_slices - 1ULL];
-      if (!isfinite(first_time) || !isfinite(last_time) ||
-          last_time <= first_time ||
-          !isfinite(min_slice_dt) || min_slice_dt <= 0.0 ||
-          !isfinite(max_slice_dt) || max_slice_dt <= 0.0) {
+        previous_payload_end = payload_offset + payload_bytes;
+      } // END LOOP: for slice_index over the trusted slice table
+
+      if (!isfinite(slice_times[0]) ||
+          !isfinite(slice_times[ntwm->num_time_slices - 1ULL]) ||
+          slice_times[ntwm->num_time_slices - 1ULL] <= slice_times[0] ||
+          previous_payload_end != ntwm->total_file_bytes) {
         free(slice_times);
+        free(slice_payload_offsets);
+        free(slice_payload_bytes);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: cached slice-time summary values were not numerically usable
+      } // END IF: cached slice-table summary values were not numerically usable
 
       ntwm->slice_times = slice_times;
-      ntwm->first_time = first_time;
-      ntwm->last_time = last_time;
-      ntwm->min_slice_dt = min_slice_dt;
-      ntwm->max_slice_dt = max_slice_dt;
+      ntwm->slice_payload_offsets = slice_payload_offsets;
+      ntwm->slice_payload_bytes = slice_payload_bytes;
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
-    } // END FUNCTION: time_window_manager_numerical_load_and_validate_slice_times
+    } // END FUNCTION: time_window_manager_numerical_load_and_validate_slice_table
 
     /**
      * Return the first slice index whose cached time is not less than target_time.
@@ -426,14 +693,15 @@ def time_window_manager_numerical() -> None:
     static inline void time_window_manager_numerical_set_inert(NumericalTimeWindowManager *ntwm) {
       ntwm->fd = -1;
       ntwm->page_size = 0;
+      ntwm->alignment_bytes = 0ULL;
+      ntwm->metadata_offset = 0ULL;
+      ntwm->metadata_bytes = 0ULL;
       ntwm->num_time_slices = 0ULL;
       ntwm->slice_table_offset = 0ULL;
+      ntwm->slice_table_entry_bytes = 0ULL;
       ntwm->first_payload_offset = 0ULL;
-      ntwm->payload_bytes_per_slice = 0ULL;
-      ntwm->payload_stride_bytes = 0ULL;
-      ntwm->point_record_count = 0ULL;
-      ntwm->point_record_bytes = 0U;
-      ntwm->num_grids = 0U;
+      ntwm->payload_bytes_total = 0ULL;
+      ntwm->total_file_bytes = 0ULL;
       ntwm->nghosts = 0U;
       for (int dirn = 0; dirn < 3; dirn++) {
         ntwm->Nxx[dirn] = 0ULL;
@@ -445,10 +713,8 @@ def time_window_manager_numerical() -> None:
         ntwm->cart_origin[dirn] = 0.0;
       } // END LOOP: for dirn over stored grid metadata arrays during inert reset
       ntwm->slice_times = NULL;
-      ntwm->first_time = 0.0;
-      ntwm->last_time = 0.0;
-      ntwm->min_slice_dt = 0.0;
-      ntwm->max_slice_dt = 0.0;
+      ntwm->slice_payload_offsets = NULL;
+      ntwm->slice_payload_bytes = NULL;
       ntwm->temporal_interp_half_width = 0;
       ntwm->temporal_interp_num_points = 0;
       ntwm->max_backward_dt_lookahead = 0.0;
@@ -457,7 +723,6 @@ def time_window_manager_numerical() -> None:
       ntwm->mapped_file_offset = 0ULL;
       ntwm->mapped_length_bytes = 0U;
       ntwm->mapped_base = NULL;
-      ntwm->active_payload_base = NULL;
     } // END FUNCTION: time_window_manager_numerical_set_inert
 
     /**
@@ -473,7 +738,6 @@ def time_window_manager_numerical() -> None:
       ntwm->mapped_file_offset = 0ULL;
       ntwm->mapped_length_bytes = 0U;
       ntwm->mapped_base = NULL;
-      ntwm->active_payload_base = NULL;
     } // END FUNCTION: time_window_manager_numerical_close_mmap
 
     /**
@@ -485,6 +749,10 @@ def time_window_manager_numerical() -> None:
       time_window_manager_numerical_close_mmap(ntwm);
       if (ntwm->slice_times != NULL)
         free(ntwm->slice_times);
+      if (ntwm->slice_payload_offsets != NULL)
+        free(ntwm->slice_payload_offsets);
+      if (ntwm->slice_payload_bytes != NULL)
+        free(ntwm->slice_payload_bytes);
       if (ntwm->fd >= 0)
         close(ntwm->fd);
       time_window_manager_numerical_set_inert(ntwm);
@@ -495,7 +763,7 @@ def time_window_manager_numerical() -> None:
      *
      * Only the grid fields serialized by the numerical-data writer are
      * overwritten here. Higher-level caller-owned params metadata unrelated to
-     * the spatial lookup contract remains untouched.
+     * the numerical dataset geometry remains untouched.
      *
      * @param[in] ntwm Initialized numerical time-window manager.
      * @param[out] params Destination params_struct to populate.
@@ -506,7 +774,7 @@ def time_window_manager_numerical() -> None:
         params_struct *restrict params) {
       if (ntwm == NULL || params == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      if (ntwm->num_grids != 1U || ntwm->nghosts != (uint32_t)NGHOSTS)
+      if (ntwm->nghosts != (uint32_t)NGHOSTS)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       for (int dirn = 0; dirn < 3; dirn++) {
         if (ntwm->Nxx[dirn] > (uint64_t)INT_MAX ||
@@ -562,7 +830,9 @@ def time_window_manager_numerical() -> None:
         const int temporal_interp_half_width,
         params_struct *restrict params) {
       unsigned char header_bytes[TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES];
+      static const unsigned char expected_magic[16] = "NRPYRTSTACK4D";
       const uint64_t expected_point_record_bytes = 53ULL * (uint64_t)sizeof(double);
+      uint64_t expected_point_record_count = 1ULL;
 
       if (ntwm == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
@@ -599,59 +869,95 @@ def time_window_manager_numerical() -> None:
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: fixed header could not be read
 
+      const uint64_t fixed_header_bytes = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES);
+      ntwm->alignment_bytes = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_ALIGNMENT_BYTES);
+      ntwm->metadata_offset = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_METADATA_OFFSET);
+      ntwm->metadata_bytes = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_METADATA_BYTES);
       ntwm->slice_table_offset = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_SLICE_TABLE_OFFSET);
+      ntwm->slice_table_entry_bytes = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_SLICE_TABLE_ENTRY_BYTES);
       ntwm->num_time_slices = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NUM_TIME_SLICES);
       ntwm->first_payload_offset = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIRST_PAYLOAD_OFFSET);
-      ntwm->payload_bytes_per_slice = time_window_manager_numerical_load_u64(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_BYTES_PER_SLICE);
-      ntwm->payload_stride_bytes = time_window_manager_numerical_load_u64(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_STRIDE_BYTES);
-      ntwm->point_record_count = time_window_manager_numerical_load_u64(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_POINT_RECORD_COUNT);
-      ntwm->point_record_bytes = time_window_manager_numerical_load_u32(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_POINT_RECORD_BYTES);
-      ntwm->num_grids = time_window_manager_numerical_load_u32(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NUM_GRIDS);
-      ntwm->nghosts = time_window_manager_numerical_load_u32(
-          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NGHOSTS);
-      for (int dirn = 0; dirn < 3; dirn++) {
-        const uint64_t offset_u64 = (uint64_t)dirn * (uint64_t)sizeof(uint64_t);
-        const uint64_t offset_f64 = (uint64_t)dirn * (uint64_t)sizeof(double);
-        ntwm->Nxx[dirn] = time_window_manager_numerical_load_u64(
-            header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NXX + offset_u64);
-        ntwm->Nxx_plus_2NGHOSTS[dirn] = time_window_manager_numerical_load_u64(
-            header_bytes +
-            TIME_WINDOW_MANAGER_NUMERICAL_HEADER_NXX_PLUS_2NGHOSTS + offset_u64);
-        ntwm->dxx[dirn] = time_window_manager_numerical_load_f64(
-            header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_DXX + offset_f64);
-        ntwm->invdxx[dirn] = time_window_manager_numerical_load_f64(
-            header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_INVDXX + offset_f64);
-        ntwm->xxmin[dirn] = time_window_manager_numerical_load_f64(
-            header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_XXMIN + offset_f64);
-        ntwm->xxmax[dirn] = time_window_manager_numerical_load_f64(
-            header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_XXMAX + offset_f64);
-        ntwm->cart_origin[dirn] = time_window_manager_numerical_load_f64(
-            header_bytes +
-            TIME_WINDOW_MANAGER_NUMERICAL_HEADER_CART_ORIGIN + offset_f64);
-      } // END LOOP: for dirn over fixed-header grid metadata arrays during initialization
+      ntwm->payload_bytes_total = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_PAYLOAD_BYTES_TOTAL);
+      ntwm->total_file_bytes = time_window_manager_numerical_load_u64(
+          header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_TOTAL_FILE_BYTES);
 
       if (ntwm->num_time_slices < 2ULL ||
           ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
           ntwm->num_time_slices > (uint64_t)LONG_MAX ||
-          ntwm->payload_bytes_per_slice == 0ULL ||
-          ntwm->payload_stride_bytes < ntwm->payload_bytes_per_slice ||
-          ntwm->num_grids != 1U || ntwm->nghosts != (uint32_t)NGHOSTS ||
-          ntwm->point_record_count == 0ULL ||
-          (uint64_t)ntwm->point_record_bytes != expected_point_record_bytes ||
-          ntwm->point_record_count > UINT64_MAX / expected_point_record_bytes) {
+          ntwm->alignment_bytes == 0ULL ||
+          (ntwm->alignment_bytes & (ntwm->alignment_bytes - 1ULL)) != 0ULL ||
+          ntwm->metadata_bytes == 0ULL ||
+          ntwm->slice_table_entry_bytes != TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES ||
+          ntwm->payload_bytes_total == 0ULL ||
+          fixed_header_bytes != TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES ||
+          memcmp(header_bytes, expected_magic, sizeof(expected_magic)) != 0) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted file payload metadata could not describe interpolation records
+      } // END IF: trusted fixed-header navigation fields were not usable
 
-      uint64_t expected_point_record_count = 1ULL;
+      const off_t file_size = lseek(ntwm->fd, 0, SEEK_END);
+      if (file_size < (off_t)TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: combined numerical container size was not usable
+      const uint64_t file_size_bytes = (uint64_t)file_size;
+      if (file_size_bytes != ntwm->total_file_bytes) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: on-disk file size disagreed with the combined-header size
+
+      if (ntwm->metadata_offset < fixed_header_bytes ||
+          ntwm->metadata_offset % ntwm->alignment_bytes != 0ULL ||
+          ntwm->metadata_offset > ntwm->total_file_bytes - ntwm->metadata_bytes) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: metadata block bounds were outside the combined container
+
+      if (ntwm->num_time_slices >
+          UINT64_MAX / ntwm->slice_table_entry_bytes) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: trusted slice-table byte count would overflow
+      const uint64_t slice_table_bytes =
+          ntwm->num_time_slices * ntwm->slice_table_entry_bytes;
+      const uint64_t metadata_end = ntwm->metadata_offset + ntwm->metadata_bytes;
+      if (ntwm->slice_table_offset > UINT64_MAX - slice_table_bytes) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: trusted slice-table end offset would overflow
+      const uint64_t slice_table_end =
+          ntwm->slice_table_offset + slice_table_bytes;
+      if (ntwm->slice_table_offset < metadata_end ||
+          ntwm->slice_table_offset % ntwm->alignment_bytes != 0ULL ||
+          slice_table_end > ntwm->first_payload_offset ||
+          slice_table_end > file_size_bytes) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: trusted slice table was outside the usable file layout
+
+      if (ntwm->first_payload_offset < slice_table_end ||
+          ntwm->first_payload_offset % ntwm->alignment_bytes != 0ULL ||
+          ntwm->first_payload_offset > ntwm->total_file_bytes ||
+          ntwm->payload_bytes_total != ntwm->total_file_bytes - ntwm->first_payload_offset) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: trusted payload-region navigation was not self-consistent
+
+      if (time_window_manager_numerical_load_grid_metadata(ntwm) !=
+          TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: JSON grid metadata could not be loaded for interpolation
+
       for (int dirn = 0; dirn < 3; dirn++) {
         if (ntwm->Nxx[dirn] == 0ULL ||
             ntwm->Nxx_plus_2NGHOSTS[dirn] !=
@@ -665,70 +971,21 @@ def time_window_manager_numerical() -> None:
             !isfinite(ntwm->cart_origin[dirn])) {
           time_window_manager_numerical_free(ntwm);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: combined-file grid metadata was not numerically usable
+        } // END IF: JSON grid metadata was not numerically usable
         expected_point_record_count *= ntwm->Nxx_plus_2NGHOSTS[dirn];
-      } // END LOOP: for dirn over combined-file grid metadata during validation
-      if (ntwm->point_record_count != expected_point_record_count) {
+      } // END LOOP: for dirn over JSON grid metadata during validation
+      if (ntwm->nghosts != (uint32_t)NGHOSTS ||
+          expected_point_record_count > UINT64_MAX / expected_point_record_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: point-record count disagreed with ghost-aware combined-file grid dimensions
+      } // END IF: runtime ghost-zone or record-size metadata was not usable
 
-      const uint64_t expected_payload_bytes =
-          ntwm->point_record_count * expected_point_record_bytes;
-      if (ntwm->payload_bytes_per_slice != expected_payload_bytes) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload length disagreed with point-record metadata
-
-      const off_t file_size = lseek(ntwm->fd, 0, SEEK_END);
-      if (file_size < (off_t)TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: combined numerical container size was not usable
-      const uint64_t file_size_bytes = (uint64_t)file_size;
-
-      if (ntwm->num_time_slices >
-          UINT64_MAX / TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table byte count would overflow
-      const uint64_t slice_table_bytes =
-          ntwm->num_time_slices *
-          TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES;
-      if (ntwm->slice_table_offset > UINT64_MAX - slice_table_bytes) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table end offset would overflow
-      const uint64_t slice_table_end =
-          ntwm->slice_table_offset + slice_table_bytes;
-      if (slice_table_end > file_size_bytes ||
-          slice_table_end > ntwm->first_payload_offset) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice table was outside the usable file layout
-
-      if (ntwm->num_time_slices > UINT64_MAX / ntwm->payload_stride_bytes) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload-region byte count would overflow
-      const uint64_t payload_region_bytes =
-          ntwm->num_time_slices * ntwm->payload_stride_bytes;
-      if (ntwm->first_payload_offset > UINT64_MAX - payload_region_bytes) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload-region end offset would overflow
-      const uint64_t payload_region_end =
-          ntwm->first_payload_offset + payload_region_bytes;
-      if (payload_region_end > file_size_bytes) {
-        time_window_manager_numerical_free(ntwm);
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload region exceeded the combined container
-
-      if (time_window_manager_numerical_load_and_validate_slice_times(ntwm) !=
+      if (time_window_manager_numerical_load_and_validate_slice_table(
+              ntwm, expected_point_record_count, expected_point_record_bytes) !=
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: exact slice-table times could not be cached and validated
+      } // END IF: slice table could not be cached and validated for interpolation
       if (params != NULL &&
           time_window_manager_numerical_apply_metadata_to_params(ntwm, params) !=
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
@@ -854,14 +1111,14 @@ def time_window_manager_numerical() -> None:
         const int slot_idx) {
       if (ntwm == NULL || tsm == NULL || ntwm->fd < 0 || ntwm->page_size <= 0 ||
           ntwm->slice_times == NULL ||
+          ntwm->slice_payload_offsets == NULL ||
+          ntwm->slice_payload_bytes == NULL ||
           ntwm->num_time_slices < 2ULL ||
           ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
-          ntwm->payload_bytes_per_slice == 0ULL ||
-          ntwm->payload_stride_bytes < ntwm->payload_bytes_per_slice ||
-          !isfinite(ntwm->first_time) || !isfinite(ntwm->last_time) ||
-          ntwm->last_time <= ntwm->first_time ||
-          !isfinite(ntwm->min_slice_dt) || ntwm->min_slice_dt <= 0.0 ||
-          !isfinite(ntwm->max_slice_dt) || ntwm->max_slice_dt <= 0.0)
+          ntwm->payload_bytes_total == 0ULL ||
+          !isfinite(ntwm->slice_times[0]) ||
+          !isfinite(ntwm->slice_times[ntwm->num_time_slices - 1ULL]) ||
+          ntwm->slice_times[ntwm->num_time_slices - 1ULL] <= ntwm->slice_times[0])
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       uint64_t first_slice = 0ULL;
@@ -880,21 +1137,18 @@ def time_window_manager_numerical() -> None:
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       const uint64_t last_slice = last_slice_exclusive - 1ULL;
-      if (first_slice > (UINT64_MAX - ntwm->first_payload_offset) /
-                            ntwm->payload_stride_bytes ||
-          last_slice > (UINT64_MAX - ntwm->first_payload_offset) /
-                           ntwm->payload_stride_bytes)
+      const uint64_t requested_offset = ntwm->slice_payload_offsets[first_slice];
+      const uint64_t last_payload_offset = ntwm->slice_payload_offsets[last_slice];
+      const uint64_t last_payload_bytes = ntwm->slice_payload_bytes[last_slice];
+      if (requested_offset < ntwm->first_payload_offset ||
+          last_payload_offset < requested_offset ||
+          last_payload_bytes == 0ULL ||
+          last_payload_offset > ntwm->total_file_bytes - last_payload_bytes) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-
-      const uint64_t requested_offset =
-          ntwm->first_payload_offset + first_slice * ntwm->payload_stride_bytes;
-      const uint64_t last_payload_offset =
-          ntwm->first_payload_offset + last_slice * ntwm->payload_stride_bytes;
-      if (last_payload_offset > UINT64_MAX - ntwm->payload_bytes_per_slice)
-        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: requested slot payload window was outside the trusted file
 
       const uint64_t requested_end =
-          last_payload_offset + ntwm->payload_bytes_per_slice;
+          last_payload_offset + last_payload_bytes;
       const uint64_t page_size = (uint64_t)ntwm->page_size;
       const uint64_t map_offset =
           requested_offset - (requested_offset % page_size);
@@ -916,7 +1170,6 @@ def time_window_manager_numerical() -> None:
       ntwm->mapped_file_offset = map_offset;
       ntwm->mapped_length_bytes = map_length;
       ntwm->mapped_base = (const unsigned char *)new_mapping;
-      ntwm->active_payload_base = ntwm->mapped_base + (requested_offset - map_offset);
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_mmap_for_slot
 
@@ -932,9 +1185,27 @@ def time_window_manager_numerical() -> None:
     static inline const double *time_window_manager_numerical_grid_ptr(
         const NumericalTimeWindowManager *ntwm,
         const uint64_t slice_index) {
-      const uint64_t local_slice = slice_index - ntwm->mapped_first_slice;
-      return (const double *)(ntwm->active_payload_base +
-                              local_slice * ntwm->payload_stride_bytes);
+      if (ntwm == NULL || ntwm->mapped_base == NULL ||
+          ntwm->slice_payload_offsets == NULL ||
+          ntwm->slice_payload_bytes == NULL ||
+          slice_index < ntwm->mapped_first_slice ||
+          slice_index >= ntwm->mapped_last_slice_exclusive) {
+        return NULL;
+      } // END IF: one requested slice was outside the active mapped payload window
+
+      const uint64_t payload_offset = ntwm->slice_payload_offsets[slice_index];
+      const uint64_t payload_bytes = ntwm->slice_payload_bytes[slice_index];
+      if (payload_offset < ntwm->mapped_file_offset ||
+          payload_bytes == 0ULL ||
+          payload_offset > UINT64_MAX - payload_bytes) {
+        return NULL;
+      } // END IF: cached payload metadata could not describe the mapped slice range
+      const uint64_t payload_relative = payload_offset - ntwm->mapped_file_offset;
+      if (payload_relative > (uint64_t)ntwm->mapped_length_bytes ||
+          payload_bytes > (uint64_t)ntwm->mapped_length_bytes - payload_relative) {
+        return NULL;
+      } // END IF: one cached payload fell outside the current mmap region
+      return (const double *)(ntwm->mapped_base + payload_relative);
     } // END FUNCTION: time_window_manager_numerical_grid_ptr
 
     /**
@@ -995,10 +1266,13 @@ def time_window_manager_numerical() -> None:
 
       for (int s = 0; s < temporal_num_points; s++) {
         const uint64_t slice_index = first_slice + (uint64_t)s;
+        const double *payload_ptr =
+            time_window_manager_numerical_grid_ptr(ntwm, slice_index);
+        if (payload_ptr == NULL)
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         slice_indices[s] = slice_index;
         slice_times[s] = (REAL)ntwm->slice_times[slice_index];
-        slice_payloads[s] =
-            time_window_manager_numerical_grid_ptr(ntwm, slice_index);
+        slice_payloads[s] = payload_ptr;
       } // END LOOP: for s over temporal interpolation stencil slices
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_stencil_for_time

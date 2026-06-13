@@ -57,7 +57,8 @@ def register_CFunction_numerical_interpolation(
     shared mapped data.
 
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
-        must be `"Spherical"` or `"SinhSpherical"`.
+        must be `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`, or
+        `"SinhCylindrical"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -91,10 +92,15 @@ def register_CFunction_numerical_interpolation(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    if CoordSystem not in ("Spherical", "SinhSpherical"):
+    if CoordSystem not in (
+        "Spherical",
+        "SinhSpherical",
+        "Cylindrical",
+        "SinhCylindrical",
+    ):
         raise ValueError(
             "numerical_interpolation currently supports only CoordSystem in "
-            "('Spherical', 'SinhSpherical'); "
+            "('Spherical', 'SinhSpherical', 'Cylindrical', 'SinhCylindrical'); "
             f"found '{CoordSystem}'."
         )
 
@@ -178,14 +184,11 @@ independently ray-by-ray.
       temporal_half_width != numerical_window->temporal_interp_half_width) {
     #pragma omp parallel for
     for (long int i = 0; i < chunk_size; i++) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      } // END LOOP: for comp over metric outputs after invalid temporal order
-      if (d_connection_bundle != NULL) {
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
-        } // END LOOP: for comp over connection outputs after invalid temporal order
-      } // END IF: connection output bundle was requested
     } // END LOOP: for i over rays after invalid temporal order
     return;
   } // END IF: runtime temporal interpolation half-width was invalid
@@ -193,14 +196,11 @@ independently ray-by-ray.
   if (temporal_num_points != numerical_window->temporal_interp_num_points) {
     #pragma omp parallel for
     for (long int i = 0; i < chunk_size; i++) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      } // END LOOP: for comp over metric outputs after inconsistent temporal stencil size
-      if (d_connection_bundle != NULL) {
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
-        } // END LOOP: for comp over connection outputs after inconsistent temporal stencil size
-      } // END IF: connection output bundle was requested
     } // END LOOP: for i over rays after inconsistent temporal stencil size
     return;
   } // END IF: runtime temporal stencil size did not match the mapped numerical window
@@ -226,49 +226,42 @@ independently ray-by-ray.
     const int window_status = time_window_manager_numerical_stencil_for_time(
         numerical_window, (double)t, temporal_half_width, slice_indices,
         slice_times, slice_payloads);
-    if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+    if (window_status != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
       ray_failed = 1;
-    } else {
+    else {
       // Step 2: Interpolate each mapped time slice in space at the photon
       // position, producing one tensor bundle per temporal node.
       const int spatial_status =
           {spatial_name}(
               spatial_context, commondata, params, x, y, z, temporal_num_points,
               slice_payloads, g4dd_slices, gamma4udd_slices);
-      if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS) {
+      if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
         ray_failed = 1;
-      } else {
+      else {
         // Step 3: Interpolate the per-slice tensor bundles in physical time to the
         // photon coordinate time.
         const int temporal_status = temporal_lagrange_interpolation(
             commondata, slice_times, g4dd_slices, gamma4udd_slices, t, g4dd_local,
             gamma4udd_local);
-        if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS) {
+        if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
-        } // END IF: temporal interpolation failed for this ray
       } // END ELSE: spatial interpolation succeeded for this ray
     } // END ELSE: mapped temporal stencil was available for this ray
 
     if (ray_failed) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      } // END LOOP: for comp over metric failure outputs
-      if (d_connection_bundle != NULL) {
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
           d_connection_bundle[IDX_CONN(comp, i)] = NAN;
-        } // END LOOP: for comp over connection failure outputs
-      } // END IF: connection output bundle was requested
       continue;
     } // END IF: at least one interpolation stage failed for this ray
 
-    for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++) {
+    for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
       d_metric_bundle[IDX_METRIC(comp, i)] = (double)g4dd_local[comp];
-    } // END LOOP: for comp over final metric components
-    if (d_connection_bundle != NULL) {
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+    if (d_connection_bundle != NULL)
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
         d_connection_bundle[IDX_CONN(comp, i)] = (double)gamma4udd_local[comp];
-      } // END LOOP: for comp over final Christoffel components
-    } // END IF: connection output bundle was requested
   } // END LOOP: for i over rays in chunk
 
   #undef IDX_F

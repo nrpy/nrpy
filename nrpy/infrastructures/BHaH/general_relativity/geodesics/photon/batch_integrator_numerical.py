@@ -30,12 +30,26 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 
 def batch_integrator_numerical(
     spacetime_name: str,
+    dataset_coord_system: str,
 ) -> None:
     r"""
     Construct the CPU numerical-spacetime photon batch integrator.
 
     :param spacetime_name: Spacetime identifier used by photon-specific initial-condition helpers.
+    :param dataset_coord_system: Coordinate system used by the numerical dataset.
     :raises ValueError: If the configured parallelization mode is not OpenMP.
+
+    Doctests:
+    >>> import os
+    >>> import nrpy.c_function as cfc
+    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
+    >>> cfc.CFunction_dict.clear()
+    >>> batch_integrator_numerical("Schwarzschild", "Spherical")
+    >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
+    >>> "@param[in] commondata" in generated
+    True
+    >>> "time_window_manager_numerical_mmap_for_slot" in generated
+    True
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
@@ -45,6 +59,16 @@ def batch_integrator_numerical(
         raise ValueError(
             "batch_integrator_numerical currently supports only "
             "parallelization='openmp'."
+        )
+    if dataset_coord_system in ("Spherical", "SinhSpherical"):
+        phi_dim = 2
+    elif dataset_coord_system in ("Cylindrical", "SinhCylindrical"):
+        phi_dim = 1
+    else:
+        raise ValueError(
+            "batch_integrator_numerical currently supports only "
+            "dataset_coord_system in ('Spherical', 'SinhSpherical', "
+            f"'Cylindrical', 'SinhCylindrical'); found '{dataset_coord_system}'."
         )
 
     # Supplied-name mapping: the checklist aliases numerical_time_window_manager_set_inert,
@@ -103,9 +127,11 @@ def batch_integrator_numerical(
     numerical_interpolation(), advances photons with the existing RKF45 kernels,
     and writes final blueprint results.
 
-    @param commondata Struct containing global numerical-spacetime, camera, and integration parameters.
+    @param[in] commondata Struct containing global numerical-spacetime, camera,
+                          and integration parameters.
     @param num_rays Total number of photon trajectories to simulate.
-    @param results_buffer Host array storing the final physical intersections."""
+    @param[out] results_buffer Host array storing the final physical
+                               intersections."""
 
     cfunc_type = "void"
 
@@ -130,7 +156,10 @@ def batch_integrator_numerical(
         "// Event outputs are written directly to results_buffer on the CPU."
     )
     calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);"
-    set_intitial_con = f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
+    set_initial_conditions_call = (
+        f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, "
+        "&all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
+    )
 
     def memcpy_cpu(dest: str, src: str, size: str) -> str:
         return f"memcpy({dest}, {src}, {size});"
@@ -332,7 +361,7 @@ def batch_integrator_numerical(
                 "The numerical photon batch integrator requires a validated combined .bin file path.\n");
         slot_manager_free(&tsm);
         exit(1);
-    }}
+    }} // END IF: numerical_spacetime_bin_path was empty
 
     if (time_window_manager_numerical_init(
             &numerical_window,
@@ -345,20 +374,22 @@ def batch_integrator_numerical(
                 commondata->numerical_spacetime_bin_path);
         slot_manager_free(&tsm);
         exit(1);
-    }}
+    }} // END IF: numerical time-window manager initialization failed
 
-    if (numerical_params.Nxx2 != 2) {{
+    if (numerical_params.Nxx{phi_dim} != 2) {{
         fprintf(stderr,
-                "ERROR: numerical spatial interpolation expects exactly two stored phi planes; got Nxx2=%d.\n",
-                numerical_params.Nxx2);
+                "ERROR: numerical spatial interpolation expects exactly two stored phi planes in native dimension {phi_dim}; got Nxx{phi_dim}=%d.\n",
+                numerical_params.Nxx{phi_dim});
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }}
+    }} // END IF: stored phi-plane count was incompatible with azimuthal symmetry
 
     azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
-    spatial_context.stored_phi_samples[0] = numerical_params.xxmin2 + 0.5 * numerical_params.dxx2;
-    spatial_context.stored_phi_samples[1] = numerical_params.xxmin2 + 1.5 * numerical_params.dxx2;
+    spatial_context.stored_phi_samples[0] =
+        numerical_params.xxmin{phi_dim} + 0.5 * numerical_params.dxx{phi_dim};
+    spatial_context.stored_phi_samples[1] =
+        numerical_params.xxmin{phi_dim} + 1.5 * numerical_params.dxx{phi_dim};
 
     //==========================================
     // 2. INITIALIZATION PHASE
@@ -371,20 +402,14 @@ def batch_integrator_numerical(
     double n_z_out[3]; // 3D orthonormal basis vector pointing along the $z$-axis of the local window geometry.
 
     // Operates synchronously as the primary state array must be fully populated before pipeline dispatch.
-    {set_intitial_con}
+    {set_initial_conditions_call}
 
     //==========================================
-    // DIAGNOSTIC PROBE: DETAILED INITIAL POSITION & PLACEHOLDER ALIGNMENT
+    // DIAGNOSTIC PROBE: INITIAL-STATE ALIGNMENT
     //==========================================
-    // Scans the master Host SoA immediately following the initialization kernel call.
+    // Scan the master Host SoA immediately after the initial-condition kernel call.
 
     long int init_mismatch_count = 0; // Accumulator tracking the total number of physical state initializations that failed structural validation.
-    long int mismatch_t = 0; // Counter tracking validation failures for the temporal coordinate $t$.
-    long int mismatch_x = 0; // Counter tracking validation failures for the spatial coordinate $x$.
-    long int mismatch_y = 0; // Counter tracking validation failures for the spatial coordinate $y$.
-    long int mismatch_z = 0; // Counter tracking validation failures for the spatial coordinate $z$.
-    long int mismatch_pt = 0; // Counter tracking validation failures for the temporal momentum $p_t$.
-    long int mismatch_lam = 0; // Counter tracking validation failures for the distance traveled.
 
     for (long int p = 0; p < num_rays; p++) {{ // Loop iterator index $p$ mapping to a unique photon trajectory $x^\mu$ during diagnostic validation.
         const double t_check = all_photons_host.f[0 * num_rays + p]; // Evaluates the current temporal coordinate $t$ from the Host SoA.
@@ -401,13 +426,6 @@ def batch_integrator_numerical(
         bool fail_pt = fabs(pt_check) > 1e-15; // Boolean flag indicating temporal momentum $p_t$ validation failure.
         bool fail_lam = fabs(lam_check) > 1e-15; // Boolean flag indicating distance traveled validation failure.
 
-        if (fail_t) mismatch_t++; // Increments the validation failure counter for temporal coordinate $t$.
-        if (fail_x) mismatch_x++; // Increments the validation failure counter for spatial coordinate $x$.
-        if (fail_y) mismatch_y++; // Increments the validation failure counter for spatial coordinate $y$.
-        if (fail_z) mismatch_z++; // Increments the validation failure counter for spatial coordinate $z$.
-        if (fail_pt) mismatch_pt++; // Increments the validation failure counter for temporal momentum $p_t$.
-        if (fail_lam) mismatch_lam++; // Increments the validation failure counter for the distance traveled.
-
         if (fail_t || fail_x || fail_y || fail_z || fail_pt || fail_lam) {{
             init_mismatch_count++; // Increments the total accumulation of trajectory structural validation failures.
         }} // END IF: validate initialization coordinates
@@ -416,7 +434,7 @@ def batch_integrator_numerical(
     if (init_mismatch_count > 0) {{
         const double mismatch_percent = ((double)init_mismatch_count / (double)num_rays) * 100.0; // Calculates the failure rate percentage for the initial state alignment.
         // This is a soft warning to surface initialization inconsistencies without halting execution.
-        printf("[DIAGNOSTIC] Initialization Alignment Check: %ld out of %ld rays (%.2f%%) fail coordinate/placeholder validation.\n", init_mismatch_count, num_rays, mismatch_percent);
+        printf("[DIAGNOSTIC] Initialization Alignment Check: %ld out of %ld rays (%.2f%%) fail initial-state validation.\n", init_mismatch_count, num_rays, mismatch_percent);
     }} // END IF: init_mismatch_count > 0 to print diagnostic
 
     const int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
@@ -427,7 +445,7 @@ def batch_integrator_numerical(
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }}
+    }} // END IF: initial photon time was outside the configured slot range
 
     if (time_window_manager_numerical_mmap_for_slot(
             &numerical_window, &tsm, initial_slot_idx) !=
@@ -439,7 +457,7 @@ def batch_integrator_numerical(
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }}
+    }} // END IF: initial slot time window mapping failed
 
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
 
@@ -602,8 +620,8 @@ def batch_integrator_numerical(
                 time_window_manager_numerical_free(&numerical_window);
                 slot_manager_free(&tsm);
                 exit(1);
-            }}
-        }}
+            }} // END IF: slot time window mapping failed
+        }} // END IF: slot_idx still contained active photons
 
         int current = 0; // Integer index tracking the primary active CPU buffer for execution.
         int next = 1; // Integer index tracking the secondary CPU buffer preparing the upcoming payload.
@@ -683,7 +701,8 @@ def batch_integrator_numerical(
             }} // END LOOP: for c_k over 9 to setup CPU buffer baseline
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
-                // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ synchronously on the active buffer.
+                // Interpolation step: evaluate the metric tensor $g_{{ \mu\nu}}$
+                // and connection $\Gamma^\alpha_{{ \beta\gamma}}$ on the active buffer.
                 numerical_interpolation(
                     commondata,
                     &numerical_params,
@@ -702,20 +721,20 @@ def batch_integrator_numerical(
                         if (!isfinite(val)) {{
                             bad_interp = true;
                             break;
-                        }}
-                    }}
+                        }} // END IF: one metric component was not finite
+                    }} // END LOOP: for interp_c over metric components
                     if (!bad_interp) {{
                         for (int interp_c = 0; interp_c < 40; ++interp_c) {{
                             const double val = d_connection_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
                             if (!isfinite(val)) {{
                                 bad_interp = true;
                                 break;
-                            }}
-                        }}
-                    }}
+                            }} // END IF: one connection component was not finite
+                        }} // END LOOP: for interp_c over connection components
+                    }} // END IF: metric components were finite before checking the connection
                     if (bad_interp)
                         bad_interp_current++;
-                }}
+                }} // END LOOP: for interp_i over active chunks on the active buffer
                 if (bad_interp_current > 0) {{
                     fprintf(stderr,
                             "ERROR: Slot %d stage %d buffer %d: %ld rays had "
@@ -729,15 +748,19 @@ def batch_integrator_numerical(
                     slot_manager_free(&tsm);
                     exit(1);
                 }} // END IF: bad_interp_current > 0 to abort before RHS on invalid interpolation
-                // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ synchronously on the active buffer.
+                // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
+                // on the active buffer.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
-                // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates synchronously on the active buffer.
+                // Stage update: accumulate the intermediate RKF45 state updates on the
+                // active buffer.
                 rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
             }} // END LOOP: for stage over 6 to execute RKF45 stages
 
-            // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
+            // Finalize step: apply Cash-Karp error control to update the integration
+            // baseline and step size $h$.
             rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
-            // Kernel Launch: Detects geometric events and records intersection coordinate states synchronously on the active buffer.
+            // Event step: detect geometric events and record intersection coordinate
+            // states on the active buffer.
             event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
@@ -845,7 +868,9 @@ def batch_integrator_numerical(
                 }} // END LOOP: for c_k over 9 to setup CPU buffer baseline
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
-                    // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ synchronously on the alternate buffer.
+                    // Interpolation step: evaluate the metric tensor
+                    // $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$
+                    // on the alternate buffer.
                     numerical_interpolation(
                         commondata,
                         &numerical_params,
@@ -864,20 +889,20 @@ def batch_integrator_numerical(
                             if (!isfinite(val)) {{
                                 bad_interp = true;
                                 break;
-                            }}
-                        }}
+                            }} // END IF: one metric component was not finite
+                        }} // END LOOP: for interp_c over metric components
                         if (!bad_interp) {{
                             for (int interp_c = 0; interp_c < 40; ++interp_c) {{
                                 const double val = d_connection_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
                                 if (!isfinite(val)) {{
                                     bad_interp = true;
                                     break;
-                                }}
-                            }}
-                        }}
+                                }} // END IF: one connection component was not finite
+                            }} // END LOOP: for interp_c over connection components
+                        }} // END IF: metric components were finite before checking the connection
                         if (bad_interp)
                             bad_interp_next++;
-                    }}
+                    }} // END LOOP: for interp_i over active chunks on the alternate buffer
                     if (bad_interp_next > 0) {{
                         fprintf(stderr,
                                 "ERROR: Slot %d stage %d buffer %d: %ld rays had "
@@ -891,15 +916,19 @@ def batch_integrator_numerical(
                         slot_manager_free(&tsm);
                         exit(1);
                     }} // END IF: bad_interp_next > 0 to abort before RHS on invalid interpolation
-                    // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ synchronously on the alternate buffer.
+                    // RHS step: compute the geodesic equation derivatives
+                    // $\dot{{ f}}^\mu$ on the alternate buffer.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
-                    // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates synchronously on the alternate buffer.
+                    // Stage update: accumulate the intermediate RKF45 state updates on
+                    // the alternate buffer.
                     rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
                 }} // END LOOP: for stage over 6 to execute RKF45 stages
 
-                // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the upcoming integration baseline.
+                // Finalize step: apply Cash-Karp error control to update the upcoming
+                // integration baseline and step size $h$.
                 rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next]{stream_arg_next});
-                // Kernel Launch: Detects geometric events and records intersection coordinate states synchronously on the alternate buffer.
+                // Event step: detect geometric events and record intersection
+                // coordinate states on the alternate buffer.
                 event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_affine[next], d_affine_prev[next], d_affine_pre_prev[next], results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
                     // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
@@ -1062,7 +1091,8 @@ def batch_integrator_numerical(
         // CPU buffer copy: Extracts validated CPU-side blueprints $b_i$ containing geometric plane intersections.
         {results_memcpy}
 
-        // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$.
+        // Final output step: process escaped photons intersecting the celestial
+        // sphere $r > r_{{escape}}$.
         {calc_blueprint}
 
         //==========================================
