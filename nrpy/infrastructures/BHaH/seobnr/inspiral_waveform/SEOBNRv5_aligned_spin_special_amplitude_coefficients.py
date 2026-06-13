@@ -137,40 +137,17 @@ Computes and applies the special amplitude coefficients to inspiral waveform mod
     prefunc = r"""
 #include<complex.h>
 
-/**
- * Clamp a value to the closed interval [lo, hi].
- *
- * @param[in] x Value to clamp.
- * @param[in] lo Lower bound.
- * @param[in] hi Upper bound.
- * @return Clamped value.
- */
 static inline REAL seobnr_clamp_real(const REAL x, const REAL lo, const REAL hi) {
   return fmin(hi, fmax(lo, x));
 } // END FUNCTION: seobnr_clamp_real
 
 /**
- * Compute the Kerr ISCO radius used by the HBR2016 final-spin fit.
- *
- * @param[in] a Dimensionless spin parameter.
- * @return Kerr ISCO radius.
- */
-static inline REAL seobnr_hbr2016_kerr_isco_radius(const REAL a) {
-  const REAL a_ceil_one = 0.5 * (a + 1.0 - fabs(a - 1.0));
-  const REAL z1 = 1.0 + cbrt(1.0 - a_ceil_one * a_ceil_one) *
-      (cbrt(1.0 + a_ceil_one) + cbrt(1.0 - a_ceil_one));
-  const REAL z2 = sqrt(3.0 * a_ceil_one * a_ceil_one + z1 * z1);
-  const REAL a_sign = (a_ceil_one > 0.0) - (a_ceil_one < 0.0);
-  return 3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2)) * a_sign;
-} // END FUNCTION: seobnr_hbr2016_kerr_isco_radius
-
-/**
  * Compute the HBR2016 M3J4 orbital angular-momentum fit ell.
  *
- * @param[in] m1 Mass of body 1.
- * @param[in] m2 Mass of body 2.
- * @param[in] chi1z Spin of body 1 projected on the orbital angular momentum.
- * @param[in] chi2z Spin of body 2 projected on the orbital angular momentum.
+ * @param m1 Mass of body 1.
+ * @param m2 Mass of body 2.
+ * @param chi1z Spin of body 1 projected on the orbital angular momentum.
+ * @param chi2z Spin of body 2 projected on the orbital angular momentum.
  * @return HBR2016 fitted ell value.
  */
 static inline REAL seobnr_hbr2016_ell_m3j4(
@@ -183,7 +160,13 @@ static inline REAL seobnr_hbr2016_ell_m3j4(
   const REAL atot = (chi1z + chi2z * q * q) / ((1.0 + q) * (1.0 + q));
   const REAL xi = 0.474046;
   const REAL aeff = atot + xi * nu * (chi1z + chi2z);
-  const REAL r_isco_eff = seobnr_hbr2016_kerr_isco_radius(aeff);
+  const REAL aeff_ceil_one = 0.5 * (aeff + 1.0 - fabs(aeff - 1.0));
+  const REAL z1 = 1.0 + cbrt(1.0 - aeff_ceil_one * aeff_ceil_one) *
+      (cbrt(1.0 + aeff_ceil_one) + cbrt(1.0 - aeff_ceil_one));
+  const REAL z2 = sqrt(3.0 * aeff_ceil_one * aeff_ceil_one + z1 * z1);
+  const REAL aeff_sign = (aeff_ceil_one > 0.0) - (aeff_ceil_one < 0.0);
+  const REAL r_isco_eff =
+      3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2)) * aeff_sign;
   const REAL l_isco_eff = (2.0 / (3.0 * sqrt(3.0))) *
       (1.0 + 2.0 * sqrt(3.0 * r_isco_eff - 2.0));
   const REAL e_isco_eff = sqrt(1.0 - 2.0 / (3.0 * r_isco_eff));
@@ -201,38 +184,18 @@ static inline REAL seobnr_hbr2016_ell_m3j4(
 } // END FUNCTION: seobnr_hbr2016_ell_m3j4
 
 /**
- * Compute the signed HBR2016 M3J4 nonprecessing final spin.
- *
- * @param[in] m1 Mass of body 1.
- * @param[in] m2 Mass of body 2.
- * @param[in] chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
- * @param[in] chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
- * @return Signed nonprecessing final spin.
- */
-static inline REAL seobnr_hbr2016_nonprecessing_final_spin_m3j4(
-    const REAL m1,
-    const REAL m2,
-    const REAL chi1_lnhat,
-    const REAL chi2_lnhat) {
-  const REAL q = m2 / m1;
-  const REAL atot = (chi1_lnhat + chi2_lnhat * q * q) / ((1.0 + q) * (1.0 + q));
-  const REAL ell = seobnr_hbr2016_ell_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
-  return atot + ell / (1.0 / q + 2.0 + q);
-} // END FUNCTION: seobnr_hbr2016_nonprecessing_final_spin_m3j4
-
-/**
  * Compute the signed HBR2016 M3J4 precessing final spin.
  *
- * @param[in] m1 Mass of body 1.
- * @param[in] m2 Mass of body 2.
- * @param[in] chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
- * @param[in] chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
- * @param[in] chi1_x Cartesian spin component of body 1.
- * @param[in] chi1_y Cartesian spin component of body 1.
- * @param[in] chi1_z Cartesian spin component of body 1.
- * @param[in] chi2_x Cartesian spin component of body 2.
- * @param[in] chi2_y Cartesian spin component of body 2.
- * @param[in] chi2_z Cartesian spin component of body 2.
+ * @param m1 Mass of body 1.
+ * @param m2 Mass of body 2.
+ * @param chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
+ * @param chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
+ * @param chi1_x Cartesian spin component of body 1.
+ * @param chi1_y Cartesian spin component of body 1.
+ * @param chi1_z Cartesian spin component of body 1.
+ * @param chi2_x Cartesian spin component of body 2.
+ * @param chi2_y Cartesian spin component of body 2.
+ * @param chi2_z Cartesian spin component of body 2.
  * @return Signed precessing final spin.
  */
 static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
@@ -267,8 +230,12 @@ static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
       + ell * ell * q2;
   if (sqrt_arg < 0.0)
     sqrt_arg = 0.0;
+  const REAL atot_nonprecessing =
+      (chi1_lnhat + chi2_lnhat * q2) / ((1.0 + q) * (1.0 + q));
+  const REAL ell_nonprecessing =
+      seobnr_hbr2016_ell_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
   const REAL final_spin_nonprecessing =
-      seobnr_hbr2016_nonprecessing_final_spin_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
+      atot_nonprecessing + ell_nonprecessing / (1.0 / q + 2.0 + q);
   const REAL sign_final_spin = final_spin_nonprecessing < 0.0 ? -1.0 : 1.0;
   return sign_final_spin * sqrt(sqrt_arg) / ((1.0 + q) * (1.0 + q));
 } // END FUNCTION: seobnr_hbr2016_precessing_final_spin_m3j4
