@@ -158,7 +158,18 @@ calculations, norm evaluations, and detailed final iteration analyses.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
 
-      bah_diagnostics_spectre_spin(commondata, griddata);
+      {
+        const int spin_rc = bah_diagnostics_spectre_spin(commondata, griddata);
+        if (spin_rc != BHAHAHA_SUCCESS) {
+          bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+          bhahaha_diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
+            fprintf(stderr, "WARNING: SpECTRE spin diagnostic failed with code %d; continuing without spin output.\n", spin_rc);
+          }
+        }
+      } // END BLOCK: optional SpECTRE spin diagnostic
 
       // Display detailed final iteration diagnostics if verbosity is enabled.
       {

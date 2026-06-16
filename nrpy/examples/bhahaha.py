@@ -46,11 +46,27 @@ parser.add_argument(
     action="store_true",
     help="Disable OpenMP flags",
 )
+parser.add_argument(
+    "--primme-dir",
+    type=str,
+    default=os.environ.get("PRIMME_DIR"),
+    help="External PRIMME installation prefix. May also be supplied via PRIMME_DIR.",
+)
 args = parser.parse_args()
 fd_order = args.fdorder
 outrootdir = args.outrootdir
 use_cpp = args.cpp
 use_openmp = not args.no_openmp  # default: True if flag omitted
+primme_dir = args.primme_dir
+if primme_dir is None:
+    raise ValueError(
+        "BHaHAHA SpECTRE spin diagnostics require PRIMME. Set PRIMME_DIR or pass --primme-dir."
+    )
+primme_include_dir = Path(primme_dir, "include")
+if not Path(primme_include_dir, "primme.h").is_file():
+    raise FileNotFoundError(
+        f"Could not find primme.h under {primme_include_dir}. Set PRIMME_DIR to the PRIMME installation prefix."
+    )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -214,6 +230,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     create_lib=True,
     static_lib=True,
     use_openmp=use_openmp,
+    include_dirs=[str(primme_include_dir)],
 )
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
@@ -248,6 +265,16 @@ BHaHAHA_h += """
 // Function: bah_error_message
 // Interprets bah_find_horizon() error codes & returns a useful string.
 const char *bah_error_message(const bhahaha_error_codes error_code);
+//===============================================
+
+//===============================================
+// External dependency for SpECTRE spin diagnostics
+//===============================================
+// This generated static library includes PRIMME's C API for the AKV
+// spin-potential generalized eigenproblem. Downstream applications must link
+// against the same external PRIMME installation used at code-generation time:
+//   -I$PRIMME_DIR/include -L$PRIMME_DIR/lib -lprimme
+// plus any transitive BLAS/LAPACK libraries required by that PRIMME build.
 //===============================================
 
 #endif // BHAHAHA_HEADER_H

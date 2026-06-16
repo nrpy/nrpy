@@ -57,6 +57,21 @@ error_code_msg_tuples_list += [("INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS",
                                 "bah_interpolation_2d_general__uniform_src_grid(): Horizon extends beyond angular directions theta,phi. Should never happen...")]
 error_code_msg_tuples_list += [
     ("DIAG_PROPER_CIRCUM_MALLOC_ERROR", "diagnostics_proper_circumferences(): One or more malloc's failed.")]
+error_code_msg_tuples_list += [
+    ("DIAG_SPECTRE_SPIN_POTENTIAL_ERROR",
+     "diagnostics_spectre_spin(): Failed to compute finite normalized spin-potential modes.")]
+error_code_msg_tuples_list += [
+    ("DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR",
+     "diagnostics_spectre_spin(): Failed to allocate spin-potential eigenproblem work arrays.")]
+error_code_msg_tuples_list += [
+    ("DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR",
+     "diagnostics_spectre_spin(): Invalid geometry or grid for spin-potential eigenproblem.")]
+error_code_msg_tuples_list += [
+    ("DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR",
+     "diagnostics_spectre_spin(): PRIMME failed to solve the spin-potential generalized eigenproblem.")]
+error_code_msg_tuples_list += [
+    ("DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR",
+     "diagnostics_spectre_spin(): Failed to align, normalize, or validate spin-potential modes.")]
 
 
 # fmt: on
