@@ -146,7 +146,9 @@ if enable_bhahaha:
         max_horizons=1
     )
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-        enable_simd=enable_intrinsics, project_dir=project_dir
+        enable_simd=enable_intrinsics,
+        project_dir=project_dir,
+        use_cpp=(parallelization == "cuda"),
     )
 
 if parallelization == "cuda":
@@ -286,7 +288,7 @@ if enable_bhahaha:
     par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
     par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
     par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
-    par.adjust_CodeParam_default("bah_max_search_radius", [2.0 * default_BH_mass])
+    par.adjust_CodeParam_default("bah_max_search_radius", [1.1 * default_BH_mass])
     par.adjust_CodeParam_default("bah_Theta_L2_times_M_tolerance", [2e-4])
     par.adjust_CodeParam_default("bah_verbosity_level", 0)
 

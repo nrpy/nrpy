@@ -200,6 +200,7 @@ if enable_bhahaha:
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics,
         project_dir=project_dir,
+        use_cpp=(parallelization == "cuda"),
     )
 
 if parallelization == "cuda":
