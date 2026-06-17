@@ -34,6 +34,11 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
 
 #define FWRITE(ptr, size, nmemb, fp, what) BHAH_safe_write_impl((ptr), (size_t)(size), (size_t)(nmemb), (fp), (what), __FILE__, __LINE__, __func__)
 
+#define BHAH_CHECKPOINT_MAGIC UINT64_C(0x42484148434B5054)
+#define BHAH_CHECKPOINT_VERSION_BASE 1U
+#define BHAH_CHECKPOINT_VERSION_AKV_CACHE 2U
+#define BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE 3U
+
 /**
  * Write a checkpoint file
  */
@@ -54,6 +59,13 @@ void write_checkpoint(const commondata_struct *restrict commondata, griddata_str
       perror("write_checkpoint: Failed to open checkpoint file. Check permissions and disk space availability.");
       exit(1);
     } // END IF cp_file == NULL
+
+    {
+      const uint64_t checkpoint_magic = BHAH_CHECKPOINT_MAGIC;
+      const uint32_t checkpoint_format_version = BHAH_CHECKPOINT_VERSION_BASE;
+      FWRITE(&checkpoint_magic, sizeof(uint64_t), 1, cp_file, "checkpoint_magic");
+      FWRITE(&checkpoint_format_version, sizeof(uint32_t), 1, cp_file, "checkpoint_format_version");
+    } // END BLOCK: write checkpoint header
 
     FWRITE(commondata, sizeof(commondata_struct), 1, cp_file, "commondata");
 
