@@ -18,6 +18,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -85,7 +86,13 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
+basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
+enable_bhahaha = parallelization == "openmp"
+
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -106,6 +113,41 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+
+if enable_bhahaha:
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        max_horizons=1
+    )
+    BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics, project_dir=project_dir
+    )
 
 if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunctions_HostDevice__operations()
@@ -133,6 +175,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
+    enable_bhahaha=enable_bhahaha,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
@@ -217,6 +260,9 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
+    set_of_CoordSystems=basis_transform_CoordSystems,
+)
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
@@ -233,6 +279,16 @@ if IDtype == "UIUCBlackHole":
     par.adjust_CodeParam_default("chi", default_BH_spin_chi)
 elif IDtype == "OffsetKerrSchild":
     par.adjust_CodeParam_default("a", default_BH_spin_chi * default_BH_mass)
+if enable_bhahaha:
+    # Set BHaHAHA defaults for the single apparent horizon around the spinning BH.
+    par.adjust_CodeParam_default("bah_initial_grid_x_center", [0.0])
+    par.adjust_CodeParam_default("bah_initial_grid_y_center", [0.0])
+    par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
+    par.adjust_CodeParam_default("bah_max_search_radius", [2.0 * default_BH_mass])
+    par.adjust_CodeParam_default("bah_Theta_L2_times_M_tolerance", [2e-4])
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
@@ -250,6 +306,9 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
+    additional_includes=(
+        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_bhahaha else []
+    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
@@ -262,7 +321,9 @@ BHaH.main_c.register_CFunction_main_c(
     boundary_conditions_desc=boundary_conditions_desc,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    enable_bhahaha=enable_bhahaha,
 )
 
 # SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
@@ -291,6 +352,10 @@ else:
         project_name=project_name,
         exec_or_library_name=project_name,
         compiler_opt_option="default",
+        addl_dirs_to_make=([BHaHAHA_subdir] if enable_bhahaha else []),
+        addl_libraries=(
+            [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_bhahaha else []
+        ),
     )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."
