@@ -197,6 +197,7 @@ if enable_bhahaha:
     BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         max_horizons=3
     )
+if enable_bhahaha or enable_psi4_diagnostics:
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics,
         project_dir=project_dir,
