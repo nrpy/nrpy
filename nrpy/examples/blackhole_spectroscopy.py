@@ -135,6 +135,10 @@ set_of_CoordSystems = {CoordSystem}
 basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
+if enable_bhahaha and fp_type != "double":
+    raise ValueError(
+        "BHaHAHA integration currently requires --floating_point_precision double."
+    )
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
@@ -197,6 +201,7 @@ if enable_bhahaha:
     BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
         max_horizons=3
     )
+if enable_bhahaha or enable_psi4_diagnostics:
     BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
         enable_simd=enable_intrinsics,
         project_dir=project_dir,
