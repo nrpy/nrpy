@@ -70,7 +70,7 @@ t_final = 1.0 * grid_physical_size
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
-    "SinhCylindrical": [72, 72, 2],
+    "SinhCylindrical": [72, 2, 72],
     "Cartesian": [64, 64, 64],
 }
 default_BH_mass = 1.0
