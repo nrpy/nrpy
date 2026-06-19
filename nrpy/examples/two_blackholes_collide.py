@@ -129,6 +129,10 @@ set_of_CoordSystems = {CoordSystem}
 basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
+if enable_bhahaha and fp_type != "double":
+    raise ValueError(
+        "BHaHAHA integration currently requires --floating_point_precision double."
+    )
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
