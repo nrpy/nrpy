@@ -57,7 +57,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "spinning_blackhole"
-CoordSystem = "Cartesian"
+CoordSystem = "SinhCylindrical"
 IDtype = "UIUCBlackHole"
 # IDtype = "OffsetKerrSchild"
 IDCoordSystem = "Spherical"
@@ -70,6 +70,7 @@ t_final = 1.0 * grid_physical_size
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
+    "SinhCylindrical": [72, 72, 2],
     "Cartesian": [64, 64, 64],
 }
 default_BH_mass = 1.0
@@ -279,6 +280,9 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
+if CoordSystem == "SinhCylindrical":
+    par.adjust_CodeParam_default("SINHWRHO", 0.4)
+    par.adjust_CodeParam_default("SINHWZ", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("M", default_BH_mass)
 if IDtype == "UIUCBlackHole":
@@ -290,11 +294,8 @@ if enable_bhahaha:
     par.adjust_CodeParam_default("bah_initial_grid_x_center", [0.0])
     par.adjust_CodeParam_default("bah_initial_grid_y_center", [0.0])
     par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
-    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
     par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
-    par.adjust_CodeParam_default("bah_max_search_radius", [1.1 * default_BH_mass])
-    par.adjust_CodeParam_default("bah_Theta_L2_times_M_tolerance", [2e-4])
-    par.adjust_CodeParam_default("bah_verbosity_level", 0)
+    par.adjust_CodeParam_default("bah_max_search_radius", [0.6 * default_BH_mass])
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
