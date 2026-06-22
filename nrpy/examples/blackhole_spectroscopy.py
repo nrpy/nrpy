@@ -132,6 +132,7 @@ enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
+basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
 if enable_bhahaha and fp_type != "double":

@@ -1,0 +1,46 @@
+#ifndef AKV_PRIMME_H
+#define AKV_PRIMME_H
+
+#include "akv_primme_prefix_symbols.h"
+
+/* Public frontend entrypoints exported by primme_c.c. */
+#define cprimme bah_akv_cprimme
+#define cprimme_normal bah_akv_cprimme_normal
+#define cublas_cprimme bah_akv_cublas_cprimme
+#define cublas_cprimme_normal bah_akv_cublas_cprimme_normal
+#define cublas_dprimme bah_akv_cublas_dprimme
+#define cublas_hprimme bah_akv_cublas_hprimme
+#define cublas_hsprimme bah_akv_cublas_hsprimme
+#define cublas_kcprimme_normal bah_akv_cublas_kcprimme_normal
+#define cublas_kprimme bah_akv_cublas_kprimme
+#define cublas_kprimme_normal bah_akv_cublas_kprimme_normal
+#define cublas_ksprimme bah_akv_cublas_ksprimme
+#define cublas_sprimme bah_akv_cublas_sprimme
+#define cublas_zprimme bah_akv_cublas_zprimme
+#define cublas_zprimme_normal bah_akv_cublas_zprimme_normal
+#define dprimme bah_akv_dprimme
+#define hprimme bah_akv_hprimme
+#define hsprimme bah_akv_hsprimme
+#define kcprimme_normal bah_akv_kcprimme_normal
+#define kprimme bah_akv_kprimme
+#define kprimme_normal bah_akv_kprimme_normal
+#define ksprimme bah_akv_ksprimme
+#define magma_cprimme bah_akv_magma_cprimme
+#define magma_cprimme_normal bah_akv_magma_cprimme_normal
+#define magma_dprimme bah_akv_magma_dprimme
+#define magma_hprimme bah_akv_magma_hprimme
+#define magma_hsprimme bah_akv_magma_hsprimme
+#define magma_kcprimme_normal bah_akv_magma_kcprimme_normal
+#define magma_kprimme bah_akv_magma_kprimme
+#define magma_kprimme_normal bah_akv_magma_kprimme_normal
+#define magma_ksprimme bah_akv_magma_ksprimme
+#define magma_sprimme bah_akv_magma_sprimme
+#define magma_zprimme bah_akv_magma_zprimme
+#define magma_zprimme_normal bah_akv_magma_zprimme_normal
+#define sprimme bah_akv_sprimme
+#define zprimme bah_akv_zprimme
+#define zprimme_normal bah_akv_zprimme_normal
+
+#include "primme.h"
+
+#endif
