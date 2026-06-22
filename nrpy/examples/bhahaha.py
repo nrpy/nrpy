@@ -244,10 +244,10 @@ akv_primme_frontend_symbols = [
     "zprimme",
     "zprimme_normal",
 ]
-akv_primme_objcopy_flags = " ".join(
-    f"--redefine-sym {symbol}=bah_akv_{symbol}"
-    for symbol in akv_primme_frontend_symbols
+akv_primme_rename_flags = " ".join(
+    f"-D{symbol}=bah_akv_{symbol}" for symbol in akv_primme_frontend_symbols
 )
+
 akv_primme_c_sources = [
     "akv_primme_eigensolver/akv_internal_blaslapack.c",
     "akv_primme_eigensolver/auxiliary_eigs.c",
@@ -280,6 +280,13 @@ akv_primme_makefile_rule = "\n".join(
         f"\t$(OBJCOPY) {akv_primme_objcopy_flags} $@",
     ]
 )
+akv_primme_makefile_rule = "\n".join(
+    [
+        "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
+        f"\t$(CC) $(CFLAGS) $(INCLUDEDIRS) {akv_primme_rename_flags} -c $< -o $@",
+    ]
+)
+
 akv_linkcheck_makefile_rule = "\n".join(
     [
         ".PHONY: linkcheck",
@@ -293,15 +300,6 @@ akv_linkcheck_makefile_rule = "\n".join(
 def patch_makefile_for_internal_akv_primme(makefile_path: Path) -> None:
     """Add BHaHAHA's frozen internal PRIMME objects to the generated Makefile."""
     lines = makefile_path.read_text(encoding="utf-8").splitlines()
-    for line_number, line in enumerate(lines):
-        if line.startswith("LDFLAGS = "):
-            lines.insert(line_number + 1, "OBJCOPY ?= objcopy")
-            break
-    else:
-        raise ValueError(
-            f"Could not find LDFLAGS in generated Makefile: {makefile_path}"
-        )
-
     for line_number, line in enumerate(lines):
         if line.startswith("OBJ_FILES = "):
             lines[line_number] = line + " " + " ".join(akv_primme_object_files)
