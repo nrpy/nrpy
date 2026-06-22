@@ -276,13 +276,6 @@ akv_primme_object_files = [
 akv_primme_makefile_rule = "\n".join(
     [
         "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
-        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@",
-        f"\t$(OBJCOPY) {akv_primme_objcopy_flags} $@",
-    ]
-)
-akv_primme_makefile_rule = "\n".join(
-    [
-        "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
         f"\t$(CC) $(CFLAGS) $(INCLUDEDIRS) {akv_primme_rename_flags} -c $< -o $@",
     ]
 )
