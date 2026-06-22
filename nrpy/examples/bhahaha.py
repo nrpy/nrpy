@@ -298,7 +298,15 @@ akv_linkcheck_makefile_rule = "\n".join(
 
 
 def patch_makefile_for_internal_akv_primme(makefile_path: Path) -> None:
-    """Add BHaHAHA's frozen internal PRIMME objects to the generated Makefile."""
+    """
+    Add BHaHAHA's frozen internal PRIMME objects to the generated Makefile.
+    Args:
+        makefile_path (Path): Path to the generated Makefile to patch.
+
+    Raises:
+        ValueError: If the generated Makefile does not contain the expected
+            `LDFLAGS`, `OBJ_FILES`, or clean-rule lines.
+    """
     lines = makefile_path.read_text(encoding="utf-8").splitlines()
     for line_number, line in enumerate(lines):
         if line.startswith("OBJ_FILES = "):
