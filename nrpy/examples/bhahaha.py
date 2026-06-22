@@ -351,7 +351,7 @@ if not akv_primme_src.is_dir():
     )
 if not Path(akv_primme_src, "primme.h").is_file():
     raise FileNotFoundError(
-        f"Could not find primme.h in internal PRIMME source directory: {primme_dir}"
+        f"Could not find primme.h in internal PRIMME source directory: {akv_primme_src}"
     )
 
 shutil.copytree(akv_primme_src, akv_primme_dst)
