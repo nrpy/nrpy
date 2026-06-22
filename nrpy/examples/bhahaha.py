@@ -46,27 +46,11 @@ parser.add_argument(
     action="store_true",
     help="Disable OpenMP flags",
 )
-parser.add_argument(
-    "--primme-dir",
-    type=str,
-    default=os.environ.get("PRIMME_DIR"),
-    help="External PRIMME installation prefix. May also be supplied via PRIMME_DIR.",
-)
 args = parser.parse_args()
 fd_order = args.fdorder
 outrootdir = args.outrootdir
 use_cpp = args.cpp
 use_openmp = not args.no_openmp  # default: True if flag omitted
-primme_dir = args.primme_dir
-if primme_dir is None:
-    raise ValueError(
-        "BHaHAHA SpECTRE spin diagnostics require PRIMME. Set PRIMME_DIR or pass --primme-dir."
-    )
-primme_include_dir = Path(primme_dir, "include")
-if not Path(primme_include_dir, "primme.h").is_file():
-    raise FileNotFoundError(
-        f"Could not find primme.h under {primme_include_dir}. Set PRIMME_DIR to the PRIMME installation prefix."
-    )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -356,7 +340,6 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     ],
     include_dirs=["akv_primme_eigensolver"],
     use_openmp=use_openmp,
-    include_dirs=[str(primme_include_dir)],
 )
 
 akv_primme_src = Path(BHaH.BHaHAHA.__file__).resolve().parent / "akv_primme_eigensolver"
@@ -365,6 +348,10 @@ akv_primme_dst = Path(project_dir) / "akv_primme_eigensolver"
 if not akv_primme_src.is_dir():
     raise FileNotFoundError(
         f"Missing internal PRIMME source directory: {akv_primme_src}"
+    )
+if not Path(akv_primme_src, "primme.h").is_file():
+    raise FileNotFoundError(
+        f"Could not find primme.h in internal PRIMME source directory: {primme_dir}"
     )
 
 shutil.copytree(akv_primme_src, akv_primme_dst)
