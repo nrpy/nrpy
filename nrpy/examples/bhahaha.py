@@ -300,7 +300,7 @@ def patch_makefile_for_internal_akv_primme(makefile_path: Path) -> None:
     lines = makefile_path.read_text(encoding="utf-8").splitlines()
     for line_number, line in enumerate(lines):
         if line.startswith("LDFLAGS = "):
-            lines.insert(line_number + 1, "OBJCOPY ?= objcopy")
+            lines.insert(line_number + 1, "OBJCOPY ?= $(shell command -v objcopy 2>/dev/null || command -v llvm-objcopy 2>/dev/null || command -v gobjcopy 2>/dev/null)")
             break
     else:
         raise ValueError(
