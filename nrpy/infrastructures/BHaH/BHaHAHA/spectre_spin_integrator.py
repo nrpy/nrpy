@@ -2716,25 +2716,30 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     }
   }
 
-  const REAL target_grad_norm = area * area / (6.0 * M_PI);
-  if (!(target_grad_norm > 0.0) || !isfinite(target_grad_norm))
+  const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
+  if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
     status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
   for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++) {
-    spectre_spin_csr_matvec(&M_csr, &modes[a * N], full_y);
-    REAL norm = 0.0;
+    REAL mean = 0.0;
     for (int p = 0; p < N; p++)
-      norm += modes[a * N + p] * full_y[p];
+      mean += mu[p] * modes[a * N + p];
+    mean /= area;
+    REAL norm = 0.0;
+    for (int p = 0; p < N; p++) {
+      const REAL centered = modes[a * N + p] - mean;
+      norm += mu[p] * centered * centered;
+    }
     if (!(norm > 0.0) || !isfinite(norm)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
-    const REAL scale = sqrt(target_grad_norm / norm);
+    const REAL scale = sqrt(target_potential_norm / norm);
     if (!isfinite(scale)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
     for (int p = 0; p < N; p++)
-      modes[a * N + p] *= scale;
+      modes[a * N + p] = scale * (modes[a * N + p] - mean);
   }
 
   if (status == BHAHAHA_SUCCESS) {
