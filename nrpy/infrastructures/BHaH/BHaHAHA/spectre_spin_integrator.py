@@ -35,7 +35,10 @@ _SPECTRE_SPIN_SCRATCH_GFS = (
 def _register_private_spectre_spin_gridfunctions() -> (
     Dict[str, Optional[gri.GridFunctionType]]
 ):
-    """Temporarily register spin-only scratch gridfunctions for FD codegen."""
+    """Temporarily register spin-only scratch gridfunctions for FD codegen.
+
+    :return: Saved global gridfunction registrations for later restoration.
+    """
     saved_gfs = {
         gf_name: gri.glb_gridfcs_dict.get(gf_name)
         for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
@@ -68,7 +71,10 @@ def _register_private_spectre_spin_gridfunctions() -> (
 def _restore_private_spectre_spin_gridfunctions(
     saved_gfs: Dict[str, Optional[gri.GridFunctionType]],
 ) -> None:
-    """Remove temporary spin scratch gridfunctions from the global registry."""
+    """Remove temporary spin scratch gridfunctions from the global registry.
+
+    :param saved_gfs: Gridfunction registrations to restore.
+    """
     for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
         if saved_gfs[gf_name] is None:
             gri.glb_gridfcs_dict.pop(gf_name, None)
@@ -77,7 +83,12 @@ def _restore_private_spectre_spin_gridfunctions(
 
 
 def _central_fd_coefficients(fd_order: int) -> Tuple[List[float], List[float]]:
-    """Return centered first- and second-derivative coefficients for supported orders."""
+    """Return centered first- and second-derivative coefficients for supported orders.
+
+    :param fd_order: Centered finite-difference order.
+    :return: First- and second-derivative finite-difference coefficients.
+    :raises ValueError: If the finite-difference order is not supported.
+    """
     coefficients = {
         2: (
             [-1.0 / 2.0, 0.0, 1.0 / 2.0],
@@ -1324,25 +1335,30 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     }
   }
 
-  const REAL target_grad_norm = area * area / (6.0 * M_PI);
-  if (!(target_grad_norm > 0.0) || !isfinite(target_grad_norm))
+  const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
+  if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
     status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
   for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++) {
-    spectre_spin_csr_matvec(&M_csr, &modes[a * N], full_y);
-    REAL norm = 0.0;
+    REAL mean = 0.0;
     for (int p = 0; p < N; p++)
-      norm += modes[a * N + p] * full_y[p];
+      mean += mu[p] * modes[a * N + p];
+    mean /= area;
+    REAL norm = 0.0;
+    for (int p = 0; p < N; p++) {
+      const REAL centered = modes[a * N + p] - mean;
+      norm += mu[p] * centered * centered;
+    }
     if (!(norm > 0.0) || !isfinite(norm)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
-    const REAL scale = sqrt(target_grad_norm / norm);
+    const REAL scale = sqrt(target_potential_norm / norm);
     if (!isfinite(scale)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
     for (int p = 0; p < N; p++)
-      modes[a * N + p] *= scale;
+      modes[a * N + p] = scale * (modes[a * N + p] - mean);
   }
 
   if (status == BHAHAHA_SUCCESS) {
@@ -1419,7 +1435,10 @@ _SPECTRE_SPIN_SCRATCH_GFS = (
 
 
 def _register_private_spectre_spin_gridfunctions() -> Dict[str, Optional[gri.GridFunctionType]]:
-    """Temporarily register spin-only scratch gridfunctions for FD codegen."""
+    """Temporarily register spin-only scratch gridfunctions for FD codegen.
+
+    :return: Saved global gridfunction registrations for later restoration.
+    """
     saved_gfs = {
         gf_name: gri.glb_gridfcs_dict.get(gf_name)
         for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
@@ -1452,7 +1471,10 @@ def _register_private_spectre_spin_gridfunctions() -> Dict[str, Optional[gri.Gri
 def _restore_private_spectre_spin_gridfunctions(
     saved_gfs: Dict[str, Optional[gri.GridFunctionType]],
 ) -> None:
-    """Remove temporary spin scratch gridfunctions from the global registry."""
+    """Remove temporary spin scratch gridfunctions from the global registry.
+
+    :param saved_gfs: Gridfunction registrations to restore.
+    """
     for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
         if saved_gfs[gf_name] is None:
             gri.glb_gridfcs_dict.pop(gf_name, None)
@@ -1461,7 +1483,12 @@ def _restore_private_spectre_spin_gridfunctions(
 
 
 def _central_fd_coefficients(fd_order: int) -> Tuple[List[float], List[float]]:
-    """Return centered first- and second-derivative coefficients for supported orders."""
+    """Return centered first- and second-derivative coefficients for supported orders.
+
+    :param fd_order: Centered finite-difference order.
+    :return: First- and second-derivative finite-difference coefficients.
+    :raises ValueError: If the finite-difference order is not supported.
+    """
     coefficients = {
         2: (
             [-1.0 / 2.0, 0.0, 1.0 / 2.0],
@@ -3244,6 +3271,21 @@ if (fabs(A) > spin_norm_tolerance) {
     const REAL M_irr_squared = A / (16.0 * M_PI);
     if (M_irr_squared > 0.0 && isfinite(M_irr_squared)) {
         const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
+
+        fprintf(stderr,
+        "\n\nDEBUG PRINT SpECTRE spin mass: nn=%d A=%+.4e S=%+.4e chi=%+.4e\n"
+        "M_irr^2=%+.4e M_irr=%+.4e\n"
+        "M_H^2=%+.4e M_H=%+.4e\n\n",
+        commondata->nn,
+        (double)A,
+        (double)S,
+        (double)sqrt(chi_U[0] * chi_U[0] + chi_U[1] * chi_U[1] + chi_U[2] * chi_U[2]),
+        (double)M_irr_squared,
+        (double)sqrt(M_irr_squared),
+        (double)M_horizon_squared,
+        (double)sqrt(M_horizon_squared));
+        fflush(stderr);
+
         if (M_horizon_squared > 0.0 && isfinite(M_horizon_squared)) {
             for (int i = 0; i < 3; i++)
                 chi_U[i] = S_U[i] / M_horizon_squared;
