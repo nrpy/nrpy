@@ -12,37 +12,14 @@ Authors: David Boyer
 import nrpy.c_function as cfc
 
 
-def register_CFunction_TOVola_TOV_interpolate_1D() -> None:
+def register_CFunction_TOVola_interp() -> None:
     """
-    Register C function TOVola_TOV_interpolate_1D().
+    Register C function TOVola_interp().
 
-    :return: None.
+    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
     """
-    name = "TOVola_TOV_interpolate_1D"
-    if name in cfc.CFunction_dict:
-        return
-
     includes = ["BHaH_defines.h"]
-    desc = """Interpolate one-dimensional TOVola radial data at an isotropic radius.
-
-@param[in] rr_iso Isotropic radius at which data are requested.
-@param[in] commondata Global simulation data, including interpolation limits.
-@param[in] interpolation_stencil_size Number of radial samples in the interpolation stencil.
-@param[in] numpoints_arr Number of samples in the TOVola radial arrays.
-@param[in] r_Schw_arr Schwarzschild-radius samples.
-@param[in] rho_energy_arr Energy-density samples.
-@param[in] rho_baryon_arr Baryon-density samples.
-@param[in] P_arr Pressure samples.
-@param[in] M_arr Enclosed-mass samples.
-@param[in] expnu_arr Lapse-squared samples.
-@param[in] exp4phi_arr Conformal-factor samples.
-@param[in] r_iso_arr Isotropic-radius samples.
-@param[out] rho_energy Interpolated energy density.
-@param[out] rho_baryon Interpolated baryon density.
-@param[out] P Interpolated pressure.
-@param[out] M Interpolated enclosed mass.
-@param[out] expnu Interpolated lapse-squared value.
-@param[out] exp4phi Interpolated conformal-factor value."""
+    desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
     prefunc = r"""
 #ifndef TOVOLA_LAGRANGE_MAX_STENCIL_SIZE
 #define TOVOLA_LAGRANGE_MAX_STENCIL_SIZE 64
@@ -299,9 +276,6 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
       rr_iso = -rr_iso;
     } // END IF: reflect negative radius into the positive-radius table
 
-  // If we are INSIDE the star, we need to interpolate the data to the grid.    
-  if (rr_iso < r_iso_max_inside_star) {
-
     // First find the central interpolation stencil index:
     const int idx_mid = TOVola_bisection_idx_finder(rr_iso, numpoints_arr, r_iso_arr);
 
@@ -342,27 +316,6 @@ static void TOVola_TOV_interpolate_1D(REAL rr_iso, const commondata_struct *rest
   //printf("%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e hhhh\n", rr_iso, r_Schw, *rho_energy, *rho_baryon, *P, *M, *expnu, *exp4phi);
 } // END FUNCTION: TOVola_TOV_interpolate_1D
 """
-
-    cfc.register_CFunction(
-        subdirectory="TOVola",
-        includes=includes,
-        prefunc=prefunc,
-        desc=desc,
-        name=name,
-        params=params,
-        body=body,
-    )
-
-
-def register_CFunction_TOVola_interp() -> None:
-    """
-    Register C function TOVola_interp().
-
-    Provides spectral interpolator to provide data at arbitrary point x,y,z in Cartesian basis.
-    """
-    register_CFunction_TOVola_TOV_interpolate_1D()
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = "Provide high-order interpolation from TOVola grids onto an arbitrary point xCart[3] = {x,y,z} in the Spherical basis."
     name = "TOVola_interp"
     params = """const commondata_struct *restrict commondata, const params_struct *restrict params, const REAL xCart[3],
      const ID_persist_struct *restrict ID_persist, initial_data_struct *restrict initial_data"""
@@ -422,6 +375,7 @@ def register_CFunction_TOVola_interp() -> None:
     cfc.register_CFunction(
         subdirectory="TOVola",
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         name=name,
         params=params,

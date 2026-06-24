@@ -143,7 +143,7 @@ grhayl_setup_str = rf"""
 
   // This section sets up the initial parameters that would normally
   // be provided by the simulation.
-  const int backup_routine[3] = {{Palenzuela1D,Font1D,None}};
+  const int backup_routine[3] = {{ghl_con2prim_id_Palenzuela1D, ghl_con2prim_id_Font1D, ghl_con2prim_id_None}};
 
   // GRHayL's primitive guesses are better to use than the previous time step, at least for hybrid eos
   const bool calc_prims_guess = true;
@@ -162,7 +162,7 @@ grhayl_setup_str = rf"""
   const double Lorentz_damping_factor = NAN;
 
   // Here, we initialize the structs that are (usually) static during a simulation.
-  ghl_initialize_params(Noble2D,
+  ghl_initialize_params(ghl_con2prim_id_Noble2D,
                       backup_routine,
                       false, // evolve entropy
                       false, // evolve temperature
@@ -348,7 +348,7 @@ BHaH.CurviBoundaryConditions.register_all.register_C_functions(
 rhs_string = r"""
 REAL *restrict xx[3]; 
 for(int ww=0;ww<3;ww++) 
-    xx[ww] = griddata[grid].xx[ww];
+  xx[ww] = griddata[grid].xx[ww];
 
 Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
@@ -356,7 +356,7 @@ rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS
 grhd_rhs_eval(commondata, params, &commondata->ghl_params, &commondata->eos, griddata[grid].xx, RK_INPUT_GFS, auxevol_gfs, RK_OUTPUT_GFS);
 
 apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                   gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                   gridfunctions_wavespeed, gridfunctions_f_infinity,
                                    RK_INPUT_GFS, RK_OUTPUT_GFS);
 """
 
@@ -501,7 +501,7 @@ if __name__ == "__main__":
     # Define the repository URL and directory
     repo_url = "https://github.com/GRHayL/GRHayL.git"
     repo_dir = "GRHayL"
-    codes_root_dir = f"project/{project_name}"  # Replace with the actual directory
+    codes_root_dir = f"project/{project_name}"
 
     # Change to the codes root directory
     os.chdir(codes_root_dir)
