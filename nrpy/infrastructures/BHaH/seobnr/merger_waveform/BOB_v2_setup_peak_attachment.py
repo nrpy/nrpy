@@ -40,7 +40,13 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     # 1. Helper Function: Evaluate d|h|/dt
     # --------------------------------------------------------
     # This assumes t_p (News Peak) = 0.0 to find the relative lag.
-    desc_helper = "Helper: Evaluates d|h|/dt assuming t_p_news=0."
+    desc_helper = """
+Evaluate the derivative of the BOB strain amplitude with the news peak fixed at zero.
+
+@param t_val Time at which to evaluate the derivative.
+@param[in] params Opaque GSL callback pointer cast to a commondata_struct.
+@return Strain-amplitude time derivative at t_val.
+"""
     name_helper = "BOB_v2_strain_deriv_lag_helper"
     params_helper = "double t_val, void *params"
 
@@ -79,8 +85,14 @@ def register_CFunction_BOB_v2_setup_peak_attachment() -> Union[None, pcg.NRPyEnv
     )
 
     desc = """
-    1. Finds the Lag (time delay) between News Peak and Strain Peak.
-    """
+Set up the BOB peak attachment time.
+
+Finds the lag between the news peak and strain peak, then shifts the BOB news
+peak so the strain peak attaches at commondata->t_attach.
+
+@param[in,out] commondata Common data structure updated with the BOB news peak time.
+@return GSL_SUCCESS on success.
+"""
     cfunc_type = "int"
     name = "BOB_v2_setup_peak_attachment"
     params = "commondata_struct *restrict commondata"

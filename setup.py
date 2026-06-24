@@ -5,6 +5,11 @@ To install the nrpy package, navigate to this directory and execute:
     pip install .
 This will install nrpy and its required dependencies.
 
+Instructions for creating the new GitHub release:
+    git tag -a v2.2026.6 -m "NRPy 2.2026.06"
+    git push origin main
+    git push origin v2.2026.6
+
 Instructions for uploading latest release to PyPI:
     rm -rf build dist && python setup.py sdist bdist_wheel && twine check dist/*
     twine upload dist/*
@@ -156,6 +161,26 @@ if __name__ == "__main__":
     auto_pkg_data.setdefault("nrpy", [])
     if "py.typed" not in auto_pkg_data["nrpy"]:
         auto_pkg_data["nrpy"].append("py.typed")
+
+    primme_pkg = "nrpy.infrastructures.BHaH.BHaHAHA"
+    auto_pkg_data.setdefault(primme_pkg, [])
+
+    primme_dir = (
+        Path(dir_setup)
+        / "nrpy"
+        / "infrastructures"
+        / "BHaH"
+        / "BHaHAHA"
+        / "akv_primme_eigensolver"
+    )
+
+    for path in primme_dir.iterdir():
+        if path.is_file() and path.suffix in {".c", ".h", ".txt", ".md"}:
+            rel = path.relative_to(
+                Path(dir_setup) / "nrpy" / "infrastructures" / "BHaH" / "BHaHAHA"
+            ).as_posix()
+            if rel not in auto_pkg_data[primme_pkg]:
+                auto_pkg_data[primme_pkg].append(rel)
 
     setup(
         name="nrpy",

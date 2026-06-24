@@ -168,6 +168,8 @@ typedef struct {
 // C struct: bhahaha_diagnostics_struct
 // Contains diagnostic quantities computed by BHaHAHA.
 //===============================================
+#define BHAHAHA_DIAGNOSTIC_UNAVAILABLE (-10.0)
+
 typedef struct {
   //==========================
   // Convergence-related quantities
@@ -224,6 +226,12 @@ typedef struct {
   REAL spin_chi_z_spectre;
   
 } bhahaha_diagnostics_struct;
+
+static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct *restrict diags) {
+  diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+}
 
 //==================
 // PUBLIC FUNCTIONS

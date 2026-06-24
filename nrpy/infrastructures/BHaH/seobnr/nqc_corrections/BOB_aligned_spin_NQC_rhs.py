@@ -52,9 +52,9 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEnv_typ
     desc = """
 Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
 
-@param commondata - Common data structure containing the model parameters.
-@param amps - Array to store the calculated amplitudes.
-@param omegas - Array to store the calculated angular frequencies.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] amps Array to store the calculated amplitudes.
+@param[out] omegas Array to store the calculated angular frequencies.
 """
     cfunc_type = "void"
     name = "BOB_aligned_spin_NQC_rhs"
@@ -66,7 +66,7 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-//compute
+// Step 1: Evaluate BOB-informed target amplitude and frequency data at attachment.
 """
     body += BOB_code
     body += """

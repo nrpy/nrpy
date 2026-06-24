@@ -30,15 +30,19 @@ def register_CFunction_SEOBNRv5_aligned_spin_NQC_corrections(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral waveform.
+Solves and applies aligned-spin (2,2) Non Quasi-Circular (NQC) corrections.
 
-@param commondata - Common data structure containing the model parameters.
-@return - Returns GSL_SUCCESS (0) on success or a nonzero error code on failure.
+The NQC coefficients match inspiral amplitude and waveform-frequency data at
+the attachment time to either NR-informed SEOBNRv5 targets or BOB-informed
+targets, depending on how this function was registered.
+
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_NQC_corrections"
     params = "commondata_struct *restrict commondata"
     body = """
+// Step 1: Allocate primary arrays for NQC basis and waveform samples.
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), malloc() failed to for times\\n");
@@ -98,6 +102,7 @@ REAL radius, omega, prstar;
 double complex h22;
 size_t i;
 
+// Step 2: Build fine-sample NQC basis arrays.
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
@@ -111,10 +116,10 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Q3[i] = Q2[i] / sqrt(r[i]);
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-}
+} // END LOOP: for i over fine dynamics samples
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
-// Find t_ISCO:
 
+// Step 3: Locate the ISCO crossing time.
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
 }
@@ -129,7 +134,7 @@ else{
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }
+  } // END LOOP: for i over zoomed ISCO samples
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
 
@@ -137,11 +142,12 @@ else{
   gsl_spline_free(spline_r);
   free(t_zoom);
   free(minus_r_zoom);
-}
+} // END ELSE: interpolate ISCO crossing on zoomed grid
 
+// Step 4: Select attachment time and crop the interpolation window.
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 size_t peak_idx;
-// if t_peak > the last point of the ODE trajector,
+// if t_peak > the last point of the ODE trajectory,
 // use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
 // gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
 // resulting in a singular matrix.
@@ -167,7 +173,9 @@ for (i = left; i < right; i++){
   Q_cropped3[i - left] = Q3[i];
   P_cropped1[i - left] = P1[i];
   P_cropped2[i - left] = P2[i];
-}
+} // END LOOP: for i over cropped attachment samples
+
+// Step 5: Build NQC amplitude and frequency systems.
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 if (acc == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
@@ -251,6 +259,7 @@ else{
 }
 
 REAL omegas[2] , amps[3];
+// Step 6: Evaluate target NQC RHS data.
 """
     if not use_numerical_relativity_nqc:
         body += """
@@ -261,6 +270,7 @@ BOB_aligned_spin_NQC_rhs(commondata,amps,omegas);
 SEOBNRv5_aligned_spin_NQC_rhs(commondata,amps,omegas);
 """
     body += """
+// Step 7: Solve for amplitude NQC coefficients.
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -290,6 +300,7 @@ gsl_vector_free(a);
 gsl_vector_free(A);
 gsl_matrix_free(Q);
 
+// Step 8: Solve for phase NQC coefficients.
 gsl_vector *restrict b = gsl_vector_alloc(2);
 if (b == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
@@ -311,6 +322,7 @@ gsl_vector_free (b);
 gsl_vector_free(O);
 gsl_matrix_free(P);
 
+// Step 9: Release temporary interpolation arrays.
 free(times);
 free(Q1);
 free(Q2);
@@ -323,7 +335,7 @@ free(hamp);
 free(phase);
 free(phase_unwrapped);
 
-// apply the nqc correction
+// Step 10: Apply the NQC correction to low and fine waveform samples.
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
@@ -340,7 +352,7 @@ for (i = 0; i < commondata->nsteps_low; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i,STRAIN)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN)] *cexp(I * nqc_phase);
-}
+} // END LOOP: for i over low-resolution waveform samples
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   radius = commondata->dynamics_fine[IDX(i,R)];
@@ -354,7 +366,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN)] * cexp(I * nqc_phase);
-}
+} // END LOOP: for i over fine-resolution waveform samples
 """
     cfc.register_CFunction(
         subdirectory="nqc_corrections",

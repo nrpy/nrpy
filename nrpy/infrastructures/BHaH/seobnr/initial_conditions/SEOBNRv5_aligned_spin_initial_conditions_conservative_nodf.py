@@ -34,10 +34,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative_nod
 """
     desc = """
 Evaluates the conservative initial conditions for the SEOBNRv5 ODE integration.
-The conservative initial conditions are given by a circular orbit (p_{r_*} = 0) such that the 
+
+The conservative initial conditions are given by a circular orbit (p_{r_*} = 0) such that
 the time derivative of the tortoise momentum is zero and the time derivative of the orbital phase equals the input orbital frequency.
-@params commondata - The Common data structure containing the model parameters.
-@returns - GSL_SUCCESS (0) upon success.
+
+@param[in,out] commondata The Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"

@@ -33,6 +33,9 @@ Eigenfunction normalization (critical):
 - This module does not automatically normalize zU[alpha]. The caller is
   responsible for providing appropriately normalized eigenfunctions or for
   rescaling zOmega_integrals before calling Salpha_and_magnitude_from_zOmega.
+- The vector S^i is an angular momentum. A dimensionless spin vector is
+  chi^i = S^i / M_H^2, where M_H is the Christodoulou horizon mass computed
+  from the area and spin magnitude.
 
 Near-zero and fallback behavior:
 
@@ -582,6 +585,49 @@ class SpECTRESpinEstimateClass:
             ssum += zOmega_integrals[a] ** 2
         return cast(sp.Expr, sp.sqrt(ssum) / (8 * sp.pi))
 
+    def christodoulou_mass_squared_from_area_and_spin(
+        self, area: sp.Expr, S: sp.Expr
+    ) -> sp.Expr:
+        """
+        Compute the Christodoulou horizon mass squared from area and spin.
+
+        M_H^2 = M_irr^2 + S^2 / (4 M_irr^2), with
+        M_irr^2 = A / (16 pi).
+
+        :param area: Surface area A.
+        :param S: Dimensional spin angular momentum magnitude.
+        :return: Christodoulou mass squared M_H^2.
+        """
+        m_irr_squared = area / (16 * sp.pi)
+        return cast(sp.Expr, m_irr_squared + S**2 / (4 * m_irr_squared))
+
+    def dimensionless_spin_vector_from_spin_vector(
+        self, area: sp.Expr, SU: List[sp.Expr], S: Optional[sp.Expr] = None
+    ) -> Dict[str, Any]:
+        """
+        Convert a dimensional spin vector S^i to chi^i = S^i / M_H^2.
+
+        This routine performs no near-zero or exact-zero conditioning. Generated
+        C code is responsible for guarding against zero area.
+
+        :param area: Surface area A.
+        :param SU: Dimensional spin angular momentum vector S^i.
+        :param S: Optional spin magnitude. If omitted, ||S^i|| is used.
+        :return: Dictionary with "chiU" and "christodoulou_mass_squared".
+        :raises ValueError: If SU does not contain exactly three entries.
+        """
+        if len(SU) != 3:
+            raise ValueError("SU must have three entries.")
+        if S is None:
+            S = sp.sqrt(SU[0] ** 2 + SU[1] ** 2 + SU[2] ** 2)
+        christodoulou_mass_squared = self.christodoulou_mass_squared_from_area_and_spin(
+            area, S
+        )
+        return {
+            "chiU": [SU[i] / christodoulou_mass_squared for i in range(3)],
+            "christodoulou_mass_squared": christodoulou_mass_squared,
+        }
+
     def compute_spin_vectors_for_c(
         self,
         sums: Dict[str, Any],
@@ -598,10 +644,14 @@ class SpECTRESpinEstimateClass:
         Returned expressions:
         - SU_nominal: S * I / ||I||
         - SU_fallback_zero: 0
+        - chiU_nominal: SU_nominal / M_H^2
+        - chiU_fallback_zero: 0
+        - christodoulou_mass_squared: M_H^2 from A and S
         - If zOmega_integrals is provided:
             SalphaU = zOmega_integrals / (8*pi)
             Salpha_norm = ||SalphaU||
             SU_fallback_zalpha = S * SalphaU / Salpha_norm
+            chiU_fallback_zalpha = SU_fallback_zalpha / M_H^2
 
         :param sums: Dictionary of precomputed surface integrals, as required
             by reduce_centroids_and_direction.
@@ -611,9 +661,13 @@ class SpECTRESpinEstimateClass:
         :return: Dictionary containing:
             - "SU_nominal": List of three components of S * I / ||I||.
             - "SU_fallback_zero": List of three zeros.
+            - "chiU_nominal": List of three dimensionless spin components.
+            - "chiU_fallback_zero": List of three zeros.
+            - "christodoulou_mass_squared": Christodoulou mass squared.
             - "SalphaU": List of three components (only if zOmega_integrals provided).
             - "Salpha_norm": Norm of SalphaU (only if zOmega_integrals provided).
             - "SU_fallback_zalpha": List of three components (only if provided).
+            - "chiU_fallback_zalpha": List of three components (only if provided).
             - "normI": Norm of I^i.
             - "x0U", "xRcorrU", "IU", "nU": As returned by
               reduce_centroids_and_direction.
@@ -623,12 +677,24 @@ class SpECTRESpinEstimateClass:
         red = self.reduce_centroids_and_direction(sums)
         nU = cast(List[sp.Expr], red["nU"])
         SU_nominal = [S * nU[i] for i in range(3)]
+        christodoulou_mass_squared = self.christodoulou_mass_squared_from_area_and_spin(
+            sums["A"], S
+        )
+        chiU_nominal = [SU_nominal[i] / christodoulou_mass_squared for i in range(3)]
 
         SU_fallback_zero: List[sp.Expr] = [sp.Integer(0), sp.Integer(0), sp.Integer(0)]
+        chiU_fallback_zero: List[sp.Expr] = [
+            sp.Integer(0),
+            sp.Integer(0),
+            sp.Integer(0),
+        ]
 
         out: Dict[str, Any] = {
             "SU_nominal": SU_nominal,
             "SU_fallback_zero": SU_fallback_zero,
+            "chiU_nominal": chiU_nominal,
+            "chiU_fallback_zero": chiU_fallback_zero,
+            "christodoulou_mass_squared": christodoulou_mass_squared,
             "normI": red["normI"],
             "x0U": red["x0U"],
             "xRcorrU": red["xRcorrU"],
@@ -642,9 +708,14 @@ class SpECTRESpinEstimateClass:
             SalphaU = [zOmega_integrals[a] / (8 * sp.pi) for a in range(3)]
             Salpha_norm = sp.sqrt(SalphaU[0] ** 2 + SalphaU[1] ** 2 + SalphaU[2] ** 2)
             SU_fallback_zalpha = [S * SalphaU[i] / Salpha_norm for i in range(3)]
+            chiU_fallback_zalpha = [
+                SU_fallback_zalpha[i] / christodoulou_mass_squared
+                for i in range(3)
+            ]
             out["SalphaU"] = SalphaU
             out["Salpha_norm"] = Salpha_norm
             out["SU_fallback_zalpha"] = SU_fallback_zalpha
+            out["chiU_fallback_zalpha"] = chiU_fallback_zalpha
 
         return out
 

@@ -121,10 +121,13 @@ class SEOBNR_aligned_spin_constants:
         )
         # strain NR fits at t_match
         self.hNR: Dict[str, sp.Expr] = {}
+        self.omegaNR: Dict[str, sp.Expr] = {}
         modes = [(2, 2), (3, 3), (2, 1), (4, 4), (4, 3), (5, 5), (3, 2)]
         for mode in modes:
             l, m = mode
             self.hNR.update({f"({l} , {m})": sp.sympify(0)})
+            self.omegaNR.update({f"({l} , {m})": sp.sympify(0)})
+
         m1 = self.m1
         m2 = self.m2
         chi1 = self.chi1
@@ -155,6 +158,24 @@ class SEOBNR_aligned_spin_constants:
             + 1.467097
         )
 
+        self.omegaNR["(2 , 2)"] = (
+            f2r(5.89352329617707670906) * nu**4
+            + f2r(3.75145580491965446868) * nu**3 * chi
+            - f2r(3.34930536209472551334) * nu**3
+            - f2r(0.97140932625194231775) * nu**2 * chi**2
+            - f2r(1.69734302394369973577) * nu**2 * chi
+            + f2r(0.28539204856044564362) * nu**2
+            + f2r(0.2419483723662931296) * nu * chi**3
+            + f2r(0.51801427018052081941) * nu * chi**2
+            + f2r(0.25096450064948544467) * nu * chi
+            - f2r(0.31709602351033533418) * nu
+            - f2r(0.01525897668158244028) * chi**4
+            - f2r(0.06692658483513916345) * chi**3
+            - f2r(0.08715176045684569495) * chi**2
+            - f2r(0.09133931944098934441) * chi
+            - f2r(0.2685414392185025978)
+        )
+
         self.hNR["(3 , 3)"] = sp.Abs(
             -0.088371 * chi**2 * delta * nu
             + 0.036258 * chi33**2 * delta
@@ -164,6 +185,18 @@ class SEOBNR_aligned_spin_constants:
             + 1.96267 * delta * nu**2
             + 0.027833 * delta * nu
             + 0.558808 * delta
+        )
+
+        self.omegaNR["(3 , 3)"] = (
+            f2r(8.88716288087403682994) * nu**3
+            - f2r(0.74592378229749944918) * nu**2 * chi
+            - f2r(4.22683134159469808822) * nu**2
+            + f2r(0.34667482329409210484) * nu * chi**2
+            + f2r(0.4789145868044565324) * nu * chi
+            - f2r(0.04514088822512542926) * chi**3
+            - f2r(0.11941861972305316264) * chi**2
+            - f2r(0.17467027880037502841) * chi
+            - f2r(0.42716659841853366064)
         )
 
         self.hNR["(2 , 1)"] = sp.Abs(
@@ -178,6 +211,19 @@ class SEOBNR_aligned_spin_constants:
             + 0.431426 * delta
         )
 
+        self.omegaNR["(2 , 1)"] = (
+            -f2r(1.96515745599907942776) * nu**3
+            - f2r(0.16885361554827885144) * nu**2 * chi
+            + f2r(0.53085041746959926723) * nu**2
+            + f2r(0.07734281111269736275) * nu * chi**2
+            + f2r(0.15938183067714695174) * nu * chi
+            - f2r(0.2379037879767669228) * nu
+            - f2r(0.01009016749505482584) * chi**3
+            - f2r(0.02410957086017969861) * chi**2
+            - f2r(0.04763491663090872047) * chi
+            - f2r(0.17652608750683201899)
+        )
+
         self.hNR["(4 , 4)"] = sp.Abs(
             0.031483 * chi44A**2
             - 0.180165 * chi44A * nu
@@ -186,6 +232,18 @@ class SEOBNR_aligned_spin_constants:
             - 1.947473 * nu**2
             - 0.615307 * nu
             + 0.262533
+        )
+
+        self.omegaNR["(4 , 4)"] = (
+            f2r(13.65133489176671410803) * nu**3
+            - f2r(0.76871184038256423765) * nu**2 * chi
+            - f2r(5.49032933904132924852) * nu**2
+            + f2r(0.4158639192986712807) * nu * chi**2
+            + f2r(0.5925675710398274898) * nu * chi
+            - f2r(0.04252924146785119763) * chi**3
+            - f2r(0.1552216774031633939) * chi**2
+            - f2r(0.24450814728556427569) * chi
+            - f2r(0.57404100593064200098)
         )
 
         self.hNR["(4 , 3)"] = sp.Abs(
@@ -199,6 +257,19 @@ class SEOBNR_aligned_spin_constants:
             + 0.07442 * delta
         )
 
+        self.omegaNR["(4 , 3)"] = (
+            -f2r(55.53410548228862353426) * nu**3
+            - f2r(0.90591912935891649727) * nu**2 * chi
+            + f2r(23.91327719774037419143) * nu**2
+            + f2r(0.22690304977596567615) * nu * chi**2
+            + f2r(0.29109174621004529904) * nu * chi
+            - f2r(3.48798589848595197438) * nu
+            - f2r(0.0379192517897683698) * chi**3
+            - f2r(0.0872880306983466886) * chi**2
+            - f2r(0.11979971300165934145) * chi
+            - f2r(0.3430602590276149999)
+        )
+
         self.hNR["(3 , 2)"] = sp.Abs(
             0.02259 * chi**2
             + 0.307803 * chi * nu
@@ -209,6 +280,17 @@ class SEOBNR_aligned_spin_constants:
             + 0.155446
         )
 
+        self.omegaNR["(3 , 2)"] = (
+            -f2r(2.34602394381327350459) * nu**3
+            - f2r(2.75863454206899216814) * nu**2 * chi
+            + f2r(1.57985993022275095221) * nu**2
+            + f2r(0.81135314747739029073) * nu * chi
+            - f2r(0.31775591479035469877) * nu
+            - f2r(0.04564745621234577583) * chi**2
+            - f2r(0.11247674297883318573) * chi
+            - f2r(0.33114128825887062524)
+        )
+
         self.hNR["(5 , 5)"] = sp.Abs(
             -7.402839 * chi33 * nu**3
             + 3.965852 * chi33 * nu**2
@@ -217,6 +299,19 @@ class SEOBNR_aligned_spin_constants:
             + 1.093812 * delta * nu**2
             - 0.462142 * delta * nu
             + 0.125468 * delta
+        )
+
+        self.omegaNR["(5 , 5)"] = (
+            f2r(13.81386002062406426205) * nu**3
+            - f2r(3.0457597325553762424) * nu**2 * chi
+            - f2r(6.61611019771898423159) * nu**2
+            + f2r(0.80275927256688528466) * nu * chi**2
+            + f2r(1.43470995594104122617) * nu * chi
+            + f2r(0.47247403131411785937) * nu
+            - f2r(0.09162925213075370778) * chi**3
+            - f2r(0.24664558041625297968) * chi**2
+            - f2r(0.32959068465244367729) * chi
+            - f2r(0.58934113264394660803)
         )
 
     def Kerr_ISCO_radius(self, a: sp.Expr) -> sp.Expr:
@@ -463,8 +558,9 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
     obj = SEOBNR_aligned_spin_constants()
     test_dict = obj.__dict__.copy()
-    if "hNR" in test_dict:
-        del test_dict["hNR"]
+    for skipped_key in ["hNR", "omegaNR"]:
+        if skipped_key in test_dict:
+            del test_dict[skipped_key]
     test_dict.update(
         {
             "hNR_22": obj.hNR["(2 , 2)"],
@@ -474,6 +570,13 @@ if __name__ == "__main__":
             "hNR_43": obj.hNR["(4 , 3)"],
             "hNR_55": obj.hNR["(5 , 5)"],
             "hNR_32": obj.hNR["(3 , 2)"],
+            "omegaNR_22": obj.omegaNR["(2 , 2)"],
+            "omegaNR_33": obj.omegaNR["(3 , 3)"],
+            "omegaNR_21": obj.omegaNR["(2 , 1)"],
+            "omegaNR_44": obj.omegaNR["(4 , 4)"],
+            "omegaNR_43": obj.omegaNR["(4 , 3)"],
+            "omegaNR_55": obj.omegaNR["(5 , 5)"],
+            "omegaNR_32": obj.omegaNR["(3 , 2)"],
         }
     )
     results_dict = ve.process_dictionary_of_expressions(
