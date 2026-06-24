@@ -482,6 +482,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 # Set GRHayL directory
 ghl_INC_FLAG = "GRHayL/include/ghl/"
 ghl_LIB_FLAG = "-LGRHayL/lib"
+ghl_RPATH_FLAG = "-Wl,-rpath,'$$ORIGIN/GRHayL/lib'"
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
@@ -489,7 +490,10 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     # compiler_opt_option="fast",
     compiler_opt_option="debug",
     include_dirs=[ghl_INC_FLAG],
-    addl_libraries=[ghl_LIB_FLAG + " -lghl", "$(shell gsl-config --libs)"],
+    addl_libraries=[
+        f"{ghl_LIB_FLAG} -lghl {ghl_RPATH_FLAG}",
+        "$(shell gsl-config --libs)",
+    ],
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
 )
 if __name__ == "__main__":

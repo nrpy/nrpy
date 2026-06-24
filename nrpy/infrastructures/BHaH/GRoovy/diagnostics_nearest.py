@@ -118,7 +118,7 @@ def register_CFunction_diagnostics_nearest(
             i2_center_expr = "params->Nxx_plus_2NGHOSTS2 / 2"
         else:
             raise ValueError(f"Unsupported CoordSystem: {CoordSystem}")
-        center_index_cases += f"""
+        center_index_cases += rf"""
     case {CoordSystem.upper()}:
       i0_center = {i0_center_expr};
       i1_center = {i1_center_expr};
@@ -184,7 +184,7 @@ grid point nearest the physical center.
     name = "diagnostics_nearest"
     params = """commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                 const REAL *restrict gridfuncs_diags[MAXNUMGRIDS]"""
-    body = f"""
+    body = rf"""
   // --- USER-EDIT: Select constraint diagnostics to sample (applies to all grids) ---
 {constraint_selection}
   // --- END USER-EDIT ---

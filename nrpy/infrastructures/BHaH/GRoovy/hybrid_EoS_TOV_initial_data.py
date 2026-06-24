@@ -123,10 +123,9 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
 	ghl_metric_quantities metric = {0};
 	ghl_conservative_quantities cons = {0};
 
-	basis_transform_rfm_basis_to_Cartesian(commondata, params,
-																					&prims, &cons, &metric,
-																					i0, i1, i2, xx,
-																					auxevol_gfs, in_gfs);
+	basis_transform_rfm_basis_to_Cartesian(
+        commondata, params, &prims, &cons, &metric,
+        i0, i1, i2, xx, auxevol_gfs, in_gfs);
 
 	bool speed_limited = false;
 	ghl_error_codes_t error = ghl_enforce_primitive_limits_and_compute_u0(
