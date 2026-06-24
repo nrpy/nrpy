@@ -295,7 +295,7 @@ if enable_bhahaha:
     par.adjust_CodeParam_default("bah_initial_grid_y_center", [0.0])
     par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
     par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
-    par.adjust_CodeParam_default("bah_max_search_radius", [0.6 * default_BH_mass])
+    par.adjust_CodeParam_default("bah_max_search_radius", [0.75 * default_BH_mass])
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
