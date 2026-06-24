@@ -34,10 +34,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_ode_integration() -> (
 #include <gsl/gsl_odeiv2.h>
 """
     desc = """
-Integrates the SEOBNRv5 equations of motion to obtain the dynamics of the EOB perturber
-as well as the augmented dynamical quantities for generating the inspiral waveform.
+Integrates the SEOBNRv5 equations of motion to obtain the EOB dynamics.
 
-@param commondata - Common data struct containing the model parameters.
+The routine also stores augmented dynamical quantities for generating the inspiral waveform.
+
+@param[in,out] commondata Common data struct containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_ode_integration"
@@ -71,11 +72,11 @@ if (dynamics_RK == NULL){
 }
 size_t nsteps = 0;
 
-// store
+// Step 1: Store the initial dynamics sample.
 dynamics_RK[IDX(nsteps,TIME)] = t;
 for (i = 1; i < 5; i++) {
   dynamics_RK[IDX(nsteps,i)] = y[i - 1];
-}
+} // END LOOP: for i over initial state variables
 SEOBNRv5_aligned_spin_augments(commondata);
 dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
 dynamics_RK[IDX(nsteps,OMEGA)] = commondata->dHreal_dpphi;
@@ -84,7 +85,7 @@ nsteps++;
 REAL Omega_previous = commondata->initial_omega;
 
 while (t < tmax && stop == 0) {
-  // integrate
+  // Step 2: Advance the ODE state by one adaptive step.
   status = gsl_odeiv2_evolve_apply(e, c, s, &sys, &t, tmax, &h, y);
   handle_gsl_return_status(status,rhs_status,1,rhs_name);
   commondata->r = y[0];
@@ -93,7 +94,7 @@ while (t < tmax && stop == 0) {
   commondata->pphi = y[3];
   SEOBNRv5_aligned_spin_augments(commondata);
 
-  // buffercheck
+  // Step 2.a: Grow the dynamics buffer when the trajectory outpaces it.
   if (nsteps >= bufferlength) {
     bufferlength = 2 * bufferlength;
     dynamics_RK = (REAL *)realloc(dynamics_RK, bufferlength * (NUMVARS) * sizeof(REAL));
@@ -101,20 +102,19 @@ while (t < tmax && stop == 0) {
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), realloc() failed for dynamics_RK\\n");
       exit(1);
     }
-  }
+  } // END IF: dynamics_RK buffer needs growth
 
-  // update
-  // store
+  // Step 2.b: Store the current dynamics sample and augmented quantities.
   dynamics_RK[IDX(nsteps,TIME)] = t;
   for (i = 1; i < 5; i++) {
     dynamics_RK[IDX(nsteps,i)] = y[i-1];
-  }
+  } // END LOOP: for i over current state variables
   dynamics_RK[IDX(nsteps,H)] = commondata->Hreal;
   dynamics_RK[IDX(nsteps,OMEGA)] = commondata->dHreal_dpphi;
   dynamics_RK[IDX(nsteps,OMEGA_CIRC)] = commondata->Omega_circ;
   nsteps++;
 
-  // stopcheck
+  // Step 2.c: Evaluate orbital stop conditions near merger.
   if (commondata->r < 6.0) {
     // decrease in frequency: Omega peak stop = index of omega
     if (commondata->dHreal_dpphi < Omega_previous) {
@@ -139,22 +139,22 @@ while (t < tmax && stop == 0) {
     if (commondata->r < 3.0 && commondata->Omega_circ > 1.0) {
       break;
     }
-  }
+  } // END IF: radius is inside the stop-condition activation region
   Omega_previous = commondata->dHreal_dpphi;
-}
+} // END WHILE: evolving aligned-spin dynamics until a stop condition is reached
 
-// free up gsl ode solver
+// Step 3: Free the GSL ODE solver state.
 gsl_odeiv2_control_free(c);
 gsl_odeiv2_step_free(s);
 gsl_odeiv2_evolve_free(e);
 
-// save the times as a separate array
+// Step 4: Save the time samples as a separate array.
 REAL *restrict times = malloc(nsteps * sizeof(REAL));
 for (i = 0; i < nsteps; i++){
   times[i] = dynamics_RK[IDX(i,TIME)];
-}
+} // END LOOP: for i over raw dynamics samples
 
-// find the coarse-fine separation index
+// Step 5: Find the coarse-fine separation index.
 REAL t_desired;
 if (stop == OMEGA){
   t_desired = times[nsteps-1] - commondata->t_stepback - 50.;
@@ -165,7 +165,7 @@ size_t coarse_fine_separation_idx = gsl_interp_bsearch(times,t_desired,0,nsteps-
 REAL *times_fine_prelim = NULL;
 REAL *dynamics_fine_prelim = NULL;
 size_t nsteps_fine_prelim = 0;
-// handle case where t_desired is less than the first timestep (only happens when PA integration is performed).
+// Step 5.a: Handle the PA case where the fine region starts at the first sample.
 if (coarse_fine_separation_idx == 0){
   nsteps_fine_prelim = nsteps;
   dynamics_fine_prelim = (REAL *)malloc(NUMVARS * nsteps_fine_prelim * sizeof(REAL));
@@ -202,7 +202,7 @@ if (coarse_fine_separation_idx == 0){
   }
   memcpy(dynamics_fine_prelim,dynamics_RK + coarse_fine_separation_idx * NUMVARS,nsteps_fine_prelim * NUMVARS * sizeof(REAL));
   memcpy(times_fine_prelim,times + coarse_fine_separation_idx,nsteps_fine_prelim * sizeof(REAL));
-}
+} // END ELSE: split coarse/fine dynamics storage
 commondata->dynamics_raw = malloc(NUMVARS * nsteps * sizeof(REAL));
 if (commondata->dynamics_raw == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for commondata->dynamics_raw\\n");
@@ -212,10 +212,8 @@ commondata->nsteps_raw = nsteps;
 memcpy(commondata->dynamics_raw,dynamics_RK,nsteps * NUMVARS * sizeof(REAL));
 free(dynamics_RK);
 
-// t_peak = dynamics[-1] if there is no peak
-
+// Step 6: Refine the peak time when a peak stop condition was detected.
 REAL t_peak = times_fine_prelim[nsteps_fine_prelim - 1];
-// perform iterative refinement to find the true peak of the dynamics
 if (stop == OMEGA) {
   REAL *t_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
   if (t_values == NULL) {
@@ -227,10 +225,10 @@ if (stop == OMEGA) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_ode_integration(), malloc() failed for omega_values\\n");
     exit(1);
   }
-for (i = 0; i < nsteps_fine_prelim; i++) {
+  for (i = 0; i < nsteps_fine_prelim; i++) {
     t_values[i] = dynamics_fine_prelim[IDX(i, TIME)];
     omega_values[i] = dynamics_fine_prelim[IDX(i, OMEGA)];
-  }
+  } // END LOOP: for i over fine samples for omega refinement
   REAL dt = times_fine_prelim[nsteps_fine_prelim - 1] - times_fine_prelim[nsteps_fine_prelim - 2];
   gsl_interp_accel *acc = gsl_interp_accel_alloc();
   if (acc == NULL) {
@@ -249,7 +247,7 @@ for (i = 0; i < nsteps_fine_prelim; i++) {
   free(omega_values);
   gsl_spline_free(spline);
   gsl_interp_accel_free(acc);
-}
+} // END IF: omega peak triggered iterative refinement
 if (stop == PRSTAR) {
   REAL *t_values = (REAL *)malloc(nsteps_fine_prelim * sizeof(REAL));
   if (t_values == NULL) {
@@ -264,7 +262,7 @@ if (stop == PRSTAR) {
   for (i = 0; i < nsteps_fine_prelim; i++) {
     t_values[i] = dynamics_fine_prelim[IDX(i, TIME)];
     prstar_values[i] = dynamics_fine_prelim[IDX(i, PRSTAR)];
-  }
+  } // END LOOP: for i over fine samples for radial-momentum refinement
   REAL dt = times_fine_prelim[nsteps_fine_prelim - 1] - times_fine_prelim[nsteps_fine_prelim - 2];
   gsl_interp_accel *acc = gsl_interp_accel_alloc();
   if (acc == NULL) {
@@ -283,9 +281,9 @@ if (stop == PRSTAR) {
   free(prstar_values);
   gsl_spline_free(spline);
   gsl_interp_accel_free(acc);
-}    
-// interpolate the dynamics
+} // END IF: radial-momentum peak triggered iterative refinement
 
+// Step 7: Interpolate the fine dynamics region and release temporary storage.
 SEOBNRv5_aligned_spin_interpolate_dynamics(commondata,dynamics_fine_prelim,nsteps_fine_prelim,t_peak,stop);
 free(dynamics_fine_prelim);
 free(times_fine_prelim);

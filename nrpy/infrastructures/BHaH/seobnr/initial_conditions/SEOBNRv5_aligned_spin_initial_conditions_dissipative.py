@@ -31,8 +31,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_dissipative() ->
     desc = """
 Evaluates the dissipative initial conditions for the SEOBNRv5 ODE integration.
 
-@params commondata - The Common data structure containing the model parameters.
-@returns - GSL_SUCCESS (0) upon success.
+@param[in,out] commondata The Common data structure containing the model parameters.
+@return GSL_SUCCESS (0) upon success.
 """
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_initial_conditions_dissipative"

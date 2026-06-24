@@ -23,7 +23,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register C function for computing the peak frequencies from numerical relativity.
+    Register C function for evaluating NR-informed peak-frequency fits.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -52,9 +52,10 @@ def register_Cfunction_SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes the peak frequencies from numerical relativity.
+Evaluates NR-informed peak-frequency fits for the stored waveform modes.
 
-@param commondata - Common data structure containing the model parameters.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] omegaNR Output array for the numerical-relativity peak frequencies.
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"

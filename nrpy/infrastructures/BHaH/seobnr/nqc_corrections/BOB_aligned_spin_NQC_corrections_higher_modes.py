@@ -36,10 +36,13 @@ def register_CFunction_BOB_aligned_spin_NQC_corrections_higher_modes(
     modes = wf.modes
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral waveform.
+Solves and applies BOB-informed higher-mode Non Quasi-Circular (NQC) corrections.
 
-@param commondata - Common data structure containing the model parameters.
-@return - Returns GSL_SUCCESS (0) on success or a nonzero error code on failure.
+For each stored inspiral mode, this matches amplitude and waveform-frequency
+data at the shared attachment time to BOB-informed targets and applies the
+resulting NQC amplitude and phase corrections.
+
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "BOB_aligned_spin_NQC_corrections_higher_modes"
@@ -111,12 +114,12 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-} // END LOOP: for i over dynamics
-// Find t_ISCO:
+} // END LOOP: for i over fine dynamics samples
 
+// Step 2: Locate the ISCO crossing used to set the common attachment time.
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-}  // END IF: r greater than r_ISCO check 
+} // END IF: final fine sample is inside r_ISCO
 else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
@@ -144,7 +147,7 @@ else{
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  } // END LOOP: for i over N_zoom
+  } // END LOOP: for i over zoomed ISCO samples
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
 
@@ -152,8 +155,9 @@ else{
   gsl_spline_free(spline_r);
   free(t_zoom);
   free(minus_r_zoom);
-} // END ELSE: find t_ISCO
+} // END ELSE: interpolate ISCO crossing on zoomed grid
 
+// Step 3: Select the attachment time and shared interpolation window.
 REAL t_peak = commondata->t_ISCO - commondata->Delta_t;
 size_t peak_idx;
 // if t_peak > the last point of the ODE trajectory,
@@ -163,10 +167,10 @@ size_t peak_idx;
 if (t_peak > times[commondata->nsteps_fine - 1]){
   t_peak = times[commondata->nsteps_fine - 2];
   peak_idx = commondata->nsteps_fine - 2;
-} // END IF: find peak_idx from t_peak if t_ppeak > last point of ODE trajector
+} // END IF: attachment time is beyond final fine sample
 else{
   peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
-} // END ELSE: find peak_idx
+} // END ELSE: attachment time lies inside fine dynamics
 commondata->t_attach = t_peak;
 size_t N = 5;
 size_t left = NRPYMAX(peak_idx, N) - N;
@@ -200,7 +204,7 @@ for (i = left; i < right; i++){{
   Q{lm[0]}{lm[1]}_cropped3[i - left] = Q3[i];
   P{lm[0]}{lm[1]}_cropped1[i - left] = P1[i];
   P{lm[0]}{lm[1]}_cropped2[i - left] = P2[i];
-}} // END LOOP: i over right
+}} // END LOOP: for i over cropped attachment samples
 gsl_interp_accel *restrict acc{lm[0]}{lm[1]} = gsl_interp_accel_alloc();
 if (acc{lm[0]}{lm[1]} == NULL){{
   fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), gsl_interp_accel_alloc() failed to initialize\\n");
@@ -277,11 +281,11 @@ gsl_interp_accel_free(acc{lm[0]}{lm[1]});
 if (omega_insp{lm[0]}{lm[1]} * omegadot_insp{lm[0]}{lm[1]} > 0.0){{
   omega_insp{lm[0]}{lm[1]} = fabs(omega_insp{lm[0]}{lm[1]});
   omegadot_insp{lm[0]}{lm[1]} = fabs(omegadot_insp{lm[0]}{lm[1]});
-}} // END IF: check if omega * omegadot is positive
+}} // END IF: waveform frequency and derivative have matching signs
 else{{
   omega_insp{lm[0]}{lm[1]} = fabs(omega_insp{lm[0]}{lm[1]});
   omegadot_insp{lm[0]}{lm[1]} = -fabs(omegadot_insp{lm[0]}{lm[1]});
-}} // END ELSE: check if omega * omegadot is negative
+}} // END ELSE: waveform frequency and derivative have opposing signs
 """
     if use_numerical_relativity_nqc:
         raise ValueError(
@@ -366,7 +370,7 @@ free(phase);
 free(phase_unwrapped);
     
 
-// apply the nqc correction
+// Step 4: Apply the higher-mode NQC correction to low and fine waveform samples.
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
 if (commondata->waveform_inspiral == NULL){
@@ -375,10 +379,10 @@ if (commondata->waveform_inspiral == NULL){
 } // END IF: waveform_inspiral allocation failed
 for (i = 0; i < commondata->nsteps_low; i++){
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
-} // END LOOP: for i over dynamics low
+} // END LOOP: for i over low-resolution waveform times
 for (i = 0; i< commondata->nsteps_fine; i++){
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
-} // END LOOP: for i over dynamics fine
+} // END LOOP: for i over fine-resolution waveform times
 """
     for lm in modes:
         body += f"""
@@ -397,7 +401,7 @@ for (i = 0; i < commondata->nsteps_low; i++){{
   nqc_amp{lm[0]}{lm[1]} = 1 + a_nqc[HNR{lm[0]}{lm[1]}][0]*q1_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][1]*q2_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][2]*q3_{lm[0]}{lm[1]};
   nqc_phase{lm[0]}{lm[1]} =  b_nqc[HNR{lm[0]}{lm[1]}][0]*p1_{lm[0]}{lm[1]} + b_nqc[HNR{lm[0]}{lm[1]}][1]*p2_{lm[0]}{lm[1]};
   commondata->waveform_inspiral[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] = nqc_amp{lm[0]}{lm[1]} * commondata->waveform_low[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] *cexp(I * nqc_phase{lm[0]}{lm[1]});
-}} // END LOOP: for i over nsteps_low
+}} // END LOOP: for i over low-resolution waveform samples
 for (i = 0; i< commondata->nsteps_fine; i++){{
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   radius = commondata->dynamics_fine[IDX(i,R)];
@@ -410,7 +414,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){{
   nqc_amp{lm[0]}{lm[1]} = 1 + a_nqc[HNR{lm[0]}{lm[1]}][0]*q1_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][1]*q2_{lm[0]}{lm[1]} + a_nqc[HNR{lm[0]}{lm[1]}][2]*q3_{lm[0]}{lm[1]};
   nqc_phase{lm[0]}{lm[1]} =  b_nqc[HNR{lm[0]}{lm[1]}][0]*p1_{lm[0]}{lm[1]} + b_nqc[HNR{lm[0]}{lm[1]}][1]*p2_{lm[0]}{lm[1]};
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN{lm[0]}{lm[1]})] = nqc_amp{lm[0]}{lm[1]} * commondata->waveform_fine[IDX_WF(i,STRAIN{lm[0]}{lm[1]})] * cexp(I * nqc_phase{lm[0]}{lm[1]});
-}} // END LOOP: for i over nsteps_fine
+}} // END LOOP: for i over fine-resolution waveform samples
 
 """
     cfc.register_CFunction(

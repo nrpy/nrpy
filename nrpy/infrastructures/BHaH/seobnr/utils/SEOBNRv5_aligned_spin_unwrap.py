@@ -29,9 +29,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_unwrap() -> Union[None, pcg.NRPyEnv
     desc = """
 Unwraps an array of angles with a period of 2pi.
 
-@param angles_in - Array of angles to unwrap.
-@param angles_out - Array to store the unwrapped angles.
-@param nsteps_arr - length of the angles_in array.
+@param[in] angles_in Array of angles to unwrap.
+@param[out] angles_out Array to store the unwrapped angles.
+@param nsteps_arr length of the angles_in array.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_unwrap"

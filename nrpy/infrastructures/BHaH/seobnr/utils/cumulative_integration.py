@@ -28,6 +28,7 @@ def register_CFunction_cumulative_integration() -> Union[None, pcg.NRPyEnv_type]
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
     Compute the cumulative integral of an array by interpolated integration stencils.
+
     This function calculates the integrals
           /x_i
     C_i = | f(x) dx
@@ -41,10 +42,10 @@ def register_CFunction_cumulative_integration() -> Union[None, pcg.NRPyEnv_type]
           j = 1
     where I_j is the integral from x_{j-1} to x_j calculated by the integration stencil function.
 
-    @param y - Array to integrate.
-    @param x - Array of independent variables.
-    @param C - Array to store the cumulative integrals.
-    @param nsteps - Size of the array.
+    @param[in] y Array to integrate.
+    @param[in] x Array of independent variables.
+    @param[out] C Array to store the cumulative integrals.
+    @param nsteps Size of the array.
     """
     cfunc_type = "void"
     name = "cumulative_integration"
