@@ -31,11 +31,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_dynamics() -> (
     desc = """
 Interpolates and fine samples the SEOBNRv5 dynamics close to the end point for Non Quasi-Circular (NQC) corrections.
 
-@param commondata - Struct containing the common data for the SEOBNRv5 dynamics.
-@param dynamics_fine_prelim - Array containing the portion of the dynamics that needs fine sampling.
-@param nsteps_fine_prelim - Lenght of dynamics_fine_prelim.
-@param t_peak - The estimated end time of the trajectory (can be the last element or the orbital frequency/tortoise momentum peak).
-@param stop - Stop condition of the ODE integration; used to determine if iterative refinement was performed.
+@param[in,out] commondata Struct containing the common data for the SEOBNRv5 dynamics.
+@param[in] dynamics_fine_prelim Array containing the portion of the dynamics that needs fine sampling.
+@param nsteps_fine_prelim Lenght of dynamics_fine_prelim.
+@param t_peak The estimated end time of the trajectory (can be the last element or the orbital frequency/tortoise momentum peak).
+@param stop Stop condition of the ODE integration; used to determine if iterative refinement was performed.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_interpolate_dynamics"

@@ -251,7 +251,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_coefficients(
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
 
-@param commondata - The Common data structure containing the model parameters.
+@param[in,out] commondata The Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_coefficients"

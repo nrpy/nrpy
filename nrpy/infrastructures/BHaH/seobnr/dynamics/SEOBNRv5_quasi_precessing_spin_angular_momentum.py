@@ -33,10 +33,10 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_angular_momentum() -> (
     desc = """
 Evaluate SEOBNRv5 angular momentum from the spin dynamics.
 
-@param z - Array of spin variables.
-@param L - Array to store the angular momentum.
-@param params - Common data struct containing the model parameters.
-@return - GSL_SUCCESS (0) as required by GSL.
+@param[in] z Array of spin variables.
+@param[out] L Array to store the angular momentum.
+@param[in] params Common data struct containing the model parameters.
+@return GSL_SUCCESS (0) as required by GSL.
 """
     cfunc_type = "int"
     name = "SEOBNRv5_quasi_precessing_spin_angular_momentum"

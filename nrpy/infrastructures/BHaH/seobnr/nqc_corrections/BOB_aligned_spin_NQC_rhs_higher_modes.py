@@ -35,9 +35,9 @@ def register_CFunction_BOB_aligned_spin_NQC_rhs_HM() -> Union[None, pcg.NRPyEnv_
     desc = """
 Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
 
-@param commondata - Common data structure containing the model parameters.
-@param amps - Array to store the calculated amplitudes.
-@param omegas - Array to store the calculated angular frequencies.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] amps Array to store the calculated amplitudes.
+@param[out] omegas Array to store the calculated angular frequencies.
 """
     cfunc_type = "void"
     name = "BOB_aligned_spin_NQC_rhs_HM"
@@ -45,7 +45,7 @@ Calculates the BOB-informed Non Quasi-Circular (NQC) right-hand side terms.
         "commondata_struct *restrict commondata , REAL (*amps)[3] , REAL (*omegas)[2]"
     )
     body = """
-//allocate memory for hNR and wNR
+// Step 1: Allocate storage for NR-informed amplitude and frequency fits.
 REAL *hNR = malloc(NUMMODES * sizeof(REAL));
 REAL *wNR = malloc(NUMMODES * sizeof(REAL));
 
@@ -59,7 +59,7 @@ if (wNR == NULL){
     exit(EXIT_FAILURE);
 }
 
-//compute hNR and wNR at t_attach
+// Step 2: Evaluate NR-informed amplitude and frequency fits at attachment.
 SEOBNRv5_aligned_spin_hNR_fits_at_t_attach(commondata, hNR);
 SEOBNRv5_aligned_spin_omegaNR_fits_at_t_attach(commondata, wNR);
 
@@ -68,7 +68,7 @@ const REAL m2 = commondata->m2;
 const REAL M = m1 + m2;
 const REAL nu = m1 * m2/ (M * M);
 
-//compute
+// Step 3: Evaluate BOB-informed higher-mode derivatives at attachment.
 """
     declare_HM_input_symbols = ""
     output_statement = ""

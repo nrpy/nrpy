@@ -23,7 +23,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register C function for computing and applying "special" amplitude coefficients needed for (2,1), (4,3), and (5,5) modes.
+    Register C function for evaluating special-amplitude rho factors.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -54,9 +54,11 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients_rhol
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the special amplitude coefficients to inspiral waveform modes (2,1), (4,3), and (5,5).
+Evaluates special-amplitude rho factors for inspiral waveform modes (2,1), (4,3), and (5,5).
 
-@param commondata - Common data structure containing the model parameters.
+@param[in] commondata Common data structure containing the model parameters.
+@param[in] dynamics Dynamical variables at the waveform sample.
+@param[out] rhos Output array for special-amplitude rho factors.
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
@@ -100,7 +102,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register C function for computing and applying "special" amplitude coefficients needed for (2,1), (4,3), and (5,5) modes.
+    Register C function for computing and storing special amplitude coefficients.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -110,9 +112,9 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the special amplitude coefficients to inspiral waveform modes (2,1), (4,3), and (5,5).
+Computes and stores special amplitude coefficients for inspiral waveform modes (2,1), (4,3), and (5,5).
 
-@param commondata - Common data structure containing the model parameters.
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
@@ -181,6 +183,7 @@ double complex inspiral_modes[NUMMODES];
 
 size_t i;
 
+// Step 1: Copy the fine dynamics into contiguous arrays for spline evaluation.
 for (i = 0; i < commondata->nsteps_fine; i++){
   Omega[i] = commondata->dynamics_fine[IDX(i,OMEGA)];
   Omega_circ[i] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
@@ -190,10 +193,10 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   prstar[i] = commondata->dynamics_fine[IDX(i,PRSTAR)];
   pphi[i] = commondata->dynamics_fine[IDX(i,PPHI)];
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
-}
+} // END LOOP: for i over fine dynamics samples
 
 
-// construct splines of dynamical variables
+// Step 2: Construct natural cubic splines of the fine-sampled dynamics.
 
 gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
   if (acc_r == NULL) {
@@ -285,8 +288,7 @@ gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
     }
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
 
-// Find t_ISCO:
-
+// Step 3: Locate the ISCO crossing used to define the (2,2) attachment time.
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
 }
@@ -306,7 +308,7 @@ else{
     for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }
+  } // END LOOP: for i over zoomed ISCO samples
   const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1);
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
@@ -314,6 +316,7 @@ else{
   free(minus_r_zoom);
 }
 
+// Step 4: Build the (2,2) and (5,5) attachment states from the splines.
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
 
@@ -352,6 +355,7 @@ const REAL hNR21_threshold = 300;
 const REAL hNR43_threshold = 200 * nu * (1 - 0.8 * chiA);
 const REAL hNR55_threshold = 2000;
 
+// Step 5: Evaluate NR-informed target amplitudes and enforce mode floors.
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
@@ -398,8 +402,7 @@ const REAL c21 = (hNR21/K21 - rho21)/vpow21;
 const REAL c43 = (hNR43/K43 - rho43)/vpow43;
 const REAL c55 = (hNR55/K55 - rho55)/vpow55;
 
-//save to commondata
-
+// Step 6: Store special amplitude coefficients for later inspiral mode generation.
 commondata->c_21 = c21;
 commondata->c_43 = c43;
 commondata->c_55 = c55;

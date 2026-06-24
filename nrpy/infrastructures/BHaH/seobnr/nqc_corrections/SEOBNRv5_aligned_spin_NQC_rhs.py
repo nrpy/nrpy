@@ -52,9 +52,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_NQC_rhs() -> Union[None, pcg.NRPyEn
     desc = """
 Calculate the SEOBNRv5 NR-informed right-hand sides for the Non Quasi-Circular (NQC) corrections.
 
-@params commondata - Common data structure containing the model parameters.
-@params amps - Array to store the amplitude and its higher derivatives.
-@params omegas - Array to store the angular frequency and its derivative.
+@param[in,out] commondata Common data structure containing the model parameters.
+@param[out] amps Array to store the amplitude and its higher derivatives.
+@param[out] omegas Array to store the angular frequency and its derivative.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_NQC_rhs"
@@ -64,7 +64,7 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-//compute
+// Step 1: Evaluate NR-informed target amplitude and frequency data at attachment.
 """
     body += SEOBNRv5_code
     body += """

@@ -23,7 +23,7 @@ def register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register C function for computing and applying "special" amplitude coefficients needed for (2,1), (4,3), and (5,5) modes.
+    Register C function for evaluating NR-informed peak-amplitude fits.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -52,9 +52,10 @@ def register_Cfunction_SEOBNRv5_aligned_spin_hNR_fits_at_t_attach() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the special amplitude coefficients to inspiral waveform modes (2,1), (4,3), and (5,5).
+Evaluates NR-informed peak-amplitude fits for the stored waveform modes.
 
-@param commondata - Common data structure containing the model parameters.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] hNR Output array for the numerical-relativity amplitudes.
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"

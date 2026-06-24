@@ -29,10 +29,10 @@ def register_CFunction_handle_gsl_return_status() -> Union[None, pcg.NRPyEnv_typ
     desc = """
 Error handler for calls to GSL-dependent routines.
 
-@param status - The return value of the GSL-dependent call.
-@param status_desired - The desired return statuses of the GSL call.
-@param num_desired - The number of desired return statuses.
-@param function_name - The name of the GSL-dependent function that was called.
+@param status The return value of the GSL-dependent call.
+@param[in] status_desired The desired return statuses of the GSL call.
+@param num_desired The number of desired return statuses.
+@param[in] function_name The name of the GSL-dependent function that was called.
 """
     cfunc_type = "void"
     name = "handle_gsl_return_status"
