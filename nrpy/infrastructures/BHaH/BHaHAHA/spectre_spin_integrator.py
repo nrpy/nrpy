@@ -1206,8 +1206,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 
   const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
   if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
+  const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
+  if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
     status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
   for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++) {
+    REAL mean = 0.0;
     REAL mean = 0.0;
     for (int p = 0; p < N; p++)
       mean += mu[p] * modes[a * N + p];
@@ -1222,11 +1225,13 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       break;
     }
     const REAL scale = sqrt(target_potential_norm / norm);
+    const REAL scale = sqrt(target_potential_norm / norm);
     if (!isfinite(scale)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
     for (int p = 0; p < N; p++)
+      modes[a * N + p] = scale * (modes[a * N + p] - mean);
       modes[a * N + p] = scale * (modes[a * N + p] - mean);
   }
 
@@ -1764,6 +1769,21 @@ if (fabs(A) > spin_norm_tolerance) {
     const REAL M_irr_squared = A / (16.0 * M_PI);
     if (M_irr_squared > 0.0 && isfinite(M_irr_squared)) {
         const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
+
+        fprintf(stderr,
+        "\n\nDEBUG PRINT SpECTRE spin mass: nn=%d A=%+.4e S=%+.4e chi=%+.4e\n"
+        "M_irr^2=%+.4e M_irr=%+.4e\n"
+        "M_H^2=%+.4e M_H=%+.4e\n\n",
+        commondata->nn,
+        (double)A,
+        (double)S,
+        (double)sqrt(chi_U[0] * chi_U[0] + chi_U[1] * chi_U[1] + chi_U[2] * chi_U[2]),
+        (double)M_irr_squared,
+        (double)sqrt(M_irr_squared),
+        (double)M_horizon_squared,
+        (double)sqrt(M_horizon_squared));
+        fflush(stderr);
+
         if (M_horizon_squared > 0.0 && isfinite(M_horizon_squared)) {
             for (int i = 0; i < 3; i++)
                 chi_U[i] = S_U[i] / M_horizon_squared;
