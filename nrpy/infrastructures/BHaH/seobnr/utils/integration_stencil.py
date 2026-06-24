@@ -37,9 +37,9 @@ def get_integration_stencil_uniform_spacing(
     x_0, x = sp.symbols("x_0 x", real=True)
     X = [x_0 + i for i in range(polynomial_order + 1)]
     Y = [sp.Symbol(f"y_{i}", real=True) for i in range(polynomial_order + 1)]
-    interpolating_polynomial = 0
+    interpolating_polynomial: sp.Expr = sp.sympify(0)
     for i in range(polynomial_order + 1):
-        l_i = 1
+        l_i: sp.Expr = sp.sympify(1)
         for j in range(polynomial_order + 1):
             if i != j:
                 l_i *= (x - X[j]) / (X[i] - X[j])
@@ -69,6 +69,7 @@ def register_CFunction_integration_stencil() -> Union[None, pcg.NRPyEnv_type]:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
     Evaluate 8-th order accurate integration stencils.
+
     This function evaluates the integral
            /x_i
     I_i =  | f(x) dx
@@ -78,9 +79,9 @@ def register_CFunction_integration_stencil() -> Union[None, pcg.NRPyEnv_type]:
     the point (x_i,f_i) with arbitrary offset (default is centered at x_i)
     and performing integration between x_{i-1} and x_i.
     
-    @param offset - offset of the point (determines the forwards/backwards/centralized interpolation).
-    @param coeffs - Array of integration weights for the stencil.
-    @param indices - Array of indices for the stencil.
+    @param offset offset of the point (determines the forwards/backwards/centralized interpolation).
+    @param[out] coeffs Array of integration weights for the stencil.
+    @param[out] indices Array of indices for the stencil.
     """
     cfunc_type = "void"
     name = "integration_stencil"

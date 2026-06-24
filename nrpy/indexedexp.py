@@ -1350,12 +1350,7 @@ def LeviCivitaTensorUUU_dim3_rank3(
     """
     # Here, we import the Levi-Civita tensor and compute the tensor with upper indices
     LeviCivitaSymbolDDD = LeviCivitaSymbol_dim3_rank3()
-    # A MyPy-friendly version of zerorank3(dimension=3) for this case:
-    LeviCivitaTensorUUU = [
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    ]
+    LeviCivitaTensorUUU = zerorank3(dimension=3)
     for i in range(3):
         for j in range(3):
             for k in range(3):
@@ -1385,12 +1380,7 @@ def LeviCivitaTensorDDD_dim3_rank3(
     """
     # Here, we import the Levi-Civita tensor and compute the tensor with lower indices
     LeviCivitaSymbolDDD = LeviCivitaSymbol_dim3_rank3()
-    # A MyPy-friendly version of zerorank3(dimension=3) for this case:
-    LeviCivitaTensorDDD = [
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-        [[0, 0, 0], [0, 0, 0], [0, 0, 0]],
-    ]
+    LeviCivitaTensorDDD = zerorank3(dimension=3)
     for i in range(3):
         for j in range(3):
             for k in range(3):

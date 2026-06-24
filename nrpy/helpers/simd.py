@@ -897,7 +897,7 @@ def expr_convert_to_simd_intrins(
         :param symbol_to_Rational_dict: Dictionary mapping symbols to Rational numbers.
         """
         NegOne_in_symbol_to_Rational_dict = False
-        NegOne_symb = sp.Symbol("none") * 2
+        NegOne_symb: sp.Basic = sp.Symbol("none") * 2
         NegOne_symb_str = f"{prefix}_NegativeOne_"
         for symb in symbol_to_Rational_dict.keys():
             if str(symb) == NegOne_symb_str:

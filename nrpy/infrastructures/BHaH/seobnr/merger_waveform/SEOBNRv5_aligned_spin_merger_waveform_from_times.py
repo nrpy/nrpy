@@ -31,16 +31,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform_from_times() -> (
     desc = """
 Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model for a given array of times.
 
-@params times - Array of times at which to evaluate the waveform.
-@params amps - Array to store the calculated amplitudes.
-@params phases - Array to store the calculated phases.
-@params t_0 - Attachment time.
-@params h_0 - Amplitude at attachment time.
-@params hdot_0 - Amplitude derivative at attachment time.
-@params phi_0 - Phase at attachment time.
-@params phidot_0 - Angular frequency at attachment time.
-@params nsteps_MR - length of the times array.
-@params commondata - Common data structure containing the model parameters.
+@param[in] times Array of times at which to evaluate the waveform.
+@param[out] amps Array to store the calculated amplitudes.
+@param[out] phases Array to store the calculated phases.
+@param t_0 Attachment time.
+@param h_0 Amplitude at attachment time.
+@param hdot_0 Amplitude derivative at attachment time.
+@param phi_0 Phase at attachment time.
+@param phidot_0 Angular frequency at attachment time.
+@param nsteps_MR Length of the times array.
+@param[in] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform_from_times"
@@ -48,13 +48,12 @@ Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model for a giv
     body = """
 size_t i;
 REAL waveform[2];
+// Step 1: Evaluate the native SEOBNRv5 merger-ringdown at each requested time.
 for (i = 0; i < nsteps_MR; i++) {
-  //compute
   SEOBNRv5_aligned_spin_merger_waveform(times[i], t_0, h_0 , hdot_0 , phi_0 , phidot_0 , commondata , waveform);
-  //store
   amps[i] = waveform[0];
   phases[i] = waveform[1];
-}
+} // END LOOP: for i over merger-ringdown evaluation times
 """
     cfc.register_CFunction(
         subdirectory="merger_waveform",

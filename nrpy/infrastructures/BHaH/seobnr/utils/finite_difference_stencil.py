@@ -32,9 +32,9 @@ def register_CFunction_finite_difference_stencil() -> Union[None, pcg.NRPyEnv_ty
     desc = """
     Evaluate 8-th order accurate finite difference stencils.
 
-    @param offset - array index (determines the forwards/backwards offset).
-    @param coeffs - Array of coefficients for the stencil.
-    @param indices - Array of indices for the stencil.
+    @param offset array index (determines the forwards/backwards offset).
+    @param[out] coeffs Array of coefficients for the stencil.
+    @param[out] indices Array of indices for the stencil.
     """
     cfunc_type = "void"
     name = "finite_difference_stencil"

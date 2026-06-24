@@ -15,6 +15,8 @@ from types import FrameType as FT
 #         and compile-time parameters.
 from typing import List, Union, cast
 
+import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.grid as gri
@@ -225,6 +227,8 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     params = "CCTK_ARGUMENTS"
     # Populate uu_rhs, vv_rhs
     rhs = WaveEquation_RHSs()
+    uu_rhs = cast(sp.Expr, rhs.uu_rhs)
+    vv_rhs = cast(sp.Expr, rhs.vv_rhs)
 
     if enable_KreissOliger_dissipation:
         diss_strength = par.register_CodeParameter(
@@ -237,8 +241,8 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
         uu_dKOD = ixp.declarerank1("uu_dKOD")
         vv_dKOD = ixp.declarerank1("vv_dKOD")
         for k in range(3):
-            rhs.uu_rhs += diss_strength * uu_dKOD[k]
-            rhs.vv_rhs += diss_strength * vv_dKOD[k]
+            uu_rhs += diss_strength * uu_dKOD[k]
+            vv_rhs += diss_strength * vv_dKOD[k]
         print(
             "WARNING: Kreiss-Oliger has been enabled.\n"
             "  In your parfile, you will need to increase by 1 the following parameters:\n"
@@ -254,7 +258,7 @@ def register_CFunction_rhs_eval(thorn_name: str) -> Union[None, pcg.NRPyEnv_type
     )
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
-            [rhs.uu_rhs, rhs.vv_rhs],
+            [uu_rhs, vv_rhs],
             [
                 gri.ETLegacyGridFunction.access_gf("uu_rhs"),
                 gri.ETLegacyGridFunction.access_gf("vv_rhs"),

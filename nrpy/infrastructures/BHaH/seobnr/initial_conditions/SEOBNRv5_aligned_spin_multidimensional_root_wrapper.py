@@ -31,10 +31,10 @@ def register_CFunction_SEOBNRv5_multidimensional_root_wrapper() -> (
     desc = """
 Wrapper function for performing multidimensional root-finding using GSL when higher derivatives of the root function are available.
 
-@param f - The GSL structure containing the root function and derivatives.
-@param x_guess - The initial guess for the root.
-@param n - The dimensionality of the root-finding problem.
-@param x_result - The result of the root-finding.
+@param f The GSL structure containing the root function and derivatives.
+@param[in] x_guess The initial guess for the root.
+@param n The dimensionality of the root-finding problem.
+@param[out] x_result The result of the root-finding.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_multidimensional_root_wrapper"

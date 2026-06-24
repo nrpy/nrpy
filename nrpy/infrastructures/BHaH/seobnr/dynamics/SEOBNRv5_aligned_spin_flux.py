@@ -31,12 +31,12 @@ def register_CFunction_SEOBNRv5_aligned_spin_flux() -> Union[None, pcg.NRPyEnv_t
     desc = """
 Evaluates the SEOBNRv5 aligned spin flux for the ODE right-hand sides.
 
-@param y - Array of dynamical variables.
-@param Hreal - The real part of the Hamiltonian.
-@param Omega - The instantaneous angular frequency of the EOB perturber.
-@param Omega_circ - The circular angular frequency of the EOB perturber.
-@param f - Array to store the flux.
-@param params - Common data structure containing the model parameters.
+@param[in] y Array of dynamical variables.
+@param Hreal The real part of the Hamiltonian.
+@param Omega The instantaneous angular frequency of the EOB perturber.
+@param Omega_circ The circular angular frequency of the EOB perturber.
+@param[out] f Array to store the flux.
+@param[in] params Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_flux"

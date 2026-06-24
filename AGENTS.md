@@ -1,20 +1,20 @@
 # NRPy Agent Instructions
 
-Use [coding_style.md](coding_style.md) as ground truth. If `AGENTS.md` and `coding_style.md` differ, `coding_style.md` wins. This file compress repo rules for agents. CI enforce many rules.
+[coding_style.md](coding_style.md) = ground truth. Conflict => `coding_style.md` wins. Repo agent rules, compressed. CI enforce many.
 
 ## Scope
 
-- NRPy generate C from Python/SymPy.
-- No binary files in PRs unless maintainers approve exception.
-- No images, archives, compiled artifacts, or other non-text assets unless maintainers approve exception.
+- NRPy: Python/SymPy -> generated C.
+- No binary files in PRs unless maintainers approve.
+- No images, archives, compiled artifacts, or other non-text assets unless maintainers approve.
 
 ## Required Checks
 
-- Run `black .` before commit for Python changes.
-- Run `./.github/single_file_static_analysis.sh <path-to-file.py>` on every modified Python file before commit.
-- Exception: trusted-value files in `.../tests/*.py` skip single-file static analysis. They store generated reference values only.
-- Do not analyze hand-picked subset only.
-- Contributions must pass project static analysis before merge.
+- Python changes: `black .` before commit.
+- Every modified Python file: `./.github/single_file_static_analysis.sh <path-to-file.py>` before commit.
+- Exception: trusted-value files in `.../tests/*.py`; generated reference values only, skip single-file static analysis.
+- No hand-picked subset only. Contributions pass project static analysis before merge.
+- Run Python examples directly from this directory: append `.` to `PYTHONPATH`: `export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."`
 
 Static-analysis script checks:
 
@@ -30,15 +30,12 @@ Static-analysis script checks:
 
 ### Formatting
 
-- Follow Black.
-- Use 4 spaces.
+- Black; 4 spaces.
 
 ### Naming
 
-- Classes: `PascalCase`
-- Constants: `UPPER_SNAKE_CASE` or leading `_`
-- Private helpers: leading `_`
-- Boolean-like params use positive names.
+- Classes: `PascalCase`; constants: `UPPER_SNAKE_CASE` or leading `_`; private helpers: leading `_`.
+- Boolean-like params positive.
 
 Prefer:
 
@@ -60,8 +57,7 @@ Avoid:
   1. standard library
   2. third-party
   3. local NRPy
-- Separate groups with blank line.
-- Follow `isort`.
+- Blank line between groups; follow `isort`.
 
 Canonical aliases mandatory:
 
@@ -74,39 +70,35 @@ Canonical aliases mandatory:
 - `import nrpy.c_codegen as ccg`
 - `import nrpy.helpers.parallel_codegen as pcg`
 
-- Do not invent aliases.
+- No invented aliases.
 
 ### `__init__.py`
 
-- No module docstring.
-- No comments.
-- No executable code beyond explicit relative import aggregation.
-- Keep namespace flat with explicit relative imports.
+- No module docstring, comments, or executable code beyond explicit relative import aggregation.
+- Flat namespace with explicit relative imports.
 
 ### Python Docstrings
 
-- Use triple double quotes.
-- Use Sphinx/reST style:
+- Triple double quotes.
+- Sphinx/reST style:
   - `:param name:`
   - `:return:`
   - `:raises ExceptionType:`
-- Use `:return:`, not `:returns:`.
-- Never use Google-style `Args:` / `Returns:` / `Raises:`.
-- Do not put type info in `:param` text.
+- `:return:`, not `:returns:`.
+- No Google-style `Args:` / `Returns:` / `Raises:`.
+- No type info in `:param` text.
 
 ### Python String Literals
 
-- Prefer triple double-quoted multiline strings for multiline literals.
-- Applies to `desc`, `body`, `prefunc`, `postfunc`, generated-code snippets, long messages, validation strings.
-- Use `r"""..."""` when backslashes must stay literal.
-- Use `rf"""..."""` only when interpolation needed.
-- Keep interpolated expressions simple and Python-3.7-friendly. Move complex expressions to locals first.
-- Do not replace clear static multiline literals with adjacent string fragments or `"\n".join(...)` unless readability clearly improves.
-- Keep single-line ordinary strings as normal double-quoted strings unless triple quotes help.
+- Prefer triple double-quoted multiline strings for multiline literals: `desc`, `body`, `prefunc`, `postfunc`, generated-code snippets, long messages, validation strings.
+- `r"""..."""` when backslashes stay literal; `rf"""..."""` only when interpolation needed.
+- Keep interpolated expressions simple and Python-3.7-friendly; move complex expressions to locals first.
+- No replacing clear static multiline literals with adjacent string fragments or `"\n".join(...)` unless readability clearly improves.
+- Single-line ordinary strings stay normal double-quoted strings unless triple quotes help.
 
 ### Module Docstrings
 
-For every non-`__init__.py` Python file, top docstring format:
+Every non-`__init__.py` Python file top docstring:
 
 ```python
 """
@@ -117,7 +109,7 @@ Author: Name
 """
 ```
 
-For multiple authors:
+Multiple authors:
 
 ```python
 """
@@ -132,12 +124,11 @@ Authors: Name One
 
 Rules:
 
-- Use `Author:` for one author, `Authors:` for multiple.
-- Do not add authors not already authors of file.
-- Optional leading filename comment only if exact form `# <relative path from nrpy root>.py`
-- `__init__.py` never get module docstrings.
-- Trusted test-vector files never get module docstrings.
-- Use only `Author:` / `Authors:` keys.
+- `Author:` for one author; `Authors:` for multiple.
+- No authors not already in file.
+- Optional leading filename comment only exact form `# <relative path from nrpy root>.py`
+- `__init__.py` and trusted test-vector files never get module docstrings.
+- Only `Author:` / `Authors:` keys.
 
 Avoid:
 
@@ -147,16 +138,12 @@ Avoid:
 
 ### Type Hints
 
-- Use type hints heavily.
-- Always include return annotations, including `-> None`.
-- Use `typing` forms: `Dict`, `List`, `Optional`, `Tuple`, `Union`, `cast`.
-- Use `typing_extensions.Literal` for constrained strings.
-- Use `# type: ignore` only when needed, mainly third-party typing gaps.
-- Avoid `Any` if more precise type possible.
-- If `Any` unavoidable, justify inline.
-- Do not use builtin generics like `list[X]`, `dict[X, Y]`, `tuple[X, ...]`.
-- Do not use `X | None`.
-- Do not add `from __future__ import annotations` unless real need.
+- Many type hints; always include return annotations, including `-> None`.
+- `typing` forms: `Dict`, `List`, `Optional`, `Tuple`, `Union`, `cast`; `typing_extensions.Literal` for constrained strings.
+- `# type: ignore` only when needed, mainly third-party typing gaps.
+- Avoid `Any`; if unavoidable, justify inline.
+- No builtin generics like `list[X]`, `dict[X, Y]`, `tuple[X, ...]`; no `X | None`.
+- No `from __future__ import annotations` unless real need.
 
 ### Comments
 
@@ -164,7 +151,7 @@ In docstrings:
 
 - Inline `Note:` okay.
 - reST `.. note::` okay.
-- Do not mix both styles in one docstring.
+- No mixing both styles in one docstring.
 
 Procedural comment style:
 
@@ -175,10 +162,10 @@ Procedural comment style:
 
 ### `if __name__ == "__main__":`
 
-- Runnable non-test, non-`__init__.py` modules under `nrpy/equations/` and subdirs should start `__main__` block with exact doctest-runner below.
+- Runnable non-test, non-`__init__.py` modules under `nrpy/equations/` and subdirs start `__main__` block with exact doctest-runner below.
 - Runnable modules under `infrastructures/*/*.py`: strongly encouraged.
 - Other runnable modules: recommended when useful.
-- Outside `nrpy/infrastructures/*/*.py`, Python-based C/C++ codegen doctests discouraged unless they add signal cheaper checks cannot provide.
+- Outside `nrpy/infrastructures/*/*.py`, Python-based C/C++ codegen doctests discouraged unless signal beats cheaper checks.
 
 Use this exact block:
 
@@ -196,32 +183,28 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 ```
 
-- Imports used only here belong inside block.
-- In `nrpy/equations/**`, symbolic validation and trusted-results generation may follow this prefix in same `__main__` block.
-- Allowed follow-on steps there include `ve.process_dictionary_of_expressions(...)`, `ve.compare_or_generate_trusted_results(...)`, loops over coordinate systems, loops over validation keys.
-- This allowance is for established equation-module validation workflow, not arbitrary script logic.
+- Imports used only here stay inside block.
+- In `nrpy/equations/**`, symbolic validation/trusted-results generation may follow this prefix in same `__main__` block.
+- Allowed follow-on steps there: `ve.process_dictionary_of_expressions(...)`, `ve.compare_or_generate_trusted_results(...)`, coordinate-system loops, validation-key loops.
+- Allowance for established equation-module validation workflow, not arbitrary script logic.
 
 ### General Python Organization
 
-- Classes group related functionality.
-- Module functions handle procedural codegen.
-- `register_CFunction_*()` pattern common.
+- Classes group related functionality; module functions handle procedural codegen.
+- Common pattern: `register_CFunction_*()`.
 - Doctests live in docstrings.
-- Raise `ValueError` for invalid input.
-- Use `warnings.warn()` for non-critical issues.
+- Raise `ValueError` for invalid input; use `warnings.warn()` for non-critical issues.
 - Validate explicitly in constructors.
 
 ## Equation Setup Rules
 
 ### SymPy
 
-- Avoid `sp.simplify()` in equation-building code.
-- Allowed only in tests, validation, or explicit identity checks.
-- `nrpy.helpers.cached_functions.cached_simplify()` is narrow exception.
-- Use cached simplification sparingly for small local scalar subexpressions when it materially helps symbolic tractability, codegen stability, or readability, especially in `nrpy/equations/general_relativity`.
-- Do not use it on whole tensors or large assembled RHS expressions when plain symbolic construction is practical.
+- Avoid `sp.simplify()` in equation-building code; allowed only in tests, validation, or explicit identity checks.
+- `nrpy.helpers.cached_functions.cached_simplify()` narrow exception: sparingly for small local scalar subexpressions when it helps symbolic tractability, codegen stability, or readability, especially in `nrpy/equations/general_relativity`.
+- No cached simplification on whole tensors or large assembled RHS expressions when plain symbolic construction works.
 - If need not obvious nearby, add short comment explaining why cached simplification warranted.
-- Do not use `sp.subs()` / `sp.replace()` for pattern-based transformation.
+- No `sp.subs()` / `sp.replace()` for pattern-based transformation.
 
 Allowed `.subs()` cases:
 
@@ -234,12 +217,12 @@ Allowed `.subs()` cases:
 Preferred:
 
 - init accumulators with `sp.sympify(0)` / `sp.sympify(1)`
-- use `sp.Rational()` for exact fractions
-- use `sp.symbols(..., real=True)` for scalars
+- `sp.Rational()` for exact fractions
+- `sp.symbols(..., real=True)` for scalars
 
 ### Indexed Expressions
 
-- Use `nrpy.indexedexp` as `ixp` for tensors.
+- `nrpy.indexedexp` as `ixp` for tensors.
 
 Common helpers:
 
@@ -258,7 +241,7 @@ Symmetry strings:
 
 ### Expression Construction
 
-- Use explicit nested loops.
+- Explicit nested loops.
 - No Einstein summation notation.
 - No matrix-multiply operators.
 
@@ -284,7 +267,7 @@ Derivative naming:
 
 ### Expression Validation
 
-- Every equation module validate symbolic expressions against trusted numerical values.
+- Every equation module validates symbolic expressions against trusted numerical values.
 
 Pipeline:
 
@@ -305,24 +288,20 @@ Key APIs:
 
 Trusted file rules:
 
-- Trusted vectors live under `*/tests/`.
-- Treat trusted vectors as generated artifacts with minimal stable structure.
-- No module docstrings.
-- No functions or classes.
+- Trusted vectors live under `*/tests/`; generated artifacts, minimal stable structure.
+- No module docstrings, functions, or classes.
 - Only `mpf` or `mpc` imports, with `# type: ignore`.
-- Skip single-file static analysis for these trusted-value files.
-- Do not hand-edit trusted values.
-- Regenerate from owning module.
+- Skip single-file static analysis for trusted-value files.
+- No hand-editing trusted values; regenerate from owning module.
 - If mismatch legitimate, delete stale file and rerun module.
-- Commit message must explain trusted-file change.
+- Commit message explains trusted-file change.
 
 Equation output contract:
 
 - Assign key outputs to `self.<expr_name>`.
 - Validate with same `process_dictionary_of_expressions` / `compare_or_generate_trusted_results` pattern.
-- Result names must match `trusted_dict` keys.
-- Use existing naming like `*_rhs`, `*_expr_list_*`.
-- Do not invent naming unless trusted files updated to match.
+- Result names match `trusted_dict` keys.
+- Existing naming like `*_rhs`, `*_expr_list_*`; no invented naming unless trusted files updated to match.
 
 ### Prohibited / Restricted Dependencies
 
@@ -332,15 +311,15 @@ Equation output contract:
 
 Regex rule:
 
-- Do not `import re` when `.replace()` or plain string methods enough.
-- Use regex only for real pattern-matching need.
+- No `import re` when `.replace()` or plain string methods enough.
+- Regex only for real pattern-matching need.
 - If regex justified, add comment why `.replace()` not enough.
 
 ## Infrastructure Code Rules
 
 ### Module Organization
 
-- Usually one Python infrastructure file register one main C function via `register_CFunction_*()`.
+- Usually one Python infrastructure file registers one main C function via `register_CFunction_*()`.
 - Module names descriptive `snake_case`.
 - `__init__.py` flat, explicit relative imports only.
 - Standard order:
@@ -352,7 +331,7 @@ Regex rule:
 
 ### Doctests
 
-- Registration-function docstrings should end with `Doctests:` before first `>>>`.
+- Registration-function docstrings end with `Doctests:` before first `>>>`.
 - Older files may use `Doctest:` or `DocTests:`. New code uses `Doctests:`.
 
 Preferred doctest pattern for stable generated C:
@@ -372,13 +351,11 @@ Rules:
 
 - Import `validate_strings` / `clang_format` inside doctest.
 - Clear `cfc.CFunction_dict` first.
-- Use `file_ext="c"` usually, `"cu"` for CUDA.
-- Python-based C/C++-generation doctests are most appropriate in `nrpy/infrastructures/*/*.py`.
-- Outside `nrpy/infrastructures/*/*.py`, use only when they verify meaningful behavior cheaper checks would miss.
-- Do not generate or check trusted output files for C functions dominated by large generated kernels. Prefer symbolic validation or small structural checks there.
-- Forbid trivial doctests that only check box.
-- Do not write doctests whose main value is "registration succeeded".
-- Do not require a doctest when only realistic option is brittle generated-text spot check.
+- `file_ext="c"` usually, `"cu"` for CUDA.
+- Python-based C/C++-generation doctests fit best in `nrpy/infrastructures/*/*.py`; outside, use only when meaningful behavior cheaper checks miss.
+- No trusted output generation/checks for C functions dominated by large generated kernels; prefer symbolic validation or small structural checks.
+- No trivial doctests whose main value is "registration succeeded".
+- No doctest required when only realistic option is brittle generated-text spot check.
 - Keep doctests lightweight.
 - If `# FIXME` placeholder exists, finish or remove later.
 
@@ -396,14 +373,13 @@ def register_CFunction_my_function() -> Union[None, pcg.NRPyEnv_type]:
 
 Rules:
 
-- Use only for functions participating in parallel/discovery codegen.
+- Only for functions participating in parallel/discovery codegen.
 - Register function after guard.
 - Non-parallel registration functions return `-> None`.
 
 ### Black Suppression
 
-- Use `# fmt: off` / `# fmt: on` rarely.
-- Only when Black destroys intentional alignment.
+- `# fmt: off` / `# fmt: on` rarely; only when Black destroys intentional alignment.
 
 ### C Function Registration from Python
 
@@ -424,17 +400,16 @@ Structure:
 
 - Declare `desc`, `cfunc_type`, `name`, `params`, `body` on separate lines.
 - Keep function self-contained, readable in execution order.
-- Do not split one-off setup into tiny helpers.
+- No splitting one-off setup into tiny helpers.
 
 ### Embedded C in Python Strings
 
-- Use raw strings `r"""..."""` for C bodies.
-- Use `rf"""..."""` if interpolation needed.
+- Raw strings `r"""..."""` for C bodies; `rf"""..."""` if interpolation needed.
 - Double braces in f-strings: `{{` and `}}`.
-- Embedded C indentation uses 2 spaces.
+- Embedded C indentation: 2 spaces.
 - Keep interpolated expressions simple and Python-3.7-friendly.
-- Do not churn old valid indentation only for style.
-- Do not mechanically re-indent historical raw strings unless fixing readability or behavior.
+- No churn of old valid indentation only for style.
+- No mechanical re-indent of historical raw strings unless fixing readability or behavior.
 - If `include_CodeParameters_h=True`, body uses `#include "set_CodeParameters.h"`.
 - String replacement may adapt generated C when needed.
 
@@ -445,22 +420,22 @@ For new ordinary per-grid or per-point kernels:
 - Prefer `BHaH.simple_loop.simple_loop()` over handwritten `LOOP_OMP(...)` or raw nested loops.
 - Prefer `ccg.c_codegen(..., automatically_read_gf_data_from_memory=True)` for registered GF reads.
 - Keep transforms symbolic until `c_codegen()`.
-- Do not use string-based replacement when symbolic expression can express same thing.
-- Do not add new `#include "set_CodeParameters.h"` inside generated bodies for this infrastructure class.
+- No string-based replacement when symbolic expression can express same thing.
+- No new `#include "set_CodeParameters.h"` inside generated bodies for this infrastructure class.
 - Instead derive needed locals with `get_params_commondata_symbols_from_expr_list()` and `generate_definition_header()`.
 - Avoid post-registration mutation of `cfc.CFunction_dict[...]`.
 - Prefer explicit hooks or params in shared registration logic.
 - Keep registration linear.
-- Do not hide one-off symbolic setup in tiny private helpers.
+- No hiding one-off symbolic setup in tiny private helpers.
 - Build expressions right before consume in `c_codegen()` / `simple_loop()`.
 - Register gridfunctions and parity tables near point of need.
-- Do not front-load unrelated setup before core metadata.
+- No front-loading unrelated setup before core metadata.
 - Build emitted C body top-to-bottom with `body += ...`.
 - Add short comments at abrupt transitions.
 
 ### Inlining Rules
 
-- Inline C and Python functions that do not save lines by being separate.
+- Inline C/Python functions that do not save lines by being separate.
 
 Separate function only if:
 
@@ -475,8 +450,7 @@ Avoid:
 
 ### `prefunc`
 
-- Helper C functions emitted into `prefunc`.
-- Concatenate with `prefunc += ...`.
+- Helper C functions emitted into `prefunc`; concatenate with `prefunc += ...`.
 
 ### Standard Struct Pointer Params
 
@@ -517,8 +491,8 @@ Common macros:
 
 SIMD:
 
-- Use `sum_lagrange_x0_simd()` from `interpolation_lagrange_uniform.h` for vectorized inner loops.
-- Use `#pragma omp simd` for GF-level vectorization.
+- `sum_lagrange_x0_simd()` from `interpolation_lagrange_uniform.h` for vectorized inner loops.
+- `#pragma omp simd` for GF-level vectorization.
 - `simd_intrinsics.h` may be copied into project when SIMD disabled elsewhere.
 
 OpenMP:
@@ -541,14 +515,14 @@ Memory:
 
 Errors:
 
-- Use enum-based error codes.
+- Enum-based error codes.
 - Check error codes immediately.
 - Common pattern: `if (commondata->error_flag != BHAHAHA_SUCCESS) return;`
 - In parallel regions use `#pragma omp critical` when setting shared error flags.
 
 ### SymPy to C
 
-- Use `ccg.c_codegen()` to generate C from SymPy.
+- `ccg.c_codegen()` generates C from SymPy.
 - Often pass expression lists and target names.
 - Declare derivatives with `ixp.declarerankN()` before codegen.
 
@@ -556,15 +530,15 @@ Errors:
 
 Preprocessor:
 
-- Use `#ifndef REAL` / `#define REAL double` / `#endif`.
-- Use `#ifndef M_PI` fallback if needed.
-- Use `#ifdef STANDALONE` for standalone tests.
-- Use GCC optimization pragmas only when appropriate.
-- Use `MAYBE_UNUSED` for intentionally unused variables.
+- `#ifndef REAL` / `#define REAL double` / `#endif`.
+- `#ifndef M_PI` fallback if needed.
+- `#ifdef STANDALONE` for standalone tests.
+- GCC optimization pragmas only when appropriate.
+- `MAYBE_UNUSED` for intentionally unused variables.
 
 C comments:
 
-- Use `//`, not block comments, in function bodies and general C.
+- `//`, not block comments, in function bodies and general C.
 - Function docs come from Doxygen or `desc=`.
 - Struct fields grouped with clear separator comments.
 
@@ -572,35 +546,27 @@ C comments:
 
 ### Formatting
 
-- Use 2 spaces.
-- No tabs.
-- Aim about 100-char lines.
-- Use K&R braces.
+- 2 spaces; no tabs; aim about 100-char lines; K&R braces.
 
 ### Naming
 
-- Structs: `snake_case`, often `_struct` suffix
-- Functions: `snake_case`
-- Macros: `UPPER_SNAKE_CASE`
-- Variables: `snake_case`
-- Enums: `UPPER_SNAKE_CASE`
+- Structs: `snake_case`, often `_struct` suffix.
+- Functions/variables: `snake_case`.
+- Macros/enums: `UPPER_SNAKE_CASE`.
 
 ### Header Guards / Includes
 
-- Use `#ifndef` / `#define` / `#endif`.
-- Guard names `UPPER_SNAKE_CASE`.
+- `#ifndef` / `#define` / `#endif`; guard names `UPPER_SNAKE_CASE`.
 - Follow surrounding file style if simple vs double-underscore variants differ.
-- Standard includes first.
-- Project headers in quotes.
-- Conditional includes for platform-specific headers.
+- Standard includes first; project headers in quotes; conditional includes for platform-specific headers.
 
 ### Macros / Declarations
 
 - Wrap macro args in parentheses.
-- Use `#if defined(...)`, `#elif defined(...)`, `#endif`.
+- `#if defined(...)`, `#elif defined(...)`, `#endif`.
 - Header helpers should be `static inline`.
 - Keep return type on same line as function name.
-- Use `const` and `restrict` where appropriate.
+- `const` and `restrict` where appropriate.
 - Declare vars at first use.
 
 ### End-Curly-Brace Comments
@@ -669,29 +635,8 @@ Structure:
 
 ## Quick Reference
 
-Python:
+Python: 4 spaces; Black/isort; Sphinx docstrings; triple-quoted multiline literals; old-style `typing`; no `__init__.py` docstrings; doctest runner required in runnable `nrpy/equations/**`; strongly encouraged in `infrastructures/*/*.py`; trusted `*/tests/*.py` files are generated values only, no module docstrings, no single-file static analysis.
 
-- 4 spaces
-- Black + isort
-- Sphinx docstrings
-- triple-quoted multiline strings for multiline literals
-- old-style `typing` annotations
-- no docstrings in `__init__.py`
-- doctest runner block required at end of runnable files in `nrpy/equations/**`
-- doctest runner block strongly encouraged in `infrastructures/*/*.py` and recommended elsewhere
-- trusted-value files in `*/tests/*.py` store reference values only; no module docstrings, no single-file static analysis
+C: 2 spaces; K&R braces; Doxygen comments; `// END ...` comments on non-trivial closing braces; header guards with `#ifndef`.
 
-C:
-
-- 2 spaces
-- K&R braces
-- Doxygen comments
-- `// END ...` comments on non-trivial closing braces
-- header guards with `#ifndef`
-
-Testing / validation:
-
-- single-file static analysis on each modified Python file except trusted-value `*/tests/*.py`
-- trusted vectors under `tests/`
-- regenerate trusted outputs, do not hand-edit
-- favor symbolic validation over brittle golden generated-C output for large kernels
+Testing/validation: run single-file static analysis on each modified Python file except trusted-value `*/tests/*.py`; trusted vectors under `tests/`; regenerate trusted outputs, do not hand-edit; favor symbolic validation over brittle golden generated-C output for large kernels.

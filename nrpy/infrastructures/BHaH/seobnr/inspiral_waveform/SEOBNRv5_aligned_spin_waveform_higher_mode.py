@@ -71,13 +71,14 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Calculates SEOBNRv5 aligned-spin inspiral waveform modes 
-(2,2), (2,1), (3,3), (3,2), (4,4), (4,3), (5,5) for a single timestep
-and stores them in the inspiral_modes array.
+Calculates SEOBNRv5 aligned-spin inspiral waveform modes.
 
-@param dynamics - Array of dynamical variables.
-@param commondata - Common data structure containing the model parameters.
-@return - The (2,2) mode of the SEOBNRv5 inspiral waveform.
+This evaluates the (2,2), (2,1), (3,3), (3,2), (4,4), (4,3), and (5,5)
+modes for a single timestep and stores them in the inspiral_modes array.
+
+@param[in] dynamics Array of dynamical variables.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] inspiral_modes Output array for the inspiral waveform modes.
 """
     cfunc_type = "void"
     prefunc = "#include<complex.h>"
@@ -103,7 +104,7 @@ const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
-//compute
+// Step 1: Evaluate the generated factorized inspiral mode expressions.
 """
     body += khat_code
     for key in hlms_dict:

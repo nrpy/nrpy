@@ -160,10 +160,10 @@ def register_CFunction_KO_apply(
     )
 
     rfm = refmetric.reference_metric["Spherical_rfm_precompute"]
-    hh_rhs = sp.Symbol(
+    hh_rhs: sp.Expr = sp.Symbol(
         gri.BHaHGridFunction.access_gf("hh", gf_array_name="rhs_gfs"), real=True
     )
-    vv_rhs = sp.Symbol(
+    vv_rhs: sp.Expr = sp.Symbol(
         gri.BHaHGridFunction.access_gf("vv", gf_array_name="rhs_gfs"), real=True
     )
     hh_dKOD = ixp.declarerank1("hh_dKOD")
