@@ -19,123 +19,147 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2(const params_struc
   Cartz -= params->Cart_originz;
   {
 
-    const REAL rCart = sqrt(Cartx * Cartx + Carty * Carty + Cartz * Cartz);
-    if (rCart <= (REAL)0.0) {
+    const REAL rCart = sqrt((Cartx) * (Cartx) + (Carty) * (Carty) + (Cartz) * (Cartz));
+    if (!(isfinite(rCart))) {
+      fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
+              (double)Cartx, (double)Carty, (double)Cartz);
+      exit(1);
+    } else if (rCart <= (REAL)1.0e-15) {
       xx[0] = (REAL)0.0;
       xx[1] = (REAL)0.0;
       xx[2] = (REAL)0.0;
     } else {
-      const REAL XX_TOLERANCE = (REAL)1e-12;
-      const REAL F_TOLERANCE = (REAL)1e-12;
-      const int ITER_MAX = 100;
+      const REAL residual_tolerance = (REAL)1.0e-12 * NRPYMAX((REAL)1.0, rCart);
+      const REAL bracket_tolerance = (REAL)1.0e-12 * NRPYMAX((REAL)1.0, rCart);
+      REAL asymptotic_scale;
+      asymptotic_scale = params->fisheye_a2 * params->fisheye_c;
 
-      // Use a robust scale for convergence tests:
-      const REAL dxx_scale = (params->dxx0 + params->dxx1 + params->dxx2) / (REAL)3.0;
-      const REAL rscale = (rCart > dxx_scale) ? rCart : dxx_scale;
+      const REAL inv_asymptotic_scale = (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
+      REAL low = (REAL)0.0;
+      REAL high = NRPYMAX(rCart * inv_asymptotic_scale, (REAL)1.0e-15);
+      REAL radial_seed = (REAL)0.5 * high;
+      int bracket_found = 0;
+      int converged = 0;
+      for (int expand = 0; expand < 80; expand++) {
+        REAL high_map;
+        const REAL high_tmp0 = (1.0 / (params->fisheye_s1));
+        const REAL high_tmp3 = (1.0 / (params->fisheye_s2));
+        const REAL high_tmp1 = fabs(high_tmp0 * (high - params->fisheye_R1));
+        const REAL high_tmp2 = fabs(high_tmp0 * (high + params->fisheye_R1));
+        const REAL high_tmp4 = fabs(high_tmp3 * (high - params->fisheye_R2));
+        const REAL high_tmp5 = fabs(high_tmp3 * (high + params->fisheye_R2));
+        high_map =
+            params->fisheye_c *
+            (high * params->fisheye_a2 +
+             (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                 (-high_tmp1 + high_tmp2 - log(1 + exp(-2 * high_tmp1)) + log(1 + exp(-2 * high_tmp2))) / tanh(high_tmp0 * params->fisheye_R1) +
+             (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                 (-high_tmp4 + high_tmp5 - log(1 + exp(-2 * high_tmp4)) + log(1 + exp(-2 * high_tmp5))) / tanh(high_tmp3 * params->fisheye_R2));
 
-      int iter = 0;
-      int tolerance_has_been_met = 0;
-
-      // Two heuristic initial guesses:
-      //   Near origin: rbar ~ c*a0*r  => r ~ rCart/(c*a0)
-      //   Far field  : rbar ~ c*aN*r  => r ~ rCart/(c*aN)
-      REAL r_guess0 = rCart / (params->fisheye_c * params->fisheye_a0);
-      REAL r_guessN = rCart / (params->fisheye_c * params->fisheye_a2);
-      if (!(r_guess0 > (REAL)0.0))
-        r_guess0 = rCart;
-      if (!(r_guessN > (REAL)0.0))
-        r_guessN = rCart;
-
-      // Pick the initial guess that yields the smaller |f(r)|.
-      REAL r = r_guessN;
-      REAL f_of_r, fprime_of_r;
-      {
-        const REAL tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL tmp5 = (1.0 / (params->fisheye_s2));
-        const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-        const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
-        const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-        const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
-        const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
-        const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
-        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
-                                      params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
-                 rCart;
-        fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
-      }
-
-      REAL fN = fabs(f_of_r);
-
-      r = r_guess0;
-      {
-        const REAL tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL tmp5 = (1.0 / (params->fisheye_s2));
-        const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-        const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
-        const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-        const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
-        const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
-        const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
-        f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
-                                      params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
-                 rCart;
-        fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
-      }
-
-      REAL f0 = fabs(f_of_r);
-
-      r = (f0 < fN) ? r_guess0 : r_guessN;
-
-      while (iter < ITER_MAX && !tolerance_has_been_met) {
-
-        {
-          const REAL tmp0 = (1.0 / (params->fisheye_s1));
-          const REAL tmp5 = (1.0 / (params->fisheye_s2));
-          const REAL tmp1 = tmp0 * (params->fisheye_R1 + r);
-          const REAL tmp3 = tmp0 * (-params->fisheye_R1 + r);
-          const REAL tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * tmp0);
-          const REAL tmp6 = tmp5 * (params->fisheye_R2 + r);
-          const REAL tmp7 = tmp5 * (-params->fisheye_R2 + r);
-          const REAL tmp8 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * tmp5);
-          f_of_r = params->fisheye_c * (params->fisheye_a2 * r + params->fisheye_s1 * tmp4 * log(cosh(tmp1) / cosh(tmp3)) +
-                                        params->fisheye_s2 * tmp8 * log(cosh(tmp6) / cosh(tmp7))) -
-                   rCart;
-          fprime_of_r = params->fisheye_c * (params->fisheye_a2 + tmp4 * (tanh(tmp1) - tanh(tmp3)) + tmp8 * (tanh(tmp6) - tanh(tmp7)));
+        const REAL high_residual = high_map - rCart;
+        if (isfinite(high_residual) && high_residual >= (REAL)0.0) {
+          bracket_found = 1;
+          break;
         }
-
-        // Unnecessary guard against division by zero in Newton step;
-        //   valid coordinate systems must have f'(r) > 0
-        // if(fprime_of_r == (REAL)0.0) {
-        //  break;
-        // }
-
-        const REAL r_np1_unclamped = r - f_of_r / fprime_of_r;
-
-        // Keep r nonnegative (fisheye assumes r >= 0 and rbar(r) is odd/monotone).
-        REAL r_np1 = r_np1_unclamped;
-        if (r_np1 <= (REAL)0.0)
-          r_np1 = (REAL)0.5 * r;
-
-        if (fabs(r - r_np1) <= XX_TOLERANCE * rscale && fabs(f_of_r) <= F_TOLERANCE * rscale) {
-          tolerance_has_been_met = 1;
-        }
-        r = r_np1;
-        iter++;
-      } // END WHILE: Newton iteration until tolerance or iteration cap
-
-      if (iter >= ITER_MAX || !tolerance_has_been_met) {
-#ifdef __CUDA_ARCH__
-        printf("ERROR: Newton-Raphson failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
-               (double)Cartx, (double)Carty, (double)Cartz);
-        asm("trap;");
-#else
-        fprintf(stderr, "ERROR: Newton-Raphson failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
+        high = NRPYMAX(high * (REAL)2.0, (REAL)1.0);
+      } // END LOOP: for expand over bracket expansions
+      if (!bracket_found) {
+        fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
                 (double)Cartx, (double)Carty, (double)Cartz);
         exit(1);
-#endif
-      } // END IF: Newton-Raphson did not converge
+      }
+      radial_seed = (REAL)0.5 * (low + high);
+      for (int iter = 0; iter < 80; iter++) {
+        REAL radial_map;
+        REAL radial_map_prime;
+        const REAL radial_tmp0 = (1.0 / (params->fisheye_s1));
+        const REAL radial_tmp7 = (1.0 / (params->fisheye_s2));
+        const REAL radial_tmp2 = params->fisheye_R1 - radial_seed;
+        const REAL radial_tmp4 = radial_tmp0 * (params->fisheye_R1 + radial_seed);
+        const REAL radial_tmp6 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * radial_tmp0);
+        const REAL radial_tmp8 = params->fisheye_R2 - radial_seed;
+        const REAL radial_tmp10 = radial_tmp7 * (params->fisheye_R2 + radial_seed);
+        const REAL radial_tmp12 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * radial_tmp7);
+        const REAL radial_tmp3 = fabs(radial_tmp0 * radial_tmp2);
+        const REAL radial_tmp5 = fabs(radial_tmp4);
+        const REAL radial_tmp9 = fabs(radial_tmp7 * radial_tmp8);
+        const REAL radial_tmp11 = fabs(radial_tmp10);
+        radial_map =
+            params->fisheye_c *
+            (params->fisheye_a2 * radial_seed +
+             params->fisheye_s1 * radial_tmp6 * (-radial_tmp3 + radial_tmp5 - log(1 + exp(-2 * radial_tmp3)) + log(1 + exp(-2 * radial_tmp5))) +
+             params->fisheye_s2 * radial_tmp12 * (radial_tmp11 - radial_tmp9 + log(1 + exp(-2 * radial_tmp11)) - log(1 + exp(-2 * radial_tmp9))));
+        radial_map_prime = params->fisheye_c * (params->fisheye_a2 + radial_tmp12 * (tanh(radial_tmp10) + tanh(radial_tmp7 * radial_tmp8)) +
+                                                radial_tmp6 * (tanh(radial_tmp4) + tanh(radial_tmp0 * radial_tmp2)));
 
-      const REAL scale = r / rCart;
+        const REAL radial_residual = radial_map - rCart;
+        REAL trial_seed = (REAL)0.5 * (low + high);
+        if (isfinite(radial_map_prime) && fabs(radial_map_prime) > (REAL)1.0e-14) {
+          const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
+          if (isfinite(newton_seed) && newton_seed > low && newton_seed < high) {
+            trial_seed = newton_seed;
+          }
+        }
+        REAL trial_map;
+        const REAL trial_tmp0 = (1.0 / (params->fisheye_s1));
+        const REAL trial_tmp4 = (1.0 / (params->fisheye_s2));
+        const REAL trial_tmp2 = fabs(trial_tmp0 * (params->fisheye_R1 - trial_seed));
+        const REAL trial_tmp3 = fabs(trial_tmp0 * (params->fisheye_R1 + trial_seed));
+        const REAL trial_tmp5 = fabs(trial_tmp4 * (params->fisheye_R2 - trial_seed));
+        const REAL trial_tmp6 = fabs(trial_tmp4 * (params->fisheye_R2 + trial_seed));
+        trial_map =
+            params->fisheye_c *
+            (params->fisheye_a2 * trial_seed +
+             (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                 (-trial_tmp2 + trial_tmp3 - log(1 + exp(-2 * trial_tmp2)) + log(1 + exp(-2 * trial_tmp3))) / tanh(params->fisheye_R1 * trial_tmp0) +
+             (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                 (-trial_tmp5 + trial_tmp6 - log(1 + exp(-2 * trial_tmp5)) + log(1 + exp(-2 * trial_tmp6))) / tanh(params->fisheye_R2 * trial_tmp4));
+
+        REAL trial_residual = trial_map - rCart;
+        if (!isfinite(trial_residual)) {
+          trial_seed = (REAL)0.5 * (low + high);
+          REAL trial_map_fallback;
+          const REAL fallback_tmp0 = (1.0 / (params->fisheye_s1));
+          const REAL fallback_tmp4 = (1.0 / (params->fisheye_s2));
+          const REAL fallback_tmp2 = fabs(fallback_tmp0 * (params->fisheye_R1 - trial_seed));
+          const REAL fallback_tmp3 = fabs(fallback_tmp0 * (params->fisheye_R1 + trial_seed));
+          const REAL fallback_tmp5 = fabs(fallback_tmp4 * (params->fisheye_R2 - trial_seed));
+          const REAL fallback_tmp6 = fabs(fallback_tmp4 * (params->fisheye_R2 + trial_seed));
+          trial_map_fallback =
+              params->fisheye_c * (params->fisheye_a2 * trial_seed +
+                                   (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                                       (-fallback_tmp2 + fallback_tmp3 - log(1 + exp(-2 * fallback_tmp2)) + log(1 + exp(-2 * fallback_tmp3))) /
+                                       tanh(fallback_tmp0 * params->fisheye_R1) +
+                                   (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                                       (-fallback_tmp5 + fallback_tmp6 - log(1 + exp(-2 * fallback_tmp5)) + log(1 + exp(-2 * fallback_tmp6))) /
+                                       tanh(fallback_tmp4 * params->fisheye_R2));
+
+          trial_residual = trial_map_fallback - rCart;
+          if (!isfinite(trial_residual)) {
+            fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n",
+                    (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
+            exit(1);
+          }
+        }
+        if (trial_residual >= (REAL)0.0) {
+          high = trial_seed;
+        } else {
+          low = trial_seed;
+        }
+        if (fabs(trial_residual) < residual_tolerance &&
+            (fabs(high - low) < bracket_tolerance || fabs(trial_seed - radial_seed) < bracket_tolerance)) {
+          radial_seed = trial_seed;
+          converged = 1;
+          break;
+        }
+        radial_seed = trial_seed;
+      } // END LOOP: for iter over bracketed Newton iterations
+      if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {
+        fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
+                (double)Cartx, (double)Carty, (double)Cartz);
+        exit(1);
+      }
+      const REAL scale = radial_seed / rCart;
       xx[0] = scale * Cartx;
       xx[1] = scale * Carty;
       xx[2] = scale * Cartz;
