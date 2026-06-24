@@ -30,15 +30,16 @@ def register_CFunction_SEOBNRv5_aligned_spin_iterative_refinement() -> (
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Evaluates the time at which the peak in orbital frequency or tortoise momentum occurs in the SEOBNRv5 dynamics.
+
 This is done by iteratively interpolating and refining the interval in which the peak occurs.
 
-@param sdata - Struct containing the spline of the tortoise momentum or orbital frequency.
-@param initial_left - The left endpoint of the interval to search for the peak.
-@param initial_right - The right endpoint of the interval to search for the peak.
-@param levels - The number of iterations of refinement to perform.
-@param dt_initial - The initial time step to use for interpolation.
-@param pr - Boolean flag to determine whether to find the peak in tortoise momentum or orbital frequency.
-@returns - The time at which the peak in orbital frequency or tortoise momentum occurs, or the midpoint of the interval if no peak is found.
+@param[in] sdata Struct containing the spline of the tortoise momentum or orbital frequency.
+@param initial_left The left endpoint of the interval to search for the peak.
+@param initial_right The right endpoint of the interval to search for the peak.
+@param levels The number of iterations of refinement to perform.
+@param dt_initial The initial time step to use for interpolation.
+@param pr Boolean flag to determine whether to find the peak in tortoise momentum or orbital frequency.
+@return The time at which the peak in orbital frequency or tortoise momentum occurs, or the midpoint of the interval if no peak is found.
 """
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_iterative_refinement"

@@ -31,7 +31,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     desc = """
 Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fine-sampled ODE trajectory.
 
-@param commondata - Common data structure containing the model parameters.
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_waveform_from_dynamics"
@@ -39,20 +39,19 @@ Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fin
     body = """
 int i;
 REAL dynamics[NUMVARS];
-commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODES*sizeof(double complex)); //t , h_+ , h_x
+commondata->waveform_low = (double complex *)malloc(commondata->nsteps_low*NUMMODES*sizeof(double complex));
 if (commondata->waveform_low == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_low\\n");
   exit(1);
 }
-commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(double complex)); //t , h_+ , h_x
+commondata->waveform_fine = (double complex *)malloc(commondata->nsteps_fine*NUMMODES*sizeof(double complex));
 if (commondata->waveform_fine == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_waveform_from_dynamics(), malloc() failed to for commondata->waveform_fine\\n");
   exit(1);
 }
 
-//low sampling
+// Step 1: Evaluate the low-sampled inspiral strain from the stored dynamics.
 for (i = 0; i < commondata->nsteps_low; i++) {
-  //assign
   dynamics[TIME] = commondata->dynamics_low[IDX(i,TIME)];
   dynamics[R] = commondata->dynamics_low[IDX(i,R)];
   dynamics[PHI] = commondata->dynamics_low[IDX(i,PHI)];
@@ -62,14 +61,12 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   dynamics[OMEGA] = commondata->dynamics_low[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
 
-  //compute
-  //store
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_low[IDX_WF(i,STRAIN)] = SEOBNRv5_aligned_spin_waveform(dynamics, commondata);
-}
-//high sampling
+} // END LOOP: for i over low-sampled inspiral dynamics
+
+// Step 2: Evaluate the fine-sampled inspiral strain used by NQC attachment.
 for (i = 0; i < commondata->nsteps_fine; i++) {
-  //assign
   dynamics[TIME] = commondata->dynamics_fine[IDX(i,TIME)];
   dynamics[R] = commondata->dynamics_fine[IDX(i,R)];
   dynamics[PHI] = commondata->dynamics_fine[IDX(i,PHI)];
@@ -79,11 +76,9 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[OMEGA] = commondata->dynamics_fine[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
 
-  //compute
-  //store
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN)] = SEOBNRv5_aligned_spin_waveform(dynamics, commondata);
-}
+} // END LOOP: for i over fine-sampled inspiral dynamics
 """
     cfc.register_CFunction(
         subdirectory="inspiral_waveform",

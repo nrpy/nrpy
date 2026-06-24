@@ -40,9 +40,9 @@ def register_CFunction_BOB_aligned_spin_waveform() -> Union[None, pcg.NRPyEnv_ty
     desc = """
 Calculates the BOB (2,2) mode for a single timestep.
 
-@param t - Time at which to evaluate the waveform.
-@param commondata - Common data structure containing the model parameters.
-@param waveform - Array to store the calculated waveform.
+@param t Time at which to evaluate the waveform.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] waveform Array to store the calculated waveform.
 """
     cfunc_type = "void"
     name = "BOB_aligned_spin_waveform"
@@ -55,7 +55,7 @@ const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
 const REAL t_0 = commondata->t_attach;
-//compute
+// Step 1: Evaluate the generated BOB amplitude and phase expressions.
 """
     body += BOB_code
     body += """

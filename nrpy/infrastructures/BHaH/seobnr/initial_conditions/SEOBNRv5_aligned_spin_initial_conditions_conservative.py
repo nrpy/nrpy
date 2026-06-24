@@ -34,9 +34,10 @@ def register_CFunction_SEOBNRv5_aligned_spin_initial_conditions_conservative() -
 """
     desc = """
 Evaluates the conservative part of the initial conditions for the SEOBNRv5 ODE integration.
+
 This function assumes that the Jacobian of the initial conditions is already computed.
 
-@params commondata - The Common data structure containing the model parameters.
+@param[in,out] commondata The Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_initial_conditions_conservative"
