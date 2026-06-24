@@ -1206,11 +1206,8 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 
   const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
   if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
-  const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
-  if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
     status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
   for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++) {
-    REAL mean = 0.0;
     REAL mean = 0.0;
     for (int p = 0; p < N; p++)
       mean += mu[p] * modes[a * N + p];
@@ -1225,13 +1222,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       break;
     }
     const REAL scale = sqrt(target_potential_norm / norm);
-    const REAL scale = sqrt(target_potential_norm / norm);
     if (!isfinite(scale)) {
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
       break;
     }
     for (int p = 0; p < N; p++)
-      modes[a * N + p] = scale * (modes[a * N + p] - mean);
       modes[a * N + p] = scale * (modes[a * N + p] - mean);
   }
 
