@@ -64,7 +64,7 @@ const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
-// Step 1: Evaluate NR-informed target amplitude and frequency data at attachment.
+// Evaluate NR-informed target amplitude and frequency data at attachment.
 """
     body += SEOBNRv5_code
     body += """
