@@ -4,6 +4,7 @@ from . import (
     BHaHAHA,
     CodeParameters,
     CurviBoundaryConditions,
+    GRoovy,
     Makefile_helpers,
     MoLtimestepping,
     bhah_lib,
