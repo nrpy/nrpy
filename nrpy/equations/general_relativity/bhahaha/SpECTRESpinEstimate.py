@@ -360,8 +360,6 @@ class SpECTRESpinEstimateClass:
         for A in range(2):
             for B in range(2):
                 covXB = self._SE_XD_dD[B][A + 1]
-                for C in range(2):
-                    covXB += -self._GammaU2DD[C][A][B] * self._SE_XD[C]
                 omega_sum += self._eps2UU[A][B] * covXB
         self._Omega = omega_sum
 
@@ -800,6 +798,8 @@ class SpECTRESpinEstimateClass:
         # Build parts for Ricci scalar:
         # R = q^{AB} ( partial_C Gamma^C_{AB} - partial_B Gamma^C_{AC}
         #              + Gamma^C_{AB} Gamma^D_{CD} - Gamma^C_{AD} Gamma^D_{BC} )
+        # Or use the Gauss relation:
+        # ^{(2)}R = ^{(3)}R - 2*R_{ab} n^a n^b + K^2 - K_{AB} K^{AB}
         dC_GammaCAB = ixp.zerorank2(dimension=2)
         dB_GammaCAC = ixp.zerorank2(dimension=2)
         for A in range(2):
@@ -836,12 +836,12 @@ class SpECTRESpinEstimateClass:
                 )
 
         # Spin function Omega = eps^{AB} * nabla_A X_B
+        # Because the Levi-Civita tensor is antisymmetric and the Christoffels are symmetric
+        # in their lower indices,the Gamma^C_{AB} term vanishes:
         omega_sum = sp.Integer(0)
         for A in range(2):
             for B in range(2):
                 covXB = self._SE_XD_dD[B][A + 1]
-                for C in range(2):
-                    covXB += -self._GammaU2DD[C][A][B] * self._SE_XD[C]
                 omega_sum += self._eps2UU[A][B] * covXB
         self._Omega_base = omega_sum
         self._Omega = self._Omega_base
