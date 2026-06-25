@@ -172,10 +172,17 @@ grhayl_setup_str = rf"""
                       Lorentz_damping_factor,
                       &commondata->ghl_params);
 
-  ghl_initialize_hybrid_eos_functions_and_params(
-                                             rho_b_min, rho_b_min, rho_b_max,
-                                             neos, rho_ppoly, Gamma_ppoly,
-                                             k_ppoly0, Gamma_th, &commondata->eos);
+  const ghl_error_codes_t eos_error =
+      ghl_initialize_hybrid_eos_functions_and_params(
+          rho_b_min, rho_b_min, rho_b_max,
+          neos, rho_ppoly, Gamma_ppoly,
+          k_ppoly0, Gamma_th, &commondata->eos);
+  if (eos_error != ghl_success) {{
+    fprintf(stderr,
+            "GRHayL hybrid EOS initialization failed with error code %d.\n",
+            (int)eos_error);
+    exit(EXIT_FAILURE);
+  }} // END IF: GRHayL hybrid EOS initialization failed
 
 //========================================================
 // End of Initialize GRHayL
@@ -353,7 +360,8 @@ for(int ww=0;ww<3;ww++)
 Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 
-grhd_rhs_eval(commondata, params, &commondata->ghl_params, &commondata->eos, griddata[grid].xx, RK_INPUT_GFS, auxevol_gfs, RK_OUTPUT_GFS);
+grhd_rhs_eval(commondata, params, &commondata->ghl_params, &commondata->eos, 
+              griddata[grid].xx, RK_INPUT_GFS, auxevol_gfs, RK_OUTPUT_GFS);
 
 apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
                                    gridfunctions_wavespeed, gridfunctions_f_infinity,
@@ -362,9 +370,12 @@ apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].
 
 post_RHS_string = r"""
 enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);
-conservatives_to_primitives_routine(commondata, params, &commondata->ghl_params, &commondata->eos, xx, RK_OUTPUT_GFS, auxevol_gfs);
-apply_copy_and_outflow_bcs(commondata, params, &commondata->ghl_params, bcstruct, xx, RK_OUTPUT_GFS, auxevol_gfs);
-compute_stress_energy_tensor(commondata, params, xx, &commondata->eos, RK_OUTPUT_GFS, auxevol_gfs);
+conservatives_to_primitives_routine(commondata, params, &commondata->ghl_params, 
+                                    &commondata->eos, xx, RK_OUTPUT_GFS, auxevol_gfs);
+apply_copy_and_outflow_bcs(commondata, params, &commondata->ghl_params, bcstruct, xx, 
+                           RK_OUTPUT_GFS, auxevol_gfs);
+compute_stress_energy_tensor(commondata, params, xx, &commondata->eos, 
+                             RK_OUTPUT_GFS, auxevol_gfs);
 """
 
 BHaH.MoLtimestepping.register_all.register_CFunctions(
@@ -519,8 +530,13 @@ if __name__ == "__main__":
     # Change to the repository directory
     os.chdir(repo_dir)
 
-    # Configure the build
-    configure_options = ["./configure", "--prefix=./", "--buildtype=opt"]
+    # Configure the build. This example uses only a hybrid EOS, so do not require HDF5.
+    configure_options = [
+        "./configure",
+        "--prefix=./",
+        "--buildtype=opt",
+        "--disable-hdf5",
+    ]
 
     result = subprocess.run(
         configure_options, capture_output=True, text=True, check=True

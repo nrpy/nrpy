@@ -132,8 +132,8 @@ for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
 			&commondata->ghl_params, &commondata->eos, &metric, &prims, &speed_limited);
 	if (error != ghl_success) {
 	fprintf(stderr,
-					"GRHayL primitive limiting failed in TOV initial data at (%d, %d, %d).\n",
-					i0, i1, i2);
+            "GRHayL primitive limiting failed in TOV initial data at (%d, %d, %d).\n",
+            i0, i1, i2);
 	exit(EXIT_FAILURE);
 	} // END IF: primitive limiting failed for TOV initial data
 
