@@ -707,8 +707,7 @@ class SpECTRESpinEstimateClass:
             Salpha_norm = sp.sqrt(SalphaU[0] ** 2 + SalphaU[1] ** 2 + SalphaU[2] ** 2)
             SU_fallback_zalpha = [S * SalphaU[i] / Salpha_norm for i in range(3)]
             chiU_fallback_zalpha = [
-                SU_fallback_zalpha[i] / christodoulou_mass_squared
-                for i in range(3)
+                SU_fallback_zalpha[i] / christodoulou_mass_squared for i in range(3)
             ]
             out["SalphaU"] = SalphaU
             out["Salpha_norm"] = Salpha_norm

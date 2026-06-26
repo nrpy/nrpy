@@ -5,10 +5,11 @@ Needs: Integrands built in equations/general_relativity/bhahaha/SpECTRESpinEstim
 Author: Ralston Graves
 """
 
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Optional, Sequence, Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -86,79 +87,11 @@ def _restore_private_spectre_spin_gridfunctions(
     :param saved_gfs: Gridfunction registrations to restore.
     """
     for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
-        if saved_gfs[gf_name] is None:
+        saved_gf = saved_gfs[gf_name]
+        if saved_gf is None:
             gri.glb_gridfcs_dict.pop(gf_name, None)
         else:
-            gri.glb_gridfcs_dict[gf_name] = saved_gfs[gf_name]
-
-
-def _central_fd_coefficients(fd_order: int) -> Tuple[List[float], List[float]]:
-    """
-    Return centered first- and second-derivative coefficients for supported orders.
-
-    :param fd_order: Centered finite-difference order.
-    :return: First- and second-derivative finite-difference coefficients.
-    :raises ValueError: If the finite-difference order is not supported.
-    """
-    coefficients = {
-        2: (
-            [-1.0 / 2.0, 0.0, 1.0 / 2.0],
-            [1.0, -2.0, 1.0],
-        ),
-        4: (
-            [1.0 / 12.0, -2.0 / 3.0, 0.0, 2.0 / 3.0, -1.0 / 12.0],
-            [-1.0 / 12.0, 4.0 / 3.0, -5.0 / 2.0, 4.0 / 3.0, -1.0 / 12.0],
-        ),
-        6: (
-            [
-                -1.0 / 60.0,
-                3.0 / 20.0,
-                -3.0 / 4.0,
-                0.0,
-                3.0 / 4.0,
-                -3.0 / 20.0,
-                1.0 / 60.0,
-            ],
-            [
-                1.0 / 90.0,
-                -3.0 / 20.0,
-                3.0 / 2.0,
-                -49.0 / 18.0,
-                3.0 / 2.0,
-                -3.0 / 20.0,
-                1.0 / 90.0,
-            ],
-        ),
-        8: (
-            [
-                1.0 / 280.0,
-                -4.0 / 105.0,
-                1.0 / 5.0,
-                -4.0 / 5.0,
-                0.0,
-                4.0 / 5.0,
-                -1.0 / 5.0,
-                4.0 / 105.0,
-                -1.0 / 280.0,
-            ],
-            [
-                -1.0 / 560.0,
-                8.0 / 315.0,
-                -1.0 / 5.0,
-                8.0 / 5.0,
-                -205.0 / 72.0,
-                8.0 / 5.0,
-                -1.0 / 5.0,
-                8.0 / 315.0,
-                -1.0 / 560.0,
-            ],
-        ),
-    }
-    if fd_order not in coefficients:
-        raise ValueError(
-            f"SpECTRE spin-potential solve supports centered fd_order in {sorted(coefficients)}, got {fd_order}"
-        )
-    return coefficients[fd_order]
+            gri.glb_gridfcs_dict[gf_name] = saved_gf
 
 
 def _c_array(values: Sequence[float]) -> str:
@@ -166,7 +99,18 @@ def _c_array(values: Sequence[float]) -> str:
 
 
 def _spectre_spin_potential_solver_prefunc(fd_order: int, ricci_c_code: str) -> str:
-    first_deriv_coeffs, second_deriv_coeffs = _central_fd_coefficients(fd_order)
+    supported_fd_orders = (2, 4, 6, 8)
+    if fd_order not in supported_fd_orders:
+        raise ValueError(
+            f"SpECTRE spin-potential solve supports centered fd_order in {list(supported_fd_orders)}, got {fd_order}"
+        )
+
+    stencil_width = fd_order + 1
+    fd_matrix_inverse = fin.setup_FD_matrix__return_inverse(stencil_width, 0)
+    first_deriv_coeffs = [float(fd_matrix_inverse[i, 1]) for i in range(stencil_width)]
+    second_deriv_coeffs = [
+        float(2 * fd_matrix_inverse[i, 2]) for i in range(stencil_width)
+    ]
     radius = fd_order // 2
     max_row_nnz = 2 * (2 * radius + 1) ** 2 + 4 * (2 * radius + 1)
 
@@ -1458,9 +1402,7 @@ def register_CFunction_diagnostics_spectre_spin(
     )
     fd_order = int(par.parval_from_str("finite_difference::fd_order"))
 
-    prefunc = (
-        APPLY_PARITY_BRANCHLESS_PREFUNC
-        + rf"""
+    prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
 #define NUM_SPECTRE_SPIN_SCRATCH_GFS {len(_SPECTRE_SPIN_SCRATCH_GFS)}
 {scratch_gf_defines}
 
@@ -1619,9 +1561,7 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
   }} // END LOOP: gf_idx
   return BHAHAHA_SUCCESS;
 }} // END FUNCTION: spectre_spin_check_finite_scratch_gfs
-"""
-        + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
-    )
+""" + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
 
     # Step 6: Construct the body of the C function.
     body = r"""
