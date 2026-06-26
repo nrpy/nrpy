@@ -55,7 +55,7 @@ const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
 const REAL t_0 = commondata->t_attach;
-// Step 1: Evaluate the generated BOB amplitude and phase expressions.
+// Evaluate the generated BOB amplitude and phase expressions.
 """
     body += BOB_code
     body += """

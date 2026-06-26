@@ -74,7 +74,7 @@ const REAL phi = dynamics[PHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
-// Step 1: Evaluate the generated factorized inspiral waveform expressions.
+// Evaluate the generated factorized inspiral waveform expressions.
 """
     body += khat2_code
     body += """

@@ -104,7 +104,7 @@ const REAL pphi = dynamics[PPHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
-// Step 1: Evaluate the generated factorized inspiral mode expressions.
+// Evaluate the generated factorized inspiral mode expressions.
 """
     body += khat_code
     for key in hlms_dict:

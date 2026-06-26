@@ -66,7 +66,7 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-// Step 1: Evaluate BOB-informed target amplitude and frequency data at attachment.
+// Evaluate BOB-informed target amplitude and frequency data at attachment.
 """
     body += BOB_code
     body += """
