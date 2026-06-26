@@ -48,7 +48,7 @@ Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model for a giv
     body = """
 size_t i;
 REAL waveform[2];
-// Step 1: Evaluate the native SEOBNRv5 merger-ringdown at each requested time.
+// Evaluate the native SEOBNRv5 merger-ringdown at each requested time.
 for (i = 0; i < nsteps_MR; i++) {
   SEOBNRv5_aligned_spin_merger_waveform(times[i], t_0, h_0 , hdot_0 , phi_0 , phidot_0 , commondata , waveform);
   amps[i] = waveform[0];

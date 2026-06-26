@@ -48,6 +48,7 @@ resulting NQC amplitude and phase corrections.
     name = "BOB_aligned_spin_NQC_corrections_higher_modes"
     params = "commondata_struct *restrict commondata"
     body = """
+// Step 1: Allocate work arrays and extract fine-dynamics basis data.
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in BOB_aligned_spin_NQC_corrections_higher_modes(), malloc() failed for times\\n");

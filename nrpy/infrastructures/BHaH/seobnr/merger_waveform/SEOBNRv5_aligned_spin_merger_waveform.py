@@ -59,7 +59,7 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-// Step 1: Evaluate the generated native SEOBNRv5 merger-ringdown expressions.
+// Evaluate the generated native SEOBNRv5 merger-ringdown expressions.
 """
     body += SEOBNRv5_code
     body += """

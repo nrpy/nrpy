@@ -5,10 +5,11 @@ Needs: Integrands built in equations/general_relativity/bhahaha/SpECTRESpinEstim
 Author: Ralston Graves
 """
 
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Dict, Optional, Sequence, Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
+import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -29,6 +30,14 @@ _SPECTRE_SPIN_SCRATCH_GFS = (
     "zU0",
     "zU1",
     "zU2",
+)
+
+_SPECTRE_SPIN_COORD_COVARIANT_GFS = (
+    "SE_qDD00",
+    "SE_qDD01",
+    "SE_qDD11",
+    "SE_XD0",
+    "SE_XD1",
 )
 
 
@@ -78,79 +87,11 @@ def _restore_private_spectre_spin_gridfunctions(
     :param saved_gfs: Gridfunction registrations to restore.
     """
     for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
-        if saved_gfs[gf_name] is None:
+        saved_gf = saved_gfs[gf_name]
+        if saved_gf is None:
             gri.glb_gridfcs_dict.pop(gf_name, None)
         else:
-            gri.glb_gridfcs_dict[gf_name] = saved_gfs[gf_name]
-
-
-def _central_fd_coefficients(fd_order: int) -> Tuple[List[float], List[float]]:
-    """
-    Return centered first- and second-derivative coefficients for supported orders.
-
-    :param fd_order: Centered finite-difference order.
-    :return: First- and second-derivative finite-difference coefficients.
-    :raises ValueError: If the finite-difference order is not supported.
-    """
-    coefficients = {
-        2: (
-            [-1.0 / 2.0, 0.0, 1.0 / 2.0],
-            [1.0, -2.0, 1.0],
-        ),
-        4: (
-            [1.0 / 12.0, -2.0 / 3.0, 0.0, 2.0 / 3.0, -1.0 / 12.0],
-            [-1.0 / 12.0, 4.0 / 3.0, -5.0 / 2.0, 4.0 / 3.0, -1.0 / 12.0],
-        ),
-        6: (
-            [
-                -1.0 / 60.0,
-                3.0 / 20.0,
-                -3.0 / 4.0,
-                0.0,
-                3.0 / 4.0,
-                -3.0 / 20.0,
-                1.0 / 60.0,
-            ],
-            [
-                1.0 / 90.0,
-                -3.0 / 20.0,
-                3.0 / 2.0,
-                -49.0 / 18.0,
-                3.0 / 2.0,
-                -3.0 / 20.0,
-                1.0 / 90.0,
-            ],
-        ),
-        8: (
-            [
-                1.0 / 280.0,
-                -4.0 / 105.0,
-                1.0 / 5.0,
-                -4.0 / 5.0,
-                0.0,
-                4.0 / 5.0,
-                -1.0 / 5.0,
-                4.0 / 105.0,
-                -1.0 / 280.0,
-            ],
-            [
-                -1.0 / 560.0,
-                8.0 / 315.0,
-                -1.0 / 5.0,
-                8.0 / 5.0,
-                -205.0 / 72.0,
-                8.0 / 5.0,
-                -1.0 / 5.0,
-                8.0 / 315.0,
-                -1.0 / 560.0,
-            ],
-        ),
-    }
-    if fd_order not in coefficients:
-        raise ValueError(
-            f"SpECTRE spin-potential solve supports centered fd_order in {sorted(coefficients)}, got {fd_order}"
-        )
-    return coefficients[fd_order]
+            gri.glb_gridfcs_dict[gf_name] = saved_gf
 
 
 def _c_array(values: Sequence[float]) -> str:
@@ -158,7 +99,18 @@ def _c_array(values: Sequence[float]) -> str:
 
 
 def _spectre_spin_potential_solver_prefunc(fd_order: int, ricci_c_code: str) -> str:
-    first_deriv_coeffs, second_deriv_coeffs = _central_fd_coefficients(fd_order)
+    supported_fd_orders = (2, 4, 6, 8)
+    if fd_order not in supported_fd_orders:
+        raise ValueError(
+            f"SpECTRE spin-potential solve supports centered fd_order in {list(supported_fd_orders)}, got {fd_order}"
+        )
+
+    stencil_width = fd_order + 1
+    fd_matrix_inverse = fin.setup_FD_matrix__return_inverse(stencil_width, 0)
+    first_deriv_coeffs = [float(fd_matrix_inverse[i, 1]) for i in range(stencil_width)]
+    second_deriv_coeffs = [
+        float(2 * fd_matrix_inverse[i, 2]) for i in range(stencil_width)
+    ]
     radius = fd_order // 2
     max_row_nnz = 2 * (2 * radius + 1) ** 2 + 4 * (2 * radius + 1)
 
@@ -1095,7 +1047,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   primme.ldevecs = Nred;
   primme.matrix = &ctx;
   primme.massMatrix = &ctx;
-  primme.eps = 1.0e-7;
+  primme.eps = 1.0e-6;
   primme.maxMatvecs = 50000;
   primme.maxOuterIterations = 5000;
   primme.printLevel = 2;
@@ -1347,7 +1299,6 @@ def register_CFunction_diagnostics_spectre_spin(
     rhss_precompute = list(gf_assignments.values())
     gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
 
-    surface_to_ambient_index = {0: 1, 1: 2}
     parity_conditions_rank2 = {
         (0, 0): 4,
         (0, 1): 5,
@@ -1359,14 +1310,12 @@ def register_CFunction_diagnostics_spectre_spin(
     parity_entries = []
     for gf_name, gf_macro in zip(gf_names, gf_macros):
         gf = gri.glb_gridfcs_dict[gf_name]
-        if gf.rank == 0:
+        if gf.name in _SPECTRE_SPIN_COORD_COVARIANT_GFS:
+            # These surface coordinate-basis covariant fields are transformed
+            # with bc->deriv_jacobian in the custom ghost-fill helper below.
             parity_value = 0
-        elif gf.name.startswith("SE_XD"):
-            parity_value = surface_to_ambient_index[int(gf.name[-1])] + 1
-        elif gf.name.startswith("SE_qDD"):
-            idx0 = surface_to_ambient_index[int(gf.name[-2])]
-            idx1 = surface_to_ambient_index[int(gf.name[-1])]
-            parity_value = parity_conditions_rank2[(idx0, idx1)]
+        elif gf.rank == 0:
+            parity_value = 0
         elif gf.rank == 1:
             parity_value = int(gf.name[-1]) + 1
         elif gf.rank == 2:
@@ -1453,15 +1402,75 @@ def register_CFunction_diagnostics_spectre_spin(
     )
     fd_order = int(par.parval_from_str("finite_difference::fd_order"))
 
-    prefunc = (
-        APPLY_PARITY_BRANCHLESS_PREFUNC
-        + rf"""
+    prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
 #define NUM_SPECTRE_SPIN_SCRATCH_GFS {len(_SPECTRE_SPIN_SCRATCH_GFS)}
 {scratch_gf_defines}
 
 static const int8_t spectre_spin_scratch_gf_parity[NUM_SPECTRE_SPIN_SCRATCH_GFS] = {{
 {parity_table_entries}
 }};
+
+/*
+ * SE_XD and SE_qDD are surface coordinate-basis covariant components on the
+ * horizon angular grid, not ambient unit-basis tensor components. Therefore
+ * they must be transformed with bc->deriv_jacobian rather than the usual
+ * unit-vector parity table.
+ */
+static REAL spectre_spin_src_XD(const REAL *restrict gfs, const int srcpt, const int src_coord,
+                                const size_t spectre_spin_npoints) {{
+  if (src_coord == 1)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD0GF];
+  if (src_coord == 2)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD1GF];
+  return 0.0;
+}}
+
+static REAL spectre_spin_transform_XD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
+                                      const int dst_surface_A, const size_t spectre_spin_npoints) {{
+  const int dst_coord = dst_surface_A + 1; // 0 -> theta, 1 -> phi
+
+  REAL val = 0.0;
+  for (int src_coord = 1; src_coord <= 2; src_coord++) {{
+    const int8_t J = bc->deriv_jacobian[dst_coord][src_coord];
+    if (J != 0)
+      val += (REAL)J * spectre_spin_src_XD(gfs, bc->srcpt, src_coord, spectre_spin_npoints);
+  }} // END LOOP: for src_coord over surface source coordinates
+
+  return val;
+}}
+
+static REAL spectre_spin_src_qDD(const REAL *restrict gfs, const int srcpt, const int src_coord_A,
+                                 const int src_coord_B, const size_t spectre_spin_npoints) {{
+  if (src_coord_A == 1 && src_coord_B == 1)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD00GF];
+  if ((src_coord_A == 1 && src_coord_B == 2) || (src_coord_A == 2 && src_coord_B == 1))
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD01GF];
+  if (src_coord_A == 2 && src_coord_B == 2)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD11GF];
+  return 0.0;
+}}
+
+static REAL spectre_spin_transform_qDD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
+                                       const int dst_surface_A, const int dst_surface_B,
+                                       const size_t spectre_spin_npoints) {{
+  const int dst_coord_A = dst_surface_A + 1; // 0 -> theta, 1 -> phi
+  const int dst_coord_B = dst_surface_B + 1;
+
+  REAL val = 0.0;
+  for (int src_coord_C = 1; src_coord_C <= 2; src_coord_C++) {{
+    const int8_t JA = bc->deriv_jacobian[dst_coord_A][src_coord_C];
+    if (JA == 0)
+      continue;
+
+    for (int src_coord_D = 1; src_coord_D <= 2; src_coord_D++) {{
+      const int8_t JB = bc->deriv_jacobian[dst_coord_B][src_coord_D];
+      if (JB != 0)
+        val += (REAL)JA * (REAL)JB * spectre_spin_src_qDD(gfs, bc->srcpt, src_coord_C, src_coord_D, spectre_spin_npoints);
+    }} // END LOOP: for src_coord_D over surface source coordinates
+  }} // END LOOP: for src_coord_C over surface source coordinates
+
+  return val;
+}}
 
 /**
  * Apply inner boundary conditions to selected spin scratch gridfunctions.
@@ -1485,6 +1494,8 @@ static void apply_inner_bc_for_selected_spectre_spin_gfs(const bc_struct *restri
                                                          const int Nxx_plus_2NGHOSTS2, const int *restrict which_gfs, const int num_gfs,
                                                          const int8_t *restrict scratch_gf_parity) {{
   const bc_info_struct *bc_info = &bcstruct->bc_info;
+  const size_t spectre_spin_npoints =
+      (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
 
 #pragma omp parallel for collapse(2)
   for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
@@ -1497,8 +1508,28 @@ static void apply_inner_bc_for_selected_spectre_spin_gfs(const bc_struct *restri
       if (dst_i0 < NGHOSTS || dst_i0 >= NGHOSTS + Nxx0)
         continue;
 
-      const int8_t p = bc->parity[scratch_gf_parity[which_gf]];
-      spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(spectre_spin_gfs[IDX4pt(which_gf, bc->srcpt)], p);
+      switch (which_gf) {{
+      case SE_XD0GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 0, spectre_spin_npoints);
+        break;
+      case SE_XD1GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 1, spectre_spin_npoints);
+        break;
+      case SE_QDD00GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 0, spectre_spin_npoints);
+        break;
+      case SE_QDD01GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 1, spectre_spin_npoints);
+        break;
+      case SE_QDD11GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 1, 1, spectre_spin_npoints);
+        break;
+      default: {{
+        const int8_t p = bc->parity[scratch_gf_parity[which_gf]];
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(spectre_spin_gfs[IDX4pt(which_gf, bc->srcpt)], p);
+        break;
+      }}
+      }} // END SWITCH: selected spin scratch gridfunction
     }} // END LOOP: for pt over inner boundary points
   }} // END LOOP: for selected spin scratch gridfunctions
 }} // END FUNCTION: apply_inner_bc_for_selected_spectre_spin_gfs
@@ -1530,9 +1561,7 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
   }} // END LOOP: gf_idx
   return BHAHAHA_SUCCESS;
 }} // END FUNCTION: spectre_spin_check_finite_scratch_gfs
-"""
-        + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
-    )
+""" + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
 
     # Step 6: Construct the body of the C function.
     body = r"""
@@ -1721,6 +1750,7 @@ const REAL XU[3] = {
     XU_sum[1] * surface_weight,
     XU_sum[2] * surface_weight};
 const REAL R0 = R0_sum * surface_weight;
+const REAL GB_error = R0 / (8.0*M_PI) - 1.0;
 const REAL XRU[3] = {
     XRU_sum[0] * surface_weight,
     XRU_sum[1] * surface_weight,
@@ -1764,11 +1794,16 @@ if (fabs(A) > spin_norm_tolerance) {
     const REAL M_irr_squared = A / (16.0 * M_PI);
     if (M_irr_squared > 0.0 && isfinite(M_irr_squared)) {
         const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
+        if (M_horizon_squared > 0.0 && isfinite(M_horizon_squared)) {
+            for (int i = 0; i < 3; i++)
+                chi_U[i] = S_U[i] / M_horizon_squared;
+        } // END IF: Christodoulou mass squared is safe
 
         fprintf(stderr,
         "\n\nDEBUG PRINT SpECTRE spin mass: nn=%d A=%+.4e S=%+.4e chi=%+.4e\n"
         "M_irr^2=%+.4e M_irr=%+.4e\n"
-        "M_H^2=%+.4e M_H=%+.4e\n\n",
+        "M_H^2=%+.4e M_H=%+.4e\n"
+        "GB_error=%+.4e\n\n",
         commondata->nn,
         (double)A,
         (double)S,
@@ -1776,13 +1811,10 @@ if (fabs(A) > spin_norm_tolerance) {
         (double)M_irr_squared,
         (double)sqrt(M_irr_squared),
         (double)M_horizon_squared,
-        (double)sqrt(M_horizon_squared));
+        (double)sqrt(M_horizon_squared),
+        (double)GB_error);
         fflush(stderr);
 
-        if (M_horizon_squared > 0.0 && isfinite(M_horizon_squared)) {
-            for (int i = 0; i < 3; i++)
-                chi_U[i] = S_U[i] / M_horizon_squared;
-        } // END IF: Christodoulou mass squared is safe
     } // END IF: irreducible mass squared is safe
 } // END IF: area is safe for centroid reduction
 

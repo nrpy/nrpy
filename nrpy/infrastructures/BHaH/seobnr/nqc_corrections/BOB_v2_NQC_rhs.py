@@ -85,7 +85,7 @@ const REAL a_f = commondata->a_f;
 const REAL t_p = commondata->t_p_BOB;
 const REAL t_attach = commondata->t_attach;
 
-// Step 1: Evaluate BOBv2-informed target amplitude and frequency data at attachment.
+// Evaluate BOBv2-informed target amplitude and frequency data at attachment.
 """
     body += BOB_code
     body += """
