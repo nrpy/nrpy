@@ -206,48 +206,6 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
-akv_primme_frontend_symbols = [
-    "cprimme",
-    "cprimme_normal",
-    "cublas_cprimme",
-    "cublas_cprimme_normal",
-    "cublas_dprimme",
-    "cublas_hprimme",
-    "cublas_hsprimme",
-    "cublas_kcprimme_normal",
-    "cublas_kprimme",
-    "cublas_kprimme_normal",
-    "cublas_ksprimme",
-    "cublas_sprimme",
-    "cublas_zprimme",
-    "cublas_zprimme_normal",
-    "dprimme",
-    "hprimme",
-    "hsprimme",
-    "kcprimme_normal",
-    "kprimme",
-    "kprimme_normal",
-    "ksprimme",
-    "magma_cprimme",
-    "magma_cprimme_normal",
-    "magma_dprimme",
-    "magma_hprimme",
-    "magma_hsprimme",
-    "magma_kcprimme_normal",
-    "magma_kprimme",
-    "magma_kprimme_normal",
-    "magma_ksprimme",
-    "magma_sprimme",
-    "magma_zprimme",
-    "magma_zprimme_normal",
-    "sprimme",
-    "zprimme",
-    "zprimme_normal",
-]
-akv_primme_objcopy_flags = " ".join(
-    f"--redefine-sym {symbol}=bah_akv_{symbol}"
-    for symbol in akv_primme_frontend_symbols
-)
 akv_primme_c_sources = [
     "akv_primme_eigensolver/akv_internal_blaslapack.c",
     "akv_primme_eigensolver/auxiliary_eigs.c",
@@ -276,12 +234,7 @@ akv_primme_object_files = [
 akv_primme_makefile_rule = "\n".join(
     [
         "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
-        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -c $< -o $@",
-        '\t@if [ -z "$(OBJCOPY)" ]; then \\',
-        "\t  echo 'error: need objcopy, llvm-objcopy, or gobjcopy to prefix embedded PRIMME symbols' >&2; \\",
-        "\t  exit 1; \\",
-        "\tfi",
-        f"\t$(OBJCOPY) {akv_primme_objcopy_flags} $@",
+        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -DBHAHAHA_AKV_PRIMME_NAMESPACE -c $< -o $@",
     ]
 )
 akv_linkcheck_makefile_rule = "\n".join(
@@ -299,21 +252,9 @@ def patch_makefile_for_internal_akv_primme(makefile_path: Path) -> None:
     Add BHaHAHA's frozen internal PRIMME objects to the generated Makefile.
     :param makefile_path: Path to the generated Makefile to patch.
     :raises ValueError: If the generated Makefile does not contain the expected
-            `LDFLAGS`, `OBJ_FILES`, or clean-rule lines.
+            `OBJ_FILES` or clean-rule lines.
     """
     lines = makefile_path.read_text(encoding="utf-8").splitlines()
-    for line_number, line in enumerate(lines):
-        if line.startswith("LDFLAGS = "):
-            lines.insert(
-                line_number + 1,
-                "OBJCOPY ?= $(shell command -v objcopy 2>/dev/null || command -v llvm-objcopy 2>/dev/null || command -v gobjcopy 2>/dev/null)",
-            )
-            break
-    else:
-        raise ValueError(
-            f"Could not find LDFLAGS in generated Makefile: {makefile_path}"
-        )
-
     for line_number, line in enumerate(lines):
         if line.startswith("OBJ_FILES = "):
             lines[line_number] = line + " " + " ".join(akv_primme_object_files)
@@ -348,6 +289,7 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     addl_CFLAGS=[
         "-DBHAHAHA_AKV_PRIMME_DOUBLE_ONLY",
         "-DBHAHAHA_AKV_PRIMME_INTERNAL_BLASLAPACK",
+        "-DBHAHAHA_AKV_PRIMME_NAMESPACE",
         "-DPRIMME_WITHOUT_FLOAT",
     ],
     include_dirs=["akv_primme_eigensolver"],

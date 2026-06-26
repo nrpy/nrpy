@@ -100,7 +100,7 @@
  *
  ******************************************************************************/
 
-int Xprimme(XEVAL *evals, XSCALAR *evecs, XREAL *resNorms,
+int BHAHAHA_AKV_PRIMME_PUBLIC_EXPAND(Xprimme)(XEVAL *evals, XSCALAR *evecs, XREAL *resNorms,
             primme_params *primme) {
 
    return Xprimme_aux_Sprimme((void *)evals, (void *)evecs, (void *)resNorms, primme,
@@ -121,7 +121,7 @@ int Xprimme(XEVAL *evals, XSCALAR *evecs, XREAL *resNorms,
 #     define Xsprimme  WITH_KIND(CONCAT(CONCAT(STEM,kc),primme))
 #  endif
 
-int Xsprimme(KIND(float, PRIMME_COMPLEX_FLOAT) * evals, XSCALAR *evecs,
+int BHAHAHA_AKV_PRIMME_PUBLIC_EXPAND(Xsprimme)(KIND(float, PRIMME_COMPLEX_FLOAT) * evals, XSCALAR *evecs,
       float *resNorms, primme_params *primme) {
 
    return Xprimme_aux_Sprimme((void *)evals, (void *)evecs, (void *)resNorms, primme,
