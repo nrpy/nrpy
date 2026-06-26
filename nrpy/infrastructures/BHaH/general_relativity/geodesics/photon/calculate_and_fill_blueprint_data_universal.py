@@ -198,10 +198,18 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     1. Allocates staging buffers for state vectors, status, and results.
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
     3. Transfers data, computes projections, and transfers results back.
-    4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays."""
+    4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays.
+    5. Optionally writes one raw double per photon to the normalization sidecar."""
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
-    params = "const PhotonStateSoA *restrict all_photons, const long int num_rays, blueprint_data_t *restrict result, const int stream_idx"
+    params = (
+        "const PhotonStateSoA *restrict all_photons, "
+        "const long int num_rays, "
+        "blueprint_data_t *restrict result, "
+        "const double *restrict normalization_abs_by_ray, "
+        "const char *restrict norm_abs_bin_path, "
+        "const int stream_idx"
+    )
     include_CodeParameters_h = False
     body = f"""
     //==========================================
@@ -227,12 +235,44 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     BHAH_FREE_DEVICE(d_f_bundle); // Free $f^mu$ buffer.
     BHAH_FREE_DEVICE(d_status_bundle); // Free status buffer.
     BHAH_FREE_DEVICE(d_result_bundle); // Free results buffer.
+    
+    if (normalization_abs_by_ray == NULL || norm_abs_bin_path == NULL ||
+        norm_abs_bin_path[0] == '\\0') {{
+        return;
+    }} // END IF: normalization sidecar inputs are absent
+
+    FILE *restrict norm_abs_file = fopen(norm_abs_bin_path, "wb");
+    if (norm_abs_file == NULL) {{
+        fprintf(stderr,
+                "ERROR: Could not open normalization sidecar '%s' for writing.\\n",
+                norm_abs_bin_path);
+        exit(1);
+    }} // END IF: failed to open normalization sidecar path
+
+    const size_t num_written = fwrite(
+        normalization_abs_by_ray, sizeof(double), (size_t)num_rays, norm_abs_file);
+    if (num_written != (size_t)num_rays) {{
+        fprintf(stderr,
+                "ERROR: Failed to write normalization sidecar '%s'; wrote %zu of %ld records.\\n",
+                norm_abs_bin_path,
+                num_written,
+                num_rays);
+        fclose(norm_abs_file);
+        exit(1);
+    }} // END IF: normalization sidecar write count mismatched
+
+    if (fclose(norm_abs_file) != 0) {{
+        fprintf(stderr,
+                "ERROR: Could not close normalization sidecar '%s' after writing.\\n",
+                norm_abs_bin_path);
+        exit(1);
+    }} // END IF: normalization sidecar close failed
     """
 
     # Step 8: Function Registration
     cfc.register_CFunction(
         prefunc=prefunc,
-        includes=includes,
+        includes=includes + ["<stdio.h>", "<stdlib.h>"],
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

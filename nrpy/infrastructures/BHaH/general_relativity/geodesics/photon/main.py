@@ -44,11 +44,6 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
             f"found '{integrator_mode}'."
         )
 
-    batch_integrator_name = (
-        "batch_integrator_numerical"
-        if integrator_mode == "Numerical"
-        else "batch_integrator_analytical"
-    )
     diagnostic_flag_name = (
         "perform_normalization_check"
         if integrator_mode == "Numerical"
@@ -58,6 +53,56 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
         "Normalization Check"
         if integrator_mode == "Numerical"
         else "Conservation Check"
+    )
+    batch_integrator_call = (
+        "batch_integrator_numerical(&commondata, num_rays, results_buffer, norm_abs_bin_name);"
+        if integrator_mode == "Numerical"
+        else "batch_integrator_analytical(&commondata, num_rays, results_buffer);"
+    )
+    serialization_desc = (
+        " When normalization checks are enabled in numerical mode, each tile also "
+        "writes a matching 'light_blueprint_norm_abs_XX_YY.zip' sidecar archive."
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    numerical_sidecar_path_setup = (
+        """
+            char norm_abs_bin_name[256];
+            if (commondata.perform_normalization_check) {
+                sprintf(
+                    norm_abs_bin_name,
+                    "light_blueprint_norm_abs_%02d_%02d.bin",
+                    tx,
+                    ty);
+            } else {
+                norm_abs_bin_name[0] = '\\0';
+            } // END ELSE: disable normalization sidecar filename for this tile
+"""
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    numerical_sidecar_archive = (
+        """
+                if (commondata.perform_normalization_check &&
+                    norm_abs_bin_name[0] != '\\0') {
+                    char norm_zip_cmd[512];
+                    sprintf(
+                        norm_zip_cmd,
+                        "zip -mq light_blueprint_norm_abs_%02d_%02d.zip %s",
+                        tx,
+                        ty,
+                        norm_abs_bin_name);
+                    int norm_status = system(norm_zip_cmd);
+                    if (norm_status != 0) {
+                        fprintf(
+                            stderr,
+                            "ERROR: Compression failed for %s. Keeping raw binary.\\n",
+                            norm_abs_bin_name);
+                    } // END IF: check normalization sidecar zip status
+                } // END IF: normalization sidecar archive should be compressed
+"""
+        if integrator_mode == "Numerical"
+        else ""
     )
     analytic_spacetime_telemetry = (
         """
@@ -93,7 +138,7 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
     3. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
     4. Loops through a grid of tiles (tx, ty), shifting the window center.
     5. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
-    6. Serializes and zips each tile's data to 'light_blueprint_XX_YY.zip'."""
+    6. Serializes and zips each tile's data to 'light_blueprint_XX_YY.zip'.{serialization_desc}"""
 
     cfunc_type = "int"
     name = "main"
@@ -244,8 +289,9 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
             printf("[Tile %02d,%02d] Processing at Center (%.3f, %.3f, %.3f)...\\n",
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
+{numerical_sidecar_path_setup}
             // 3. Execute Numerical Integration Pipeline
-            {batch_integrator_name}(&commondata, num_rays, results_buffer);
+            {batch_integrator_call}
 
             // 3.5. Coordinate Global Shift
             // Maps local tile-space hits to the global window coordinate system.
@@ -271,6 +317,7 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
                 if (status != 0) {{
                     fprintf(stderr, "ERROR: Compression failed for %s. Keeping raw binary.\\n", bin_name);
                 }} // END IF: check zip status
+{numerical_sidecar_archive}
             }} else {{
                 fprintf(stderr, "ERROR: Could not write to %s\\n", bin_name);
                 free(results_buffer);

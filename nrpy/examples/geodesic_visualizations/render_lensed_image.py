@@ -63,6 +63,9 @@ def _init_worker(
 
 def _load_texture(
     image_input: Union[str, npt.NDArray[np.float64]],
+    warn_if_not_png: bool = False,
+    center_crop_to_square: bool = False,
+    warn_if_non_equirectangular: bool = False,
 ) -> npt.NDArray[np.float64]:
     """
     Load and normalize textures into float64 arrays.
@@ -80,6 +83,10 @@ def _load_texture(
     TypeError: Image input must be a file path (str) or a NumPy array.
 
     :param image_input: A file path (str) or a NumPy array to be loaded.
+    :param warn_if_not_png: Whether to print a warning if the provided path is not a PNG.
+    :param center_crop_to_square: Whether to center-crop a loaded file image to a square.
+    :param warn_if_non_equirectangular: Whether to warn when a loaded file image is not
+        approximately 2:1 in aspect ratio.
     :return: A float64 NumPy array normalized to the [0.0, 1.0] range.
     :raises FileNotFoundError: Raised if the provided file path does not exist.
     :raises TypeError: Raised if the input is not a string or NumPy array.
@@ -87,17 +94,75 @@ def _load_texture(
     if isinstance(image_input, str):
         if not os.path.exists(image_input):
             raise FileNotFoundError(f"Texture file not found: {image_input}")
+        if warn_if_not_png and not image_input.lower().endswith(".png"):
+            print(
+                f"WARNING: Custom texture path '{image_input}' does not end in '.png'. Attempting to load it anyway."
+            )
         # pylint: disable=import-outside-toplevel, import-error
         from PIL import Image
 
         with Image.open(image_input) as img:
-            return np.array(img.convert("RGB")).astype(np.float64) / 255.0
+            texture_array = np.array(img.convert("RGB")).astype(np.float64)
+
+        if center_crop_to_square:
+            texture_array = _center_crop_texture_to_square(texture_array, image_input)
+        if warn_if_non_equirectangular:
+            _warn_if_texture_not_equirectangular(texture_array, image_input)
+        return texture_array / 255.0
     if isinstance(image_input, np.ndarray):
         texture_array = image_input.astype(np.float64)
         if np.max(texture_array) > 1.0:
             texture_array /= 255.0  # Normalize if input is 0-255
         return texture_array
     raise TypeError("Image input must be a file path (str) or a NumPy array.")
+
+
+def _center_crop_texture_to_square(
+    texture_array: npt.NDArray[np.float64], texture_path: str
+) -> npt.NDArray[np.float64]:
+    """
+    Center-crop a texture to a square using the smaller image dimension.
+
+    :param texture_array: The RGB image data to crop.
+    :param texture_path: Path used only for warning context.
+    :return: The original array if already square, otherwise a centered square crop.
+    """
+    texture_height = texture_array.shape[0]
+    texture_width = texture_array.shape[1]
+    if texture_height == texture_width:
+        return texture_array
+
+    print(
+        f"WARNING: Custom source image '{texture_path}' is {texture_width}x{texture_height}; center-cropping to a square."
+    )
+    cropped_size = min(texture_height, texture_width)
+
+    if texture_width > texture_height:
+        left = (texture_width - cropped_size) // 2
+        right = left + cropped_size
+        return texture_array[:, left:right, :]
+
+    top = (texture_height - cropped_size) // 2
+    bottom = top + cropped_size
+    return texture_array[top:bottom, :, :]
+
+
+def _warn_if_texture_not_equirectangular(
+    texture_array: npt.NDArray[np.float64], texture_path: str
+) -> None:
+    """
+    Warn if a texture does not appear approximately equirectangular.
+
+    :param texture_array: The RGB image data to inspect.
+    :param texture_path: Path used only for warning context.
+    """
+    texture_height = texture_array.shape[0]
+    texture_width = texture_array.shape[1]
+    aspect_ratio = texture_width / texture_height
+    if not np.isclose(aspect_ratio, 2.0, rtol=0.05, atol=0.05):
+        print(
+            f"WARNING: Custom celestial sphere image '{texture_path}' is {texture_width}x{texture_height}; expected an approximately 2:1 texture."
+        )
 
 
 def generate_source_disk_array(
@@ -366,6 +431,8 @@ def generate_static_lensed_image(
     window_height: float,
     chunk_size: int = cfg.CHUNK_SIZE,
     display_image: bool = True,
+    custom_sphere_image: bool = False,
+    custom_source_image: bool = False,
 ) -> None:
     """
     Generate a static lensed image from geodesic blueprint data.
@@ -386,6 +453,8 @@ def generate_static_lensed_image(
     :param window_width: The physical width of the camera's local window.
     :param chunk_size: Number of records to read from the binary stream at once.
     :param display_image: If True, opens the resulting image using the default viewer.
+    :param custom_sphere_image: Whether the sphere texture came from a custom CLI override.
+    :param custom_source_image: Whether the source texture came from a custom CLI override.
     """
     # pylint: disable=import-outside-toplevel, import-error
     from PIL import Image
@@ -402,8 +471,16 @@ def generate_static_lensed_image(
     window_z_range = z_w_max - z_w_min
 
     # Load textures for mapping
-    source_texture = _load_texture(source_image)
-    sphere_texture = _load_texture(sphere_image)
+    source_texture = _load_texture(
+        source_image,
+        warn_if_not_png=custom_source_image,
+        center_crop_to_square=custom_source_image,
+    )
+    sphere_texture = _load_texture(
+        sphere_image,
+        warn_if_not_png=custom_sphere_image,
+        warn_if_non_equirectangular=custom_sphere_image,
+    )
 
     # Accumulators allow for averaging colors if multiple rays map to one pixel
     pixel_accumulator = np.zeros(

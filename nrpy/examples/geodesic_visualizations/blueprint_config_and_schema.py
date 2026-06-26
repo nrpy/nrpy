@@ -35,6 +35,13 @@ BLUEPRINT_DTYPE = np.dtype(
     ],
     align=False,
 )
+BLUEPRINT_NORM_ABS_DTYPE = np.dtype("f8")
+BLUEPRINT_NORM_ABS_FILENAME_TEMPLATE = (
+    "light_blueprint_norm_abs_{tile_x:02d}_{tile_y:02d}.bin"
+)
+BLUEPRINT_NORM_ABS_ARCHIVE_TEMPLATE = (
+    "light_blueprint_norm_abs_{tile_x:02d}_{tile_y:02d}.zip"
+)
 
 # Step 2: Termination enums.
 # These integers identify the fate of a photon ray.

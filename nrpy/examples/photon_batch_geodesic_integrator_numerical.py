@@ -512,6 +512,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "    Then, execute the visualization script directly from the project directory:"
     )
     print(f"    {vis_command}\n")
+    print("    To use your own celestial sphere image, add:")
+    print("    --sphere_image /path/to/celestial_sphere.png")
+    print("    To use your own source image, add:")
+    print("    --source_image /path/to/source_image.png\n")
 
     blueprint_command = " ".join(
         [

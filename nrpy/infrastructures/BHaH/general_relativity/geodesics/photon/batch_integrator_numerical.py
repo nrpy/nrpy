@@ -131,13 +131,20 @@ def batch_integrator_numerical(
                           and integration parameters.
     @param num_rays Total number of photon trajectories to simulate.
     @param[out] results_buffer Host array storing the final physical
-                               intersections."""
+                               intersections.
+    @param[in] norm_abs_bin_path Optional output filename for the raw float64
+                                 normalization sidecar."""
 
     cfunc_type = "void"
 
     name = "batch_integrator_numerical"
 
-    params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
+    params = (
+        "const commondata_struct *restrict commondata, "
+        "long int num_rays, "
+        "blueprint_data_t *restrict results_buffer, "
+        "const char *restrict norm_abs_bin_path"
+    )
 
     include_CodeParameters_h = True
 
@@ -155,7 +162,24 @@ def batch_integrator_numerical(
     results_memcpy = (
         "// Event outputs are written directly to results_buffer on the CPU."
     )
-    calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);"
+    calc_blueprint = (
+        "calculate_and_fill_blueprint_data_universal("
+        "&all_photons_host, "
+        "num_rays, "
+        "results_buffer, "
+        "NULL, "
+        "NULL, "
+        "0);"
+    )
+    calc_blueprint_with_norm_abs = (
+        "calculate_and_fill_blueprint_data_universal("
+        "&all_photons_host, "
+        "num_rays, "
+        "results_buffer, "
+        "normalization_abs_by_ray, "
+        "norm_abs_bin_path, "
+        "0);"
+    )
     set_initial_conditions_call = (
         f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, "
         "&all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
@@ -324,9 +348,15 @@ def batch_integrator_numerical(
 
     // Scratchpad array holding the terminal normalization diagnostic outputs.
     normalization_constraint_t *d_norm_bundle = NULL;
+    // Host array storing one absolute normalization value per photon in master-ray order.
+    double *normalization_abs_by_ray = NULL;
 
     if (commondata->perform_normalization_check) {{
         {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
+        {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon normalization sidecar buffer.
+        for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
+            normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
+        }} // END LOOP: for norm_init_i over num_rays to initialize normalization sidecar buffer
     }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
 
     // Event-detection kernels write final physical plane intersections directly to results_buffer.
@@ -1086,14 +1116,10 @@ def batch_integrator_numerical(
     //==========================================
     // 4. RESULT WRITING, CLEANUP, AND FINALIZATION
     //==========================================
-    // Process terminal photon trajectories and extract final geometric intersections.
+    // Process terminal photon trajectories, evaluate optional diagnostics, and extract final geometric intersections.
 
         // CPU buffer copy: Extracts validated CPU-side blueprints $b_i$ containing geometric plane intersections.
         {results_memcpy}
-
-        // Final output step: process escaped photons intersecting the celestial
-        // sphere $r > r_{{escape}}$.
-        {calc_blueprint}
 
         //==========================================
         // TERMINAL NORMALIZATION DIAGNOSTIC
@@ -1112,6 +1138,8 @@ def batch_integrator_numerical(
 
             double max_err_norm = 0.0;
             long int worst_ray_norm = -1;
+            double max_err_norm_non_pt_big = 0.0;
+            long int worst_ray_norm_non_pt_big = -1;
 
             for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {{
                 const int norm_slot_idx = slot_get_index(
@@ -1175,16 +1203,23 @@ def batch_integrator_numerical(
                         0);
 
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                        const long int master_idx = chunk_buffer[0][norm_i];
                         const double current_norm_err = fabs(d_norm_bundle[norm_i].C);
                         if (!isfinite(current_norm_err)) {{
                             normalization_failure_mode = 3;
-                            normalization_failure_ray = chunk_buffer[0][norm_i];
+                            normalization_failure_ray = master_idx;
                             break;
                         }} // END IF: current_norm_err is non-finite
+                        normalization_abs_by_ray[master_idx] = current_norm_err;
                         if (current_norm_err > max_err_norm) {{
                             max_err_norm = current_norm_err;
-                            worst_ray_norm = chunk_buffer[0][norm_i];
+                            worst_ray_norm = master_idx;
                         }} // END IF: current_norm_err > max_err_norm
+                        if (all_photons_host.status[master_idx] != FAILURE_PT_TOO_BIG &&
+                            current_norm_err > max_err_norm_non_pt_big) {{
+                            max_err_norm_non_pt_big = current_norm_err;
+                            worst_ray_norm_non_pt_big = master_idx;
+                        }} // END IF: current_norm_err updates the non-FAILURE_PT_TOO_BIG maximum
                     }} // END LOOP: for norm_i over chunk_size to scan constraint values
                 }} // END WHILE: norm_tsm.slot_counts[norm_slot_idx] > 0 to process the terminal slot
             }} // END LOOP: for norm_slot_idx down to 0 to process all terminal slots
@@ -1214,13 +1249,29 @@ def batch_integrator_numerical(
             printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
             printf("=================================================\n");
             printf(
-                "  Max Absolute Error (Normalization Constraint |g_mu_nu p^mu p^nu|): %e (Ray %ld)\n",
+                "  Max Absolute Error, all checked photons: %e (Ray %ld)\n",
                 max_err_norm,
                 worst_ray_norm);
+            printf(
+                "  Max Absolute Error, excluding FAILURE_PT_TOO_BIG: %e (Ray %ld)\n",
+                max_err_norm_non_pt_big,
+                worst_ray_norm_non_pt_big);
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization constraint
+
+        // Final output step: process escaped photons intersecting the celestial
+        // sphere $r > r_{{escape}}$ and optionally write the normalization sidecar.
+        if (commondata->perform_normalization_check &&
+            normalization_abs_by_ray != NULL &&
+            norm_abs_bin_path != NULL &&
+            norm_abs_bin_path[0] != '\0') {{
+            {calc_blueprint_with_norm_abs}
+        }} else {{
+            {calc_blueprint}
+        }} // END ELSE: blueprint post-processing without normalization sidecar
 
         if (commondata->perform_normalization_check) {{
             {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
+            {free_pinned}(normalization_abs_by_ray); // Purges the per-photon normalization sidecar buffer.
         }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
 
         // Loop iterator $s$ purging the double-buffered arrays across both CPU buffers.

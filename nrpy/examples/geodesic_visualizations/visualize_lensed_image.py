@@ -15,19 +15,17 @@ import math
 import os
 import sys
 import urllib.request
+from typing import Union
 
 import numpy as np
+import numpy.typing as npt
 
 try:
     import blueprint_config_and_schema as cfg  # type: ignore
     import render_lensed_image as rli  # type: ignore
 except ImportError:
-    from nrpy.examples.geodesic_visualizations import (
-        blueprint_config_and_schema as cfg,
-    )
-    from nrpy.examples.geodesic_visualizations import (
-        render_lensed_image as rli,
-    )
+    from nrpy.examples.geodesic_visualizations import blueprint_config_and_schema as cfg
+    from nrpy.examples.geodesic_visualizations import render_lensed_image as rli
 
 
 def main() -> None:
@@ -69,7 +67,7 @@ def main() -> None:
         "--source_r_min",
         type=float,
         default=6.0,
-        help="Inner physical radius r_min of the source disk.",
+        help="Inner physical radius r_min of the generated source disk.",
     )
     parser.add_argument(
         "--source_r_max",
@@ -94,6 +92,18 @@ def main() -> None:
         type=int,
         default=750,
         help="Pixel width of the final static output image.",
+    )
+    parser.add_argument(
+        "--sphere_image",
+        type=str,
+        default=None,
+        help="Optional path to a custom celestial sphere texture image.",
+    )
+    parser.add_argument(
+        "--source_image",
+        type=str,
+        default=None,
+        help="Optional path to a custom source-plane texture image.",
     )
 
     # The parsed arguments struct contains all runtime configurations.
@@ -121,21 +131,25 @@ def main() -> None:
 
     print(f"Loading {len(blueprint_zips)} blueprint tiles...")
 
-    # The texture path locates the high-resolution background celestial sphere image.
-    starmap_path = os.path.join(script_dir, cfg.SPHERE_TEXTURE_FILE)
+    # The custom sphere image overrides the default downloaded texture when provided.
+    if args.sphere_image is None:
+        sphere_image: str = os.path.join(script_dir, cfg.SPHERE_TEXTURE_FILE)
 
-    # Download the celestial sphere texture if it doesn't already exist locally.
-    if not os.path.exists(starmap_path):
-        print(f"Downloading {cfg.SPHERE_TEXTURE_FILE}...")
-        starmap_url = "https://raw.githubusercontent.com/Moone02/nrpy-visual-assets/96a39ba8510e401ea8ec836154fca5db3b13f4d3/noirlab2430b.tif"
-        try:
-            urllib.request.urlretrieve(starmap_url, starmap_path)
-            print("Download complete.")
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(
-                f"FATAL: Failed to download {cfg.SPHERE_TEXTURE_FILE} from {starmap_url}: {e}"
-            )
-            sys.exit(1)
+        # Download the celestial sphere texture if it doesn't already exist locally.
+        if not os.path.exists(sphere_image):
+            print(f"Downloading {cfg.SPHERE_TEXTURE_FILE}...")
+            starmap_url = "https://raw.githubusercontent.com/Moone02/nrpy-visual-assets/96a39ba8510e401ea8ec836154fca5db3b13f4d3/noirlab2430b.tif"
+            try:
+                urllib.request.urlretrieve(starmap_url, sphere_image)
+                print("Download complete.")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(
+                    f"FATAL: Failed to download {cfg.SPHERE_TEXTURE_FILE} from {starmap_url}: {e}"
+                )
+                sys.exit(1)
+    else:
+        sphere_image = args.sphere_image
+        print(f"Using custom celestial sphere texture: {sphere_image}")
 
     # Physical span encompasses full mathematical diameter of accretion disk geometry.
     source_physical_width = 2.0 * args.source_r_max
@@ -145,18 +159,23 @@ def main() -> None:
         (args.window_height / args.window_width) * args.pixel_width
     )
 
-    print("Creating source disk array...")
+    source_image: Union[str, npt.NDArray[np.float64]]
+    if args.source_image is None:
+        print("Creating source disk array...")
 
-    # Texture array represents the equatorial source disk using defined radii.
-    disk_texture = rli.generate_source_disk_array(
-        disk_physical_width=source_physical_width,
-        disk_inner_radius=args.source_r_min,
-        disk_outer_radius=args.source_r_max,
-        colormap=cfg.COLORMAP,
-    )
+        # Texture array represents the equatorial source disk using defined radii.
+        disk_texture = rli.generate_source_disk_array(
+            disk_physical_width=source_physical_width,
+            disk_inner_radius=args.source_r_min,
+            disk_outer_radius=args.source_r_max,
+            colormap=cfg.COLORMAP,
+        )
 
-    # Cast the uint8 array to float64 to satisfy mypy type constraints.
-    disk_texture_float = disk_texture.astype(np.float64)
+        # Cast the uint8 array to float64 to satisfy mypy type constraints.
+        source_image = disk_texture.astype(np.float64)
+    else:
+        source_image = args.source_image
+        print(f"Using custom source texture: {source_image}")
 
     print(f"Rendering image to: {args.output}...")
 
@@ -166,11 +185,13 @@ def main() -> None:
         output_pixel_width=args.pixel_width,
         output_pixel_height=pixel_height,
         source_image_width=source_physical_width,
-        sphere_image=starmap_path,
-        source_image=disk_texture_float,
+        sphere_image=sphere_image,
+        source_image=source_image,
         blueprint_filenames=blueprint_zips,
         window_width=args.window_width,
         window_height=args.window_height,
+        custom_sphere_image=args.sphere_image is not None,
+        custom_source_image=args.source_image is not None,
     )
 
     print("Visualization complete!")
