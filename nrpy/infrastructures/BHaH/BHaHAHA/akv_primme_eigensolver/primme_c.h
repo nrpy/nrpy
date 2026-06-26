@@ -33,6 +33,7 @@
 
 #ifndef primme_c_H
 #define primme_c_H
+#include "akv_primme_namespace.h"
 #if !defined(CHECK_TEMPLATE) && !defined(Xprimme_aux_Sprimme)
 #  define Xprimme_aux_Sprimme CONCAT(Xprimme_aux_,WITH_KIND(SCALAR_SUF))
 #endif

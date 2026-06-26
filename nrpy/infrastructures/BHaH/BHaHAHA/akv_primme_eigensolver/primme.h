@@ -51,6 +51,8 @@
 
 #define PRIMME_QUAD double long
 
+#include "akv_primme_namespace.h"
+
 /* A C99 code with complex type is not a valid C++ code. However C++          */
 /* compilers usually can take it. Nevertheless in order to avoid the warnings */
 /* while compiling in pedantic mode, we use the proper complex type for C99   */

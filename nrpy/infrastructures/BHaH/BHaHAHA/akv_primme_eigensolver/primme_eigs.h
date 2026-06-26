@@ -379,101 +379,101 @@ typedef enum {
 
 /* Hermitian operator */
 
-int hprimme(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(hprimme)(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int kprimme(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(kprimme)(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int sprimme(float *evals, float *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(sprimme)(float *evals, float *evecs, float *resNorms,
       primme_params *primme);
-int cprimme(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cprimme)(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int dprimme(double *evals, double *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(dprimme)(double *evals, double *evecs, double *resNorms,
       primme_params *primme);
-int zprimme(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(zprimme)(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
-int magma_hprimme(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_hprimme)(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int magma_kprimme(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_kprimme)(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int magma_sprimme(float *evals, float *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_sprimme)(float *evals, float *evecs, float *resNorms,
       primme_params *primme);
-int magma_cprimme(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_cprimme)(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int magma_dprimme(double *evals, double *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_dprimme)(double *evals, double *evecs, double *resNorms,
       primme_params *primme);
-int magma_zprimme(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_zprimme)(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
-int cublas_hprimme(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_hprimme)(PRIMME_HALF *evals, PRIMME_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int cublas_kprimme(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_kprimme)(PRIMME_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int cublas_sprimme(float *evals, float *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_sprimme)(float *evals, float *evecs, float *resNorms,
       primme_params *primme);
-int cublas_cprimme(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_cprimme)(float *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int cublas_dprimme(double *evals, double *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_dprimme)(double *evals, double *evecs, double *resNorms,
       primme_params *primme);
-int cublas_zprimme(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_zprimme)(double *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
 
 
-int hsprimme(float *evals, PRIMME_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(hsprimme)(float *evals, PRIMME_HALF *evecs, float *resNorms,
       primme_params *primme);
-int ksprimme(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(ksprimme)(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
       primme_params *primme);
-int magma_hsprimme(float *evals, PRIMME_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_hsprimme)(float *evals, PRIMME_HALF *evecs, float *resNorms,
       primme_params *primme);
-int magma_ksprimme(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_ksprimme)(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
       primme_params *primme);
-int cublas_hsprimme(float *evals, PRIMME_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_hsprimme)(float *evals, PRIMME_HALF *evecs, float *resNorms,
       primme_params *primme);
-int cublas_ksprimme(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_ksprimme)(float *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
       primme_params *primme);
 
 
 /* Normal operator */
 
-int kprimme_normal(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(kprimme_normal)(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int cprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int zprimme_normal(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(zprimme_normal)(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
-int magma_kprimme_normal(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_kprimme_normal)(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int magma_cprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_cprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int magma_zprimme_normal(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_zprimme_normal)(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
-int cublas_kprimme_normal(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_kprimme_normal)(PRIMME_COMPLEX_HALF *evals, PRIMME_COMPLEX_HALF *evecs, PRIMME_HALF *resNorms,
       primme_params *primme);
-int cublas_cprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_cprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_FLOAT *evecs, float *resNorms,
       primme_params *primme);
-int cublas_zprimme_normal(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms, 
-      primme_params *primme);
-
-
-int kcprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
-      primme_params *primme);
-int magma_kcprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
-      primme_params *primme);
-int cublas_kcprimme_normal(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms, 
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_zprimme_normal)(PRIMME_COMPLEX_DOUBLE *evals, PRIMME_COMPLEX_DOUBLE *evecs, double *resNorms,
       primme_params *primme);
 
-primme_params* primme_params_create(void);
-int primme_params_destroy(primme_params *primme);
-void primme_initialize(primme_params *primme);
-int  primme_set_method(primme_preset_method method, primme_params *params);
-void primme_display_params(primme_params primme);
-void primme_free(primme_params *primme);
-int primme_get_member(primme_params *primme, primme_params_label label,
+
+int BHAHAHA_AKV_PRIMME_PUBLIC(kcprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
+      primme_params *primme);
+int BHAHAHA_AKV_PRIMME_PUBLIC(magma_kcprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
+      primme_params *primme);
+int BHAHAHA_AKV_PRIMME_PUBLIC(cublas_kcprimme_normal)(PRIMME_COMPLEX_FLOAT *evals, PRIMME_COMPLEX_HALF *evecs, float *resNorms,
+      primme_params *primme);
+
+primme_params* BHAHAHA_AKV_PRIMME_PUBLIC(primme_params_create)(void);
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_params_destroy)(primme_params *primme);
+void BHAHAHA_AKV_PRIMME_PUBLIC(primme_initialize)(primme_params *primme);
+int  BHAHAHA_AKV_PRIMME_PUBLIC(primme_set_method)(primme_preset_method method, primme_params *params);
+void BHAHAHA_AKV_PRIMME_PUBLIC(primme_display_params)(primme_params primme);
+void BHAHAHA_AKV_PRIMME_PUBLIC(primme_free)(primme_params *primme);
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_get_member)(primme_params *primme, primme_params_label label,
       void *value);
-int primme_set_member(primme_params *primme, primme_params_label label,
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_set_member)(primme_params *primme, primme_params_label label,
       void *value);
-int primme_member_info(primme_params_label *label, const char** label_name,
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_member_info)(primme_params_label *label, const char** label_name,
       primme_type *type, int *arity);
-int primme_constant_info(const char* label_name, int *value);
-int primme_enum_member_info(
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_constant_info)(const char* label_name, int *value);
+int BHAHAHA_AKV_PRIMME_PUBLIC(primme_enum_member_info)(
       primme_params_label label, int *value, const char **value_name);
 
 
