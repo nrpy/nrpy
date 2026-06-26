@@ -597,7 +597,7 @@ class SpECTRESpinEstimateClass:
         :return: Christodoulou mass squared M_H^2.
         """
         m_irr_squared = area / (16 * sp.pi)
-        return cast(sp.Expr, m_irr_squared + S**2 / (4 * m_irr_squared))
+        return m_irr_squared + S**2 / (4 * m_irr_squared)
 
     def dimensionless_spin_vector_from_spin_vector(
         self, area: sp.Expr, SU: List[sp.Expr], S: Optional[sp.Expr] = None
