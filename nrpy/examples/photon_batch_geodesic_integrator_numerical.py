@@ -6,8 +6,11 @@ through a numerical spacetime sourced from the combined raytracing ``.bin``
 generated from ``two_blackholes_collide.py --raytracing-time ...``.
 
 The generated code keeps the existing Structure-of-Arrays photon pipeline and
-adaptive RKF45 stepping, but all metric and Christoffel evaluations now come
-from the numerical interpolation helpers instead of analytic spacetime kernels.
+adaptive RKF45 stepping, but metric and Christoffel evaluations now use a
+piecewise analytic/numerical interpolation pipeline. Two user-selected static
+analytic spacetimes cover the lower-time and upper-time regions, while the
+intermediate coordinate-time interval uses the numerical interpolation helpers
+fed by the combined numerical-spacetime dataset.
 
 This example currently generates a CPU/OpenMP project.
 
@@ -19,6 +22,7 @@ import argparse
 import os
 import shutil
 import sys
+import warnings
 
 import sympy as sp
 
@@ -31,6 +35,8 @@ from nrpy.infrastructures.BHaH import CodeParameters as CPs
 from nrpy.infrastructures.BHaH import Makefile_helpers as Makefile
 from nrpy.infrastructures.BHaH import cmdline_input_and_parfiles
 from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
+    connections,
+    g4DD_metric,
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import (
@@ -66,6 +72,9 @@ def _require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+BRILL_LINDQUIST_CARTESIAN = "BrillLindquist_Cartesian"
+
+
 if __name__ == "__main__":
     # Step 1: Configure command-line arguments for the generation pipeline
     parser = argparse.ArgumentParser(
@@ -74,10 +83,10 @@ if __name__ == "__main__":
 python3 two_blackholes_collide.py --raytracing-time T_FINAL DIAGNOSTICS_OUTPUT_EVERY --raytracing-coord-system CoordSystem --raytracing-Nxx NXX0 NXX1 NXX2 --raytracing-domain ...
 
 Then rerun this photon script using the .bin filename printed to the terminal by two_blackholes_collide.py, e.g.:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_sinhw_0p4_72_12_2.bin --dataset-coord-system SinhSpherical --dataset-grid-size 7.5 --dataset-sinhw 0.4
+python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_sinhw_0p4_72_12_2.bin --coord-system-numerical SinhSpherical --grid-size-numerical 7.5 --sinhw-numerical 0.4 --analytical-metric-0 KerrSchild_Cartesian --analytical-metric-1 KerrSchild_Cartesian --t-metric-0 5.0 --t-metric-1 100.0 --dt-numerical-spacetime-data 0.5
 
 or:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhCylindrical_sinhwrho_0p25_sinhwz_0p4_72_2_12.bin --dataset-coord-system SinhCylindrical --dataset-grid-size 7.5 --dataset-sinhw 0.25 0.4""",
+python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhCylindrical_sinhwrho_0p25_sinhwz_0p4_72_2_12.bin --coord-system-numerical SinhCylindrical --grid-size-numerical 7.5 --sinhw-numerical 0.25 0.4 --analytical-metric-0 KerrSchild_Cartesian --analytical-metric-1 KerrSchild_Cartesian --t-metric-0 5.0 --t-metric-1 100.0 --dt-numerical-spacetime-data 0.5""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -93,25 +102,69 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         help="The parent directory where the generated C project will reside.",
     )
     parser.add_argument(
-        "--dataset-coord-system",
+        "--coord-system-numerical",
         type=str,
         required=True,
         choices=refmetric.supported_CoordSystems,
         help="""Coordinate system used when generating the numerical spacetime dataset. Required by the spatial interpolation pipeline.""",
     )
     parser.add_argument(
-        "--dataset-grid-size",
+        "--grid-size-numerical",
         type=float,
         required=True,
         help="""Physical grid size used when generating the numerical spacetime dataset.""",
     )
     parser.add_argument(
-        "--dataset-sinhw",
+        "--sinhw-numerical",
         nargs="+",
         type=float,
         default=None,
         metavar="SINHW",
         help="""Sinh width parameter(s) used when generating the numerical spacetime dataset. SinhSpherical: SINHW. SinhCylindrical: SINHWRHO SINHWZ. Do not use with non-Sinh coordinate systems.""",
+    )
+    parser.add_argument(
+        "--analytical-metric-0",
+        type=str,
+        required=True,
+        help="""Analytic spacetime name used for photon times strictly below t_metric_0.""",
+    )
+    parser.add_argument(
+        "--analytical-metric-1",
+        type=str,
+        required=True,
+        help="""Analytic spacetime name used for photon times strictly above t_metric_1.""",
+    )
+    parser.add_argument(
+        "--t-metric-0",
+        type=float,
+        required=True,
+        help="""Lower coordinate-time transition from analytical-metric-0 to the numerical interpolation region.""",
+    )
+    parser.add_argument(
+        "--t-metric-1",
+        type=float,
+        required=True,
+        help="""Upper coordinate-time transition from the numerical interpolation region to analytical-metric-1.""",
+    )
+    parser.add_argument(
+        "--dt-numerical-spacetime-data",
+        type=float,
+        required=True,
+        help="""Uniform physical coordinate-time spacing of the numerical spacetime data.""",
+    )
+    parser.add_argument(
+        "--time-start",
+        type=float,
+        default=200.0,
+        help="""Initial coordinate time assigned to the photon batch.""",
+    )
+    parser.add_argument(
+        "--brill-lindquist-bhs",
+        nargs=4,
+        type=float,
+        default=None,
+        metavar=("Z_1", "Z_2", "M_1", "M_2"),
+        help="""Override the Brill-Lindquist black-hole z positions and masses, e.g. --brill-lindquist-bhs 0.5 -0.5 0.5 0.5.""",
     )
     if len(sys.argv) == 1:
         parser.print_help()
@@ -127,33 +180,97 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "--bin-name must name a numerical spacetime .bin file.",
     )
     _require(
-        args.dataset_grid_size > 0.0,
-        "--dataset-grid-size must be positive.",
+        args.grid_size_numerical > 0.0,
+        "--grid-size-numerical must be positive.",
     )
-    dataset_sinhw = None
-    dataset_sinhwrho = None
-    dataset_sinhwz = None
-    if args.dataset_coord_system == "SinhSpherical":
+    _require(
+        args.dt_numerical_spacetime_data > 0.0,
+        "--dt-numerical-spacetime-data must be positive.",
+    )
+    _require(
+        args.time_start >= 0.0,
+        "--time-start must be nonnegative.",
+    )
+    _require(
+        args.t_metric_0 < args.t_metric_1,
+        "--t-metric-0 must be strictly less than --t-metric-1.",
+    )
+    sinhw_numerical = None
+    sinhw_numerical_rho = None
+    sinhw_numerical_z = None
+    if args.coord_system_numerical == "SinhSpherical":
         _require(
-            args.dataset_sinhw is not None and len(args.dataset_sinhw) == 1,
-            "--dataset-coord-system SinhSpherical requires --dataset-sinhw SINHW.",
+            args.sinhw_numerical is not None and len(args.sinhw_numerical) == 1,
+            "--coord-system-numerical SinhSpherical requires --sinhw-numerical SINHW.",
         )
-        dataset_sinhw = args.dataset_sinhw[0]
-        _require(dataset_sinhw > 0.0, "SINHW must be positive.")
-    elif args.dataset_coord_system == "SinhCylindrical":
+        sinhw_numerical = args.sinhw_numerical[0]
+        _require(sinhw_numerical > 0.0, "SINHW must be positive.")
+    elif args.coord_system_numerical == "SinhCylindrical":
         _require(
-            args.dataset_sinhw is not None and len(args.dataset_sinhw) == 2,
-            """--dataset-coord-system SinhCylindrical requires --dataset-sinhw SINHWRHO SINHWZ.""",
+            args.sinhw_numerical is not None and len(args.sinhw_numerical) == 2,
+            """--coord-system-numerical SinhCylindrical requires --sinhw-numerical SINHWRHO SINHWZ.""",
         )
-        dataset_sinhwrho = args.dataset_sinhw[0]
-        dataset_sinhwz = args.dataset_sinhw[1]
-        _require(dataset_sinhwrho > 0.0, "SINHWRHO must be positive.")
-        _require(dataset_sinhwz > 0.0, "SINHWZ must be positive.")
+        sinhw_numerical_rho = args.sinhw_numerical[0]
+        sinhw_numerical_z = args.sinhw_numerical[1]
+        _require(sinhw_numerical_rho > 0.0, "SINHWRHO must be positive.")
+        _require(sinhw_numerical_z > 0.0, "SINHWZ must be positive.")
     else:
         _require(
-            args.dataset_sinhw is None,
-            """--dataset-sinhw is supported only for SinhSpherical and SinhCylindrical.""",
+            args.sinhw_numerical is None,
+            """--sinhw-numerical is supported only for SinhSpherical and SinhCylindrical.""",
         )
+    analytical_metric_0 = args.analytical_metric_0
+    analytical_metric_1 = args.analytical_metric_1
+    analytical_metric_0_is_brill_lindquist = (
+        analytical_metric_0 == BRILL_LINDQUIST_CARTESIAN
+    )
+    analytical_metric_1_is_brill_lindquist = (
+        analytical_metric_1 == BRILL_LINDQUIST_CARTESIAN
+    )
+    use_brill_lindquist_bhs = (
+        analytical_metric_0_is_brill_lindquist or analytical_metric_1_is_brill_lindquist
+    )
+    default_BH1_z_posn = None
+    default_BH2_z_posn = None
+    default_BH1_mass = None
+    default_BH2_mass = None
+    _require(
+        not analytical_metric_0_is_brill_lindquist
+        or args.brill_lindquist_bhs is not None,
+        f"""--brill-lindquist-bhs is required when --analytical-metric-0 is {BRILL_LINDQUIST_CARTESIAN}.""",
+    )
+    _require(
+        not analytical_metric_1_is_brill_lindquist
+        or args.brill_lindquist_bhs is not None,
+        f"""--brill-lindquist-bhs is required when --analytical-metric-1 is {BRILL_LINDQUIST_CARTESIAN}.""",
+    )
+    if analytical_metric_1_is_brill_lindquist:
+        warnings.warn(
+            """--analytical-metric-1 is the spacetime metric after merger. You selected BrillLindquist_Cartesian for this late-time region. Please check that this is what you want; --analytical-metric-0 covers the earlier-time analytic region.""",
+            stacklevel=1,
+        )
+    if args.brill_lindquist_bhs is not None:
+        default_BH1_z_posn = args.brill_lindquist_bhs[0]
+        default_BH2_z_posn = args.brill_lindquist_bhs[1]
+        default_BH1_mass = args.brill_lindquist_bhs[2]
+        default_BH2_mass = args.brill_lindquist_bhs[3]
+        _require(
+            default_BH1_mass > 0.0 and default_BH2_mass > 0.0,
+            """--brill-lindquist-bhs masses M_1 and M_2 must be positive.""",
+        )
+        if not use_brill_lindquist_bhs:
+            warnings.warn(
+                f"""--brill-lindquist-bhs was provided, but neither analytic metric is {BRILL_LINDQUIST_CARTESIAN}. These black-hole inputs will be ignored.""",
+                stacklevel=1,
+            )
+    particle_type = "photon"
+    for analytical_metric in [analytical_metric_0, analytical_metric_1]:
+        try:
+            _ = geo.Geodesic_Equations[f"{analytical_metric}_{particle_type}"]
+        except ValueError as exc:
+            raise ValueError(
+                f"Unsupported analytic spacetime '{analytical_metric}' for {particle_type}."
+            ) from exc
 
     # Step 2: Define strict project constants and simulation targets
     project_name = "photon_batch_geodesic_integrator_numerical"
@@ -165,7 +282,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     integrator_mode = "Numerical"
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
-    dataset_coord_system = args.dataset_coord_system
+    coord_system_numerical = args.coord_system_numerical
     enable_simd = False
 
     # Step 3: Initialize the project directory and select the infrastructure backend
@@ -177,11 +294,11 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
     par.set_parval_from_str(
-        "CoordSystem_to_register_CodeParameters", dataset_coord_system
+        "CoordSystem_to_register_CodeParameters", coord_system_numerical
     )
 
-    # Step 4: Build the generic symbolic photon equations used by the
-    # runtime numerical interpolation pipeline.
+    # Step 4: Build the symbolic photon data used by the mixed
+    # analytic/numerical interpolation pipeline.
     print(f" -> Assembling symbolic data for {GEO_KEY}...")
     # Step 4.a: Bypass __init__ because these symbolic helper methods build
     # placeholder-based expressions and do not require spacetime-specific state.
@@ -192,6 +309,12 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     normalization_constraint_expr = (
         generic_geodesic_equations.normalization_constraint()
     )
+    analytical_geodesic_data_0 = geo.Geodesic_Equations[
+        f"{analytical_metric_0}_{PARTICLE}"
+    ]
+    analytical_geodesic_data_1 = geo.Geodesic_Equations[
+        f"{analytical_metric_1}_{PARTICLE}"
+    ]
 
     # Step 5: Register C functions in split-pipeline order.
     print(" -> Registering C functions and local CodeParameters...")
@@ -206,51 +329,83 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         normalization_constraint_expr, PARTICLE
     )
 
-    # Step 5.c: Register numerical interpolation helpers.
+    # Step 5.c: Register the analytic spacetime workers used outside the
+    # numerical interval and on one reconstructed stencil edge.
+    g4DD_metric.g4DD_metric(
+        analytical_geodesic_data_0.g4DD, analytical_metric_0, PARTICLE
+    )
+    connections.connections(
+        analytical_geodesic_data_0.Gamma4UDD, analytical_metric_0, PARTICLE
+    )
+    if analytical_metric_1 != analytical_metric_0:
+        g4DD_metric.g4DD_metric(
+            analytical_geodesic_data_1.g4DD, analytical_metric_1, PARTICLE
+        )
+        connections.connections(
+            analytical_geodesic_data_1.Gamma4UDD, analytical_metric_1, PARTICLE
+        )
+
+    # Step 5.d: Register numerical interpolation helpers.
     register_azimuthal_interp = (
         azimuthal_symmetry_spatial_lagrange_interpolation.register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation
     )
     register_azimuthal_interp(
-        dataset_coord_system, enable_simd=enable_simd, project_dir=project_dir
+        coord_system_numerical, enable_simd=enable_simd, project_dir=project_dir
     )
     temporal_lagrange_interpolation.register_CFunction_temporal_lagrange_interpolation(
         enable_simd=enable_simd, project_dir=project_dir
     )
     numerical_interpolation.register_CFunction_numerical_interpolation(
-        dataset_coord_system, enable_simd=enable_simd, project_dir=project_dir
+        coord_system_numerical,
+        enable_simd=enable_simd,
+        project_dir=project_dir,
+        analytical_metric_0=analytical_metric_0,
+        analytical_metric_1=analytical_metric_1,
     )
 
-    # Step 5.d: Register RKF45 evolution kernels.
+    # Step 5.e: Register RKF45 evolution kernels.
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(geodesic_rhs, coordinate_symbols)
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True
     )
 
-    # Step 5.e: Register event-detection and boundary-intersection kernels.
+    # Step 5.f: Register event-detection and boundary-intersection kernels.
     find_event_time_and_state.find_event_time_and_state()
     handle_source_plane_intersection.handle_source_plane_intersection()
     handle_window_plane_intersection.handle_window_plane_intersection()
     event_detection_manager_kernel.event_detection_manager_kernel()
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
 
-    # Step 5.f: Register project-level orchestration helpers.
+    # Step 5.g: Register project-level orchestration helpers.
     # The numerical interpolation and RKF45 finalization registrations above
     # already pull in the shared slot/time-window helpers on demand. Calling
     # them again here would append duplicate definitions into BHaH_defines.h.
     batch_integrator_numerical.batch_integrator_numerical(
-        SPACETIME, dataset_coord_system
+        SPACETIME, coord_system_numerical
     )
     main.main(SPACETIME, integrator_mode)
 
-    # Step 5.g: Remove helper registrations emitted only through other kernels.
-    # The event manager emits these helpers through prefunc, so keeping the
-    # standalone registrations would add unused source files and prototypes.
-    for internal_func in [
+    # Step 5.h: Remove helper registrations emitted only through other kernels.
+    # The event manager emits its local event helpers through prefunc. The
+    # analytic metric and connection helpers are likewise copied into the
+    # numerical interpolation wrapper through prefunc, so keeping standalone
+    # registrations would add unused source files and duplicate prototypes.
+    internal_funcs_to_remove = [
         "find_event_time_and_state",
         "handle_source_plane_intersection",
         "handle_window_plane_intersection",
-    ]:
+        f"g4DD_metric_{analytical_metric_0}",
+        f"connections_{analytical_metric_0}",
+    ]
+    if analytical_metric_1 != analytical_metric_0:
+        internal_funcs_to_remove.extend(
+            [
+                f"g4DD_metric_{analytical_metric_1}",
+                f"connections_{analytical_metric_1}",
+            ]
+        )
+    for internal_func in internal_funcs_to_remove:
         cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 6: Override CodeParameter defaults before parfile generation.
@@ -273,25 +428,25 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
 
     # Step 6.b: Match the dataset reference-metric defaults used by the
     # combined raytracing file before metadata overrides Nxx/dxx/xxmin/xxmax.
-    par.adjust_CodeParam_default("grid_physical_size", args.dataset_grid_size)
-    rfm = refmetric.reference_metric[dataset_coord_system]
+    par.adjust_CodeParam_default("grid_physical_size", args.grid_size_numerical)
+    rfm = refmetric.reference_metric[coord_system_numerical]
     for param_name, grid_size_mapping in rfm.grid_physical_size_dict.items():
         if grid_size_mapping == "grid_physical_size":
-            par.adjust_CodeParam_default(param_name, args.dataset_grid_size)
+            par.adjust_CodeParam_default(param_name, args.grid_size_numerical)
         elif grid_size_mapping == "-grid_physical_size":
-            par.adjust_CodeParam_default(param_name, -args.dataset_grid_size)
+            par.adjust_CodeParam_default(param_name, -args.grid_size_numerical)
         else:
             raise ValueError(
-                f"""Unsupported grid_physical_size mapping '{grid_size_mapping}' for {dataset_coord_system}:{param_name}"""
+                f"""Unsupported grid_physical_size mapping '{grid_size_mapping}' for {coord_system_numerical}:{param_name}"""
             )
-    if dataset_coord_system == "SinhSpherical":
-        assert dataset_sinhw is not None
-        par.adjust_CodeParam_default("SINHW", dataset_sinhw)
-    elif dataset_coord_system == "SinhCylindrical":
-        assert dataset_sinhwrho is not None
-        assert dataset_sinhwz is not None
-        par.adjust_CodeParam_default("SINHWRHO", dataset_sinhwrho)
-        par.adjust_CodeParam_default("SINHWZ", dataset_sinhwz)
+    if coord_system_numerical == "SinhSpherical":
+        assert sinhw_numerical is not None
+        par.adjust_CodeParam_default("SINHW", sinhw_numerical)
+    elif coord_system_numerical == "SinhCylindrical":
+        assert sinhw_numerical_rho is not None
+        assert sinhw_numerical_z is not None
+        par.adjust_CodeParam_default("SINHWRHO", sinhw_numerical_rho)
+        par.adjust_CodeParam_default("SINHWZ", sinhw_numerical_z)
 
     # Step 6.c: Set interpolation-order defaults.
     par.glb_code_params_dict[
@@ -302,23 +457,42 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     ].defaultvalue = 3
 
     # Step 6.d: Set initial-condition defaults.
-    par.glb_code_params_dict["t_start"].defaultvalue = 100.0
-    par.glb_code_params_dict["scan_density"].defaultvalue = 100
+    par.glb_code_params_dict["t_start"].defaultvalue = args.time_start
+    par.glb_code_params_dict["scan_density"].defaultvalue = 500
 
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
     par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 40.0
+    par.glb_code_params_dict["r_escape"].defaultvalue = 140.0
 
-    # Step 6.f: Cap coordinate-time growth per accepted RKF45 step.
+    # Step 6.f: Set the analytic/numerical transition defaults.
+    par.glb_code_params_dict["t_metric_0"].defaultvalue = args.t_metric_0
+    par.glb_code_params_dict["t_metric_1"].defaultvalue = args.t_metric_1
+    par.glb_code_params_dict["dt_numerical_spacetime_data"].defaultvalue = (
+        args.dt_numerical_spacetime_data
+    )
+
+    # Step 6.f.i: Set Brill-Lindquist black-hole defaults only when requested.
+    if use_brill_lindquist_bhs:
+        assert args.brill_lindquist_bhs is not None
+        assert default_BH1_z_posn is not None
+        assert default_BH2_z_posn is not None
+        assert default_BH1_mass is not None
+        assert default_BH2_mass is not None
+        par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
+        par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
+        par.adjust_CodeParam_default("BH1_posn_z", default_BH1_z_posn)
+        par.adjust_CodeParam_default("BH2_posn_z", default_BH2_z_posn)
+
+    # Step 6.g: Cap coordinate-time growth per accepted RKF45 step.
     par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 0.5
 
-    # Step 6.g: Set time-window manager defaults.
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 2.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = 5.0
+    # Step 6.h: Set time-window manager defaults.
+    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 5.0
+    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -200.0
 
-    # Step 6.h: Set source-plane geometry defaults.
-    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = -100.0
+    # Step 6.i: Set source-plane geometry defaults.
+    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = -10.0
     par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0
     par.glb_code_params_dict["source_plane_center_z"].defaultvalue = 0.0
 
@@ -326,19 +500,19 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["source_plane_normal_y"].defaultvalue = 0.0
     par.glb_code_params_dict["source_plane_normal_z"].defaultvalue = 0.0
 
-    par.glb_code_params_dict["source_r_max"].defaultvalue = 30.0
-    par.glb_code_params_dict["source_r_min"].defaultvalue = 0.0
+    par.glb_code_params_dict["source_r_max"].defaultvalue = 10.0
+    par.glb_code_params_dict["source_r_min"].defaultvalue = 2.0
 
     par.glb_code_params_dict["source_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
+    par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 0.0
+    par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 1.0
 
-    # Step 6.i: Set camera window geometry defaults.
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 11.0
+    # Step 6.j: Set camera window geometry defaults.
+    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 30.0
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
     par.glb_code_params_dict["camera_pos_z"].defaultvalue = 0.0
 
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 10.0
+    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 29.5
     par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
     par.glb_code_params_dict["original_window_center_z"].defaultvalue = 0.0
 
@@ -349,11 +523,11 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
 
-    # Step 6.j: Set the fixed CPU tiling defaults.
+    # Step 6.k: Set the fixed CPU tiling defaults.
     par.glb_code_params_dict["window_tiles_width"].defaultvalue = 1
     par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
 
-    # Step 6.k: Set RKF45 controller defaults.
+    # Step 6.l: Set RKF45 controller defaults.
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.05
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1.0e-8
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1.0e-8
@@ -361,16 +535,28 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1.0e-15
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
-    print(f" -> Dataset coordinate system: {dataset_coord_system}")
-    print(f" -> Dataset grid size: {args.dataset_grid_size}")
-    if dataset_sinhw is not None:
-        print(f" -> Dataset SINHW: {dataset_sinhw}")
-    if dataset_sinhwrho is not None:
-        print(f" -> Dataset SINHWRHO: {dataset_sinhwrho}")
-    if dataset_sinhwz is not None:
-        print(f" -> Dataset SINHWZ: {dataset_sinhwz}")
+    print(f" -> Numerical coordinate system: {coord_system_numerical}")
+    print(f" -> Numerical grid size: {args.grid_size_numerical}")
+    if sinhw_numerical is not None:
+        print(f" -> Numerical SINHW: {sinhw_numerical}")
+    if sinhw_numerical_rho is not None:
+        print(f" -> Numerical SINHWRHO: {sinhw_numerical_rho}")
+    if sinhw_numerical_z is not None:
+        print(f" -> Numerical SINHWZ: {sinhw_numerical_z}")
+    print(f" -> Analytic metric 0: {analytical_metric_0}")
+    print(f" -> Analytic metric 1: {analytical_metric_1}")
+    if use_brill_lindquist_bhs:
+        print(
+            " -> Brill-Lindquist BHs: "
+            f"z1={default_BH1_z_posn}, z2={default_BH2_z_posn}, "
+            f"M1={default_BH1_mass}, M2={default_BH2_mass}"
+        )
+    print(f" -> time_start: {args.time_start}")
+    print(f" -> t_metric_0: {args.t_metric_0}")
+    print(f" -> t_metric_1: {args.t_metric_1}")
+    print(" -> dt_numerical_spacetime_data: " f"{args.dt_numerical_spacetime_data}")
 
-    # Step 6.l: Generate C code for parameter handling.
+    # Step 6.m: Generate C code for parameter handling.
     print(" -> Generating parameter handling code...")
     CPs.write_CodeParameters_h_files(project_dir=project_dir, set_commondata_only=True)
     CPs.register_CFunctions_params_commondata_struct_set_to_default()
@@ -479,7 +665,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
     c_tiles_width = int(par.glb_code_params_dict["window_tiles_width"].defaultvalue)
     c_tiles_height = int(par.glb_code_params_dict["window_tiles_height"].defaultvalue)
-    c_pixel_width = 600
+    c_pixel_width = 450
     data_request_file = "numerical_spacetime_data_request.json"
     data_prep_command = f"python3 combined_raytracing_bin_helper.py {data_request_file}"
     parfile_path = os.path.join(project_dir, f"{project_name}.par")
