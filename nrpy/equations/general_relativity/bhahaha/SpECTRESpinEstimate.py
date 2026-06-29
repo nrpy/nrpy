@@ -84,6 +84,9 @@ Inputs expected to already exist in BHaHAHA (on-surface samples):
     normalized externally if the resulting S is to be physically meaningful.
 
 Everything else below is constructed symbolically within this module.
+
+Author: Ralston Graves
+        ralstonkgraves **at** gmail **dot** com
 """
 
 from typing import Any, Dict, Iterable, List, Optional, cast
@@ -801,12 +804,13 @@ class SpECTRESpinEstimateClass:
         dB_GammaCAC = ixp.zerorank2(dimension=2)
         for A in range(2):
             for B in range(2):
-                dC_GammaCAB[A][B] = cast(
-                    sp.Expr, sum(self._GammaU2DD_dD[C][A][B][C] for C in range(2))
-                )
-                dB_GammaCAC[A][B] = cast(
-                    sp.Expr, sum(self._GammaU2DD_dD[C][A][C][B] for C in range(2))
-                )
+                dC_GammaCAB_sum = sp.Integer(0)
+                dB_GammaCAC_sum = sp.Integer(0)
+                for C in range(2):
+                    dC_GammaCAB_sum += self._GammaU2DD_dD[C][A][B][C]
+                    dB_GammaCAC_sum += self._GammaU2DD_dD[C][A][C][B]
+                dC_GammaCAB[A][B] = dC_GammaCAB_sum
+                dB_GammaCAC[A][B] = dB_GammaCAC_sum
 
         GammaCAB_GammaDCD = ixp.zerorank2(dimension=2)
         GammaCAD_GammaDBC = ixp.zerorank2(dimension=2)

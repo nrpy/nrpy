@@ -1220,7 +1220,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   primme.eps = 1.0e-6;
   primme.maxMatvecs = 50000;
   primme.maxOuterIterations = 5000;
-  primme.printLevel = 2;
+  primme.printLevel = 1;
   primme_set_method(PRIMME_DEFAULT_MIN_TIME, &primme);
   primme.initSize = 3;
   primme.maxBasisSize = 60;
