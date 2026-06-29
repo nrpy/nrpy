@@ -176,11 +176,11 @@ if __name__ == "__main__":
 
     for path in primme_dir.iterdir():
         if path.is_file() and path.suffix in {".c", ".h", ".txt", ".md"}:
-            rel = path.relative_to(
+            rel_primme_path = path.relative_to(
                 Path(dir_setup) / "nrpy" / "infrastructures" / "BHaH" / "BHaHAHA"
             ).as_posix()
-            if rel not in auto_pkg_data[primme_pkg]:
-                auto_pkg_data[primme_pkg].append(rel)
+            if rel_primme_path not in auto_pkg_data[primme_pkg]:
+                auto_pkg_data[primme_pkg].append(rel_primme_path)
 
     setup(
         name="nrpy",
