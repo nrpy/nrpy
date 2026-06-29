@@ -17,6 +17,8 @@ The codegen pipeline starts from expression free symbols. `extract_list_of_deriv
 
 `FDFunction` represents a generated finite-difference helper function. It records the floating-point alias, order, operator, rational constants, symbolic formula, SIMD mode, and generated C function name. `construct_FD_functions_prefunc()` emits the registered helper functions for use in a C function `prefunc`.
 
+Finite-difference pages own derivative naming, stencil construction, and memory-read ordering. Helper CSE and SIMD pages own shared expression preprocessing, deterministic CSE handling, and symbolic SIMD rewrite mechanics that can be used by the generated finite-difference code path.
+
 ## Sources
 
 - [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `compute_fdcoeffs_fdstencl`, `extract_list_of_deriv_var_strings_from_sympyexpr_list`, `extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars`
@@ -29,3 +31,5 @@ The codegen pipeline starts from expression free symbols. `extract_list_of_deriv
 - [Core APIs](index.md)
 - [C Codegen](c-codegen.md)
 - [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- [CSE And Printer Support](helpers/cse-and-printer-support.md)
+- [SIMD And Intrinsic Support](helpers/simd-and-intrinsic-support.md)

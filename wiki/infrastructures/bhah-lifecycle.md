@@ -39,6 +39,9 @@ initial time bookkeeping.
 functions. `simple_loop` supplies the standard BHaH loop skeleton for all points,
 interior points, or interior-plus-one-upper regions, with OpenMP pragmas, CUDA
 index ranges, optional SIMD increments, and optional reference-metric reads.
+The generic `loop()`, `GPUKernel`, and host/device utility helpers are owned by
+the Core helper pages; this BHaH page owns the BHaH loop-region and lifecycle
+choices that consume them.
 
 `bhah_lib` is a related library interface. Its aggregate registration function
 creates `bhah_initialize`, `bhah_evolve`, `bhah_diagnostics`, and
@@ -67,3 +70,5 @@ project Makefile.
 - [Infrastructures](index.md)
 - [First Wave Equation Run](../examples/first-wave-equation-run.md)
 - [Black Hole Evolution](../examples/black-hole-evolution.md)
+- [Loop Kernel And Device Helpers](../core/helpers/loop-kernel-and-device-helpers.md)
+- [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)

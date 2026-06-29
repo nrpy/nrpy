@@ -10,5 +10,6 @@
 | [Indexed Expressions](indexed-expressions.md) | You need tensor declaration helpers, symmetry strings, zero tensors, matrix inversion, or Levi-Civita helpers. |
 | [Reference Metrics](reference-metrics.md) | You need coordinate-system reference metrics, trusted reference-metric tests, or BHaH precompute routing. |
 | [Finite Difference](finite-difference.md) | You need finite-difference coefficients, derivative extraction, gridfunction memory reads, or FD helper functions. |
+| [Helper APIs](helpers/index.md) | You need shared helper modules for expressions, CSE/printers, SIMD/intrinsics, loops, device utilities, parallel codegen, or maintenance support. |
 
 Back to [AGENTS.md](../../AGENTS.md).

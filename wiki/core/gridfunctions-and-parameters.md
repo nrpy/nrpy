@@ -19,6 +19,8 @@ Infrastructure subclasses choose storage details. `BHaHGridFunction` accepts gro
 
 For BHaH generated structs, `register_griddata_commondata()` stores `GridCommonData` declarations under `par.glb_extras_dict["griddata_struct"]` or `par.glb_extras_dict["commondata_struct"]`, depending on whether the data is grid-local or common across grids.
 
+Generation-time parallel codegen snapshots and merges the parameter, code-parameter, C-function, Python-function, gridfunction, and extras dictionaries. Use [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md) for that multiprocessing merge contract; this page owns the objects and registries being merged.
+
 ## Sources
 
 - [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`
@@ -31,3 +33,5 @@ For BHaH generated structs, `register_griddata_commondata()` stores `GridCommonD
 - [Core APIs](index.md)
 - [Indexed Expressions](indexed-expressions.md)
 - [Finite Difference](finite-difference.md)
+- [Symbolic Expression Utilities](helpers/symbolic-expression-utilities.md)
+- [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)

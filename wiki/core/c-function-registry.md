@@ -17,6 +17,8 @@ The generated function text is assembled from includes, optional `prefunc`, a Do
 
 BHaH shows the registry in normal use. `register_CFunction_main_c()` checks that required functions are already present in `CFunction_dict`, then registers the generated `main` function. `register_CFunctions_bhah_lib()` registers library-facing initialization, evolution, diagnostics, and finalization functions through the same registration mechanism.
 
+`GPUKernel` is a helper-side producer of `CFunction` text and launch calls. Use [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md) for CUDA launch dictionaries, host/device wrapper choices, and GPU-kernel call-string behavior; this page remains the owner of the registry contract itself.
+
 ## Sources
 
 - [nrpy/c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `register_CFunction`, `function_name_and_subdir_with_CoordSystem`
@@ -29,3 +31,5 @@ BHaH shows the registry in normal use. `register_CFunction_main_c()` checks that
 - [Core APIs](index.md)
 - [C Codegen](c-codegen.md)
 - [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md)
+- [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)
