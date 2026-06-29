@@ -1762,7 +1762,6 @@ const REAL XU[3] = {
     XU_sum[1] * surface_weight,
     XU_sum[2] * surface_weight};
 const REAL R0 = R0_sum * surface_weight;
-const REAL GB_error = R0 / (8.0*M_PI) - 1.0;
 const REAL XRU[3] = {
     XRU_sum[0] * surface_weight,
     XRU_sum[1] * surface_weight,

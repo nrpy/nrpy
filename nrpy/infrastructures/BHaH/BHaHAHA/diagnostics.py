@@ -180,7 +180,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
 
-      if (1) {  // Placeholder for params_and_data value to be implemented later
+      if (commondata->bhahaha_params_and_data->enable_spectre_spin_diagnostic) {
         const int spin_rc = bah_diagnostics_spectre_spin(commondata, griddata);
         if (spin_rc != BHAHAHA_SUCCESS) {
           bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
