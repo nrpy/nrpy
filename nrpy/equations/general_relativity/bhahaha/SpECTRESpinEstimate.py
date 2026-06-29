@@ -326,9 +326,7 @@ class SpECTRESpinEstimateClass:
             raise ValueError("xMeasU must have length 3.")
         rr = self._rfm.xx[0]
         for expr in xMeasU:
-            if (
-                rr in expr.free_symbols
-            ):
+            if rr in expr.free_symbols:
                 raise ValueError(
                     "MeasurementFrame coordinate depends explicitly on xx[0]. "
                     "Provide on-surface expressions using (theta, phi, h) only."
