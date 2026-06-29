@@ -180,7 +180,7 @@ typedef struct {
 
 static void spectre_spin_row_clear(spectre_spin_sparse_row *restrict row) {
   row->n = 0;
-}
+} // END FUNCTION: spectre_spin_row_clear
 
 /**
  * Add or accumulate one sparse-row matrix entry.
@@ -207,16 +207,30 @@ static int spectre_spin_row_add(spectre_spin_sparse_row *restrict row, const int
   return BHAHAHA_SUCCESS;
 } // END FUNCTION: spectre_spin_row_add
 
+/**
+ * Remove zero or non-finite entries from a sparse row in place.
+ *
+ * @param[in,out] row Sparse row to prune.
+ */
 static void spectre_spin_row_prune(spectre_spin_sparse_row *restrict row) {
   int out = 0;
   for (int i = 0; i < row->n; i++) {
     if (row->e[i].val != 0.0 && isfinite(row->e[i].val)) {
       row->e[out++] = row->e[i];
-    }
-  }
+    } // END IF: row entry is nonzero and finite
+  } // END LOOP: for i over sparse-row entries
   row->n = out;
-}
+} // END FUNCTION: spectre_spin_row_prune
 
+/**
+ * Initialize a triplet sparse-matrix builder.
+ *
+ * @param[in,out] builder Triplet builder to initialize.
+ * @param rows Number of matrix rows.
+ * @param cols Number of matrix columns.
+ * @param initial_capacity Requested initial entry capacity.
+ * @return BHAHAHA_SUCCESS, or an allocation error code.
+ */
 static int spectre_spin_builder_init(spectre_spin_triplet_builder *restrict builder, const int rows, const int cols,
                                      const int initial_capacity) {
   builder->rows = rows;
@@ -225,15 +239,29 @@ static int spectre_spin_builder_init(spectre_spin_triplet_builder *restrict buil
   builder->capacity = initial_capacity > 0 ? initial_capacity : 1024;
   builder->entries = (spectre_spin_triplet *)malloc((size_t)builder->capacity * sizeof(spectre_spin_triplet));
   return builder->entries == NULL ? DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR : BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_builder_init
 
+/**
+ * Free storage owned by a triplet sparse-matrix builder.
+ *
+ * @param[in,out] builder Triplet builder to release.
+ */
 static void spectre_spin_builder_free(spectre_spin_triplet_builder *restrict builder) {
   free(builder->entries);
   builder->entries = NULL;
   builder->nnz = 0;
   builder->capacity = 0;
-}
+} // END FUNCTION: spectre_spin_builder_free
 
+/**
+ * Append one finite matrix entry to a triplet sparse-matrix builder.
+ *
+ * @param[in,out] builder Triplet builder being assembled.
+ * @param row Row index for the entry.
+ * @param col Column index for the entry.
+ * @param val Entry value.
+ * @return BHAHAHA_SUCCESS, or an allocation/geometry error code.
+ */
 static int spectre_spin_builder_add(spectre_spin_triplet_builder *restrict builder, const int row, const int col, const REAL val) {
   if (val == 0.0)
     return BHAHAHA_SUCCESS;
@@ -247,13 +275,13 @@ static int spectre_spin_builder_add(spectre_spin_triplet_builder *restrict build
       return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
     builder->entries = new_entries;
     builder->capacity = new_capacity;
-  }
+  } // END IF: triplet builder storage is full
   builder->entries[builder->nnz].row = row;
   builder->entries[builder->nnz].col = col;
   builder->entries[builder->nnz].val = val;
   builder->nnz++;
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_builder_add
 
 static int spectre_spin_triplet_cmp(const void *a, const void *b) {
   const spectre_spin_triplet *ta = (const spectre_spin_triplet *)a;
@@ -263,8 +291,18 @@ static int spectre_spin_triplet_cmp(const void *a, const void *b) {
   if (ta->col != tb->col)
     return ta->col < tb->col ? -1 : 1;
   return 0;
-}
+} // END FUNCTION: spectre_spin_triplet_cmp
 
+/**
+ * Convert assembled triplets to compressed sparse row storage.
+ *
+ * Duplicate triplet entries are sorted, summed, and zero/non-finite sums are
+ * discarded before the CSR arrays are allocated and populated.
+ *
+ * @param[in,out] builder Triplet builder containing entries to compress.
+ * @param[in,out] csr Output CSR matrix.
+ * @return BHAHAHA_SUCCESS, or an allocation error code.
+ */
 static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict builder, spectre_spin_csr_matrix *restrict csr) {
   csr->rows = builder->rows;
   csr->cols = builder->cols;
@@ -283,14 +321,14 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
     while (i < builder->nnz && builder->entries[i].row == row && builder->entries[i].col == col) {
       val += builder->entries[i].val;
       i++;
-    }
+    } // END WHILE: accumulate duplicate triplet entries
     if (val != 0.0 && isfinite(val)) {
       builder->entries[compressed_nnz].row = row;
       builder->entries[compressed_nnz].col = col;
       builder->entries[compressed_nnz].val = val;
       compressed_nnz++;
-    }
-  }
+    } // END IF: compressed triplet entry is nonzero and finite
+  } // END LOOP: for i over sorted triplet entries
 
   csr->rowptr = (int *)calloc((size_t)csr->rows + 1, sizeof(int));
   csr->colind = (int *)malloc((size_t)compressed_nnz * sizeof(int));
@@ -303,7 +341,7 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
     csr->colind = NULL;
     csr->vals = NULL;
     return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
-  }
+  } // END IF: CSR array allocation failed
 
   for (int i = 0; i < compressed_nnz; i++)
     csr->rowptr[builder->entries[i].row + 1]++;
@@ -318,7 +356,7 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
     csr->colind = NULL;
     csr->vals = NULL;
     return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
-  }
+  } // END IF: CSR row cursor allocation failed
   for (int row = 0; row < csr->rows; row++)
     cursor[row] = csr->rowptr[row];
   for (int i = 0; i < compressed_nnz; i++) {
@@ -326,12 +364,17 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
     const int dst = cursor[row]++;
     csr->colind[dst] = builder->entries[i].col;
     csr->vals[dst] = builder->entries[i].val;
-  }
+  } // END LOOP: for i over compressed triplet entries
   free(cursor);
   csr->nnz = compressed_nnz;
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_builder_to_csr
 
+/**
+ * Free storage owned by a CSR matrix.
+ *
+ * @param[in,out] csr CSR matrix to release.
+ */
 static void spectre_spin_csr_free(spectre_spin_csr_matrix *restrict csr) {
   free(csr->rowptr);
   free(csr->colind);
@@ -340,27 +383,51 @@ static void spectre_spin_csr_free(spectre_spin_csr_matrix *restrict csr) {
   csr->colind = NULL;
   csr->vals = NULL;
   csr->nnz = 0;
-}
+} // END FUNCTION: spectre_spin_csr_free
 
+/**
+ * Apply a CSR matrix to a vector.
+ *
+ * @param[in] csr Matrix in compressed sparse row storage.
+ * @param[in] x Input vector.
+ * @param[out] y Output vector.
+ */
 static void spectre_spin_csr_matvec(const spectre_spin_csr_matrix *restrict csr, const REAL *restrict x, REAL *restrict y) {
   for (int row = 0; row < csr->rows; row++) {
     REAL sum = 0.0;
     for (int jj = csr->rowptr[row]; jj < csr->rowptr[row + 1]; jj++)
       sum += csr->vals[jj] * x[csr->colind[jj]];
     y[row] = sum;
-  }
-}
+  } // END LOOP: for row over CSR matrix rows
+} // END FUNCTION: spectre_spin_csr_matvec
 
+/**
+ * Seed reduced-space eigenvectors from centered coordinate functions.
+ *
+ * @param N Number of full-space grid points.
+ * @param Nred Number of reduced-space grid points.
+ * @param[in] red_to_full Map from reduced-space indices to full-space indices.
+ * @param[in] x_ref Reference coordinate functions.
+ * @param[in] x_centroid Area centroid.
+ * @param[out] evecs_red Initial reduced-space eigenvector guesses.
+ */
 static void spectre_spin_seed_coordinate_reduced(const int N, const int Nred, const int *restrict red_to_full, const REAL *restrict x_ref,
                                                  const REAL x_centroid[3], double *restrict evecs_red) {
   for (int mode = 0; mode < 3; mode++) {
     for (int r = 0; r < Nred; r++) {
       const int full = red_to_full[r];
       evecs_red[(size_t)mode * (size_t)Nred + r] = (double)(x_ref[(size_t)mode * (size_t)N + full] - x_centroid[mode]);
-    }
-  }
-}
+    } // END LOOP: for r over reduced-space grid points
+  } // END LOOP: for mode over coordinate seed modes
+} // END FUNCTION: spectre_spin_seed_coordinate_reduced
 
+/**
+ * Expand a reduced mean-zero vector into full-space coordinates.
+ *
+ * @param[in] ctx PRIMME matrix-vector context.
+ * @param[in] xred Reduced-space vector.
+ * @param[out] xfull Full-space vector satisfying the weighted mean constraint.
+ */
 static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx *restrict ctx, const double *restrict xred, REAL *restrict xfull) {
   for (int i = 0; i < ctx->nfull; i++)
     xfull[i] = 0.0;
@@ -369,18 +436,36 @@ static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx *restrict 
     const int full = ctx->red_to_full[r];
     xfull[full] = (REAL)xred[r];
     anchor_sum += ctx->mu[full] * xfull[full];
-  }
+  } // END LOOP: for r over reduced-space entries
   xfull[ctx->anchor] = -anchor_sum / ctx->mu_anchor;
-}
+} // END FUNCTION: spectre_spin_expand_reduced
 
+/**
+ * Project a full-space operator result back into reduced coordinates.
+ *
+ * @param[in] ctx PRIMME matrix-vector context.
+ * @param[in] yfull Full-space vector.
+ * @param[out] yred Reduced-space projected vector.
+ */
 static void spectre_spin_project_reduced(const spectre_spin_primme_ctx *restrict ctx, const REAL *restrict yfull, double *restrict yred) {
   const REAL y_anchor = yfull[ctx->anchor];
   for (int r = 0; r < ctx->nred; r++) {
     const int full = ctx->red_to_full[r];
     yred[r] = (double)(yfull[full] - (ctx->mu[full] / ctx->mu_anchor) * y_anchor);
-  }
-}
+  } // END LOOP: for r over reduced-space entries
+} // END FUNCTION: spectre_spin_project_reduced
 
+/**
+ * Apply one reduced operator to a block of PRIMME vectors.
+ *
+ * @param[in] ctx PRIMME matrix-vector context.
+ * @param[in] A Full-space CSR operator to apply.
+ * @param[in] x Reduced-space input block.
+ * @param ldx Leading dimension of the input block.
+ * @param[out] y Reduced-space output block.
+ * @param ldy Leading dimension of the output block.
+ * @param block_size Number of vectors in the block.
+ */
 static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx *restrict ctx, const spectre_spin_csr_matrix *restrict A,
                                                 const double *restrict x, const PRIMME_INT ldx, double *restrict y, const PRIMME_INT ldy,
                                                 const int block_size) {
@@ -390,41 +475,49 @@ static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx *r
     spectre_spin_expand_reduced(ctx, xcol, ctx->full_x);
     spectre_spin_csr_matvec(A, ctx->full_x, ctx->full_y);
     spectre_spin_project_reduced(ctx, ctx->full_y, ycol);
-  }
-}
+  } // END LOOP: for block over PRIMME block vectors
+} // END FUNCTION: spectre_spin_apply_reduced_operator
 
 #ifdef BHAHAHA_PRIMME_USES_LEGACY_MATVEC
 static void spectre_spin_primme_K_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
   spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->matrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->K, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
   *err = 0;
-}
+} // END FUNCTION: spectre_spin_primme_K_matvec
 
 static void spectre_spin_primme_M_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
   spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->massMatrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
   *err = 0;
-}
+} // END FUNCTION: spectre_spin_primme_M_matvec
 #else
 static void spectre_spin_primme_K_matvec(void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize, primme_params *primme,
                                          int *err) {
   spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->matrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->K, (const double *)x, *ldx, (double *)y, *ldy, *blockSize);
   *err = 0;
-}
+} // END FUNCTION: spectre_spin_primme_K_matvec
 
 static void spectre_spin_primme_M_matvec(void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize, primme_params *primme,
                                          int *err) {
   spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->massMatrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, *ldx, (double *)y, *ldy, *blockSize);
   *err = 0;
-}
+} // END FUNCTION: spectre_spin_primme_M_matvec
 #endif
 
 static int spectre_spin_active_index(const int j1, const int j2, const int Ntheta) {
   return j1 + Ntheta * j2;
-}
+} // END FUNCTION: spectre_spin_active_index
 
+/**
+ * Reflect a scalar angular-grid index through the spherical-polar axis.
+ *
+ * @param[in,out] j1 Theta-like angular index.
+ * @param[in,out] j2 Phi-like angular index.
+ * @param Ntheta Number of theta points.
+ * @param Nphi Number of phi points.
+ */
 static void spectre_spin_reflect_scalar_index(int *restrict j1, int *restrict j2, const int Ntheta, const int Nphi) {
   while (*j1 < 0 || *j1 >= Ntheta) {
     if (*j1 < 0)
@@ -432,12 +525,25 @@ static void spectre_spin_reflect_scalar_index(int *restrict j1, int *restrict j2
     else
       *j1 = 2 * Ntheta - *j1 - 1;
     *j2 += Nphi / 2;
-  }
+  } // END WHILE: theta index lies outside the active angular domain
   *j2 %= Nphi;
   if (*j2 < 0)
     *j2 += Nphi;
-}
+} // END FUNCTION: spectre_spin_reflect_scalar_index
 
+/**
+ * Build one finite-difference derivative row for a scalar on the horizon grid.
+ *
+ * @param[in,out] row Sparse row receiving the finite-difference stencil.
+ * @param j1 Theta-like angular point.
+ * @param j2 Phi-like angular point.
+ * @param Ntheta Number of theta points.
+ * @param Nphi Number of phi points.
+ * @param deriv_type Derivative selector.
+ * @param invdtheta Inverse theta spacing.
+ * @param invdphi Inverse phi spacing.
+ * @return BHAHAHA_SUCCESS, or an error code from sparse-row assembly.
+ */
 static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row *restrict row, const int j1, const int j2, const int Ntheta,
                                                     const int Nphi, const int deriv_type, const REAL invdtheta, const REAL invdphi) {
   spectre_spin_row_clear(row);
@@ -452,7 +558,7 @@ static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row *res
       const int status = spectre_spin_row_add(row, col, coeffs[s + SPECTRE_SPIN_FD_RADIUS] * scale);
       if (status != BHAHAHA_SUCCESS)
         return status;
-    }
+    } // END LOOP: for s over theta derivative stencil offsets
   } else if (deriv_type == 1 || deriv_type == 3) {
     const REAL scale = deriv_type == 1 ? invdphi : invdphi * invdphi;
     const REAL *restrict coeffs = deriv_type == 1 ? spectre_spin_fd_first : spectre_spin_fd_second;
@@ -464,7 +570,7 @@ static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row *res
       const int status = spectre_spin_row_add(row, col, coeffs[s + SPECTRE_SPIN_FD_RADIUS] * scale);
       if (status != BHAHAHA_SUCCESS)
         return status;
-    }
+    } // END LOOP: for s over phi derivative stencil offsets
   } else {
     const REAL scale = invdtheta * invdphi;
     for (int s1 = -SPECTRE_SPIN_FD_RADIUS; s1 <= SPECTRE_SPIN_FD_RADIUS; s1++) {
@@ -477,13 +583,29 @@ static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row *res
         const int status = spectre_spin_row_add(row, col, val);
         if (status != BHAHAHA_SUCCESS)
           return status;
-      }
-    }
-  }
+      } // END LOOP: for s2 over phi mixed-derivative stencil offsets
+    } // END LOOP: for s1 over theta mixed-derivative stencil offsets
+  } // END ELSE: build mixed theta-phi derivative row
   spectre_spin_row_prune(row);
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_build_scalar_derivative_row
 
+/**
+ * Compute one angular derivative of a scratch metric gridfunction.
+ *
+ * @param[in] gfs Spin scratch gridfunction storage.
+ * @param gf Gridfunction index to differentiate.
+ * @param i0 Radial grid index.
+ * @param i1 Theta grid index.
+ * @param i2 Phi grid index.
+ * @param dir Angular derivative direction.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param invdtheta Inverse theta spacing.
+ * @param invdphi Inverse phi spacing.
+ * @return Angular derivative of the requested gridfunction.
+ */
 static REAL spectre_spin_metric_deriv(const REAL *restrict gfs, const int gf, const int i0, const int i1, const int i2,
                                       const int dir, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
                                       const int Nxx_plus_2NGHOSTS2, const REAL invdtheta, const REAL invdphi) {
@@ -492,18 +614,27 @@ static REAL spectre_spin_metric_deriv(const REAL *restrict gfs, const int gf, co
     for (int s = -SPECTRE_SPIN_FD_RADIUS; s <= SPECTRE_SPIN_FD_RADIUS; s++) {
       const int idx = i0 + Nxx_plus_2NGHOSTS0 * ((i1 + s) + Nxx_plus_2NGHOSTS1 * (i2 + Nxx_plus_2NGHOSTS2 * gf));
       deriv += spectre_spin_fd_first[s + SPECTRE_SPIN_FD_RADIUS] * gfs[idx];
-    }
+    } // END LOOP: for s over theta derivative stencil offsets
     deriv *= invdtheta;
   } else {
     for (int s = -SPECTRE_SPIN_FD_RADIUS; s <= SPECTRE_SPIN_FD_RADIUS; s++) {
       const int idx = i0 + Nxx_plus_2NGHOSTS0 * (i1 + Nxx_plus_2NGHOSTS1 * ((i2 + s) + Nxx_plus_2NGHOSTS2 * gf));
       deriv += spectre_spin_fd_first[s + SPECTRE_SPIN_FD_RADIUS] * gfs[idx];
-    }
+    } // END LOOP: for s over phi derivative stencil offsets
     deriv *= invdphi;
-  }
+  } // END ELSE: differentiate in phi direction
   return deriv;
-}
+} // END FUNCTION: spectre_spin_metric_deriv
 
+/**
+ * Add a scaled sparse outer product to a triplet matrix builder.
+ *
+ * @param[in,out] builder Triplet builder receiving the outer product.
+ * @param[in] a Left sparse row.
+ * @param[in] b Right sparse row.
+ * @param factor Scalar multiplier.
+ * @return BHAHAHA_SUCCESS, or an error code from triplet assembly.
+ */
 static int spectre_spin_add_outer(spectre_spin_triplet_builder *restrict builder, const spectre_spin_sparse_row *restrict a,
                                   const spectre_spin_sparse_row *restrict b, const REAL factor) {
   if (factor == 0.0)
@@ -513,11 +644,23 @@ static int spectre_spin_add_outer(spectre_spin_triplet_builder *restrict builder
       const int status = spectre_spin_builder_add(builder, a->e[ia].col, b->e[ib].col, factor * a->e[ia].val * b->e[ib].val);
       if (status != BHAHAHA_SUCCESS)
         return status;
-    }
-  }
+    } // END LOOP: for ib over right sparse-row entries
+  } // END LOOP: for ia over left sparse-row entries
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_add_outer
 
+/**
+ * Add one q^{AB} grad_A eta grad_B z bilinear form contribution.
+ *
+ * @param[in,out] builder Triplet builder receiving the contribution.
+ * @param[in] dtheta Theta derivative row.
+ * @param[in] dphi Phi derivative row.
+ * @param factor Scalar quadrature and physical multiplier.
+ * @param q00 Inverse surface metric theta-theta component.
+ * @param q01 Inverse surface metric theta-phi component.
+ * @param q11 Inverse surface metric phi-phi component.
+ * @return BHAHAHA_SUCCESS, or an error code from triplet assembly.
+ */
 static int spectre_spin_add_gradient_form(spectre_spin_triplet_builder *restrict builder, const spectre_spin_sparse_row *restrict dtheta,
                                           const spectre_spin_sparse_row *restrict dphi, const REAL factor, const REAL q00,
                                           const REAL q01, const REAL q11) {
@@ -531,16 +674,24 @@ static int spectre_spin_add_gradient_form(spectre_spin_triplet_builder *restrict
   if (status != BHAHAHA_SUCCESS)
     return status;
   return spectre_spin_add_outer(builder, dphi, dphi, factor * q11);
-}
+} // END FUNCTION: spectre_spin_add_gradient_form
 
+/**
+ * Compute eigenpairs of a symmetric 3x3 matrix using Jacobi rotations.
+ *
+ * @param[in] input Symmetric input matrix.
+ * @param[out] evals Eigenvalues in ascending order.
+ * @param[out] evecs Corresponding eigenvectors.
+ * @return BHAHAHA_SUCCESS, or a normalization error if an eigenvalue is not finite.
+ */
 static int spectre_spin_jacobi_eigen_3x3(const REAL input[3][3], REAL evals[3], REAL evecs[3][3]) {
   REAL a[3][3];
   for (int i = 0; i < 3; i++) {
     for (int j = 0; j < 3; j++) {
       a[i][j] = input[i][j];
       evecs[i][j] = i == j ? 1.0 : 0.0;
-    }
-  }
+    } // END LOOP: for j over matrix columns
+  } // END LOOP: for i over matrix rows
   for (int iter = 0; iter < 64; iter++) {
     int p = 0;
     int q = 1;
@@ -549,12 +700,12 @@ static int spectre_spin_jacobi_eigen_3x3(const REAL input[3][3], REAL evals[3], 
       p = 0;
       q = 2;
       max_offdiag = fabs(a[0][2]);
-    }
+    } // END IF: a[0][2] is the largest candidate off-diagonal entry
     if (fabs(a[1][2]) > max_offdiag) {
       p = 1;
       q = 2;
       max_offdiag = fabs(a[1][2]);
-    }
+    } // END IF: a[1][2] is the largest candidate off-diagonal entry
     if (max_offdiag < 1.0e-13)
       break;
     const REAL tau = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
@@ -576,18 +727,18 @@ static int spectre_spin_jacobi_eigen_3x3(const REAL input[3][3], REAL evals[3], 
         a[p][k] = a[k][p];
         a[k][q] = s * akp + c * akq;
         a[q][k] = a[k][q];
-      }
+      } // END IF: k is outside the active Jacobi pivot pair
       const REAL vkp = evecs[k][p];
       const REAL vkq = evecs[k][q];
       evecs[k][p] = c * vkp - s * vkq;
       evecs[k][q] = s * vkp + c * vkq;
-    }
-  }
+    } // END LOOP: for k over Jacobi-rotation rows
+  } // END LOOP: for iter over Jacobi sweeps
   for (int i = 0; i < 3; i++) {
     evals[i] = a[i][i];
     if (!isfinite(evals[i]))
       return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
-  }
+  } // END LOOP: for i over eigenvalues
   for (int i = 0; i < 2; i++) {
     for (int j = i + 1; j < 3; j++) {
       if (evals[j] < evals[i]) {
@@ -598,19 +749,26 @@ static int spectre_spin_jacobi_eigen_3x3(const REAL input[3][3], REAL evals[3], 
           const REAL tmp_vec = evecs[k][i];
           evecs[k][i] = evecs[k][j];
           evecs[k][j] = tmp_vec;
-        }
-      }
-    }
-  }
+        } // END LOOP: for k over eigenvector components
+      } // END IF: eigenvalues are out of order
+    } // END LOOP: for j over later eigenvalues
+  } // END LOOP: for i over eigenvalues to sort
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_jacobi_eigen_3x3
 
 static REAL spectre_spin_det3(const REAL A[3][3]) {
   return A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) -
          A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
          A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
-}
+} // END FUNCTION: spectre_spin_det3
 
+/**
+ * Compute the orthogonal Procrustes rotation from a 3x3 correlation matrix.
+ *
+ * @param[in] C Correlation matrix between numerical and reference modes.
+ * @param[out] O Orientation-preserving orthogonal alignment matrix.
+ * @return BHAHAHA_SUCCESS, or an error code if the alignment is singular.
+ */
 static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
   REAL CtC[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
   for (int i = 0; i < 3; i++)
@@ -626,7 +784,7 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
   for (int i = 0; i < 3; i++) {
     if (!(evals[i] > 0.0) || !isfinite(evals[i]))
       return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
-  }
+  } // END LOOP: for i over Procrustes singular values
 
   REAL invsqrt[3] = {1.0 / sqrt(evals[0]), 1.0 / sqrt(evals[1]), 1.0 / sqrt(evals[2])};
   for (int a = 0; a < 3; a++) {
@@ -635,8 +793,8 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
       for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
           O[a][b] += C[a][i] * V[i][j] * invsqrt[j] * V[b][j];
-    }
-  }
+    } // END LOOP: for b over output matrix columns
+  } // END LOOP: for a over output matrix rows
   if (spectre_spin_det3(O) < 0.0) {
     invsqrt[0] = -invsqrt[0];
     for (int a = 0; a < 3; a++) {
@@ -645,11 +803,11 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
         for (int i = 0; i < 3; i++)
           for (int j = 0; j < 3; j++)
             O[a][b] += C[a][i] * V[i][j] * invsqrt[j] * V[b][j];
-      }
-    }
-  }
+      } // END LOOP: for b over orientation-corrected output matrix columns
+    } // END LOOP: for a over orientation-corrected output matrix rows
+  } // END IF: Procrustes rotation needs orientation correction
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_procrustes
 
 /**
  * Compute normalized scalar spin-potential modes z_alpha for the SpECTRE-style
@@ -1422,11 +1580,17 @@ static const int8_t spectre_spin_scratch_gf_parity[NUM_SPECTRE_SPIN_SCRATCH_GFS]
 {parity_table_entries}
 }};
 
-/*
+/**
  * SE_XD and SE_qDD are surface coordinate-basis covariant components on the
  * horizon angular grid, not ambient unit-basis tensor components. Therefore
  * they must be transformed with bc->deriv_jacobian rather than the usual
  * unit-vector parity table.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param srcpt Source point index in flattened grid storage.
+ * @param src_coord Source angular coordinate index.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Requested source covector component, or zero for unsupported indices.
  */
 static REAL spectre_spin_src_XD(const REAL *restrict gfs, const int srcpt, const int src_coord,
                                 const size_t spectre_spin_npoints) {{
@@ -1435,8 +1599,17 @@ static REAL spectre_spin_src_XD(const REAL *restrict gfs, const int srcpt, const
   if (src_coord == 2)
     return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD1GF];
   return 0.0;
-}}
+}} // END FUNCTION: spectre_spin_src_XD
 
+/**
+ * Transform one surface covector component across an inner boundary map.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param[in] bc Inner-boundary source/destination metadata.
+ * @param dst_surface_A Destination surface-coordinate component.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Transformed destination covector component.
+ */
 static REAL spectre_spin_transform_XD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
                                       const int dst_surface_A, const size_t spectre_spin_npoints) {{
   const int dst_coord = dst_surface_A + 1; // 0 -> theta, 1 -> phi
@@ -1449,8 +1622,18 @@ static REAL spectre_spin_transform_XD(const REAL *restrict gfs, const innerpt_bc
   }} // END LOOP: for src_coord over surface source coordinates
 
   return val;
-}}
+}} // END FUNCTION: spectre_spin_transform_XD
 
+/**
+ * Read one symmetric surface metric component from a source point.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param srcpt Source point index in flattened grid storage.
+ * @param src_coord_A First source angular coordinate index.
+ * @param src_coord_B Second source angular coordinate index.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Requested source metric component, or zero for unsupported indices.
+ */
 static REAL spectre_spin_src_qDD(const REAL *restrict gfs, const int srcpt, const int src_coord_A,
                                  const int src_coord_B, const size_t spectre_spin_npoints) {{
   if (src_coord_A == 1 && src_coord_B == 1)
@@ -1460,8 +1643,18 @@ static REAL spectre_spin_src_qDD(const REAL *restrict gfs, const int srcpt, cons
   if (src_coord_A == 2 && src_coord_B == 2)
     return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD11GF];
   return 0.0;
-}}
+}} // END FUNCTION: spectre_spin_src_qDD
 
+/**
+ * Transform one symmetric surface metric component across an inner boundary map.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param[in] bc Inner-boundary source/destination metadata.
+ * @param dst_surface_A First destination surface-coordinate component.
+ * @param dst_surface_B Second destination surface-coordinate component.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Transformed destination metric component.
+ */
 static REAL spectre_spin_transform_qDD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
                                        const int dst_surface_A, const int dst_surface_B,
                                        const size_t spectre_spin_npoints) {{
@@ -1482,7 +1675,7 @@ static REAL spectre_spin_transform_qDD(const REAL *restrict gfs, const innerpt_b
   }} // END LOOP: for src_coord_C over surface source coordinates
 
   return val;
-}}
+}} // END FUNCTION: spectre_spin_transform_qDD
 
 /**
  * Apply inner boundary conditions to selected spin scratch gridfunctions.
@@ -1540,12 +1733,29 @@ static void apply_inner_bc_for_selected_spectre_spin_gfs(const bc_struct *restri
         const int8_t p = bc->parity[scratch_gf_parity[which_gf]];
         spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(spectre_spin_gfs[IDX4pt(which_gf, bc->srcpt)], p);
         break;
-      }}
+      }} // END DEFAULT: apply scalar parity to selected scratch gridfunction
       }} // END SWITCH: selected spin scratch gridfunction
     }} // END LOOP: for pt over inner boundary points
   }} // END LOOP: for selected spin scratch gridfunctions
 }} // END FUNCTION: apply_inner_bc_for_selected_spectre_spin_gfs
 
+/**
+ * Check selected scratch gridfunctions for finite values over an index box.
+ *
+ * @param[in] spectre_spin_gfs Spin diagnostic scratch storage.
+ * @param Nxx0 Number of active radial horizon slabs.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param[in] which_gfs Selected spin scratch gridfunction indices.
+ * @param num_gfs Number of selected gridfunctions.
+ * @param i1_min Minimum theta index to check.
+ * @param i1_max One-past-maximum theta index to check.
+ * @param i2_min Minimum phi index to check.
+ * @param i2_max One-past-maximum phi index to check.
+ * @param[in] stage Diagnostic stage name for warning output.
+ * @return BHAHAHA_SUCCESS, or a geometry error if a value is non-finite.
+ */
 static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_spin_gfs, const int Nxx0, const int Nxx_plus_2NGHOSTS0,
                                                  const int Nxx_plus_2NGHOSTS1, const int Nxx_plus_2NGHOSTS2,
                                                  const int *restrict which_gfs, const int num_gfs, const int i1_min,
@@ -1566,7 +1776,7 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
                     "gf=%d i0=%d i1=%d i2=%d value=%+.17e\n",
                     stage, gf, i0, i1, i2, (double)val);
             return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-          }}
+          }} // END IF: scratch-gridfunction value is not finite
         }} // END LOOP: i0
       }} // END LOOP: i1
     }} // END LOOP: i2
