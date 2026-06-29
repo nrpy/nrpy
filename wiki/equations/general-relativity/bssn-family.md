@@ -1,7 +1,7 @@
 # BSSN Family
 
 > Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 2026-06-29
-> Up: [Equations](index.md)
+> Up: [General Relativity](index.md)
 
 ## Summary
 
@@ -33,6 +33,11 @@ Gamma-driver variants.
 It registers diagnostic gridfunctions for `H` and `MSQUARED`, optionally
 registers `MU`, and stores `H`, `MU`, `Msquared`, and rescaled `mU` outputs.
 
+Representative trusted files pin the core RHS, quantity, and constraint
+dictionaries. Gauge validation is driven by the supported lapse and shift option
+names in `BSSN_gauge_RHSs`, while coordinate and reference-metric variants stay
+validation evidence rather than new page scope.
+
 The style contract for these modules is part of their interface: tensor
 construction uses explicit loops, established suffixes such as `U`, `D`, `DD`,
 `dD`, `dDD`, `dupD`, and `rhs`, and validation keys must stay aligned with the
@@ -40,13 +45,20 @@ corresponding trusted files.
 
 ## Sources
 
-- [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs_varname_to_expr_dict`
-- [BSSN_quantities.py](../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
-- [BSSN_gauge_RHSs.py](../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
-- [BSSN_constraints.py](../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`, `BSSN_constraints`
-- [coding_style.md](../../coding_style.md) - `Equation Setup Patterns`
+- [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs_varname_to_expr_dict`
+- [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
+- [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
+- [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`, `BSSN_constraints`
+- [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
+- [BSSN_quantities_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py) - `trusted_dict`
+- [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py) - `trusted_dict`
+- [coding_style.md](../../../coding_style.md) - `Equation Setup Patterns`
 
 ## See Also
 
-- [Equations](index.md)
-- [Trusted Expression Pipeline](trusted-expression-pipeline.md)
+- [General Relativity](index.md)
+- [Equations](../index.md)
+- [Metric Conversions And Matter](metric-conversions-and-matter.md)
+- [Initial Data](initial-data.md)
+- [GRHD](../grhd.md)
+- [Trusted Expression Pipeline](../trusted-expression-pipeline.md)

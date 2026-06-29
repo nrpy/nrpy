@@ -74,6 +74,120 @@ row above.
 | `nrpy/examples/two_blackholes_collide.py` | living | 2026-06-29 11:58:33 | sha256:47751a1bf77ce2dee2873b437bae41e492f2e807987c52ee3fe8a58ea10ecf2c |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living | 2026-06-29 11:58:33 | sha256:af7a994e86157842efd5ad93459c19c8fa811a4b523ea3585a63bb2172aa67d2 |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living | 2026-06-29 11:58:33 | sha256:cfe3b83c41d9006940c3f5388dc6479abeeffb1da0791db4e9850a2bdaa394f8 |
+| `nrpy/equations/basis_transforms/jacobians.py` | living | 2026-06-29 11:58:33 | sha256:108739db4e1643d56a42fe867c17544be49858effef7be759bee798ac36c03f7 |
+| `nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:a27cad9211a86a5bb6ed0f242fa06fd71c9300ffe774cecfdf88df5f234b4bf4 |
+| `nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py` | living | 2026-06-29 11:58:33 | sha256:68b3256a2a2fa054e4fac84ead5b0f126965334f6af3395d5344675d66644a35 |
+| `nrpy/equations/basis_transforms/tests/jacobians_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:c6e76a7bdcdfa6fc9791948642fe0b1e18f919dbd06ac3ef953acacab868e219 |
+| `nrpy/equations/general_relativity/ADM_to_BSSN.py` | living | 2026-06-29 11:58:33 | sha256:be03d74dce18099d8adefc1464bab872575a27661dcb4f44ce4cddfd6e408c5f |
+| `nrpy/equations/general_relativity/BSSN_to_ADM.py` | living | 2026-06-29 11:58:33 | sha256:ee8e576434ffac843596f2a773c651d998e83eb7cb6fe813c582bc49428afd18 |
+| `nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py` | living | 2026-06-29 11:58:33 | sha256:7494813506c1ba6428b38da993816f81a92ac6bc4c9ee1013184292fba30242c |
+| `nrpy/equations/general_relativity/InitialData_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:e1ace04212eca3d6f08b2b4862b3233a4a391570b05ce304120e28465648a72a |
+| `nrpy/equations/general_relativity/InitialData_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:89f045217d279dfbe991c5421b7b4cec20d6b4fda622e983aeee5e6edcc146d1 |
+| `nrpy/equations/general_relativity/LorentzBoost.py` | living | 2026-06-29 11:58:33 | sha256:9af347801fecffd0d41050511280812970b1af510ebc2cc4af43f879bcc79621 |
+| `nrpy/equations/general_relativity/T4munu.py` | living | 2026-06-29 11:58:33 | sha256:e19e05804adeb676ad8ce0c0c2a497d3f2e6c13985682d1450e70c23b1727622 |
+| `nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py` | living | 2026-06-29 11:58:33 | sha256:e3178d3245e1ba8afc7933b4be4e12c83c0ce2f2eebc4d0638424025ee2cf88b |
+| `nrpy/equations/general_relativity/bhahaha/HorizonSpinVorticityDipole.py` | living | 2026-06-29 11:58:33 | sha256:e545a46b7782d05847f2cbbba9d3c59849046e808a0f00cff1488e10fb98b6f2 |
+| `nrpy/equations/general_relativity/bhahaha/SpECTRESpinEstimate.py` | living | 2026-06-29 11:58:33 | sha256:18debe2904a85d7f7e1271ac5df2ccc9bda123568ea945986333e7d0b7bb31cc |
+| `nrpy/equations/general_relativity/bhahaha/approx_killing_vector_spin.py` | living | 2026-06-29 11:58:33 | sha256:8fd1a37b0f9715b24a7b430f295b60ce729d63370bcecd72d529539abab00bf9 |
+| `nrpy/equations/general_relativity/bhahaha/area.py` | living | 2026-06-29 11:58:33 | sha256:3ce7c6c6bac8da7b512397ac722e1b21869fd401a75dc9292a0391a221aea47c |
+| `nrpy/equations/general_relativity/bhahaha/tests/ExpansionFunctionTheta_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:9cc3d8f7c6e24c24cd281b53ec5a0ebad801aa3ceaefdb00cc25b278bba388d5 |
+| `nrpy/equations/general_relativity/bhahaha/tests/HorizonSpinVorticityDipole_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:f4e7bbd387d46147119b9c1b04ad7db6d02c234682d9fc12855b9a06644819ba |
+| `nrpy/equations/general_relativity/bhahaha/tests/SpECTRESpinEstimate_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:6d275bad64150d0c41370dd294647722189faff3dea83ede63f0c54b2bba592e |
+| `nrpy/equations/general_relativity/bhahaha/tests/approx_killing_vector_spin_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:9bf3769ed65ba9e551e4784b71b35ce09437e231646769628c697f6175faf501 |
+| `nrpy/equations/general_relativity/bhahaha/tests/area_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:69a0a7412fa361e8e6af0444a06d400966eda28d1766a988b5c827185829e0cf |
+| `nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py` | living | 2026-06-29 11:58:33 | sha256:cfb1b5899341eb232b331431f93f88c468f7b70fb0083dfb7fcb63bec279fbe1 |
+| `nrpy/equations/general_relativity/fishbone_moncrief/tests/fishbone_moncrief.py` | living | 2026-06-29 11:58:33 | sha256:3ce59437f68bc0a119f7e27ed499c7b9c184b9b7e8aafa2f07562e196e909440 |
+| `nrpy/equations/general_relativity/g4munu_conversions.py` | living | 2026-06-29 11:58:33 | sha256:44e6b856e88ab3e21968ea028aeb44751a4465eca5d37704ed2c55c3a849fd2d |
+| `nrpy/equations/general_relativity/geodesics/analytic_spacetimes.py` | living | 2026-06-29 11:58:33 | sha256:e58102a859ec0809ce26037f7c8fbb878f384f614f19f2799c86c1703b2753cf |
+| `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/conserved_quantities.py` | living | 2026-06-29 11:58:33 | sha256:1666ef7c79725237dd2f00d18dc17ed8a2af2c8c8d6db6b39467684b4d8396e6 |
+| `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/tests/conserved_quantities_KerrSchild_Cartesian_massive.py` | living | 2026-06-29 11:58:33 | sha256:41a2639d33c5fd9af356bb5f4282883b44b95fb7848c27ddab1edc4c539d4730 |
+| `nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/tests/conserved_quantities_KerrSchild_Cartesian_photon.py` | living | 2026-06-29 11:58:33 | sha256:02589a7d01047eb040e370f58a3014da8b4f630a0c45600ab8f90107fd8f3bf5 |
+| `nrpy/equations/general_relativity/geodesics/geodesics.py` | living | 2026-06-29 11:58:33 | sha256:9b55f35c675ca02a4f523c7221a9637a4c11b800af89acac4594d54358ef2f5e |
+| `nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_KerrSchild_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:5e6541942912c40ce2042dd81828e55d43c01158ab0d5b94eb6eba6eaa785a0b |
+| `nrpy/equations/general_relativity/geodesics/tests/geodesics_KerrSchild_Cartesian_massive.py` | living | 2026-06-29 11:58:33 | sha256:1e691b037f3a810df306efc1aa6168f169bb44924b861abdd726b1b5b7e9550f |
+| `nrpy/equations/general_relativity/geodesics/tests/geodesics_KerrSchild_Cartesian_photon.py` | living | 2026-06-29 11:58:33 | sha256:d3896c74f2899d706ecb6e15eaba61f4fc61f34370edfc418065fe6cd943255d |
+| `nrpy/equations/general_relativity/psi4.py` | living | 2026-06-29 11:58:33 | sha256:d2409b60157f7205da01e2ec915f6739bf4d2dea8952c4713a0d8088b77e4940 |
+| `nrpy/equations/general_relativity/psi4_tetrads.py` | living | 2026-06-29 11:58:33 | sha256:2098929f0a2a841048625da007e494979d6deee7ed95d317f839738710819112 |
+| `nrpy/equations/general_relativity/tests/ADM_to_BSSN_StaticTrumpet.py` | living | 2026-06-29 11:58:33 | sha256:a25d860e19c2a65b168b383cded56f89c4531f7cc987edc0a030562aeb2688af |
+| `nrpy/equations/general_relativity/tests/BSSN_to_ADM_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:790327f5cddb211acbffd806e8b92266402ad70c66bc17c7964a1ee276f7a1ac |
+| `nrpy/equations/general_relativity/tests/BSSN_to_g4Christoffel_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:475f6c4858196ea4d0df4d33571aa6577ee1c892805630229493d63b040b4b0e |
+| `nrpy/equations/general_relativity/tests/InitialData_Cartesian_BrillLindquist.py` | living | 2026-06-29 11:58:33 | sha256:6f82928cfc1b4a84442d40bb6a26e9bcaf2e29e47b6737b45756a93f3c348c4f |
+| `nrpy/equations/general_relativity/tests/InitialData_Cartesian_Kasner.py` | living | 2026-06-29 11:58:33 | sha256:d465454fd8268be282ed2ff8d9c54ebd5ed3246fe23d2b89b96c4614a89c0e6f |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_OffsetKerrSchild.py` | living | 2026-06-29 11:58:33 | sha256:50b6f67f8f8b4a1b6f6d76737d2970292620b99f41b7a0c8551a6cbf0b452cf1 |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_StaticTrumpet.py` | living | 2026-06-29 11:58:33 | sha256:99115d6091f3627564eafccb02b951fada14497943098226c1ac265bcae0c472 |
+| `nrpy/equations/general_relativity/tests/InitialData_Spherical_UIUCBlackHole.py` | living | 2026-06-29 11:58:33 | sha256:875b6649f2c89d7e5d48684670b3188984e60e89c01604f366942f665f1bf9ef |
+| `nrpy/equations/general_relativity/tests/LorentzBoost.py` | living | 2026-06-29 11:58:33 | sha256:475af2a54edc28d0209d3e68852a75d9ecc2b75d5a1979e855d9729cf1314467 |
+| `nrpy/equations/general_relativity/tests/T4munu.py` | living | 2026-06-29 11:58:33 | sha256:99a88e7ab763db2bc34f2945bf5c181b48a87814b96c9c7e342438fd2a040a4d |
+| `nrpy/equations/general_relativity/tests/g4munu_conversions.py` | living | 2026-06-29 11:58:33 | sha256:3c1d2a0d4966f6bc61ed4b8f27d4359da5e2b29648905848d61bea3afab82757 |
+| `nrpy/equations/general_relativity/tests/psi4_leave_symbolic_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:11223713bafeae40de76ceeb8a3340550b1ad33d57560f2971b8ab0a258b2dea |
+| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_SinhSpherical_rfm_precompute.py` | living | 2026-06-29 11:58:33 | sha256:6275e0ad7bc5cb32cd2ccbbf408c8f213f0af8b5ce7d576fc3ded69acecd4952 |
+| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:a0a5e4afef5a20fd63da2ba39ebf20defa96b7ecd0325db3eef02081a0cbebfd |
+| `nrpy/equations/general_relativity/tests/psi4_tetrads_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:8b602a4173a53a1948489caecf67532c527b0f3054b97e8cf5db2b1028f74e05 |
+| `nrpy/equations/generalrfm/fisheye.py` | living | 2026-06-29 11:58:33 | sha256:b50aae8404d3c30ea93f9f6b6875e184859f19a38555c2f936027e8071f63a2d |
+| `nrpy/equations/generalrfm/tests/fisheye_N1.py` | living | 2026-06-29 11:58:33 | sha256:267764855eabcc037274cc092d4cfe969d77e26f352a7693f106e421c5dcf01b |
+| `nrpy/equations/generalrfm/tests/fisheye_N2.py` | living | 2026-06-29 11:58:33 | sha256:8e742ffe9cdd23e2918296fd59d0e7a56fc308f868cd98f9c8834d6762ca0dd8 |
+| `nrpy/equations/grhd/GRHD_equations.py` | living | 2026-06-29 11:58:33 | sha256:ad5ef0653959988c7ab57aa05c41481db63db1ee57fab3d8f59f1ee7aca6cd34 |
+| `nrpy/equations/grhd/HLL_fluxes.py` | living | 2026-06-29 11:58:33 | sha256:9475b47d2e89a30df051fe09434e4010a6fcf3012c16476b5c7b199b0a258160 |
+| `nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py` | living | 2026-06-29 11:58:33 | sha256:3f49914a9432dcbdfd15200ca748603c140efc1dd3fbc048a8b845fb2f093ea3 |
+| `nrpy/equations/grhd/characteristic_speeds.py` | living | 2026-06-29 11:58:33 | sha256:7ad4a9cb14e9c784b3d78ed27b11c001385aebabc2099859f0041e73c0deb112 |
+| `nrpy/equations/grhd/tests/GRHD_equations_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:70554a5c0ce467195677071c5e900fe8257726aa0c0f56f2951349d821fc433b |
+| `nrpy/equations/grhd/tests/GRHD_equations_SinhSpherical_rfm_precompute.py` | living | 2026-06-29 11:58:33 | sha256:e43dac1e5a7564119a5eb5ea8b2bedd9e0ac3e7b517effa68b18756d15725bf9 |
+| `nrpy/equations/grhd/tests/GRHD_equations_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:3f7f3b466e911e8548de65841c8f312af8c67782d919fb9d5f97bc5a11850e90 |
+| `nrpy/equations/grhd/tests/HLL_fluxes.py` | living | 2026-06-29 11:58:33 | sha256:728cfd971cab2ff43035e5df96d37d1651dd2bd413ce915365d83cae061eb4e7 |
+| `nrpy/equations/grhd/tests/Min_Max_and_Piecewise_Expressions.py` | living | 2026-06-29 11:58:33 | sha256:0dd22eb12a79fbaa51987d22fa398ecbb5506800cf888f9d25b36738ae97bec9 |
+| `nrpy/equations/grhd/tests/characteristic_speeds.py` | living | 2026-06-29 11:58:33 | sha256:85cbacb1a01a46d601c88f20c6a20f437c3143cd77d71ecfe956888e6536c454 |
+| `nrpy/equations/nrpyelliptic/ConformallyFlat_RHSs.py` | living | 2026-06-29 11:58:33 | sha256:0b8f10e30ab438540660ee32be4a8ca9d2506a026ed2da6efad627e202e56994 |
+| `nrpy/equations/nrpyelliptic/ConformallyFlat_SourceTerms.py` | living | 2026-06-29 11:58:33 | sha256:248f20f6069ba794e627b56b6f69da21aef17fcd2b1d02657d6ed18f4bab0050 |
+| `nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:9820a7fe42e77922b1f6cc929cec79d98dce92d7e78420c238069c1306b796e7 |
+| `nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:1ac440559ff2384a185db78ffe0edd4613912ea6f310f8cdea8fa8ec0534f8b7 |
+| `nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:7ef6d5fcf7a99fc3e8d38c48273ad8d229d93d98adcec6eb3905a6bc76f479f9 |
+| `nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:549ed4b7ef4cb7a9697faa5260f02a7331382bfc50f2d691472fb0547e26d546 |
+| `nrpy/equations/quaternion_rotations/tensor_rotation.py` | living | 2026-06-29 11:58:33 | sha256:fe986ec2b0bc79d0b1583f11ba743d4a1e04e39c98c26dc5cc3f32fbfb23255e |
+| `nrpy/equations/rotation/SO3_rotations.py` | living | 2026-06-29 11:58:33 | sha256:d3c8d704b7bd8ad3e8a60ffb2d53d9ee060ec24e9895381c5d74fb94856ec4dc |
+| `nrpy/equations/rotation/tests/SO3_rotations.py` | living | 2026-06-29 11:58:33 | sha256:d45bf7c986fed5beee5e9e12ff353803cd3e08387d6a5df42a726efc4cce7f2a |
+| `nrpy/equations/seobnr/BOB_aligned_spin_waveform_quantities.py` | living | 2026-06-29 11:58:33 | sha256:fa3475fb420396d3ca4682073917e547d86de25c1a8e152a62c71d25a2a3a852 |
+| `nrpy/equations/seobnr/BOB_aligned_spin_waveform_quantities_higher_modes.py` | living | 2026-06-29 11:58:33 | sha256:cda5d979a91be71b0a9fa74739a736fe843555a92634b4d0b69894e1c481607b |
+| `nrpy/equations/seobnr/BOB_v2_waveform_quantities_kankani_etal.py` | living | 2026-06-29 11:58:33 | sha256:7b89a0e37e9f91b46903175d9cf7b1cf7a0accfe7866a57fa949cf229b128d0a |
+| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py` | living | 2026-06-29 11:58:33 | sha256:0481b48e82f65de18356c0b7064d3a7fd7380bd734e6d7b4c05f6472e8ebc2ce |
+| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py` | living | 2026-06-29 11:58:33 | sha256:f889447cc79a4bb8d0ae495a654c73e761fd63ed41018402cc91f657de1f9511 |
+| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py` | living | 2026-06-29 11:58:33 | sha256:2506da2e0b3df7d3717b5083eaf5aca1532f656440ad8c773b465502d29e4ebc |
+| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py` | living | 2026-06-29 11:58:33 | sha256:baf87f8f8b15fbcb0ded28521f7b9fef463c18a243aaa0f98dd9b6424fcac9d2 |
+| `nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py` | living | 2026-06-29 11:58:33 | sha256:043fb6dafce3b527a942e525bbaef11f96b24db601cdda4f148edda628fae31b |
+| `nrpy/equations/seobnr/SEOBNRv5_merger_ringdown.py` | living | 2026-06-29 11:58:33 | sha256:388be5783217ee5c6c1cac1980f16f4ec5175b0b24582fca5482b228d69d1fcb |
+| `nrpy/equations/seobnr/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py` | living | 2026-06-29 11:58:33 | sha256:be42c42e954932434e068c6bde3f79513da31be1e1b778ab64d4fa0f392dd0e9 |
+| `nrpy/equations/seobnr/SEOBNRv5_spin_evolution_equations.py` | living | 2026-06-29 11:58:33 | sha256:2160909a521e51366a93fd3aab1798281e34e5388462f84bccd9216a73606f6f |
+| `nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities.py` | living | 2026-06-29 11:58:33 | sha256:094ba094b8b2aceb6cfd177c9eee910adf844407c6cd816db9f71fda79c3e682 |
+| `nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities_higher_modes.py` | living | 2026-06-29 11:58:33 | sha256:0ff57a4cd1f6e02fe36cd238fb87ea21a66802ed437f2d7ee60c5e8062a24e41 |
+| `nrpy/equations/seobnr/tests/BOB_v2_waveform_quantities_kankani_etal.py` | living | 2026-06-29 11:58:33 | sha256:f4bebc8622bc9847756adb7d0e6e4913b6ab638b9cdf071df5107a75acad5b5c |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py` | living | 2026-06-29 11:58:33 | sha256:1e185579b712f99ed06bcf9c3435b24df3182f64d4a2fcf029897e265c433db4 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py` | living | 2026-06-29 11:58:33 | sha256:a78f81f0294be7e88102211b6577b1260848b34c459777747fa51891671c5b35 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py` | living | 2026-06-29 11:58:33 | sha256:04c641edf9b5deec19a39a9b06fa274b257875d38132e5e27026665936244b30 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py` | living | 2026-06-29 11:58:33 | sha256:be2ab43bbc813701b44c19f4df01a0e71abef8c449134a62458dce10129e0da4 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_coprecessing_rotations_quantities.py` | living | 2026-06-29 11:58:33 | sha256:4c804f9920e852dcf87ae5b24ccf55e33ebc64ef2be70d9a11f67592207869b4 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_merger_ringdown.py` | living | 2026-06-29 11:58:33 | sha256:aa067642b93f324be8f98af3e49f0710f9585776c760a7b490cbf8deae42e404 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_quasi_precessing_spin_Hamiltonian.py` | living | 2026-06-29 11:58:33 | sha256:9a351352b8e40f1620cb92ca5bcf99595d1a44e0512bff867ca4e61575d149f9 |
+| `nrpy/equations/seobnr/tests/SEOBNRv5_spin_evolution_equations.py` | living | 2026-06-29 11:58:33 | sha256:6515f3497031d17176531b8b066e04652f685da84c63257e8e134264a205617d |
+| `nrpy/equations/special_functions/spin_weighted_spherical_harmonics.py` | living | 2026-06-29 11:58:33 | sha256:a96367dda36fa0063d59c8a07881091af7cc02843041ea3029e13e78c7bf0c90 |
+| `nrpy/equations/special_functions/tests/spin_weighted_spherical_harmonics.py` | living | 2026-06-29 11:58:33 | sha256:dba274310d12250690789b919af87190fc6c5d262de6295651f7a63462194fe4 |
+| `nrpy/equations/tov/TOV_equations.py` | living | 2026-06-29 11:58:33 | sha256:cadc2a34fddc08a2592f956d4406764872609d51f19936d64afa0514e97f4f0d |
+| `nrpy/equations/tov/tests/TOV_equations.py` | living | 2026-06-29 11:58:33 | sha256:c2386fb5d9c5b4a79e32f1adffdd1fc0cbe8260287dd8041621e08380f13834c |
+| `nrpy/equations/wave_equation/WaveEquationCurvilinear_RHSs.py` | living | 2026-06-29 11:58:33 | sha256:8d989c28d2499916c9955b90e0f70d8249c91e9e1c1bee0758063d9e811f9c2c |
+| `nrpy/equations/wave_equation/WaveEquation_RHSs.py` | living | 2026-06-29 11:58:33 | sha256:83a10adcca206cb842bc95d2cf32daaa21049b0775ab799f17e7f714e30108bd |
+| `nrpy/equations/wave_equation/WaveEquation_Solutions_InitialData.py` | living | 2026-06-29 11:58:33 | sha256:ada9e9f00086c92de05fd4bb9afc585f62dfd5d32ab0cceb224061ab77cfbee7 |
+| `nrpy/equations/wave_equation/tests/WaveEquationCurvilinear_RHSs_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:0d09ebc02ed9a718151be8894494ca039df01978a6df2229b33e18f2bf91f8c3 |
+| `nrpy/equations/wave_equation/tests/WaveEquation_RHSs_WaveEquation.py` | living | 2026-06-29 11:58:33 | sha256:8589c9a62a996f54c6ea728f5a7b6332d3ec6f51ae870746028491723ad2c0ff |
+| `nrpy/equations/wave_equation/tests/WaveEquation_Solutions_InitialData_PlaneWave.py` | living | 2026-06-29 11:58:33 | sha256:d53c4153d65ce029b3a23d2cf000ba3c238fa1f222ae6031bc0bb3d433dcffb0 |
+| `nrpy/equations/wave_equation/tests/WaveEquation_Solutions_InitialData_SphericalGaussian.py` | living | 2026-06-29 11:58:33 | sha256:fedc95c05700150d150614b1e924f97824d444a71d2cfe7ece611df1f6527037 |
+
+## External Background Sources
+
+| Source | Provenance | Status | Accessed | Ingest | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 2026-06-29 | partial | NRPyElliptic background for hyperbolic relaxation and conformally flat binary-puncture initial data. |
+| `https://link.aps.org/doi/10.1103/PhysRev.55.374` | DOI landing page for `10.1103/PhysRev.55.374`. | living | 2026-06-29 | partial | Original Oppenheimer-Volkoff stellar-equilibrium background. |
+| `https://web2.ph.utexas.edu/~gsudama/pub/1967_008.pdf` | PDF URL for Goldberg et al. spin-weighted spherical-harmonic formula reference. | living | 2026-06-29 | partial | Goldberg-formula background for spin-weighted spherical harmonics. |
+| `https://pubs.aip.org/aip/jmp/article/57/9/092504/648118/How-should-spin-weighted-spherical-functions-be` | Journal of Mathematical Physics article landing page. | living | 2026-06-29 | partial | Background on spin-weighted functions and quaternion viewpoints. |
+| `https://rotations.berkeley.edu/geodesics-of-the-rotation-group-so3/` | Berkeley rotations course page. | living | 2026-06-29 | partial | Background on SO(3) and quaternion rotation geometry. |
 
 ## Exclusions
 

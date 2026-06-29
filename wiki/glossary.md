@@ -27,7 +27,16 @@ pages where a first-pass owner exists.
 | GridFunction | Registered evolved, auxiliary, or diagnostic grid quantity; see [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md). |
 | reference metric | Coordinate-system-aware metric context used by symbolic equations and infrastructures; see [Reference Metrics](core/reference-metrics.md). |
 | indexed expression | Tensor or vector structure built with `nrpy.indexedexp`; see [Indexed Expressions](core/indexed-expressions.md). |
-| BSSN | Baumgarte-Shapiro-Shibata-Nakamura formulation family implemented by NRPy equation modules; see [BSSN Family](equations/bssn-family.md). |
+| ADM | Arnowitt-Deser-Misner 3+1 quantities used by GR conversions and initial-data pages; see [Metric Conversions And Matter](equations/general-relativity/metric-conversions-and-matter.md). |
+| BSSN | Baumgarte-Shapiro-Shibata-Nakamura formulation family implemented by NRPy equation modules; see [BSSN Family](equations/general-relativity/bssn-family.md). |
+| GRHD | General relativistic hydrodynamics equation family for conserved variables, fluxes, sources, speeds, and HLL helpers; see [GRHD](equations/grhd.md). |
+| TOV | Tolman-Oppenheimer-Volkoff stellar-equilibrium ODE system; see [TOV Equations](equations/tov-equations.md). |
+| Psi4 | Weyl radiation scalar implementation and tetrad construction path; see [Psi4 And Tetrads](equations/general-relativity/psi4-and-tetrads.md). |
+| SEOBNR | Effective-One-Body binary-black-hole dynamics and waveform family under `nrpy/equations/seobnr`; see [SEOBNR And BOB](equations/seobnr/index.md). |
+| BOB | Backwards-One-Body waveform and attachment quantity family; see [BOB Waveforms](equations/seobnr/bob-waveforms.md). |
+| GeneralRFM | General reference-metric support including fisheye coordinate maps; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
+| Fishbone-Moncrief | Relativistic torus initial-data model implemented under GR equation modules; see [Fishbone-Moncrief](equations/general-relativity/fishbone-moncrief.md). |
+| spin-weighted spherical harmonic | Special-function helper implemented with the Goldberg formula; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
 | Method of Lines | Timestepping pattern registered by BHaH examples through MoL infrastructure. |
 | trusted values | Generated reference dictionaries used to validate symbolic expressions; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
 | validate_expressions | Module that processes and compares symbolic-expression validation dictionaries; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
@@ -54,6 +63,15 @@ pages where a first-pass owner exists.
 - [indexedexp.py](../nrpy/indexedexp.py) - `declarerank1`
 - [validate_expressions.py](../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`
 - [validate_expressions.py](../nrpy/validate_expressions/validate_expressions.py) - `compare_or_generate_trusted_results`
+- [ADM_to_BSSN.py](../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`
+- [GRHD_equations.py](../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`
+- [TOV_equations.py](../nrpy/equations/tov/TOV_equations.py) - `TOV_Equations`
+- [psi4.py](../nrpy/equations/general_relativity/psi4.py) - `Psi4`
+- [SEOBNRv5_aligned_spin_Hamiltonian.py](../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
+- [BOB_aligned_spin_waveform_quantities.py](../nrpy/equations/seobnr/BOB_aligned_spin_waveform_quantities.py) - `BOB_aligned_spin_waveform_quantities`
+- [fisheye.py](../nrpy/equations/generalrfm/fisheye.py) - `GeneralRFMFisheye`
+- [fishbone_moncrief.py](../nrpy/equations/general_relativity/fishbone_moncrief/fishbone_moncrief.py) - `FishboneMoncriefID`
+- [spin_weighted_spherical_harmonics.py](../nrpy/equations/special_functions/spin_weighted_spherical_harmonics.py) - `Y`
 
 ## See Also
 

@@ -7,9 +7,10 @@
 
 Equation modules validate symbolic expressions by building a results dictionary,
 converting it to deterministic high-precision numerical values, and comparing
-or generating a sibling trusted file under `tests/`. Trusted files are generated
-evidence, not hand-authored code, and ordinary per-file static analysis is
-skipped for them.
+or generating a sibling trusted file under `tests/`. The same mechanics cover
+BSSN, GR conversions and diagnostics, GRHD, wave, elliptic, TOV, SEOBNR/BOB,
+and most geometry-support helpers. Quaternion tensor rotation is a confirmed
+doctest-only exception.
 
 ## Detail
 
@@ -39,6 +40,16 @@ and no classes. The preserved agent rules and coding style both say not to
 hand-edit trusted values; regenerate them from the owning module and explain the
 reason in the commit message.
 
+Family pages own the implementation-specific validation inventory. In compact
+form, current coverage includes BSSN quantities/RHSs/constraints, ADM/BSSN and
+four-metric conversions, initial data, Psi4/tetrads, geodesics, horizon
+diagnostics, Fishbone-Moncrief data, GRHD equations/speeds/HLL fluxes, scalar
+wave RHSs and initial data, conformally flat elliptic RHS/source terms, TOV ODE
+RHSs, SEOBNRv5/BOB dynamics and waveform quantities, basis transforms,
+GeneralRFM fisheye maps, SO(3) rotations, and spin-weighted spherical
+harmonics. The owning leaves link to representative trusted files and stable
+symbols; this page owns only the common processing and comparison mechanics.
+
 ## Sources
 
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
@@ -47,8 +58,17 @@ reason in the commit message.
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `Required Checks`, `Expression Validation`
 - [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs`
 - [BSSN_RHSs_Cartesian.py](../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
+- [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
+- [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py) - `WaveEquation_RHSs`
+- [SEOBNRv5_aligned_spin_Hamiltonian.py](../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
+- [jacobians.py](../../nrpy/equations/basis_transforms/jacobians.py) - `BasisTransforms`
+- [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`
 
 ## See Also
 
 - [Equations](index.md)
-- [BSSN Family](bssn-family.md)
+- [BSSN Family](general-relativity/bssn-family.md)
+- [GRHD](grhd.md)
+- [Wave Equation](wave-equation.md)
+- [SEOBNR And BOB](seobnr/index.md)
+- [Geometry And Special-Function Support](geometry-and-special-function-support.md)

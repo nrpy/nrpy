@@ -10,7 +10,7 @@ the whole tree first.
 | --- | --- |
 | [Architecture](wiki/architecture/index.md) | Project purpose, build/run paths, generated-output boundaries, and contribution rules. |
 | [Core APIs](wiki/core/index.md) | Core codegen APIs, parameters, gridfunctions, indexed expressions, reference metrics, and finite difference support. |
-| [Equations](wiki/equations/index.md) | BSSN overview and trusted expression validation. |
+| [Equations](wiki/equations/index.md) | Symbolic equation families, GR and SEOBNR routes, support helpers, and trusted expression validation. |
 | [Infrastructures](wiki/infrastructures/index.md) | BHaH generated-application lifecycle. |
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
 | [Validation](wiki/validation/index.md) | Static analysis and generated-project CI. |
@@ -29,7 +29,7 @@ the whole tree first.
 | Understand generated outputs | [Generated Output Boundaries](wiki/architecture/generated-output-boundaries.md) |
 | Check style and static-analysis rules | [Contribution Style And Static Analysis](wiki/architecture/contribution-style-and-static-analysis.md) |
 | Find `CFunction`, `c_codegen`, parameters, or gridfunctions | [Core APIs](wiki/core/index.md) |
-| Change BSSN or expression validation | [Equations](wiki/equations/index.md) |
+| Change equation modules or expression validation | [Equations](wiki/equations/index.md) |
 | Work on BHaH generation | [BHaH Lifecycle](wiki/infrastructures/bhah-lifecycle.md) |
 | Run the first example | [First Wave Equation Run](wiki/examples/first-wave-equation-run.md) |
 | Inspect CI coverage | [Generated Project CI](wiki/validation/generated-project-ci.md) |
