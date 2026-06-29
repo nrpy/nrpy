@@ -3,6 +3,7 @@ Register a C function to perform numerical integrations over the apparent horizo
 Needs: Integrands built in equations/general_relativity/bhahaha/SpECTRESpinEstimate.py
 
 Author: Ralston Graves
+        ralstonkgraves **at** gmail **dot** com
 """
 
 from typing import Dict, Optional, Sequence, Union
@@ -181,6 +182,14 @@ static void spectre_spin_row_clear(spectre_spin_sparse_row *restrict row) {
   row->n = 0;
 }
 
+/**
+ * Add or accumulate one sparse-row matrix entry.
+ *
+ * @param[in,out] row Sparse row being assembled.
+ * @param col Column index to add.
+ * @param val Entry value to add.
+ * @return BHAHAHA_SUCCESS, or an error code if the row is full.
+ */
 static int spectre_spin_row_add(spectre_spin_sparse_row *restrict row, const int col, const REAL val) {
   if (val == 0.0)
     return BHAHAHA_SUCCESS;
@@ -188,15 +197,15 @@ static int spectre_spin_row_add(spectre_spin_sparse_row *restrict row, const int
     if (row->e[i].col == col) {
       row->e[i].val += val;
       return BHAHAHA_SUCCESS;
-    }
-  }
+    } // END IF: sparse-row entry already exists
+  } // END LOOP: for i over sparse-row entries
   if (row->n >= SPECTRE_SPIN_MAX_ROW_NNZ)
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
   row->e[row->n].col = col;
   row->e[row->n].val = val;
   row->n++;
   return BHAHAHA_SUCCESS;
-}
+} // END FUNCTION: spectre_spin_row_add
 
 static void spectre_spin_row_prune(spectre_spin_sparse_row *restrict row) {
   int out = 0;
@@ -655,7 +664,8 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
  *
  * Constants are removed by an area-weighted mean-zero reduced space. The three
  * lowest modes are aligned to measurement-frame reference potentials and
- * normalized to the 2*pi-orbit convention int |grad z_alpha|^2 dA=A^2/(6*pi).
+ * normalized with the scalar-potential convention:
+ * int (z_alpha - <z_alpha>)^2 dA = A^3 / (48*pi^2).
  */
 static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                                                const REAL *restrict auxevol_gfs, REAL *restrict spectre_spin_gfs) {
@@ -1034,10 +1044,12 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   primme.nLocal = Nred;
   primme.numEvals = 3;
 
-  static double target_shift = 0.0;                             // start new block
+  
+  // Target the smallest-magnitude eigenvalues near zero.
+  static double target_shift = 0.0;
   primme.target = primme_closest_abs;
   primme.numTargetShifts = 1;
-  primme.targetShifts = &target_shift;                          // might should be primme_closest_abs
+  primme.targetShifts = &target_shift;
   
   primme.matrixMatvec = spectre_spin_primme_K_matvec;
   primme.massMatrixMatvec = spectre_spin_primme_M_matvec;
@@ -1079,7 +1091,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(resnorms);
     free(evecs_full);
     free(modes);
-    return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR; // TODO 6/12: make sure this is handled correctly by the caller
+    return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR;
   }
   for (int a = 0; a < 3; a++) {
     if (!isfinite(evals[a]) || !isfinite(resnorms[a])) {
@@ -1798,22 +1810,6 @@ if (fabs(A) > spin_norm_tolerance) {
             for (int i = 0; i < 3; i++)
                 chi_U[i] = S_U[i] / M_horizon_squared;
         } // END IF: Christodoulou mass squared is safe
-
-        fprintf(stderr,
-        "\n\nDEBUG PRINT SpECTRE spin mass: nn=%d A=%+.4e S=%+.4e chi=%+.4e\n"
-        "M_irr^2=%+.4e M_irr=%+.4e\n"
-        "M_H^2=%+.4e M_H=%+.4e\n"
-        "GB_error=%+.4e\n\n",
-        commondata->nn,
-        (double)A,
-        (double)S,
-        (double)sqrt(chi_U[0] * chi_U[0] + chi_U[1] * chi_U[1] + chi_U[2] * chi_U[2]),
-        (double)M_irr_squared,
-        (double)sqrt(M_irr_squared),
-        (double)M_horizon_squared,
-        (double)sqrt(M_horizon_squared),
-        (double)GB_error);
-        fflush(stderr);
 
     } // END IF: irreducible mass squared is safe
 } // END IF: area is safe for centroid reduction

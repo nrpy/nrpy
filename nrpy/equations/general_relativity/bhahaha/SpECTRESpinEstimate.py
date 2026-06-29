@@ -328,7 +328,7 @@ class SpECTRESpinEstimateClass:
         for expr in xMeasU:
             if (
                 rr in expr.free_symbols
-            ):  # Normally would use spympify on `expr`, but that goes against NRPy standards and they should be SymPy expressions anyway
+            ):
                 raise ValueError(
                     "MeasurementFrame coordinate depends explicitly on xx[0]. "
                     "Provide on-surface expressions using (theta, phi, h) only."
@@ -836,7 +836,7 @@ class SpECTRESpinEstimateClass:
 
         # Spin function Omega = eps^{AB} * nabla_A X_B
         # Because the Levi-Civita tensor is antisymmetric and the Christoffels are symmetric
-        # in their lower indices,the Gamma^C_{AB} term vanishes:
+        # in their lower indices, the Gamma^C_{AB} term vanishes:
         omega_sum = sp.Integer(0)
         for A in range(2):
             for B in range(2):
