@@ -365,6 +365,7 @@ if enable_bhahaha:
         "bah_enable_BBH_mode",
         1,
     )
+    par.adjust_CodeParam_default("bah_enable_spectre_spin_diagnostic", 1)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir

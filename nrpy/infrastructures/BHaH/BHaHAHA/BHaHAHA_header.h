@@ -144,6 +144,7 @@ typedef struct {
                                                            // 2 = full algorithmic details.
   int enable_eta_varying_alg_for_precision_common_horizon; // 0 = no; 1 = yes. Janky, unless trying to find R_crit for a common horizon.
   int enable_spectre_spin_diagnostic;                      // 0 = no; 1 = yes. Computes spin vector chi^i based on SpECTRE method.
+                                                           // Uses a noticeable amount of compute.
 
   //==========================
   // Persistent previous horizon data, used for setting up external input grid & horizon initial guess.

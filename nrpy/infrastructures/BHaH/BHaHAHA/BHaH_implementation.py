@@ -146,7 +146,7 @@ def register_CFunction_bhahaha_find_horizons(
         ),
         "bah_enable_spectre_spin_diagnostic": (
             "Enable SpECTRE spin diagnostic",
-            1,
+            0,
         ),
     }
     for key, value in int_params.items():

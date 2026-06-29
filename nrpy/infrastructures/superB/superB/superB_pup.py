@@ -227,6 +227,7 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   p | bp.num_horizons;
   p | bp.verbosity_level;
   p | bp.enable_eta_varying_alg_for_precision_common_horizon;
+  p | bp.enable_spectre_spin_diagnostic;
   p | bp.t_m1;
   p | bp.t_m2;
   p | bp.t_m3;

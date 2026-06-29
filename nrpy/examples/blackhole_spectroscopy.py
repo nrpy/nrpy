@@ -436,6 +436,7 @@ if enable_bhahaha:
         [2e-4, 2e-4, 2e-4],
     )
     par.adjust_CodeParam_default("bah_enable_BBH_mode", 1)
+    par.adjust_CodeParam_default("bah_enable_spectre_spin_diagnostic", 1)
     par.adjust_CodeParam_default("bah_verbosity_level", 0)
 if num_fisheye_transitions is not None:
     for parname, value in fisheye_param_defaults.items():
