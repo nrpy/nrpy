@@ -63,6 +63,7 @@ _SPECTRE_SPIN_COORD_COVARIANT_GFS = (
     "SE_XD1",
 )
 
+
 def _c_array(values: Sequence[float]) -> str:
     return ", ".join(f"{value:.17e}" for value in values)
 
@@ -1453,7 +1454,9 @@ def register_CFunction_diagnostics_spectre_spin(
             gf_array_name="spectre_spin_gfs",
         )
 
-        gf_assignments = spin_calc.get_gridfunction_assignments(include_flux_density=False)
+        gf_assignments = spin_calc.get_gridfunction_assignments(
+            include_flux_density=False
+        )
         gf_names = [str(sym) for sym in gf_assignments.keys()]
 
         lhss_precompute = [
@@ -1483,7 +1486,9 @@ def register_CFunction_diagnostics_spectre_spin(
             elif gf.rank == 1:
                 parity_value = int(gf.name[-1]) + 1
             elif gf.rank == 2:
-                parity_value = parity_conditions_rank2[(int(gf.name[-2]), int(gf.name[-1]))]
+                parity_value = parity_conditions_rank2[
+                    (int(gf.name[-2]), int(gf.name[-1]))
+                ]
             else:
                 raise ValueError(
                     f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
