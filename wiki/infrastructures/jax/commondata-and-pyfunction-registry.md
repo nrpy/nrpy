@@ -81,5 +81,7 @@ the returned environment dictionaries back into parent globals, including
 
 - [JAX](index.md)
 - [Project Generation Lifecycle](project-generation-lifecycle.md)
+- [Python Function Registry](../../core/python-function-registry.md)
+- [Python Codegen](../../core/python-codegen.md)
 - [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)
 - [Parallel Codegen Orchestration](../../core/helpers/parallel-codegen-orchestration.md)

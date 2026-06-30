@@ -42,5 +42,6 @@ Because this helper mutates global registries, it is closely related to the C-fu
 - [Helper APIs](index.md)
 - [Loop Kernel And Device Helpers](loop-kernel-and-device-helpers.md)
 - [C Function Registry](../c-function-registry.md)
+- [Python Function Registry](../python-function-registry.md)
 - [Gridfunctions And Parameters](../gridfunctions-and-parameters.md)
 - [BHaH Lifecycle](../../infrastructures/bhah-lifecycle.md)

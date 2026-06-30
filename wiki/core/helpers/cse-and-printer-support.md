@@ -35,6 +35,7 @@ The JAX printer also implements `_print_ArrayElementwiseApplyFunc()`. Unary lamb
 
 - [Helper APIs](index.md)
 - [C Codegen](../c-codegen.md)
+- [Python Codegen](../python-codegen.md)
 - [Finite Difference](../finite-difference.md)
 - [SIMD And Intrinsic Support](simd-and-intrinsic-support.md)
 - [Symbolic Expression Utilities](symbolic-expression-utilities.md)

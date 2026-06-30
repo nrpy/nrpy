@@ -72,3 +72,4 @@ symbols; this page owns only the common processing and comparison mechanics.
 - [Wave Equation](wave-equation.md)
 - [SEOBNR And BOB](seobnr/index.md)
 - [Geometry And Special-Function Support](geometry-and-special-function-support.md)
+- [Expression Validation Helpers](../validation/expression-validation-helpers.md)

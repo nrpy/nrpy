@@ -92,4 +92,5 @@ already-registered Python functions are assembled into a package.
 - [JAX](index.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
 - [Generated Project CI](../../validation/generated-project-ci.md)
+- [Python Function Registry](../../core/python-function-registry.md)
 - [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md)
