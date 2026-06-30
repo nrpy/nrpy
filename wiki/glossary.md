@@ -60,7 +60,7 @@ pages where a first-pass owner exists.
 | PUP | Charm++ pack/unpack serialization mechanism used for migration, checkpointing, and restart contracts; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
-| JAX | Python array/accelerator ecosystem targeted by the `sebobv1_jax` generator. |
+| JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
 
 ## Sources
 

@@ -33,7 +33,7 @@ row above.
 
 | Source | Status | Mtime | Hash |
 | --- | --- | --- | --- |
-| `README.md` | living | 2026-06-29 11:58:33 | sha256:624146e60406f834d15541c7af89cfd48cb4b105268c06be4c94f2325108c6ab |
+| `README.md` | living | 2026-06-29 17:38:36 | sha256:624146e60406f834d15541c7af89cfd48cb4b105268c06be4c94f2325108c6ab |
 | `CITATION.md` | living | 2026-06-29 11:58:33 | sha256:5b86ec909e9a85a937cc14919eb6821f15a475af05b354839460147040b62844 |
 | `coding_style.md` | living | 2026-06-29 11:58:33 | sha256:4bac95dced40591cf75fd2aa3363638617e1dbd5e54b582b129382d38129ab09 |
 | `setup.py` | living | 2026-06-29 11:58:33 | sha256:4ed649ad92b8daa9ff6a34e8f7a4f0e06a512984dfdb98be1b9184f273ffbb7b |
@@ -49,8 +49,8 @@ row above.
 | `.github/single_file_static_analysis.sh` | living | 2026-06-09 17:07:33 | sha256:ac927452e0ada5a0f1fe9a141b414dff2898896d6c8956b1c3ce4f2acbb6df96 |
 | `.github/full_nrpy_local_ci.sh` | living | 2026-06-09 17:07:33 | sha256:a14053488856de143b3302d304c2ad2b94f0c7e2c0af728ac70c11922bd1007b |
 | `nrpy/c_codegen.py` | living | 2026-06-29 11:58:33 | sha256:7b2be17cea0769db3379925a79646536e026dfeabbd06b48037dbea364be08d5 |
-| `nrpy/py_codegen.py` | living | 2026-06-29 13:58:41 | sha256:924430dce028f9c51e413e70cb8aa0bc1ca45cb6e1c9510d78a828e89caeb226 |
-| `nrpy/py_function.py` | living | 2026-06-29 13:58:41 | sha256:dfe29d4cf4959e7a6f45beaf785492a49790448470ddd26a46668004fd4bc22a |
+| `nrpy/py_codegen.py` | living | 2026-06-29 17:38:36 | sha256:924430dce028f9c51e413e70cb8aa0bc1ca45cb6e1c9510d78a828e89caeb226 |
+| `nrpy/py_function.py` | living | 2026-06-29 17:38:36 | sha256:dfe29d4cf4959e7a6f45beaf785492a49790448470ddd26a46668004fd4bc22a |
 | `nrpy/c_function.py` | living | 2026-06-29 11:58:33 | sha256:336ebca412f844a67257d560d07423397d18b4cd95ede90fd18b2e5a011c5a5f |
 | `nrpy/grid.py` | living | 2026-06-29 11:58:33 | sha256:99c8844226246b0c41a1327f547cc22f321aa4bdf1f7cb8657360efc40e86dbe |
 | `nrpy/params.py` | living | 2026-06-29 11:58:33 | sha256:576a2eb79c4d709fbe111ee11f6be6e383be3b2da401c1301c1f01befb800079 |
@@ -63,14 +63,14 @@ row above.
 | `nrpy/helpers/functional.py` | living | 2026-06-29 13:58:41 | sha256:60914a6df754c4a0998f5f9d5a46fb35f27802e9de4bee6066fa742d1ed8a52c |
 | `nrpy/helpers/cse_preprocess_postprocess.py` | living | 2026-06-29 13:58:41 | sha256:db76a8c01651365de5ab00f69ea4aff631a0e9020f84b7411b8d872549aaea71 |
 | `nrpy/helpers/custom_c_codegen_functions.py` | living | 2026-06-29 13:58:41 | sha256:c0da4d28d247f60b107e3832cfd36bbe8fa16c7d12a143f96a2ee20682f4d8e9 |
-| `nrpy/helpers/jax_printer.py` | living | 2026-06-29 13:58:41 | sha256:3371ea1989ae5a0fe872f8fe4916d3c875494a856865101b5c2caa5c312e6974 |
+| `nrpy/helpers/jax_printer.py` | living | 2026-06-29 17:38:36 | sha256:3371ea1989ae5a0fe872f8fe4916d3c875494a856865101b5c2caa5c312e6974 |
 | `nrpy/helpers/simd.py` | living | 2026-06-29 13:58:41 | sha256:39afa854bd3fb780bf35cf0bc05f3a21bd74d6797bfc63d5eb31761505ade8dc |
 | `nrpy/helpers/simd_intrinsics.h` | living | 2026-06-29 13:58:41 | sha256:449aaf17b8af5e71d19a9d1983e256e73479d4f9081f938c4420102a7086efca |
 | `nrpy/helpers/cuda_intrinsics.h` | living | 2026-06-29 13:58:41 | sha256:1099aa36f9b9151ea73656e6dca9eb33c2f1a13e8cda230b8477e71e6e12b34f |
 | `nrpy/helpers/loop.py` | living | 2026-06-29 13:58:41 | sha256:4271134f8c60895d3243778e356b9add7d034260ac2a9315cf2ec3e1cfc5221f |
 | `nrpy/helpers/parallelization/gpu_kernel.py` | living | 2026-06-29 13:58:41 | sha256:eddc36f080048b6efa676ec1a3ce72aa81bdf0dd3c51a0411fa894c41788de12 |
 | `nrpy/helpers/parallelization/utilities.py` | living | 2026-06-29 13:58:41 | sha256:6078e43f54d509312105cf85a5b19cb91a15c28ad63996e79cbe1ca3ea17e73c |
-| `nrpy/helpers/parallel_codegen.py` | living | 2026-06-29 13:58:41 | sha256:ddadeae7617cce81e8d3d57410237579e6a8b07aba2cd26379261930f9b1b214 |
+| `nrpy/helpers/parallel_codegen.py` | living | 2026-06-29 17:38:36 | sha256:ddadeae7617cce81e8d3d57410237579e6a8b07aba2cd26379261930f9b1b214 |
 | `nrpy/helpers/parallelization/__init__.py` | living | 2026-06-29 13:58:41 | sha256:5776ba86b2f78cdae3487b55c1a954aa968e5671a326726874dd3a9c164afaa5 |
 | `nrpy/helpers/generic.py` | living | 2026-06-29 13:58:41 | sha256:b795553804c68b267da49bee17b785f697f352ebd5d8a3ae7e9e0528535af7cc |
 | `nrpy/helpers/cached_functions.py` | living | 2026-06-29 13:58:41 | sha256:30d914c4be69d113e1ba810d24fb47522d5420e55eabfaab457678e0deb597ca |
@@ -141,6 +141,9 @@ row above.
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:ddc3d11fcd53c5a651935e655d658efde2cef54c221f5376197d69cc398de5a4 |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:f69abf66f34bbdc67104f1b7b3fc2debdda88314b684dcf42d4ac4cc51288d60 |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:dc4b0d899b21ea8545bd67fd67f27c4b3aab68e26eab279707905753c23b331f |
+| `nrpy/infrastructures/JAX/commondata.py` | living | 2026-06-29 17:38:36 | sha256:84dc06f69347bb6dfea382a61ffda05e866b7f3c6c7b4b9418c2f2467322992a |
+| `nrpy/infrastructures/JAX/jax_project_generator.py` | living | 2026-06-29 17:38:36 | sha256:7c7a39f2f32dbb825d9c9d25fb8259b95818678b9387c6fe6e23252f5881751b |
+| `nrpy/infrastructures/JAX/sebob/SEOBNRv5_aligned_spin_coefficients.py` | living | 2026-06-29 17:38:36 | sha256:9557a4d1a6f0ee370317fe16ad617de02e3dc373f6ac8f2df62c61e1171a61a9 |
 | `nrpy/infrastructures/superB/main_chare.py` | living | 2026-06-29 14:47:32 | sha256:bf9e686ebf58f86cfa5b4d23aca1eab5523dde80001d87b377d6bd49b6d2620d |
 | `nrpy/infrastructures/superB/timestepping_chare.py` | living | 2026-06-29 14:47:32 | sha256:4a88fadf7223f4ef5bcdd3757792bfdf8dd105139c8126ae1bbcbb02d5392d6b |
 | `nrpy/infrastructures/superB/Makefile_helpers.py` | living | 2026-06-29 14:47:32 | sha256:f52184fc4cfd001bafdc48a838cf8f5fc36799459b27f580a382bd3ad6d014f4 |
@@ -166,6 +169,7 @@ row above.
 | `nrpy/tests/reference_metric_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:fa562e7e0dd7ba64b95129f4c4a26b565eccad9b96b783b12e3573d093efa474 |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living | 2026-06-29 11:58:33 | sha256:4dd315d1777e16c6cf03efe76713f377979e9baef55da8ea8206d71c186b51b5 |
 | `nrpy/examples/wave_equation_cartesian.py` | living | 2026-06-29 11:58:33 | sha256:d3337a4f2aec6ee2d6e44967d3b33d8397116acc4fdffcd606960c0250f5d986 |
+| `nrpy/examples/sebobv1_jax.py` | living | 2026-06-29 17:38:36 | sha256:c05a747ccdb83f0c610e5dd97e0f75d9f7313b11ff8b9162fe90691a5b115123 |
 | `nrpy/examples/two_blackholes_collide.py` | living | 2026-06-29 11:58:33 | sha256:47751a1bf77ce2dee2873b437bae41e492f2e807987c52ee3fe8a58ea10ecf2c |
 | `nrpy/examples/superB_two_blackholes_collide.py` | living | 2026-06-29 14:47:32 | sha256:7423369f397c72b0f61eb479ceeea3e5e613ce05b2b5ee0a1acae8ad7a84751f |
 | `nrpy/examples/superB_blackhole_spectroscopy.py` | living | 2026-06-29 14:47:32 | sha256:fc69305f0472d889e4f354cb352250f38a99b68642938fcade0a0e6287a4cdf6 |
@@ -247,7 +251,7 @@ row above.
 | `nrpy/equations/seobnr/BOB_aligned_spin_waveform_quantities_higher_modes.py` | living | 2026-06-29 11:58:33 | sha256:cda5d979a91be71b0a9fa74739a736fe843555a92634b4d0b69894e1c481607b |
 | `nrpy/equations/seobnr/BOB_v2_waveform_quantities_kankani_etal.py` | living | 2026-06-29 11:58:33 | sha256:7b89a0e37e9f91b46903175d9cf7b1cf7a0accfe7866a57fa949cf229b128d0a |
 | `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py` | living | 2026-06-29 11:58:33 | sha256:0481b48e82f65de18356c0b7064d3a7fd7380bd734e6d7b4c05f6472e8ebc2ce |
-| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py` | living | 2026-06-29 11:58:33 | sha256:f889447cc79a4bb8d0ae495a654c73e761fd63ed41018402cc91f657de1f9511 |
+| `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py` | living | 2026-06-29 17:38:36 | sha256:f889447cc79a4bb8d0ae495a654c73e761fd63ed41018402cc91f657de1f9511 |
 | `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py` | living | 2026-06-29 11:58:33 | sha256:2506da2e0b3df7d3717b5083eaf5aca1532f656440ad8c773b465502d29e4ebc |
 | `nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py` | living | 2026-06-29 11:58:33 | sha256:baf87f8f8b15fbcb0ded28521f7b9fef463c18a243aaa0f98dd9b6424fcac9d2 |
 | `nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py` | living | 2026-06-29 11:58:33 | sha256:043fb6dafce3b527a942e525bbaef11f96b24db601cdda4f148edda628fae31b |
