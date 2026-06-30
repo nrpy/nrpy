@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 2026-06-29.
+> trigger re-ingest. Last audited: 2026-06-30.
 
 ## Aggregate Sources
 
@@ -90,6 +90,32 @@ row above.
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living | 2026-06-29 11:58:33 | sha256:d65600e26c665d7af4c267868ee96744c9502bcea20a11d25f9ff6e8e789a836 |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living | 2026-06-29 11:58:33 | sha256:7bf1bc7a473cf0a3629991249d8d9264cbbd373c354949ae32d8403efa6068e9 |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living | 2026-06-29 11:58:33 | sha256:02b8ad1a43a65d3000a9e923a03f2292052d2f9486860962855078e148615b5b |
+| `nrpy/infrastructures/ETLegacy/interface_ccl.py` | living | 2026-06-29 17:38:36 | sha256:8d3f47d455f421d148f38dcdc10a1cf12208e31841e0e2e5ac5c55e9c090abcc |
+| `nrpy/infrastructures/ETLegacy/param_ccl.py` | living | 2026-06-29 17:38:36 | sha256:a072c2ac4b1bcad76318b6d90f06dd3924f387243adc8c2071b1a6d58a3b035e |
+| `nrpy/infrastructures/ETLegacy/schedule_ccl.py` | living | 2026-06-29 17:38:36 | sha256:2cd7e09ac76f3c3e9f1ad4f86e713d124c47294b0f18d41e8e4e127be4ece090 |
+| `nrpy/infrastructures/ETLegacy/make_code_defn.py` | living | 2026-06-29 17:38:36 | sha256:a198287be5e894a8afed6a3cd11b5f47e95ee7089fae1b39686e4659ea23bf9c |
+| `nrpy/infrastructures/ETLegacy/CodeParameters.py` | living | 2026-06-29 17:38:36 | sha256:35f506a0bd67f27ab52c7579a8c5b4c36c03d2ecb186551d2bec2a20c414bcff |
+| `nrpy/infrastructures/ETLegacy/ETLegacy_include_header.py` | living | 2026-06-29 17:38:36 | sha256:ad2c756d21847a20b62e02bbe51120989dfb051d39d4f31b073a2f2211e32056 |
+| `nrpy/infrastructures/ETLegacy/simple_loop.py` | living | 2026-06-29 17:38:36 | sha256:53f36746d16264a62211fe270d357bd9b50e9c45ea737cb97469e88e4bed09b4 |
+| `nrpy/infrastructures/ETLegacy/MoL_registration.py` | living | 2026-06-29 17:38:36 | sha256:854eff17bc909e506b34dfa3df4cc2589a0e0fec65244bd658bf2c6009052507 |
+| `nrpy/infrastructures/ETLegacy/Symmetry_registration.py` | living | 2026-06-29 17:38:36 | sha256:3644897ef2aedc2f146a15a240594f8c32c1530a4d8182d515f0aca19f3dca1e |
+| `nrpy/infrastructures/ETLegacy/boundary_conditions.py` | living | 2026-06-29 17:38:36 | sha256:d52878df89de7c1e3f58f6d730e58bbdcef45ed200174a9d0a877499ba580571 |
+| `nrpy/infrastructures/ETLegacy/zero_rhss.py` | living | 2026-06-29 17:38:36 | sha256:bd354fda74ba940cc2d8cae89e52923d88e61ed3e11fa6dd638c395035a815b4 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py` | living | 2026-06-29 17:38:36 | sha256:db8bf50c1760ac141133659e9c8c115a878bd6ea19af6e404562df219eab7751 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/Ricci_eval.py` | living | 2026-06-29 17:38:36 | sha256:c3f713ea241523a0dcfcf262fcd9515a58ba5a4d68d834ed91b33ef82a7a65ff |
+| `nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py` | living | 2026-06-29 17:38:36 | sha256:4e8d5129718b875e0ebe72ae9af952927e75c2ba3d4b606944c21083202b99e5 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/ADM_to_BSSN.py` | living | 2026-06-29 17:38:36 | sha256:d336f496ef65051c4752a1abafcc86d3f419fc3f49c0399ed3ccb0dcb3141cd6 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/BSSN_to_ADM.py` | living | 2026-06-29 17:38:36 | sha256:e9f092005b3f6f1c0cd1d394e4b6b4985410b9175d30e9c9723a0a3a8beab951 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/T4DD_to_T4UU.py` | living | 2026-06-29 17:38:36 | sha256:1199ca1ef19df9c909e0f1e693d13f0a0c32033464fae72765446c03aedce33a |
+| `nrpy/infrastructures/ETLegacy/general_relativity/RegisterSlicing.py` | living | 2026-06-29 17:38:36 | sha256:2b7af0cb13282ef1c487a879c530803704198449e3f1715acdb4d8d2e622a0d7 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py` | living | 2026-06-29 17:38:36 | sha256:31cfc957c1d0a24ea1e88b10e65b9b6ecd9c9384dd891eaa89f35b2bc5bf640e |
+| `nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgammahat_constraint.py` | living | 2026-06-29 17:38:36 | sha256:be033ba2762217b552f265ea9e1674ea2199eb219445f6ca0c0b06f8f4940c0a |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:dc4b0d899b21ea8545bd67fd67f27c4b3aab68e26eab279707905753c23b331f |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:f69abf66f34bbdc67104f1b7b3fc2debdda88314b684dcf42d4ac4cc51288d60 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:15b73c0db1fafb6feb99e3cf0ad4af888060abe929a5b2f8b9e61c53baff808f |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:ddc3d11fcd53c5a651935e655d658efde2cef54c221f5376197d69cc398de5a4 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:6f5e8144fb6e343038310f238e29c72389c8533528b0f58a56ca7b61718d6e48 |
+| `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:b58fb9cb25725c9480d840fd2dee99db4b500210a36ed3b33df3759a7f5dbf73 |
 | `nrpy/infrastructures/superB/main_chare.py` | living | 2026-06-29 14:47:32 | sha256:bf9e686ebf58f86cfa5b4d23aca1eab5523dde80001d87b377d6bd49b6d2620d |
 | `nrpy/infrastructures/superB/timestepping_chare.py` | living | 2026-06-29 14:47:32 | sha256:4a88fadf7223f4ef5bcdd3757792bfdf8dd105139c8126ae1bbcbb02d5392d6b |
 | `nrpy/infrastructures/superB/Makefile_helpers.py` | living | 2026-06-29 14:47:32 | sha256:f52184fc4cfd001bafdc48a838cf8f5fc36799459b27f580a382bd3ad6d014f4 |
@@ -240,6 +266,15 @@ row above.
 | `https://github.com/charmplusplus/charm/blob/main/doc/quickstart.rst` | Charm++ quickstart from the Charm++ repository. | living | 2026-06-29 | partial | Background for `.ci` files, generated `.decl.h` and `.def.h` files, `charmc`, and `charmrun`. |
 | `https://github.com/charmplusplus/charm/blob/main/doc/charm%2B%2B/manual.rst` | Charm++ language manual from the Charm++ repository. | living | 2026-06-29 | partial | Background for chares, entry methods, proxies, SDAG, PUP, checkpoint/restart, reductions, and chare arrays. |
 | `https://github.com/charmplusplus/charm/blob/main/doc/libraries/manual.rst` | Charm++ and Converse libraries manual from the Charm++ repository. | living | 2026-06-29 | partial | Background for CkIO. |
+| `https://einsteintoolkit.org/usersguide/UsersGuide.html` | Cactus 4.20 Users Guide page from the Einstein Toolkit site. | living | 2026-06-30 | partial | Background for Cactus thorn-writing and Cactus terminology emitted by ETLegacy code. |
+| `https://einsteintoolkit.org/referencemanual/ReferenceManual.html` | Cactus 4.20 Reference Manual page from the Einstein Toolkit site. | living | 2026-06-30 | partial | Background for `CCTK_*` thorn-writer function terminology emitted by ETLegacy code. |
+| `https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html` | Cactus users guide chapter C1, `Application thorns`. | living | 2026-06-30 | partial | Background for CCL and thorn-file terminology emitted by ETLegacy code. |
+| `https://einsteintoolkit.org/thornguide/CactusNumerical/MoL/documentation.html` | Einstein Toolkit thorn guide page, `Method of Lines`. | living | 2026-06-30 | partial | Background for MoL terminology emitted by ETLegacy registration code. |
+| `https://einsteintoolkit.org/thornguide/CactusBase/Boundary/documentation.html` | Einstein Toolkit thorn guide page, `Boundary Conditions`. | living | 2026-06-30 | partial | Background for Boundary terminology emitted by ETLegacy boundary-condition code. |
+| `https://einsteintoolkit.org/thornguide/EinsteinEvolve/NewRad/documentation.html` | Einstein Toolkit thorn guide page, `NewRad`. | living | 2026-06-30 | partial | Background for NewRad terminology emitted by ETLegacy boundary-condition code. |
+| `https://einsteintoolkit.org/thornguide/CactusBase/CartGrid3D/documentation.html` | Einstein Toolkit thorn guide page, `CartGrid3D`. | living | 2026-06-30 | partial | Background for CartGrid3D terminology emitted by ETLegacy symmetry code. |
+| `https://einsteintoolkit.org/thornguide/EinsteinBase/ADMBase/documentation.html` | Einstein Toolkit thorn guide page, `ADMBase`. | living | 2026-06-30 | partial | Background for ADMBase terminology emitted by ETLegacy GR coupling code. |
+| `https://einsteintoolkit.org/thornguide/EinsteinBase/TmunuBase/documentation.html` | Einstein Toolkit thorn guide page, `TmunuBase`. | living | 2026-06-30 | partial | Background for TmunuBase terminology emitted by ETLegacy matter-coupling code. |
 
 ## Exclusions
 
