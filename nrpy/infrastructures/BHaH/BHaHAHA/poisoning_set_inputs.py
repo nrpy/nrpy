@@ -71,6 +71,7 @@ def register_CFunction_poisoning_set_inputs() -> None:
 
   POISON_INT(params->verbosity_level);
   POISON_INT(params->enable_eta_varying_alg_for_precision_common_horizon);
+  POISON_INT(params->enable_spectre_spin_diagnostic);
 """
     cfc.register_CFunction(
         subdirectory="",

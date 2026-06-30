@@ -87,6 +87,7 @@ enable_KreissOliger_dissipation = False
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
+basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
 if enable_bhahaha and fp_type != "double":
@@ -294,7 +295,8 @@ if enable_bhahaha:
     par.adjust_CodeParam_default("bah_initial_grid_y_center", [0.0])
     par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
     par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
-    par.adjust_CodeParam_default("bah_max_search_radius", [0.6 * default_BH_mass])
+    par.adjust_CodeParam_default("bah_max_search_radius", [0.75 * default_BH_mass])
+    par.adjust_CodeParam_default("bah_enable_spectre_spin_diagnostic", 1)
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir

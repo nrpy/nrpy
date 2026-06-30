@@ -143,6 +143,8 @@ typedef struct {
   int verbosity_level;                                     // 0 = essential only; 1 = physical summary of found horizons;
                                                            // 2 = full algorithmic details.
   int enable_eta_varying_alg_for_precision_common_horizon; // 0 = no; 1 = yes. Janky, unless trying to find R_crit for a common horizon.
+  int enable_spectre_spin_diagnostic;                      // 0 = no; 1 = yes. Computes spin vector chi^i based on SpECTRE method.
+                                                           // Uses a noticeable amount of compute.
 
   //==========================
   // Persistent previous horizon data, used for setting up external input grid & horizon initial guess.
@@ -168,6 +170,8 @@ typedef struct {
 // C struct: bhahaha_diagnostics_struct
 // Contains diagnostic quantities computed by BHaHAHA.
 //===============================================
+#define BHAHAHA_DIAGNOSTIC_UNAVAILABLE (-10.0)
+
 typedef struct {
   //==========================
   // Convergence-related quantities
@@ -218,7 +222,18 @@ typedef struct {
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================
+  // Dimensionless spin vector chi, based on a spin function Omega calculated based on a rotational one-form according to the same method as SpECTRE
+  REAL spin_chi_x_spectre;
+  REAL spin_chi_y_spectre;
+  REAL spin_chi_z_spectre;
+  
 } bhahaha_diagnostics_struct;
+
+static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct *restrict diags) {
+  diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+} // END FUNCTION: bah_initialize_diagnostics_struct
 
 //==================
 // PUBLIC FUNCTIONS

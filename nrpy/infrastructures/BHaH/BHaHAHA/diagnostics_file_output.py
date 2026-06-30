@@ -105,24 +105,31 @@ Operations performed:
     fprintf(fileptr, "# column 19 = Spin y-component (based on xy/xz)\n");
     fprintf(fileptr, "# column 20 = Spin z-component (based on xz/xy)\n");
     fprintf(fileptr, "# column 21 = Spin z-component (based on yz/xy)\n");
+    fprintf(fileptr, "# column 22 = Dimensionless spin x-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 23 = Dimensionless spin y-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 24 = Dimensionless spin z-component (based on spin function Omega)\n");
     fflush(fileptr);
   } // END IF: file size zero -> need to write header
 
   // Calculate irreducible mass from horizon area.
   REAL M_irr = sqrt(diags->area / (16.0 * M_PI));
 
-  // Assign spin magnitudes, using NaN to indicate undefined values.
-  const REAL a_x_xy_over_yz_spin = (diags->spin_a_x_from_xy_over_yz_prop_circumfs != -10.0) ? diags->spin_a_x_from_xy_over_yz_prop_circumfs : NAN;
-  const REAL a_x_xz_over_yz_spin = (diags->spin_a_x_from_xz_over_yz_prop_circumfs != -10.0) ? diags->spin_a_x_from_xz_over_yz_prop_circumfs : NAN;
-  const REAL a_y_yz_over_xz_spin = (diags->spin_a_y_from_yz_over_xz_prop_circumfs != -10.0) ? diags->spin_a_y_from_yz_over_xz_prop_circumfs : NAN;
-  const REAL a_y_xy_over_xz_spin = (diags->spin_a_y_from_xy_over_xz_prop_circumfs != -10.0) ? diags->spin_a_y_from_xy_over_xz_prop_circumfs : NAN;
-  const REAL a_z_xz_over_xy_spin = (diags->spin_a_z_from_xz_over_xy_prop_circumfs != -10.0) ? diags->spin_a_z_from_xz_over_xy_prop_circumfs : NAN;
-  const REAL a_z_yz_over_xy_spin = (diags->spin_a_z_from_yz_over_xy_prop_circumfs != -10.0) ? diags->spin_a_z_from_yz_over_xy_prop_circumfs : NAN;
+  // Assign spin magnitudes for both circumference ratio and vorticity dipole methods, using NaN to indicate undefined values.  
+  const REAL a_x_xy_over_yz_spin = (diags->spin_a_x_from_xy_over_yz_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_x_from_xy_over_yz_prop_circumfs : NAN;
+  const REAL a_x_xz_over_yz_spin = (diags->spin_a_x_from_xz_over_yz_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_x_from_xz_over_yz_prop_circumfs : NAN;
+  const REAL a_y_yz_over_xz_spin = (diags->spin_a_y_from_yz_over_xz_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_y_from_yz_over_xz_prop_circumfs : NAN;
+  const REAL a_y_xy_over_xz_spin = (diags->spin_a_y_from_xy_over_xz_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_y_from_xy_over_xz_prop_circumfs : NAN;
+  const REAL a_z_xz_over_xy_spin = (diags->spin_a_z_from_xz_over_xy_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_z_from_xz_over_xy_prop_circumfs : NAN;
+  const REAL a_z_yz_over_xy_spin = (diags->spin_a_z_from_yz_over_xy_prop_circumfs != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_a_z_from_yz_over_xy_prop_circumfs : NAN;
+  const REAL spin_chi_x_spectre = (diags->spin_chi_x_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_x_spectre : NAN;
+  const REAL spin_chi_y_spectre = (diags->spin_chi_y_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_y_spectre : NAN;
+  const REAL spin_chi_z_spectre = (diags->spin_chi_z_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_z_spectre : NAN;
 
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
@@ -143,7 +150,10 @@ Operations performed:
           a_y_yz_over_xz_spin,                               // (18) Spin y (yz/xz)
           a_y_xy_over_xz_spin,                               // (19) Spin y (xy/xz)
           a_z_xz_over_xy_spin,                               // (20) Spin z (xz/xy)
-          a_z_yz_over_xy_spin                                // (21) Spin z (yz/xy)
+          a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
+          spin_chi_x_spectre,                                // (22) Dimensionless spin x (Omega)
+          spin_chi_y_spectre,                                // (23) Dimensionless spin y (Omega)
+          spin_chi_z_spectre                                 // (24) Dimensionless spin z (Omega)
   );
 
   fflush(fileptr);

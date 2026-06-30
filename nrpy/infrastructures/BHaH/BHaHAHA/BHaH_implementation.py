@@ -144,6 +144,10 @@ def register_CFunction_bhahaha_find_horizons(
             "Enable varying-eta prescription for precision common-horizon finding",
             0,
         ),
+        "bah_enable_spectre_spin_diagnostic": (
+            "Enable SpECTRE spin diagnostic",
+            0,
+        ),
     }
     for key, value in int_params.items():
         _ = par.register_CodeParameter(
@@ -372,6 +376,7 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
 
   // STEP 3: Copies non-persistent solver parameters from `commondata` to `current_horizon_params`.
   current_horizon_params->enable_eta_varying_alg_for_precision_common_horizon = commondata->bah_enable_eta_varying_alg_for_precision_common_horizon;
+  current_horizon_params->enable_spectre_spin_diagnostic = commondata->bah_enable_spectre_spin_diagnostic;
   current_horizon_params->verbosity_level = commondata->bah_verbosity_level;
   current_horizon_params->max_iterations = commondata->bah_max_iterations;
   current_horizon_params->cfl_factor = commondata->bah_cfl_factor[h];
