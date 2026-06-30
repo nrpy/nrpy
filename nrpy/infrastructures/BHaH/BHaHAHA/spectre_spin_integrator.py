@@ -1769,8 +1769,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   free(modes);
   return status;
 } // END FUNCTION: bah_compute_spectre_spin_potentials
-"""
-            .replace("@FD_RADIUS@", str(fd_radius))
+""".replace("@FD_RADIUS@", str(fd_radius))
             .replace("@FD_WIDTH@", str(fd_width))
             .replace("@MAX_ROW_NNZ@", str(max_row_nnz))
             .replace("@FD_FIRST@", fd_first_coeffs)
