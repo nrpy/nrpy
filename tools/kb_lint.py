@@ -73,6 +73,21 @@ def _rel(path: Path) -> str:
     return path.resolve().relative_to(ROOT).as_posix()
 
 
+def _is_relative_to(path: Path, base: Path) -> bool:
+    """
+    Return whether ``path`` is under ``base``.
+
+    :param path: Candidate path.
+    :param base: Candidate parent path.
+    :return: Whether ``path`` is equal to or below ``base``.
+    """
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError:
+        return False
+    return True
+
+
 def _fail(failures: List[str], path: Path, line: Optional[int], message: str) -> None:
     """
     Append a formatted lint failure.
@@ -306,7 +321,7 @@ def _is_normal_leaf(path: Path) -> bool:
     :return: Whether the path is a normal leaf.
     """
     return (
-        path.is_relative_to(WIKI)
+        _is_relative_to(path, WIKI)
         and not _is_router(path)
         and not _is_support_page(path)
     )
@@ -368,7 +383,7 @@ def _check_router_detail(files: List[Path], failures: List[str]) -> None:
     :param failures: Mutable failure list.
     """
     for path in files:
-        if path == AGENTS or path.is_relative_to(WIKI):
+        if path == AGENTS or _is_relative_to(path, WIKI):
             if _is_router(path) and re.search(
                 r"^## Detail\s*$", _read(path), re.MULTILINE
             ):
@@ -431,7 +446,7 @@ def _check_reachability(graph: Dict[Path, List[Path]], failures: List[str]) -> N
         reachable.add(path)
         for target in graph.get(path, []):
             if target.is_file() and (
-                target == AGENTS.resolve() or target.is_relative_to(WIKI)
+                target == AGENTS.resolve() or _is_relative_to(target, WIKI)
             ):
                 queue.append(target)
 
@@ -460,7 +475,7 @@ def _check_catalog(failures: List[str]) -> None:
             continue
         for link in re.finditer(r"(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)", row[page_i]):
             target, _ = _path_from_link(CATALOG, link.group(2))
-            if target is not None and target.is_relative_to(WIKI):
+            if target is not None and _is_relative_to(target, WIKI):
                 links.append(target)
     counts = Counter(links)
     for page in _wiki_pages():
