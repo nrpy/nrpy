@@ -39,6 +39,12 @@ integration and sets apparent-horizon defaults. The generated command-line
 parser accepts `convergence_factor`, matching the broader standalone BHaH
 example pattern.
 
+For the rest of the standalone BHaH numerical-relativity family, use
+[Standalone GR/BHaH](standalone-gr-bhah.md). For raytracing output and
+standalone geodesic generators, use [Geodesic Raytracing](geodesic-raytracing.md).
+For BHaHAHA library generation behind horizon-enabled examples, use
+[Apparent Horizon Library](apparent-horizon-library.md).
+
 ## Sources
 
 - [README.md](../../README.md) - `Lightweight Single-Patch BH@H Example`, `Standalone BHaH Generators`
@@ -51,4 +57,7 @@ example pattern.
 
 - [Examples](index.md)
 - [First Wave Equation Run](first-wave-equation-run.md)
+- [Standalone GR/BHaH](standalone-gr-bhah.md)
+- [Geodesic Raytracing](geodesic-raytracing.md)
+- [Apparent Horizon Library](apparent-horizon-library.md)
 - [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)

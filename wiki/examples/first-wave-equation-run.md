@@ -46,6 +46,8 @@ Makefile.
 The RHS path is the compact symbolic-codegen pattern: the example builds wave
 equation SymPy RHS expressions, passes them through `ccg.c_codegen`, and wraps
 the emitted assignments in `BHaH.simple_loop.simple_loop` over the interior.
+For the broader Cartesian, curvilinear, and multicoordinate wave-equation
+family, use [Wave Equation Generators](wave-equation-generators.md).
 
 ## Sources
 
@@ -58,5 +60,6 @@ the emitted assignments in `BHaH.simple_loop.simple_loop` over the interior.
 ## See Also
 
 - [Examples](index.md)
+- [Wave Equation Generators](wave-equation-generators.md)
 - [Black Hole Evolution](black-hole-evolution.md)
 - [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)

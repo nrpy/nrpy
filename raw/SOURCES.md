@@ -16,7 +16,7 @@
 | `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | 2026-06-29 11:58:33 | sha256:8355737f318de5fa31ba3a56f4260565a6b646e61514c6569464329feff44090 | partial |
 | `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 364 files. | living | 2026-06-29 15:34:39 | sha256:ae23973e29b30242334f4a1e6b9ea96884e7467edc5151805242fbde3c8b5bdc | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | 2026-06-29 17:38:36 | sha256:07407d727087c6d4fda8b151b8f9553a34dcb98979115bdfde288aa71629e84c | ingested |
-| `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 35 files. | living | 2026-06-29 11:58:33 | sha256:744144d1ce74d36bd2b64021e7e1e2ccd9e94e38f35a5b56fa2a90c8d672eba0 | partial |
+| `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 39 files. | living | 2026-06-29 17:38:36 | sha256:f8f3a7f258770c096e5723ea1542a8289ba16e0c8434dc12f6dd371763442c30 | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | 2026-06-09 17:07:33 | sha256:7a0c354fec49d1874eb1bfe456017e61e868b96127b7b0f4dd6deb52ee518ae4 | partial |
 
 ## Source Documents Moved Below Root
@@ -169,11 +169,42 @@ row above.
 | `nrpy/tests/reference_metric_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:fa562e7e0dd7ba64b95129f4c4a26b565eccad9b96b783b12e3573d093efa474 |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living | 2026-06-29 11:58:33 | sha256:4dd315d1777e16c6cf03efe76713f377979e9baef55da8ea8206d71c186b51b5 |
 | `nrpy/examples/wave_equation_cartesian.py` | living | 2026-06-29 11:58:33 | sha256:d3337a4f2aec6ee2d6e44967d3b33d8397116acc4fdffcd606960c0250f5d986 |
+| `nrpy/examples/wave_equation_curvilinear.py` | living | 2026-06-29 17:38:36 | sha256:1a71ac5dff3e0e77a634971d51fd345d3a77c452475dd5d6fa732999d8ae97b0 |
+| `nrpy/examples/wave_equation_multicoordinates.py` | living | 2026-06-29 17:38:36 | sha256:ea549858f015d95a32eb4b42cca1730a58e86f86dc27f986ebd2098037f1ad02 |
 | `nrpy/examples/sebobv1_jax.py` | living | 2026-06-29 17:38:36 | sha256:c05a747ccdb83f0c610e5dd97e0f75d9f7313b11ff8b9162fe90691a5b115123 |
+| `nrpy/examples/sebobv2.py` | living | 2026-06-29 17:38:36 | sha256:4fd114e535d0eb18bbc5bac73fe52d2cc540e3d6c2cc0f2bed9c2dea7896dab6 |
+| `nrpy/examples/seobnrv5_aligned_spin_inspiral.py` | living | 2026-06-29 17:38:36 | sha256:e6ee0577e94815b9ac0645119f09d49d7e09408d6552f67eeb73c8631b2b1105 |
+| `nrpy/examples/nrpypn_quasicircular_momenta.py` | living | 2026-06-29 17:38:36 | sha256:9aa49c9264b5f6661e1b2a89b3f2d91f9a5b14a2ecbbba762d86774204a8457d |
 | `nrpy/examples/two_blackholes_collide.py` | living | 2026-06-29 11:58:33 | sha256:47751a1bf77ce2dee2873b437bae41e492f2e807987c52ee3fe8a58ea10ecf2c |
+| `nrpy/examples/blackhole_spectroscopy.py` | living | 2026-06-29 17:38:36 | sha256:2a321f2ec5e0377ad3bf092a5049d2ae608afc3283b7d422ff3b4f126ec22752 |
+| `nrpy/examples/spinning_blackhole.py` | living | 2026-06-29 17:38:36 | sha256:ceea1b0de2a58f97e40661df5c061f37b217b0a5373c561a0dcf5cdb66c9924f |
+| `nrpy/examples/kasner_exact_evolution.py` | living | 2026-06-29 17:38:36 | sha256:d936053591b9f8b8ef962a16b0c1a95d6b359346c999bfae06128e07e19674c3 |
+| `nrpy/examples/nrpyelliptic_conformally_flat.py` | living | 2026-06-29 17:38:36 | sha256:baa472ed57aa9683785688996da0a32b2adaa10ee75bacc7a6f1c009a41fe48f |
+| `nrpy/examples/carpet_wavetoy_thorns.py` | living | 2026-06-29 17:38:36 | sha256:80d77dda73ea41c5d8aa87f1f720f4535145dc18b272ba227411e2fe6d2768cd |
+| `nrpy/examples/carpet_baikal_thorns.py` | living | 2026-06-29 17:38:36 | sha256:175f6bc5615e8684c70f7fe58780471ad8c163b525e9599f907546e43f71f0b2 |
+| `nrpy/examples/carpetx_wavetoy_thorns.py` | living | 2026-06-29 17:38:36 | sha256:c879adf8849ffb5a93cae562af6a81397ef432a0062b9976c1f0069f2db0a812 |
+| `nrpy/examples/carpetx_baikal_thorns.py` | living | 2026-06-29 17:38:36 | sha256:fe047de47d5962a9817abf2cc27d24c8cf7adcebbf874028eefa11b39b0fd857 |
 | `nrpy/examples/superB_two_blackholes_collide.py` | living | 2026-06-29 14:47:32 | sha256:7423369f397c72b0f61eb479ceeea3e5e613ce05b2b5ee0a1acae8ad7a84751f |
 | `nrpy/examples/superB_blackhole_spectroscopy.py` | living | 2026-06-29 14:47:32 | sha256:fc69305f0472d889e4f354cb352250f38a99b68642938fcade0a0e6287a4cdf6 |
 | `nrpy/examples/superB_nrpyelliptic_conformally_flat.py` | living | 2026-06-29 14:47:32 | sha256:af0ba41012b4d27258e1f99a20789d458cdbae21a179b4edcc42f7745b4a4fe2 |
+| `nrpy/examples/mass_geodesic_integrator.py` | living | 2026-06-29 17:38:36 | sha256:a7ddc3f5de21d8cfc9f6e152cb1b0295ea6d3dbae57bfc2ced4fdabe62afbe41 |
+| `nrpy/examples/photon_geodesic_integrator.py` | living | 2026-06-29 17:38:36 | sha256:1d4e46e880c2cd52a777af9ad2a289822869892a3f07519777d563b1731ff6e6 |
+| `nrpy/examples/photon_geodesic_batch_integrator.py` | living | 2026-06-29 17:38:36 | sha256:060a2059a559cae768cf311b7c887200bb7420ac49c30c785839fd8732697f2b |
+| `nrpy/examples/tovola_neutron_star.py` | living | 2026-06-29 17:38:36 | sha256:71b9175d6cfa80727f6742a55f7831802ecaf603371cd84b74ccd2e85e03bf68 |
+| `nrpy/examples/hydro_without_hydro.py` | living | 2026-06-29 17:38:36 | sha256:8ea8ef6c2ea1e54ec09b12ad10011f6b3f3518631a729acfe935954254699d16 |
+| `nrpy/examples/groovy_TOV_BSSN.py` | living | 2026-06-29 17:38:36 | sha256:2b52991cb119e7aae2382f7ded396caa53ae4ca33b82ca560dfbc49098f8e860 |
+| `nrpy/examples/manga_bhah_lib.py` | living | 2026-06-29 17:38:36 | sha256:c1314070f930901737d2494ad3d92ea8d8e4d37a4ac487fdf648edb61d63e50b |
+| `nrpy/examples/bhahaha.py` | living | 2026-06-29 17:38:36 | sha256:ae545f72292718f4aa9444c4916607682a17a7a6332fdff387f739d066b3999d |
+| `nrpy/examples/et_WaveToyfiles/ThornList` | living | 2026-06-29 17:38:36 | sha256:04e8f00223eb3b8b53e383245bf1fc091478e221191512766b517d3a556a98dc |
+| `nrpy/examples/et_WaveToyfiles/WaveToyNRPy.par` | living | 2026-06-29 17:38:36 | sha256:60151793cb08f1e6ad53ca581173808f3b1763e33c7f3809c41f046c26ec41fc |
+| `nrpy/examples/et_WaveToyfiles/test/test.ccl` | living | 2026-06-29 17:38:36 | sha256:29ad9b7c85fef520fd869e7146c3e978e5bf712fb59ac0c9c1a4357f23cad636 |
+| `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par` | living | 2026-06-29 17:38:36 | sha256:e6baaf758f6d64c8264fbae931b0993b1307430e17d8dc76aa3904af67c281a5 |
+| `nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc` | living | 2026-06-29 17:38:36 | sha256:7ec61d53370aec99aef92395057dda0b6be5de2e58e349c346c119c91ea4171b |
+| `nrpy/examples/geodesic_visualizations/visualize_trajectory.py` | living | 2026-06-29 17:38:36 | sha256:eb8806847d1da769ff181c9d6d1408e2c5b53fc88ce3eae762f0562856ca1078 |
+| `nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py` | living | 2026-06-29 17:38:36 | sha256:4ab5c6d299cc5612ba88359889b4f64ccf96810fa87412221fb338d733b797d9 |
+| `nrpy/examples/geodesic_visualizations/render_lensed_image.py` | living | 2026-06-29 17:38:36 | sha256:5c72e4fb9be1149b0067033d97a0780f8123535bc0ad4620f692857ba6b04f25 |
+| `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` | living | 2026-06-29 17:38:36 | sha256:b94c76d9c026309218073d8148602ddcb31584fe20bf8ddc1025c0a3d50d577f |
+| `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living | 2026-06-29 17:38:36 | sha256:7570cd18a27b44de8deb8acaafb9b6dfee263920999975cbcd5e3c43b4169d51 |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living | 2026-06-29 11:58:33 | sha256:af7a994e86157842efd5ad93459c19c8fa811a4b523ea3585a63bb2172aa67d2 |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living | 2026-06-29 11:58:33 | sha256:cfe3b83c41d9006940c3f5388dc6479abeeffb1da0791db4e9850a2bdaa394f8 |
 | `nrpy/equations/basis_transforms/jacobians.py` | living | 2026-06-29 11:58:33 | sha256:108739db4e1643d56a42fe867c17544be49858effef7be759bee798ac36c03f7 |
