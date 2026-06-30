@@ -14,7 +14,7 @@ import sys
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Deque, Dict, List, Optional, Set, Tuple
+from typing import Deque, Dict, List, Match, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -143,7 +143,7 @@ def _mask_code_fences(text: str) -> str:
     :return: Text with fenced-code characters replaced by spaces.
     """
 
-    def repl(match: re.Match[str]) -> str:
+    def repl(match: Match[str]) -> str:
         return "".join("\n" if ch == "\n" else " " for ch in match.group(0))
 
     return re.sub(r"```.*?```", repl, text, flags=re.DOTALL)
