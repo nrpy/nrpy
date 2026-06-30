@@ -36,7 +36,6 @@ Retained eigensolver sources:
 
 Retained internal headers:
 - `*.h`
-- `*.h`
 - `blaslapack_private.h`
 
 Deliberately removed:

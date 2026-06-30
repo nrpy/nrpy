@@ -28,7 +28,7 @@ Author: Ralston Graves
         ralstonkgraves **at** gmail **dot** com
 """
 
-from typing import Dict, Optional, Sequence, Union
+from typing import Sequence, Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -62,60 +62,6 @@ _SPECTRE_SPIN_COORD_COVARIANT_GFS = (
     "SE_XD0",
     "SE_XD1",
 )
-
-
-def _register_private_spectre_spin_gridfunctions() -> (
-    Dict[str, Optional[gri.GridFunctionType]]
-):
-    """
-    Temporarily register spin-only scratch gridfunctions for FD codegen.
-
-    :return: Saved global gridfunction registrations for later restoration.
-    """
-    saved_gfs = {
-        gf_name: gri.glb_gridfcs_dict.get(gf_name)
-        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
-    }
-    for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
-        gri.glb_gridfcs_dict.pop(gf_name, None)
-
-    _ = gri.register_gridfunctions_for_single_rank2(
-        "SE_qDD",
-        symmetry="sym01",
-        dimension=2,
-        group="AUX",
-        gf_array_name="spectre_spin_gfs",
-    )
-    _ = gri.register_gridfunctions_for_single_rank1(
-        "SE_XD",
-        dimension=2,
-        group="AUX",
-        gf_array_name="spectre_spin_gfs",
-    )
-    _ = gri.register_gridfunctions_for_single_rank1(
-        "zU",
-        dimension=3,
-        group="AUX",
-        gf_array_name="spectre_spin_gfs",
-    )
-    return saved_gfs
-
-
-def _restore_private_spectre_spin_gridfunctions(
-    saved_gfs: Dict[str, Optional[gri.GridFunctionType]],
-) -> None:
-    """
-    Remove temporary spin scratch gridfunctions from the global registry.
-
-    :param saved_gfs: Gridfunction registrations to restore.
-    """
-    for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
-        saved_gf = saved_gfs[gf_name]
-        if saved_gf is None:
-            gri.glb_gridfcs_dict.pop(gf_name, None)
-        else:
-            gri.glb_gridfcs_dict[gf_name] = saved_gf
-
 
 def _c_array(values: Sequence[float]) -> str:
     return ", ".join(f"{value:.17e}" for value in values)
@@ -1479,122 +1425,148 @@ def register_CFunction_diagnostics_spectre_spin(
     ]
 
     # Step 2: Temporarily register spin scratch symbols for FD codegen only.
-    saved_spectre_spin_gfs = _register_private_spectre_spin_gridfunctions()
-
-    gf_assignments = spin_calc.get_gridfunction_assignments(include_flux_density=False)
-    gf_names = [str(sym) for sym in gf_assignments.keys()]
-
-    lhss_precompute = [
-        gri.BHaHGridFunction.access_gf(gf_name, gf_array_name="spectre_spin_gfs")
-        for gf_name in gf_names
-    ]
-    rhss_precompute = list(gf_assignments.values())
-    gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
-
-    parity_conditions_rank2 = {
-        (0, 0): 4,
-        (0, 1): 5,
-        (0, 2): 6,
-        (1, 1): 7,
-        (1, 2): 8,
-        (2, 2): 9,
+    saved_spectre_spin_gfs = {
+        gf_name: gri.glb_gridfcs_dict.get(gf_name)
+        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
     }
-    parity_entries = []
-    for gf_name, gf_macro in zip(gf_names, gf_macros):
-        gf = gri.glb_gridfcs_dict[gf_name]
-        if gf.name in _SPECTRE_SPIN_COORD_COVARIANT_GFS:
-            # These surface coordinate-basis covariant fields are transformed
-            # with bc->deriv_jacobian in the custom ghost-fill helper below.
-            parity_value = 0
-        elif gf.rank == 0:
-            parity_value = 0
-        elif gf.rank == 1:
-            parity_value = int(gf.name[-1]) + 1
-        elif gf.rank == 2:
-            parity_value = parity_conditions_rank2[(int(gf.name[-2]), int(gf.name[-1]))]
-        else:
-            raise ValueError(
-                f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
-            )
-        parity_entries.append(f"  [{gf_macro}] = {parity_value},")
-    parity_table_entries = "\n".join(parity_entries)
-    selected_precompute_gfs = ", ".join(gf_macros)
-    scratch_gf_defines = "\n".join(
-        f"#define {gf_name.upper()}GF {idx}"
-        for idx, gf_name in enumerate(_SPECTRE_SPIN_SCRATCH_GFS)
-    )
+    try:
+        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
+            gri.glb_gridfcs_dict.pop(gf_name, None)
 
-    # Step 3: Generate C code for intermediate surface fields.
-    precompute_c_code = ccg.c_codegen(
-        rhss_precompute,
-        lhss_precompute,
-        enable_fd_codegen=True,
-        enable_fd_functions=enable_fd_functions,
-    )
+        _ = gri.register_gridfunctions_for_single_rank2(
+            "SE_qDD",
+            symmetry="sym01",
+            dimension=2,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
+        _ = gri.register_gridfunctions_for_single_rank1(
+            "SE_XD",
+            dimension=2,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
+        _ = gri.register_gridfunctions_for_single_rank1(
+            "zU",
+            dimension=3,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
 
-    # Step 4: Retrieve the dictionary of all per-point integrands.
-    integrands_dict = spin_calc.get_public_integrands()
+        gf_assignments = spin_calc.get_gridfunction_assignments(include_flux_density=False)
+        gf_names = [str(sym) for sym in gf_assignments.keys()]
 
-    # Step 5: Extract the symbolic expressions we need to integrate.
-    # According to the SpECTRESpinEstimate documentation, we need to integrate:
-    # - 1 (for the Area A)
-    # - x^i (for the centroid XU)
-    # - R (for R0)
-    # - x^i * R (for XRU)
-    # - Omega (for O0)
-    # - x^i * Omega (for XOU)
-    # - z_alpha * Omega (for ZOU)
-    # - |Omega| (for Oabs, used in the near-zero policy)
+        lhss_precompute = [
+            gri.BHaHGridFunction.access_gf(gf_name, gf_array_name="spectre_spin_gfs")
+            for gf_name in gf_names
+        ]
+        rhss_precompute = list(gf_assignments.values())
+        gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
 
-    # Note: The 'integrand' is the quantity 'f' in ∮ f dA.
-    # The differential area element is dA = sqrt(q) * weights * dθ * dφ.
-    # We will pass sqrt(q) to c_codegen as 'area_density' and handle the
-    # weights and coordinate steps in the C code loop.
+        parity_conditions_rank2 = {
+            (0, 0): 4,
+            (0, 1): 5,
+            (0, 2): 6,
+            (1, 1): 7,
+            (1, 2): 8,
+            (2, 2): 9,
+        }
+        parity_entries = []
+        for gf_name, gf_macro in zip(gf_names, gf_macros):
+            gf = gri.glb_gridfcs_dict[gf_name]
+            if gf.name in _SPECTRE_SPIN_COORD_COVARIANT_GFS:
+                # These surface coordinate-basis covariant fields are transformed
+                # with bc->deriv_jacobian in the custom ghost-fill helper below.
+                parity_value = 0
+            elif gf.rank == 0:
+                parity_value = 0
+            elif gf.rank == 1:
+                parity_value = int(gf.name[-1]) + 1
+            elif gf.rank == 2:
+                parity_value = parity_conditions_rank2[(int(gf.name[-2]), int(gf.name[-1]))]
+            else:
+                raise ValueError(
+                    f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
+                )
+            parity_entries.append(f"  [{gf_macro}] = {parity_value},")
+        parity_table_entries = "\n".join(parity_entries)
+        selected_precompute_gfs = ", ".join(gf_macros)
+        scratch_gf_defines = "\n".join(
+            f"#define {gf_name.upper()}GF {idx}"
+            for idx, gf_name in enumerate(_SPECTRE_SPIN_SCRATCH_GFS)
+        )
 
-    area_density = integrands_dict["area_density"]
+        # Step 3: Generate C code for intermediate surface fields.
+        precompute_c_code = ccg.c_codegen(
+            rhss_precompute,
+            lhss_precompute,
+            enable_fd_codegen=True,
+            enable_fd_functions=enable_fd_functions,
+        )
 
-    # List of all symbolic quantities to be evaluated inside the loop
-    integrand_c_vars = [
-        "const REAL area_density",
-        "const REAL A_integrand",
-        "const REAL XU0_integrand",
-        "const REAL XU1_integrand",
-        "const REAL XU2_integrand",
-        "const REAL R0_integrand",
-        "const REAL XRU0_integrand",
-        "const REAL XRU1_integrand",
-        "const REAL XRU2_integrand",
-        "const REAL O0_integrand",
-        "const REAL XOU0_integrand",
-        "const REAL XOU1_integrand",
-        "const REAL XOU2_integrand",
-        "const REAL ZOU0_integrand",
-        "const REAL ZOU1_integrand",
-        "const REAL ZOU2_integrand",
-        "const REAL Oabs_integrand",
-    ]
+        # Step 4: Retrieve the dictionary of all per-point integrands.
+        integrands_dict = spin_calc.get_public_integrands()
 
-    sympy_expressions = [
-        area_density,
-        integrands_dict["area_integrand"],  # This is just 1.
-        *integrands_dict["measurement_frame_xU"],
-        integrands_dict["ricci_scalar"],
-        *integrands_dict["x_times_R_integrand"],
-        integrands_dict["spin_function"],
-        *integrands_dict["xOmega_momentU"],
-        *integrands_dict["zOmegaU"],
-        integrands_dict["abs_omega_integrand"],
-    ]
+        # Step 5: Extract the symbolic expressions we need to integrate.
+        # According to the SpECTRESpinEstimate documentation, we need to integrate:
+        # - 1 (for the Area A)
+        # - x^i (for the centroid XU)
+        # - R (for R0)
+        # - x^i * R (for XRU)
+        # - Omega (for O0)
+        # - x^i * Omega (for XOU)
+        # - z_alpha * Omega (for ZOU)
+        # - |Omega| (for Oabs, used in the near-zero policy)
 
-    ricci_c_code = ccg.c_codegen(
-        [area_density, integrands_dict["ricci_scalar"]],
-        ["const REAL spin_area_density", "const REAL spin_ricci_scalar"],
-        enable_fd_codegen=True,
-        enable_fd_functions=enable_fd_functions,
-    )
-    fd_order = int(par.parval_from_str("finite_difference::fd_order"))
+        # Note: The 'integrand' is the quantity 'f' in ∮ f dA.
+        # The differential area element is dA = sqrt(q) * weights * dθ * dφ.
+        # We will pass sqrt(q) to c_codegen as 'area_density' and handle the
+        # weights and coordinate steps in the C code loop.
 
-    prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
+        area_density = integrands_dict["area_density"]
+
+        # List of all symbolic quantities to be evaluated inside the loop
+        integrand_c_vars = [
+            "const REAL area_density",
+            "const REAL A_integrand",
+            "const REAL XU0_integrand",
+            "const REAL XU1_integrand",
+            "const REAL XU2_integrand",
+            "const REAL R0_integrand",
+            "const REAL XRU0_integrand",
+            "const REAL XRU1_integrand",
+            "const REAL XRU2_integrand",
+            "const REAL O0_integrand",
+            "const REAL XOU0_integrand",
+            "const REAL XOU1_integrand",
+            "const REAL XOU2_integrand",
+            "const REAL ZOU0_integrand",
+            "const REAL ZOU1_integrand",
+            "const REAL ZOU2_integrand",
+            "const REAL Oabs_integrand",
+        ]
+
+        sympy_expressions = [
+            area_density,
+            integrands_dict["area_integrand"],  # This is just 1.
+            *integrands_dict["measurement_frame_xU"],
+            integrands_dict["ricci_scalar"],
+            *integrands_dict["x_times_R_integrand"],
+            integrands_dict["spin_function"],
+            *integrands_dict["xOmega_momentU"],
+            *integrands_dict["zOmegaU"],
+            integrands_dict["abs_omega_integrand"],
+        ]
+
+        ricci_c_code = ccg.c_codegen(
+            [area_density, integrands_dict["ricci_scalar"]],
+            ["const REAL spin_area_density", "const REAL spin_ricci_scalar"],
+            enable_fd_codegen=True,
+            enable_fd_functions=enable_fd_functions,
+        )
+        fd_order = int(par.parval_from_str("finite_difference::fd_order"))
+
+        prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
 #define NUM_SPECTRE_SPIN_SCRATCH_GFS {len(_SPECTRE_SPIN_SCRATCH_GFS)}
 {scratch_gf_defines}
 
@@ -1807,8 +1779,8 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
 }} // END FUNCTION: spectre_spin_check_finite_scratch_gfs
 """ + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
 
-    # Step 6: Construct the body of the C function.
-    body = r"""
+        # Step 6: Construct the body of the C function.
+        body = r"""
     const int grid=0;
     const params_struct *restrict params = &griddata[grid].params;
     REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
@@ -1857,8 +1829,8 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
             (void)xx1;
             for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
 """
-    body += precompute_c_code
-    body += rf"""
+        body += precompute_c_code
+        body += rf"""
             }} // END LOOP: for i0 over active radial horizon-grid slabs
         }} // END LOOP: for i1 over physical theta horizon-grid points
     }} // END LOOP: for i2 over physical phi horizon-grid points
@@ -1932,17 +1904,17 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
             (void)xx1;
             for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {{
 """
-    # Step 7: Generate C code for all integrands and the area density.
-    # enable_fd_codegen=True tells c_codegen to automatically handle all
-    # finite difference derivatives of gridfunctions.
-    body += ccg.c_codegen(
-        sympy_expressions,
-        integrand_c_vars,
-        enable_fd_codegen=True,
-        enable_fd_functions=enable_fd_functions,
-    )
+        # Step 7: Generate C code for all integrands and the area density.
+        # enable_fd_codegen=True tells c_codegen to automatically handle all
+        # finite difference derivatives of gridfunctions.
+        body += ccg.c_codegen(
+            sympy_expressions,
+            integrand_c_vars,
+            enable_fd_codegen=True,
+            enable_fd_functions=enable_fd_functions,
+        )
 
-    body += r"""
+        body += r"""
                 // The differential area element, excluding coordinate steps (dθ, dφ)
                 const REAL dA_unscaled = area_density * weight1 * weight2;
                 
@@ -2052,7 +2024,13 @@ bhahaha_diags->spin_chi_z_spectre = chi_U[2];
 free(spectre_spin_gfs);
 return BHAHAHA_SUCCESS;
 """
-    _restore_private_spectre_spin_gridfunctions(saved_spectre_spin_gfs)
+    finally:
+        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
+            saved_gf = saved_spectre_spin_gfs[gf_name]
+            if saved_gf is None:
+                gri.glb_gridfcs_dict.pop(gf_name, None)
+            else:
+                gri.glb_gridfcs_dict[gf_name] = saved_gf
     formatted_body = clang_format(body)
 
     # Format and register the C function using the standard helper.
