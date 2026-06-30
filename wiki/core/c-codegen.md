@@ -37,8 +37,9 @@ Helper pages own the lower-level transformation mechanics used by this interface
 
 ## See Also
 
-- [Core APIs](index.md)
-- [Finite Difference](finite-difference.md)
-- [C Function Registry](c-function-registry.md)
-- [CSE And Printer Support](helpers/cse-and-printer-support.md)
-- [SIMD And Intrinsic Support](helpers/simd-and-intrinsic-support.md)
+- Parent: [Core APIs](index.md)
+- Depends on: [Finite Difference](finite-difference.md)
+- Depends on: [CSE And Printer Support](helpers/cse-and-printer-support.md)
+- Depends on: [SIMD And Intrinsic Support](helpers/simd-and-intrinsic-support.md)
+- Contrasts with: [Python Codegen](python-codegen.md)
+- See also: [C Function Registry](c-function-registry.md)

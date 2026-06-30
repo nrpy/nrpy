@@ -38,6 +38,30 @@ Source status is either `frozen` for preserved snapshots and selected evidence
 or `living` for files that may change. Ingest state is `registered`, `partial`,
 or `ingested`.
 
+## Support Pages
+
+Support pages keep the wiki compounding without changing router semantics:
+
+- `wiki/catalog.md` is the global content catalog. It lists pages with type,
+  one-line answer, route, query terms, status, reconciliation date, source
+  count, and concept-hub candidacy. It does not replace reading leaves.
+- `wiki/log.md` is append-only chronological memory for durable KB operations:
+  ingest, query filing, lint, source drift, reconciliation, page movement, and
+  other maintenance decisions. It must stay free of chat transcripts, scratch
+  logs, token reports, and planning dumps.
+- `wiki/source-map.md` records source dependencies: source or aggregate,
+  source authority tier, ingest status, dependent pages, covered subpaths,
+  known gaps, last check, and next action.
+- `wiki/contradictions.md` records contested or stale claims, competing
+  sources, authority decisions, affected pages, and resolution state.
+
+`index.md` files remain router-only. Do not turn router indexes into global
+content catalogs.
+
+Every durable KB operation updates `wiki/log.md`. Every page add, move, or
+delete updates `wiki/catalog.md`. Every durable source dependency change
+updates `wiki/source-map.md`.
+
 ## Page Contract
 
 Leaves use this exact section order: title, two-line blockquote header,
@@ -51,6 +75,20 @@ Each leaf must cite at least one source. `See Also` must include the parent
 router and at least one neighboring wiki page; the header `Up:` link does not
 count.
 
+Use typed `See Also` labels when the relation is known:
+
+- `Parent:` owning router or parent concept.
+- `Depends on:` prerequisite concept, API, or workflow.
+- `Implements:` page, source, or workflow this page realizes.
+- `Validated by:` tests, examples, CI, or evidence pages.
+- `Example:` worked example or generated application that demonstrates the
+  page.
+- `Contrasts with:` related page that differs in an important way.
+- `See also:` useful neighbor when a stronger typed relation does not apply.
+
+New or substantially edited leaves should use typed labels for non-parent
+links when doing so improves traversal.
+
 ## Citation Rules
 
 Code citations use a relative path plus a stable symbol, function, class,
@@ -58,6 +96,41 @@ macro, or header name. Documentation citations use a relative path plus a
 stable heading or document role. Generated line numbers are not stable
 authorities. Every cited source belongs in `raw/SOURCES.md` directly or through
 a clearly named aggregate source row.
+
+Source authority tiers are:
+
+- `primary-code`: repository source code, configuration, and checked-in build
+  inputs.
+- `primary-test`: repository tests and validation harnesses.
+- `generated-evidence`: selected frozen generated files, run outputs, or build
+  evidence deliberately registered as evidence.
+- `primary-doc`: repository documentation and preserved root instructions.
+- `external-spec`: stable external specification or upstream documentation
+  used for a durable KB claim.
+- `background`: orientation material that informs structure or interpretation
+  but does not decide repository facts.
+
+Default contradiction precedence is `primary-code` > `primary-test` >
+`generated-evidence` > `primary-doc` > `external-spec` > `background`.
+Exceptions are allowed only with source-specific reasoning in `wiki/log.md`
+and, when a claim is contested, `wiki/contradictions.md`.
+
+Avoid per-sentence citations. Add inline source tags only for high-risk claims:
+public APIs, generated-output boundaries, CI guarantees, source authority
+decisions, contradiction decisions, and claims where a nearby source paragraph
+could plausibly be misread.
+
+## Query Filing
+
+One-off answers do not need filing. File durable answers when they span three
+or more leaves, resolve recurring ambiguity, compare subsystems, record a
+gotcha, or change how future queries should route.
+
+File durable single-topic synthesis into the owning leaf. Create a new leaf
+only for a durable narrow topic with a clear owning branch, or for a
+cross-branch synthesis that cannot cleanly live under an existing branch. In
+all cases, update neighboring links, `wiki/catalog.md`, `wiki/log.md`, and
+`wiki/source-map.md` when source dependencies change.
 
 ## Router Rules
 

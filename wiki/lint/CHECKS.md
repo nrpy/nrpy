@@ -26,11 +26,30 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 
 - Root `AGENTS.md` is the only root-level KB document.
 - Every content-bearing `wiki/` directory has an `index.md` router, except the
-  allowed `wiki/lint/` utility directory.
+  allowed `wiki/lint/` utility directory or another explicit schema exemption.
+- Every new `wiki/` directory with content pages has an `index.md` router in
+  the same change, unless explicitly exempted by [Schema](../SCHEMA.md).
 - No router has a `Detail` section.
 - Routers generally have no `Sources` section and carry no unique durable
   implementation facts.
 - Routers link only to immediate children plus parent, root, or global hubs.
+
+## Compounding Memory Checks
+
+- Every `wiki/**/*.md` page appears exactly once in [catalog.md](../catalog.md),
+  including routers, leaves, and governance/support pages.
+- Catalog rows are one-line navigation aids only; they do not replace leaf
+  reading, leaf `Sources`, or source-backed detail.
+- Every durable ingest, query filing, lint pass, reconciliation, source-drift
+  decision, page move, page add, or page delete has a parseable
+  [log.md](../log.md) entry.
+- `wiki/log.md` contains decisions and checks only; it has no chat transcripts,
+  scratch output, token reports, planning dumps, or routine lint reports.
+- Every glossary term has an owner page link, an explicit external/background
+  marker, or a matching concept-hub candidate row in `wiki/catalog.md`.
+- [source-map.md](../source-map.md) covers seeded high-value dependencies,
+  especially exact cited files and aggregate `partial` rows from
+  [raw/SOURCES.md](../../raw/SOURCES.md).
 
 ## Leaf Checks
 

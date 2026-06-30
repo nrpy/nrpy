@@ -196,9 +196,9 @@ requested extraction.
 
 ## See Also
 
-- [BHaH](index.md)
-- [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
-- [Initial Data](../../equations/general-relativity/initial-data.md)
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
-- [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
+- Parent: [BHaH](index.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [Initial Data](../../equations/general-relativity/initial-data.md)
+- Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
+- Depends on: [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
+- See also: [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)

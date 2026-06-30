@@ -75,10 +75,10 @@ Split into separate parameter and gridfunction leaves is deferred unless this le
 
 ## See Also
 
-- [Core APIs](index.md)
-- [Indexed Expressions](indexed-expressions.md)
-- [Finite Difference](finite-difference.md)
-- [C Codegen](c-codegen.md)
-- [Reference Metrics](reference-metrics.md)
-- [Symbolic Expression Utilities](helpers/symbolic-expression-utilities.md)
-- [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)
+- Parent: [Core APIs](index.md)
+- Depends on: [Indexed Expressions](indexed-expressions.md)
+- Depends on: [Symbolic Expression Utilities](helpers/symbolic-expression-utilities.md)
+- See also: [C Codegen](c-codegen.md)
+- See also: [Finite Difference](finite-difference.md)
+- See also: [Reference Metrics](reference-metrics.md)
+- See also: [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)

@@ -35,8 +35,8 @@ Finite-difference pages own derivative naming, stencil construction, memory-read
 
 ## See Also
 
-- [Core APIs](index.md)
-- [C Codegen](c-codegen.md)
-- [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
-- [CSE And Printer Support](helpers/cse-and-printer-support.md)
-- [SIMD And Intrinsic Support](helpers/simd-and-intrinsic-support.md)
+- Parent: [Core APIs](index.md)
+- See also: [C Codegen](c-codegen.md)
+- Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- Depends on: [CSE And Printer Support](helpers/cse-and-printer-support.md)
+- Depends on: [SIMD And Intrinsic Support](helpers/simd-and-intrinsic-support.md)

@@ -66,10 +66,10 @@ symbols; this page owns only the common processing and comparison mechanics.
 
 ## See Also
 
-- [Equations](index.md)
-- [BSSN Family](general-relativity/bssn-family.md)
-- [GRHD](grhd.md)
-- [Wave Equation](wave-equation.md)
-- [SEOBNR And BOB](seobnr/index.md)
-- [Geometry And Special-Function Support](geometry-and-special-function-support.md)
-- [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Parent: [Equations](index.md)
+- Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Example: [BSSN Family](general-relativity/bssn-family.md)
+- Example: [GRHD](grhd.md)
+- Example: [Wave Equation](wave-equation.md)
+- Example: [SEOBNR And BOB](seobnr/index.md)
+- Example: [Geometry And Special-Function Support](geometry-and-special-function-support.md)

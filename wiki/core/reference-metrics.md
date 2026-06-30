@@ -39,7 +39,7 @@ In the module `__main__` validation path, doctests run first. Then every entry i
 
 ## See Also
 
-- [Core APIs](index.md)
-- [Indexed Expressions](indexed-expressions.md)
-- [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
-- [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Parent: [Core APIs](index.md)
+- Depends on: [Indexed Expressions](indexed-expressions.md)
+- Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)

@@ -30,7 +30,7 @@ This page owns the public `py_codegen()` and `PyCodeGen` contract. Helper pages 
 
 ## See Also
 
-- [Core APIs](index.md)
-- [C Codegen](c-codegen.md)
-- [CSE And Printer Support](helpers/cse-and-printer-support.md)
-- [JAX Project Generation Lifecycle](../infrastructures/jax/project-generation-lifecycle.md)
+- Parent: [Core APIs](index.md)
+- Depends on: [CSE And Printer Support](helpers/cse-and-printer-support.md)
+- Contrasts with: [C Codegen](c-codegen.md)
+- See also: [JAX Project Generation Lifecycle](../infrastructures/jax/project-generation-lifecycle.md)

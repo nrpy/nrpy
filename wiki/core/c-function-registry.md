@@ -35,8 +35,8 @@ Einstein Toolkit metadata is stored directly on the `CFunction`: `ET_thorn_name`
 
 ## See Also
 
-- [Core APIs](index.md)
-- [C Codegen](c-codegen.md)
-- [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
-- [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md)
-- [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)
+- Parent: [Core APIs](index.md)
+- Depends on: [C Codegen](c-codegen.md)
+- Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
+- See also: [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md)
+- See also: [Parallel Codegen Orchestration](helpers/parallel-codegen-orchestration.md)

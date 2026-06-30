@@ -111,8 +111,8 @@ aggregate ingestion is not proven complete for all future files.
 
 ## See Also
 
-- [Examples](index.md)
-- [First Wave Equation Run](first-wave-equation-run.md)
-- [Black Hole Evolution](black-hole-evolution.md)
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
-- [Generated Project CI](../validation/generated-project-ci.md)
+- Parent: [Examples](index.md)
+- Depends on: [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
+- Validated by: [Generated Project CI](../validation/generated-project-ci.md)
+- Example: [First Wave Equation Run](first-wave-equation-run.md)
+- Example: [Black Hole Evolution](black-hole-evolution.md)

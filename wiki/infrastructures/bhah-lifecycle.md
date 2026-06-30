@@ -24,6 +24,6 @@ pages, not on this compatibility page.
 
 ## See Also
 
-- [Infrastructures](index.md)
-- [BHaH](bhah/index.md)
-- [Lifecycle And Project Assembly](bhah/lifecycle-and-project-assembly.md)
+- Parent: [Infrastructures](index.md)
+- See also: [BHaH](bhah/index.md)
+- See also: [Lifecycle And Project Assembly](bhah/lifecycle-and-project-assembly.md)

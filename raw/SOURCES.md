@@ -316,6 +316,7 @@ row above.
 
 | Source | Provenance | Status | Accessed | Ingest | Notes |
 | --- | --- | --- | --- | --- | --- |
+| `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`, pinned to revision `ac46de1ad27f92b28ac95459c782c07f6b8c964a`. | frozen | 2026-06-30 | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers, index/log, and ingest/query/lint workflows. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 2026-06-29 | partial | NRPyElliptic background for hyperbolic relaxation and conformally flat binary-puncture initial data. |
 | `https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html` | Intel Intrinsics Guide landing page. | living | 2026-06-29 | partial | SSE, AVX, AVX512, and intrinsic-family terminology for SIMD helper documentation. |
 | `https://docs.nvidia.com/cuda/cuda-programming-guide/index.html` | NVIDIA CUDA C++ Programming Guide. | living | 2026-06-29 | partial | CUDA C++ terminology for SIMD, CUDA header, and GPU kernel helper documentation. |

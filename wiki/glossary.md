@@ -15,7 +15,7 @@ pages where a first-pass owner exists.
 | SymPy | Python symbolic algebra package used to build expressions before C generation; see [Symbolic Codegen Lifecycle](architecture/symbolic-codegen-lifecycle.md). |
 | generated C | C emitted by NRPy generators and infrastructure rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
 | BHaH | NRPy's standalone generated-application infrastructure for BH@H-style workflows; see [BHaH Lifecycle](infrastructures/bhah-lifecycle.md). |
-| BH@H | BlackHoles@Home, the single-patch numerical relativity workflow represented by current BHaH examples. |
+| BH@H | BlackHoles@Home, the single-patch numerical relativity workflow represented by current BHaH examples; see [Black Hole Evolution](examples/black-hole-evolution.md). |
 | BHaHAHA | Apparent-horizon finding library integrated by BHaH black-hole workflows; see [BHaHAHA Horizon Runtime](infrastructures/bhah/bhahaha-horizon-runtime.md). |
 | CFunction | Python representation of a generated C function; see [C Function Registry](core/c-function-registry.md). |
 | CFunction_dict | Global registry mapping generated function names to `CFunction` objects; see [C Function Registry](core/c-function-registry.md). |
@@ -47,7 +47,7 @@ pages where a first-pass owner exists.
 | GeneralRFM | General reference-metric support including fisheye coordinate maps; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
 | Fishbone-Moncrief | Relativistic torus initial-data model implemented under GR equation modules; see [Fishbone-Moncrief](equations/general-relativity/fishbone-moncrief.md). |
 | spin-weighted spherical harmonic | Special-function helper implemented with the Goldberg formula; see [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md). |
-| Method of Lines | Timestepping pattern used by NRPy infrastructures; ETLegacy registers evolved and RHS groups with the Einstein Toolkit MoL thorn, while BHaH examples use MoL infrastructure for standalone workflows. |
+| Method of Lines | Timestepping pattern used by NRPy infrastructures; ETLegacy registers evolved and RHS groups with the Einstein Toolkit MoL thorn, while BHaH examples use MoL infrastructure for standalone workflows; see [MoL Time Integration](infrastructures/bhah/mol-time-integration.md). |
 | trusted values | Generated reference dictionaries used to validate symbolic expressions; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
 | trusted string files | Caller-derived text files written or compared by `validate_strings()` for generated string output; see [Maintenance And Validation Helpers](core/helpers/maintenance-and-validation-helpers.md). |
 | trusted expression dictionaries | Generated symbolic-expression dictionaries processed by `validate_expressions`, distinct from trusted string files; see [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md). |
