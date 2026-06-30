@@ -16,7 +16,7 @@ pages where a first-pass owner exists.
 | generated C | C emitted by NRPy generators and infrastructure rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
 | BHaH | NRPy's standalone generated-application infrastructure for BH@H-style workflows; see [BHaH Lifecycle](infrastructures/bhah-lifecycle.md). |
 | BH@H | BlackHoles@Home, the single-patch numerical relativity workflow represented by current BHaH examples. |
-| BHaHAHA | Apparent-horizon finding library integrated by black-hole workflows. |
+| BHaHAHA | Apparent-horizon finding library integrated by BHaH black-hole workflows; see [BHaHAHA Horizon Runtime](infrastructures/bhah/bhahaha-horizon-runtime.md). |
 | CFunction | Python representation of a generated C function; see [C Function Registry](core/c-function-registry.md). |
 | CFunction_dict | Global registry mapping generated function names to `CFunction` objects; see [C Function Registry](core/c-function-registry.md). |
 | register_CFunction | API that registers generated C functions; see [C Function Registry](core/c-function-registry.md). |
