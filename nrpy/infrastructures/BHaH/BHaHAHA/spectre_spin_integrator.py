@@ -28,7 +28,7 @@ Author: Ralston Graves
         ralstonkgraves **at** gmail **dot** com
 """
 
-from typing import Sequence, Union
+from typing import Union
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -64,27 +64,425 @@ _SPECTRE_SPIN_COORD_COVARIANT_GFS = (
 )
 
 
-def _c_array(values: Sequence[float]) -> str:
-    return ", ".join(f"{value:.17e}" for value in values)
+def register_CFunction_diagnostics_spectre_spin(
+    CoordSystem: str = "Spherical",
+    enable_rfm_precompute: bool = False,
+    enable_fd_functions: bool = False,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register a C function that computes the SpECTRE-style spin vector.
 
+    :param CoordSystem: The coordinate system to use, defaults to "Spherical".
+    :param enable_rfm_precompute: Whether to enable RFM precompute.
+    :param enable_fd_functions: Whether to enable finite-difference functions.
+    :return: An NRPyEnv_type object if registration is successful, otherwise None.
+    :raises ValueError: If a precompute gridfunction has an unsupported rank.
 
-def _spectre_spin_potential_solver_prefunc(fd_order: int, ricci_c_code: str) -> str:
-    supported_fd_orders = (2, 4, 6, 8)
-    if fd_order not in supported_fd_orders:
+    """
+    if par.parval_from_str("fp_type") != "double":
         raise ValueError(
-            f"SpECTRE spin-potential solve supports centered fd_order in {list(supported_fd_orders)}, got {fd_order}"
+            "SpECTRE spin diagnostics require fp_type=double because the "
+            "runtime eigensolver calls double-precision PRIMME (dprimme)."
         )
 
-    stencil_width = fd_order + 1
-    fd_matrix_inverse = fin.setup_FD_matrix__return_inverse(stencil_width, 0)
-    first_deriv_coeffs = [float(fd_matrix_inverse[i, 1]) for i in range(stencil_width)]
-    second_deriv_coeffs = [
-        float(2 * fd_matrix_inverse[i, 2]) for i in range(stencil_width)
-    ]
-    radius = fd_order // 2
-    max_row_nnz = 2 * (2 * radius + 1) ** 2 + 4 * (2 * radius + 1)
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(
+            f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}",
+            locals(),
+        )
+        return None
 
-    template = r"""
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "akv_primme.h"]
+    desc = r"""
+    Compute the SpECTRE-style dimensionless spin vector diagnostic and store it in the diagnostics struct.
+    """
+    cfunc_type = "int"
+    cfunc_name = "diagnostics_spectre_spin"
+    params = (
+        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
+    )
+
+    # Step 1: Get an instance of the symbolic calculator.
+    spin_calc = SpECTRESpinEstimate[
+        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
+    ]
+
+    # Step 2: Temporarily register spin scratch symbols for FD codegen only.
+    saved_spectre_spin_gfs = {
+        gf_name: gri.glb_gridfcs_dict.get(gf_name)
+        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
+    }
+    try:
+        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
+            gri.glb_gridfcs_dict.pop(gf_name, None)
+
+        _ = gri.register_gridfunctions_for_single_rank2(
+            "SE_qDD",
+            symmetry="sym01",
+            dimension=2,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
+        _ = gri.register_gridfunctions_for_single_rank1(
+            "SE_XD",
+            dimension=2,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
+        _ = gri.register_gridfunctions_for_single_rank1(
+            "zU",
+            dimension=3,
+            group="AUX",
+            gf_array_name="spectre_spin_gfs",
+        )
+
+        gf_assignments = spin_calc.get_gridfunction_assignments(
+            include_flux_density=False
+        )
+        gf_names = [str(sym) for sym in gf_assignments.keys()]
+
+        lhss_precompute = [
+            gri.BHaHGridFunction.access_gf(gf_name, gf_array_name="spectre_spin_gfs")
+            for gf_name in gf_names
+        ]
+        rhss_precompute = list(gf_assignments.values())
+        gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
+
+        parity_conditions_rank2 = {
+            (0, 0): 4,
+            (0, 1): 5,
+            (0, 2): 6,
+            (1, 1): 7,
+            (1, 2): 8,
+            (2, 2): 9,
+        }
+        parity_entries = []
+        for gf_name, gf_macro in zip(gf_names, gf_macros):
+            gf = gri.glb_gridfcs_dict[gf_name]
+            if gf.name in _SPECTRE_SPIN_COORD_COVARIANT_GFS:
+                # These surface coordinate-basis covariant fields are transformed
+                # with bc->deriv_jacobian in the custom ghost-fill helper below.
+                parity_value = 0
+            elif gf.rank == 0:
+                parity_value = 0
+            elif gf.rank == 1:
+                parity_value = int(gf.name[-1]) + 1
+            elif gf.rank == 2:
+                parity_value = parity_conditions_rank2[
+                    (int(gf.name[-2]), int(gf.name[-1]))
+                ]
+            else:
+                raise ValueError(
+                    f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
+                )
+            parity_entries.append(f"  [{gf_macro}] = {parity_value},")
+        parity_table_entries = "\n".join(parity_entries)
+        selected_precompute_gfs = ", ".join(gf_macros)
+        scratch_gf_defines = "\n".join(
+            f"#define {gf_name.upper()}GF {idx}"
+            for idx, gf_name in enumerate(_SPECTRE_SPIN_SCRATCH_GFS)
+        )
+
+        # Step 3: Generate C code for intermediate surface fields.
+        precompute_c_code = ccg.c_codegen(
+            rhss_precompute,
+            lhss_precompute,
+            enable_fd_codegen=True,
+            enable_fd_functions=enable_fd_functions,
+        )
+
+        # Step 4: Retrieve the dictionary of all per-point integrands.
+        integrands_dict = spin_calc.get_public_integrands()
+
+        # Step 5: Extract the symbolic expressions we need to integrate.
+        # According to the SpECTRESpinEstimate documentation, we need to integrate:
+        # - 1 (for the Area A)
+        # - x^i (for the centroid XU)
+        # - R (for R0)
+        # - x^i * R (for XRU)
+        # - Omega (for O0)
+        # - x^i * Omega (for XOU)
+        # - z_alpha * Omega (for ZOU)
+        # - |Omega| (for Oabs, used in the near-zero policy)
+
+        # Note: The 'integrand' is the quantity 'f' in ∮ f dA.
+        # The differential area element is dA = sqrt(q) * weights * dθ * dφ.
+        # We will pass sqrt(q) to c_codegen as 'area_density' and handle the
+        # weights and coordinate steps in the C code loop.
+
+        area_density = integrands_dict["area_density"]
+
+        # List of all symbolic quantities to be evaluated inside the loop
+        integrand_c_vars = [
+            "const REAL area_density",
+            "const REAL A_integrand",
+            "const REAL XU0_integrand",
+            "const REAL XU1_integrand",
+            "const REAL XU2_integrand",
+            "const REAL R0_integrand",
+            "const REAL XRU0_integrand",
+            "const REAL XRU1_integrand",
+            "const REAL XRU2_integrand",
+            "const REAL O0_integrand",
+            "const REAL XOU0_integrand",
+            "const REAL XOU1_integrand",
+            "const REAL XOU2_integrand",
+            "const REAL ZOU0_integrand",
+            "const REAL ZOU1_integrand",
+            "const REAL ZOU2_integrand",
+            "const REAL Oabs_integrand",
+        ]
+
+        sympy_expressions = [
+            area_density,
+            integrands_dict["area_integrand"],  # This is just 1.
+            *integrands_dict["measurement_frame_xU"],
+            integrands_dict["ricci_scalar"],
+            *integrands_dict["x_times_R_integrand"],
+            integrands_dict["spin_function"],
+            *integrands_dict["xOmega_momentU"],
+            *integrands_dict["zOmegaU"],
+            integrands_dict["abs_omega_integrand"],
+        ]
+
+        ricci_c_code = ccg.c_codegen(
+            [area_density, integrands_dict["ricci_scalar"]],
+            ["const REAL spin_area_density", "const REAL spin_ricci_scalar"],
+            enable_fd_codegen=True,
+            enable_fd_functions=enable_fd_functions,
+        )
+        fd_order = int(par.parval_from_str("finite_difference::fd_order"))
+        supported_fd_orders = (2, 4, 6, 8)
+        if fd_order not in supported_fd_orders:
+            raise ValueError(
+                f"SpECTRE spin-potential solve supports centered fd_order in {list(supported_fd_orders)}, got {fd_order}"
+            )
+
+        fd_radius = fd_order // 2
+        fd_width = fd_order + 1
+        fd_matrix_inverse = fin.setup_FD_matrix__return_inverse(fd_width, 0)
+        fd_first_coeffs = ", ".join(
+            f"{float(fd_matrix_inverse[i, 1]):.17e}" for i in range(fd_width)
+        )
+        fd_second_coeffs = ", ".join(
+            f"{float(2 * fd_matrix_inverse[i, 2]):.17e}" for i in range(fd_width)
+        )
+        max_row_nnz = 2 * fd_width**2 + 4 * fd_width
+
+        prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
+#define NUM_SPECTRE_SPIN_SCRATCH_GFS {len(_SPECTRE_SPIN_SCRATCH_GFS)}
+{scratch_gf_defines}
+
+static const int8_t spectre_spin_scratch_gf_parity[NUM_SPECTRE_SPIN_SCRATCH_GFS] = {{
+{parity_table_entries}
+}};
+
+/**
+ * SE_XD and SE_qDD are surface coordinate-basis covariant components on the
+ * horizon angular grid, not ambient unit-basis tensor components. Therefore
+ * they must be transformed with bc->deriv_jacobian rather than the usual
+ * unit-vector parity table.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param srcpt Source point index in flattened grid storage.
+ * @param src_coord Source angular coordinate index.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Requested source covector component, or zero for unsupported indices.
+ */
+static REAL spectre_spin_src_XD(const REAL *restrict gfs, const int srcpt, const int src_coord,
+                                const size_t spectre_spin_npoints) {{
+  if (src_coord == 1)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD0GF];
+  if (src_coord == 2)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD1GF];
+  return 0.0;
+}} // END FUNCTION: spectre_spin_src_XD
+
+/**
+ * Transform one surface covector component across an inner boundary map.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param[in] bc Inner-boundary source/destination metadata.
+ * @param dst_surface_A Destination surface-coordinate component.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Transformed destination covector component.
+ */
+static REAL spectre_spin_transform_XD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
+                                      const int dst_surface_A, const size_t spectre_spin_npoints) {{
+  const int dst_coord = dst_surface_A + 1; // 0 -> theta, 1 -> phi
+
+  REAL val = 0.0;
+  for (int src_coord = 1; src_coord <= 2; src_coord++) {{
+    const int8_t J = bc->deriv_jacobian[dst_coord][src_coord];
+    if (J != 0)
+      val += (REAL)J * spectre_spin_src_XD(gfs, bc->srcpt, src_coord, spectre_spin_npoints);
+  }} // END LOOP: for src_coord over surface source coordinates
+
+  return val;
+}} // END FUNCTION: spectre_spin_transform_XD
+
+/**
+ * Read one symmetric surface metric component from a source point.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param srcpt Source point index in flattened grid storage.
+ * @param src_coord_A First source angular coordinate index.
+ * @param src_coord_B Second source angular coordinate index.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Requested source metric component, or zero for unsupported indices.
+ */
+static REAL spectre_spin_src_qDD(const REAL *restrict gfs, const int srcpt, const int src_coord_A,
+                                 const int src_coord_B, const size_t spectre_spin_npoints) {{
+  if (src_coord_A == 1 && src_coord_B == 1)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD00GF];
+  if ((src_coord_A == 1 && src_coord_B == 2) || (src_coord_A == 2 && src_coord_B == 1))
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD01GF];
+  if (src_coord_A == 2 && src_coord_B == 2)
+    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD11GF];
+  return 0.0;
+}} // END FUNCTION: spectre_spin_src_qDD
+
+/**
+ * Transform one symmetric surface metric component across an inner boundary map.
+ *
+ * @param[in] gfs Spin diagnostic scratch storage.
+ * @param[in] bc Inner-boundary source/destination metadata.
+ * @param dst_surface_A First destination surface-coordinate component.
+ * @param dst_surface_B Second destination surface-coordinate component.
+ * @param spectre_spin_npoints Number of points in one scratch gridfunction.
+ * @return Transformed destination metric component.
+ */
+static REAL spectre_spin_transform_qDD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
+                                       const int dst_surface_A, const int dst_surface_B,
+                                       const size_t spectre_spin_npoints) {{
+  const int dst_coord_A = dst_surface_A + 1; // 0 -> theta, 1 -> phi
+  const int dst_coord_B = dst_surface_B + 1;
+
+  REAL val = 0.0;
+  for (int src_coord_C = 1; src_coord_C <= 2; src_coord_C++) {{
+    const int8_t JA = bc->deriv_jacobian[dst_coord_A][src_coord_C];
+    if (JA == 0)
+      continue;
+
+    for (int src_coord_D = 1; src_coord_D <= 2; src_coord_D++) {{
+      const int8_t JB = bc->deriv_jacobian[dst_coord_B][src_coord_D];
+      if (JB != 0)
+        val += (REAL)JA * (REAL)JB * spectre_spin_src_qDD(gfs, bc->srcpt, src_coord_C, src_coord_D, spectre_spin_npoints);
+    }} // END LOOP: for src_coord_D over surface source coordinates
+  }} // END LOOP: for src_coord_C over surface source coordinates
+
+  return val;
+}} // END FUNCTION: spectre_spin_transform_qDD
+
+/**
+ * Apply inner boundary conditions to selected spin scratch gridfunctions.
+ *
+ * The spin diagnostic precomputes SE_qDD and SE_XD on physical angular points
+ * before generated finite-difference code differentiates those fields. This
+ * helper fills their angular ghost zones for every active radial horizon slab.
+ *
+ * @param[in] bcstruct Boundary metadata for inner curvilinear points.
+ * @param[in,out] spectre_spin_gfs Spin diagnostic scratch storage.
+ * @param Nxx0 Number of active radial horizon slabs.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param[in] which_gfs Selected spin scratch gridfunction indices.
+ * @param num_gfs Number of selected gridfunctions.
+ * @param[in] scratch_gf_parity Parity table indexed by spin scratch gridfunction.
+ */
+static void apply_inner_bc_for_selected_spectre_spin_gfs(const bc_struct *restrict bcstruct, REAL *restrict spectre_spin_gfs, const int Nxx0,
+                                                         const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+                                                         const int Nxx_plus_2NGHOSTS2, const int *restrict which_gfs, const int num_gfs,
+                                                         const int8_t *restrict scratch_gf_parity) {{
+  const bc_info_struct *bc_info = &bcstruct->bc_info;
+  const size_t spectre_spin_npoints =
+      (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
+
+#pragma omp parallel for collapse(2)
+  for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
+    for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {{
+      const int which_gf = which_gfs[gf_idx];
+      const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
+      const int dstpt = bc->dstpt;
+      const int dst_i0 = dstpt % Nxx_plus_2NGHOSTS0;
+
+      if (dst_i0 < NGHOSTS || dst_i0 >= NGHOSTS + Nxx0)
+        continue;
+
+      switch (which_gf) {{
+      case SE_XD0GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 0, spectre_spin_npoints);
+        break;
+      case SE_XD1GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 1, spectre_spin_npoints);
+        break;
+      case SE_QDD00GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 0, spectre_spin_npoints);
+        break;
+      case SE_QDD01GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 1, spectre_spin_npoints);
+        break;
+      case SE_QDD11GF:
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 1, 1, spectre_spin_npoints);
+        break;
+      default: {{
+        const int8_t p = bc->parity[scratch_gf_parity[which_gf]];
+        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(spectre_spin_gfs[IDX4pt(which_gf, bc->srcpt)], p);
+        break;
+      }} // END DEFAULT: apply scalar parity to selected scratch gridfunction
+      }} // END SWITCH: selected spin scratch gridfunction
+    }} // END LOOP: for pt over inner boundary points
+  }} // END LOOP: for selected spin scratch gridfunctions
+}} // END FUNCTION: apply_inner_bc_for_selected_spectre_spin_gfs
+
+/**
+ * Check selected scratch gridfunctions for finite values over an index box.
+ *
+ * @param[in] spectre_spin_gfs Spin diagnostic scratch storage.
+ * @param Nxx0 Number of active radial horizon slabs.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param[in] which_gfs Selected spin scratch gridfunction indices.
+ * @param num_gfs Number of selected gridfunctions.
+ * @param i1_min Minimum theta index to check.
+ * @param i1_max One-past-maximum theta index to check.
+ * @param i2_min Minimum phi index to check.
+ * @param i2_max One-past-maximum phi index to check.
+ * @param[in] stage Diagnostic stage name for warning output.
+ * @return BHAHAHA_SUCCESS, or a geometry error if a value is non-finite.
+ */
+static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_spin_gfs, const int Nxx0, const int Nxx_plus_2NGHOSTS0,
+                                                 const int Nxx_plus_2NGHOSTS1, const int Nxx_plus_2NGHOSTS2,
+                                                 const int *restrict which_gfs, const int num_gfs, const int i1_min,
+                                                 const int i1_max, const int i2_min, const int i2_max, const char *restrict stage) {{
+  if (NGHOSTS < 0 || NGHOSTS + Nxx0 > Nxx_plus_2NGHOSTS0 ||
+      i1_min < 0 || i2_min < 0 || i1_max > Nxx_plus_2NGHOSTS1 || i2_max > Nxx_plus_2NGHOSTS2)
+    return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
+
+  for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
+    const int gf = which_gfs[gf_idx];
+    for (int i2 = i2_min; i2 < i2_max; i2++) {{
+      for (int i1 = i1_min; i1 < i1_max; i1++) {{
+        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {{
+          const REAL val = spectre_spin_gfs[IDX4(gf, i0, i1, i2)];
+          if (!isfinite(val)) {{
+            fprintf(stderr,
+                    "WARNING: SpECTRE spin scratch check failed after %s: "
+                    "gf=%d i0=%d i1=%d i2=%d value=%+.17e\n",
+                    stage, gf, i0, i1, i2, (double)val);
+            return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
+          }} // END IF: scratch-gridfunction value is not finite
+        }} // END LOOP: i0
+      }} // END LOOP: i1
+    }} // END LOOP: i2
+  }} // END LOOP: gf_idx
+  return BHAHAHA_SUCCESS;
+}} // END FUNCTION: spectre_spin_check_finite_scratch_gfs
+"""
+        prefunc += (
+            r"""
 #include "akv_primme.h"
 
 #ifndef PRIMME_VERSION_MAJOR
@@ -1372,417 +1770,13 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   return status;
 } // END FUNCTION: bah_compute_spectre_spin_potentials
 """
-    return (
-        template.replace("@FD_RADIUS@", str(radius))
-        .replace("@FD_WIDTH@", str(2 * radius + 1))
-        .replace("@MAX_ROW_NNZ@", str(max_row_nnz))
-        .replace("@FD_FIRST@", _c_array(first_deriv_coeffs))
-        .replace("@FD_SECOND@", _c_array(second_deriv_coeffs))
-        .replace("@RICCI_CODE@", ricci_c_code.rstrip())
-    )
-
-
-def register_CFunction_diagnostics_spectre_spin(
-    CoordSystem: str = "Spherical",
-    enable_rfm_precompute: bool = False,
-    enable_fd_functions: bool = False,
-) -> Union[None, pcg.NRPyEnv_type]:
-    """
-    Register a C function that computes the SpECTRE-style spin vector.
-
-    :param CoordSystem: The coordinate system to use, defaults to "Spherical".
-    :param enable_rfm_precompute: Whether to enable RFM precompute.
-    :param enable_fd_functions: Whether to enable finite-difference functions.
-    :return: An NRPyEnv_type object if registration is successful, otherwise None.
-    :raises ValueError: If a precompute gridfunction has an unsupported rank.
-
-    """
-    if par.parval_from_str("fp_type") != "double":
-        raise ValueError(
-            "SpECTRE spin diagnostics require fp_type=double because the "
-            "runtime eigensolver calls double-precision PRIMME (dprimme)."
+            .replace("@FD_RADIUS@", str(fd_radius))
+            .replace("@FD_WIDTH@", str(fd_width))
+            .replace("@MAX_ROW_NNZ@", str(max_row_nnz))
+            .replace("@FD_FIRST@", fd_first_coeffs)
+            .replace("@FD_SECOND@", fd_second_coeffs)
+            .replace("@RICCI_CODE@", ricci_c_code.rstrip())
         )
-
-    if pcg.pcg_registration_phase():
-        pcg.register_func_call(
-            f"{__name__}.{register_CFunction_diagnostics_spectre_spin.__name__}",
-            locals(),
-        )
-        return None
-
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "akv_primme.h"]
-    desc = r"""
-    Compute the SpECTRE-style dimensionless spin vector diagnostic and store it in the diagnostics struct.
-    """
-    cfunc_type = "int"
-    cfunc_name = "diagnostics_spectre_spin"
-    params = (
-        "commondata_struct *restrict commondata, griddata_struct *restrict griddata"
-    )
-
-    # Step 1: Get an instance of the symbolic calculator.
-    spin_calc = SpECTRESpinEstimate[
-        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-    ]
-
-    # Step 2: Temporarily register spin scratch symbols for FD codegen only.
-    saved_spectre_spin_gfs = {
-        gf_name: gri.glb_gridfcs_dict.get(gf_name)
-        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS
-    }
-    try:
-        for gf_name in _SPECTRE_SPIN_SCRATCH_GFS:
-            gri.glb_gridfcs_dict.pop(gf_name, None)
-
-        _ = gri.register_gridfunctions_for_single_rank2(
-            "SE_qDD",
-            symmetry="sym01",
-            dimension=2,
-            group="AUX",
-            gf_array_name="spectre_spin_gfs",
-        )
-        _ = gri.register_gridfunctions_for_single_rank1(
-            "SE_XD",
-            dimension=2,
-            group="AUX",
-            gf_array_name="spectre_spin_gfs",
-        )
-        _ = gri.register_gridfunctions_for_single_rank1(
-            "zU",
-            dimension=3,
-            group="AUX",
-            gf_array_name="spectre_spin_gfs",
-        )
-
-        gf_assignments = spin_calc.get_gridfunction_assignments(
-            include_flux_density=False
-        )
-        gf_names = [str(sym) for sym in gf_assignments.keys()]
-
-        lhss_precompute = [
-            gri.BHaHGridFunction.access_gf(gf_name, gf_array_name="spectre_spin_gfs")
-            for gf_name in gf_names
-        ]
-        rhss_precompute = list(gf_assignments.values())
-        gf_macros = [f"{gf_name.upper()}GF" for gf_name in gf_names]
-
-        parity_conditions_rank2 = {
-            (0, 0): 4,
-            (0, 1): 5,
-            (0, 2): 6,
-            (1, 1): 7,
-            (1, 2): 8,
-            (2, 2): 9,
-        }
-        parity_entries = []
-        for gf_name, gf_macro in zip(gf_names, gf_macros):
-            gf = gri.glb_gridfcs_dict[gf_name]
-            if gf.name in _SPECTRE_SPIN_COORD_COVARIANT_GFS:
-                # These surface coordinate-basis covariant fields are transformed
-                # with bc->deriv_jacobian in the custom ghost-fill helper below.
-                parity_value = 0
-            elif gf.rank == 0:
-                parity_value = 0
-            elif gf.rank == 1:
-                parity_value = int(gf.name[-1]) + 1
-            elif gf.rank == 2:
-                parity_value = parity_conditions_rank2[
-                    (int(gf.name[-2]), int(gf.name[-1]))
-                ]
-            else:
-                raise ValueError(
-                    f"Unsupported spin-diagnostic precompute gridfunction rank: {gf.name}, rank={gf.rank}"
-                )
-            parity_entries.append(f"  [{gf_macro}] = {parity_value},")
-        parity_table_entries = "\n".join(parity_entries)
-        selected_precompute_gfs = ", ".join(gf_macros)
-        scratch_gf_defines = "\n".join(
-            f"#define {gf_name.upper()}GF {idx}"
-            for idx, gf_name in enumerate(_SPECTRE_SPIN_SCRATCH_GFS)
-        )
-
-        # Step 3: Generate C code for intermediate surface fields.
-        precompute_c_code = ccg.c_codegen(
-            rhss_precompute,
-            lhss_precompute,
-            enable_fd_codegen=True,
-            enable_fd_functions=enable_fd_functions,
-        )
-
-        # Step 4: Retrieve the dictionary of all per-point integrands.
-        integrands_dict = spin_calc.get_public_integrands()
-
-        # Step 5: Extract the symbolic expressions we need to integrate.
-        # According to the SpECTRESpinEstimate documentation, we need to integrate:
-        # - 1 (for the Area A)
-        # - x^i (for the centroid XU)
-        # - R (for R0)
-        # - x^i * R (for XRU)
-        # - Omega (for O0)
-        # - x^i * Omega (for XOU)
-        # - z_alpha * Omega (for ZOU)
-        # - |Omega| (for Oabs, used in the near-zero policy)
-
-        # Note: The 'integrand' is the quantity 'f' in ∮ f dA.
-        # The differential area element is dA = sqrt(q) * weights * dθ * dφ.
-        # We will pass sqrt(q) to c_codegen as 'area_density' and handle the
-        # weights and coordinate steps in the C code loop.
-
-        area_density = integrands_dict["area_density"]
-
-        # List of all symbolic quantities to be evaluated inside the loop
-        integrand_c_vars = [
-            "const REAL area_density",
-            "const REAL A_integrand",
-            "const REAL XU0_integrand",
-            "const REAL XU1_integrand",
-            "const REAL XU2_integrand",
-            "const REAL R0_integrand",
-            "const REAL XRU0_integrand",
-            "const REAL XRU1_integrand",
-            "const REAL XRU2_integrand",
-            "const REAL O0_integrand",
-            "const REAL XOU0_integrand",
-            "const REAL XOU1_integrand",
-            "const REAL XOU2_integrand",
-            "const REAL ZOU0_integrand",
-            "const REAL ZOU1_integrand",
-            "const REAL ZOU2_integrand",
-            "const REAL Oabs_integrand",
-        ]
-
-        sympy_expressions = [
-            area_density,
-            integrands_dict["area_integrand"],  # This is just 1.
-            *integrands_dict["measurement_frame_xU"],
-            integrands_dict["ricci_scalar"],
-            *integrands_dict["x_times_R_integrand"],
-            integrands_dict["spin_function"],
-            *integrands_dict["xOmega_momentU"],
-            *integrands_dict["zOmegaU"],
-            integrands_dict["abs_omega_integrand"],
-        ]
-
-        ricci_c_code = ccg.c_codegen(
-            [area_density, integrands_dict["ricci_scalar"]],
-            ["const REAL spin_area_density", "const REAL spin_ricci_scalar"],
-            enable_fd_codegen=True,
-            enable_fd_functions=enable_fd_functions,
-        )
-        fd_order = int(par.parval_from_str("finite_difference::fd_order"))
-
-        prefunc = APPLY_PARITY_BRANCHLESS_PREFUNC + rf"""
-#define NUM_SPECTRE_SPIN_SCRATCH_GFS {len(_SPECTRE_SPIN_SCRATCH_GFS)}
-{scratch_gf_defines}
-
-static const int8_t spectre_spin_scratch_gf_parity[NUM_SPECTRE_SPIN_SCRATCH_GFS] = {{
-{parity_table_entries}
-}};
-
-/**
- * SE_XD and SE_qDD are surface coordinate-basis covariant components on the
- * horizon angular grid, not ambient unit-basis tensor components. Therefore
- * they must be transformed with bc->deriv_jacobian rather than the usual
- * unit-vector parity table.
- *
- * @param[in] gfs Spin diagnostic scratch storage.
- * @param srcpt Source point index in flattened grid storage.
- * @param src_coord Source angular coordinate index.
- * @param spectre_spin_npoints Number of points in one scratch gridfunction.
- * @return Requested source covector component, or zero for unsupported indices.
- */
-static REAL spectre_spin_src_XD(const REAL *restrict gfs, const int srcpt, const int src_coord,
-                                const size_t spectre_spin_npoints) {{
-  if (src_coord == 1)
-    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD0GF];
-  if (src_coord == 2)
-    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_XD1GF];
-  return 0.0;
-}} // END FUNCTION: spectre_spin_src_XD
-
-/**
- * Transform one surface covector component across an inner boundary map.
- *
- * @param[in] gfs Spin diagnostic scratch storage.
- * @param[in] bc Inner-boundary source/destination metadata.
- * @param dst_surface_A Destination surface-coordinate component.
- * @param spectre_spin_npoints Number of points in one scratch gridfunction.
- * @return Transformed destination covector component.
- */
-static REAL spectre_spin_transform_XD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
-                                      const int dst_surface_A, const size_t spectre_spin_npoints) {{
-  const int dst_coord = dst_surface_A + 1; // 0 -> theta, 1 -> phi
-
-  REAL val = 0.0;
-  for (int src_coord = 1; src_coord <= 2; src_coord++) {{
-    const int8_t J = bc->deriv_jacobian[dst_coord][src_coord];
-    if (J != 0)
-      val += (REAL)J * spectre_spin_src_XD(gfs, bc->srcpt, src_coord, spectre_spin_npoints);
-  }} // END LOOP: for src_coord over surface source coordinates
-
-  return val;
-}} // END FUNCTION: spectre_spin_transform_XD
-
-/**
- * Read one symmetric surface metric component from a source point.
- *
- * @param[in] gfs Spin diagnostic scratch storage.
- * @param srcpt Source point index in flattened grid storage.
- * @param src_coord_A First source angular coordinate index.
- * @param src_coord_B Second source angular coordinate index.
- * @param spectre_spin_npoints Number of points in one scratch gridfunction.
- * @return Requested source metric component, or zero for unsupported indices.
- */
-static REAL spectre_spin_src_qDD(const REAL *restrict gfs, const int srcpt, const int src_coord_A,
-                                 const int src_coord_B, const size_t spectre_spin_npoints) {{
-  if (src_coord_A == 1 && src_coord_B == 1)
-    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD00GF];
-  if ((src_coord_A == 1 && src_coord_B == 2) || (src_coord_A == 2 && src_coord_B == 1))
-    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD01GF];
-  if (src_coord_A == 2 && src_coord_B == 2)
-    return gfs[(size_t)srcpt + spectre_spin_npoints * (size_t)SE_QDD11GF];
-  return 0.0;
-}} // END FUNCTION: spectre_spin_src_qDD
-
-/**
- * Transform one symmetric surface metric component across an inner boundary map.
- *
- * @param[in] gfs Spin diagnostic scratch storage.
- * @param[in] bc Inner-boundary source/destination metadata.
- * @param dst_surface_A First destination surface-coordinate component.
- * @param dst_surface_B Second destination surface-coordinate component.
- * @param spectre_spin_npoints Number of points in one scratch gridfunction.
- * @return Transformed destination metric component.
- */
-static REAL spectre_spin_transform_qDD(const REAL *restrict gfs, const innerpt_bc_struct *restrict bc,
-                                       const int dst_surface_A, const int dst_surface_B,
-                                       const size_t spectre_spin_npoints) {{
-  const int dst_coord_A = dst_surface_A + 1; // 0 -> theta, 1 -> phi
-  const int dst_coord_B = dst_surface_B + 1;
-
-  REAL val = 0.0;
-  for (int src_coord_C = 1; src_coord_C <= 2; src_coord_C++) {{
-    const int8_t JA = bc->deriv_jacobian[dst_coord_A][src_coord_C];
-    if (JA == 0)
-      continue;
-
-    for (int src_coord_D = 1; src_coord_D <= 2; src_coord_D++) {{
-      const int8_t JB = bc->deriv_jacobian[dst_coord_B][src_coord_D];
-      if (JB != 0)
-        val += (REAL)JA * (REAL)JB * spectre_spin_src_qDD(gfs, bc->srcpt, src_coord_C, src_coord_D, spectre_spin_npoints);
-    }} // END LOOP: for src_coord_D over surface source coordinates
-  }} // END LOOP: for src_coord_C over surface source coordinates
-
-  return val;
-}} // END FUNCTION: spectre_spin_transform_qDD
-
-/**
- * Apply inner boundary conditions to selected spin scratch gridfunctions.
- *
- * The spin diagnostic precomputes SE_qDD and SE_XD on physical angular points
- * before generated finite-difference code differentiates those fields. This
- * helper fills their angular ghost zones for every active radial horizon slab.
- *
- * @param[in] bcstruct Boundary metadata for inner curvilinear points.
- * @param[in,out] spectre_spin_gfs Spin diagnostic scratch storage.
- * @param Nxx0 Number of active radial horizon slabs.
- * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
- * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
- * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
- * @param[in] which_gfs Selected spin scratch gridfunction indices.
- * @param num_gfs Number of selected gridfunctions.
- * @param[in] scratch_gf_parity Parity table indexed by spin scratch gridfunction.
- */
-static void apply_inner_bc_for_selected_spectre_spin_gfs(const bc_struct *restrict bcstruct, REAL *restrict spectre_spin_gfs, const int Nxx0,
-                                                         const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
-                                                         const int Nxx_plus_2NGHOSTS2, const int *restrict which_gfs, const int num_gfs,
-                                                         const int8_t *restrict scratch_gf_parity) {{
-  const bc_info_struct *bc_info = &bcstruct->bc_info;
-  const size_t spectre_spin_npoints =
-      (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
-
-#pragma omp parallel for collapse(2)
-  for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
-    for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {{
-      const int which_gf = which_gfs[gf_idx];
-      const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
-      const int dstpt = bc->dstpt;
-      const int dst_i0 = dstpt % Nxx_plus_2NGHOSTS0;
-
-      if (dst_i0 < NGHOSTS || dst_i0 >= NGHOSTS + Nxx0)
-        continue;
-
-      switch (which_gf) {{
-      case SE_XD0GF:
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 0, spectre_spin_npoints);
-        break;
-      case SE_XD1GF:
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_XD(spectre_spin_gfs, bc, 1, spectre_spin_npoints);
-        break;
-      case SE_QDD00GF:
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 0, spectre_spin_npoints);
-        break;
-      case SE_QDD01GF:
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 0, 1, spectre_spin_npoints);
-        break;
-      case SE_QDD11GF:
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = spectre_spin_transform_qDD(spectre_spin_gfs, bc, 1, 1, spectre_spin_npoints);
-        break;
-      default: {{
-        const int8_t p = bc->parity[scratch_gf_parity[which_gf]];
-        spectre_spin_gfs[IDX4pt(which_gf, dstpt)] = apply_parity_branchless(spectre_spin_gfs[IDX4pt(which_gf, bc->srcpt)], p);
-        break;
-      }} // END DEFAULT: apply scalar parity to selected scratch gridfunction
-      }} // END SWITCH: selected spin scratch gridfunction
-    }} // END LOOP: for pt over inner boundary points
-  }} // END LOOP: for selected spin scratch gridfunctions
-}} // END FUNCTION: apply_inner_bc_for_selected_spectre_spin_gfs
-
-/**
- * Check selected scratch gridfunctions for finite values over an index box.
- *
- * @param[in] spectre_spin_gfs Spin diagnostic scratch storage.
- * @param Nxx0 Number of active radial horizon slabs.
- * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
- * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
- * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
- * @param[in] which_gfs Selected spin scratch gridfunction indices.
- * @param num_gfs Number of selected gridfunctions.
- * @param i1_min Minimum theta index to check.
- * @param i1_max One-past-maximum theta index to check.
- * @param i2_min Minimum phi index to check.
- * @param i2_max One-past-maximum phi index to check.
- * @param[in] stage Diagnostic stage name for warning output.
- * @return BHAHAHA_SUCCESS, or a geometry error if a value is non-finite.
- */
-static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_spin_gfs, const int Nxx0, const int Nxx_plus_2NGHOSTS0,
-                                                 const int Nxx_plus_2NGHOSTS1, const int Nxx_plus_2NGHOSTS2,
-                                                 const int *restrict which_gfs, const int num_gfs, const int i1_min,
-                                                 const int i1_max, const int i2_min, const int i2_max, const char *restrict stage) {{
-  if (NGHOSTS < 0 || NGHOSTS + Nxx0 > Nxx_plus_2NGHOSTS0 ||
-      i1_min < 0 || i2_min < 0 || i1_max > Nxx_plus_2NGHOSTS1 || i2_max > Nxx_plus_2NGHOSTS2)
-    return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-
-  for (int gf_idx = 0; gf_idx < num_gfs; gf_idx++) {{
-    const int gf = which_gfs[gf_idx];
-    for (int i2 = i2_min; i2 < i2_max; i2++) {{
-      for (int i1 = i1_min; i1 < i1_max; i1++) {{
-        for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {{
-          const REAL val = spectre_spin_gfs[IDX4(gf, i0, i1, i2)];
-          if (!isfinite(val)) {{
-            fprintf(stderr,
-                    "WARNING: SpECTRE spin scratch check failed after %s: "
-                    "gf=%d i0=%d i1=%d i2=%d value=%+.17e\n",
-                    stage, gf, i0, i1, i2, (double)val);
-            return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-          }} // END IF: scratch-gridfunction value is not finite
-        }} // END LOOP: i0
-      }} // END LOOP: i1
-    }} // END LOOP: i2
-  }} // END LOOP: gf_idx
-  return BHAHAHA_SUCCESS;
-}} // END FUNCTION: spectre_spin_check_finite_scratch_gfs
-""" + _spectre_spin_potential_solver_prefunc(fd_order, ricci_c_code)
 
         # Step 6: Construct the body of the C function.
         body = r"""
