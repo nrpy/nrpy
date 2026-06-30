@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Mechanical lint checks for the markdown knowledge base."""
+"""
+Mechanical lint checks for the markdown knowledge base.
 
-from __future__ import annotations
+Author: NRPy contributors
+"""
 
 import argparse
 import os
+
+# Regexes are needed for Markdown link, heading, table, and log-pattern checks.
 import re
 import sys
 from collections import Counter, defaultdict, deque
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Deque, Dict, List, Optional, Set, Tuple
 from urllib.parse import unquote, urlparse
-
 
 ROOT = Path(__file__).resolve().parents[1]
 WIKI = ROOT / "wiki"
@@ -47,28 +51,49 @@ ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 
 @dataclass(frozen=True)
-class Link:
+class _Link:
+    """Markdown link with resolved local target metadata."""
+
     source: Path
     line: int
     label: str
     target: str
-    target_path: Path | None
+    target_path: Optional[Path]
     anchor: str
     is_source_section: bool
 
 
-def rel(path: Path) -> str:
+def _rel(path: Path) -> str:
+    """
+    Return a repository-relative POSIX path.
+
+    :param path: Absolute or relative path inside the repository.
+    :return: POSIX path relative to the repository root.
+    """
     return path.resolve().relative_to(ROOT).as_posix()
 
 
-def fail(failures: list[str], path: Path, line: int | None, message: str) -> None:
-    prefix = rel(path)
+def _fail(failures: List[str], path: Path, line: Optional[int], message: str) -> None:
+    """
+    Append a formatted lint failure.
+
+    :param failures: Mutable failure list.
+    :param path: File or directory associated with the failure.
+    :param line: Optional one-based line number.
+    :param message: Failure detail.
+    """
+    prefix = _rel(path)
     if line is not None:
         prefix += f":{line}"
     failures.append(f"{prefix}: {message}")
 
 
-def iter_md_files() -> list[Path]:
+def _iter_md_files() -> List[Path]:
+    """
+    Return markdown files governed by compiled-KB lint rules.
+
+    :return: Markdown paths included in normal lint checks.
+    """
     files = [AGENTS]
     if WIKI.exists():
         files.extend(sorted(WIKI.rglob("*.md")))
@@ -78,52 +103,102 @@ def iter_md_files() -> list[Path]:
     return sorted({p.resolve() for p in files})
 
 
-def wiki_pages() -> list[Path]:
+def _wiki_pages() -> List[Path]:
+    """
+    Return all wiki markdown pages.
+
+    :return: Markdown files under ``wiki/``.
+    """
     if not WIKI.exists():
         return []
     return sorted(p.resolve() for p in WIKI.rglob("*.md"))
 
 
-def read(path: Path) -> str:
+def _read(path: Path) -> str:
+    """
+    Read a UTF-8 text file.
+
+    :param path: File to read.
+    :return: File contents.
+    """
     return path.read_text(encoding="utf-8")
 
 
-def line_for_offset(text: str, offset: int) -> int:
+def _line_for_offset(text: str, offset: int) -> int:
+    """
+    Return one-based line number for character offset.
+
+    :param text: Text containing the offset.
+    :param offset: Zero-based character offset.
+    :return: One-based line number.
+    """
     return text.count("\n", 0, offset) + 1
 
 
-def mask_code_fences(text: str) -> str:
+def _mask_code_fences(text: str) -> str:
+    """
+    Mask fenced code while preserving offsets and line numbers.
+
+    :param text: Markdown text.
+    :return: Text with fenced-code characters replaced by spaces.
+    """
+
     def repl(match: re.Match[str]) -> str:
         return "".join("\n" if ch == "\n" else " " for ch in match.group(0))
 
     return re.sub(r"```.*?```", repl, text, flags=re.DOTALL)
 
 
-def slugify_heading(title: str) -> str:
+def _slugify_heading(title: str) -> str:
+    """
+    Convert a Markdown heading to GitHub-style anchor slug.
+
+    :param title: Heading title.
+    :return: Anchor slug.
+    """
     slug = re.sub(r"[^\w\s-]", "", title.strip().lower())
     return re.sub(r"\s+", "-", slug)
 
 
-def heading_anchors(path: Path) -> set[str]:
-    anchors: set[str] = set()
-    for line in read(path).splitlines():
+def _heading_anchors(path: Path) -> Set[str]:
+    """
+    Return Markdown heading anchors defined in a file.
+
+    :param path: Markdown file to scan.
+    :return: Set of heading anchor slugs.
+    """
+    anchors: Set[str] = set()
+    for line in _read(path).splitlines():
         match = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
         if not match:
             continue
         title = re.sub(r"\s+#+\s*$", "", match.group(2)).strip()
-        anchors.add(slugify_heading(title))
+        anchors.add(_slugify_heading(title))
     return anchors
 
 
-def headings(text: str) -> list[tuple[int, str]]:
-    result: list[tuple[int, str]] = []
+def _headings(text: str) -> List[Tuple[int, str]]:
+    """
+    Return Markdown headings as ``(level, title)`` tuples.
+
+    :param text: Markdown text.
+    :return: Heading level and title pairs.
+    """
+    result: List[Tuple[int, str]] = []
     for match in re.finditer(r"^(#{2,6})\s+(.+?)\s*$", text, re.MULTILINE):
         title = re.sub(r"\s+#+\s*$", "", match.group(2)).strip()
         result.append((len(match.group(1)), title))
     return result
 
 
-def section_body(text: str, section: str) -> str:
+def _section_body(text: str, section: str) -> str:
+    """
+    Return content under a second-level Markdown section.
+
+    :param text: Markdown text.
+    :param section: Section title without hashes.
+    :return: Section body, or an empty string when absent.
+    """
     match = re.search(rf"^## {re.escape(section)}\s*$", text, re.MULTILINE)
     if not match:
         return ""
@@ -133,7 +208,14 @@ def section_body(text: str, section: str) -> str:
     return text[start:end].strip()
 
 
-def path_from_link(source: Path, target: str) -> tuple[Path | None, str]:
+def _path_from_link(source: Path, target: str) -> Tuple[Optional[Path], str]:
+    """
+    Resolve a Markdown link target relative to a source file.
+
+    :param source: Markdown file containing the link.
+    :param target: Raw link target.
+    :return: Resolved local path, if any, and decoded anchor.
+    """
     target = target.strip()
     if not target:
         return None, ""
@@ -151,7 +233,14 @@ def path_from_link(source: Path, target: str) -> tuple[Path | None, str]:
     return candidate.resolve(), anchor
 
 
-def in_sources_section(text: str, offset: int) -> bool:
+def _in_sources_section(text: str, offset: int) -> bool:
+    """
+    Return whether an offset lies inside a ``Sources`` section.
+
+    :param text: Markdown text.
+    :param offset: Character offset to test.
+    :return: Whether the offset is inside ``## Sources``.
+    """
     sources_start = re.search(r"^## Sources\s*$", text, re.MULTILINE)
     if not sources_start:
         return False
@@ -160,54 +249,97 @@ def in_sources_section(text: str, offset: int) -> bool:
     return sources_start.start() <= offset < sources_end
 
 
-def extract_links(path: Path) -> list[Link]:
-    text = read(path)
-    search_text = mask_code_fences(text)
+def _extract_links(path: Path) -> List[_Link]:
+    """
+    Extract Markdown links outside fenced code blocks.
+
+    :param path: Markdown file to scan.
+    :return: Links with local resolution metadata.
+    """
+    text = _read(path)
+    search_text = _mask_code_fences(text)
     pattern = re.compile(r"(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)")
-    links: list[Link] = []
+    links: List[_Link] = []
     for match in pattern.finditer(search_text):
         label, raw_target = match.groups()
         target = raw_target.strip()
-        path_part, anchor = path_from_link(path, target)
+        path_part, anchor = _path_from_link(path, target)
         links.append(
-            Link(
+            _Link(
                 source=path,
-                line=line_for_offset(search_text, match.start()),
+                line=_line_for_offset(search_text, match.start()),
                 label=label.strip(),
                 target=target,
                 target_path=path_part,
                 anchor=anchor,
-                is_source_section=in_sources_section(search_text, match.start()),
+                is_source_section=_in_sources_section(search_text, match.start()),
             )
         )
     return links
 
 
-def is_router(path: Path) -> bool:
+def _is_router(path: Path) -> bool:
+    """
+    Return whether a path is a KB router page.
+
+    :param path: Candidate page path.
+    :return: Whether the path is a router.
+    """
     return path.name in ROUTER_NAMES or path == AGENTS
 
 
-def is_support_page(path: Path) -> bool:
+def _is_support_page(path: Path) -> bool:
+    """
+    Return whether a path is a governance/support page.
+
+    :param path: Candidate page path.
+    :return: Whether the path is a support page.
+    """
     return path in SUPPORT_PAGES
 
 
-def is_normal_leaf(path: Path) -> bool:
-    return path.is_relative_to(WIKI) and not is_router(path) and not is_support_page(path)
+def _is_normal_leaf(path: Path) -> bool:
+    """
+    Return whether a path is a normal sourced wiki leaf.
+
+    :param path: Candidate page path.
+    :return: Whether the path is a normal leaf.
+    """
+    return (
+        path.is_relative_to(WIKI)
+        and not _is_router(path)
+        and not _is_support_page(path)
+    )
 
 
-def check_wikilinks(files: list[Path], failures: list[str]) -> None:
+def _check_wikilinks(files: List[Path], failures: List[str]) -> None:
+    """
+    Check governed files for Obsidian-style wikilinks.
+
+    :param files: Markdown files to scan.
+    :param failures: Mutable failure list.
+    """
     pattern = re.compile(r"\[\[[^\]]+\]\]")
     for path in files:
-        text = read(path)
+        text = _read(path)
         for match in pattern.finditer(text):
-            fail(failures, path, line_for_offset(text, match.start()), "wikilink found")
+            _fail(
+                failures, path, _line_for_offset(text, match.start()), "wikilink found"
+            )
 
 
-def check_links(files: list[Path], failures: list[str]) -> dict[Path, list[Path]]:
-    graph: dict[Path, list[Path]] = defaultdict(list)
-    anchor_cache: dict[Path, set[str]] = {}
+def _check_links(files: List[Path], failures: List[str]) -> Dict[Path, List[Path]]:
+    """
+    Validate Markdown links and return local link graph.
+
+    :param files: Markdown files to scan.
+    :param failures: Mutable failure list.
+    :return: Directed graph of local links.
+    """
+    graph: Dict[Path, List[Path]] = defaultdict(list)
+    anchor_cache: Dict[Path, Set[str]] = {}
     for path in files:
-        for link in extract_links(path):
+        for link in _extract_links(path):
             target = link.target_path
             if target is None:
                 continue
@@ -215,61 +347,83 @@ def check_links(files: list[Path], failures: list[str]) -> dict[Path, list[Path]
                 message = f"link target missing: {link.target}"
                 if link.is_source_section:
                     message = f"source link target missing: {link.target}"
-                fail(failures, path, link.line, message)
+                _fail(failures, path, link.line, message)
                 continue
             if link.anchor:
-                anchor_cache.setdefault(target, heading_anchors(target))
-                if slugify_heading(link.anchor) not in anchor_cache[target]:
-                    fail(failures, path, link.line, f"link anchor missing: {link.target}")
+                anchor_cache.setdefault(target, _heading_anchors(target))
+                if _slugify_heading(link.anchor) not in anchor_cache[target]:
+                    _fail(
+                        failures, path, link.line, f"link anchor missing: {link.target}"
+                    )
                     continue
             graph[path].append(target)
     return graph
 
 
-def check_router_detail(files: list[Path], failures: list[str]) -> None:
+def _check_router_detail(files: List[Path], failures: List[str]) -> None:
+    """
+    Check router pages do not contain detail sections.
+
+    :param files: Markdown files to scan.
+    :param failures: Mutable failure list.
+    """
     for path in files:
         if path == AGENTS or path.is_relative_to(WIKI):
-            if is_router(path) and re.search(r"^## Detail\s*$", read(path), re.MULTILINE):
-                fail(failures, path, None, "router has Detail section")
+            if _is_router(path) and re.search(
+                r"^## Detail\s*$", _read(path), re.MULTILINE
+            ):
+                _fail(failures, path, None, "router has Detail section")
 
 
-def check_leaf_contract(pages: list[Path], failures: list[str]) -> None:
+def _check_leaf_contract(pages: List[Path], failures: List[str]) -> None:
+    """
+    Check normal leaves satisfy the page contract.
+
+    :param pages: Wiki pages to scan.
+    :param failures: Mutable failure list.
+    """
     for path in pages:
-        if not is_normal_leaf(path):
+        if not _is_normal_leaf(path):
             continue
-        text = read(path)
+        text = _read(path)
         lines = text.splitlines()
         if not lines or not lines[0].startswith("# "):
-            fail(failures, path, 1, "leaf missing H1 title")
+            _fail(failures, path, 1, "leaf missing H1 title")
         header_lines = [line for line in lines[1:4] if line.startswith("> ")]
         if len(header_lines) < 2:
-            fail(failures, path, 2, "leaf missing two-line blockquote header")
+            _fail(failures, path, 2, "leaf missing two-line blockquote header")
 
-        found = [title for level, title in headings(text) if level == 2]
+        found = [title for level, title in _headings(text) if level == 2]
         positions = []
         for section in REQUIRED_LEAF_SECTIONS:
             try:
                 positions.append(found.index(section))
             except ValueError:
-                fail(failures, path, None, f"leaf missing section: {section}")
+                _fail(failures, path, None, f"leaf missing section: {section}")
                 positions.append(-1)
         if all(pos >= 0 for pos in positions) and positions != sorted(positions):
-            fail(
+            _fail(
                 failures,
                 path,
                 None,
                 "leaf sections out of order; want Summary, Detail, Sources, See Also",
             )
         for section in ("Sources", "See Also"):
-            if not section_body(text, section):
-                fail(failures, path, None, f"leaf has empty {section}")
+            if not _section_body(text, section):
+                _fail(failures, path, None, f"leaf has empty {section}")
 
 
-def check_reachability(graph: dict[Path, list[Path]], failures: list[str]) -> None:
+def _check_reachability(graph: Dict[Path, List[Path]], failures: List[str]) -> None:
+    """
+    Check all wiki pages are reachable from ``AGENTS.md``.
+
+    :param graph: Directed graph of local links.
+    :param failures: Mutable failure list.
+    """
     if not AGENTS.exists():
         return
-    reachable: set[Path] = set()
-    queue: deque[Path] = deque([AGENTS.resolve()])
+    reachable: Set[Path] = set()
+    queue: Deque[Path] = deque([AGENTS.resolve()])
     while queue:
         path = queue.popleft()
         if path in reachable:
@@ -281,38 +435,48 @@ def check_reachability(graph: dict[Path, list[Path]], failures: list[str]) -> No
             ):
                 queue.append(target)
 
-    for page in wiki_pages():
+    for page in _wiki_pages():
         if page not in reachable:
-            fail(failures, page, None, "wiki page not reachable from AGENTS.md")
+            _fail(failures, page, None, "wiki page not reachable from AGENTS.md")
 
 
-def check_catalog(failures: list[str]) -> None:
+def _check_catalog(failures: List[str]) -> None:
+    """
+    Check the global catalog lists each wiki page once.
+
+    :param failures: Mutable failure list.
+    """
     if not CATALOG.exists():
         return
-    header, rows = parse_table(CATALOG)
+    header, rows = _parse_table(CATALOG)
     try:
         page_i = header.index("Page")
     except ValueError:
-        fail(failures, CATALOG, None, "catalog lacks Page column")
+        _fail(failures, CATALOG, None, "catalog lacks Page column")
         return
-    links: list[Path] = []
+    links: List[Path] = []
     for row in rows:
         if len(row) <= page_i:
             continue
         for link in re.finditer(r"(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)", row[page_i]):
-            target, _ = path_from_link(CATALOG, link.group(2))
+            target, _ = _path_from_link(CATALOG, link.group(2))
             if target is not None and target.is_relative_to(WIKI):
                 links.append(target)
     counts = Counter(links)
-    for page in wiki_pages():
+    for page in _wiki_pages():
         count = counts.get(page, 0)
         if count == 0:
-            fail(failures, CATALOG, None, f"missing wiki page: {rel(page)}")
+            _fail(failures, CATALOG, None, f"missing wiki page: {_rel(page)}")
         elif count > 1:
-            fail(failures, CATALOG, None, f"duplicate wiki page: {rel(page)}")
+            _fail(failures, CATALOG, None, f"duplicate wiki page: {_rel(page)}")
 
 
-def check_content_dir_indexes(failures: list[str]) -> None:
+def _check_content_dir_indexes(failures: List[str]) -> None:
+    """
+    Check content-bearing wiki directories have routers.
+
+    :param failures: Mutable failure list.
+    """
     for directory, _, files in os.walk(WIKI):
         path = Path(directory).resolve()
         if path in EXEMPT_INDEX_DIRS:
@@ -320,15 +484,21 @@ def check_content_dir_indexes(failures: list[str]) -> None:
         if path == WIKI:
             continue
         if any(name.endswith(".md") for name in files) and "index.md" not in files:
-            fail(failures, path, None, "wiki content directory lacks index.md")
+            _fail(failures, path, None, "wiki content directory lacks index.md")
 
 
-def parse_table(path: Path) -> tuple[list[str], list[list[str]]]:
+def _parse_table(path: Path) -> Tuple[List[str], List[List[str]]]:
+    """
+    Parse the first simple Markdown table in a file.
+
+    :param path: Markdown file containing a table.
+    :return: Header cells and row cells.
+    """
     if not path.exists():
         return [], []
-    lines = read(path).splitlines()
-    header: list[str] = []
-    rows: list[list[str]] = []
+    lines = _read(path).splitlines()
+    header: List[str] = []
+    rows: List[List[str]] = []
     for line in lines:
         if not line.startswith("|"):
             continue
@@ -342,18 +512,23 @@ def parse_table(path: Path) -> tuple[list[str], list[list[str]]]:
     return header, rows
 
 
-def check_glossary_catalog_signal(failures: list[str]) -> None:
+def _check_glossary_catalog_signal(failures: List[str]) -> None:
+    """
+    Check glossary terms have owner or concept-candidate signals.
+
+    :param failures: Mutable failure list.
+    """
     if not (CATALOG.exists() and GLOSSARY.exists()):
         return
-    catalog_header, catalog_rows = parse_table(CATALOG)
+    catalog_header, catalog_rows = _parse_table(CATALOG)
     try:
         page_i = catalog_header.index("Page")
         candidate_i = catalog_header.index("Concept hub candidate")
     except ValueError:
-        fail(failures, CATALOG, None, "catalog lacks Concept hub candidate column")
+        _fail(failures, CATALOG, None, "catalog lacks Concept hub candidate column")
         return
 
-    candidates: set[str] = set()
+    candidates: Set[str] = set()
     for row in catalog_rows:
         if len(row) <= max(page_i, candidate_i):
             continue
@@ -361,12 +536,12 @@ def check_glossary_catalog_signal(failures: list[str]) -> None:
         if marker and marker not in {"-", "no", "n/a", "none"}:
             candidates.add(row[page_i].lower())
 
-    glossary_header, glossary_rows = parse_table(GLOSSARY)
+    glossary_header, glossary_rows = _parse_table(GLOSSARY)
     try:
         term_i = glossary_header.index("Term")
         meaning_i = glossary_header.index("Meaning")
     except ValueError:
-        fail(failures, GLOSSARY, None, "glossary lacks Term/Meaning table")
+        _fail(failures, GLOSSARY, None, "glossary lacks Term/Meaning table")
         return
 
     for row in glossary_rows:
@@ -378,7 +553,7 @@ def check_glossary_catalog_signal(failures: list[str]) -> None:
         external = "external" in meaning.lower() or "background" in meaning.lower()
         candidate = any(term.lower() in entry for entry in candidates)
         if not (has_owner or external or candidate):
-            fail(
+            _fail(
                 failures,
                 GLOSSARY,
                 None,
@@ -386,14 +561,19 @@ def check_glossary_catalog_signal(failures: list[str]) -> None:
             )
 
 
-def check_log_format(failures: list[str]) -> None:
+def _check_log_format(failures: List[str]) -> None:
+    """
+    Check KB log headings, required fields, and hygiene.
+
+    :param failures: Mutable failure list.
+    """
     if not LOG.exists():
-        fail(failures, LOG, None, "missing KB log")
+        _fail(failures, LOG, None, "missing KB log")
         return
-    text = read(LOG)
+    text = _read(LOG)
     for idx, line in enumerate(text.splitlines(), start=1):
         if line.startswith("## [") and not LOG_HEAD_RE.fullmatch(line):
-            fail(failures, LOG, idx, "unparseable log heading")
+            _fail(failures, LOG, idx, "unparseable log heading")
 
     required = [
         "- `Sources:`",
@@ -408,31 +588,46 @@ def check_log_format(failures: list[str]) -> None:
             continue
         heading = chunk.splitlines()[0]
         if LOG_FORBIDDEN_RE.search(chunk):
-            fail(failures, LOG, line_for_offset(text, text.find(chunk)), "forbidden transient log content")
-        missing = [field for field in required if field not in chunk]
-        if missing:
-            fail(
+            _fail(
                 failures,
                 LOG,
-                line_for_offset(text, text.find(heading)),
+                _line_for_offset(text, text.find(chunk)),
+                "forbidden transient log content",
+            )
+        missing = [field for field in required if field not in chunk]
+        if missing:
+            _fail(
+                failures,
+                LOG,
+                _line_for_offset(text, text.find(heading)),
                 f"log entry missing fields: {', '.join(missing)}",
             )
 
 
-def check_root_and_generated_artifacts(failures: list[str]) -> None:
+def _check_root_and_generated_artifacts(failures: List[str]) -> None:
+    """
+    Check root maintenance artifacts and generated Python files.
+
+    :param failures: Mutable failure list.
+    """
     allowed_root_docs = {"AGENTS.md", "README.md", "CITATION.md", "coding_style.md"}
     for path in ROOT.glob("*.md"):
         if path.name in allowed_root_docs:
             continue
         if ROOT_KB_ARTIFACT_RE.match(path.name):
-            fail(failures, path, None, "root-level KB maintenance artifact")
+            _fail(failures, path, None, "root-level KB maintenance artifact")
     for path in ROOT.rglob("__pycache__"):
-        fail(failures, path, None, "generated Python artifact")
+        _fail(failures, path, None, "generated Python artifact")
     for path in ROOT.rglob("*.pyc"):
-        fail(failures, path, None, "generated Python artifact")
+        _fail(failures, path, None, "generated Python artifact")
 
 
-def main() -> int:
+def _main() -> int:
+    """
+    Run KB lint checks.
+
+    :return: Process exit status.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--all",
@@ -441,20 +636,20 @@ def main() -> int:
     )
     parser.parse_args()
 
-    failures: list[str] = []
-    files = iter_md_files()
-    pages = wiki_pages()
+    failures: List[str] = []
+    files = _iter_md_files()
+    pages = _wiki_pages()
 
-    check_wikilinks(files, failures)
-    graph = check_links(files, failures)
-    check_router_detail(files, failures)
-    check_leaf_contract(pages, failures)
-    check_reachability(graph, failures)
-    check_catalog(failures)
-    check_content_dir_indexes(failures)
-    check_glossary_catalog_signal(failures)
-    check_log_format(failures)
-    check_root_and_generated_artifacts(failures)
+    _check_wikilinks(files, failures)
+    graph = _check_links(files, failures)
+    _check_router_detail(files, failures)
+    _check_leaf_contract(pages, failures)
+    _check_reachability(graph, failures)
+    _check_catalog(failures)
+    _check_content_dir_indexes(failures)
+    _check_glossary_catalog_signal(failures)
+    _check_log_format(failures)
+    _check_root_and_generated_artifacts(failures)
 
     if failures:
         print("KB lint failed:")
@@ -467,4 +662,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_main())
