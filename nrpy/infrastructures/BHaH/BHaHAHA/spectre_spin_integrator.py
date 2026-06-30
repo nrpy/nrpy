@@ -2,6 +2,28 @@
 Register a C function to perform numerical integrations over the apparent horizon surface for spin and mass diagnostics.
 Needs: Integrands built in equations/general_relativity/bhahaha/SpECTRESpinEstimate.py
 
+Derivation and AKV convention summary:
+
+- The scalar potentials z_alpha are the AKV representatives. With the chosen
+  surface orientation eps^{theta phi} = +1/sqrt(q), a potential zeta generates
+  the tangential vector field phi^A = eps^{AB} D_B zeta. Reversing the
+  orientation reverses eps^{AB}, Omega, and the reported spin components.
+- The spin function used by the integrands is
+  Omega = eps^{AB} D_A X_B, where X_B = e_B^i K_ij s^j. On a closed surface,
+  integration by parts gives the AKV angular momentum
+  J[zeta] = (1/(8*pi)) int phi^A X_A dA
+          = (1/(8*pi)) int zeta Omega dA
+  for this sign convention.
+- The runtime potential solve discretizes the symmetric scalar AKV weak form
+  K(eta,z) = int (Delta eta)(Delta z) dA
+           - int R D_A eta D^A z dA,
+  M(eta,z) = int D_A eta D^A z dA, with K z = lambda M z and constants
+  removed by an area-weighted mean-zero constraint.
+- Normalization is part of the convention, not a post-processing detail:
+  rescaling z_alpha rescales S_alpha. This file therefore normalizes each
+  centered potential with int z_alpha^2 dA = A^3/(48*pi^2) before evaluating
+  S_alpha = (1/(8*pi)) int z_alpha Omega dA.
+
 Author: Ralston Graves
         ralstonkgraves **at** gmail **dot** com
 """

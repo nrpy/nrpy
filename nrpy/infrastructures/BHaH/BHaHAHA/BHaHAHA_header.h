@@ -233,7 +233,7 @@ static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct 
   diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
-}
+} // END FUNCTION: bah_initialize_diagnostics_struct
 
 //==================
 // PUBLIC FUNCTIONS
