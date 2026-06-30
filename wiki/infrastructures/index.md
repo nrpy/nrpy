@@ -6,6 +6,7 @@
 | --- | --- |
 | [BHaH](bhah/index.md) | You need standalone BHaH generated-application infrastructure. |
 | [ETLegacy](etlegacy/index.md) | You need classic Einstein Toolkit generated-thorn infrastructure. |
+| [CarpetX](carpetx/index.md) | You need CarpetX generated-thorn infrastructure routes. |
 | [superB](superb/index.md) | You need Charm++-based superB generated-application infrastructure. |
 
 Back to [AGENTS.md](../../AGENTS.md).

@@ -15,6 +15,7 @@
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | 2026-06-29 11:58:33 | sha256:039963e2bbdd73a4a7a19f62d360a3a5f5c755ca1f7d37f86841134027e80269 | partial |
 | `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | 2026-06-29 11:58:33 | sha256:8355737f318de5fa31ba3a56f4260565a6b646e61514c6569464329feff44090 | partial |
 | `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 364 files. | living | 2026-06-29 15:34:39 | sha256:ae23973e29b30242334f4a1e6b9ea96884e7467edc5151805242fbde3c8b5bdc | partial |
+| `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | 2026-06-29 17:38:36 | sha256:07407d727087c6d4fda8b151b8f9553a34dcb98979115bdfde288aa71629e84c | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 35 files. | living | 2026-06-29 11:58:33 | sha256:744144d1ce74d36bd2b64021e7e1e2ccd9e94e38f35a5b56fa2a90c8d672eba0 | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | 2026-06-09 17:07:33 | sha256:7a0c354fec49d1874eb1bfe456017e61e868b96127b7b0f4dd6deb52ee518ae4 | partial |
 
@@ -116,6 +117,30 @@ row above.
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:ddc3d11fcd53c5a651935e655d658efde2cef54c221f5376197d69cc398de5a4 |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:6f5e8144fb6e343038310f238e29c72389c8533528b0f58a56ca7b61718d6e48 |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:b58fb9cb25725c9480d840fd2dee99db4b500210a36ed3b33df3759a7f5dbf73 |
+| `nrpy/infrastructures/CarpetX/interface_ccl.py` | living | 2026-06-29 17:38:36 | sha256:1b4d3cc0ad734d1eccfd3f69fda3a21cc14fb44cf63a04882bf23aad53ec7bc9 |
+| `nrpy/infrastructures/CarpetX/param_ccl.py` | living | 2026-06-29 17:38:36 | sha256:b63eba3921a220e8c31b1b3f9c31779e78b4a14040e3ded4eb0d042a720600f0 |
+| `nrpy/infrastructures/CarpetX/schedule_ccl.py` | living | 2026-06-29 17:38:36 | sha256:704b8ca5995aebd1b08f12b612933c9ef6cae8d61d5b4f887423eea013b84142 |
+| `nrpy/infrastructures/CarpetX/configuration_ccl.py` | living | 2026-06-29 17:38:36 | sha256:b2a61779460ed1db3d6b9d2cfb070e6d431f8e0b0dc0218ecca55a8b40e15433 |
+| `nrpy/infrastructures/CarpetX/make_code_defn.py` | living | 2026-06-29 17:38:36 | sha256:acb15dd0a9d426145b0887212882e8813a37f736d3e93567773dac7c7a7ed19d |
+| `nrpy/infrastructures/CarpetX/CodeParameters.py` | living | 2026-06-29 17:38:36 | sha256:740d7701e7a84816b1612c896e7b0bdc7c18c3e3afe874d1731653cb9ff503f9 |
+| `nrpy/infrastructures/CarpetX/CarpetX_include_header.py` | living | 2026-06-29 17:38:36 | sha256:df5f77f6e0684838ee337c5a26851939dc5729d90fcded876574ddccbd1feaa8 |
+| `nrpy/infrastructures/CarpetX/simple_loop.py` | living | 2026-06-29 17:38:36 | sha256:8f6ce1f2066cfe8ca10f0b7dd2871e688211afeac7416341365c41d439576a1e |
+| `nrpy/infrastructures/CarpetX/boundary_conditions.py` | living | 2026-06-29 17:38:36 | sha256:1dd8d7544be9f8fe321ab3a59f26da46981a5b85e35e845c41ca986aada23539 |
+| `nrpy/infrastructures/CarpetX/zero_rhss.py` | living | 2026-06-29 17:38:36 | sha256:54ac804fddec65ee6591abf9071accb88bd74a58932ff5fe8439a73d06216602 |
+| `nrpy/infrastructures/CarpetX/general_relativity/Ricci_eval.py` | living | 2026-06-29 17:38:36 | sha256:dd6987840c258b54a44c21fead98a0b12be78feceee032580f77d6e690e8a757 |
+| `nrpy/infrastructures/CarpetX/general_relativity/rhs_eval.py` | living | 2026-06-29 17:38:36 | sha256:00626397c80e26ee9c71203b100cd64fe335eedc8fb8064bee7082cc0bf8ced8 |
+| `nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py` | living | 2026-06-29 17:38:36 | sha256:4898778ffcd49944c86d2a80962172bedaa7876b484d0d815e69c85be9619b73 |
+| `nrpy/infrastructures/CarpetX/general_relativity/ADM_to_BSSN.py` | living | 2026-06-29 17:38:36 | sha256:7572a31e53c8478b20aedee5c96084d5f79643f702bbd28478b4587b097623b4 |
+| `nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py` | living | 2026-06-29 17:38:36 | sha256:2f81bc54bf142dc8def50cdc3dd7818b679eedc1c49f410462a0acd6f889bc90 |
+| `nrpy/infrastructures/CarpetX/general_relativity/T4DD_to_T4UU.py` | living | 2026-06-29 17:38:36 | sha256:7ff2931ae9b7a2a0921a98fd3ca5be1d05f0cb73b46fa572b4d8a713b428edd4 |
+| `nrpy/infrastructures/CarpetX/general_relativity/floor_the_lapse.py` | living | 2026-06-29 17:38:36 | sha256:466519ed2877e7c2348ffdf0891286c24074932ff5ff6ceb409d25f484c2ad58 |
+| `nrpy/infrastructures/CarpetX/general_relativity/enforce_detgammahat_constraint.py` | living | 2026-06-29 17:38:36 | sha256:f2659f91c646e09504de4079b9c173c5f5656ddf83dab718c1a7202016bd53f8 |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:6f5e8144fb6e343038310f238e29c72389c8533528b0f58a56ca7b61718d6e48 |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:15b73c0db1fafb6feb99e3cf0ad4af888060abe929a5b2f8b9e61c53baff808f |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:b58fb9cb25725c9480d840fd2dee99db4b500210a36ed3b33df3759a7f5dbf73 |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:ddc3d11fcd53c5a651935e655d658efde2cef54c221f5376197d69cc398de5a4 |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py` | living | 2026-06-29 17:38:36 | sha256:f69abf66f34bbdc67104f1b7b3fc2debdda88314b684dcf42d4ac4cc51288d60 |
+| `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py` | living | 2026-06-29 17:38:36 | sha256:dc4b0d899b21ea8545bd67fd67f27c4b3aab68e26eab279707905753c23b331f |
 | `nrpy/infrastructures/superB/main_chare.py` | living | 2026-06-29 14:47:32 | sha256:bf9e686ebf58f86cfa5b4d23aca1eab5523dde80001d87b377d6bd49b6d2620d |
 | `nrpy/infrastructures/superB/timestepping_chare.py` | living | 2026-06-29 14:47:32 | sha256:4a88fadf7223f4ef5bcdd3757792bfdf8dd105139c8126ae1bbcbb02d5392d6b |
 | `nrpy/infrastructures/superB/Makefile_helpers.py` | living | 2026-06-29 14:47:32 | sha256:f52184fc4cfd001bafdc48a838cf8f5fc36799459b27f580a382bd3ad6d014f4 |
@@ -269,6 +294,8 @@ row above.
 | `https://einsteintoolkit.org/usersguide/UsersGuide.html` | Cactus 4.20 Users Guide page from the Einstein Toolkit site. | living | 2026-06-30 | partial | Background for Cactus thorn-writing and Cactus terminology emitted by ETLegacy code. |
 | `https://einsteintoolkit.org/referencemanual/ReferenceManual.html` | Cactus 4.20 Reference Manual page from the Einstein Toolkit site. | living | 2026-06-30 | partial | Background for `CCTK_*` thorn-writer function terminology emitted by ETLegacy code. |
 | `https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html` | Cactus users guide chapter C1, `Application thorns`. | living | 2026-06-30 | partial | Background for CCL and thorn-file terminology emitted by ETLegacy code. |
+| `https://www.cactuscode.org/documentation/usersguide/UsersGuidech12.html` | Cactus users guide chapter D2, CCL reference. | living | 2026-06-30 | partial | Background for CCL configuration-file terminology emitted by CarpetX thorn-assembly code. |
+| `https://einsteintoolkit.org/thornguide/CarpetX/CarpetX/documentation.html` | Einstein Toolkit thorn guide page, `CarpetX`. | living | 2026-06-30 | partial | Background for CarpetX CCL and dependency terminology emitted by CarpetX thorn-assembly code. |
 | `https://einsteintoolkit.org/thornguide/CactusNumerical/MoL/documentation.html` | Einstein Toolkit thorn guide page, `Method of Lines`. | living | 2026-06-30 | partial | Background for MoL terminology emitted by ETLegacy registration code. |
 | `https://einsteintoolkit.org/thornguide/CactusBase/Boundary/documentation.html` | Einstein Toolkit thorn guide page, `Boundary Conditions`. | living | 2026-06-30 | partial | Background for Boundary terminology emitted by ETLegacy boundary-condition code. |
 | `https://einsteintoolkit.org/thornguide/EinsteinEvolve/NewRad/documentation.html` | Einstein Toolkit thorn guide page, `NewRad`. | living | 2026-06-30 | partial | Background for NewRad terminology emitted by ETLegacy boundary-condition code. |
