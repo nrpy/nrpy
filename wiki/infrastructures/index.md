@@ -4,7 +4,7 @@
 
 | Page | Go here when... |
 | --- | --- |
-| [BHaH Lifecycle](bhah-lifecycle.md) | You need the standalone BHaH generated-application assembly flow. |
+| [BHaH](bhah/index.md) | You need standalone BHaH generated-application infrastructure. |
 | [superB](superb/index.md) | You need Charm++-based superB generated-application infrastructure. |
 
 Back to [AGENTS.md](../../AGENTS.md).
