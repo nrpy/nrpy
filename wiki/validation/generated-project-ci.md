@@ -58,7 +58,7 @@ generated file has been deliberately registered as frozen evidence.
 
 ## See Also
 
-- [Validation](index.md)
-- [Static Analysis](static-analysis.md)
-- [Glossary](../glossary.md)
-- [Workflows](../workflows.md)
+- Parent: [Validation](index.md)
+- Contrasts with: [Static Analysis](static-analysis.md)
+- See also: [Glossary](../glossary.md)
+- See also: [Workflows](../workflows.md)

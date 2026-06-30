@@ -26,7 +26,7 @@ The contribution boundary is stricter than the generated-project capability. Bin
 
 ## See Also
 
-- [Architecture](index.md)
-- [Overview](overview.md)
-- [Build And Run](build-and-run.md)
-- [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
+- Parent: [Architecture](index.md)
+- Depends on: [Build And Run](build-and-run.md)
+- Depends on: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
+- See also: [Overview](overview.md)

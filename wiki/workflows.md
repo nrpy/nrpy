@@ -1,16 +1,29 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 2026-06-29
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 2026-06-30
 
 ## Summary
 
-Start from `AGENTS.md`, follow routers to one or two compiled leaves, and answer
-from sourced pages. Maintenance work registers sources first, updates the owning
-leaf, then fixes nearby links and glossary terms. NRPy code changes keep their
-normal project workflow: direct example runs need `PYTHONPATH=.` when there is
-no editable install, Python edits require Black before commit, and every
-modified Python file gets the single-file static-analysis script unless it is a
-generated trusted-value file under `*/tests/*.py`.
+Start from `AGENTS.md`, follow catalog and router paths to compiled leaves, and
+answer from sourced pages. Durable answers are filed back into the wiki when
+they should compound. Maintenance work registers sources first, updates the
+owning leaf, then fixes nearby links, catalog/log entries, and glossary terms.
+NRPy code changes keep their normal project workflow: direct example runs need
+`PYTHONPATH=.` when there is no editable install, Python edits require Black
+before commit, and every modified Python file gets the single-file
+static-analysis script unless it is a generated trusted-value file under
+`*/tests/*.py`.
+
+## Search Order
+
+Use this order for agent navigation:
+
+1. Read [AGENTS.md](../AGENTS.md) for root routes and governance pointers.
+2. Read [catalog.md](catalog.md) for ambiguous or cross-branch queries.
+3. Follow branch `index.md` routers from root to owner.
+4. Read the owning leaves and their typed `See Also` neighbors.
+5. Use `rg` over `wiki/` only when catalog and router paths fail.
+6. Use `rg` over source code only to verify or update sourced facts.
 
 ## Ingest
 
@@ -26,16 +39,70 @@ generated trusted-value file under `*/tests/*.py`.
 
 ## Query
 
-Start at [AGENTS.md](../AGENTS.md). Follow the narrow route through branch
-routers to the owning leaf, read one or two leaves, then answer from compiled
-pages. If a normal question requires broad tree search, repair the relevant
-router or add a focused sourced leaf.
+Start with the search order above. Answer from compiled pages whenever they are
+current and sufficiently sourced. If a normal question requires broad tree
+search, repair the relevant router, catalog row, or focused sourced leaf instead
+of making broad search the permanent workflow.
+
+## Query Filing
+
+Do not file one-off answers.
+
+File durable answers when they span three or more leaves, resolve recurring
+ambiguity, compare subsystems, record a gotcha, or change how future queries
+should route.
+
+Use this filing target:
+
+1. Durable single-topic synthesis updates the existing owning leaf.
+2. Durable narrow new topic creates a leaf under the owning branch.
+3. Durable cross-branch synthesis goes under an existing branch when one branch
+   owns it cleanly.
+4. Durable cross-branch synthesis with no clean owner creates
+   `wiki/syntheses/index.md` plus the first `wiki/syntheses/*.md` leaf in the
+   same change.
+
+When filing, update [catalog.md](catalog.md), [log.md](log.md), source
+dependencies in [source-map.md](source-map.md) when they change, and typed
+neighbor links. Use plain markdown; do not require Obsidian metadata or
+frontmatter.
 
 ## Living-Source Change
 
 Recompute the changed source's mtime and hash, re-ingest affected leaves, and
 update one-hop neighbors that share changed glossary entities. Mark a page
-`stale` only when it cannot be reconciled immediately.
+`stale` only when it cannot be reconciled immediately. Record durable source
+drift and reconciliation decisions in [log.md](log.md).
+
+## External Source Trust Change
+
+Classify external sources as `background` unless a durable KB claim depends on
+them. Promote an external source to `external-spec` only when the claim needs
+the source as authority and one of these is true:
+
+1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
+2. The upstream source is stable by version, commit, or immutable URL.
+3. A logged exception explains why the live external source is acceptable.
+
+Any external source trust change requires updates to [source-map.md](source-map.md)
+and [log.md](log.md). If the change affects a contested or stale claim, also
+update [contradictions.md](contradictions.md). Repository facts still follow the
+authority order in [SCHEMA.md](SCHEMA.md): code, tests, generated evidence,
+docs, external specs, then background sources.
+
+## Contradiction And Stale Claims
+
+When sources disagree, create or update a row in
+[contradictions.md](contradictions.md) before changing the affected claim's
+status to `contested`. Record the competing sources, authority decision,
+affected pages, opened date, and next action. Add a matching `reconcile` or
+`source-drift` entry to [log.md](log.md).
+
+When a living source has moved and reconciliation cannot finish in the same
+change, mark affected pages `stale`, add or update the contradiction/staleness
+row, and log the blocked reconciliation reason. When a claim is reconciled,
+update affected pages, close or revise the row in [contradictions.md](contradictions.md),
+and append the resolution to [log.md](log.md).
 
 ## Page Move Or Delete
 
