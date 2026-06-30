@@ -268,7 +268,6 @@ class SpECTRESpinEstimateClass:
 
         # Placeholders; will be defined in _build_intrinsic_ops_and_omega.
         self._R: sp.Expr = sp.Integer(0)
-        self._Omega_base: sp.Expr = sp.Integer(0)
         self._Omega: sp.Expr = sp.Integer(0)
 
         # Build intrinsic connection, R, Omega, and Laplacians
@@ -849,8 +848,7 @@ class SpECTRESpinEstimateClass:
             for B in range(2):
                 covXB = self._SE_XD_dD[B][A + 1]
                 omega_sum += self._eps2UU[A][B] * covXB
-        self._Omega_base = omega_sum
-        self._Omega = self._Omega_base
+        self._Omega = omega_sum
 
         # Laplacians of zeta and y_aux:
         # Delta f = q^{AB} * ( partial_A partial_B f - Gamma^C_{AB} partial_C f )
