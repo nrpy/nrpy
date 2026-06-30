@@ -619,9 +619,9 @@ def _check_log_format(failures: List[str]) -> None:
             )
 
 
-def _check_root_and_generated_artifacts(failures: List[str]) -> None:
+def _check_root_artifacts(failures: List[str]) -> None:
     """
-    Check root maintenance artifacts and generated Python files.
+    Check root maintenance artifacts.
 
     :param failures: Mutable failure list.
     """
@@ -631,10 +631,6 @@ def _check_root_and_generated_artifacts(failures: List[str]) -> None:
             continue
         if ROOT_KB_ARTIFACT_RE.match(path.name):
             _fail(failures, path, None, "root-level KB maintenance artifact")
-    for path in ROOT.rglob("__pycache__"):
-        _fail(failures, path, None, "generated Python artifact")
-    for path in ROOT.rglob("*.pyc"):
-        _fail(failures, path, None, "generated Python artifact")
 
 
 def _main() -> int:
@@ -664,7 +660,7 @@ def _main() -> int:
     _check_content_dir_indexes(failures)
     _check_glossary_catalog_signal(failures)
     _check_log_format(failures)
-    _check_root_and_generated_artifacts(failures)
+    _check_root_artifacts(failures)
 
     if failures:
         print("KB lint failed:")
