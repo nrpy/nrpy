@@ -7,10 +7,11 @@ generated from ``two_blackholes_collide.py --raytracing-time ...``.
 
 The generated code keeps the existing Structure-of-Arrays photon pipeline and
 adaptive RKF45 stepping, but metric and Christoffel evaluations now use a
-piecewise analytic/numerical interpolation pipeline. Two user-selected static
-analytic spacetimes cover the lower-time and upper-time regions, while the
-intermediate coordinate-time interval uses the numerical interpolation helpers
-fed by the combined numerical-spacetime dataset.
+piecewise analytic/numerical interpolation pipeline. One user-selected static
+analytic spacetime covers the lower-time region, while the intermediate and
+late-time coordinate interval uses the numerical interpolation helpers fed by
+the combined numerical-spacetime dataset, freezing the numerical spacetime to
+its final stored slice after `t_numerical_end`.
 
 This example currently generates a CPU/OpenMP project.
 
@@ -83,10 +84,10 @@ if __name__ == "__main__":
 python3 two_blackholes_collide.py --raytracing-time T_FINAL DIAGNOSTICS_OUTPUT_EVERY --raytracing-coord-system CoordSystem --raytracing-Nxx NXX0 NXX1 NXX2 --raytracing-domain ...
 
 Then rerun this photon script using the .bin filename printed to the terminal by two_blackholes_collide.py, e.g.:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_sinhw_0p4_72_12_2.bin --coord-system-numerical SinhSpherical --grid-size-numerical 7.5 --sinhw-numerical 0.4 --analytical-metric-0 KerrSchild_Cartesian --analytical-metric-1 KerrSchild_Cartesian --t-metric-0 5.0 --t-metric-1 100.0 --dt-numerical-spacetime-data 0.5
+python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhSpherical_sinhw_0p4_72_12_2.bin --coord-system-numerical SinhSpherical --grid-size-numerical 7.5 --sinhw-numerical 0.4 --analytical-metric-0 KerrSchild_Cartesian --t-metric-0 5.0 --t-numerical-end 100.0 --dt-numerical-spacetime-data 0.5
 
 or:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhCylindrical_sinhwrho_0p25_sinhwz_0p4_72_2_12.bin --coord-system-numerical SinhCylindrical --grid-size-numerical 7.5 --sinhw-numerical 0.25 0.4 --analytical-metric-0 KerrSchild_Cartesian --analytical-metric-1 KerrSchild_Cartesian --t-metric-0 5.0 --t-metric-1 100.0 --dt-numerical-spacetime-data 0.5""",
+python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_SinhCylindrical_sinhwrho_0p25_sinhwz_0p4_72_2_12.bin --coord-system-numerical SinhCylindrical --grid-size-numerical 7.5 --sinhw-numerical 0.25 0.4 --analytical-metric-0 KerrSchild_Cartesian --t-metric-0 5.0 --t-numerical-end 100.0 --dt-numerical-spacetime-data 0.5""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -129,22 +130,16 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         help="""Analytic spacetime name used for photon times strictly below t_metric_0.""",
     )
     parser.add_argument(
-        "--analytical-metric-1",
-        type=str,
-        required=True,
-        help="""Analytic spacetime name used for photon times strictly above t_metric_1.""",
-    )
-    parser.add_argument(
         "--t-metric-0",
         type=float,
         required=True,
         help="""Lower coordinate-time transition from analytical-metric-0 to the numerical interpolation region.""",
     )
     parser.add_argument(
-        "--t-metric-1",
+        "--t-numerical-end",
         type=float,
         required=True,
-        help="""Upper coordinate-time transition from the numerical interpolation region to analytical-metric-1.""",
+        help="""Coordinate time of the final stored numerical slice. After this time the numerical spacetime is frozen to that final slice.""",
     )
     parser.add_argument(
         "--dt-numerical-spacetime-data",
@@ -192,8 +187,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "--time-start must be nonnegative.",
     )
     _require(
-        args.t_metric_0 < args.t_metric_1,
-        "--t-metric-0 must be strictly less than --t-metric-1.",
+        args.t_metric_0 < args.t_numerical_end,
+        "--t-metric-0 must be strictly less than --t-numerical-end.",
     )
     sinhw_numerical = None
     sinhw_numerical_rho = None
@@ -220,16 +215,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
             """--sinhw-numerical is supported only for SinhSpherical and SinhCylindrical.""",
         )
     analytical_metric_0 = args.analytical_metric_0
-    analytical_metric_1 = args.analytical_metric_1
     analytical_metric_0_is_brill_lindquist = (
         analytical_metric_0 == BRILL_LINDQUIST_CARTESIAN
     )
-    analytical_metric_1_is_brill_lindquist = (
-        analytical_metric_1 == BRILL_LINDQUIST_CARTESIAN
-    )
-    use_brill_lindquist_bhs = (
-        analytical_metric_0_is_brill_lindquist or analytical_metric_1_is_brill_lindquist
-    )
+    use_brill_lindquist_bhs = analytical_metric_0_is_brill_lindquist
     default_BH1_z_posn = None
     default_BH2_z_posn = None
     default_BH1_mass = None
@@ -239,16 +228,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         or args.brill_lindquist_bhs is not None,
         f"""--brill-lindquist-bhs is required when --analytical-metric-0 is {BRILL_LINDQUIST_CARTESIAN}.""",
     )
-    _require(
-        not analytical_metric_1_is_brill_lindquist
-        or args.brill_lindquist_bhs is not None,
-        f"""--brill-lindquist-bhs is required when --analytical-metric-1 is {BRILL_LINDQUIST_CARTESIAN}.""",
-    )
-    if analytical_metric_1_is_brill_lindquist:
-        warnings.warn(
-            """--analytical-metric-1 is the spacetime metric after merger. You selected BrillLindquist_Cartesian for this late-time region. Please check that this is what you want; --analytical-metric-0 covers the earlier-time analytic region.""",
-            stacklevel=1,
-        )
     if args.brill_lindquist_bhs is not None:
         default_BH1_z_posn = args.brill_lindquist_bhs[0]
         default_BH2_z_posn = args.brill_lindquist_bhs[1]
@@ -260,11 +239,11 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         )
         if not use_brill_lindquist_bhs:
             warnings.warn(
-                f"""--brill-lindquist-bhs was provided, but neither analytic metric is {BRILL_LINDQUIST_CARTESIAN}. These black-hole inputs will be ignored.""",
+                f"""--brill-lindquist-bhs was provided, but no analytic metric is {BRILL_LINDQUIST_CARTESIAN}. These black-hole inputs will be ignored.""",
                 stacklevel=1,
             )
     particle_type = "photon"
-    for analytical_metric in [analytical_metric_0, analytical_metric_1]:
+    for analytical_metric in [analytical_metric_0]:
         try:
             _ = geo.Geodesic_Equations[f"{analytical_metric}_{particle_type}"]
         except ValueError as exc:
@@ -312,9 +291,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     analytical_geodesic_data_0 = geo.Geodesic_Equations[
         f"{analytical_metric_0}_{PARTICLE}"
     ]
-    analytical_geodesic_data_1 = geo.Geodesic_Equations[
-        f"{analytical_metric_1}_{PARTICLE}"
-    ]
 
     # Step 5: Register C functions in split-pipeline order.
     print(" -> Registering C functions and local CodeParameters...")
@@ -329,21 +305,14 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         normalization_constraint_expr, PARTICLE
     )
 
-    # Step 5.c: Register the analytic spacetime workers used outside the
-    # numerical interval and on one reconstructed stencil edge.
+    # Step 5.c: Register the lower analytic spacetime workers used outside the
+    # early-time numerical interval and on one reconstructed stencil edge.
     g4DD_metric.g4DD_metric(
         analytical_geodesic_data_0.g4DD, analytical_metric_0, PARTICLE
     )
     connections.connections(
         analytical_geodesic_data_0.Gamma4UDD, analytical_metric_0, PARTICLE
     )
-    if analytical_metric_1 != analytical_metric_0:
-        g4DD_metric.g4DD_metric(
-            analytical_geodesic_data_1.g4DD, analytical_metric_1, PARTICLE
-        )
-        connections.connections(
-            analytical_geodesic_data_1.Gamma4UDD, analytical_metric_1, PARTICLE
-        )
 
     # Step 5.d: Register numerical interpolation helpers.
     register_azimuthal_interp = (
@@ -360,7 +329,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         enable_simd=enable_simd,
         project_dir=project_dir,
         analytical_metric_0=analytical_metric_0,
-        analytical_metric_1=analytical_metric_1,
     )
 
     # Step 5.e: Register RKF45 evolution kernels.
@@ -398,13 +366,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         f"g4DD_metric_{analytical_metric_0}",
         f"connections_{analytical_metric_0}",
     ]
-    if analytical_metric_1 != analytical_metric_0:
-        internal_funcs_to_remove.extend(
-            [
-                f"g4DD_metric_{analytical_metric_1}",
-                f"connections_{analytical_metric_1}",
-            ]
-        )
     for internal_func in internal_funcs_to_remove:
         cfc.CFunction_dict.pop(internal_func, None)
 
@@ -465,9 +426,9 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 140.0
 
-    # Step 6.f: Set the analytic/numerical transition defaults.
+    # Step 6.f: Set the lower analytic / numerical transition defaults.
     par.glb_code_params_dict["t_metric_0"].defaultvalue = args.t_metric_0
-    par.glb_code_params_dict["t_metric_1"].defaultvalue = args.t_metric_1
+    par.glb_code_params_dict["t_numerical_end"].defaultvalue = args.t_numerical_end
     par.glb_code_params_dict["dt_numerical_spacetime_data"].defaultvalue = (
         args.dt_numerical_spacetime_data
     )
@@ -544,7 +505,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     if sinhw_numerical_z is not None:
         print(f" -> Numerical SINHWZ: {sinhw_numerical_z}")
     print(f" -> Analytic metric 0: {analytical_metric_0}")
-    print(f" -> Analytic metric 1: {analytical_metric_1}")
     if use_brill_lindquist_bhs:
         print(
             " -> Brill-Lindquist BHs: "
@@ -553,7 +513,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         )
     print(f" -> time_start: {args.time_start}")
     print(f" -> t_metric_0: {args.t_metric_0}")
-    print(f" -> t_metric_1: {args.t_metric_1}")
+    print(f" -> t_numerical_end: {args.t_numerical_end}")
     print(" -> dt_numerical_spacetime_data: " f"{args.dt_numerical_spacetime_data}")
 
     # Step 6.m: Generate C code for parameter handling.

@@ -1,0 +1,1326 @@
+"""
+Register a C function that exports one synthetic frozen-final raytracing slice.
+
+This module generates a BHaH diagnostics helper with the same on-disk binary
+format as ``output_raytracing_data.py``. The metric payload is evaluated from
+the current BSSN state, but the Christoffels are recomputed from the same
+four-metric after imposing the frozen-metric condition
+``partial_t g_{mu nu} = 0``. The resulting Cartesian metric and Christoffels
+can be combined by the existing raytracing time-slice pipeline without a file
+format change.
+
+The intended diagnostics-side use is to call the ordinary
+``output_raytracing_data(...)`` first on the last scheduled raytracing output,
+then call ``output_raytracing_data_frozen_final_slice(...)`` with output index
+``time_output_index + 1`` while the BSSN state still matches the last real
+exported metric slice. This function writes ``simulation_time`` metadata equal
+to ``commondata->t_final``.
+
+Author: Dalton J. Moone
+        daltonmoone **at** gmail **dot** com
+"""
+
+from inspect import currentframe as cfr
+from types import FrameType as FT
+from typing import List, Tuple, Union, cast
+
+import sympy as sp
+
+import nrpy.c_codegen as ccg
+import nrpy.c_function as cfc
+import nrpy.helpers.parallel_codegen as pcg
+import nrpy.indexedexp as ixp
+import nrpy.params as par
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
+from nrpy.infrastructures import BHaH
+
+
+def _validate_fixed_width_string(text: str, field_bytes: int, label: str) -> None:
+    """
+    Validate that a fixed-width on-disk string fits its serialized field.
+
+    The binary writer stores null-padded strings and rejects any text whose
+    encoded length would fill or exceed the field. Checking this at Python
+    code-generation time is cheaper than discovering the mismatch during a run.
+
+    :param text: String that will be serialized into the fixed-width field.
+    :param field_bytes: Exact field width in bytes.
+    :param label: Human-readable label for error reporting.
+    :raises ValueError: If the string cannot fit in the fixed-width field.
+    """
+    if len(text.encode("ascii")) >= field_bytes:
+        raise ValueError(
+            f"String '{text}' for {label} exceeds fixed-width field size "
+            f"{field_bytes}."
+        )
+
+
+def _build_lifted_grid_to_cartesian_jacobians(
+    bssn_coord_system: str,
+    enable_bssn_rfm_precompute: bool,
+) -> Tuple[
+    List[List[sp.Expr]],
+    List[List[sp.Expr]],
+    List[List[List[sp.Expr]]],
+]:
+    r"""
+    Build 4D Jacobian data for the grid-basis to Cartesian transformation.
+
+    The spacetime map is assumed to be a time-independent spatial map lifted
+    into four dimensions:
+
+        x^0 = u^0,
+        x^i = X^i(u^1, u^2, u^3).
+
+    Returned tensors are indexed as:
+
+        J4UD[alpha][a]       = partial x^alpha / partial u^a,
+        K4UD[a][alpha]       = partial u^a / partial x^alpha,
+        J4UD_dD[alpha][c][b] = partial_b J4UD[alpha][c].
+
+    These are the exact data structures consumed by the geodesics.py
+    transformation helpers used by the ordinary raytracing exporter path.
+
+    :param bssn_coord_system: Native BSSN coordinate system.
+    :param enable_bssn_rfm_precompute: Whether reference-metric precomputation
+        is enabled for the generated project.
+    :return: Lifted forward Jacobian, inverse Jacobian, and forward-Jacobian
+        derivatives.
+    :raises ValueError: If the coordinate system is unsupported.
+    """
+    # pylint: disable-next=import-outside-toplevel
+    import nrpy.reference_metric as refmetric
+
+    if bssn_coord_system not in refmetric.supported_CoordSystems:
+        raise ValueError(
+            f"Unsupported CoordSystem '{bssn_coord_system}'. "
+            f"Supported coordinate systems: {refmetric.supported_CoordSystems}"
+        )
+
+    coord_system_key = bssn_coord_system + (
+        "_rfm_precompute" if enable_bssn_rfm_precompute else ""
+    )
+    rfm = refmetric.reference_metric[coord_system_key]
+    if len(rfm.xx) != 3:
+        raise ValueError("ReferenceMetric coordinates are inconsistent with 3D space.")
+
+    spatial_J3UD = rfm.Jac_dUCart_dDrfmUD
+    spatial_K3UD = rfm.Jac_dUrfm_dDCartUD
+
+    J4UD = ixp.zerorank2(dimension=4)
+    K4UD = ixp.zerorank2(dimension=4)
+    J4UD[0][0] = sp.sympify(1)
+    K4UD[0][0] = sp.sympify(1)
+
+    for spatial_target_index in range(3):
+        for spatial_grid_index in range(3):
+            J4UD[spatial_target_index + 1][spatial_grid_index + 1] = spatial_J3UD[
+                spatial_target_index
+            ][spatial_grid_index]
+            K4UD[spatial_grid_index + 1][spatial_target_index + 1] = spatial_K3UD[
+                spatial_grid_index
+            ][spatial_target_index]
+
+    J4UD_dD = ixp.zerorank3(dimension=4)
+    for spatial_target_index in range(3):
+        for spatial_grid_index in range(3):
+            for spatial_deriv_index in range(3):
+                J4UD_dD[spatial_target_index + 1][spatial_grid_index + 1][
+                    spatial_deriv_index + 1
+                ] = sp.diff(
+                    spatial_J3UD[spatial_target_index][spatial_grid_index],
+                    rfm.xx[spatial_deriv_index],
+                )
+
+    return J4UD, K4UD, J4UD_dD
+
+
+def _christoffels_from_inverse_metric_and_metric_derivatives(
+    g4UU: List[List[sp.Expr]],
+    g4DD_dD: List[List[List[sp.Expr]]],
+) -> List[List[List[sp.Expr]]]:
+    r"""
+    Compute four-Christoffel symbols from metric derivative data.
+
+    This helper uses the convention
+    ``g4DD_dD[mu][nu][rho] = partial_rho g_{mu nu}`` and computes:
+
+    ``Gamma^alpha_{mu nu} = 1/2 g^{alpha beta}``
+    ``(g_{beta mu,nu} + g_{beta nu,mu} - g_{mu nu,beta})``.
+
+    :param g4UU: Contravariant four-metric in the source grid basis.
+    :param g4DD_dD: First derivatives of the covariant four-metric.
+    :return: Four-Christoffel symbols in the source grid basis.
+    """
+    Gamma4UDD = ixp.zerorank3(dimension=4)
+    for alpha in range(4):
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = sp.sympify(0)
+                for beta in range(4):
+                    term += (
+                        sp.Rational(1, 2)
+                        * g4UU[alpha][beta]
+                        * (
+                            g4DD_dD[beta][mu][nu]
+                            + g4DD_dD[beta][nu][mu]
+                            - g4DD_dD[mu][nu][beta]
+                        )
+                    )
+                Gamma4UDD[alpha][mu][nu] = term
+                Gamma4UDD[alpha][nu][mu] = term
+    return Gamma4UDD
+
+
+def _build_frozen_final_cartesian_recipes(
+    bssn_coord_system: str,
+    enable_bssn_rfm_precompute: bool,
+) -> Tuple[List[List[sp.Expr]], List[List[List[sp.Expr]]]]:
+    r"""
+    Build Cartesian-basis metric and frozen-compatible Christoffel recipes.
+
+    The metric is the ordinary BSSN-reconstructed four-metric. The Christoffels
+    are rebuilt from the metric after setting only the derivative-direction
+    sector ``g4DD_dD[mu][nu][0]`` to zero. Components with ``mu == 0`` or
+    ``nu == 0`` are not zeroed; their spatial derivatives remain part of the
+    frozen metric connection.
+
+    :param bssn_coord_system: Coordinate system used by the evolved BSSN state.
+    :param enable_bssn_rfm_precompute: Whether reference-metric precomputation
+        is enabled in the generated project.
+    :return: Cartesian covariant four-metric and Cartesian four-Christoffel
+        symbolic recipes ready for serialization.
+    """
+    # Register conformal-factor parameters and BSSN gridfunction symbols before
+    # building the BSSN-to-four-metric expressions.
+    # pylint: disable-next=import-outside-toplevel
+    __import__("nrpy.equations.general_relativity.BSSN_quantities")
+
+    # pylint: disable-next=import-outside-toplevel
+    from nrpy.equations.general_relativity.BSSN_to_g4Christoffel import (
+        BSSN_to_g4Christoffel,
+    )
+
+    # pylint: disable-next=import-outside-toplevel
+    from nrpy.equations.general_relativity.geodesics.geodesics import (
+        GeodesicEquations,
+    )
+
+    bssn_to_g4christoffel = BSSN_to_g4Christoffel(
+        CoordSystem=bssn_coord_system,
+        enable_rfm_precompute=enable_bssn_rfm_precompute,
+    )
+    grid_g4DD = bssn_to_g4christoffel.g4DD
+    grid_g4UU = bssn_to_g4christoffel.g4UU
+    dynamic_grid_g4DD_dD = bssn_to_g4christoffel.g4DD_dD
+
+    frozen_grid_g4DD_dD = ixp.zerorank3(dimension=4)
+    for mu in range(4):
+        for nu in range(4):
+            for deriv_index in range(4):
+                if deriv_index == 0:
+                    frozen_grid_g4DD_dD[mu][nu][deriv_index] = sp.sympify(0)
+                else:
+                    frozen_grid_g4DD_dD[mu][nu][deriv_index] = dynamic_grid_g4DD_dD[mu][
+                        nu
+                    ][deriv_index]
+
+    frozen_grid_Gamma4UDD = _christoffels_from_inverse_metric_and_metric_derivatives(
+        g4UU=grid_g4UU,
+        g4DD_dD=frozen_grid_g4DD_dD,
+    )
+    J4UD, K4UD, J4UD_dD = _build_lifted_grid_to_cartesian_jacobians(
+        bssn_coord_system=bssn_coord_system,
+        enable_bssn_rfm_precompute=enable_bssn_rfm_precompute,
+    )
+
+    # pylint: disable=protected-access
+    cartesian_g4DD = GeodesicEquations._transform_covariant_metric_from_grid_basis_data(
+        grid_g4DD=grid_g4DD,
+        K4UD=K4UD,
+    )
+    cartesian_Gamma4UDD = (
+        GeodesicEquations._transform_christoffel_recipe_from_grid_basis_data(
+            grid_Gamma4UDD=frozen_grid_Gamma4UDD,
+            J4UD=J4UD,
+            J4UD_dD=J4UD_dD,
+            K4UD=K4UD,
+        )
+    )
+    # pylint: enable=protected-access
+
+    return cartesian_g4DD, cartesian_Gamma4UDD
+
+
+def register_CFunction_output_raytracing_data_frozen_final_slice(
+    CoordSystem: str,
+    enable_rfm_precompute: bool,
+    enable_RbarDD_gridfunctions: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
+    """
+    Register the synthetic frozen-final raytracing binary exporter.
+
+    The generated C helper writes one binary file with the same header and
+    payload layout as the ordinary raytracing exporter, but its Christoffels are
+    recomputed after imposing ``partial_t g_{mu nu} = 0``. The physical
+    ``simulation_time`` stored in the file is ``commondata->t_final``.
+
+    :param CoordSystem: Coordinate system used by the evolved BSSN state.
+    :param enable_rfm_precompute: Whether the generated project uses
+        reference-metric precomputation.
+    :param enable_RbarDD_gridfunctions: Kept for API symmetry with the normal
+        raytracing exporter. The frozen exporter itself does not use Ricci/RHS
+        refreshes or RbarDD gridfunctions.
+    :return: None if in registration phase, else the updated NRPy environment.
+    :raises ValueError: If ``CoordSystem`` is not a string.
+    :raises ValueError: If ``enable_rfm_precompute`` is not a bool.
+    :raises ValueError: If ``enable_RbarDD_gridfunctions`` is not a bool.
+    :raises ValueError: If ``enable_rfm_precompute`` is False.
+    :raises ValueError: If the generated project uses CUDA parallelization.
+    """
+    if not isinstance(CoordSystem, str):
+        raise ValueError(
+            f"CoordSystem must be a string, got {type(CoordSystem).__name__}"
+        )
+    if not isinstance(enable_rfm_precompute, bool):
+        raise ValueError(
+            "enable_rfm_precompute must be a bool, "
+            f"got {type(enable_rfm_precompute).__name__}"
+        )
+    if not isinstance(enable_RbarDD_gridfunctions, bool):
+        raise ValueError(
+            "enable_RbarDD_gridfunctions must be a bool, "
+            f"got {type(enable_RbarDD_gridfunctions).__name__}"
+        )
+    if not enable_rfm_precompute:
+        raise ValueError(
+            "Frozen-final raytracing export currently follows the ordinary "
+            "raytracing exporter constraint enable_rfm_precompute=True."
+        )
+
+    if pcg.pcg_registration_phase():
+        pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
+        return None
+
+    parallelization = cast(str, par.parval_from_str("parallelization"))
+    if parallelization == "cuda":
+        raise ValueError(
+            "Raytracing binary exporters currently support only host/OpenMP builds. "
+            "Add host-only Ricci/RHS extraction before enabling CUDA."
+        )
+
+    # Step 1: Build the transformed symbolic recipes for the exported tensors.
+    # The metric is the current BSSN metric; the Christoffels are recomputed
+    # after zeroing the time-derivative direction of g4DD_dD.
+    g4DD, Gamma4UDD = _build_frozen_final_cartesian_recipes(
+        bssn_coord_system=CoordSystem,
+        enable_bssn_rfm_precompute=enable_rfm_precompute,
+    )
+
+    # Step 2: Define the on-disk tensor component ordering.
+    metric_components: List[Tuple[Tuple[int, int], str]] = [
+        ((0, 0), "g4DD00"),
+        ((0, 1), "g4DD01"),
+        ((0, 2), "g4DD02"),
+        ((0, 3), "g4DD03"),
+        ((1, 1), "g4DD11"),
+        ((1, 2), "g4DD12"),
+        ((1, 3), "g4DD13"),
+        ((2, 2), "g4DD22"),
+        ((2, 3), "g4DD23"),
+        ((3, 3), "g4DD33"),
+    ]
+    christoffel_components: List[Tuple[Tuple[int, int, int], str]] = []
+    for alpha in range(4):
+        for mu in range(4):
+            for nu in range(mu, 4):
+                christoffel_components.append(
+                    ((alpha, mu, nu), f"Gamma4UDD{alpha}{mu}{nu}")
+                )
+
+    # Step 3: Flatten the symbolic expressions into the serialized record layout.
+    expr_list = [g4DD[mu][nu] for (mu, nu), _ in metric_components]
+    expr_list.extend(
+        Gamma4UDD[alpha][mu][nu] for (alpha, mu, nu), _ in christoffel_components
+    )
+
+    lhs_list = [f"REAL {name}" for _, name in metric_components]
+    lhs_list.extend(f"REAL {name}" for _, name in christoffel_components)
+
+    # Step 4: Ask the shared expression helpers which runtime parameters the
+    #         symbolic recipes need, then generate the corresponding C locals.
+    params_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        expr_list
+    )
+    params_definitions = generate_definition_header(
+        params_symbols,
+        enable_intrinsics=False,
+        var_access="params->",
+    )
+    commondata_definitions = generate_definition_header(
+        commondata_symbols,
+        enable_intrinsics=False,
+        var_access="commondata->",
+    )
+
+    # Step 5: Define the fixed-width header schema.
+    record_component_names = ["x", "y", "z"]
+    record_component_names.extend(name for _, name in metric_components)
+    record_component_names.extend(name for _, name in christoffel_components)
+    header_label = "NRPy RT spacetime data"
+    record_component_name_bytes = 24
+    header_label_bytes = 32
+    format_name = "Cartesian g4DD+Gamma4UDD"
+    format_name_bytes = 32
+    target_basis_name = "Cartesian"
+    basis_name_bytes = 16
+    coord_name_bytes = 32
+    loop_order_name = "i2maj_i0fast"
+    loop_order_name_bytes = 16
+    metric_component_name_bytes = 16
+    gamma_component_name_bytes = 16
+    num_metric_components = len(metric_components)
+    num_gamma_components = len(christoffel_components)
+    num_record_components = len(record_component_names)
+    point_record_real_count = 3 + num_metric_components + num_gamma_components
+    point_record_bytes = 8 * point_record_real_count
+    num_u32_header_fields = 19
+    num_u64_header_fields = 15
+    num_f64_header_fields = 15
+    cf_convention_bytes = format_name_bytes
+    header_size_bytes = (
+        16
+        + num_u32_header_fields * 4
+        + num_u64_header_fields * 8
+        + num_f64_header_fields * 8
+        + header_label_bytes
+        + format_name_bytes
+        + basis_name_bytes
+        + coord_name_bytes
+        + loop_order_name_bytes
+        + cf_convention_bytes
+        + num_record_components * record_component_name_bytes
+        + num_metric_components * metric_component_name_bytes
+        + num_gamma_components * gamma_component_name_bytes
+    )
+    cf_convention = cast(str, par.parval_from_str("EvolvedConformalFactor_cf"))
+
+    # Step 5.a: Validate every fixed-width string before generating the C exporter.
+    _validate_fixed_width_string(header_label, header_label_bytes, "header_label")
+    _validate_fixed_width_string(format_name, format_name_bytes, "format_name")
+    _validate_fixed_width_string(target_basis_name, basis_name_bytes, "target_basis")
+    _validate_fixed_width_string(CoordSystem, coord_name_bytes, "source_coord_system")
+    _validate_fixed_width_string(loop_order_name, loop_order_name_bytes, "loop_order")
+    _validate_fixed_width_string(cf_convention, cf_convention_bytes, "cf_convention")
+    for component_name in record_component_names:
+        _validate_fixed_width_string(
+            component_name, record_component_name_bytes, "record_component_names"
+        )
+    for _, component_name in metric_components:
+        _validate_fixed_width_string(
+            component_name, metric_component_name_bytes, "metric_component_names"
+        )
+    for _, component_name in christoffel_components:
+        _validate_fixed_width_string(
+            component_name, gamma_component_name_bytes, "christoffel_component_names"
+        )
+
+    # Step 6: Build the interior-point evaluation kernel for one output record.
+    loop_body = rf"""
+{commondata_definitions}
+{params_definitions}
+  MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+  MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+  MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
+  MAYBE_UNUSED const REAL xx0 = xx[0][i0];
+  MAYBE_UNUSED const REAL xx1 = xx[1][i1];
+  MAYBE_UNUSED const REAL xx2 = xx[2][i2];
+  const int idx3 = IDX3(i0, i1, i2);
+  const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
+      i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
+      payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+      (uint64_t)Nxx_plus_2NGHOSTS1_u32, (uint64_t)Nxx_plus_2NGHOSTS2_u32);
+  const uint64_t base_index = point_index * (uint64_t)point_record_real_count;
+  const REAL *restrict in_gfs = y_n_gfs;
+
+{ccg.c_codegen(
+        expr_list,
+        lhs_list,
+        enable_fd_codegen=True,
+        enable_simd=False,
+        enable_fd_functions=False,
+        include_braces=False,
+    )}
+"""
+    component_index = 3
+    for _, name in metric_components:
+        loop_body += (
+            f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
+        )
+        component_index += 1
+    for _, name in christoffel_components:
+        loop_body += (
+            f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
+        )
+        component_index += 1
+
+    # Step 7: Wrap the pointwise kernel in the standard BHaH interior loop.
+    loop = BHaH.simple_loop.simple_loop(
+        loop_body=loop_body,
+        loop_region="interior",
+        enable_intrinsics=False,
+        CoordSystem=CoordSystem,
+        enable_rfm_precompute=enable_rfm_precompute,
+        read_xxs=not enable_rfm_precompute,
+        OMP_collapse=1,
+    )
+
+    # Step 8: Register the generated C exporter and its helper functions.
+    includes = [
+        "<errno.h>",
+        "<float.h>",
+        "<inttypes.h>",
+        "<math.h>",
+        "<stdint.h>",
+        "<stdio.h>",
+        "<stdlib.h>",
+        "<string.h>",
+        "<sys/stat.h>",
+        "<unistd.h>",
+        "BHaH_defines.h",
+        "BHaH_function_prototypes.h",
+    ]
+    desc = """
+Export one synthetic frozen-final Cartesian-basis raytracing slice.
+
+This function writes at most one binary file per diagnostics output to:
+
+  ./raytracing_data_t########.bin
+
+where the eight-digit index is the diagnostics output index. Each file is
+written to a unique temporary sibling path and then installed at the final
+path without overwriting an existing file. The payload stores the physical
+simulation time and one point record per full logical-grid point, including
+ghost zones.
+
+Each point record contains:
+  - Cartesian coordinates x, y, z,
+  - the 10 unique covariant four-metric components
+      (00, 01, 02, 03, 11, 12, 13, 22, 23, 33),
+  - the 40 unique four-Christoffel components serialized by nested
+      (alpha, mu, nu) order with nu >= mu.
+
+The Cartesian tensor expressions are evaluated directly from the transformed
+symbolic recipes in geodesics.py. The exporter does not perform a second
+runtime tensor basis transformation after importing those recipes.
+
+The Christoffels are rebuilt from metric derivatives after forcing
+``partial_t g_mu_nu = 0``. No Ricci/RHS refresh or RHS scratch buffer is
+allocated. The exporter evaluates Cartesian coordinates on the full logical
+grid and evaluates the Cartesian tensors only on interior logical-grid points.
+It then fills pure outer ghost-zone tensor fields using the existing BHaH
+2nd-order extrapolation ordering and copies inner-boundary ghost-zone tensor
+fields from their mapped source records in bcstruct. Point records are
+first assembled into a deterministic in-memory payload buffer using the
+documented logical-grid ordering, then written to disk after the ghost-fill
+phase completes. The serialized payload metadata exposes the logical-grid
+half-open interval [-NGHOSTS, Nxx + NGHOSTS) while preserving the
+underlying zero-based storage order.
+
+@param[in] commondata  Global simulation metadata used in output naming and headers
+@param[in] griddata  Host-side per-grid runtime state to export
+@param time_output_index  Diagnostics output index used in the emitted filename
+"""
+    cfunc_type = "void"
+    name = "output_raytracing_data_frozen_final_slice"
+    params = (
+        "const commondata_struct *restrict commondata, "
+        "const griddata_struct *restrict griddata, "
+        "const int time_output_index"
+    )
+
+    prefunc = r"""
+/**
+ * Abort the program with a message.
+ *
+ * @param[in] message  Error message to print before aborting.
+ */
+static void raytracing_data_abort_with_message(const char *restrict message) {
+  fprintf(stderr, "%s\n", message);
+  exit(1);
+} // END FUNCTION: raytracing_data_abort_with_message
+
+/**
+ * Cast a nonnegative integer to uint32_t, aborting on invalid input.
+ *
+ * @param value  Integer value to convert.
+ * @param[in] label  Label for the error message.
+ * @return Safely casted uint32_t value.
+ */
+static uint32_t raytracing_data_u32_from_nonnegative_int_or_abort(
+    const int value,
+    const char *restrict label
+) {
+  if (value < 0) {
+    fprintf(stderr,
+            "Error: output_raytracing_data received negative %s=%d.\n",
+            label,
+            value);
+    exit(1);
+  } // END IF: negative integers cannot be serialized as uint32_t
+  if ((uint64_t)value > (uint64_t)UINT32_MAX) {
+    fprintf(stderr,
+            "Error: output_raytracing_data %s=%d does not fit in uint32_t.\n",
+            label,
+            value);
+    exit(1);
+  } // END IF: value exceeds the documented header format
+  return (uint32_t)value;
+} // END FUNCTION: raytracing_data_u32_from_nonnegative_int_or_abort
+
+/**
+ * Add two uint64_t values, aborting on overflow.
+ *
+ * @param a  First value.
+ * @param b  Second value.
+ * @param[in] label  Label for the error message.
+ * @return The sum a + b.
+ */
+static uint64_t raytracing_data_add_u64_or_abort(
+    const uint64_t a,
+    const uint64_t b,
+    const char *restrict label
+) {
+  if (UINT64_MAX - a < b) {
+    fprintf(stderr,
+            "Error: output_raytracing_data uint64 overflow while computing %s.\n",
+            label);
+    exit(1);
+  } // END IF: addition would overflow
+  return a + b;
+} // END FUNCTION: raytracing_data_add_u64_or_abort
+
+/**
+ * Multiply two uint64_t values, aborting on overflow.
+ *
+ * @param a  First value.
+ * @param b  Second value.
+ * @param[in] label  Label for the error message.
+ * @return The product a * b.
+ */
+static uint64_t raytracing_data_mul_u64_or_abort(
+    const uint64_t a,
+    const uint64_t b,
+    const char *restrict label
+) {
+  if (a != 0ULL && b > UINT64_MAX / a) {
+    fprintf(stderr,
+            "Error: output_raytracing_data uint64 overflow while computing %s.\n",
+            label);
+    exit(1);
+  } // END IF: multiplication would overflow
+  return a * b;
+} // END FUNCTION: raytracing_data_mul_u64_or_abort
+
+/**
+ * Cast a uint64_t value to size_t, aborting on overflow.
+ *
+ * @param value  Integer value to convert.
+ * @param[in] label  Label for the error message.
+ * @return Safely casted size_t value.
+ */
+static size_t raytracing_data_size_t_from_u64_or_abort(
+    const uint64_t value,
+    const char *restrict label
+) {
+  if (value > (uint64_t)SIZE_MAX) {
+    fprintf(stderr,
+            "Error: output_raytracing_data %s=%" PRIu64 " does not fit in size_t.\n",
+            label,
+            value);
+    exit(1);
+  } // END IF: value exceeds the local size_t range
+  return (size_t)value;
+} // END FUNCTION: raytracing_data_size_t_from_u64_or_abort
+
+/**
+ * Write elements to a file, aborting on failure.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param[in] data  Data to write.
+ * @param element_size  Size of each element.
+ * @param count  Number of elements.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_or_abort(
+    FILE *restrict fp,
+    const void *restrict data,
+    const size_t element_size,
+    const size_t count,
+    const char *restrict label
+) {
+  if (count != 0 && element_size > SIZE_MAX / count) {
+    fprintf(stderr,
+            "Error: output_raytracing_data size_t overflow before writing %s.\n",
+            label);
+    fclose(fp);
+    exit(1);
+  } // END IF: fwrite byte count would overflow
+  if (fwrite(data, element_size, count, fp) != count) {
+    fprintf(stderr,
+            "Error: output_raytracing_data failed while writing %s.\n",
+            label);
+    fclose(fp);
+    exit(1);
+  } // END IF: fwrite failed
+} // END FUNCTION: raytracing_data_write_or_abort
+
+/**
+ * Write a uint32_t value in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param value  Value to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_u32_or_abort(
+    FILE *restrict fp,
+    const uint32_t value,
+    const char *restrict label
+) {
+  uint8_t buffer[4];
+  buffer[0] = (uint8_t)(value & 0xffU);
+  buffer[1] = (uint8_t)((value >> 8U) & 0xffU);
+  buffer[2] = (uint8_t)((value >> 16U) & 0xffU);
+  buffer[3] = (uint8_t)((value >> 24U) & 0xffU);
+  raytracing_data_write_or_abort(fp, buffer, sizeof(uint8_t), 4, label);
+} // END FUNCTION: raytracing_data_write_u32_or_abort
+
+/**
+ * Write a uint64_t value in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param value  Value to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_u64_or_abort(
+    FILE *restrict fp,
+    const uint64_t value,
+    const char *restrict label
+) {
+  uint8_t buffer[8];
+  buffer[0] = (uint8_t)(value & 0xffULL);
+  buffer[1] = (uint8_t)((value >> 8U) & 0xffULL);
+  buffer[2] = (uint8_t)((value >> 16U) & 0xffULL);
+  buffer[3] = (uint8_t)((value >> 24U) & 0xffULL);
+  buffer[4] = (uint8_t)((value >> 32U) & 0xffULL);
+  buffer[5] = (uint8_t)((value >> 40U) & 0xffULL);
+  buffer[6] = (uint8_t)((value >> 48U) & 0xffULL);
+  buffer[7] = (uint8_t)((value >> 56U) & 0xffULL);
+  raytracing_data_write_or_abort(fp, buffer, sizeof(uint8_t), 8, label);
+} // END FUNCTION: raytracing_data_write_u64_or_abort
+
+/**
+ * Write an int64_t value in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param value  Value to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_i64_or_abort(
+    FILE *restrict fp,
+    const int64_t value,
+    const char *restrict label
+) {
+  raytracing_data_write_u64_or_abort(fp, (uint64_t)value, label);
+} // END FUNCTION: raytracing_data_write_i64_or_abort
+
+/**
+ * Write a binary64 value in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param value  Value to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_f64_or_abort(
+    FILE *restrict fp,
+    const double value,
+    const char *restrict label
+) {
+  uint64_t bits = 0ULL;
+  memcpy(&bits, &value, sizeof(bits));
+  raytracing_data_write_u64_or_abort(fp, bits, label);
+} // END FUNCTION: raytracing_data_write_f64_or_abort
+
+/**
+ * Write an array of binary64 values in little-endian byte order.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param[in] values  Contiguous binary64 payload values.
+ * @param count  Number of binary64 values to write.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_f64_array_or_abort(
+    FILE *restrict fp,
+    const double *restrict values,
+    const size_t count,
+    const char *restrict label
+) {
+  const uint16_t endianness_probe = 1U;
+  if (((const uint8_t *restrict)&endianness_probe)[0] == 1U) {
+    raytracing_data_write_or_abort(fp, values, sizeof(double), count, label);
+    return;
+  } // END IF: host memory already matches the documented little-endian payload format
+
+  for (size_t i = 0; i < count; i++) {
+    raytracing_data_write_f64_or_abort(fp, values[i], label);
+  } // END LOOP: for i over payload binary64 values on non-little-endian hosts
+} // END FUNCTION: raytracing_data_write_f64_array_or_abort
+
+/**
+ * Validate the binary64 output assumptions before serialization.
+ */
+static void raytracing_data_validate_binary64_output_or_abort(void) {
+#if FLT_RADIX != 2 || DBL_MANT_DIG != 53 || DBL_MAX_EXP != 1024 || DBL_MIN_EXP != -1021
+  raytracing_data_abort_with_message(
+      "Error: raytracing output requires C double to match IEEE-754 binary64 semantics.");
+#endif
+  if (sizeof(double) != 8)
+    raytracing_data_abort_with_message(
+        "Error: raytracing output requires 8-byte C double for binary64 serialization.");
+  if (sizeof(REAL) > sizeof(double))
+    raytracing_data_abort_with_message(
+        "Error: raytracing output refuses to silently down-convert REAL values wider than binary64.");
+} // END FUNCTION: raytracing_data_validate_binary64_output_or_abort
+
+/**
+ * Write a fixed-width string, null-padded to the requested size.
+ *
+ * @param[in,out] fp  File pointer.
+ * @param[in] text  Text to write.
+ * @param field_bytes  Exact field width in bytes.
+ * @param[in] label  Label for the error message.
+ */
+static void raytracing_data_write_fixed_length_string_or_abort(
+    FILE *restrict fp,
+    const char *restrict text,
+    const size_t field_bytes,
+    const char *restrict label
+) {
+  char buffer[128];
+  const size_t text_len = strlen(text);
+  if (field_bytes > sizeof(buffer))
+    raytracing_data_abort_with_message(
+        "Error: raytracing header string field exceeds the internal serialization buffer.");
+  if (field_bytes == 0 || text_len >= field_bytes) {
+    fprintf(stderr,
+            "Error: output_raytracing_data string field %s is too long for its fixed header field.\n",
+            label);
+    fclose(fp);
+    exit(1);
+  } // END IF: fixed-width string would be truncated
+  memset(buffer, 0, sizeof(buffer));
+  memcpy(buffer, text, text_len);
+  raytracing_data_write_or_abort(fp, buffer, sizeof(char), field_bytes, label);
+} // END FUNCTION: raytracing_data_write_fixed_length_string_or_abort
+
+/**
+ * Map logical-grid indices to the payload-local point-record order.
+ *
+ * @param i0  Signed logical x0 index in the payload window.
+ * @param i1  Signed logical x1 index in the payload window.
+ * @param i2  Signed logical x2 index in the payload window.
+ * @param payload_i0_start  Logical x0 start index of the half-open payload window.
+ * @param payload_i1_start  Logical x1 start index of the half-open payload window.
+ * @param payload_i2_start  Logical x2 start index of the half-open payload window.
+ * @param payload_i0_count  Full logical-grid point count in the x0 direction.
+ * @param payload_i1_count  Full logical-grid point count in the x1 direction.
+ * @param payload_i2_count  Full logical-grid point count in the x2 direction.
+ * @return The zero-based payload-local point index in i2-major, i0-fast order.
+ */
+static uint64_t raytracing_data_point_index_from_logical_indices(
+    const int i0,
+    const int i1,
+    const int i2,
+    const int64_t payload_i0_start,
+    const int64_t payload_i1_start,
+    const int64_t payload_i2_start,
+    const uint64_t payload_i0_count,
+    const uint64_t payload_i1_count,
+    const uint64_t payload_i2_count
+) {
+  const int64_t j0_signed = (int64_t)i0 - payload_i0_start;
+  const int64_t j1_signed = (int64_t)i1 - payload_i1_start;
+  const int64_t j2_signed = (int64_t)i2 - payload_i2_start;
+  if (j0_signed < 0 || j1_signed < 0 || j2_signed < 0) {
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data logical indices fell below the payload window.");
+  } // END IF: logical indices must not fall below the documented payload window
+  const uint64_t j0 = (uint64_t)j0_signed;
+  const uint64_t j1 = (uint64_t)j1_signed;
+  const uint64_t j2 = (uint64_t)j2_signed;
+  if (j0 >= payload_i0_count || j1 >= payload_i1_count ||
+      j2 >= payload_i2_count) {
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data logical indices exceeded payload bounds.");
+  } // END IF: logical indices must stay within the documented payload
+  return j0 + payload_i0_count * (j1 + payload_i1_count * j2);
+} // END FUNCTION: raytracing_data_point_index_from_logical_indices
+
+"""
+
+    body = rf"""
+  if (commondata->NUMGRIDS != 1)
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data_frozen_final_slice currently requires commondata->NUMGRIDS == 1.");
+  if (time_output_index < 0)
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data_frozen_final_slice received a negative output index.");
+
+  raytracing_data_validate_binary64_output_or_abort();
+
+  const REAL simulation_time = commondata->t_final;
+
+  const params_struct *restrict params = &griddata[0].params;
+  const bc_struct *restrict bcstruct = &griddata[0].bcstruct;
+  MAYBE_UNUSED const rfm_struct *restrict rfmstruct = griddata[0].rfmstruct;
+  const REAL *restrict y_n_gfs = griddata[0].gridfuncs.y_n_gfs;
+  REAL *restrict xx[3] = {{
+      griddata[0].xx[0],
+      griddata[0].xx[1],
+      griddata[0].xx[2],
+  }};
+  const uint32_t header_size = {header_size_bytes}U;
+  const uint32_t output_index =
+      raytracing_data_u32_from_nonnegative_int_or_abort(
+          time_output_index, "time_output_index");
+  const uint32_t num_grids = (uint32_t)commondata->NUMGRIDS;
+  const uint32_t serialized_real_bytes = 8U;
+  const uint32_t record_component_count = {num_record_components}U;
+  const uint32_t metric_component_count = {num_metric_components}U;
+  const uint32_t christoffel_component_count = {num_gamma_components}U;
+  const uint32_t point_record_real_count = {point_record_real_count}U;
+  const uint32_t point_record_bytes = {point_record_bytes}U;
+  const uint32_t payload_includes_ghost_zones = 1U;
+  const uint32_t file_is_little_endian = 1U;
+  const uint32_t time_variable_is_f64 = 1U;
+  const uint32_t reserved_u32 = 0U;
+  const uint32_t Nxx0 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(params->Nxx0, "Nxx0");
+  const uint32_t Nxx1 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(params->Nxx1, "Nxx1");
+  const uint32_t Nxx2 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(params->Nxx2, "Nxx2");
+  const uint32_t Nxx_plus_2NGHOSTS0_u32 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(
+          params->Nxx_plus_2NGHOSTS0, "Nxx_plus_2NGHOSTS0");
+  const uint32_t Nxx_plus_2NGHOSTS1_u32 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(
+          params->Nxx_plus_2NGHOSTS1, "Nxx_plus_2NGHOSTS1");
+  const uint32_t Nxx_plus_2NGHOSTS2_u32 =
+      raytracing_data_u32_from_nonnegative_int_or_abort(
+          params->Nxx_plus_2NGHOSTS2, "Nxx_plus_2NGHOSTS2");
+  const uint64_t point_record_count = raytracing_data_mul_u64_or_abort(
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+          (uint64_t)Nxx_plus_2NGHOSTS1_u32,
+          "Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1"),
+      (uint64_t)Nxx_plus_2NGHOSTS2_u32,
+      "full logical-grid point count");
+  const uint64_t point_records_bytes = raytracing_data_mul_u64_or_abort(
+      point_record_count,
+      (uint64_t)point_record_bytes,
+      "point-record payload size");
+  const uint64_t payload_value_count_u64 = raytracing_data_mul_u64_or_abort(
+      point_record_count,
+      (uint64_t)point_record_real_count,
+      "point-record payload value count");
+  const uint64_t simulation_time_offset = (uint64_t)header_size;
+  const uint64_t point_records_offset = raytracing_data_add_u64_or_abort(
+      simulation_time_offset, 8ULL, "point-record payload offset");
+  const uint64_t total_file_bytes = raytracing_data_add_u64_or_abort(
+      point_records_offset, point_records_bytes, "total file bytes");
+  const size_t point_records_bytes_size_t =
+      raytracing_data_size_t_from_u64_or_abort(
+          point_records_bytes, "point-record payload size");
+  const size_t payload_value_count =
+      raytracing_data_size_t_from_u64_or_abort(
+          payload_value_count_u64, "point-record payload value count");
+  const int64_t payload_i0_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i1_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i2_start = -(int64_t)NGHOSTS;
+  const int64_t payload_i0_end = (int64_t)Nxx0 + (int64_t)NGHOSTS;
+  const int64_t payload_i1_end = (int64_t)Nxx1 + (int64_t)NGHOSTS;
+  const int64_t payload_i2_end = (int64_t)Nxx2 + (int64_t)NGHOSTS;
+  SET_NXX_PLUS_2NGHOSTS_VARS(0);
+  const double dxx[3] = {{
+      (double)params->dxx0,
+      (double)params->dxx1,
+      (double)params->dxx2,
+  }};
+  const double invdxx[3] = {{
+      (double)params->invdxx0,
+      (double)params->invdxx1,
+      (double)params->invdxx2,
+  }};
+  const double xxmin[3] = {{
+      (double)params->xxmin0,
+      (double)params->xxmin1,
+      (double)params->xxmin2,
+  }};
+  const double xxmax[3] = {{
+      (double)params->xxmax0,
+      (double)params->xxmax1,
+      (double)params->xxmax2,
+  }};
+  const double cart_origin[3] = {{
+      (double)params->Cart_originx,
+      (double)params->Cart_originy,
+      (double)params->Cart_originz,
+  }};
+  const char magic[16] = "NRPYRTDATA4D";
+
+  char final_filename[256];
+  char temporary_filename[256];
+  snprintf(final_filename, sizeof(final_filename), "./raytracing_data_t%08d.bin", time_output_index);
+  snprintf(
+      temporary_filename,
+      sizeof(temporary_filename),
+      "./raytracing_data_t%08d.bin.tmp.XXXXXX",
+      time_output_index);
+
+  const int temporary_fd = mkstemp(temporary_filename);
+  if (temporary_fd == -1) {{
+    fprintf(stderr,
+            "Error: output_raytracing_data could not create temporary file %s. errno=%d\n",
+            temporary_filename,
+            errno);
+    exit(1);
+  }} // END IF: temporary output file could not be created
+
+  const mode_t current_umask = umask((mode_t)0);
+  umask(current_umask);
+  if (fchmod(temporary_fd, (mode_t)(0666 & ~current_umask)) != 0) {{
+    const int saved_errno = errno;
+    const int close_result = close(temporary_fd);
+    const int close_errno = close_result == 0 ? 0 : errno;
+    const int cleanup_result = remove(temporary_filename);
+    const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
+    if (close_result != 0 || cleanup_result != 0) {{
+      fprintf(stderr,
+              "Error: output_raytracing_data could not adjust permissions on %s and cleanup was incomplete. fchmod errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+              temporary_filename,
+              saved_errno,
+              close_result,
+              close_errno,
+              cleanup_result,
+              cleanup_errno);
+      exit(1);
+    }} // END IF: cleanup after fchmod failure failed
+    fprintf(stderr,
+            "Error: output_raytracing_data could not adjust permissions on %s. errno=%d\n",
+            temporary_filename,
+            saved_errno);
+    exit(1);
+  }} // END IF: temporary output file permissions could not be adjusted
+
+  FILE *restrict fp = fdopen(temporary_fd, "wb");
+  if (fp == NULL) {{
+    const int saved_errno = errno;
+    const int close_result = close(temporary_fd);
+    const int close_errno = close_result == 0 ? 0 : errno;
+    const int cleanup_result = remove(temporary_filename);
+    const int cleanup_errno = cleanup_result == 0 ? 0 : errno;
+    if (close_result != 0 || cleanup_result != 0) {{
+      fprintf(stderr,
+              "Error: output_raytracing_data could not open %s for writing and cleanup was incomplete. fdopen errno=%d close result=%d close errno=%d cleanup result=%d cleanup errno=%d\n",
+              temporary_filename,
+              saved_errno,
+              close_result,
+              close_errno,
+              cleanup_result,
+              cleanup_errno);
+      exit(1);
+    }} // END IF: cleanup after fdopen failure failed
+    fprintf(stderr,
+            "Error: output_raytracing_data could not open %s for writing. errno=%d\n",
+            temporary_filename,
+            saved_errno);
+    exit(1);
+  }} // END IF: fdopen failed
+
+  double *restrict payload_buffer;
+  BHAH_MALLOC(payload_buffer, point_records_bytes_size_t);
+  if (payload_buffer == NULL) {{
+    fclose(fp);
+    remove(temporary_filename);
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data could not allocate the raytracing payload buffer.");
+  }} // END IF: payload buffer allocation failed
+
+"""
+    body += r"""
+
+  // Step 1: Write the fixed-size file header in documented little-endian field order.
+  raytracing_data_write_or_abort(fp, magic, sizeof(char), 16, "magic");
+  raytracing_data_write_u32_or_abort(fp, header_size, "header_size");
+  raytracing_data_write_u32_or_abort(fp, output_index, "output_index");
+  raytracing_data_write_u32_or_abort(fp, num_grids, "num_grids");
+  raytracing_data_write_u32_or_abort(fp, serialized_real_bytes, "serialized_real_bytes");
+  raytracing_data_write_u32_or_abort(fp, record_component_count, "record_component_count");
+  raytracing_data_write_u32_or_abort(fp, metric_component_count, "metric_component_count");
+  raytracing_data_write_u32_or_abort(
+      fp, christoffel_component_count, "christoffel_component_count");
+  raytracing_data_write_u32_or_abort(fp, point_record_real_count, "point_record_real_count");
+  raytracing_data_write_u32_or_abort(fp, point_record_bytes, "point_record_bytes");
+  raytracing_data_write_u32_or_abort(
+      fp, payload_includes_ghost_zones, "payload_includes_ghost_zones");
+  raytracing_data_write_u32_or_abort(
+      fp, file_is_little_endian, "file_is_little_endian");
+  raytracing_data_write_u32_or_abort(
+      fp, time_variable_is_f64, "time_variable_is_f64");
+  raytracing_data_write_u32_or_abort(fp, reserved_u32, "reserved_u32");
+  raytracing_data_write_u32_or_abort(fp, Nxx0, "Nxx0");
+  raytracing_data_write_u32_or_abort(fp, Nxx1, "Nxx1");
+  raytracing_data_write_u32_or_abort(fp, Nxx2, "Nxx2");
+  raytracing_data_write_u32_or_abort(fp, Nxx_plus_2NGHOSTS0_u32, "Nxx_plus_2NGHOSTS0");
+  raytracing_data_write_u32_or_abort(fp, Nxx_plus_2NGHOSTS1_u32, "Nxx_plus_2NGHOSTS1");
+  raytracing_data_write_u32_or_abort(fp, Nxx_plus_2NGHOSTS2_u32, "Nxx_plus_2NGHOSTS2");
+  raytracing_data_write_u64_or_abort(fp, point_record_count, "point_record_count");
+  raytracing_data_write_u64_or_abort(fp, simulation_time_offset, "simulation_time_offset");
+  raytracing_data_write_u64_or_abort(fp, point_records_offset, "point_records_offset");
+  raytracing_data_write_u64_or_abort(fp, point_records_bytes, "point_records_bytes");
+  raytracing_data_write_u64_or_abort(fp, total_file_bytes, "total_file_bytes");
+  raytracing_data_write_u64_or_abort(fp, (uint64_t)NGHOSTS, "NGHOSTS");
+  raytracing_data_write_u64_or_abort(
+      fp, (uint64_t)Nxx_plus_2NGHOSTS0_u32, "payload_i0_count");
+  raytracing_data_write_u64_or_abort(
+      fp, (uint64_t)Nxx_plus_2NGHOSTS1_u32, "payload_i1_count");
+  raytracing_data_write_u64_or_abort(
+      fp, (uint64_t)Nxx_plus_2NGHOSTS2_u32, "payload_i2_count");
+  raytracing_data_write_i64_or_abort(fp, payload_i0_start, "payload_i0_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i1_start, "payload_i1_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i2_start, "payload_i2_start");
+  raytracing_data_write_i64_or_abort(fp, payload_i0_end, "payload_i0_end");
+  raytracing_data_write_i64_or_abort(fp, payload_i1_end, "payload_i1_end");
+  raytracing_data_write_i64_or_abort(fp, payload_i2_end, "payload_i2_end");
+
+  for (int i = 0; i < 3; i++)
+    raytracing_data_write_f64_or_abort(fp, dxx[i], "dxx");
+  for (int i = 0; i < 3; i++)
+    raytracing_data_write_f64_or_abort(fp, invdxx[i], "invdxx");
+  for (int i = 0; i < 3; i++)
+    raytracing_data_write_f64_or_abort(fp, xxmin[i], "xxmin");
+  for (int i = 0; i < 3; i++)
+    raytracing_data_write_f64_or_abort(fp, xxmax[i], "xxmax");
+  for (int i = 0; i < 3; i++)
+    raytracing_data_write_f64_or_abort(fp, cart_origin[i], "cart_origin");
+
+"""
+    body += (
+        "  raytracing_data_write_fixed_length_string_or_abort("
+        f'fp, "{header_label}", {header_label_bytes}, "header_label");\n'
+    )
+    body += (
+        "  raytracing_data_write_fixed_length_string_or_abort("
+        f'fp, "{format_name}", {format_name_bytes}, "format_name");\n'
+    )
+    body += (
+        "  raytracing_data_write_fixed_length_string_or_abort("
+        f'fp, "{target_basis_name}", {basis_name_bytes}, "target_basis");\n'
+    )
+    body += (
+        f'  raytracing_data_write_fixed_length_string_or_abort(fp, "{CoordSystem}",'
+        f' {coord_name_bytes}, "source_coord_system");\n'
+    )
+    body += (
+        "  raytracing_data_write_fixed_length_string_or_abort("
+        f'fp, "{loop_order_name}", {loop_order_name_bytes}, "loop_order");\n'
+    )
+    body += (
+        "  raytracing_data_write_fixed_length_string_or_abort("
+        f'fp, "{cf_convention}", {cf_convention_bytes}, "cf_convention");\n'
+    )
+    for component_name in record_component_names:
+        body += (
+            "  raytracing_data_write_fixed_length_string_or_abort("
+            f'fp, "{component_name}", {record_component_name_bytes}, "record_component_names");\n'
+        )
+    for _, component_name in metric_components:
+        body += (
+            "  raytracing_data_write_fixed_length_string_or_abort("
+            f'fp, "{component_name}", {metric_component_name_bytes}, "metric_component_names");\n'
+        )
+    for _, component_name in christoffel_components:
+        body += (
+            "  raytracing_data_write_fixed_length_string_or_abort("
+            f'fp, "{component_name}", {gamma_component_name_bytes}, "christoffel_component_names");\n'
+        )
+    body += r"""
+
+  // Step 2: Write the synthetic frozen-final simulation time.
+  raytracing_data_write_f64_or_abort(fp, (double)simulation_time, "simulation_time");
+
+  // Step 3: Evaluate Cartesian coordinates on the full logical grid. This
+  //         loop is handwritten instead of generated by simple_loop()
+  //         because it covers the full ghost-aware storage window and
+  //         initializes payload coordinates before the interior tensor loop.
+  for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+    for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+      for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+        const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
+            i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
+            payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
+            (uint64_t)Nxx_plus_2NGHOSTS1_u32, (uint64_t)Nxx_plus_2NGHOSTS2_u32);
+        const uint64_t base_index =
+            point_index * (uint64_t)point_record_real_count;
+        const REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
+        REAL xCart[3];
+        xx_to_Cart(params, xOrig, xCart);
+
+        payload_buffer[base_index + 0] = (double)xCart[0];
+        payload_buffer[base_index + 1] = (double)xCart[1];
+        payload_buffer[base_index + 2] = (double)xCart[2];
+      } // END LOOP: for i0 over full logical-grid x0 indices
+    } // END LOOP: for i1 over full logical-grid x1 indices
+  } // END LOOP: for i2 over full logical-grid x2 indices
+
+  // Step 4: Evaluate Cartesian metric and Christoffels into interior tensor payload records.
+"""
+    body += loop
+    body += r"""
+
+  // Step 5: Fill tensor fields for pure outer and inner ghost-zone payload records.
+  //         Inner-boundary source records may map to outer-boundary records, so
+  //         this phase preserves the canonical BHaH outer-then-inner ordering.
+  const bc_info_struct *restrict bc_info = &bcstruct->bc_info;
+  for (int which_gz = 0; which_gz < NGHOSTS; which_gz++) {
+    for (int dirn = 0; dirn < 3; dirn++) {
+      const int num_pure_outer_boundary_points =
+          bc_info->num_pure_outer_boundary_points[which_gz][dirn];
+      if (num_pure_outer_boundary_points <= 0)
+        continue;
+
+      const size_t gz_idx = (size_t)dirn + 3U * (size_t)which_gz;
+      const outerpt_bc_struct *restrict pure_outer_bc_array =
+          bcstruct->pure_outer_bc_array[gz_idx];
+
+#pragma omp parallel for schedule(static)
+      for (int idx2d = 0; idx2d < num_pure_outer_boundary_points; idx2d++) {
+        const short i0 = pure_outer_bc_array[idx2d].i0;
+        const short i1 = pure_outer_bc_array[idx2d].i1;
+        const short i2 = pure_outer_bc_array[idx2d].i2;
+        const short face_x0 = pure_outer_bc_array[idx2d].FACEX0;
+        const short face_x1 = pure_outer_bc_array[idx2d].FACEX1;
+        const short face_x2 = pure_outer_bc_array[idx2d].FACEX2;
+        const int idx_offset0 = IDX3(i0, i1, i2);
+        const int idx_offset1 =
+            IDX3(i0 + face_x0, i1 + face_x1, i2 + face_x2);
+        const int idx_offset2 =
+            IDX3(i0 + 2 * face_x0, i1 + 2 * face_x1, i2 + 2 * face_x2);
+        const int idx_offset3 =
+            IDX3(i0 + 3 * face_x0, i1 + 3 * face_x1, i2 + 3 * face_x2);
+        const size_t base_offset0 =
+            (size_t)idx_offset0 * (size_t)point_record_real_count;
+        const size_t base_offset1 =
+            (size_t)idx_offset1 * (size_t)point_record_real_count;
+        const size_t base_offset2 =
+            (size_t)idx_offset2 * (size_t)point_record_real_count;
+        const size_t base_offset3 =
+            (size_t)idx_offset3 * (size_t)point_record_real_count;
+
+        for (size_t comp = 3; comp < (size_t)point_record_real_count; comp++) {
+          payload_buffer[base_offset0 + comp] =
+              +3.0 * payload_buffer[base_offset1 + comp]
+              - 3.0 * payload_buffer[base_offset2 + comp]
+              + 1.0 * payload_buffer[base_offset3 + comp];
+        } // END LOOP: for comp over serialized tensor payload components
+      } // END LOOP: for idx2d over pure outer boundary points on this face/layer
+    } // END LOOP: for dirn over pure outer boundary directions
+  } // END LOOP: for which_gz over pure outer ghost-zone layers
+
+#pragma omp parallel for schedule(static)
+  for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
+    const innerpt_bc_struct *restrict bc = &bcstruct->inner_bc_array[pt];
+    const size_t dst_base_offset =
+        (size_t)bc->dstpt * (size_t)point_record_real_count;
+    const size_t src_base_offset =
+        (size_t)bc->srcpt * (size_t)point_record_real_count;
+
+    for (size_t comp = 3; comp < (size_t)point_record_real_count; comp++) {
+      payload_buffer[dst_base_offset + comp] =
+          payload_buffer[src_base_offset + comp];
+    } // END LOOP: for comp over serialized tensor payload components
+  } // END LOOP: for pt over inner boundary ghost-zone points
+
+  // Step 6: Serialize the payload buffer using the documented little-endian binary64 layout.
+  raytracing_data_write_f64_array_or_abort(
+      fp, payload_buffer, payload_value_count, "point-record payload");
+
+  // Step 7: Finalize the file and install it without overwriting an existing output.
+  BHAH_FREE(payload_buffer);
+
+  if (fflush(fp) != 0) {
+    const int saved_errno = errno;
+    fclose(fp);
+    remove(temporary_filename);
+    fprintf(stderr,
+            "Error: output_raytracing_data failed while flushing %s. errno=%d\n",
+            temporary_filename,
+            saved_errno);
+    exit(1);
+  } // END IF: fflush failed
+  if (fclose(fp) != 0) {
+    const int saved_errno = errno;
+    remove(temporary_filename);
+    fprintf(stderr,
+            "Error: output_raytracing_data failed while closing %s. errno=%d\n",
+            temporary_filename,
+            saved_errno);
+    exit(1);
+  } // END IF: fclose failed
+  if (link(temporary_filename, final_filename) != 0) {
+    const int saved_errno = errno;
+    if (remove(temporary_filename) != 0) {
+      fprintf(stderr,
+              "Error: output_raytracing_data could not install %s at %s and could not remove %s. link errno=%d cleanup errno=%d\n",
+              temporary_filename,
+              final_filename,
+              temporary_filename,
+              saved_errno,
+              errno);
+      exit(1);
+    } // END IF: cleanup failed after installation failure
+    if (saved_errno == EEXIST)
+      return;
+    fprintf(stderr,
+            "Error: output_raytracing_data could not install %s at %s. errno=%d\n",
+            temporary_filename,
+            final_filename,
+            saved_errno);
+    exit(1);
+  } // END IF: final output file could not be installed without overwrite
+  if (remove(temporary_filename) != 0) {
+    fprintf(stderr,
+            "Error: output_raytracing_data installed %s but could not remove %s. errno=%d\n",
+            final_filename,
+            temporary_filename,
+            errno);
+    exit(1);
+  } // END IF: temporary output file could not be removed after installation
+"""
+
+    cfc.register_CFunction(
+        subdirectory="diagnostics",
+        includes=includes,
+        prefunc=prefunc,
+        desc=desc,
+        cfunc_type=cfunc_type,
+        name=name,
+        params=params,
+        include_CodeParameters_h=False,
+        body=body,
+    )
+    return pcg.NRPyEnv()

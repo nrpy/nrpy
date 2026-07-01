@@ -80,6 +80,11 @@ parser.add_argument(
     metavar=("Z_1", "Z_2", "M_1", "M_2"),
     help="""Override the generated project's black-hole z positions and masses, e.g. --raytracing-bhs 0.5 -0.5 0.5 0.5.""",
 )
+parser.add_argument(
+    "--raytracing-frozen-final-slice",
+    action="store_true",
+    help="""Emit one synthetic final raytracing slice at t_final whose metric matches the last ordinary slice and whose Christoffels are recomputed assuming partial_t g_mu_nu = 0.""",
+)
 args = parser.parse_args()
 
 
@@ -94,6 +99,7 @@ if parallelization not in ["openmp", "cuda"]:
 # Step 1.c: Raytracing spacetime output requires OpenMP, double precision,
 # and consistent raytracing-specific option combinations.
 enable_raytracing_data_output = args.raytracing_time is not None
+enable_raytracing_frozen_final_slice_output = args.raytracing_frozen_final_slice
 
 if fp_type not in ("float", "double"):
     raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
@@ -110,6 +116,8 @@ if args.raytracing_domain is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-domain requires --raytracing-time.")
 if args.raytracing_nxx is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-Nxx requires --raytracing-time.")
+if enable_raytracing_frozen_final_slice_output and not enable_raytracing_data_output:
+    raise ValueError("--raytracing-frozen-final-slice requires --raytracing-time.")
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
@@ -392,6 +400,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
     enable_raytracing_data_output=enable_raytracing_data_output,
+    enable_raytracing_frozen_final_slice_output=enable_raytracing_frozen_final_slice_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -602,7 +611,10 @@ if enable_raytracing_data_output:
         sinh_width_z_name = _format_output_name_value(sinh_width_z)
         domain_suffix = f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
 
-    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}.bin"
+    frozen_name_suffix = (
+        "_frozen-final" if enable_raytracing_frozen_final_slice_output else ""
+    )
+    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}{frozen_name_suffix}.bin"
     combined_output_path = os.path.join(
         "..", "raytracing_data", raytracing_combined_bin_name
     )
@@ -624,6 +636,7 @@ if enable_raytracing_data_output:
         "raytracing_Nxx": [nxx0, nxx1, nxx2],
         "raytracing_coord_system": CoordSystem,
         "raytracing_domain": domain,
+        "raytracing_frozen_final_slice": enable_raytracing_frozen_final_slice_output,
         "raytracing_time": {
             "diagnostics_output_every": diagnostics_output_every,
             "t_final": t_final,

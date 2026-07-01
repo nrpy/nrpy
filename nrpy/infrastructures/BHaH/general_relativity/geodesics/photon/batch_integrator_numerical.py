@@ -619,6 +619,14 @@ def batch_integrator_numerical(
     struct timespec batch_start_time;
     // Hardware clock state marking the conclusion of the active integration chunk.
     struct timespec batch_end_time;
+    // Counter tracking the number of finalized full RKF45 attempts since the previous dashboard print.
+    long int attempted_rkf45_steps_since_print = 0;
+    // User-tunable exponential moving average window for the RKF45 throughput display.
+    const double rkf45_speed_avg_window_sec = 1.0;
+    // Smoothed RKF45 attempt throughput displayed in the live dashboard.
+    double rkf45_attempts_per_sec_avg = 0.0;
+    // Tracks whether the throughput average has received its first valid sample.
+    bool rkf45_speed_avg_initialized = false;
     // Captures the initial hardware clock state prior to temporal loop execution.
     clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
 
@@ -789,6 +797,7 @@ def batch_integrator_numerical(
             // Finalize step: apply Cash-Karp error control to update the integration
             // baseline and step size $h$.
             rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
+            attempted_rkf45_steps_since_print += active_chunks[current];
             // Event step: detect geometric events and record intersection coordinate
             // states on the active buffer.
             event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
@@ -957,6 +966,7 @@ def batch_integrator_numerical(
                 // Finalize step: apply Cash-Karp error control to update the upcoming
                 // integration baseline and step size $h$.
                 rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next]{stream_arg_next});
+                attempted_rkf45_steps_since_print += active_chunks[next];
                 // Event step: detect geometric events and record intersection
                 // coordinate states on the alternate buffer.
                 event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_affine[next], d_affine_prev[next], d_affine_pre_prev[next], results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
@@ -1050,8 +1060,22 @@ def batch_integrator_numerical(
             // Evaluates the absolute wall-clock duration of the integration chunk in seconds.
             double elapsed_sec = (batch_end_time.tv_sec - batch_start_time.tv_sec) + (batch_end_time.tv_nsec - batch_start_time.tv_nsec) / 1e9;
 
-            // Evaluates the raw integration steps per second to monitor pipeline throughput.
-            double steps_per_sec = (elapsed_sec > 0.0) ? ((double)active_chunks[current] / elapsed_sec) : 0.0;
+            // Evaluates the finalized full-RKF45-attempt throughput across the current dashboard interval.
+            double rkf45_attempts_per_sec =
+                (elapsed_sec > 0.0) ? ((double)attempted_rkf45_steps_since_print / elapsed_sec) : 0.0;
+
+            // Updates the smoothed RKF45 attempt throughput using an exponential moving average.
+            if (elapsed_sec > 0.0 && attempted_rkf45_steps_since_print > 0) {{
+                const double alpha = elapsed_sec / (rkf45_speed_avg_window_sec + elapsed_sec);
+
+                if (!rkf45_speed_avg_initialized) {{
+                    rkf45_attempts_per_sec_avg = rkf45_attempts_per_sec;
+                    rkf45_speed_avg_initialized = true;
+                }} else {{
+                    rkf45_attempts_per_sec_avg =
+                        (1.0 - alpha) * rkf45_attempts_per_sec_avg + alpha * rkf45_attempts_per_sec;
+                }} // END ELSE: update the existing RKF45 throughput moving average
+            }} // END IF: elapsed interval produced at least one completed RKF45 attempt
 
             // Evaluates the global completion ratio bounded between $0.0$ and $1.0$.
             double percent_done = 100.0 * (1.0 - ((double)total_active_photons / (double)num_rays));
@@ -1074,15 +1098,21 @@ def batch_integrator_numerical(
             }} // END LOOP: for bar_i over bar_width to construct loading bar
             bar[bar_width] = '\0'; // Terminates the loading bar character array to prevent buffer overruns.
 
-            // Accumulator tracking the total number of adaptive step size $h$ rejections in the active chunk.
+            // Accumulator tracking how many rays in the just-processed chunk finished this RKF45 attempt in the recoverable REJECTED state.
+            // This deliberately counts finalized per-attempt outcomes instead of summing rejection_retries, because rejection_retries stores
+            // each ray's current consecutive retry depth rather than a binary "this attempt was rejected" flag.
             long int batch_rejections = 0;
 
-            // Loop iterator $sum_i$ scanning the finalized physical state bridge for error tolerance failures.
+            // Loop iterator $sum_i$ scanning the finalized status bridge after rkf45_finalize_and_control() has classified every attempted ray.
+            // A status of REJECTED means the current attempt failed error control and the ray will be re-queued into the same slot with its
+            // adapted step size, so this produces the intended per-chunk rejection count for the dashboard percentage readout.
             for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
-                batch_rejections += retries_bridge[current][sum_i]; // Accumulates the localized step rejection tally.
+                if (status_bridge[current][sum_i] == REJECTED) {{
+                    batch_rejections++; // Counts one rejected integration attempt for this chunk entry.
+                }} // END IF: finalized status for this attempted ray was REJECTED
             }} // END LOOP: for sum_i over active_chunks[current] to calculate rejection count
 
-            // Evaluates the relative frequency of adaptive step size $h$ rejections.
+            // Evaluates the fraction of attempted rays in this processed chunk whose current RKF45 attempt was rejected and re-queued.
             double reject_percent = (active_chunks[current] > 0) ? (100.0 * (double)batch_rejections / (double)active_chunks[current]) : 0.0;
 
             // Restores the terminal cursor position vertically to overwrite the previous dashboard iteration.
@@ -1091,13 +1121,14 @@ def batch_integrator_numerical(
             printf(" Progress:   [%s] %5.1f%% \033[K\n", bar, percent_done); // Prints the global completion loading bar and percentage.
             printf(" Active:     %ld / %ld \033[K\n", total_active_photons, num_rays); // Prints the remaining active photon trajectories $x^\mu$.
             printf(" Slot Time:  Slot %d (t = %.1f) \033[K\n", slot_idx, current_t); // Prints the current physical temporal bin coordinate $t$.
-            printf(" Speed:      %.2e integration steps/s \033[K\n", steps_per_sec); // Prints the pipeline execution throughput.
+            printf(" Speed:      %.2e RKF45 attempts/s, %.0fs avg \033[K\n", rkf45_attempts_per_sec_avg, rkf45_speed_avg_window_sec); // Prints the smoothed pipeline execution throughput.
             printf(" Rejects:    %ld (%.1f%%) \033[K\n", batch_rejections, reject_percent); // Prints the adaptive step size $h$ rejection frequency.
             printf("--------------------------------------------------\n"); // Prints the lower border of the diagnostic dashboard.
             fflush(stdout); // Flushes the standard output buffer to ensure instantaneous terminal rendering.
 
             // Resets the hardware clock state for the upcoming integration chunk.
             clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
+            attempted_rkf45_steps_since_print = 0;
             // --------------------------
 
             active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
