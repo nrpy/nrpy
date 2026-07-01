@@ -421,7 +421,7 @@ void pup_MoL_gridfunctions_struct(PUP::er &p, MoL_gridfunctions_struct &gridfunc
 void pup_charecomm_struct(PUP::er &p, charecomm_struct &cc, const params_struct &params_chare) {
   const int ntotchare = params_chare.Nxx_plus_2NGHOSTS0 * params_chare.Nxx_plus_2NGHOSTS1 * params_chare.Nxx_plus_2NGHOSTS2;
   if (p.isUnpacking()) {
-    cc.localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
+    cc.localidx3pt_to_globalidx3pt = (int64_t *restrict)malloc(sizeof(int64_t) * ntotchare);
   }
   PUParray(p, cc.localidx3pt_to_globalidx3pt, ntotchare);
 }"""
@@ -561,9 +561,9 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
     nonlocal.num_srcpts_tosend_each_chare = (int *restrict)malloc(sizeof(int) * nonlocal.tot_num_dst_chares);
 
     nonlocal.map_srcchare_and_srcpt_id_to_linear_id = (int **)malloc(sizeof(int *) * nonlocal.tot_num_src_chares);
-    nonlocal.globalidx3_srcpts = (int **)malloc(sizeof(int *) * nonlocal.tot_num_src_chares);
+    nonlocal.globalidx3_srcpts = (int64_t **)malloc(sizeof(int64_t *) * nonlocal.tot_num_src_chares);
 
-    nonlocal.globalidx3_srcpts_tosend = (int **)malloc(sizeof(int *) * nonlocal.tot_num_dst_chares);
+    nonlocal.globalidx3_srcpts_tosend = (int64_t **)malloc(sizeof(int64_t *) * nonlocal.tot_num_dst_chares);
   }
   PUParray(p, nonlocal.idx3_of_src_chares, nonlocal.tot_num_src_chares);
   PUParray(p, nonlocal.idx3chare_to_src_chare_id, tot_num_chares);
@@ -578,7 +578,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
       nonlocal.map_srcchare_and_srcpt_id_to_linear_id[src_chare] =
           (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_each_chare[src_chare]);
       nonlocal.globalidx3_srcpts[src_chare] =
-          (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_each_chare[src_chare]);
+          (int64_t *restrict)malloc(sizeof(int64_t) * nonlocal.num_srcpts_each_chare[src_chare]);
     }
     PUParray(p, nonlocal.map_srcchare_and_srcpt_id_to_linear_id[src_chare], nonlocal.num_srcpts_each_chare[src_chare]);
     PUParray(p, nonlocal.globalidx3_srcpts[src_chare], nonlocal.num_srcpts_each_chare[src_chare]);
@@ -586,7 +586,7 @@ void pup_nonlocalinnerbc_struct(PUP::er &p, nonlocalinnerbc_struct &nonlocal, co
   for (int dst_chare = 0; dst_chare < nonlocal.tot_num_dst_chares; dst_chare++) {
     if (p.isUnpacking()) {
       nonlocal.globalidx3_srcpts_tosend[dst_chare] =
-          (int *restrict)malloc(sizeof(int) * nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
+          (int64_t *restrict)malloc(sizeof(int64_t) * nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
     }
     PUParray(p, nonlocal.globalidx3_srcpts_tosend[dst_chare], nonlocal.num_srcpts_tosend_each_chare[dst_chare]);
   }
