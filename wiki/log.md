@@ -107,3 +107,19 @@ what changed, why it changed, and what remains to reconcile.
 - `Decision:` closed earlier follow-ups: root routes now include catalog/source-map, source-map reconciliation left 8 aggregate rows and 21 exact-source rows, and final KB lint passes.
 - `Checks:` `git diff --check`; `rg -n '\[\[' AGENTS.md wiki raw`; `python tools/kb_lint.py`.
 - `Follow-up:` none from the final mechanical pass.
+
+## [2026-07-02] reconcile | BHaH SO(3) rotation provenance
+
+- `Sources:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/*.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_*__openmp.c`.
+- `Pages touched:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [KB Log](log.md).
+- `Decision:` registered exact raw/source rows for the BHaH rotation package init, bulk registrar, seven SO(3) helper Python modules, and the seven trusted `so3_*__openmp.c` validation files currently read by `register_all.py`; deferred BHaH router, owner leaf, equation handoff, and catalog edits to later Issue 1 phases.
+- `Checks:` `git diff --check -- raw/SOURCES.md wiki/source-map.md wiki/log.md`; `python - <<'PY' ...` hash/mtime recomputation for registered rotation files.
+- `Follow-up:` create and route the BHaH SO(3) Rotation Helpers leaf, then update source-map dependent page status from registered to exact seed.
+
+## [2026-07-02] page-add | BHaH SO(3) Rotation Helpers
+
+- `Sources:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); `nrpy/equations/rotation/SO3_rotations.py`; `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/*.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_*__openmp.c`.
+- `Pages touched:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [BHaH](infrastructures/bhah/index.md); [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md); [Global Catalog](catalog.md); [Source Map](source-map.md); [KB Log](log.md).
+- `Decision:` added and routed the BHaH SO(3) Rotation Helpers leaf, cited the equation-side `SO3_rotations.py` source, linked the equation-side `SO3Expressions` page to the generated-C helper owner, added the global catalog row, and reconciled the source-map row from registered provenance to exact-seed owner coverage.
+- `Checks:` `git diff --check -- wiki/infrastructures/bhah/so3-rotation-helpers.md wiki/infrastructures/bhah/index.md wiki/equations/geometry-and-special-function-support.md wiki/catalog.md raw/SOURCES.md wiki/source-map.md wiki/log.md`; recomputed exact SO(3) source hashes and equation/infrastructure aggregate hashes; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache python nrpy/infrastructures/BHaH/rotation/register_all.py`.
+- `Follow-up:` none for Issue 1; the two `register_all_unrotate_*__openmp.c` files remain outside this source-map seed row because `register_all.py` does not validate them.

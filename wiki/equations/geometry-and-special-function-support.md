@@ -1,6 +1,6 @@
 # Geometry And Special-Function Support
 
-> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 2026-06-29
+> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 2026-07-02
 > Up: [Equations](index.md)
 
 ## Summary
@@ -29,13 +29,15 @@ reference metric `ghatDD` plus first and second derivatives in the raw
 coordinates. `build_fisheye` is the public constructor wrapper, and trusted
 files cover the N=1 and N=2 variants.
 
-`SO3Expressions` stores symbolic matrix-rotation expressions used by rotation
-infrastructure and validation code. Its helpers build a rotation matrix from
-orthonormal frame hats, apply `R` or `R^T` to vectors and rank-2 covariant
-tensors, compute relative rotations, dot products, norms, cross products,
-right-handed-frame invariants, Rodrigues axis-angle matrices, and axis recovery
-branches from a rotation matrix. Its script entry point sends the object
-dictionary through the trusted-expression pipeline.
+`SO3Expressions` stores symbolic matrix-rotation expressions used by equation
+validation and by the generated BHaH SO(3) helper layer. Its helpers build a
+rotation matrix from orthonormal frame hats, apply `R` or `R^T` to vectors and
+rank-2 covariant tensors, compute relative rotations, dot products, norms,
+cross products, right-handed-frame invariants, Rodrigues axis-angle matrices,
+and axis recovery branches from a rotation matrix. Its script entry point sends
+the object dictionary through the trusted-expression pipeline. Generated BHaH C
+helpers that wrap this symbolic layer are routed from
+[BHaH SO(3) Rotation Helpers](../infrastructures/bhah/so3-rotation-helpers.md).
 
 `tensor_rotation.rotate` is a lighter quaternion path for symbolic vectors and
 3x3 tensors. It constructs a SymPy quaternion from an axis and angle, applies

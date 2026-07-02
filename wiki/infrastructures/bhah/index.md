@@ -10,6 +10,7 @@
 | [MoL Time Integration](mol-time-integration.md) | You need Method of Lines storage, Runge-Kutta method selection, stage stepping, or time-integration hooks. |
 | [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md) | You need diagnostics dispatch, output cadence, progress indicators, or checkpoint/restart flow. |
 | [GR Application Wiring](gr-application-wiring.md) | You need BHaH GR RHS, Ricci, constraints, initial-data, basis-transform, or Psi4 wiring. |
+| [SO(3) Rotation Helpers](so3-rotation-helpers.md) | You need BHaH generated C helper registration, API names, conventions, or generated-string validation for `nrpy/infrastructures/BHaH/rotation/`. |
 | [BHaHAHA Horizon Runtime](bhahaha-horizon-runtime.md) | You need orientation for BHaHAHA apparent-horizon runtime and its task pages. |
 | [BHaHAHA Public API And Input Contract](bhahaha-public-api-and-input-contract.md) | You need the public C boundary, caller inputs, generated BHaH controls, or runtime validation contract. |
 | [BHaHAHA Grid, Interpolation, And Boundaries](bhahaha-grid-interpolation-and-boundaries.md) | You need the BHaH-to-BHaHAHA data bridge, spherical grids, interpolation stages, or local boundary handling. |
