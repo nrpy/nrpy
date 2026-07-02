@@ -1982,38 +1982,63 @@ const REAL Oabs = Oabs_sum * surface_weight;
 REAL S_U[3] = {0.0, 0.0, 0.0};
 REAL chi_U[3] = {0.0, 0.0, 0.0};
 
-if (fabs(A) > spin_norm_tolerance) {
-    REAL x0U[3], xRcorrU[3], IU[3], SalphaU[3];
+if (!(A > spin_norm_tolerance) || !isfinite(A) || !isfinite(R0) || !isfinite(O0) ||
+    !isfinite(Oabs)) {
+    free(spectre_spin_gfs);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
+} // END IF: integrated area or scalar spin moments are invalid
+for (int i = 0; i < 3; i++) {
+    if (!isfinite(XU[i]) || !isfinite(XRU[i]) || !isfinite(XOU[i]) || !isfinite(ZOU[i])) {
+        free(spectre_spin_gfs);
+        return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
+    } // END IF: integrated vector spin moment is invalid
+} // END LOOP: for i over integrated spin-vector components
 
-    for (int i = 0; i < 3; i++) {
-        x0U[i] = XU[i] / A;
-        xRcorrU[i] = (XRU[i] - x0U[i] * R0) / (8.0 * M_PI);
-        IU[i] = XOU[i] - (x0U[i] + xRcorrU[i]) * O0;
-        SalphaU[i] = ZOU[i] / (8.0 * M_PI);
-    } // END LOOP: for i over spatial spin-vector components
+REAL x0U[3], xRcorrU[3], IU[3], SalphaU[3];
+for (int i = 0; i < 3; i++) {
+    x0U[i] = XU[i] / A;
+    xRcorrU[i] = (XRU[i] - x0U[i] * R0) / (8.0 * M_PI);
+    IU[i] = XOU[i] - (x0U[i] + xRcorrU[i]) * O0;
+    SalphaU[i] = ZOU[i] / (8.0 * M_PI);
+} // END LOOP: for i over spatial spin-vector components
 
-    const REAL normI = sqrt(IU[0] * IU[0] + IU[1] * IU[1] + IU[2] * IU[2]);
-    const REAL Salpha_norm = sqrt(SalphaU[0] * SalphaU[0] + SalphaU[1] * SalphaU[1] + SalphaU[2] * SalphaU[2]);
-    const REAL S = Salpha_norm;
+const REAL normI = sqrt(IU[0] * IU[0] + IU[1] * IU[1] + IU[2] * IU[2]);
+const REAL Salpha_norm = sqrt(SalphaU[0] * SalphaU[0] + SalphaU[1] * SalphaU[1] + SalphaU[2] * SalphaU[2]);
+const REAL S = Salpha_norm;
+if (!isfinite(normI) || !isfinite(Salpha_norm) || !isfinite(S)) {
+    free(spectre_spin_gfs);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+} // END IF: spin-vector normalization is invalid
 
-    if (Oabs > spin_norm_tolerance && normI > spin_norm_tolerance) {
-        for (int i = 0; i < 3; i++)
-            S_U[i] = S * IU[i] / normI;
-    } else if (Salpha_norm > spin_norm_tolerance) {
-        for (int i = 0; i < 3; i++)
-            S_U[i] = S * SalphaU[i] / Salpha_norm;
-    } // END ELSE IF: use z_alpha fallback direction when nominal direction is unsafe
+if (Oabs > spin_norm_tolerance && normI > spin_norm_tolerance) {
+    for (int i = 0; i < 3; i++)
+        S_U[i] = S * IU[i] / normI;
+} else if (Salpha_norm > spin_norm_tolerance) {
+    for (int i = 0; i < 3; i++)
+        S_U[i] = S * SalphaU[i] / Salpha_norm;
+} else if (Oabs > spin_norm_tolerance) {
+    free(spectre_spin_gfs);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+} // END ELSE IF: no usable spin direction for nonzero vorticity
 
-    const REAL M_irr_squared = A / (16.0 * M_PI);
-    if (M_irr_squared > 0.0 && isfinite(M_irr_squared)) {
-        const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
-        if (M_horizon_squared > 0.0 && isfinite(M_horizon_squared)) {
-            for (int i = 0; i < 3; i++)
-                chi_U[i] = S_U[i] / M_horizon_squared;
-        } // END IF: Christodoulou mass squared is safe
+const REAL M_irr_squared = A / (16.0 * M_PI);
+if (!(M_irr_squared > 0.0) || !isfinite(M_irr_squared)) {
+    free(spectre_spin_gfs);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+} // END IF: irreducible mass squared is invalid
+const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
+if (!(M_horizon_squared > 0.0) || !isfinite(M_horizon_squared)) {
+    free(spectre_spin_gfs);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+} // END IF: Christodoulou mass squared is invalid
 
-    } // END IF: irreducible mass squared is safe
-} // END IF: area is safe for centroid reduction
+for (int i = 0; i < 3; i++) {
+    chi_U[i] = S_U[i] / M_horizon_squared;
+    if (!isfinite(chi_U[i])) {
+        free(spectre_spin_gfs);
+        return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+    } // END IF: dimensionless spin component is invalid
+} // END LOOP: for i over dimensionless spin-vector components
 
 bhahaha_diags->spin_chi_x_spectre = chi_U[0];
 bhahaha_diags->spin_chi_y_spectre = chi_U[1];
