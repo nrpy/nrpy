@@ -74,7 +74,10 @@ Nxx_dict = {
     "Cartesian": [64, 64, 64],
 }
 default_BH_mass = 1.0
-default_BH_spin_chi = +0.8
+spin_alignment_vector_params = ("chi_x", "chi_y", "chi_z")
+default_BH_spin_chiU = [0.0, 0.0, 0.8]
+if sum(chi_component * chi_component for chi_component in default_BH_spin_chiU) >= 1.0:
+    raise ValueError("default_BH_spin_chiU must satisfy |chi| < 1")
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
@@ -98,13 +101,18 @@ BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
     BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
 
+uses_axisymmetric_coordinate_setup = False
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
+    uses_axisymmetric_coordinate_setup = True
     OMP_collapse = 2  # about 2x faster
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
+    uses_axisymmetric_coordinate_setup = True
     OMP_collapse = 2  # might be slightly faster
+if uses_axisymmetric_coordinate_setup and 2 not in Nxx_dict[CoordSystem]:
+    raise ValueError("Axisymmetric coordinate setup requires a reduced grid direction.")
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
@@ -165,6 +173,9 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
     ID_persist_struct_str="",
+    spin_alignment_vector_params=(
+        spin_alignment_vector_params if IDtype == "UIUCBlackHole" else None
+    ),
 )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
@@ -285,9 +296,17 @@ if CoordSystem == "SinhCylindrical":
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("M", default_BH_mass)
 if IDtype == "UIUCBlackHole":
-    par.adjust_CodeParam_default("chi", default_BH_spin_chi)
+    for spin_param, default_spin_component in zip(
+        spin_alignment_vector_params, default_BH_spin_chiU
+    ):
+        par.adjust_CodeParam_default(spin_param, default_spin_component)
 elif IDtype == "OffsetKerrSchild":
-    par.adjust_CodeParam_default("a", default_BH_spin_chi * default_BH_mass)
+    spin_x, spin_y, spin_z = default_BH_spin_chiU
+    if spin_x != 0.0 or spin_y != 0.0:
+        raise ValueError(
+            "OffsetKerrSchild only supports z-aligned spin in this example."
+        )
+    par.adjust_CodeParam_default("a", spin_z * default_BH_mass)
 if enable_bhahaha:
     # Set BHaHAHA defaults for the single apparent horizon around the spinning BH.
     par.adjust_CodeParam_default("bah_initial_grid_x_center", [0.0])
@@ -321,10 +340,28 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 
+post_params_struct_set_to_default = ""
+if IDtype == "UIUCBlackHole":
+    chi_x_name, chi_y_name, _ = spin_alignment_vector_params
+    post_params_struct_set_to_default = (
+        "validate_and_set_UIUC_spin_vector(&commondata);"
+    )
+    if uses_axisymmetric_coordinate_setup:
+        post_params_struct_set_to_default += rf"""
+if (commondata.{chi_x_name} != 0.0 || commondata.{chi_y_name} != 0.0) {{
+  fprintf(stderr,
+          "ERROR: tilted UIUC spin vectors require a full 3D grid; "
+          "this example uses an axisymmetric coordinate setup. "
+          "Set {chi_x_name}={chi_y_name}=0 or use Cartesian.\n");
+  exit(1);
+}} // END IF: tilted UIUC spin on axisymmetric reduced grid
+"""
+
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute,

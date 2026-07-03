@@ -123,3 +123,27 @@ what changed, why it changed, and what remains to reconcile.
 - `Decision:` added and routed the BHaH SO(3) Rotation Helpers leaf, cited the equation-side `SO3_rotations.py` source, linked the equation-side `SO3Expressions` page to the generated-C helper owner, added the global catalog row, and reconciled the source-map row from registered provenance to exact-seed owner coverage.
 - `Checks:` `git diff --check -- wiki/infrastructures/bhah/so3-rotation-helpers.md wiki/infrastructures/bhah/index.md wiki/equations/geometry-and-special-function-support.md wiki/catalog.md raw/SOURCES.md wiki/source-map.md wiki/log.md`; recomputed exact SO(3) source hashes and equation/infrastructure aggregate hashes; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache python nrpy/infrastructures/BHaH/rotation/register_all.py`.
 - `Follow-up:` none for Issue 1; the two `register_all_unrotate_*__openmp.c` files remain outside this source-map seed row because `register_all.py` does not validate them.
+
+## [2026-07-02] reconcile | BHaH SO(3) tensor helper documentation
+
+- `Sources:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c`.
+- `Pages touched:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [KB Log](log.md).
+- `Decision:` reconciled the BHaH SO(3) helper owner page and exact source rows with the tensor helper now registered by `register_all.py`, raising the documented helper count and trusted generated-C source count from seven to eight.
+- `Checks:` `git diff --check`; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/register_all.py`.
+- `Follow-up:` none.
+
+## [2026-07-02] reconcile | spinning black-hole vector-spin docs and sources
+
+- `Sources:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); `nrpy/examples/spinning_blackhole.py`; `nrpy/equations/general_relativity/InitialData_Spherical.py`.
+- `Pages touched:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [KB Log](log.md).
+- `Decision:` reconciled the standalone GR/BHaH page with public UIUC vector-spin defaults and refreshed stale source-manifest rows for changed equation, infrastructure, and example sources.
+- `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `make -C project/spinning_blackhole -j2`.
+- `Follow-up:` none.
+
+## [2026-07-02] reconcile | spinning black-hole vector-spin cleanup
+
+- `Sources:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); `nrpy/examples/spinning_blackhole.py`; `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`.
+- `Pages touched:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [KB Log](log.md).
+- `Decision:` aligned the standalone page reconciliation date, kept SO(3) helper imports scoped to runtime needs, inlined the single-use Python wrapper for the emitted ADM rotation helper, and constrained the inactive OffsetKerrSchild example branch to signed z-aligned spin.
+- `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py nrpy/examples/spinning_blackhole.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/examples/spinning_blackhole.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `make -C project/spinning_blackhole -j2`.
+- `Follow-up:` none.

@@ -13,10 +13,10 @@
 | `core-top-level-package-modules` | Core top-level package modules from `find nrpy -maxdepth 1 -type f \( -name '*.py' -o -name '*.txt' -o -name 'py.typed' \)`, 12 files. | living | 2026-06-29 11:58:33 | sha256:4898e5f7d33e03dd3f5b30bc668746bd6043c20a29f68556aff22197ee69c6b0 | partial |
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | 2026-06-29 13:58:41 | sha256:a7f4734cc55bd7c571cd5879db516de03fb2a6551c454774ad04a94b99e567f6 | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | 2026-06-29 11:58:33 | sha256:039963e2bbdd73a4a7a19f62d360a3a5f5c755ca1f7d37f86841134027e80269 | partial |
-| `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | 2026-07-02 11:54:56 | sha256:8355737f318de5fa31ba3a56f4260565a6b646e61514c6569464329feff44090 | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 364 files. | living | 2026-07-02 11:54:56 | sha256:ae23973e29b30242334f4a1e6b9ea96884e7467edc5151805242fbde3c8b5bdc | partial |
+| `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | 2026-07-02 13:44:14 | sha256:b43c1609d83cce6ae7168af90a4868a132691aa791e99668383b32349fe8799c | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 366 files. | living | 2026-07-02 22:39:25 | sha256:3fd2a42145da27db2e695315c61ad3785bb833379a2c106779eebcfa8a78efd5 | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | 2026-06-29 17:38:36 | sha256:07407d727087c6d4fda8b151b8f9553a34dcb98979115bdfde288aa71629e84c | ingested |
-| `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 39 files. | living | 2026-06-29 17:38:36 | sha256:f8f3a7f258770c096e5723ea1542a8289ba16e0c8434dc12f6dd371763442c30 | partial |
+| `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | 2026-07-02 22:39:40 | sha256:0bc426fe84da30f0eca7b9da0aff2c96768602b4968812c265a7dfcb289f762b | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | 2026-06-09 17:07:33 | sha256:7a0c354fec49d1874eb1bfe456017e61e868b96127b7b0f4dd6deb52ee518ae4 | partial |
 
 ## Source Documents Moved Below Root
@@ -91,10 +91,11 @@ row above.
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living | 2026-06-29 11:58:33 | sha256:d65600e26c665d7af4c267868ee96744c9502bcea20a11d25f9ff6e8e789a836 |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living | 2026-06-29 11:58:33 | sha256:7bf1bc7a473cf0a3629991249d8d9264cbbd373c354949ae32d8403efa6068e9 |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living | 2026-06-29 11:58:33 | sha256:02b8ad1a43a65d3000a9e923a03f2292052d2f9486860962855078e148615b5b |
-| `nrpy/infrastructures/BHaH/rotation/__init__.py` | living | 2026-07-02 11:54:56 | sha256:7968828043731ea61d96d9624fd4de53287edabcbe29b33cbc9ac8cea8cfe645 |
-| `nrpy/infrastructures/BHaH/rotation/register_all.py` | living | 2026-07-02 11:54:56 | sha256:32fb98ad0e935a64e399c1e529c4acd4c7fbd3d6737d01b44b5825d28136ad3b |
+| `nrpy/infrastructures/BHaH/rotation/__init__.py` | living | 2026-07-02 14:35:07 | sha256:1bff084b37122a3f5d39d4d3f8eb976df4a754372478f44646de21d6b3c56933 |
+| `nrpy/infrastructures/BHaH/rotation/register_all.py` | living | 2026-07-02 13:44:14 | sha256:4bfda2349b1083ad03e4cef23ab96ba0d92fef0fd2b28c60d1dcdb728f7911b9 |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living | 2026-07-02 11:54:56 | sha256:8e4e98a4de512ceee8a45fb87a5344eb7783a960259910ccedb09aa9ea0275d9 |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_RT_to_vector.py` | living | 2026-07-02 11:54:56 | sha256:dfb03bc7bd051f6c3911340d43849f9bfa3dae1e6090b5b5faf857cf3367daf3 |
+| `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py` | living | 2026-07-02 22:39:25 | sha256:68d0c9263bc14df18636f5d31da3cdb8855a6e8e1ab6fa0124febd067bd7130f |
 | `nrpy/infrastructures/BHaH/rotation/so3_axis_angle_to_R.py` | living | 2026-07-02 11:54:56 | sha256:a94ad3fc6d76b9a41339402a651e68625ec73789f335232c22cbbe017fec12d8 |
 | `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py` | living | 2026-07-02 11:54:56 | sha256:199f0b736a2242d700fa747a07f11b54fa4f2b5c9d493fcec36dab255295bbf0 |
 | `nrpy/infrastructures/BHaH/rotation/so3_find_nU_and_dphi_from_unit_vectors.py` | living | 2026-07-02 11:54:56 | sha256:a3e5498af33caaa96aead8d51b8b72d5af581b4d44202b0b2174ee23bb716997 |
@@ -102,6 +103,7 @@ row above.
 | `nrpy/infrastructures/BHaH/rotation/so3_relative_R_dst_from_src.py` | living | 2026-07-02 11:54:56 | sha256:cac9d25b0bf79f82907bca3a18ff5b76050684bfd246dae4b22396affe2ad0a4 |
 | `nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_vector_so3_apply_R_to_vector__openmp.c` | living | 2026-07-02 11:54:56 | sha256:632e27c41919c11b5c2dc02412ec0320fe921b5e9e6a699048567321e0203bc9 |
 | `nrpy/infrastructures/BHaH/rotation/tests/so3_apply_RT_to_vector_so3_apply_RT_to_vector__openmp.c` | living | 2026-07-02 11:54:56 | sha256:6744cae4d63af4c6abd7cf709902fc988d5c7b2bc082a4fb1a2f28dd8c69ff6e |
+| `nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c` | living | 2026-07-02 14:26:12 | sha256:fb3991b931b4b3fc4dc514abfb388488e1bc9e77d49609bb45f16d4a69c6effc |
 | `nrpy/infrastructures/BHaH/rotation/tests/so3_axis_angle_to_R_so3_axis_angle_to_R__openmp.c` | living | 2026-07-02 11:54:56 | sha256:c8d66069aa099e4e5cebb5cf020ef427b839ff1ccd665caec6b718f39feff82c |
 | `nrpy/infrastructures/BHaH/rotation/tests/so3_build_R_from_hats_so3_build_R_from_hats__openmp.c` | living | 2026-07-02 11:54:56 | sha256:e7df67d93c4c2e2d0a49948bebb7f36ec412680a01e43120bf24dcaff932f58c |
 | `nrpy/infrastructures/BHaH/rotation/tests/so3_find_nU_and_dphi_from_unit_vectors_so3_find_nU_and_dphi_from_unit_vectors__openmp.c` | living | 2026-07-02 11:54:56 | sha256:05953cff48c466aa91afc5a3ca80653e745132a9f774461f89333a584f07e302 |
@@ -193,7 +195,7 @@ row above.
 | `nrpy/examples/nrpypn_quasicircular_momenta.py` | living | 2026-06-29 17:38:36 | sha256:9aa49c9264b5f6661e1b2a89b3f2d91f9a5b14a2ecbbba762d86774204a8457d |
 | `nrpy/examples/two_blackholes_collide.py` | living | 2026-06-29 11:58:33 | sha256:47751a1bf77ce2dee2873b437bae41e492f2e807987c52ee3fe8a58ea10ecf2c |
 | `nrpy/examples/blackhole_spectroscopy.py` | living | 2026-06-29 17:38:36 | sha256:2a321f2ec5e0377ad3bf092a5049d2ae608afc3283b7d422ff3b4f126ec22752 |
-| `nrpy/examples/spinning_blackhole.py` | living | 2026-06-29 17:38:36 | sha256:ceea1b0de2a58f97e40661df5c061f37b217b0a5373c561a0dcf5cdb66c9924f |
+| `nrpy/examples/spinning_blackhole.py` | living | 2026-07-02 22:39:40 | sha256:5f5e9987a387f4b99e30ed04b8fedcc557b10db73f6f0a693a52a5d067fb4505 |
 | `nrpy/examples/kasner_exact_evolution.py` | living | 2026-06-29 17:38:36 | sha256:d936053591b9f8b8ef962a16b0c1a95d6b359346c999bfae06128e07e19674c3 |
 | `nrpy/examples/nrpyelliptic_conformally_flat.py` | living | 2026-06-29 17:38:36 | sha256:baa472ed57aa9683785688996da0a32b2adaa10ee75bacc7a6f1c009a41fe48f |
 | `nrpy/examples/carpet_wavetoy_thorns.py` | living | 2026-06-29 17:38:36 | sha256:80d77dda73ea41c5d8aa87f1f720f4535145dc18b272ba227411e2fe6d2768cd |
@@ -231,7 +233,7 @@ row above.
 | `nrpy/equations/general_relativity/BSSN_to_ADM.py` | living | 2026-06-29 11:58:33 | sha256:ee8e576434ffac843596f2a773c651d998e83eb7cb6fe813c582bc49428afd18 |
 | `nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py` | living | 2026-06-29 11:58:33 | sha256:7494813506c1ba6428b38da993816f81a92ac6bc4c9ee1013184292fba30242c |
 | `nrpy/equations/general_relativity/InitialData_Cartesian.py` | living | 2026-06-29 11:58:33 | sha256:e1ace04212eca3d6f08b2b4862b3233a4a391570b05ce304120e28465648a72a |
-| `nrpy/equations/general_relativity/InitialData_Spherical.py` | living | 2026-06-29 11:58:33 | sha256:89f045217d279dfbe991c5421b7b4cec20d6b4fda622e983aeee5e6edcc146d1 |
+| `nrpy/equations/general_relativity/InitialData_Spherical.py` | living | 2026-07-02 13:44:14 | sha256:850268556a07ef37096bed502f0009c6efc6283298a728cf86939cd2bdb1a5db |
 | `nrpy/equations/general_relativity/LorentzBoost.py` | living | 2026-06-29 11:58:33 | sha256:9af347801fecffd0d41050511280812970b1af510ebc2cc4af43f879bcc79621 |
 | `nrpy/equations/general_relativity/T4munu.py` | living | 2026-06-29 11:58:33 | sha256:e19e05804adeb676ad8ce0c0c2a497d3f2e6c13985682d1450e70c23b1727622 |
 | `nrpy/equations/general_relativity/bhahaha/ExpansionFunctionTheta.py` | living | 2026-06-29 11:58:33 | sha256:e3178d3245e1ba8afc7933b4be4e12c83c0ce2f2eebc4d0638424025ee2cf88b |

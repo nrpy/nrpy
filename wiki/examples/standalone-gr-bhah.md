@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 2026-06-30
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 2026-07-02
 > Up: [Examples](index.md)
 
 ## Summary
@@ -46,8 +46,8 @@ inactive source option for `OffsetKerrSchild` in the script. It uses the same
 `OnePlusLog` lapse, `GammaDriving2ndOrder_Covariant` shift, RK4, fourth-order
 finite differences, separate Ricci, and outgoing radiation pattern as the
 compact binary example, but owns the single spinning black-hole defaults:
-`M = 1.0` and `chi = +0.8`. Its source-backed generation flags are `--cuda`
-and `--floating_point_precision`.
+`M = 1.0` and spin vector `(chi_x, chi_y, chi_z) = (0.0, 0.0, +0.8)`.
+Its source-backed generation flags are `--cuda` and `--floating_point_precision`.
 
 `python -m nrpy.examples.kasner_exact_evolution` generates
 `project/kasner_exact_evolution/`. It is a benchmark rather than a black-hole
@@ -90,7 +90,7 @@ generator that horizon-enabled black-hole examples call.
 
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-outputs`, `enable_bhahaha`
 - [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.checkpointing.register_CFunctions`
-- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `default_BH_spin_chi`
+- [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`
 - [Black Hole Evolution](black-hole-evolution.md) - compact public single-patch BH@H workflow
 

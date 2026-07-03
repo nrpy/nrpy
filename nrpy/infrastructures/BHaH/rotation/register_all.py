@@ -21,6 +21,7 @@ def register_CFunctions() -> None:
     BHaH.rotation.so3_axis_angle_to_R.register_CFunction_so3_axis_angle_to_R()
     BHaH.rotation.so3_apply_R_to_vector.register_CFunction_so3_apply_R_to_vector()
     BHaH.rotation.so3_apply_RT_to_vector.register_CFunction_so3_apply_RT_to_vector()
+    BHaH.rotation.so3_apply_R_to_tensorDD.register_CFunction_so3_apply_R_to_tensorDD()
     BHaH.rotation.so3_relative_R_dst_from_src.register_CFunction_so3_relative_R_dst_from_src()
     BHaH.rotation.so3_left_multiply_hats_with_R.register_CFunction_so3_left_multiply_hats_with_R()
     so3_find_nU_and_dphi_from_unit_vectors.register_CFunction_so3_find_nU_and_dphi_from_unit_vectors()
@@ -39,6 +40,7 @@ if __name__ == "__main__":
         "so3_axis_angle_to_R",
         "so3_apply_R_to_vector",
         "so3_apply_RT_to_vector",
+        "so3_apply_R_to_tensorDD",
         "so3_relative_R_dst_from_src",
         "so3_left_multiply_hats_with_R",
         "so3_find_nU_and_dphi_from_unit_vectors",
