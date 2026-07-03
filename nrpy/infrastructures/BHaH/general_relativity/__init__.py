@@ -17,5 +17,4 @@ from . import (
     psi4,
     psi4_spinweightm2_decomposition,
     rhs_eval,
-    spin_vector,
 )
