@@ -850,9 +850,9 @@ def build_initial_data_conversion_loop(
     :param spin_alignment_vector_params: Optional public spin-vector commondata
         parameter names. When set, sample aligned UIUC data at ``R^T xCart`` and
         rotate ADM Cartesian basis data back with ``R``. Note: for Spherical
-        initial data, tilted spins move the polar-axis coordinate singularity
-        into the aligned frame; grids should avoid sampling exactly on the spin
-        axis.
+        initial data, tilting the spin moves the ID coordinate singularity off
+        the grid's polar axis onto the spin axis; grids should avoid sampling
+        exactly on the spin axis.
     :return: a raw string containing the entire loop + assignments
     """
     spin_setup = ""

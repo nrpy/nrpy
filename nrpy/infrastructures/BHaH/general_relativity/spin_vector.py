@@ -48,7 +48,10 @@ The symbolic UIUC equations remain aligned with +z spin and consume
 components after parsing and before initial-data setup.
 
 @param[in,out] commondata Commondata structure containing spin components and chi.
-    """
+"""
+    cfunc_type = "void"
+    name = "validate_and_set_UIUC_spin_vector"
+    params = "commondata_struct *restrict commondata"
     body = rf"""
   const REAL chi_x = commondata->{chi_x_name};
   const REAL chi_y = commondata->{chi_y_name};
@@ -78,9 +81,6 @@ components after parsing and before initial-data setup.
 
   commondata->chi = chi_norm;
 """
-    cfunc_type = "void"
-    name = "validate_and_set_UIUC_spin_vector"
-    params = "commondata_struct *restrict commondata"
     cfc.register_CFunction(
         includes=includes,
         desc=desc,
