@@ -849,8 +849,11 @@ def build_initial_data_conversion_loop(
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
     :param spin_alignment_vector_params: Optional public spin-vector commondata
         parameter names. When set, sample aligned UIUC data at ``R^T xCart`` and
-        rotate ADM Cartesian basis data back with ``R``.
-    :returns: a raw string containing the entire loop + assignments
+        rotate ADM Cartesian basis data back with ``R``. Note: for Spherical
+        initial data, tilted spins move the polar-axis coordinate singularity
+        into the aligned frame; grids should avoid sampling exactly on the spin
+        axis.
+    :return: a raw string containing the entire loop + assignments
     """
     spin_setup = ""
     if spin_alignment_vector_params is not None:
@@ -919,7 +922,7 @@ SPIN_ALIGNMENT_R_SETUP
     xx_to_Cart(params, xOrig, xCart);
 XCART_ID_BLOCK
 
-    // Read or compute initial data at destination point xCart
+    // Read or compute initial data at the sampling point XCART_FOR_ID.
     initial_data_struct initial_data;
     ID_function(commondata, params, XCART_FOR_ID, ID_persist, &initial_data);
 

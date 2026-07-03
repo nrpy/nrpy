@@ -57,7 +57,9 @@ def register_CFunction_initial_data(
         UIUCBlackHole. When set, the aligned UIUC scalar ``chi`` is derived from
         these components and ADM data are sampled in the aligned frame.
 
-    :raises ValueError: If ``set_of_CoordSystems`` is empty.
+    :raises ValueError: If ``set_of_CoordSystems`` is empty, if
+        ``spin_alignment_vector_params`` is set for an ID type other than
+        UIUCBlackHole, or if it is combined with ``enable_T4munu=True``.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if IDtype == "UIUCBlackHole" and spin_alignment_vector_params is None:
@@ -164,7 +166,14 @@ if( CHECKPOINT_READ_CALL ) {
 """
         body += restart_body.replace(
             "CHECKPOINT_READ_CALL", checkpoint_read_call
-        ).replace("SPIN_VECTOR_VALIDATION_CALL", spin_vector_validation_call.rstrip())
+        ).replace(
+            "\n  SPIN_VECTOR_VALIDATION_CALL",
+            (
+                "\n  " + spin_vector_validation_call.rstrip()
+                if spin_vector_validation_call
+                else ""
+            ),
+        )
     body += spin_vector_validation_call
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
