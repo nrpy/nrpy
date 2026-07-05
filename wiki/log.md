@@ -10,14 +10,14 @@ parseable with simple Unix tools.
 
 Use one of these exact heading forms:
 
-- `## [YYYY-MM-DD] ingest | <title>`
-- `## [YYYY-MM-DD] query-filed | <title>`
-- `## [YYYY-MM-DD] lint | <scope>`
-- `## [YYYY-MM-DD] source-drift | <source>`
-- `## [YYYY-MM-DD] reconcile | <page-or-source>`
-- `## [YYYY-MM-DD] page-add | <page>`
-- `## [YYYY-MM-DD] page-move | <page>`
-- `## [YYYY-MM-DD] page-delete | <page>`
+- `## [MM-DD-YYYY] ingest | <title>`
+- `## [MM-DD-YYYY] query-filed | <title>`
+- `## [MM-DD-YYYY] lint | <scope>`
+- `## [MM-DD-YYYY] source-drift | <source>`
+- `## [MM-DD-YYYY] reconcile | <page-or-source>`
+- `## [MM-DD-YYYY] page-add | <page>`
+- `## [MM-DD-YYYY] page-move | <page>`
+- `## [MM-DD-YYYY] page-delete | <page>`
 
 ## Entry Fields
 
@@ -36,7 +36,7 @@ temporary planning notes, command output dumps, or agent-status chatter here.
 Only record durable operations whose result should help future agents understand
 what changed, why it changed, and what remains to reconcile.
 
-## [2026-06-30] reconcile | compounding-memory support
+## [06-30-2026] reconcile | compounding-memory support
 
 - `Sources:` [AGENTS.md](../AGENTS.md); [SCHEMA.md](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); Karpathy LLM Wiki approach (`https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`).
 - `Pages touched:` [KB Log](log.md).
@@ -44,7 +44,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `git diff --check -- wiki/log.md`.
 - `Follow-up:` update schema, workflows, catalog, and lint rules in their scoped tasks so future durable operations consistently update this log.
 
-## [2026-06-30] reconcile | governance support pages
+## [06-30-2026] reconcile | governance support pages
 
 - `Sources:` [AGENTS.md](../AGENTS.md); [SCHEMA.md](SCHEMA.md); [Workflows](workflows.md); [Contradictions](contradictions.md); [Sources](../raw/SOURCES.md); Karpathy LLM Wiki approach (`https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`).
 - `Pages touched:` [AGENTS.md](../AGENTS.md); [SCHEMA.md](SCHEMA.md); [Workflows](workflows.md); [Contradictions](contradictions.md); [Sources](../raw/SOURCES.md).
@@ -52,7 +52,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` scoped `git diff --check` commands reported clean by the implementing tasks.
 - `Follow-up:` closed by later root routing and source-map reconciliation.
 
-## [2026-06-30] reconcile | global catalog
+## [06-30-2026] reconcile | global catalog
 
 - `Sources:` [Global Catalog](catalog.md); current `wiki/**/*.md` inventory.
 - `Pages touched:` [Global Catalog](catalog.md).
@@ -60,7 +60,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` catalog task reported `git diff --check -- wiki/catalog.md` clean and row count matched current markdown page count at creation time.
 - `Follow-up:` refresh catalog after synthesis pages or new support pages are added.
 
-## [2026-06-30] reconcile | source map
+## [06-30-2026] reconcile | source map
 
 - `Sources:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); Karpathy LLM Wiki approach as background only.
 - `Pages touched:` [Source Map](source-map.md).
@@ -68,7 +68,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` source-map task reported `git diff --check -- wiki/source-map.md` clean, with 8 aggregate rows and 20 exact-source rows at creation time. Later reconciliation left the source map with 8 aggregate rows and 21 exact-source rows.
 - `Follow-up:` add exact dependency rows as high-risk pages change.
 
-## [2026-06-30] lint | compounding-memory checks
+## [06-30-2026] lint | compounding-memory checks
 
 - `Sources:` [Lint Checks](lint/CHECKS.md); [kb_lint.py](../tools/kb_lint.py); Karpathy LLM Wiki approach as lint/health-check background.
 - `Pages touched:` [Lint Checks](lint/CHECKS.md); [kb_lint.py](../tools/kb_lint.py).
@@ -76,7 +76,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` implementing task reported `git diff --check -- wiki/lint/CHECKS.md`, `git diff --check -- tools/kb_lint.py`, and `python -m py_compile tools/kb_lint.py` clean. Later cleanup reconciled remaining lint failures.
 - `Follow-up:` none.
 
-## [2026-06-30] reconcile | typed See Also migration
+## [06-30-2026] reconcile | typed See Also migration
 
 - `Sources:` [SCHEMA.md](SCHEMA.md); target leaf pages.
 - `Pages touched:` [C Codegen](core/c-codegen.md); [Python Codegen](core/python-codegen.md); [C Function Registry](core/c-function-registry.md); [Gridfunctions And Parameters](core/gridfunctions-and-parameters.md); [Reference Metrics](core/reference-metrics.md); [Finite Difference](core/finite-difference.md); [Generated Output Boundaries](architecture/generated-output-boundaries.md); [Generated Project CI](validation/generated-project-ci.md); [Example Generator Catalog](examples/example-generator-catalog.md); [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md); [BHaH Lifecycle](infrastructures/bhah-lifecycle.md); [GR Application Wiring](infrastructures/bhah/gr-application-wiring.md).
@@ -84,7 +84,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` scoped `git diff --check` commands reported clean by the implementing tasks.
 - `Follow-up:` extend typed labels opportunistically when other leaves receive substantial edits.
 
-## [2026-06-30] query-filed | generated backend comparison
+## [06-30-2026] query-filed | generated backend comparison
 
 - `Sources:` [Generated Backend Comparison](syntheses/generated-backend-comparison.md); [Generated Output Boundaries](architecture/generated-output-boundaries.md); [Generated Project CI](validation/generated-project-ci.md); infrastructure branch pages cited by the synthesis; Karpathy LLM Wiki approach as query-filing background.
 - `Pages touched:` [Syntheses](syntheses/index.md); [Generated Backend Comparison](syntheses/generated-backend-comparison.md).
@@ -92,7 +92,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` synthesis task reported `git diff --check -- wiki/syntheses/index.md wiki/syntheses/generated-backend-comparison.md` clean and no Obsidian-style wikilinks, `TODO`, or `TBD` matches under `wiki/syntheses`.
 - `Follow-up:` keep [Global Catalog](catalog.md) and [Source Map](source-map.md) synchronized when the synthesis page's cited sources change.
 
-## [2026-06-30] lint | final compounding-memory audit
+## [06-30-2026] lint | final compounding-memory audit
 
 - `Sources:` [Lint Checks](lint/CHECKS.md); [kb_lint.py](../tools/kb_lint.py).
 - `Pages touched:` [KB Log](log.md); [kb_lint.py](../tools/kb_lint.py).
@@ -100,7 +100,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `git diff --check`; `rg -n '\[\[' AGENTS.md wiki raw`; `python tools/kb_lint.py`.
 - `Follow-up:` remove generated bytecode such as `tools/__pycache__/kb_lint.cpython-312.pyc` before commit.
 
-## [2026-06-30] reconcile | final compounding-memory cleanup
+## [06-30-2026] reconcile | final compounding-memory cleanup
 
 - `Sources:` [AGENTS.md](../AGENTS.md); [Source Map](source-map.md); [kb_lint.py](../tools/kb_lint.py); [Lint Checks](lint/CHECKS.md).
 - `Pages touched:` [AGENTS.md](../AGENTS.md); [Source Map](source-map.md); [kb_lint.py](../tools/kb_lint.py); [KB Log](log.md).
@@ -108,23 +108,23 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `git diff --check`; `rg -n '\[\[' AGENTS.md wiki raw`; `python tools/kb_lint.py`.
 - `Follow-up:` none from the final mechanical pass.
 
-## [2026-07-02] reconcile | BHaH SO(3) rotation provenance
+## [07-02-2026] reconcile | BHaH SO(3) rotation provenance
 
 - `Sources:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/*.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_*__openmp.c`.
 - `Pages touched:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [KB Log](log.md).
 - `Decision:` registered exact raw/source rows for the BHaH rotation package init, bulk registrar, seven SO(3) helper Python modules, and the seven trusted `so3_*__openmp.c` validation files currently read by `register_all.py`; deferred BHaH router, owner leaf, equation handoff, and catalog edits to later Issue 1 phases.
-- `Checks:` `git diff --check -- raw/SOURCES.md wiki/source-map.md wiki/log.md`; `python - <<'PY' ...` hash/mtime recomputation for registered rotation files.
+- `Checks:` `git diff --check -- raw/SOURCES.md wiki/source-map.md wiki/log.md`; `python - <<'PY' ...` source-row verification for registered rotation files.
 - `Follow-up:` create and route the BHaH SO(3) Rotation Helpers leaf, then update source-map dependent page status from registered to exact seed.
 
-## [2026-07-02] page-add | BHaH SO(3) Rotation Helpers
+## [07-02-2026] page-add | BHaH SO(3) Rotation Helpers
 
 - `Sources:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); `nrpy/equations/rotation/SO3_rotations.py`; `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/*.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_*__openmp.c`.
 - `Pages touched:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [BHaH](infrastructures/bhah/index.md); [Geometry And Special-Function Support](equations/geometry-and-special-function-support.md); [Global Catalog](catalog.md); [Source Map](source-map.md); [KB Log](log.md).
 - `Decision:` added and routed the BHaH SO(3) Rotation Helpers leaf, cited the equation-side `SO3_rotations.py` source, linked the equation-side `SO3Expressions` page to the generated-C helper owner, added the global catalog row, and reconciled the source-map row from registered provenance to exact-seed owner coverage.
-- `Checks:` `git diff --check -- wiki/infrastructures/bhah/so3-rotation-helpers.md wiki/infrastructures/bhah/index.md wiki/equations/geometry-and-special-function-support.md wiki/catalog.md raw/SOURCES.md wiki/source-map.md wiki/log.md`; recomputed exact SO(3) source hashes and equation/infrastructure aggregate hashes; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache python nrpy/infrastructures/BHaH/rotation/register_all.py`.
+- `Checks:` `git diff --check -- wiki/infrastructures/bhah/so3-rotation-helpers.md wiki/infrastructures/bhah/index.md wiki/equations/geometry-and-special-function-support.md wiki/catalog.md raw/SOURCES.md wiki/source-map.md wiki/log.md`; refreshed exact SO(3) and aggregate source rows; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache python nrpy/infrastructures/BHaH/rotation/register_all.py`.
 - `Follow-up:` none for Issue 1; the two `register_all_unrotate_*__openmp.c` files remain outside this source-map seed row because `register_all.py` does not validate them.
 
-## [2026-07-02] reconcile | BHaH SO(3) tensor helper documentation
+## [07-02-2026] reconcile | BHaH SO(3) tensor helper documentation
 
 - `Sources:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); `nrpy/infrastructures/BHaH/rotation/register_all.py`; `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `nrpy/infrastructures/BHaH/rotation/tests/so3_apply_R_to_tensorDD_so3_apply_R_to_tensorDD__openmp.c`.
 - `Pages touched:` [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [KB Log](log.md).
@@ -132,7 +132,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `git diff --check`; `python tools/kb_lint.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/register_all.py`.
 - `Follow-up:` none.
 
-## [2026-07-02] reconcile | spinning black-hole vector-spin docs and sources
+## [07-02-2026] reconcile | spinning black-hole vector-spin docs and sources
 
 - `Sources:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); `nrpy/examples/spinning_blackhole.py`; `nrpy/equations/general_relativity/InitialData_Spherical.py`.
 - `Pages touched:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [KB Log](log.md).
@@ -140,7 +140,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `make -C project/spinning_blackhole -j2`.
 - `Follow-up:` none.
 
-## [2026-07-02] reconcile | spinning black-hole vector-spin cleanup
+## [07-02-2026] reconcile | spinning black-hole vector-spin cleanup
 
 - `Sources:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); `nrpy/examples/spinning_blackhole.py`; `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`.
 - `Pages touched:` [Standalone GR/BHaH](examples/standalone-gr-bhah.md); [Sources](../raw/SOURCES.md); [KB Log](log.md).
@@ -148,7 +148,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py nrpy/examples/spinning_blackhole.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/examples/spinning_blackhole.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_tensorDD.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `make -C project/spinning_blackhole -j2`.
 - `Follow-up:` none.
 
-## [2026-07-02] reconcile | spin-vector style and generated comments
+## [07-02-2026] reconcile | spin-vector style and generated comments
 
 - `Sources:` [Sources](../raw/SOURCES.md); `nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `nrpy/infrastructures/BHaH/general_relativity/spin_vector.py`.
 - `Pages touched:` [Sources](../raw/SOURCES.md); [KB Log](log.md).
@@ -156,7 +156,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/initial_data.py nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py nrpy/infrastructures/BHaH/general_relativity/spin_vector.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/spin_vector.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python - <<'PY' ...` checkpoint placeholder check; `make -C project/spinning_blackhole -j2`.
 - `Follow-up:` none.
 
-## [2026-07-02] reconcile | spin-vector registration comment cleanup
+## [07-02-2026] reconcile | spin-vector registration comment cleanup
 
 - `Sources:` [Sources](../raw/SOURCES.md); `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `nrpy/infrastructures/BHaH/general_relativity/spin_vector.py`.
 - `Pages touched:` [Sources](../raw/SOURCES.md); [KB Log](log.md).
@@ -164,7 +164,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/spin_vector.py nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/spin_vector.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; `python - <<'PY' ...` generated validation-helper header check; `make -C project/spinning_blackhole -j2`.
 - `Follow-up:` none.
 
-## [2026-07-03] reconcile | inline UIUC spin-vector registration into initial_data
+## [07-03-2026] reconcile | inline UIUC spin-vector registration into initial_data
 
 - `Sources:` [Sources](../raw/SOURCES.md); `nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `nrpy/infrastructures/BHaH/general_relativity/__init__.py`.
 - `Pages touched:` [Sources](../raw/SOURCES.md); [KB Log](log.md).
@@ -172,10 +172,26 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; before/after diff of all generated `project/spinning_blackhole` `.c`/`.h`/`.par` files (attribution comments only); `make -C project/spinning_blackhole -j4`.
 - `Follow-up:` none.
 
-## [2026-07-05] reconcile | BHaH MoL diagonal-RK3 hooks
+## [07-05-2026] reconcile | BHaH MoL diagonal-RK3 hooks
 
 - `Sources:` [MoL Time Integration](infrastructures/bhah/mol-time-integration.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); `nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`.
 - `Pages touched:` [MoL Time Integration](infrastructures/bhah/mol-time-integration.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [KB Log](log.md).
 - `Decision:` reconciled BHaH MoL documentation and infrastructure aggregate source metadata with the diagonal-RK3 k2 post-hook fix; kept compact-binary example documentation on RK4 because `two_blackholes_collide.py` defaults to RK4.
 - `Checks:` `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/MoLtimestepping/register_all.py`; `python tools/kb_lint.py`; `git diff --check`.
+- `Follow-up:` none.
+
+## [07-05-2026] reconcile | remove source-tracking hash and timestamp metadata
+
+- `Sources:` [AGENTS.md](../AGENTS.md); [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); [kb-instructions.md](../raw/source-docs/kb-instructions.md); [kb_lint.py](../tools/kb_lint.py).
+- `Pages touched:` [AGENTS.md](../AGENTS.md); [Schema](SCHEMA.md); [Workflows](workflows.md); [Lint Checks](lint/CHECKS.md); [Source Map](source-map.md); [Sources](../raw/SOURCES.md); [kb-instructions.md](../raw/source-docs/kb-instructions.md); [KB Log](log.md); every `wiki/**/*.md` page for date normalization, including [Global Catalog](catalog.md) and [Contradictions](contradictions.md).
+- `Decision:` source tracking no longer stores or computes hash or `mtime` metadata: sources are never hashed for tracking with any algorithm, and manifest rows are source identity, provenance, status, and ingest state only, with no digest values, no `Mtime`/`Hash` columns, and no `mtime` values; a root source-tracking and date policy section was added to `AGENTS.md`; all retained KB dates now use `MM-DD-YYYY`; source drift moved from stored-fingerprint comparison to dependency-aware review; and the frozen `kb-instructions.md` scaffold was narrowly edited, as an explicit logged exception to frozen-source preservation, so its superseded source-tracking instructions cannot keep the removed behavior alive.
+- `Checks:` `git status --short`; `git diff --check`; `python -m py_compile tools/kb_lint.py`; `python tools/kb_lint.py`; `find wiki raw -type f ! -name '*.md' -print`; `rg -n '\[\[' AGENTS.md wiki raw`; targeted `rg` scans over `AGENTS.md`, `wiki`, `raw`, and `tools` for removed source-tracking metadata (digest values, manifest timestamp/digest columns), `YYYY-MM-DD` date literals, and remaining technical `hash` facts.
+- `Follow-up:` none.
+
+## [07-05-2026] reconcile | metadata lint allowlist and manifest contract
+
+- `Sources:` [kb_lint.py](../tools/kb_lint.py); [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); code-review findings on the metadata migration.
+- `Pages touched:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); [kb_lint.py](../tools/kb_lint.py); [KB Log](log.md).
+- `Decision:` tightened the removed-metadata lint exemption so a mention passes only when a prohibition or supersession keyword precedes it with no sentence boundary in between, making positive restore-the-metadata instructions fail; and clarified the manifest contract: repository rows carry identity, provenance, status, and ingest state as their only source-tracking fields, exact cited-file rows abbreviate to source and status with provenance implied by the repository path and ingest state tracked through covering aggregate rows and the source map, and external-source accessed dates and notes are ordinary KB metadata.
+- `Checks:` `python -m py_compile tools/kb_lint.py`; `python tools/kb_lint.py`; unit exercise of the exemption helper against positive-instruction and prohibition sample lines; `git diff --check`.
 - `Follow-up:` none.

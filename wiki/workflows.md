@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 2026-06-30
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-05-2026
 
 ## Summary
 
@@ -28,7 +28,10 @@ Use this order for agent navigation:
 ## Ingest
 
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
-   `frozen` or `living` status, mtime, hash, and ingest state.
+   `frozen` or `living` status, and ingest state. Exact cited-file rows may
+   abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
+   rows may also carry an accessed date and notes. Do not record or compute
+   source-tracking digests or timestamps.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -69,10 +72,13 @@ frontmatter.
 
 ## Living-Source Change
 
-Recompute the changed source's mtime and hash, re-ingest affected leaves, and
-update one-hop neighbors that share changed glossary entities. Mark a page
-`stale` only when it cannot be reconciled immediately. Record durable source
-drift and reconciliation decisions in [log.md](log.md).
+Review the change dependency-aware: inspect the changed paths, confirm the
+source's [raw/SOURCES.md](../raw/SOURCES.md) row (provenance, status, ingest
+state) still describes it, follow [source-map.md](source-map.md) ownership rows
+and maintainer signals to the affected compiled pages, then re-ingest affected
+leaves and update one-hop neighbors that share changed glossary entities. Mark
+a page `stale` only when it cannot be reconciled immediately. Record durable
+source drift and reconciliation decisions in [log.md](log.md).
 
 ## External Source Trust Change
 

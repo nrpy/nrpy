@@ -1,6 +1,6 @@
 # ETLegacy Code Parameters, Includes, And Loops
 
-> ETLegacy-local helpers for Cactus parameter reads, standard includes, and generated grid loops. · Status: confirmed · Last reconciled: 2026-06-30
+> ETLegacy-local helpers for Cactus parameter reads, standard includes, and generated grid loops. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary

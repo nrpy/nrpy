@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain how superB generators assemble Charm++ projects, emitted assets, build/run guidance, and top-level header/PUP registration. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [superB](index.md)
 
 ## Summary

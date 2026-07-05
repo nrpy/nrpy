@@ -1,6 +1,6 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 2026-06-29
+> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Validation](index.md)
 
 ## Summary

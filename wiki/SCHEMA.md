@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 2026-06-29
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-05-2026
 
 ## Summary
 
@@ -37,6 +37,29 @@ rules, maintenance procedures, and lint checks.
 Source status is either `frozen` for preserved snapshots and selected evidence
 or `living` for files that may change. Ingest state is `registered`, `partial`,
 or `ingested`.
+
+## Source-Tracking Metadata And Dates
+
+A repository source-manifest row records source identity, provenance, status,
+and ingest state as its only source-tracking fields. Exact cited-file rows may
+abbreviate to source and status: the repository path is the provenance, and
+ingest state is tracked through covering aggregate rows and
+[source-map.md](source-map.md). External-source rows may also carry an
+accessed date (`MM-DD-YYYY`) and notes; those are ordinary KB metadata, not
+source-tracking metadata. Manifests and KB docs carry no source-tracking
+hash columns or values of any kind (`sha256` or any other digest algorithm)
+and no `mtime` columns or values; sources are never hashed for tracking.
+Technical, non-source-tracking hash facts (cache hashing, coordinate hash
+macros) remain allowed as reviewed domain facts, but never as stored digest
+values.
+
+Source drift and staleness are resolved by dependency-aware reconciliation, not
+stored fingerprints: inspect the changed paths, the source's manifest row and
+status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
+the affected compiled pages, then re-ingest and reconcile.
+
+All retained KB dates use the `MM-DD-YYYY` format. Approved placeholders such
+as `n/a` or `-` are allowed where no date applies.
 
 ## Support Pages
 

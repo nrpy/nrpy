@@ -1,6 +1,6 @@
 # Generated Output Boundaries
 
-> Distinguish handwritten source from generated projects, generated thorns, generated language targets, and artifacts. · Status: confirmed · Last reconciled: 2026-06-29
+> Distinguish handwritten source from generated projects, generated thorns, generated language targets, and artifacts. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Architecture](index.md)
 
 ## Summary

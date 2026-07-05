@@ -1,6 +1,6 @@
 # CarpetX GR Poststep Repairs
 
-> CarpetX lapse flooring and conformal-metric determinant repair in `ODESolvers_PostStep`. · Status: confirmed · Last reconciled: 2026-06-30
+> CarpetX lapse flooring and conformal-metric determinant repair in `ODESolvers_PostStep`. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary

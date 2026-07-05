@@ -1,6 +1,6 @@
 # CSE And Printer Support
 
-> Helper route for CSE preprocessing, CSE postprocessing, custom C printer mappings, and JAX printer behavior. · Status: confirmed · Last reconciled: 2026-06-29
+> Helper route for CSE preprocessing, CSE postprocessing, custom C printer mappings, and JAX printer behavior. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary

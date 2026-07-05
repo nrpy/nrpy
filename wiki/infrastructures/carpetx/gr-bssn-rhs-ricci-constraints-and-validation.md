@@ -1,6 +1,6 @@
 # CarpetX GR BSSN RHS, Ricci, Constraints, And Validation
 
-> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 2026-06-30
+> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary

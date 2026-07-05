@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 2026-06-29
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Examples](index.md)
 
 ## Summary

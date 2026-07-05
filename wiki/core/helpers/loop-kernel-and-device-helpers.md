@@ -1,6 +1,6 @@
 # Loop Kernel And Device Helpers
 
-> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 2026-06-29
+> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # GR Poststep Repairs
 
-> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 2026-06-30
+> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary

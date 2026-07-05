@@ -1,6 +1,6 @@
 # CarpetX Thorn Assembly, Configuration, And CCL Files
 
-> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed · Last reconciled: 2026-06-30
+> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary

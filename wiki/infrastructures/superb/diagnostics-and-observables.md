@@ -1,6 +1,6 @@
 # Diagnostics And Observables
 
-> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [superB](index.md)
 
 ## Summary

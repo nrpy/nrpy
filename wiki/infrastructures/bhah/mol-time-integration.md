@@ -1,6 +1,6 @@
 # MoL Time Integration
 
-> BHaH route for Method of Lines parameters, Runge-Kutta routing, stage storage, and time-step hooks. Status: confirmed. Last reconciled: 2026-06-29
+> BHaH route for Method of Lines parameters, Runge-Kutta routing, stage storage, and time-step hooks. Status: confirmed. Last reconciled: 06-29-2026
 > Up: [BHaH](index.md)
 
 ## Summary

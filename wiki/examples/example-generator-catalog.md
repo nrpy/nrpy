@@ -1,6 +1,6 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 2026-06-30
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [Examples](index.md)
 
 ## Summary

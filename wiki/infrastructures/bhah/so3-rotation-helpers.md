@@ -1,6 +1,6 @@
 # SO(3) Rotation Helpers
 
-> Map the BHaH generated-C SO(3) helper layer for rotation matrices, hat vectors, and axis-angle recovery. Status: confirmed. Last reconciled: 2026-07-02
+> Map the BHaH generated-C SO(3) helper layer for rotation matrices, hat vectors, and axis-angle recovery. Status: confirmed. Last reconciled: 07-02-2026
 > Up: [BHaH](index.md)
 
 ## Summary

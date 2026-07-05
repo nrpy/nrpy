@@ -1,6 +1,6 @@
 # Glossary
 
-> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: 2026-06-29
+> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: 06-29-2026
 
 ## Summary
 

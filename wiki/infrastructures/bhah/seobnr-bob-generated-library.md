@@ -1,6 +1,6 @@
 # SEOBNR BOB Generated Library
 
-> BHaH generated C library flow for SEOBNRv5, BOB, and SEBOBv2 waveforms. · Status: confirmed · Last reconciled: 2026-06-29
+> BHaH generated C library flow for SEOBNRv5, BOB, and SEBOBv2 waveforms. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [BHaH](index.md)
 
 ## Summary

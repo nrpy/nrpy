@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [General Relativity](index.md)
 
 ## Summary

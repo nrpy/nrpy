@@ -1,6 +1,6 @@
 # Psi4 And Tetrads
 
-> Map the Psi4 radiation scalar and tetrad construction modules. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the Psi4 radiation scalar and tetrad construction modules. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [General Relativity](index.md)
 
 ## Summary

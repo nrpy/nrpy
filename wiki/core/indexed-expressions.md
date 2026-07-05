@@ -1,6 +1,6 @@
 # Indexed Expressions
 
-> Core route for tensor-like symbolic arrays and symmetry-aware declarations. · Status: confirmed · Last reconciled: 2026-06-29
+> Core route for tensor-like symbolic arrays and symmetry-aware declarations. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Core APIs](index.md)
 
 ## Summary

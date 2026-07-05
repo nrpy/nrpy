@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 2026-06-30
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary

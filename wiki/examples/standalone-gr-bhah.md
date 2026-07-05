@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 2026-07-02
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-02-2026
 > Up: [Examples](index.md)
 
 ## Summary

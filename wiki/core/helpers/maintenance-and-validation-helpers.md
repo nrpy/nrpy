@@ -1,6 +1,6 @@
 # Maintenance And Validation Helpers
 
-> Utility helpers for formatting, trusted string files, caches, conditional writes, colored output, and runtime annotation checks. · Status: confirmed · Last reconciled: 2026-06-29
+> Utility helpers for formatting, trusted string files, caches, conditional writes, colored output, and runtime annotation checks. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary

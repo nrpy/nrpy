@@ -1,6 +1,6 @@
 # CarpetX Boundaries And RHS Initialization
 
-> CarpetX-local NewRadX boundary registration and RHS zeroing behavior. · Status: confirmed · Last reconciled: 2026-06-30
+> CarpetX-local NewRadX boundary registration and RHS zeroing behavior. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -47,7 +47,7 @@ imports `nrpy.infrastructures.ETLegacy.simple_loop as lp` and uses
 `gri.ETLegacyGridFunction.access_gf()` for RHS accesses. This page documents
 that source behavior only; it is not a code-fix task.
 
-A scoped inventory of `nrpy/infrastructures/CarpetX/` on 2026-06-30 shows no
+A scoped inventory of `nrpy/infrastructures/CarpetX/` on 06-30-2026 shows no
 local CarpetX files named for MoL registration, Symmetry registration, Driver
 boundary selection, or separate Boundary registration beyond
 `boundary_conditions.py`. The local CarpetX boundary-specific source in this

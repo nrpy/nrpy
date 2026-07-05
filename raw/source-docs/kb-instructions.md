@@ -5,6 +5,16 @@ plain-markdown, agent-oriented knowledge base (KB) in **another repo** —
 including replacing that repo's existing `AGENTS.md`. They are a synthesis of
 four independent instruction sets, keeping the strongest treatment of each topic.
 
+> **Policy supersession note.** Local NRPy KB governance ([AGENTS.md](../../AGENTS.md),
+> [wiki/SCHEMA.md](../../wiki/SCHEMA.md)) supersedes this scaffold's original
+> hash/mtime source-tracking instructions. Source manifests record identity,
+> provenance, status, and ingest state only — no source-tracking hash columns
+> or values of any kind (`sha256` or any other digest), no hashing of sources
+> at all, no `mtime` columns or values — and retained KB dates use
+> `MM-DD-YYYY`. This file has been edited narrowly to remove the superseded
+> metadata instructions; the exception is logged in
+> [wiki/log.md](../../wiki/log.md).
+
 The approach is **domain-agnostic**. Only the *content* (branch names, leaf
 topics, glossary terms, cited source files) changes per repo. The *tree shape,
 file roles, page contracts, citation rules, and lint checks stay identical*.
@@ -331,7 +341,7 @@ the root becomes the entry point; durable facts move into compiled pages.
 | `partial` | Some of it compiled (e.g. an aggregate code-tree row). |
 | `ingested` | Its relevant facts are compiled into one or more leaves. |
 
-Dates are ISO `YYYY-MM-DD`. A leaf's `Last reconciled` is the date its content
+Dates are `MM-DD-YYYY`. A leaf's `Last reconciled` is the date its content
 was last checked against its sources.
 
 ---
@@ -390,7 +400,7 @@ of grepping the whole tree first.
 | [Experiments](wiki/experiments/index.md) | Validation status, logs, campaigns, and known outcomes. |
 | [Glossary](wiki/glossary.md) | Canonical spellings and meanings for recurring entities. |
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
-| [Sources](raw/SOURCES.md) | Immutable/living source manifest with mtimes and hashes. |
+| [Sources](raw/SOURCES.md) | Immutable/living source manifest with provenance, status, and ingest state. |
 | [Schema](wiki/SCHEMA.md) | Ownership, page contracts, and maintenance rules. |
 
 ## Where Do I Start?
@@ -441,7 +451,7 @@ Every non-router content page uses exactly this shape and section order:
 ```markdown
 # <Title>
 
-> One-sentence purpose. · Status: <confirmed|provisional|contested|stale> · Last reconciled: <YYYY-MM-DD>
+> One-sentence purpose. · Status: <confirmed|provisional|contested|stale> · Last reconciled: <MM-DD-YYYY>
 > Up: [<Parent Router>](index.md)
 
 ## Summary
@@ -486,8 +496,6 @@ exclusions.
 | Source | Relative path or aggregate name. |
 | Provenance | What the source represents and where it came from. |
 | Status | `frozen` or `living`. |
-| Mtime | Last-modified timestamp at audit time. |
-| Hash | Stable content hash (`sha256:<hash>`). |
 | Ingest | `registered`, `partial`, or `ingested`. |
 
 ```markdown
@@ -497,28 +505,28 @@ exclusions.
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: <YYYY-MM-DD>.
+> trigger re-ingest. Last audited: <MM-DD-YYYY>.
 
 ## Aggregate Sources
 
-| Source | Provenance | Status | Mtime | Hash | Ingest |
-| --- | --- | --- | --- | --- | --- |
-| `<source tree>` | in-tree implementation files, primary executable record | living | <YYYY-MM-DD HH:MM:SS> | sha256:<hash> | partial |
+| Source | Provenance | Status | Ingest |
+| --- | --- | --- | --- |
+| `<source tree>` | in-tree implementation files, primary executable record | living | partial |
 
 ## Source Documents Moved Below Root
 
-| Source | Provenance | Status | Mtime | Hash | Ingest |
-| --- | --- | --- | --- | --- | --- |
-| `raw/source-docs/original-agents.md` | previous root agent instructions | frozen | <YYYY-MM-DD HH:MM:SS> | sha256:<hash> | ingested |
+| Source | Provenance | Status | Ingest |
+| --- | --- | --- | --- |
+| `raw/source-docs/original-agents.md` | previous root agent instructions | frozen | ingested |
 
 ## Cited Code And Config Sources
 
 Exact cited files are registered below; they may also be covered by an aggregate
 row above.
 
-| Source | Status | Mtime | Hash |
-| --- | --- | --- | --- |
-| `src/example.ext` | living | <YYYY-MM-DD HH:MM:SS> | sha256:<hash> |
+| Source | Status |
+| --- | --- |
+| `src/example.ext` | living |
 
 ## Exclusions
 
@@ -528,19 +536,11 @@ are excluded unless a selected evidence directory is registered explicitly.
 ```
 
 Manifest rules: every cited authority appears here directly or through a clearly
-named aggregate row; `living` sources trigger re-ingest when mtime/hash changes;
-fix a wrong `frozen` source by adding a new source, not editing history.
-
-Collect metadata mechanically (never use placeholder hashes):
-
-```bash
-date +%F                                   # audit date
-date -r path/to/source "+%Y-%m-%d %H:%M:%S"   # (or: stat -c '%y' path/to/source)
-sha256sum path/to/source                   # take field 1, prefix "sha256:"
-# Deterministic aggregate hash for a whole code tree:
-find src include -type f \( -name '*.c' -o -name '*.h' \) -print0 \
-  | sort -z | xargs -0 sha256sum | sha256sum
-```
+named aggregate row; when a `living` source changes, re-ingest its dependent
+leaves via dependency-aware review (changed paths, source status, source-map
+rows, affected compiled pages); fix a wrong `frozen` source by adding a new
+source, not editing history. Do not record or compute source-tracking digests
+or timestamps for manifest rows.
 
 ### 7.5 `wiki/SCHEMA.md` — the rules hub
 
@@ -550,7 +550,7 @@ sections:
 ```markdown
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: <YYYY-MM-DD>
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: <MM-DD-YYYY>
 
 ## Summary
 ## Commitments
@@ -586,7 +586,7 @@ layers — navigation is a router tree of unbounded depth. Use these commitments
 
 **Ingest** (one source at a time):
 1. Register the source in `raw/SOURCES.md` (provenance, `frozen`/`living`,
-   mtime, hash, ingest state).
+   ingest state).
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose; cite exact files + stable symbols.
 4. From glossary entities the source touches, follow existing links one hop and
@@ -599,7 +599,8 @@ layers — navigation is a router tree of unbounded depth. Use these commitments
 owning leaf; read one or two leaves; answer from compiled pages. If a normal
 question needs broad tree search, record or fix index drift.
 
-**Living-source change:** recompute mtime/hash; re-ingest the affected leaf;
+**Living-source change:** review the change dependency-aware (changed paths,
+source status, source-map rows, affected pages); re-ingest the affected leaf;
 update one-hop neighbors sharing changed glossary entities; mark `stale` if it
 cannot be reconciled immediately. Never edit source files to make the wiki cleaner.
 
@@ -615,7 +616,7 @@ frozen source under `raw/source-docs/`; compile only the durable lesson.
 ```markdown
 # Glossary
 
-> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: <YYYY-MM-DD>
+> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: <MM-DD-YYYY>
 
 ## Summary
 
@@ -659,8 +660,8 @@ Treat the KB like code. **Mechanical checks** (must pass for touched pages):
 - *Provenance*: every leaf has a non-empty `Sources` section.
 - *Source registration*: every cited authority appears in `raw/SOURCES.md`
   directly or through an aggregate row.
-- *Staleness*: no listed `living` source has a newer mtime/hash than the leaf's
-  `Last reconciled` date.
+- *Staleness*: no listed `living` source has changed since the leaf's
+  `Last reconciled` date without dependency-aware review of its dependent pages.
 - *Transient size checks*: generate token counts on request, but do not commit
   token-count reports (counts drift with every documentation edit).
 
@@ -720,7 +721,8 @@ Build in passes; do not write every leaf before the router tree exists.
 5. **Write the meta files** (they define the contract): `wiki/SCHEMA.md` and
    `wiki/lint/CHECKS.md` first, then seed `wiki/glossary.md` and `wiki/workflows.md`.
 6. **Build `raw/SOURCES.md`**: register the code tree as an aggregate row, then
-   the specific docs/files you intend to cite, with real mtimes/hashes (§7.4).
+   the specific docs/files you intend to cite, with provenance, status, and
+   ingest state (§7.4).
 7. **Ingest one source at a time** (§7.6): write/extend the owning leaf at the
    correct depth, add citations and `See Also` edges, update glossary terms,
    update routers only when a route changes.
@@ -750,7 +752,8 @@ has deeper structure.
 update `See Also`; update the parent router only if the route shape changed;
 update `raw/SOURCES.md` if sources were added/changed; run touched-subgraph lint.
 
-**When a living source changes:** recompute mtime/hash; re-ingest affected
+**When a living source changes:** review the change dependency-aware (changed
+paths, source status, source-map rows, affected pages); re-ingest affected
 leaves; follow glossary/entity links one hop and update neighbors; mark
 unresolved conflicts `contested` rather than silently choosing a convenient answer.
 
@@ -813,7 +816,7 @@ The new KB matches this approach when:
 - [ ] Every cited file/symbol exists; every relative markdown link resolves; no
       orphans (every page reachable from `AGENTS.md`).
 - [ ] Every cited authority is registered in `raw/SOURCES.md` with provenance,
-      status, real mtime + `sha256:` hash, and ingest state.
+      status, and ingest state.
 - [ ] Durable terms are centralized in `wiki/glossary.md`; every non-trivial
       claim is sourced or marked `provisional`/`contested`/`stale`.
 - [ ] No excluded artifacts (build products, binaries, dumps, token reports) were

@@ -1,6 +1,6 @@
 # Wave Equation
 
-> Map the scalar wave-equation RHS and exact-solution modules. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the scalar wave-equation RHS and exact-solution modules. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Equations](index.md)
 
 ## Summary

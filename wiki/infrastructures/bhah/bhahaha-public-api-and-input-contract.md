@@ -1,6 +1,6 @@
 # BHaHAHA Public API And Input Contract
 
-> Define the BHaHAHA public C boundary, caller-owned inputs, generated-app controls, poisoning checks, and error vocabulary. · Status: confirmed · Last reconciled: 2026-06-30
+> Define the BHaHAHA public C boundary, caller-owned inputs, generated-app controls, poisoning checks, and error vocabulary. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [BHaH](index.md)
 
 ## Summary

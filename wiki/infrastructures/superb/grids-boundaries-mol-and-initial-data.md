@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 2026-06-29
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [superB](index.md)
 
 ## Summary

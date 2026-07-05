@@ -1,6 +1,6 @@
 # Generated Backend Comparison
 
-> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 2026-06-30
+> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 06-30-2026
 > Up: [Syntheses](index.md)
 
 ## Summary

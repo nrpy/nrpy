@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [BHaH](index.md)
 
 ## Summary

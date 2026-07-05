@@ -1,6 +1,6 @@
 # Geometry And Special-Function Support
 
-> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 2026-07-02
+> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 07-02-2026
 > Up: [Equations](index.md)
 
 ## Summary

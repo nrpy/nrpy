@@ -1,6 +1,6 @@
 # Chare Entrypoints And Runtime
 
-> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP contracts. · Status: confirmed · Last reconciled: 2026-06-29
+> Structural map of superB Charm++ chares, entry methods, proxies, SDAG, reductions, checkpointing, and PUP contracts. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [superB](index.md)
 
 ## Summary

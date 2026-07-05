@@ -1,6 +1,6 @@
 # TOV Equations
 
-> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Equations](index.md)
 
 ## Summary

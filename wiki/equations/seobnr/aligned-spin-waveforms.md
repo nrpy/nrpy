@@ -1,6 +1,6 @@
 # Aligned-Spin Waveforms
 
-> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 2026-06-29
+> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

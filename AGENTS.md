@@ -18,7 +18,7 @@ the whole tree first.
 | [Catalog](wiki/catalog.md) | Global page inventory and query-routing terms. |
 | [Workflows](wiki/workflows.md) | KB ingest, query, and maintenance procedures. |
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
-| [Sources](raw/SOURCES.md) | Source manifest with mtimes and hashes. |
+| [Sources](raw/SOURCES.md) | Source manifest with provenance, status, and ingest state. |
 | [Source Map](wiki/source-map.md) | Source-to-page dependency seed map and drift follow-up. |
 | [Log](wiki/log.md) | Chronological KB maintenance history. |
 | [Contradictions](wiki/contradictions.md) | Contested, stale, and reconciled claims. |
@@ -39,5 +39,19 @@ the whole tree first.
 | Run the first example | [First Wave Equation Run](wiki/examples/first-wave-equation-run.md) |
 | Inspect CI coverage | [Generated Project CI](wiki/validation/generated-project-ci.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
+
+## Source-Tracking And Date Policy
+
+These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
+`raw/`:
+
+- No source-tracking hash columns or values of any kind — `sha256` or any
+  other digest — and no hashing of sources at all.
+- No `mtime` columns or values.
+- Retained KB dates use `MM-DD-YYYY`.
+
+Source drift is handled by dependency-aware review of changed paths, source
+status, [Source Map](wiki/source-map.md) rows, and affected compiled pages —
+not by stored fingerprints.
 
 Rules for maintaining this KB live in [wiki/SCHEMA.md](wiki/SCHEMA.md).

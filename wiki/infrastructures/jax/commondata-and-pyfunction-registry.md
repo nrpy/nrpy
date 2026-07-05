@@ -1,6 +1,6 @@
 # Commondata And PyFunction Registry
 
-> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 2026-06-30
+> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [JAX](index.md)
 
 ## Summary

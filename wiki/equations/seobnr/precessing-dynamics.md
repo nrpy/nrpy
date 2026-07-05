@@ -1,6 +1,6 @@
 # SEOBNR Precessing Dynamics
 
-> Map NRPy's quasi-precessing SEOBNRv5 Hamiltonian and spin/orbital evolution equation builders. · Status: confirmed · Last reconciled: 2026-06-29
+> Map NRPy's quasi-precessing SEOBNRv5 Hamiltonian and spin/orbital evolution equation builders. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

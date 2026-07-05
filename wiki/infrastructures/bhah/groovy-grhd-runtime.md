@@ -1,6 +1,6 @@
 # GRoovy GRHD Runtime
 
-> Explain how BHaH GRoovy registers and orchestrates generated GRHD runtime kernels. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain how BHaH GRoovy registers and orchestrates generated GRHD runtime kernels. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [BHaH](index.md)
 
 ## Summary

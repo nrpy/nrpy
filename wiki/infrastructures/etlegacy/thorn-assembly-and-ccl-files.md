@@ -1,6 +1,6 @@
 # Thorn Assembly And CCL Files
 
-> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 2026-06-30
+> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary

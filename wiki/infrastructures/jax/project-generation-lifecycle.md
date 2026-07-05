@@ -1,6 +1,6 @@
 # Project Generation Lifecycle
 
-> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed · Last reconciled: 2026-06-30
+> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [JAX](index.md)
 
 ## Summary
