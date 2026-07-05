@@ -171,3 +171,11 @@ what changed, why it changed, and what remains to reconcile.
 - `Decision:` deleted the single-consumer `spin_vector.py` module and inlined its spin-vector CodeParameter registration and UIUC validation-helper C-function registration into the spin branch of `register_CFunction_initial_data`, so the entire UIUC spin flow reads top-to-bottom in one file, the CodeParameters are registered by the routine that owns the generated code consuming them, and the package no longer exports a two-step registration API that is only safe in one call order; generated project output is unchanged except CodeParameter module-attribution comments now cite `initial_data`.
 - `Checks:` `black nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/general_relativity/initial_data.py`; `python tools/kb_lint.py`; `git diff --check`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python -m nrpy.examples.spinning_blackhole`; before/after diff of all generated `project/spinning_blackhole` `.c`/`.h`/`.par` files (attribution comments only); `make -C project/spinning_blackhole -j4`.
 - `Follow-up:` none.
+
+## [2026-07-05] reconcile | BHaH MoL diagonal-RK3 hooks
+
+- `Sources:` [MoL Time Integration](infrastructures/bhah/mol-time-integration.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); `nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`.
+- `Pages touched:` [MoL Time Integration](infrastructures/bhah/mol-time-integration.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [KB Log](log.md).
+- `Decision:` reconciled BHaH MoL documentation and infrastructure aggregate source metadata with the diagonal-RK3 k2 post-hook fix; kept compact-binary example documentation on RK4 because `two_blackholes_collide.py` defaults to RK4.
+- `Checks:` `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. ./.github/single_file_static_analysis.sh nrpy/infrastructures/BHaH/MoLtimestepping/MoL_step_forward_in_time.py`; `XDG_CACHE_HOME=/tmp/nrpy-cache PYTHONPATH=. python nrpy/infrastructures/BHaH/MoLtimestepping/register_all.py`; `python tools/kb_lint.py`; `git diff --check`.
+- `Follow-up:` none.
