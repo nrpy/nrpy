@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-02-2026.
+> trigger re-ingest. Last audited: 07-06-2026.
 
 ## Aggregate Sources
 
@@ -23,7 +23,7 @@
 
 | Source | Provenance | Status | Ingest |
 | --- | --- | --- | --- |
-| `raw/source-docs/original-agents.md` | Previous root agent instructions, preserved byte-for-byte before replacing `AGENTS.md`. | frozen | ingested |
+| `raw/source-docs/original-agents.md` | Previous root agent instructions, retained as a frozen source after removing a deprecated root-file reference. | frozen | ingested |
 | `raw/source-docs/kb-instructions.md` | KB schema and governance source moved from the repository root. | frozen | ingested |
 
 ## Cited Code And Config Sources
@@ -37,7 +37,6 @@ aggregate rows and `wiki/source-map.md`.
 | --- | --- |
 | `README.md` | living |
 | `CITATION.md` | living |
-| `coding_style.md` | living |
 | `setup.py` | living |
 | `requirements.txt` | living |
 | `requirements-dev.txt` | living |

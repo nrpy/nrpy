@@ -141,8 +141,6 @@ registered as frozen evidence.
 
 - [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
 - [original-agents.md](../raw/source-docs/original-agents.md) - `## Required Checks`
-- [coding_style.md](../coding_style.md) - `## Static Analysis Configuration`
-- [coding_style.md](../coding_style.md) - `### Trusted Vector File Contract`
 - [README.md](../README.md) - `## Contributor Setup`
 - [single_file_static_analysis.sh](../.github/single_file_static_analysis.sh) - `run_test_step`
 - [main.yml](../.github/workflows/main.yml) - `static-analysis`

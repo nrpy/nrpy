@@ -86,7 +86,6 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 
 - [kb-instructions.md](../../raw/source-docs/kb-instructions.md) - section 7.8 for `wiki/lint/CHECKS.md`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
-- [coding_style.md](../../coding_style.md) - `## Static Analysis Configuration`
 
 ## See Also
 

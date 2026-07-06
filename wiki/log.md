@@ -195,3 +195,19 @@ what changed, why it changed, and what remains to reconcile.
 - `Decision:` tightened the removed-metadata lint exemption so a mention passes only when a prohibition or supersession keyword precedes it with no sentence boundary in between, making positive restore-the-metadata instructions fail; and clarified the manifest contract: repository rows carry identity, provenance, status, and ingest state as their only source-tracking fields, exact cited-file rows abbreviate to source and status with provenance implied by the repository path and ingest state tracked through covering aggregate rows and the source map, and external-source accessed dates and notes are ordinary KB metadata.
 - `Checks:` `python -m py_compile tools/kb_lint.py`; `python tools/kb_lint.py`; unit exercise of the exemption helper against positive-instruction and prohibition sample lines; `git diff --check`.
 - `Follow-up:` none.
+
+## [07-06-2026] page-add | coding style leaves
+
+- `Sources:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Source Map](source-map.md); [Global Catalog](catalog.md); project style-guide source used during initial filing.
+- `Pages touched:` [Python Coding Style](architecture/python-coding-style.md); [C And Embedded C Style](architecture/c-and-embedded-c-style.md); [Equation Setup Style](equations/equation-setup-style.md); [Infrastructure Code Style](infrastructures/infrastructure-code-style.md); [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md); [Architecture](architecture/index.md); [Equations](equations/index.md); [Infrastructures](infrastructures/index.md); [Global Catalog](catalog.md); [Source Map](source-map.md); [KB Log](log.md).
+- `Decision:` filed the project style-guide contents into focused KB leaves for Python, C/embedded C, equation setup, and infrastructure code style; kept the contribution page as the quick route; routed new leaves through owning branch indexes; and expanded source dependency routing for affected style pages.
+- `Checks:` `git diff --check`; `python tools/kb_lint.py`.
+- `Follow-up:` none.
+
+## [07-06-2026] reconcile | remove root style-guide references
+
+- `Sources:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [original-agents.md](../raw/source-docs/original-agents.md).
+- `Pages touched:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md); [Generated Output Boundaries](architecture/generated-output-boundaries.md); [Python Coding Style](architecture/python-coding-style.md); [C And Embedded C Style](architecture/c-and-embedded-c-style.md); [Equation Setup Style](equations/equation-setup-style.md); [BSSN Family](equations/general-relativity/bssn-family.md); [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md); [Infrastructure Code Style](infrastructures/infrastructure-code-style.md); [Static Analysis](validation/static-analysis.md); [Workflows](workflows.md); [Lint Checks](lint/CHECKS.md); [original-agents.md](../raw/source-docs/original-agents.md); [KB Log](log.md).
+- `Decision:` removed all AGENTS/wiki/raw references to the deprecated root style-guide filename, replaced style citations with the preserved agent-rule source and direct tool/config sources, removed the exact source-manifest row for the root style-guide file, and refreshed catalog/source-map metadata for the affected pages.
+- `Checks:` targeted filename scan over `AGENTS.md`, `wiki`, and `raw` returned no matches; `python tools/kb_lint.py`; `git diff --check`.
+- `Follow-up:` none.

@@ -22,7 +22,6 @@ The contribution boundary is stricter than the generated-project capability. Bin
 - [README.md](../../README.md) - `## What Gets Generated?`, `## Project Families and Example Generators`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`, `charmpp-validation`, `codegen-ubuntu`, `codegen-mac`
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Scope`
-- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
 
 ## See Also
 

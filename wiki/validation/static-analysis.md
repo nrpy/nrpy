@@ -5,11 +5,11 @@
 
 ## Summary
 
-For Python source changes, `coding_style.md` is the ground truth. Run `black .`
-before commit and run `./.github/single_file_static_analysis.sh <path.py>` for
-every modified Python file, except generated trusted-value files under
-`*/tests/*.py`. The single-file script checks formatting, imports, typing,
-linting, docstrings, docstring arguments, and doctests.
+For Python source changes, run `black .` before commit and run
+`./.github/single_file_static_analysis.sh <path.py>` for every modified Python
+file, except generated trusted-value files under `*/tests/*.py`. The
+single-file script checks formatting, imports, typing, linting, docstrings,
+docstring arguments, and doctests.
 
 ## Detail
 
@@ -43,8 +43,6 @@ formatting, disabled warnings, and version-specific Pylint behavior.
 ## Sources
 
 - [../../raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
-- [../../coding_style.md](../../coding_style.md) - `## Static Analysis Configuration`
-- [../../coding_style.md](../../coding_style.md) - `### Trusted Vector File Contract`
 - [../../.github/single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `static-analysis`
 - [../../pyproject.toml](../../pyproject.toml) - `[tool.isort]`
