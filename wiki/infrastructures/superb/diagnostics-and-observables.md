@@ -108,4 +108,4 @@ equation definitions behind those gridfunctions to the equation pages.
 - [superB](index.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [GR, BHaHAHA, Psi4, And Interpolation](gr-bhahaha-psi4-and-interpolation.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)

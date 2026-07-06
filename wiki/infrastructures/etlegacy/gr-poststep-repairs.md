@@ -1,6 +1,6 @@
 # GR Poststep Repairs
 
-> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 06-30-2026
+> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -45,7 +45,6 @@ or misleading docstring text in neighboring functions.
 
 - [floor_the_lapse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py) - `register_CFunction_floor_the_lapse`
 - [enforce_detgammahat_constraint.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgammahat_constraint.py) - `register_CFunction_enforce_detgammahat_constraint`
-- [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md) - gridfunction and code-parameter ownership
 
 ## See Also
 

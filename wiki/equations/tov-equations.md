@@ -47,4 +47,4 @@ covers the declared integration symbols and all four RHS attributes.
 - [Conformally Flat Elliptic](conformally-flat-elliptic.md)
 - [GRHD](grhd.md)
 - [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

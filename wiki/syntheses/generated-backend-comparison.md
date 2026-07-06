@@ -1,6 +1,6 @@
 # Generated Backend Comparison
 
-> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 06-30-2026
+> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 07-06-2026
 > Up: [Syntheses](index.md)
 
 ## Summary
@@ -45,28 +45,10 @@ not covered by the cited validation pages as provisional.
 
 ## Sources
 
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md) - generated project, thorn, Charm++, and JAX artifact boundary.
-- [Build And Run](../architecture/build-and-run.md) - install, generated project build paths, and backend prerequisites.
-- [Generated Project CI](../validation/generated-project-ci.md) - generated C project, Einstein Toolkit, Charm++, SEOB/SEBOB, and JAX generation validation routes.
-- [Infrastructures](../infrastructures/index.md) - generated backend router.
-- [BHaH](../infrastructures/bhah/index.md) - standalone BHaH branch router.
-- [BHaH Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md) - BHaH generated project and executable/library lifecycle.
-- [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md) - BHaH GR kernel registration and diagnostics wiring.
-- [ETLegacy](../infrastructures/etlegacy/index.md) - ETLegacy branch router.
-- [ETLegacy Thorn Assembly And CCL Files](../infrastructures/etlegacy/thorn-assembly-and-ccl-files.md) - generated Cactus CCL and C source handoff.
-- [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../infrastructures/etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md) - ETLegacy trusted-expression validation route.
-- [CarpetX](../infrastructures/carpetx/index.md) - CarpetX branch router.
-- [CarpetX Thorn Assembly, Configuration, And CCL Files](../infrastructures/carpetx/thorn-assembly-configuration-and-ccl-files.md) - generated Cactus/CarpetX CCL, configuration, and C++ source handoff.
-- [CarpetX GR BSSN RHS, Ricci, Constraints, And Validation](../infrastructures/carpetx/gr-bssn-rhs-ricci-constraints-and-validation.md) - CarpetX trusted-expression validation route and caveats.
-- [superB](../infrastructures/superb/index.md) - superB branch router.
-- [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - Charm++ project assembly, `charmc`, `charmrun`, PUP, and generated assets.
-- [superB Chare Entrypoints And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md) - Charm++ chare runtime structure.
-- [JAX](../infrastructures/jax/index.md) - JAX branch router.
-- [JAX Project Generation Lifecycle](../infrastructures/jax/project-generation-lifecycle.md) - generated Python package lifecycle and artifact boundary.
-- [JAX Commondata And PyFunction Registry](../infrastructures/jax/commondata-and-pyfunction-registry.md) - generation-time registries consumed by JAX project generation.
-- [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) - current JAX example surface, CI generation route, and provisional runtime caveat.
 - Karpathy LLM Wiki approach - query-output filing principle:
   `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
+- [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
+- [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
 
 ## See Also
 
@@ -75,3 +57,19 @@ not covered by the cited validation pages as provisional.
 - Depends on: [Build And Run](../architecture/build-and-run.md)
 - Validated by: [Generated Project CI](../validation/generated-project-ci.md)
 - See also: [Infrastructures](../infrastructures/index.md)
+- Depends on: [BHaH](../infrastructures/bhah/index.md) - standalone BHaH branch router.
+- Depends on: [BHaH Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md) - BHaH generated project and executable/library lifecycle.
+- Depends on: [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md) - BHaH GR kernel registration and diagnostics wiring.
+- Depends on: [ETLegacy](../infrastructures/etlegacy/index.md) - ETLegacy branch router.
+- Depends on: [ETLegacy Thorn Assembly And CCL Files](../infrastructures/etlegacy/thorn-assembly-and-ccl-files.md) - generated Cactus CCL and C source handoff.
+- Depends on: [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../infrastructures/etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md) - ETLegacy trusted-expression validation route.
+- Depends on: [CarpetX](../infrastructures/carpetx/index.md) - CarpetX branch router.
+- Depends on: [CarpetX Thorn Assembly, Configuration, And CCL Files](../infrastructures/carpetx/thorn-assembly-configuration-and-ccl-files.md) - generated Cactus/CarpetX CCL, configuration, and C++ source handoff.
+- Depends on: [CarpetX GR BSSN RHS, Ricci, Constraints, And Validation](../infrastructures/carpetx/gr-bssn-rhs-ricci-constraints-and-validation.md) - CarpetX trusted-expression validation route and caveats.
+- Depends on: [superB](../infrastructures/superb/index.md) - superB branch router.
+- Depends on: [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - Charm++ project assembly, `charmc`, `charmrun`, PUP, and generated assets.
+- Depends on: [superB Chare Entrypoints And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md) - Charm++ chare runtime structure.
+- Depends on: [JAX](../infrastructures/jax/index.md) - JAX branch router.
+- Depends on: [JAX Project Generation Lifecycle](../infrastructures/jax/project-generation-lifecycle.md) - generated Python package lifecycle and artifact boundary.
+- Depends on: [JAX Commondata And PyFunction Registry](../infrastructures/jax/commondata-and-pyfunction-registry.md) - generation-time registries consumed by JAX project generation.
+- Depends on: [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) - current JAX example surface, CI generation route, and provisional runtime caveat.

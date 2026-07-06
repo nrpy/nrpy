@@ -11,9 +11,7 @@ four independent instruction sets, keeping the strongest treatment of each topic
 > provenance, status, and ingest state only — no source-tracking hash columns
 > or values of any kind (`sha256` or any other digest), no hashing of sources
 > at all, no `mtime` columns or values — and retained KB dates use
-> `MM-DD-YYYY`. This file has been edited narrowly to remove the superseded
-> metadata instructions; the exception is logged in
-> [wiki/log.md](../../wiki/log.md).
+> `MM-DD-YYYY`.
 
 The approach is **domain-agnostic**. Only the *content* (branch names, leaf
 topics, glossary terms, cited source files) changes per repo. The *tree shape,

@@ -1,6 +1,6 @@
 # Elliptic Initial Data
 
-> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 06-29-2026
+> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -87,8 +87,6 @@ Generated `project/**` files are validation products, not documentation sources.
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `nrpyelliptic_project=True`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [README.md](../../README.md) - `Good Next Examples`, `Standalone BHaH Generators`, `superB / Charm++ Generators`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`, `charmpp-validation`
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md) - compiled generated-output boundary summary
-- [Generated Project CI](../validation/generated-project-ci.md) - compiled CI validation summary
 
 ## See Also
 
@@ -97,3 +95,4 @@ Generated `project/**` files are validation products, not documentation sources.
 - [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md)
 - [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md)
 - [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
+- Depends on: [Generated Project CI](../validation/generated-project-ci.md) - compiled CI validation summary.

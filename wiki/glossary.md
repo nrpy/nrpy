@@ -1,6 +1,6 @@
 # Glossary
 
-> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: 06-29-2026
+> Canonical spellings for recurring code, domain, and experiment entities. · Status: confirmed · Last reconciled: 07-06-2026
 
 ## Summary
 
@@ -14,7 +14,7 @@ pages where a first-pass owner exists.
 | NRPy | Python/SymPy-based symbolic code generation toolkit for numerical relativity and relativistic astrophysics; see [Architecture Overview](architecture/overview.md). |
 | SymPy | Python symbolic algebra package used to build expressions before C generation; see [Symbolic Codegen Lifecycle](architecture/symbolic-codegen-lifecycle.md). |
 | generated C | C emitted by NRPy generators and infrastructure rather than handwritten source; see [Generated Output Boundaries](architecture/generated-output-boundaries.md). |
-| BHaH | NRPy's standalone generated-application infrastructure for BH@H-style workflows; see [BHaH Lifecycle](infrastructures/bhah-lifecycle.md). |
+| BHaH | NRPy's standalone generated-application infrastructure for BH@H-style workflows; see [BHaH](infrastructures/bhah/index.md). |
 | BH@H | BlackHoles@Home, the single-patch numerical relativity workflow represented by current BHaH examples; see [Black Hole Evolution](examples/black-hole-evolution.md). |
 | BHaHAHA | Apparent-horizon finding library integrated by BHaH black-hole workflows; see [BHaHAHA Horizon Runtime](infrastructures/bhah/bhahaha-horizon-runtime.md). |
 | CFunction | Python representation of a generated C function; see [C Function Registry](core/c-function-registry.md). |
@@ -66,6 +66,13 @@ pages where a first-pass owner exists.
 | SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
 | JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
+| NRPyElliptic | Hyperbolic-relaxation elliptic initial-data solver family spanning equation modules, BHaH workflows, and superB examples; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
+| SEBOB | SEOBNR-plus-BOB waveform example family (SEBOBv1, SEBOBv2) spanning generated C library and JAX routes; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
+| Kreiss-Oliger | Numerical dissipation scheme applied through `dKOD` finite-difference operators in evolution RHS wiring; see [Finite Difference](core/finite-difference.md). |
+| GRoovy | GRHD evolution code family generated through BHaH matter workflows; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
+| TOVola | TOV initial-data solver used by matter workflow examples; see [Matter TOV Workflows](examples/matter-tov-workflows.md). |
+| GRHayL | External GRHD library that is a hard generated-project build dependency for GRoovy examples; see [GRoovy GRHD Runtime](infrastructures/bhah/groovy-grhd-runtime.md). |
+| SO(3) | Canonical spelling for the rotation-group helpers (`SO3_rotations.py` symbolic expressions and generated BHaH helper CFunctions); prefer `SO(3)` in prose, `SO3` only in code symbols; see [SO(3) Rotation Helpers](infrastructures/bhah/so3-rotation-helpers.md). |
 
 ## Sources
 

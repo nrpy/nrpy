@@ -62,4 +62,4 @@ family, use [Wave Equation Generators](wave-equation-generators.md).
 - [Examples](index.md)
 - [Wave Equation Generators](wave-equation-generators.md)
 - [Black Hole Evolution](black-hole-evolution.md)
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

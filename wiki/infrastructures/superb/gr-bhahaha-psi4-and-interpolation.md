@@ -104,7 +104,7 @@ adapt those quantities at runtime.
 ## See Also
 
 - [superB](index.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [Diagnostics And Observables](diagnostics-and-observables.md)
 - [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)

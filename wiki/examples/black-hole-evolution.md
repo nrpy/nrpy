@@ -60,4 +60,4 @@ For BHaHAHA library generation behind horizon-enabled examples, use
 - [Standalone GR/BHaH](standalone-gr-bhah.md)
 - [Geodesic Raytracing](geodesic-raytracing.md)
 - [Apparent Horizon Library](apparent-horizon-library.md)
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

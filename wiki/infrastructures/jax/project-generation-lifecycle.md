@@ -1,6 +1,6 @@
 # Project Generation Lifecycle
 
-> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain how the JAX project generator turns registered `PyFunction` objects into a generated Python package. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [JAX](index.md)
 
 ## Summary
@@ -83,9 +83,6 @@ already-registered Python functions are assembled into a package.
 - [sebobv1_jax.py](../../../nrpy/examples/sebobv1_jax.py) - `project_name`, `project_dir`, `output_PyFunction_files_and_construct_project`
 - [README.md](../../../README.md) - `Project Families and Example Generators`, `What Gets Generated?`, `Contributor Setup`
 - [main.yml](../../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md) - generated project boundary
-- [Generated Project CI](../../validation/generated-project-ci.md) - `codegen-ubuntu`, `codegen-mac`
-- [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md) - `py_codegen`, `NRPyJaxPrinter`
 
 ## See Also
 

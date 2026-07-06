@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 06-29-2026
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -82,8 +82,6 @@ frozen evidence.
 - [bhah_lib.py](../../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`, `BHaH_struct`
 - [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `output_CFunctions_function_prototypes_and_construct_Makefile`, `compile_Makefile`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md) - generated project boundary
-- [Build And Run](../../architecture/build-and-run.md) - standalone BHaH prerequisites and generated-project build path
 
 ## See Also
 

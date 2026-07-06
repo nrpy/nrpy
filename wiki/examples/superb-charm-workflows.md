@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 06-29-2026
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -98,9 +98,6 @@ infrastructure leaves.
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `get_log10_residual_tolerance`, `post_MoL_step_forward_in_time`, `addl_libraries=["-module CkIO"]`
 - [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`
-- [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - compiled superB assembly summary
-- [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md) - compiled chare-grid and MoL summary
-- [superB GR, BHaHAHA, Psi4, And Interpolation](../infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md) - compiled service-chare summary
 
 ## See Also
 
@@ -110,3 +107,6 @@ infrastructure leaves.
 - [superB](../infrastructures/superb/index.md)
 - [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
 - [Generated Project CI](../validation/generated-project-ci.md)
+- Depends on: [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - compiled superB assembly summary.
+- Depends on: [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md) - compiled chare-grid and MoL summary.
+- Depends on: [superB GR, BHaHAHA, Psi4, And Interpolation](../infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md) - compiled service-chare summary.

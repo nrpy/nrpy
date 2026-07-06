@@ -8,7 +8,7 @@ Author: NRPy contributors
 import argparse
 import os
 
-# Regexes are needed for Markdown link, heading, table, and log-pattern checks.
+# Regexes are needed for Markdown link, heading, and table checks.
 import re
 import sys
 from collections import Counter, defaultdict, deque
@@ -23,7 +23,7 @@ RAW = ROOT / "raw"
 AGENTS = ROOT / "AGENTS.md"
 CATALOG = WIKI / "catalog.md"
 GLOSSARY = WIKI / "glossary.md"
-LOG = WIKI / "log.md"
+RETIRED_OPERATION_OUTPUT = WIKI / "log.md"
 
 REQUIRED_LEAF_SECTIONS = ["Summary", "Detail", "Sources", "See Also"]
 ROUTER_NAMES = {"index.md"}
@@ -32,17 +32,12 @@ SUPPORT_PAGES = {
     WIKI / "workflows.md",
     WIKI / "glossary.md",
     WIKI / "catalog.md",
-    WIKI / "log.md",
     WIKI / "source-map.md",
     WIKI / "contradictions.md",
     WIKI / "lint" / "CHECKS.md",
 }
 EXEMPT_INDEX_DIRS = {WIKI / "lint"}
 SKIP_LINK_SCHEMES = {"http", "https", "mailto", "tel"}
-LOG_HEAD_RE = re.compile(
-    r"^## \[\d{2}-\d{2}-\d{4}\] "
-    r"(ingest|query-filed|lint|source-drift|reconcile|page-add|page-move|page-delete) \| .+"
-)
 # Removed source-tracking metadata bans: no hash digest values of any
 # algorithm, no Mtime/Hash manifest columns, no Mtime values, and no
 # YYYY-MM-DD date literals in governed KB files. Prohibition/supersession
@@ -62,10 +57,6 @@ METADATA_PROHIBITION_RE = re.compile(
     re.IGNORECASE,
 )
 ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-LOG_FORBIDDEN_RE = re.compile(
-    r"\b(chat transcript|token report|routine lint dump|agent-status|scratch output|planning dump)\b",
-    re.IGNORECASE,
-)
 ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 
@@ -595,47 +586,20 @@ def _check_glossary_catalog_signal(failures: List[str]) -> None:
             )
 
 
-def _check_log_format(failures: List[str]) -> None:
+def _check_retired_operation_output(failures: List[str]) -> None:
     """
-    Check KB log headings, required fields, and hygiene.
+    Check that the retired KB maintenance-output page has not been recreated.
 
     :param failures: Mutable failure list.
     """
-    if not LOG.exists():
-        _fail(failures, LOG, None, "missing KB log")
-        return
-    text = _read(LOG)
-    for idx, line in enumerate(text.splitlines(), start=1):
-        if line.startswith("## [") and not LOG_HEAD_RE.fullmatch(line):
-            _fail(failures, LOG, idx, "unparseable log heading")
-
-    required = [
-        "- `Sources:`",
-        "- `Pages touched:`",
-        "- `Decision:`",
-        "- `Checks:`",
-        "- `Follow-up:`",
-    ]
-    chunks = re.split(r"(?=^## \[\d{2}-\d{2}-\d{4}\] )", text, flags=re.MULTILINE)
-    for chunk in chunks:
-        if not chunk.startswith("## "):
-            continue
-        heading = chunk.splitlines()[0]
-        if LOG_FORBIDDEN_RE.search(chunk):
-            _fail(
-                failures,
-                LOG,
-                _line_for_offset(text, text.find(chunk)),
-                "forbidden transient log content",
-            )
-        missing = [field for field in required if field not in chunk]
-        if missing:
-            _fail(
-                failures,
-                LOG,
-                _line_for_offset(text, text.find(heading)),
-                f"log entry missing fields: {', '.join(missing)}",
-            )
+    if RETIRED_OPERATION_OUTPUT.exists():
+        _fail(
+            failures,
+            RETIRED_OPERATION_OUTPUT,
+            None,
+            "retired KB maintenance-output page must not exist; use git "
+            "history for durable operations",
+        )
 
 
 def _governed_kb_files() -> List[Path]:
@@ -731,7 +695,7 @@ def _main() -> int:
     _check_catalog(failures)
     _check_content_dir_indexes(failures)
     _check_glossary_catalog_signal(failures)
-    _check_log_format(failures)
+    _check_retired_operation_output(failures)
     _check_source_tracking_metadata(failures)
     _check_root_artifacts(failures)
 

@@ -44,4 +44,4 @@ Because this helper mutates global registries, it is closely related to the C-fu
 - [C Function Registry](../c-function-registry.md)
 - [Python Function Registry](../python-function-registry.md)
 - [Gridfunctions And Parameters](../gridfunctions-and-parameters.md)
-- [BHaH Lifecycle](../../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../../infrastructures/bhah/lifecycle-and-project-assembly.md)

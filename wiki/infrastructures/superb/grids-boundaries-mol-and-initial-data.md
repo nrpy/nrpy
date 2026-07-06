@@ -121,5 +121,5 @@ ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 - [superB](index.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [Diagnostics And Observables](diagnostics-and-observables.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)

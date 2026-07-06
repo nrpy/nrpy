@@ -10,5 +10,6 @@
 | [superB](superb/index.md) | You need Charm++-based superB generated-application infrastructure. |
 | [JAX](jax/index.md) | You need generated Python/JAX project infrastructure routes. |
 | [Infrastructure Code Style](infrastructure-code-style.md) | You need infrastructure module structure, C-function registration, CodeParameter scope, doctest, parallel codegen, or BHaH generator style rules. |
+| [BHaH Lifecycle](bhah-lifecycle.md) | You followed an older link to the moved BHaH lifecycle content and need the current route. |
 
 Back to [AGENTS.md](../../AGENTS.md).

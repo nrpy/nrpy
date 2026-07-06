@@ -20,7 +20,6 @@ the whole tree first.
 | [Lint Checks](wiki/lint/CHECKS.md) | Mechanical and review checks for the KB. |
 | [Sources](raw/SOURCES.md) | Source manifest with provenance, status, and ingest state. |
 | [Source Map](wiki/source-map.md) | Source-to-page dependency seed map and drift follow-up. |
-| [Log](wiki/log.md) | Chronological KB maintenance history. |
 | [Contradictions](wiki/contradictions.md) | Contested, stale, and reconciled claims. |
 | [Syntheses](wiki/syntheses/index.md) | Cross-branch filed syntheses. |
 | [Schema](wiki/SCHEMA.md) | Page contracts and governance. |
@@ -49,6 +48,9 @@ These rules bind every KB manifest and doc under `AGENTS.md`, `wiki/`, and
   other digest — and no hashing of sources at all.
 - No `mtime` columns or values.
 - Retained KB dates use `MM-DD-YYYY`.
+- Do not output KB maintenance notes to a separate log file. This KB already
+  lives in a git repo: commit history records durable operations, so separate
+  logs are redundant and wasteful.
 
 Source drift is handled by dependency-aware review of changed paths, source
 status, [Source Map](wiki/source-map.md) rows, and affected compiled pages —

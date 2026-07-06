@@ -1,6 +1,6 @@
 # CarpetX Thorn Assembly, Configuration, And CCL Files
 
-> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain how CarpetX writes Cactus CCL files, `make.code.defn`, and thorn-local C++ sources from registered generator state. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -84,7 +84,6 @@ emits `.cxx` files.
 - [schedule_ccl.py](../../../nrpy/infrastructures/CarpetX/schedule_ccl.py) - `ScheduleCCL`, `construct_schedule_ccl`
 - [configuration_ccl.py](../../../nrpy/infrastructures/CarpetX/configuration_ccl.py) - `construct_configuration_ccl`
 - [make_code_defn.py](../../../nrpy/infrastructures/CarpetX/make_code_defn.py) - `output_CFunctions_and_construct_make_code_defn`
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md) - generated thorn boundary
 - [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - Cactus thorn and CCL terminology
 - [Cactus Users Guide chapter D2](https://www.cactuscode.org/documentation/usersguide/UsersGuidech12.html) - CCL configuration file syntax
 - [CarpetX User Manual](https://einsteintoolkit.org/thornguide/CarpetX/CarpetX/documentation.html) - CarpetX CCL background and dependency terminology

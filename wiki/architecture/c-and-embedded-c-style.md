@@ -1,6 +1,6 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: confirmed · Last reconciled: 07-05-2026
+> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 07-06-2026
 > Up: [Architecture](index.md)
 
 ## Summary

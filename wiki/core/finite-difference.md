@@ -1,6 +1,6 @@
 # Finite Difference
 
-> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 06-29-2026
+> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [Core APIs](index.md)
 
 ## Summary

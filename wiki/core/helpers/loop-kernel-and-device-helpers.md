@@ -44,5 +44,5 @@ When the active infrastructure is `BHaH`, `GPUKernel` also participates in BHaH 
 - [SIMD And Intrinsic Support](simd-and-intrinsic-support.md)
 - [Parallel Codegen Orchestration](parallel-codegen-orchestration.md)
 - [C Function Registry](../c-function-registry.md)
-- [BHaH Lifecycle](../../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../../infrastructures/bhah/lifecycle-and-project-assembly.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)

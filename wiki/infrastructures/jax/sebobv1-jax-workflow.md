@@ -1,6 +1,6 @@
 # SEBOBv1 JAX Workflow
 
-> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: confirmed · Last reconciled: 06-30-2026
+> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [JAX](index.md)
 
 ## Summary
@@ -62,7 +62,9 @@ tables for final-spin values and the real/imaginary `(2,2)` QNM data, computes
 `Commondata(...)` return expression populated with masses, spins, initial
 frequency, rescaled timestep, coefficients, `rISCO`, `rstop`, QNM values,
 `M_f`, and `a_f`. That emitted return currently mismatches the generated
-dataclass until `a_f` is registered or the return signature is changed.
+dataclass until `a_f` is registered or the return signature is changed; this
+contested claim is tracked in the [Contradictions](../../contradictions.md)
+register.
 
 The symbolic source behind this narrow surface is
 `SEOBNR_aligned_spin_constants`. Its constructor defines symbolic masses and
@@ -90,9 +92,6 @@ deliberately freezes and registers such output.
 - [py_codegen.py](../../../nrpy/py_codegen.py) - `PyCodeGen`, `py_codegen`
 - [parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - `pcg_registration_phase`, `register_func_call`, `do_parallel_codegen`
 - [main.yml](../../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`
-- [SEOBNR And BOB](../../equations/seobnr/index.md) - equation-family router
-- [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md) - `py_codegen`, `NRPyJaxPrinter`
-- [Generated Project CI](../../validation/generated-project-ci.md) - `codegen-ubuntu`, `codegen-mac`
 
 ## See Also
 

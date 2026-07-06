@@ -110,5 +110,5 @@ temporary-buffer, `griddata`, and `griddata_chare` state.
 ## See Also
 
 - [superB](index.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)

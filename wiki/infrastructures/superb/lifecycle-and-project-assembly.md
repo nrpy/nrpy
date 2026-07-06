@@ -99,7 +99,7 @@ struct declarations consumed by generated code.
 ## See Also
 
 - [superB](index.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)
 - [Build And Run](../../architecture/build-and-run.md)
 - [C Function Registry](../../core/c-function-registry.md)

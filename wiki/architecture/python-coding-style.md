@@ -1,6 +1,6 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: confirmed · Last reconciled: 07-05-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-06-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -58,10 +58,10 @@ the module docstring only when it exactly matches the relative `nrpy` path form
 `# <relative path from nrpy root>.py`. Test data files that only carry trusted
 dictionaries omit module docstrings.
 
-Use `Author:` for one author and `Authors:` for more than one. Avoid nonstandard
-metadata keys such as `Email:` or `Contributor:`. New legitimate authorship
-credit may be added for substantive changes; review it for formatting,
-consistency, and accuracy, not for preserving the prior list unchanged.
+Use `Author:` for one author and `Authors:` for more than one; those are the
+only allowed metadata keys. Avoid nonstandard keys such as `Email:` or
+`Contributor:`, a singular `Author:` with multiple names, and mixed metadata
+styles in one file. Do not add authors not already present in the file.
 
 ### Python String Literals
 
