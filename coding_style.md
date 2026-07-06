@@ -1,5 +1,8 @@
 # NRPy Project Coding Style Guide
 
+> Human-facing reference for contributors. These rules may also be duplicated
+> in the KB under `wiki/` so LLM agents can route through compiled pages.
+
 ## Overview
 
 This document provides a comprehensive style guide for the NRPy project, a numerical relativity framework that generates C code from Python/SymPy expressions. The coding standards described herein are enforced by CI tooling and must be followed by all contributors.

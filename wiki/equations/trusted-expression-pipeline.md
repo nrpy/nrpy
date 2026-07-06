@@ -1,6 +1,6 @@
 # Trusted Expression Pipeline
 
-> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 06-29-2026
+> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-05-2026
 > Up: [Equations](index.md)
 
 ## Summary

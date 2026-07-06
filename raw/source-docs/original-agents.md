@@ -1,6 +1,6 @@
 # NRPy Agent Instructions
 
-Repo agent rules, compressed. CI enforce many.
+[coding_style.md](coding_style.md) = ground truth. Conflict => `coding_style.md` wins. Repo agent rules, compressed. CI enforce many.
 
 ## Scope
 

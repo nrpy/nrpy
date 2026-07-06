@@ -196,7 +196,7 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `python -m py_compile tools/kb_lint.py`; `python tools/kb_lint.py`; unit exercise of the exemption helper against positive-instruction and prohibition sample lines; `git diff --check`.
 - `Follow-up:` none.
 
-## [07-06-2026] page-add | coding style leaves
+## [07-05-2026] page-add | coding style leaves
 
 - `Sources:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Source Map](source-map.md); [Global Catalog](catalog.md); project style-guide source used during initial filing.
 - `Pages touched:` [Python Coding Style](architecture/python-coding-style.md); [C And Embedded C Style](architecture/c-and-embedded-c-style.md); [Equation Setup Style](equations/equation-setup-style.md); [Infrastructure Code Style](infrastructures/infrastructure-code-style.md); [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md); [Architecture](architecture/index.md); [Equations](equations/index.md); [Infrastructures](infrastructures/index.md); [Global Catalog](catalog.md); [Source Map](source-map.md); [KB Log](log.md).
@@ -204,10 +204,18 @@ what changed, why it changed, and what remains to reconcile.
 - `Checks:` `git diff --check`; `python tools/kb_lint.py`.
 - `Follow-up:` none.
 
-## [07-06-2026] reconcile | remove root style-guide references
+## [07-05-2026] reconcile | retire active root style-guide references
 
 - `Sources:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [original-agents.md](../raw/source-docs/original-agents.md).
 - `Pages touched:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md); [Generated Output Boundaries](architecture/generated-output-boundaries.md); [Python Coding Style](architecture/python-coding-style.md); [C And Embedded C Style](architecture/c-and-embedded-c-style.md); [Equation Setup Style](equations/equation-setup-style.md); [BSSN Family](equations/general-relativity/bssn-family.md); [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md); [Infrastructure Code Style](infrastructures/infrastructure-code-style.md); [Static Analysis](validation/static-analysis.md); [Workflows](workflows.md); [Lint Checks](lint/CHECKS.md); [original-agents.md](../raw/source-docs/original-agents.md); [KB Log](log.md).
-- `Decision:` removed all AGENTS/wiki/raw references to the deprecated root style-guide filename, replaced style citations with the preserved agent-rule source and direct tool/config sources, removed the exact source-manifest row for the root style-guide file, and refreshed catalog/source-map metadata for the affected pages.
-- `Checks:` targeted filename scan over `AGENTS.md`, `wiki`, and `raw` returned no matches; `python tools/kb_lint.py`; `git diff --check`.
+- `Decision:` retired active AGENTS/wiki/raw agent-routing references to the root style-guide filename while preserving the frozen `original-agents.md` historical line; replaced KB style citations with the preserved agent-rule source and direct tool/config sources; removed the exact source-manifest row for the root style-guide file; and refreshed catalog/source-map metadata for the affected pages.
+- `Checks:` targeted active-reference scan over `AGENTS.md`, `wiki`, and `raw` excluding the frozen `original-agents.md` line; `python tools/kb_lint.py`; `git diff --check`.
+- `Follow-up:` none.
+
+## [07-05-2026] reconcile | issues review metadata cleanup
+
+- `Sources:` [Schema](SCHEMA.md); [Workflows](workflows.md); [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [original-agents.md](../raw/source-docs/original-agents.md); code-review findings on the style-page reconciliation.
+- `Pages touched:` [Sources](../raw/SOURCES.md); [Source Map](source-map.md); [Global Catalog](catalog.md); [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md); [Generated Output Boundaries](architecture/generated-output-boundaries.md); [Python Coding Style](architecture/python-coding-style.md); [C And Embedded C Style](architecture/c-and-embedded-c-style.md); [Equation Setup Style](equations/equation-setup-style.md); [BSSN Family](equations/general-relativity/bssn-family.md); [Trusted Expression Pipeline](equations/trusted-expression-pipeline.md); [Infrastructure Code Style](infrastructures/infrastructure-code-style.md); [Static Analysis](validation/static-analysis.md); root style-guide file; [KB Log](log.md).
+- `Decision:` restored the frozen `original-agents.md` line and source-manifest provenance note, normalized future-dated style-page metadata to the local `07-05-2026` date, reconciled catalog/page header dates and source counts, corrected the source-map exact-row count, and clarified the root style guide's human-facing purpose.
+- `Checks:` `python tools/kb_lint.py`; `git diff --check`; targeted scans for future-date residue, active root style-guide filename references, source-map exact-row count, and new style-page source-bullet counts.
 - `Follow-up:` none.

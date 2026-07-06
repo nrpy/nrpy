@@ -1,6 +1,6 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 06-29-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-05-2026
 > Up: [Validation](index.md)
 
 ## Summary
