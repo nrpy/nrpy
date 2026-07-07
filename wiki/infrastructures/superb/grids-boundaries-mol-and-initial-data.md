@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 06-29-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 07-07-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -35,6 +35,26 @@ point including ghost zones. The global-owner and global-to-local conversions
 are computed on demand through `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX*`,
 `MAP_GLOBAL_TO_LOCAL_IDX*`, `globalidx3pt_to_chareidx3`, and
 `globalidx3pt_to_localidx3pt` in `superB.h`.
+
+The grid transport paths are ordinary Charm++ entry-method sends generated for
+the `Timestepping` array:
+
+| Flow | Routing | Payload | Owner facts |
+| --- | --- | --- | --- |
+| ghost face slabs | indexed point-to-point `Timestepping` sends | parameter-marshaled `REAL` face slabs | face area and `NGHOSTS` from superB code |
+| nonlocal setup | sparse point-to-point sends | source index arrays | destination tells source which points are needed |
+| nonlocal data | sparse point-to-point sends | parameter-marshaled `REAL` point data | phase-specific receive methods protect SDAG matching |
+| MoL/BC ordering | SDAG local order plus `when` waits | messages buffer until wait reached | no global Charm barrier implied |
+
+`Nchare0`, `Nchare1`, and `Nchare2` define grid and chare decomposition, not
+processing-element placement. The chare/global/local owner helpers on this page
+belong to grid indexing and sparse source lookup; load-balancing policy and PE
+placement belong to the runtime page. Current ghost and nonlocal boundary paths
+do not use TRAM, multicast sections, priority sends, immediate entry methods,
+expedited handling, or zero-copy transfer. Immediate entry methods are not a
+valid replacement for these generated `Timestepping` chare-array receives: the
+current `.ci` signatures are ordinary array entry methods carrying marshaled
+buffers and matched by SDAG `when` clauses.
 
 CurviBC setup starts from the global `bc_struct` and filters it into
 chare-local storage. `bcstruct_chare_set_up` counts inner boundary points whose
@@ -121,5 +141,5 @@ ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 - [superB](index.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [Diagnostics And Observables](diagnostics-and-observables.md)
-- [Lifecycle And Project Assembly](../bhah/lifecycle-and-project-assembly.md)
+- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
 - [Generated Output Boundaries](../../architecture/generated-output-boundaries.md)

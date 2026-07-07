@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-06-2026
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-07-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -14,13 +14,15 @@ The three checked examples are `superB_two_blackholes_collide`,
 `superB_nrpyelliptic_conformally_flat`. Each writes `project/<project_name>/`,
 prints `make` as the build step, and runs as `./charmrun +pN ./<project_name>`
 with `+p4` shown by the examples and `+p2` used by CI for the collision run.
+Upstream Charm++ examples and tests can inform pattern matching, but they are
+not NRPy CI validation evidence.
 
 ## Detail
 
 | Example | Generate | Project | Prerequisites | Build/run shape | Validation status |
 | --- | --- | --- | --- | --- | --- |
 | Two black holes collide | `python -m nrpy.examples.superB_two_blackholes_collide` | `project/superB_two_blackholes_collide/` | Python, Charm++ toolchain, `make`; BHaHAHA library is generated under the project because `enable_BHaHAHA = True` | `make`, then `./charmrun +p4 ./superB_two_blackholes_collide` | CI generates, builds with `make -j2`, and runs `./charmrun +p2 ./superB_two_blackholes_collide` |
-| Black-hole spectroscopy | `python -m nrpy.examples.superB_blackhole_spectroscopy` | `project/superB_blackhole_spectroscopy/` | Python, Charm++ toolchain, `make`, GSL, TwoPunctures headers copied by the generator; BHaHAHA and Psi4 services enabled | `make`, then `./charmrun +p4 ./superB_blackhole_spectroscopy`; checkpoint restart shape is `./charmrun +p4 ./superB_blackhole_spectroscopy +restart log` | CI generates and builds with `make -j2`; it does not run the executable in the current workflow |
+| Black-hole spectroscopy | `python -m nrpy.examples.superB_blackhole_spectroscopy` | `project/superB_blackhole_spectroscopy/` | Python, Charm++ toolchain, `make`, GSL, TwoPunctures headers copied by the generator; BHaHAHA and Psi4 services enabled | `make`, then `./charmrun +p4 ./superB_blackhole_spectroscopy`; the generator also prints `./charmrun +p4 ./superB_blackhole_spectroscopy +restart log` as the checkpoint restart command | CI generates and builds with `make -j2`; it does not run the executable or restart command in the current workflow |
 | Elliptic conformally flat | `python -m nrpy.examples.superB_nrpyelliptic_conformally_flat` | `project/superB_nrpyelliptic_conformally_flat/` | Python, Charm++ toolchain, `make`; no GSL flag in the example; `--floating_point_precision` accepts `float` or `double` tolerance branches | `make`, then `./charmrun +p4 ./superB_nrpyelliptic_conformally_flat` | CI generates and builds with `make -j2`; it does not run the executable in the current workflow |
 
 All three examples set the generated infrastructure parameter to BHaH but
@@ -31,8 +33,10 @@ and `Timestepping` flow, static `superB` headers, PUP routines, and a Makefile
 compiled with `charmc`.
 
 Chare decomposition is selected per example through `Nchare0`, `Nchare1`, and
-`Nchare2` defaults. The examples require each global grid dimension divided by
-its matching chare count to be an integer larger than `NGHOSTS`. The collision
+`Nchare2` defaults. The generated grid setup requires each global grid
+dimension divided by its matching chare count to be an integer; multi-chare
+dimensions are rejected only when the per-chare interior size is smaller than
+`NGHOSTS`. The collision
 example defaults to spherical coordinates with chares `18 x 2 x 1`. The
 spectroscopy example defaults to `SinhCylindrical` with chares `4 x 1 x 4`.
 The elliptic example defaults to `SinhSpherical` with chares `16 x 2 x 2`.
@@ -44,6 +48,13 @@ and `register_CFunction_superB_pup_routines`; copies `superB.h` and
 `superB_pup_function_prototypes.h`; links `-module CkIO`; and emits the
 project Makefile with `CC="charmc"`. These are Charm++ projects, so run them
 through `charmrun` rather than executing a plain standalone binary directly.
+Low-level ownership stays in the infrastructure leaves: build and interface
+rules belong to [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md),
+runtime chare/proxy details belong to
+[superB Chare Entry Points And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md),
+CkIO and volume-output behavior belongs to
+[superB Diagnostics And Observables](../infrastructures/superb/diagnostics-and-observables.md),
+and CI coverage belongs to [Generated Project CI](../validation/generated-project-ci.md).
 
 `superB_two_blackholes_collide` is the Charm++ analog of the lightweight
 standalone black-hole evolution example. It evolves Brill-Lindquist initial
@@ -108,5 +119,7 @@ infrastructure leaves.
 - [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
 - [Generated Project CI](../validation/generated-project-ci.md)
 - Depends on: [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md) - compiled superB assembly summary.
+- Depends on: [superB Chare Entry Points And Runtime](../infrastructures/superb/chare-entrypoints-and-runtime.md) - compiled chare and runtime handle summary.
+- Depends on: [superB Diagnostics And Observables](../infrastructures/superb/diagnostics-and-observables.md) - compiled CkIO and volume-output summary.
 - Depends on: [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md) - compiled chare-grid and MoL summary.
 - Depends on: [superB GR, BHaHAHA, Psi4, And Interpolation](../infrastructures/superb/gr-bhahaha-psi4-and-interpolation.md) - compiled service-chare summary.
