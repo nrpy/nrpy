@@ -1,6 +1,6 @@
 # Reference Metrics
 
-> Core route for coordinate-system reference metrics and precompute support. · Status: confirmed · Last reconciled: 2026-06-29
+> Core route for coordinate-system reference metrics and precompute support. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [Core APIs](index.md)
 
 ## Summary

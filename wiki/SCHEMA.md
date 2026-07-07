@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 2026-06-29
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-06-2026
 
 ## Summary
 
@@ -36,7 +36,32 @@ rules, maintenance procedures, and lint checks.
 
 Source status is either `frozen` for preserved snapshots and selected evidence
 or `living` for files that may change. Ingest state is `registered`, `partial`,
-or `ingested`.
+or `ingested`. Exact seed rows in [source-map.md](source-map.md) may use the
+`exact seed` ingest state for exact cited files whose dependent-page coverage
+is seeded row-by-row rather than through a covering aggregate.
+
+## Source-Tracking Metadata And Dates
+
+A repository source-manifest row records source identity, provenance, status,
+and ingest state as its only source-tracking fields. Exact cited-file rows may
+abbreviate to source and status: the repository path is the provenance, and
+ingest state is tracked through covering aggregate rows and
+[source-map.md](source-map.md). External-source rows may also carry an
+accessed date (`MM-DD-YYYY`) and notes; those are ordinary KB metadata, not
+source-tracking metadata. Manifests and KB docs carry no source-tracking
+hash columns or values of any kind (`sha256` or any other digest algorithm)
+and no `mtime` columns or values; sources are never hashed for tracking.
+Technical, non-source-tracking hash facts (cache hashing, coordinate hash
+macros) remain allowed as reviewed domain facts, but never as stored digest
+values.
+
+Source drift and staleness are resolved by dependency-aware reconciliation, not
+stored fingerprints: inspect the changed paths, the source's manifest row and
+status, [source-map.md](source-map.md) ownership rows, maintainer signals, and
+the affected compiled pages, then re-ingest and reconcile.
+
+All retained KB dates use the `MM-DD-YYYY` format. Approved placeholders such
+as `n/a` or `-` are allowed where no date applies.
 
 ## Support Pages
 
@@ -45,10 +70,6 @@ Support pages keep the wiki compounding without changing router semantics:
 - `wiki/catalog.md` is the global content catalog. It lists pages with type,
   one-line answer, route, query terms, status, reconciliation date, source
   count, and concept-hub candidacy. It does not replace reading leaves.
-- `wiki/log.md` is append-only chronological memory for durable KB operations:
-  ingest, query filing, lint, source drift, reconciliation, page movement, and
-  other maintenance decisions. It must stay free of chat transcripts, scratch
-  logs, token reports, and planning dumps.
 - `wiki/source-map.md` records source dependencies: source or aggregate,
   source authority tier, ingest status, dependent pages, covered subpaths,
   known gaps, last check, and next action.
@@ -58,9 +79,10 @@ Support pages keep the wiki compounding without changing router semantics:
 `index.md` files remain router-only. Do not turn router indexes into global
 content catalogs.
 
-Every durable KB operation updates `wiki/log.md`. Every page add, move, or
-delete updates `wiki/catalog.md`. Every durable source dependency change
-updates `wiki/source-map.md`.
+Every page add, move, or delete updates `wiki/catalog.md`. Every durable source
+dependency change updates `wiki/source-map.md`. Durable rationale belongs in
+the changed governance text, source-map notes, contradiction rows, commit
+messages, or PR descriptions, as appropriate.
 
 ## Page Contract
 
@@ -112,8 +134,8 @@ Source authority tiers are:
 
 Default contradiction precedence is `primary-code` > `primary-test` >
 `generated-evidence` > `primary-doc` > `external-spec` > `background`.
-Exceptions are allowed only with source-specific reasoning in `wiki/log.md`
-and, when a claim is contested, `wiki/contradictions.md`.
+Exceptions are allowed only with source-specific reasoning in the affected page
+or [contradictions.md](contradictions.md) when a claim is contested.
 
 Avoid per-sentence citations. Add inline source tags only for high-risk claims:
 public APIs, generated-output boundaries, CI guarantees, source authority
@@ -129,8 +151,8 @@ gotcha, or change how future queries should route.
 File durable single-topic synthesis into the owning leaf. Create a new leaf
 only for a durable narrow topic with a clear owning branch, or for a
 cross-branch synthesis that cannot cleanly live under an existing branch. In
-all cases, update neighboring links, `wiki/catalog.md`, `wiki/log.md`, and
-`wiki/source-map.md` when source dependencies change.
+all cases, update neighboring links, `wiki/catalog.md`, and `wiki/source-map.md`
+when source dependencies change.
 
 ## Router Rules
 

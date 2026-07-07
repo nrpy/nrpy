@@ -1,6 +1,6 @@
 # Aligned-Spin Hamiltonian
 
-> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary

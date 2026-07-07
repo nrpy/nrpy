@@ -12,5 +12,6 @@
 | [SEOBNR And BOB](seobnr/index.md) | You need SEOBNRv5 or BOB Hamiltonian, waveform, calibration, rotation, or ringdown quantities. |
 | [Geometry And Special-Function Support](geometry-and-special-function-support.md) | You need basis transforms, GeneralRFM fisheye maps, rotations, or spin-weighted spherical harmonics. |
 | [Trusted Expression Pipeline](trusted-expression-pipeline.md) | You need to understand or update equation trusted values and validation flow. |
+| [Equation Setup Style](equation-setup-style.md) | You need equation-building style rules for SymPy use, tensor loops, derivative names, trusted dictionaries, or prohibited dependencies. |
 
 Back to [AGENTS.md](../../AGENTS.md).

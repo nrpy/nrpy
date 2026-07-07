@@ -8,7 +8,7 @@ Author: NRPy contributors
 import argparse
 import os
 
-# Regexes are needed for Markdown link, heading, table, and log-pattern checks.
+# Regexes are needed for Markdown link, heading, and table checks.
 import re
 import sys
 from collections import Counter, defaultdict, deque
@@ -23,7 +23,7 @@ RAW = ROOT / "raw"
 AGENTS = ROOT / "AGENTS.md"
 CATALOG = WIKI / "catalog.md"
 GLOSSARY = WIKI / "glossary.md"
-LOG = WIKI / "log.md"
+RETIRED_OPERATION_OUTPUT = WIKI / "log.md"
 
 REQUIRED_LEAF_SECTIONS = ["Summary", "Detail", "Sources", "See Also"]
 ROUTER_NAMES = {"index.md"}
@@ -32,21 +32,31 @@ SUPPORT_PAGES = {
     WIKI / "workflows.md",
     WIKI / "glossary.md",
     WIKI / "catalog.md",
-    WIKI / "log.md",
     WIKI / "source-map.md",
     WIKI / "contradictions.md",
     WIKI / "lint" / "CHECKS.md",
 }
 EXEMPT_INDEX_DIRS = {WIKI / "lint"}
 SKIP_LINK_SCHEMES = {"http", "https", "mailto", "tel"}
-LOG_HEAD_RE = re.compile(
-    r"^## \[\d{4}-\d{2}-\d{2}\] "
-    r"(ingest|query-filed|lint|source-drift|reconcile|page-add|page-move|page-delete) \| .+"
+# Removed source-tracking metadata bans: no hash digest values of any
+# algorithm, no Mtime/Hash manifest columns, no Mtime values, and no
+# YYYY-MM-DD date literals in governed KB files. Prohibition/supersession
+# statements may still name the removed metadata.
+HASH_DIGEST_VALUE_RE = re.compile(
+    r"\b(sha-?\d+|md-?5|blake-?\d\w*|xxh\d*|crc-?\d+)[:]", re.IGNORECASE
 )
-LOG_FORBIDDEN_RE = re.compile(
-    r"\b(chat transcript|token report|routine lint dump|agent-status|scratch output|planning dump)\b",
+MTIME_HASH_COLUMN_RE = re.compile(r"\|\s*(Mtime|Hash)\s*\|")
+MTIME_WORD_RE = re.compile(r"\bmtimes?\b", re.IGNORECASE)
+# A mention is only allowed when a prohibition/supersession keyword precedes
+# it with no sentence boundary in between (e.g. "no `mtime` columns",
+# "supersedes ... mtime source-tracking instructions"). Positive instructions
+# such as "record mtime values" must fail.
+METADATA_PROHIBITION_RE = re.compile(
+    r"\b(?:no|not|never|without|removed?|supersed\w*|prohibit\w*|banned|bans?)\b"
+    r"[^.!?]*\bmtimes?\b",
     re.IGNORECASE,
 )
+ISO_DATE_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 ROOT_KB_ARTIFACT_RE = re.compile(r"^kb_audit_.*[.]md$")
 
 
@@ -576,47 +586,73 @@ def _check_glossary_catalog_signal(failures: List[str]) -> None:
             )
 
 
-def _check_log_format(failures: List[str]) -> None:
+def _check_retired_operation_output(failures: List[str]) -> None:
     """
-    Check KB log headings, required fields, and hygiene.
+    Check that the retired KB maintenance-output page has not been recreated.
 
     :param failures: Mutable failure list.
     """
-    if not LOG.exists():
-        _fail(failures, LOG, None, "missing KB log")
-        return
-    text = _read(LOG)
-    for idx, line in enumerate(text.splitlines(), start=1):
-        if line.startswith("## [") and not LOG_HEAD_RE.fullmatch(line):
-            _fail(failures, LOG, idx, "unparseable log heading")
+    if RETIRED_OPERATION_OUTPUT.exists():
+        _fail(
+            failures,
+            RETIRED_OPERATION_OUTPUT,
+            None,
+            "retired KB maintenance-output page must not exist; use git "
+            "history for durable operations",
+        )
 
-    required = [
-        "- `Sources:`",
-        "- `Pages touched:`",
-        "- `Decision:`",
-        "- `Checks:`",
-        "- `Follow-up:`",
-    ]
-    chunks = re.split(r"(?=^## \[\d{4}-\d{2}-\d{2}\] )", text, flags=re.MULTILINE)
-    for chunk in chunks:
-        if not chunk.startswith("## "):
-            continue
-        heading = chunk.splitlines()[0]
-        if LOG_FORBIDDEN_RE.search(chunk):
-            _fail(
-                failures,
-                LOG,
-                _line_for_offset(text, text.find(chunk)),
-                "forbidden transient log content",
-            )
-        missing = [field for field in required if field not in chunk]
-        if missing:
-            _fail(
-                failures,
-                LOG,
-                _line_for_offset(text, text.find(heading)),
-                f"log entry missing fields: {', '.join(missing)}",
-            )
+
+def _governed_kb_files() -> List[Path]:
+    """
+    Return KB files governed by source-tracking metadata and date checks.
+
+    :return: Governed markdown files, including ``raw/source-docs/**/*.md``.
+    """
+    files = set(_iter_md_files())
+    source_docs = RAW / "source-docs"
+    if source_docs.exists():
+        files.update(p.resolve() for p in source_docs.rglob("*.md"))
+    return sorted(files)
+
+
+def _metadata_mention_allowed(lines: List[str], line_index: int) -> bool:
+    """
+    Return whether a removed-metadata mention is prohibition/supersession text.
+
+    :param lines: File lines being checked.
+    :param line_index: Zero-based index of the line with the mention.
+    :return: Whether nearby context permits the mention.
+    """
+    context = " ".join(lines[max(0, line_index - 2) : line_index + 1])
+    return METADATA_PROHIBITION_RE.search(context) is not None
+
+
+def _check_source_tracking_metadata(failures: List[str]) -> None:
+    """
+    Check governed KB files for removed source-tracking metadata and dates.
+
+    :param failures: Mutable failure list.
+    """
+    for path in _governed_kb_files():
+        lines = _read(path).splitlines()
+        for idx, line in enumerate(lines, start=1):
+            if HASH_DIGEST_VALUE_RE.search(line):
+                _fail(failures, path, idx, "hash digest value found")
+            if MTIME_HASH_COLUMN_RE.search(line):
+                _fail(
+                    failures, path, idx, "source-tracking Mtime/Hash table column found"
+                )
+            if MTIME_WORD_RE.search(line) and not _metadata_mention_allowed(
+                lines, idx - 1
+            ):
+                _fail(failures, path, idx, "source-tracking Mtime metadata found")
+            if ISO_DATE_RE.search(line):
+                _fail(
+                    failures,
+                    path,
+                    idx,
+                    "YYYY-MM-DD date literal found; KB dates use MM-DD-YYYY",
+                )
 
 
 def _check_root_artifacts(failures: List[str]) -> None:
@@ -659,7 +695,8 @@ def _main() -> int:
     _check_catalog(failures)
     _check_content_dir_indexes(failures)
     _check_glossary_catalog_signal(failures)
-    _check_log_format(failures)
+    _check_retired_operation_output(failures)
+    _check_source_tracking_metadata(failures)
     _check_root_artifacts(failures)
 
     if failures:

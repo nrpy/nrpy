@@ -1,6 +1,6 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 2026-06-30
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -106,8 +106,6 @@ aggregate ingestion is not proven complete for all future files.
 - [blueprint_analysis.py](../../nrpy/examples/geodesic_visualizations/blueprint_analysis.py) - `diagnose_blueprint`
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `__main__`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `__main__`
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md) - generated-project source boundary
-- [Generated Project CI](../validation/generated-project-ci.md) - compiled CI validation route summary
 
 ## See Also
 

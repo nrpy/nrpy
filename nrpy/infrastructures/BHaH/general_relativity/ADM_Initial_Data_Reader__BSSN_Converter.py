@@ -631,7 +631,10 @@ def register_BHaH_defines_h(
 
 
 def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
-    enable_T4munu: bool, CoordSystem: str, IDCoordSystem: str = "Spherical"
+    enable_T4munu: bool,
+    CoordSystem: str,
+    IDCoordSystem: str = "Spherical",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> Tuple[str, str]:
     """
     Generate the C “prefunc” string and the lambdaU launch snippet for the initial-data reader converting ADM→BSSN.
@@ -639,10 +642,8 @@ def generate_ADM_Initial_Data_Reader_prefunc_and_lambdaU_launch(
     :param enable_T4munu: whether to include the T4UU stress-energy block
     :param CoordSystem:   coordinate system for the BSSN conversion CFunctions
     :param IDCoordSystem: coordinate system for the ADM→Cart conversion (default "Spherical")
-    :return: a tuple (prefunc, lambdaU_launch) where
-             - prefunc is the C code defining the ADM, BSSN, and rescaled-BSSN structs
-               and the conversion CFunction bodies plus lambdaU prefuc
-             - lambdaU_launch is the C code snippet to launch the lambdaU grid interior
+    :param spin_alignment_vector_params: Optional public spin-vector commondata names.
+    :return: The C prefunc string and lambdaU launch snippet.
     """
 
     def T4UU_prettyprint() -> str:
@@ -698,6 +699,54 @@ typedef struct __rescaled_BSSN_rfm_basis_struct__ {
         enable_T4munu=enable_T4munu,
     )
     prefunc += Cfunction_ADM_Cart_to_BSSN_Cart(enable_T4munu=enable_T4munu)
+    if spin_alignment_vector_params is not None:
+        prefunc += r"""
+/**
+ * Rotate ADM Cartesian vectors and tensors by an SO(3) matrix.
+ *
+ * @param[in] R Rotation matrix.
+ * @param[in,out] ADM ADM Cartesian-basis data to rotate in place.
+ */
+static void rotate_ADM_Cart_basis_with_R(const REAL R[3][3], ADM_Cart_basis_struct *restrict ADM) {
+  REAL betaU[3] = {ADM->betaU0, ADM->betaU1, ADM->betaU2};
+  so3_apply_R_to_vector(R, betaU);
+  ADM->betaU0 = betaU[0];
+  ADM->betaU1 = betaU[1];
+  ADM->betaU2 = betaU[2];
+
+  REAL BU[3] = {ADM->BU0, ADM->BU1, ADM->BU2};
+  so3_apply_R_to_vector(R, BU);
+  ADM->BU0 = BU[0];
+  ADM->BU1 = BU[1];
+  ADM->BU2 = BU[2];
+
+  REAL gammaDD[3][3] = {
+      {ADM->gammaDD00, ADM->gammaDD01, ADM->gammaDD02},
+      {ADM->gammaDD01, ADM->gammaDD11, ADM->gammaDD12},
+      {ADM->gammaDD02, ADM->gammaDD12, ADM->gammaDD22},
+  };
+  so3_apply_R_to_tensorDD(R, gammaDD);
+  ADM->gammaDD00 = gammaDD[0][0];
+  ADM->gammaDD01 = gammaDD[0][1];
+  ADM->gammaDD02 = gammaDD[0][2];
+  ADM->gammaDD11 = gammaDD[1][1];
+  ADM->gammaDD12 = gammaDD[1][2];
+  ADM->gammaDD22 = gammaDD[2][2];
+
+  REAL KDD[3][3] = {
+      {ADM->KDD00, ADM->KDD01, ADM->KDD02},
+      {ADM->KDD01, ADM->KDD11, ADM->KDD12},
+      {ADM->KDD02, ADM->KDD12, ADM->KDD22},
+  };
+  so3_apply_R_to_tensorDD(R, KDD);
+  ADM->KDD00 = KDD[0][0];
+  ADM->KDD01 = KDD[0][1];
+  ADM->KDD02 = KDD[0][2];
+  ADM->KDD11 = KDD[1][1];
+  ADM->KDD12 = KDD[1][2];
+  ADM->KDD22 = KDD[2][2];
+} // END FUNCTION: rotate_ADM_Cart_basis_with_R
+"""
     prefunc += Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm(
         CoordSystem=CoordSystem,
         enable_T4munu=enable_T4munu,
@@ -718,6 +767,7 @@ def setup_ADM_initial_data_reader(
     addl_includes: Optional[List[str]],
     CoordSystem: str,
     IDCoordSystem: str = "Spherical",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> Tuple[List[str], str, str]:
     """
     Perform Steps 1–3 for the ADM initial-data reader registration.
@@ -732,9 +782,22 @@ def setup_ADM_initial_data_reader(
     :param addl_includes:         Additional headers to include.
     :param CoordSystem:           Target coordinate system for CFunctions.
     :param IDCoordSystem:         Input ADM coordinate system (default "Spherical").
+    :param spin_alignment_vector_params: Optional public spin-vector commondata names.
     :return:                       A tuple (includes, prefunc, lambdaU_launch).
     :raises ValueError:           If `addl_includes` is provided but not a list.
     """
+    if spin_alignment_vector_params is not None:
+        if "so3_find_nU_and_dphi_from_unit_vectors" not in cfc.CFunction_dict:
+            BHaH.rotation.so3_find_nU_and_dphi_from_unit_vectors.register_CFunction_so3_find_nU_and_dphi_from_unit_vectors()
+        if "so3_axis_angle_to_R" not in cfc.CFunction_dict:
+            BHaH.rotation.so3_axis_angle_to_R.register_CFunction_so3_axis_angle_to_R()
+        if "so3_apply_R_to_vector" not in cfc.CFunction_dict:
+            BHaH.rotation.so3_apply_R_to_vector.register_CFunction_so3_apply_R_to_vector()
+        if "so3_apply_RT_to_vector" not in cfc.CFunction_dict:
+            BHaH.rotation.so3_apply_RT_to_vector.register_CFunction_so3_apply_RT_to_vector()
+        if "so3_apply_R_to_tensorDD" not in cfc.CFunction_dict:
+            BHaH.rotation.so3_apply_R_to_tensorDD.register_CFunction_so3_apply_R_to_tensorDD()
+
     # Step 1: register BHaH_defines.h contribution
     register_BHaH_defines_h(
         ID_persist_struct_str=ID_persist_struct_str,
@@ -757,6 +820,7 @@ def setup_ADM_initial_data_reader(
             enable_T4munu=enable_T4munu,
             CoordSystem=CoordSystem,
             IDCoordSystem=IDCoordSystem,
+            spin_alignment_vector_params=spin_alignment_vector_params,
         )
     )
 
@@ -766,6 +830,7 @@ def setup_ADM_initial_data_reader(
 def build_initial_data_conversion_loop(
     enable_T4munu: bool,
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> str:
     """
     Generate the string for the initial data conversion loop.
@@ -782,13 +847,68 @@ def build_initial_data_conversion_loop(
     :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
         ``ADM_Cart_to_BSSN_Cart(...)`` and before
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
-    :returns: a raw string containing the entire loop + assignments
+    :param spin_alignment_vector_params: Optional public spin-vector commondata
+        parameter names. When set, sample aligned UIUC data at ``R^T xCart`` and
+        rotate ADM Cartesian basis data back with ``R``. Note: for Spherical
+        initial data, tilting the spin moves the ID coordinate singularity off
+        the grid's polar axis onto the spin axis; grids should avoid sampling
+        exactly on the spin axis.
+    :return: a raw string containing the entire loop + assignments
     """
-    header = r"""
+    spin_setup = ""
+    if spin_alignment_vector_params is not None:
+        chi_x_name, chi_y_name, chi_z_name = spin_alignment_vector_params
+        spin_setup = rf"""
+  REAL R_spin_aligned_to_fixed[3][3];
+  {{
+    const REAL spin_norm = commondata->chi;
+    if (spin_norm < 1e-300) {{
+      R_spin_aligned_to_fixed[0][0] = 1.0;
+      R_spin_aligned_to_fixed[0][1] = 0.0;
+      R_spin_aligned_to_fixed[0][2] = 0.0;
+      R_spin_aligned_to_fixed[1][0] = 0.0;
+      R_spin_aligned_to_fixed[1][1] = 1.0;
+      R_spin_aligned_to_fixed[1][2] = 0.0;
+      R_spin_aligned_to_fixed[2][0] = 0.0;
+      R_spin_aligned_to_fixed[2][1] = 0.0;
+      R_spin_aligned_to_fixed[2][2] = 1.0;
+    }} // END IF: zero UIUC spin alignment is identity
+    else {{
+      const REAL ezU[3] = {{0.0, 0.0, 1.0}};
+      const REAL chihatU[3] = {{
+          commondata->{chi_x_name} / spin_norm,
+          commondata->{chi_y_name} / spin_norm,
+          commondata->{chi_z_name} / spin_norm,
+      }};
+      REAL nU[3];
+      REAL dphi;
+      so3_find_nU_and_dphi_from_unit_vectors(ezU, chihatU, nU, &dphi);
+      so3_axis_angle_to_R(nU, dphi, R_spin_aligned_to_fixed);
+    }} // END ELSE: nonzero UIUC spin alignment rotation
+  }} // END BLOCK: build UIUC aligned-to-fixed rotation matrix
+"""
+    xCart_for_ID = "xCart_ID" if spin_alignment_vector_params is not None else "xCart"
+    xCart_ID_block = (
+        r"""
+    REAL xCart_ID[3] = {xCart[0], xCart[1], xCart[2]};
+    so3_apply_RT_to_vector(R_spin_aligned_to_fixed, xCart_ID);
+"""
+        if spin_alignment_vector_params is not None
+        else ""
+    )
+    rotate_ADM_block = (
+        r"""
+    rotate_ADM_Cart_basis_with_R(R_spin_aligned_to_fixed, &ADM_Cart_basis);
+"""
+        if spin_alignment_vector_params is not None
+        else ""
+    )
+    header = (
+        r"""
   const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
   const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
   const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
-
+SPIN_ALIGNMENT_R_SETUP
   LOOP_OMP("omp parallel for",
            i0, 0, Nxx_plus_2NGHOSTS0,
            i1, 0, Nxx_plus_2NGHOSTS1,
@@ -800,17 +920,23 @@ def build_initial_data_conversion_loop(
     REAL xCart[3];
     REAL xOrig[3] = {xx[0][i0], xx[1][i1], xx[2][i2]};
     xx_to_Cart(params, xOrig, xCart);
+XCART_ID_BLOCK
 
-    // Read or compute initial data at destination point xCart
+    // Read or compute initial data at the sampling point XCART_FOR_ID.
     initial_data_struct initial_data;
-    ID_function(commondata, params, xCart, ID_persist, &initial_data);
+    ID_function(commondata, params, XCART_FOR_ID, ID_persist, &initial_data);
 
     ADM_Cart_basis_struct ADM_Cart_basis;
-    ADM_SphorCart_to_Cart(commondata, params, xCart, &initial_data, &ADM_Cart_basis);
+    ADM_SphorCart_to_Cart(commondata, params, XCART_FOR_ID, &initial_data, &ADM_Cart_basis);
+ROTATE_ADM_BLOCK
 
     BSSN_Cart_basis_struct BSSN_Cart_basis;
     ADM_Cart_to_BSSN_Cart(commondata, params, xCart, &ADM_Cart_basis, &BSSN_Cart_basis);
-"""
+""".replace("SPIN_ALIGNMENT_R_SETUP", spin_setup.rstrip())
+        .replace("XCART_ID_BLOCK", xCart_ID_block.rstrip())
+        .replace("XCART_FOR_ID", xCart_for_ID)
+        .replace("ROTATE_ADM_BLOCK", rotate_ADM_block.rstrip())
+    )
     if post_ADM_Cart_to_BSSN_Cart_hook_str:
         header += "\n" + post_ADM_Cart_to_BSSN_Cart_hook_str.rstrip() + "\n"
     header += r"""
@@ -898,6 +1024,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> None:
     """
     Register the CFunction for converting initial ADM data to BSSN variables.
@@ -911,7 +1038,14 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
         ``ADM_Cart_to_BSSN_Cart(...)`` and before
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
+    :param spin_alignment_vector_params: Optional public spin-vector commondata
+        parameter names used to sample aligned initial data and rotate ADM data.
+    :raises ValueError: If spin-vector alignment is requested with T4munu.
     """
+    if spin_alignment_vector_params is not None and enable_T4munu:
+        raise ValueError(
+            "spin_alignment_vector_params does not currently support enable_T4munu=True."
+        )
     parallelization = par.parval_from_str("parallelization")
 
     includes, prefunc, lambdaU_launch = setup_ADM_initial_data_reader(
@@ -921,6 +1055,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
         addl_includes=addl_includes,
         CoordSystem=CoordSystem,
         IDCoordSystem=IDCoordSystem,
+        spin_alignment_vector_params=spin_alignment_vector_params,
     )
 
     desc = f"Read ADM data in the {IDCoordSystem} basis, and output rescaled BSSN data in the {CoordSystem} basis"
@@ -950,6 +1085,7 @@ def register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     body = build_initial_data_conversion_loop(
         enable_T4munu,
         post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
+        spin_alignment_vector_params=spin_alignment_vector_params,
     )
 
     post_initial_data_call: str = ""
@@ -999,6 +1135,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     enable_fd_functions: bool = False,
     ID_persist_struct_str: str = "",
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> None:
     """
     Register ADM->BSSN converters for multiple coordinate systems.
@@ -1015,6 +1152,8 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
     :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
         ``ADM_Cart_to_BSSN_Cart(...)`` and before
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
+    :param spin_alignment_vector_params: Optional public spin-vector commondata
+        parameter names used to sample aligned initial data and rotate ADM data.
     """
     for CoordSystem in sorted(set_of_CoordSystems):
         register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
@@ -1025,6 +1164,7 @@ def register_CFunctions_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN(
             enable_fd_functions=enable_fd_functions,
             ID_persist_struct_str=ID_persist_struct_str,
             post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
+            spin_alignment_vector_params=spin_alignment_vector_params,
         )
 
 

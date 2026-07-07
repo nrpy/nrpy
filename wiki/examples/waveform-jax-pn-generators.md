@@ -1,6 +1,6 @@
 # Waveform JAX PN Generators
 
-> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 2026-06-30
+> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [Examples](index.md)
 
 ## Summary

@@ -1,6 +1,6 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 2026-06-30
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -140,7 +140,8 @@ make
 
 The source's final print still says to run `./bhah_lib`, but the Makefile call
 is explicitly a library build. Treat that print as stale generic messaging for
-this example. The checked-in CI workflows contain commented-out Ubuntu and macOS
+this example; this open stale claim is tracked in the
+[Contradictions](../contradictions.md) register. The checked-in CI workflows contain commented-out Ubuntu and macOS
 commands for `python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib &&
 make && make clean)`, so source and workflow evidence support generation intent
 and a disabled/commented CI status, not active CI coverage.

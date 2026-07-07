@@ -1,17 +1,17 @@
 # Diagnostics And Observables
 
-> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 07-07-2026
 > Up: [superB](index.md)
 
 ## Summary
 
 superB diagnostics are staged through a generated `diagnostics()` dispatcher,
 the `Timestepping` chare's scheduled output block, nearest-point sampling
-helpers, CkIO-backed 1D/2D file sessions, and reduction-backed volume-integral
-reporting. The diagnostic gridfunctions sampled by this machinery are chosen by
-the project variant: the GR nearest dispatcher samples Hamiltonian and
-`MSQUARED` diagnostics, while the NRPyElliptic nearest dispatcher samples
-residual and `uu` diagnostics.
+helpers, output-only CkIO sessions for 1D/2D nearest files, direct `FILE *`
+center output, and reduction-backed volume-integral reporting. The diagnostic
+gridfunctions sampled by this machinery are chosen by the project variant: the
+GR nearest dispatcher samples Hamiltonian and `MSQUARED` diagnostics, while the
+NRPyElliptic nearest dispatcher samples residual and `uu` diagnostics.
 
 ## Detail
 
@@ -54,30 +54,60 @@ During timestepping, the generated control flow computes
 per-grid `diagnostic_gfs`, initializes them to `NAN`, fills them with
 `diagnostic_gfs_set`, and aliases MoL's diagnostic-output pointer to that
 storage. Center diagnostics are then run directly through
-`diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER)`. The 1D and 2D
-outputs are routed through file opens, CkIO write sessions, callback-triggered
-`diagnostics_ckio` calls, completion callbacks, and file closes before
-timestepping resumes.
+`diagnostics_ckio(Ck::IO::Session(), DIAGNOSTICS_WRITE_CENTER)`, but the center
+helper writes `out0d` through a normal `FILE *`; no CkIO session is involved.
+The 1D and 2D outputs are routed through file opens, CkIO write sessions,
+callback-triggered `diagnostics_ckio` calls, completion callbacks, and file
+closes before timestepping resumes. `DIAGNOSTICS_VOLUME` is also invoked through
+`diagnostics_ckio`, but it bypasses the regular row-output dispatcher and enters
+the volume-reduction path.
 
-CkIO is the correct Charm++ mechanism for this parallel file path. The current
-Charm++ repository describes CkIO as a parallel I/O library that supports
-reading and writing with aggregation, and its output API follows an open,
-`startSession`, multi-PE `write`, completion-callback, and `close` sequence.
-superB maps that API directly: the root diagnostic block opens each 1D/2D
-output file, `generate_diagnostics_code` starts a session using the total byte
-size saved in `diagnostic_struct`, the nearest helpers write fixed-size rows at
-precomputed offsets with `Ck::IO::write`, and the generated completion path
-closes the file.
+superB uses CkIO only for nearest 1D/2D output files. On each output step, the
+root diagnostics branch opens each `out1d-*` and `out2d-*` file. The generated
+CkIO callbacks currently target `thisProxy`, the full `Timestepping` array
+proxy; Charm++ treats `CkCallback(ep, CkArrayID)` as an array-broadcast
+callback. The intended root branch starts the write session with the total byte
+size saved in `diagnostic_struct`, broadcasts the session token to all
+`Timestepping` elements through `diagnostics_ckio`, and closes the file after
+CkIO reports completion, but callback delivery itself is not encoded as a
+root-only target. The nearest helpers write headers and fixed-size rows with
+`Ck::IO::write`.
+Charm++ defines those write offsets as relative to the whole file, not to the
+session offset, while the session itself is a byte window; superB's precomputed
+header and row offsets must therefore fit inside that file-global window. CkIO
+uses seek/read/write at the lowest level, so this output path requires seekable
+files. The generated code constructs default `Ck::IO::Options` values for
+opens, but this page does not prescribe CkIO option tuning. Current superB
+control flow should not be read as checkpointing an open CkIO file: write
+sessions complete, files close, SDAG reaches the `closed_*` callbacks, and only
+then does the timestepping continuation and checkpoint-scheduling path proceed.
+
+| Step | superB entry or call | Charm++ message/meaning |
+| --- | --- | --- |
+| open | root diagnostics branch calls `Ck::IO::open` | schedules file open with a `thisProxy` array-broadcast callback |
+| file ready | `ready_*` | receives `FileReadyMsg`; generated callback target is array-shaped, while the intended consuming SDAG branch is root-owned |
+| start session | `Ck::IO::startSession` | intended root branch starts byte-window session |
+| session ready | `start_write_*` | receives `SessionReadyMsg` and broadcasts `diagnostics_ckio` |
+| write | all `Timestepping` elements call `Ck::IO::write` | multi-PE row/header writes into session window |
+| write complete | `test_written_*` | receives completion `CkReductionMsg *`; delete/ignore payload as completion, not reducer data |
+| close | root calls `Ck::IO::close` | closes after completion |
+| closed | `closed_*` | SDAG resumes only after close callback |
 
 Volume diagnostics use Charm++ reductions rather than CkIO row writes.
-`diagnostics_ckio` treats `DIAGNOSTICS_VOLUME` specially by calling
+`diagnostics_ckio` checks for `DIAGNOSTICS_VOLUME` before calling the generated
+`diagnostics()` row dispatcher, so volume output goes directly to
 `contribute_localsums_for_diagnostic_volume_integ`. Each chare evaluates the
-default integration recipes against `diagnostic_gfs`, flattens selected volumes
-and integrals into a `std::vector<double>`, and contributes them with
-`CkReduction::sum_double` to `report_sums_for_volume` on chare `(0,0,0)`.
-Charm++ documents reductions as contributions from chare-array members that
-apply one operation and collect the result in one place, with `sum_double` as a
-built-in reducer for double data. The reporting entry method reconstructs the
+default integration recipes against `diagnostic_gfs`, flattens one
+`std::vector<double>` per contribution in recipe order, and stores each recipe
+as selected volume followed by that recipe's integrands. It contributes the
+flattened vector with `CkReduction::sum_double`. The callback is constructed as
+`CkIndex_Timestepping::report_sums_for_volume(NULL)` on
+`Timestepping(0,0,0)`, not as a typed `[reductiontarget]` callback, so the root
+entry receives a real `CkReductionMsg *` payload and reconstructs doubles from
+`getSize()` and `getData()`. This is distinct from CkIO callback messages in
+`test_written_*` and `closed_*`: `test_written_*` receives the empty CkIO
+completion `CkReductionMsg *`, and both handlers delete callback messages
+instead of parsing reducer data. The reporting entry method reconstructs the
 recipe results, writes `out3d-integrals-conv_factor...` files from the root
 chare, and for NRPyElliptic updates `commondata.log10_current_residual` from
 the residual RMS for the named `sphere_R_80` recipe.
@@ -108,4 +138,4 @@ equation definitions behind those gridfunctions to the equation pages.
 - [superB](index.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [GR, BHaHAHA, Psi4, And Interpolation](gr-bhahaha-psi4-and-interpolation.md)
-- [BHaH Lifecycle](../bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)

@@ -1,6 +1,6 @@
 # BHaHAHA Relaxation, Diagnostics, And State
 
-> Explain the single-horizon relaxation loop, persistent horizon state, BBH common-horizon state, diagnostics, file output, and cleanup paths. · Status: confirmed · Last reconciled: 2026-06-30
+> Explain the single-horizon relaxation loop, persistent horizon state, BBH common-horizon state, diagnostics, file output, and cleanup paths. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [BHaH](index.md)
 
 ## Summary

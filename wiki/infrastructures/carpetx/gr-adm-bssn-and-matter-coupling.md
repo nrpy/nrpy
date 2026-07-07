@@ -1,6 +1,6 @@
 # CarpetX GR ADM/BSSN And Matter Coupling
 
-> CarpetX ADMBaseX import/export and TmunuBaseX stress-energy raising around BSSN evolution. · Status: confirmed · Last reconciled: 2026-06-30
+> CarpetX ADMBaseX import/export and TmunuBaseX stress-energy raising around BSSN evolution. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary

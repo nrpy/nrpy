@@ -1,6 +1,6 @@
 # Generated Output Boundaries
 
-> Distinguish handwritten source from generated projects, generated thorns, generated language targets, and artifacts. · Status: confirmed · Last reconciled: 2026-06-29
+> Distinguish handwritten source from generated projects, generated thorns, generated language targets, and artifacts. · Status: confirmed · Last reconciled: 07-05-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -22,7 +22,6 @@ The contribution boundary is stricter than the generated-project capability. Bin
 - [README.md](../../README.md) - `## What Gets Generated?`, `## Project Families and Example Generators`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`, `charmpp-validation`, `codegen-ubuntu`, `codegen-mac`
 - [raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Scope`
-- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
 
 ## See Also
 

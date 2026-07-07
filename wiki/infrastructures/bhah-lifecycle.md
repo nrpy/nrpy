@@ -1,6 +1,6 @@
 # BHaH Lifecycle
 
-> Compatibility page for the moved BHaH lifecycle content. · Status: confirmed · Last reconciled: 2026-06-29
+> Compatibility page for the moved BHaH lifecycle content. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -19,8 +19,7 @@ pages, not on this compatibility page.
 
 ## Sources
 
-- [Workflows](../workflows.md) - `Page Move Or Delete`
-- [Schema](../SCHEMA.md) - `Router Rules`, `Page Contract`
+- [kb-instructions.md](../../raw/source-docs/kb-instructions.md) - `### 2.2 Navigation invariants` (leaf promotion moves content into child leaves; every leaf stays reachable through routers)
 
 ## See Also
 

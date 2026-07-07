@@ -1,6 +1,6 @@
 # Commondata And PyFunction Registry
 
-> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 2026-06-30
+> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [JAX](index.md)
 
 ## Summary
@@ -30,7 +30,9 @@ not check that the four input lists have equal lengths; ordinary Python `zip()`
 truncation therefore defines how many entries are registered. In
 `nrpy.examples.sebobv1_jax`, the observed call supplies fourteen names and
 descriptions but thirteen dtypes and defaults, so the final listed `a_f` field
-is not passed to `register_commondata_param()` by that batch call.
+is not passed to `register_commondata_param()` by that batch call. This
+contested claim is tracked in the [Contradictions](../../contradictions.md)
+register.
 
 `generate_commondata_dataclass()` turns the current registry contents into the
 generated `Commondata.py` module text. It emits `from dataclasses import
@@ -74,8 +76,6 @@ the returned environment dictionaries back into parent globals, including
 - [nrpy/py_function.py](../../../nrpy/py_function.py) - `PyFunction`, `PyFunction_dict`, `register_PyFunction`
 - [nrpy/helpers/parallel_codegen.py](../../../nrpy/helpers/parallel_codegen.py) - `NRPyEnv`, `pcg_registration_phase`, `do_parallel_codegen`, `unpack_NRPy_environment_dict`
 - [nrpy/examples/sebobv1_jax.py](../../../nrpy/examples/sebobv1_jax.py) - `JAX.commondata.register_commondata_params`
-- [Parallel Codegen Orchestration](../../core/helpers/parallel-codegen-orchestration.md) - helper leaf for deferred registration and global-registry merge behavior
-- [CSE And Printer Support](../../core/helpers/cse-and-printer-support.md) - helper leaf for `py_codegen()` and `NRPyJaxPrinter` behavior
 
 ## See Also
 

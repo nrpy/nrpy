@@ -1,6 +1,6 @@
 # SIMD And Intrinsic Support
 
-> Helper route for symbolic SIMD rewrites and handwritten intrinsic macro headers. · Status: confirmed · Last reconciled: 2026-06-29
+> Helper route for symbolic SIMD rewrites and handwritten intrinsic macro headers. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary

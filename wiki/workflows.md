@@ -1,13 +1,14 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 2026-06-30
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-06-2026
 
 ## Summary
 
 Start from `AGENTS.md`, follow catalog and router paths to compiled leaves, and
 answer from sourced pages. Durable answers are filed back into the wiki when
 they should compound. Maintenance work registers sources first, updates the
-owning leaf, then fixes nearby links, catalog/log entries, and glossary terms.
+owning leaf, then fixes nearby links, catalog entries, source-map rows, and
+glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
 `PYTHONPATH=.` when there is no editable install, Python edits require Black
 before commit, and every modified Python file gets the single-file
@@ -28,7 +29,10 @@ Use this order for agent navigation:
 ## Ingest
 
 1. Register the source in [raw/SOURCES.md](../raw/SOURCES.md) with provenance,
-   `frozen` or `living` status, mtime, hash, and ingest state.
+   `frozen` or `living` status, and ingest state. Exact cited-file rows may
+   abbreviate to source and status per [SCHEMA.md](SCHEMA.md); external-source
+   rows may also carry an accessed date and notes. Do not record or compute
+   source-tracking digests or timestamps.
 2. Decide which branch owns the compiled facts.
 3. Update the owning leaf in synthesized prose and cite exact files plus stable
    symbols or headings.
@@ -62,17 +66,21 @@ Use this filing target:
    `wiki/syntheses/index.md` plus the first `wiki/syntheses/*.md` leaf in the
    same change.
 
-When filing, update [catalog.md](catalog.md), [log.md](log.md), source
-dependencies in [source-map.md](source-map.md) when they change, and typed
-neighbor links. Use plain markdown; do not require Obsidian metadata or
-frontmatter.
+When filing, update [catalog.md](catalog.md), source dependencies in
+[source-map.md](source-map.md) when they change, and typed neighbor links. Use
+plain markdown; do not require Obsidian metadata or frontmatter.
 
 ## Living-Source Change
 
-Recompute the changed source's mtime and hash, re-ingest affected leaves, and
-update one-hop neighbors that share changed glossary entities. Mark a page
-`stale` only when it cannot be reconciled immediately. Record durable source
-drift and reconciliation decisions in [log.md](log.md).
+Review the change dependency-aware: inspect the changed paths, confirm the
+source's [raw/SOURCES.md](../raw/SOURCES.md) row (provenance, status, ingest
+state) still describes it, follow [source-map.md](source-map.md) ownership rows
+and maintainer signals to the affected compiled pages, then re-ingest affected
+leaves and update one-hop neighbors that share changed glossary entities. Mark
+a page `stale` only when it cannot be reconciled immediately. Record durable
+source drift and reconciliation decisions in the affected pages,
+[source-map.md](source-map.md), [contradictions.md](contradictions.md), commit
+messages, or PR descriptions as appropriate.
 
 ## External Source Trust Change
 
@@ -82,27 +90,26 @@ the source as authority and one of these is true:
 
 1. A frozen markdown excerpt or version note exists under `raw/source-docs/`.
 2. The upstream source is stable by version, commit, or immutable URL.
-3. A logged exception explains why the live external source is acceptable.
+3. A documented exception explains why the live external source is acceptable.
 
-Any external source trust change requires updates to [source-map.md](source-map.md)
-and [log.md](log.md). If the change affects a contested or stale claim, also
-update [contradictions.md](contradictions.md). Repository facts still follow the
-authority order in [SCHEMA.md](SCHEMA.md): code, tests, generated evidence,
-docs, external specs, then background sources.
+Any external source trust change requires updates to
+[source-map.md](source-map.md). If the change affects a contested or stale
+claim, also update [contradictions.md](contradictions.md). Repository facts
+still follow the authority order in [SCHEMA.md](SCHEMA.md): code, tests,
+generated evidence, docs, external specs, then background sources.
 
 ## Contradiction And Stale Claims
 
 When sources disagree, create or update a row in
 [contradictions.md](contradictions.md) before changing the affected claim's
 status to `contested`. Record the competing sources, authority decision,
-affected pages, opened date, and next action. Add a matching `reconcile` or
-`source-drift` entry to [log.md](log.md).
+affected pages, opened date, and next action.
 
 When a living source has moved and reconciliation cannot finish in the same
 change, mark affected pages `stale`, add or update the contradiction/staleness
-row, and log the blocked reconciliation reason. When a claim is reconciled,
-update affected pages, close or revise the row in [contradictions.md](contradictions.md),
-and append the resolution to [log.md](log.md).
+row, and record the blocked reconciliation reason there. When a claim is
+reconciled, update affected pages and close or revise the row in
+[contradictions.md](contradictions.md).
 
 ## Page Move Or Delete
 
@@ -135,8 +142,6 @@ registered as frozen evidence.
 
 - [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
 - [original-agents.md](../raw/source-docs/original-agents.md) - `## Required Checks`
-- [coding_style.md](../coding_style.md) - `## Static Analysis Configuration`
-- [coding_style.md](../coding_style.md) - `### Trusted Vector File Contract`
 - [README.md](../README.md) - `## Contributor Setup`
 - [single_file_static_analysis.sh](../.github/single_file_static_analysis.sh) - `run_test_step`
 - [main.yml](../.github/workflows/main.yml) - `static-analysis`

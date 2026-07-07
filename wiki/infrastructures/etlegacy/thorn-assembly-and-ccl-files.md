@@ -1,6 +1,6 @@
 # Thorn Assembly And CCL Files
 
-> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 2026-06-30
+> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -76,7 +76,6 @@ thorn-local C files and Cactus build metadata.
 - [schedule_ccl.py](../../../nrpy/infrastructures/ETLegacy/schedule_ccl.py) - `ScheduleCCL`, `construct_schedule_ccl`
 - [make_code_defn.py](../../../nrpy/infrastructures/ETLegacy/make_code_defn.py) - `output_CFunctions_and_construct_make_code_defn`
 - [c_function.py](../../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `full_function`, `ET_schedule_bins_entries`, `ET_current_thorn_CodeParams_used`
-- [Generated Output Boundaries](../../architecture/generated-output-boundaries.md) - generated thorn boundary
 - [Cactus Users Guide chapter C1.2](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - Cactus thorn and CCL file terminology
 
 ## See Also

@@ -1,6 +1,6 @@
 # Trusted Expression Pipeline
 
-> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 2026-06-29
+> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-05-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -36,9 +36,9 @@ the owning module only when the new result is trusted.
 
 Trusted-value files under `*/tests/*.py` are treated specially. They should
 contain only generated `mpf` or `mpc` data, no module docstrings, no functions,
-and no classes. The preserved agent rules and coding style both say not to
-hand-edit trusted values; regenerate them from the owning module and explain the
-reason in the commit message.
+and no classes. The preserved agent rules say not to hand-edit trusted values;
+regenerate them from the owning module and explain the reason in the commit
+message.
 
 Family pages own the implementation-specific validation inventory. In compact
 form, current coverage includes BSSN quantities/RHSs/constraints, ADM/BSSN and
@@ -54,7 +54,6 @@ symbols; this page owns only the common processing and comparison mechanics.
 
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `output_trusted`, `compare_against_trusted`
-- [coding_style.md](../../coding_style.md) - `Expression Validation via Trusted Dictionaries`, `Trusted Vector File Contract`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `Required Checks`, `Expression Validation`
 - [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs`
 - [BSSN_RHSs_Cartesian.py](../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`

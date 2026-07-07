@@ -1,6 +1,6 @@
 # Conformally Flat Elliptic
 
-> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Equations](index.md)
 
 ## Summary

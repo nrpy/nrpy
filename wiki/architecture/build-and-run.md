@@ -1,6 +1,6 @@
 # Build And Run
 
-> Compile the supported install paths, prerequisites, and first runnable workflow. · Status: confirmed · Last reconciled: 2026-06-29
+> Compile the supported install paths, prerequisites, and first runnable workflow. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Architecture](index.md)
 
 ## Summary

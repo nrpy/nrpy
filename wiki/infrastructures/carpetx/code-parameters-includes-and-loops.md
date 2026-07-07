@@ -1,6 +1,6 @@
 # CarpetX Code Parameters, Includes, And Loops
 
-> CarpetX-local helpers for Cactus parameter reads, standard includes, and generated Loop kernels. · Status: confirmed · Last reconciled: 2026-06-30
+> CarpetX-local helpers for Cactus parameter reads, standard includes, and generated Loop kernels. · Status: confirmed · Last reconciled: 06-30-2026
 > Up: [CarpetX](index.md)
 
 ## Summary

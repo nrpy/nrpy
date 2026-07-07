@@ -3,9 +3,4 @@ build/
 nrpy.egg-info/
 .mypy_cache/
 project/
-.apptainer-home/
-.apptainer-tmp/
-.apptainer-workdir/
-.apptainer-vscode/
-.apptainer-etc/
-.apptainer-codex/
+.apptainer*/

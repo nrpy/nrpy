@@ -1,6 +1,6 @@
 # Wave Equation Generators
 
-> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 2026-06-29
+> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -148,10 +148,6 @@ for project ownership, build, and generated-source boundaries.
 - [wave_equation_curvilinear.py](../../nrpy/examples/wave_equation_curvilinear.py) - `BHaH.numerical_grids_and_timestep.register_CFunctions`, `BHaH.rfm_precompute.register_CFunctions_rfm_precompute`, `BHaH.CurviBoundaryConditions.register_all.register_C_functions`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
 - [wave_equation_multicoordinates.py](../../nrpy/examples/wave_equation_multicoordinates.py) - `parser`, `project_name`, `set_of_CoordSystems`, `Nxx_dict`, `CoordSystem_to_register_CodeParameters`
 - [wave_equation_multicoordinates.py](../../nrpy/examples/wave_equation_multicoordinates.py) - `BHaH.numerical_grids_and_timestep.register_CFunctions`, `BHaH.rfm_precompute.register_CFunctions_rfm_precompute`, `BHaH.CurviBoundaryConditions.register_all.register_C_functions`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
-- [First Wave Equation Run](first-wave-equation-run.md) - first standalone generation, build, run, and `convergence_factor` workflow
-- [Build And Run](../architecture/build-and-run.md) - package, editable checkout, and first-run command shape
-- [Generated Output Boundaries](../architecture/generated-output-boundaries.md) - generated-project source boundary
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md) - compatibility route for BHaH generated-application lifecycle
 
 ## See Also
 

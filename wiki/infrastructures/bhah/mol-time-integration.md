@@ -1,6 +1,6 @@
 # MoL Time Integration
 
-> BHaH route for Method of Lines parameters, Runge-Kutta routing, stage storage, and time-step hooks. Status: confirmed. Last reconciled: 2026-06-29
+> BHaH route for Method of Lines parameters, Runge-Kutta routing, stage storage, and time-step hooks. Status: confirmed. Last reconciled: 07-05-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -71,7 +71,9 @@ writes. `MoL_Functions_dict` stores generated substep functions so
 `single_RK_substep_input_symbolic()` builds the substep order: set
 `commondata->time` to `time_start + c_i * dt`, update CUDA constant params when
 needed, run RHS, launch the RK update, run post-RHS hooks, close the grid loop,
-then run post-post-RHS hooks.
+then run post-post-RHS hooks. In the diagonal RK3 k2 substep, the post-RHS hook
+targets the next stage state, not the running final-state accumulator; the
+accumulator is only combined pointwise into the final `y_n_gfs`.
 
 After all substeps, `MoL_step_forward_in_time()` updates
 `commondata->time = commondata->t_0 + (commondata->nn - commondata->nn_0 + 1) *

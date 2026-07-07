@@ -1,6 +1,6 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 2026-06-29
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-07-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -25,10 +25,20 @@ checkout, builds the toolkit, and runs the Baikal, BaikalVacuum, and WaveToyNRPy
 testsuites. The job fails if the Einstein Toolkit summary reports any failed
 tests.
 
-The `charmpp-validation` job uses an Apptainer image with Charm++ to generate
-`superB` elliptic, black-hole spectroscopy, and two-black-hole workflows. It
-builds each generated project and runs `superB_two_blackholes_collide` through
-`charmrun +p2`.
+The `charmpp-validation` job is the authority for Charm++ runtime-version facts
+on this page. It uses an Apptainer image, then exports `/opt/charm-8.0.0`
+`bin`, `lib`, and include paths before running the superB validation commands.
+
+Build coverage in `charmpp-validation` covers three generated superB projects:
+`superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and
+`superB_two_blackholes_collide`. The job generates each project and runs
+`make -j2` in each generated project directory.
+
+Runtime coverage is narrower. The same job runs only
+`superB_two_blackholes_collide` via
+`./charmrun +p2 ./superB_two_blackholes_collide`. Current CI does not
+runtime-test restart, Psi4 output, elliptic residual-stop behavior, active load
+balancing, TRAM, sections, priority, immediate, expedited, or zero-copy paths.
 
 The SEOB/SEBOB jobs checkout a trusted commit, build trusted and current
 executables, then run comparison scripts. `sebob_consistency_check.py` compares

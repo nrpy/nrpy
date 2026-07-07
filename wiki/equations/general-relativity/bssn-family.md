@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-05-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -52,7 +52,7 @@ corresponding trusted files.
 - [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
 - [BSSN_quantities_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py) - `trusted_dict`
 - [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py) - `trusted_dict`
-- [coding_style.md](../../../coding_style.md) - `Equation Setup Patterns`
+- [original-agents.md](../../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
 
 ## See Also
 

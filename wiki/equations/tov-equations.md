@@ -1,6 +1,6 @@
 # TOV Equations
 
-> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 2026-06-29
+> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -47,4 +47,4 @@ covers the declared integration symbols and all four RHS attributes.
 - [Conformally Flat Elliptic](conformally-flat-elliptic.md)
 - [GRHD](grhd.md)
 - [Trusted Expression Pipeline](trusted-expression-pipeline.md)
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

@@ -1,6 +1,6 @@
 # First Wave Equation Run
 
-> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed · Last reconciled: 2026-06-29
+> Describe the first standalone project generation, build, run, and output milestone. · Status: confirmed · Last reconciled: 06-29-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -62,4 +62,4 @@ family, use [Wave Equation Generators](wave-equation-generators.md).
 - [Examples](index.md)
 - [Wave Equation Generators](wave-equation-generators.md)
 - [Black Hole Evolution](black-hole-evolution.md)
-- [BHaH Lifecycle](../infrastructures/bhah-lifecycle.md)
+- [Lifecycle And Project Assembly](../infrastructures/bhah/lifecycle-and-project-assembly.md)

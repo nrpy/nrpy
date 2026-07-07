@@ -1,6 +1,6 @@
 # GR ADM/BSSN, Slicing, And Matter Coupling
 
-> ETLegacy initialization, ADMBase export, slicing registration, and stress-energy raising. · Status: confirmed · Last reconciled: 2026-06-30
+> ETLegacy initialization, ADMBase export, slicing registration, and stress-energy raising. · Status: confirmed · Last reconciled: 07-06-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -66,8 +66,6 @@ generated thorn as a 3+1 slicing provider before later schedule bins run.
 - [BSSN_to_ADM.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_to_ADM.py) - `register_CFunction_BSSN_to_ADM`
 - [T4DD_to_T4UU.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/T4DD_to_T4UU.py) - `register_CFunction_T4DD_to_T4UU`
 - [RegisterSlicing.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/RegisterSlicing.py) - `register_CFunction_RegisterSlicing`
-- [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md) - symbolic ADM/BSSN and matter conversion ownership
-- [BSSN Family](../../equations/general-relativity/bssn-family.md) - symbolic BSSN evolution and constraint ownership
 
 ## See Also
 

@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Set, Union, cast
+from typing import Optional, Set, Tuple, Union, cast
 
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
@@ -31,6 +31,7 @@ def register_CFunction_initial_data(
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
+    spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -51,14 +52,93 @@ def register_CFunction_initial_data(
     :param post_ADM_Cart_to_BSSN_Cart_hook_str: Optional C code injected after
         ``ADM_Cart_to_BSSN_Cart(...)`` and before
         ``BSSN_Cart_to_rescaled_BSSN_rfm(...)``.
+    :param spin_alignment_vector_params: Optional public spin-vector commondata
+        parameter names. Defaults to ``("chi_x", "chi_y", "chi_z")`` for
+        UIUCBlackHole. When set, the aligned UIUC scalar ``chi`` is derived from
+        these components and ADM data are sampled in the aligned frame.
 
-    :raises ValueError: If ``set_of_CoordSystems`` is empty.
+    :raises ValueError: If ``set_of_CoordSystems`` is empty, if
+        ``spin_alignment_vector_params`` is set for an ID type other than
+        UIUCBlackHole, or if it is combined with ``enable_T4munu=True``.
     :return: None if in registration phase, else the updated NRPy environment.
     """
+    if IDtype == "UIUCBlackHole" and spin_alignment_vector_params is None:
+        spin_alignment_vector_params = ("chi_x", "chi_y", "chi_z")
+
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
     parallelization = par.parval_from_str("parallelization")
+    if spin_alignment_vector_params is not None:
+        if IDtype != "UIUCBlackHole":
+            raise ValueError(
+                "spin_alignment_vector_params is currently supported only for UIUCBlackHole."
+            )
+        if enable_T4munu:
+            raise ValueError(
+                "spin_alignment_vector_params does not currently support enable_T4munu=True."
+            )
+        # Register the public spin-vector commondata parameters, then the C helper
+        # that validates them and derives the hidden aligned scalar chi consumed by
+        # the +z-aligned symbolic UIUC equations.
+        par.register_CodeParameters(
+            "REAL",
+            __name__,
+            list(spin_alignment_vector_params),
+            [0.0, 0.0, 0.99],
+            commondata=True,
+        )
+        chi_x_name, chi_y_name, chi_z_name = spin_alignment_vector_params
+        desc = r"""
+Validate public UIUC spin-vector parameters and set hidden scalar chi.
+
+The symbolic UIUC equations remain aligned with +z spin and consume
+``commondata->chi``. This helper derives that scalar from public parfile
+components after parsing and before initial-data setup.
+
+@param[in,out] commondata Commondata structure containing spin components and chi.
+"""
+        cfunc_type = "void"
+        name = "validate_and_set_UIUC_spin_vector"
+        params = "commondata_struct *restrict commondata"
+        body = rf"""
+  const REAL chi_x = commondata->{chi_x_name};
+  const REAL chi_y = commondata->{chi_y_name};
+  const REAL chi_z = commondata->{chi_z_name};
+
+  if (!isfinite((double)chi_x) || !isfinite((double)chi_y) || !isfinite((double)chi_z)) {{
+    fprintf(stderr,
+            "ERROR: UIUC spin vector components must be finite: {chi_x_name}=%.15e {chi_y_name}=%.15e {chi_z_name}=%.15e\n",
+            (double)chi_x, (double)chi_y, (double)chi_z);
+    exit(1);
+  }}
+
+  const REAL chi2 = chi_x * chi_x + chi_y * chi_y + chi_z * chi_z;
+  const REAL chi_norm = sqrt(chi2);
+  if (!isfinite((double)chi_norm)) {{
+    fprintf(stderr,
+            "ERROR: UIUC spin magnitude is not finite: {chi_x_name}=%.15e {chi_y_name}=%.15e {chi_z_name}=%.15e |chi|=%.15e\n",
+            (double)chi_x, (double)chi_y, (double)chi_z, (double)chi_norm);
+    exit(1);
+  }}
+  if (!(chi2 < 1.0)) {{
+    fprintf(stderr,
+            "ERROR: UIUC spin vector must satisfy |chi| < 1: {chi_x_name}=%.15e {chi_y_name}=%.15e {chi_z_name}=%.15e |chi|=%.15e\n",
+            (double)chi_x, (double)chi_y, (double)chi_z, (double)chi_norm);
+    exit(1);
+  }}
+
+  commondata->chi = chi_norm;
+"""
+        cfc.register_CFunction(
+            includes=["BHaH_defines.h"],
+            desc=desc,
+            cfunc_type=cfunc_type,
+            name=name,
+            params=params,
+            include_CodeParameters_h=False,
+            body=body,
+        )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -94,6 +174,7 @@ def register_CFunction_initial_data(
         ID_persist_struct_str=ID_persist_struct_str,
         enable_T4munu=enable_T4munu,
         post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
+        spin_alignment_vector_params=spin_alignment_vector_params,
     )
     for coord in sorted(coord_systems_to_register):
         if coord.startswith("GeneralRFM"):
@@ -109,6 +190,11 @@ def register_CFunction_initial_data(
     )
 
     body = ""
+    spin_vector_validation_call = (
+        "validate_and_set_UIUC_spin_vector(commondata);\n"
+        if spin_alignment_vector_params is not None
+        else ""
+    )
     host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
     if enable_checkpointing:
         checkpoint_read_call = (
@@ -119,6 +205,7 @@ def register_CFunction_initial_data(
         restart_body = """
 // Attempt to read checkpoint file. If it doesn't exist, then continue. Otherwise rebuild omitted restart points and return.
 if( CHECKPOINT_READ_CALL ) {
+  SPIN_VECTOR_VALIDATION_CALL
   for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     if (griddata[grid].bcstruct.bc_info.num_inner_boundary_points > 0)
       apply_bcs_inner_only(commondata, &griddata[grid].params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
@@ -132,7 +219,17 @@ if( CHECKPOINT_READ_CALL ) {
         restart_body += """  return;
 }
 """
-        body += restart_body.replace("CHECKPOINT_READ_CALL", checkpoint_read_call)
+        body += restart_body.replace(
+            "CHECKPOINT_READ_CALL", checkpoint_read_call
+        ).replace(
+            "\n  SPIN_VECTOR_VALIDATION_CALL",
+            (
+                "\n  " + spin_vector_validation_call.rstrip()
+                if spin_vector_validation_call
+                else ""
+            ),
+        )
+    body += spin_vector_validation_call
     body += "ID_persist_struct ID_persist;\n"
     if populate_ID_persist_struct_str:
         body += populate_ID_persist_struct_str
