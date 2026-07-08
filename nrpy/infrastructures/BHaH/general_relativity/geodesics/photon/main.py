@@ -290,6 +290,11 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
 {numerical_sidecar_path_setup}
+            // 2.5. Clear the reused results buffer before each tile integration.
+            for (long int i = 0; i < num_rays; i++) {{
+                results_buffer[i] = (blueprint_data_t){{0}};
+            }} // END LOOP: for i over rays to clear the reused results buffer
+
             // 3. Execute Numerical Integration Pipeline
             {batch_integrator_call}
 

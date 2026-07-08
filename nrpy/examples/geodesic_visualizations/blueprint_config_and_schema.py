@@ -30,8 +30,8 @@ BLUEPRINT_DTYPE = np.dtype(
         ("final_phi", "f8"),  # Final azimuthal angle on the celestial sphere
         ("L_w", "f8"),  # Affine parameter at window intersection
         ("t_w", "f8"),  # Coordinate time at window intersection
-        ("L_s", "f8"),  # Affine parameter at source plane intersection
-        ("t_s", "f8"),  # Coordinate time at source plane intersection
+        ("L_f", "f8"),  # Affine parameter when the photon terminated
+        ("t_f", "f8"),  # Coordinate time when the photon terminated
     ],
     align=False,
 )

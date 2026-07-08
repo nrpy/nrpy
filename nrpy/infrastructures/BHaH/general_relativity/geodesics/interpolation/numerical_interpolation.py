@@ -71,8 +71,8 @@ def register_CFunction_numerical_interpolation(
     stencil.
 
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
-        must be `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`, or
-        `"SinhCylindrical"`.
+        must be `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
+        `"SinhCylindrical"`, or `"SinhCylindricalv2n2"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :param analytical_metric_0: Name of the lower-time static analytic metric
@@ -126,10 +126,12 @@ def register_CFunction_numerical_interpolation(
         "SinhSpherical",
         "Cylindrical",
         "SinhCylindrical",
+        "SinhCylindricalv2n2",
     ):
         raise ValueError(
             "numerical_interpolation currently supports only CoordSystem in "
-            "('Spherical', 'SinhSpherical', 'Cylindrical', 'SinhCylindrical'); "
+            "('Spherical', 'SinhSpherical', 'Cylindrical', "
+            "'SinhCylindrical', 'SinhCylindricalv2n2'); "
             f"found '{CoordSystem}'."
         )
     if not analytical_metric_0:

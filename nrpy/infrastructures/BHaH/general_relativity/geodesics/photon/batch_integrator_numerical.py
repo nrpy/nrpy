@@ -62,7 +62,7 @@ def batch_integrator_numerical(
         )
     if dataset_coord_system in ("Spherical", "SinhSpherical"):
         phi_dim = 2
-    elif dataset_coord_system in ("Cylindrical", "SinhCylindrical"):
+    elif dataset_coord_system in ("Cylindrical", "SinhCylindrical", "SinhCylindricalv2n2"):
         phi_dim = 1
     else:
         raise ValueError(
@@ -84,7 +84,7 @@ def batch_integrator_numerical(
             "p_t_max",
             "numerical_initial_h",
         ],
-        [150.0, 1e3, 0.1],
+        [150.0, 1e3, 0.05],
         commondata=True,
         add_to_parfile=True,
     )
@@ -379,7 +379,8 @@ def batch_integrator_numerical(
     time_window_manager_numerical_set_inert(&numerical_window);
 
     // Seed the runtime params with generator-time defaults so coordinate-map
-    // parameters like AMPL and SINHW remain valid after metadata overlay.
+    // parameters like AMPL, SINHW, and any slope terms remain valid after
+    // metadata overlay.
     commondata_struct commondata_for_params_defaults = *commondata;
     griddata_struct dummy_griddata[MAXNUMGRIDS];
     params_struct_set_to_default(&commondata_for_params_defaults, dummy_griddata);

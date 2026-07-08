@@ -111,8 +111,8 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     consumes those per-slice tensors and interpolates them in physical time.
 
     :param CoordSystem: Coordinate system used by the source dataset; must be
-        `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`, or
-        `"SinhCylindrical"`.
+        `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
+        `"SinhCylindrical"`, or `"SinhCylindricalv2n2"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -173,13 +173,18 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     # which native coordinates define the 2D interpolation grid.
     if CoordSystem in ("Spherical", "SinhSpherical"):
         phi_dim, interp_dim0, interp_dim1 = 2, 0, 1
-    elif CoordSystem in ("Cylindrical", "SinhCylindrical"):
+    elif CoordSystem in (
+        "Cylindrical",
+        "SinhCylindrical",
+        "SinhCylindricalv2n2",
+    ):
         phi_dim, interp_dim0, interp_dim1 = 1, 0, 2
     else:
         raise ValueError(
             "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
             "implemented only for CoordSystem in ('Spherical', "
-            "'SinhSpherical', 'Cylindrical', 'SinhCylindrical'); found "
+            "'SinhSpherical', 'Cylindrical', 'SinhCylindrical', "
+            "'SinhCylindricalv2n2'); found "
             f"'{CoordSystem}'."
         )
 

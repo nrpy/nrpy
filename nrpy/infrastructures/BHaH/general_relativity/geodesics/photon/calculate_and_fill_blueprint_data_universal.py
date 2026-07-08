@@ -32,6 +32,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
+        "d_affine_bundle": "const double *restrict",
         "d_status_bundle": "const termination_type_t *restrict",
         "d_result_bundle": "blueprint_data_t *restrict",
         "current_chunk_size": "const long int",
@@ -39,6 +40,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     arg_dict_host = {
         "d_f_bundle": "const double *restrict",
+        "d_affine_bundle": "const double *restrict",
         "d_status_bundle": "const termination_type_t *restrict",
         "d_result_bundle": "blueprint_data_t *restrict",
         "current_chunk_size": "const long int",
@@ -82,6 +84,16 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     //==========================================
     // Synchronize final exit status directly into the persistent blueprint array.
     d_result_bundle[c].termination_type = d_status_bundle[c]; // Stores final termination state.
+
+    //==========================================
+    // TERMINATION STATE RECORD
+    //==========================================
+    // Preserve the exact interpolated source-plane termination event already stored in
+    // the blueprint. All other termination modes record the final evolved state.
+    if (d_status_bundle[c] != TERMINATION_TYPE_SOURCE_PLANE) {
+        d_result_bundle[c].t_f = d_f_bundle[IDX_LOCAL(0, c, BUNDLE_CAPACITY)];
+        d_result_bundle[c].L_f = d_affine_bundle[c];
+    } // END IF: termination did not already store an exact source-plane event
 
     //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
@@ -136,6 +148,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     if parallelization == "cuda":
         memcpy_status = "cudaMemcpy(d_status_bundle, all_photons->status + start_idx, sizeof(termination_type_t) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_f = "cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);"
+        memcpy_affine = "cudaMemcpy(d_affine_bundle, all_photons->affine_param + start_idx, sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_result_in = "cudaMemcpy(d_result_bundle, result + start_idx, sizeof(blueprint_data_t) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_result_out = "cudaMemcpy(result + start_idx, d_result_bundle, sizeof(blueprint_data_t) * current_chunk_size, cudaMemcpyDeviceToHost);"
         transfer_comment_in = "//==========================================\n        // ASYNC MEMORY TRANSFER (HOST TO DEVICE)\n        //=========================================="
@@ -143,6 +156,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     else:
         memcpy_status = "memcpy(d_status_bundle, all_photons->status + start_idx, sizeof(termination_type_t) * current_chunk_size);"
         memcpy_f = "memcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size);"
+        memcpy_affine = "memcpy(d_affine_bundle, all_photons->affine_param + start_idx, sizeof(double) * current_chunk_size);"
         memcpy_result_in = "memcpy(d_result_bundle, result + start_idx, sizeof(blueprint_data_t) * current_chunk_size);"
         memcpy_result_out = "memcpy(result + start_idx, d_result_bundle, sizeof(blueprint_data_t) * current_chunk_size);"
         transfer_comment_in = "//==========================================\n        // MEMORY TRANSFER (HOST TO STAGING BUFFER)\n        //=========================================="
@@ -160,6 +174,9 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     for(int m=0; m<9; m++) {{ // Iterate over the 9 components of the $f^mu$ state vector.
         {memcpy_f} // Transfer of $f^mu$.
     }} // END LOOP: for m over 9 components of f^mu state vector
+
+    // Transfer the final affine parameters for the current bundle.
+    {memcpy_affine} // Transfer of $\lambda$.
 
     // Pre-load existing results to prevent overwriting valid memory with garbage during the subsequent transfer.
     {memcpy_result_in} // Transfer of previous results.
@@ -217,10 +234,12 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     //==========================================
     // Pointers for the bundled data processing.
     double *d_f_bundle; // Buffer for state vector $f^mu$.
+    double *d_affine_bundle; // Buffer for affine parameter $\lambda$.
     termination_type_t *d_status_bundle; // Buffer for photon termination status.
     blueprint_data_t *d_result_bundle; // Buffer for calculated blueprint data.
 
     BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^mu$ buffer.
+    BHAH_MALLOC_DEVICE(d_affine_bundle, sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ buffer.
     BHAH_MALLOC_DEVICE(d_status_bundle, sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status buffer.
     BHAH_MALLOC_DEVICE(d_result_bundle, sizeof(blueprint_data_t) * BUNDLE_CAPACITY); // Allocate results buffer.
 
@@ -233,6 +252,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     // BUFFER CLEANUP
     //==========================================
     BHAH_FREE_DEVICE(d_f_bundle); // Free $f^mu$ buffer.
+    BHAH_FREE_DEVICE(d_affine_bundle); // Free $\lambda$ buffer.
     BHAH_FREE_DEVICE(d_status_bundle); // Free status buffer.
     BHAH_FREE_DEVICE(d_result_bundle); // Free results buffer.
     

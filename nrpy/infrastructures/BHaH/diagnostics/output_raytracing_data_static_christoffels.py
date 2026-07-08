@@ -1,5 +1,5 @@
 """
-Register a C function that exports one synthetic frozen-final raytracing slice.
+Register a C function that exports one synthetic static-Christoffels slice.
 
 This module generates a BHaH diagnostics helper with the same on-disk binary
 format as ``output_raytracing_data.py``. The metric payload is evaluated from
@@ -9,12 +9,9 @@ four-metric after imposing the frozen-metric condition
 can be combined by the existing raytracing time-slice pipeline without a file
 format change.
 
-The intended diagnostics-side use is to call the ordinary
-``output_raytracing_data(...)`` first on the last scheduled raytracing output,
-then call ``output_raytracing_data_frozen_final_slice(...)`` with output index
-``time_output_index + 1`` while the BSSN state still matches the last real
-exported metric slice. This function writes ``simulation_time`` metadata equal
-to ``commondata->t_final``.
+This module computes the Christoffel symbols by setting
+``g4DD_dt = 0``, equivalently ``partial_t g_{mu nu} = 0``, while keeping the
+metric payload itself equal to the current BSSN-reconstructed four-metric.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -175,12 +172,12 @@ def _christoffels_from_inverse_metric_and_metric_derivatives(
     return Gamma4UDD
 
 
-def _build_frozen_final_cartesian_recipes(
+def _build_static_christoffels_cartesian_recipes(
     bssn_coord_system: str,
     enable_bssn_rfm_precompute: bool,
 ) -> Tuple[List[List[sp.Expr]], List[List[List[sp.Expr]]]]:
     r"""
-    Build Cartesian-basis metric and frozen-compatible Christoffel recipes.
+    Build Cartesian-basis metric and static-Christoffels recipes.
 
     The metric is the ordinary BSSN-reconstructed four-metric. The Christoffels
     are rebuilt from the metric after setting only the derivative-direction
@@ -255,18 +252,19 @@ def _build_frozen_final_cartesian_recipes(
     return cartesian_g4DD, cartesian_Gamma4UDD
 
 
-def register_CFunction_output_raytracing_data_frozen_final_slice(
+def register_CFunction_output_raytracing_data_static_christoffels(
     CoordSystem: str,
     enable_rfm_precompute: bool,
     enable_RbarDD_gridfunctions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register the synthetic frozen-final raytracing binary exporter.
+    Register the synthetic static-Christoffels raytracing exporter.
 
     The generated C helper writes one binary file with the same header and
     payload layout as the ordinary raytracing exporter, but its Christoffels are
     recomputed after imposing ``partial_t g_{mu nu} = 0``. The physical
-    ``simulation_time`` stored in the file is ``commondata->t_final``.
+    ``simulation_time`` stored in the file is
+    ``commondata->t_final + commondata->diagnostics_output_every``.
 
     :param CoordSystem: Coordinate system used by the evolved BSSN state.
     :param enable_rfm_precompute: Whether the generated project uses
@@ -297,7 +295,7 @@ def register_CFunction_output_raytracing_data_frozen_final_slice(
         )
     if not enable_rfm_precompute:
         raise ValueError(
-            "Frozen-final raytracing export currently follows the ordinary "
+            "Static-Christoffels raytracing export currently follows the ordinary "
             "raytracing exporter constraint enable_rfm_precompute=True."
         )
 
@@ -315,7 +313,7 @@ def register_CFunction_output_raytracing_data_frozen_final_slice(
     # Step 1: Build the transformed symbolic recipes for the exported tensors.
     # The metric is the current BSSN metric; the Christoffels are recomputed
     # after zeroing the time-derivative direction of g4DD_dD.
-    g4DD, Gamma4UDD = _build_frozen_final_cartesian_recipes(
+    g4DD, Gamma4UDD = _build_static_christoffels_cartesian_recipes(
         bssn_coord_system=CoordSystem,
         enable_bssn_rfm_precompute=enable_rfm_precompute,
     )
@@ -494,7 +492,7 @@ def register_CFunction_output_raytracing_data_frozen_final_slice(
         "BHaH_function_prototypes.h",
     ]
     desc = """
-Export one synthetic frozen-final Cartesian-basis raytracing slice.
+Export one synthetic static-Christoffels Cartesian-basis raytracing slice.
 
 This function writes at most one binary file per diagnostics output to:
 
@@ -535,7 +533,7 @@ underlying zero-based storage order.
 @param time_output_index  Diagnostics output index used in the emitted filename
 """
     cfunc_type = "void"
-    name = "output_raytracing_data_frozen_final_slice"
+    name = "output_raytracing_data_static_christoffels"
     params = (
         "const commondata_struct *restrict commondata, "
         "const griddata_struct *restrict griddata, "
@@ -874,14 +872,15 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     body = rf"""
   if (commondata->NUMGRIDS != 1)
     raytracing_data_abort_with_message(
-        "Error: output_raytracing_data_frozen_final_slice currently requires commondata->NUMGRIDS == 1.");
+        "Error: output_raytracing_data_static_christoffels currently requires commondata->NUMGRIDS == 1.");
   if (time_output_index < 0)
     raytracing_data_abort_with_message(
-        "Error: output_raytracing_data_frozen_final_slice received a negative output index.");
+        "Error: output_raytracing_data_static_christoffels received a negative output index.");
 
   raytracing_data_validate_binary64_output_or_abort();
 
-  const REAL simulation_time = commondata->t_final;
+  const REAL simulation_time =
+      commondata->t_final + commondata->diagnostics_output_every;
 
   const params_struct *restrict params = &griddata[0].params;
   const bc_struct *restrict bcstruct = &griddata[0].bcstruct;
@@ -1160,7 +1159,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
         )
     body += r"""
 
-  // Step 2: Write the synthetic frozen-final simulation time.
+  // Step 2: Write the synthetic static-Christoffels simulation time.
   raytracing_data_write_f64_or_abort(fp, (double)simulation_time, "simulation_time");
 
   // Step 3: Evaluate Cartesian coordinates on the full logical grid. This

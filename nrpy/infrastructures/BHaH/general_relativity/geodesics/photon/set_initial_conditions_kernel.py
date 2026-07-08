@@ -65,8 +65,8 @@ batch_structs_c_code = r"""
         double final_phi;   // Final azimuthal angle $\phi$ at termination.
         double L_w; // Affine parameter $\lambda$ at the window intersection.
         double t_w; // Physical coordinate time $t$ at the window intersection.
-        double L_s; // Affine parameter $\lambda$ at the source intersection.
-        double t_s; // Physical coordinate time $t$ at the source intersection.
+        double L_f; // Affine parameter $\lambda$ when the photon terminated.
+        double t_f; // Physical coordinate time $t$ when the photon terminated.
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
 
     // ==========================================

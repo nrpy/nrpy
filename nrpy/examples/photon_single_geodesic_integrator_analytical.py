@@ -104,7 +104,7 @@ conserved-quantity diagnostics.
     commondata_struct_set_to_default(&commondata);
 
     commondata.M_scale = 1.0;
-    commondata.a_spin = 0.9;
+    commondata.a_spin = 0.0;
 
     const double r_escape = 150.0;
     const double p_t_max = 1000.0;
@@ -170,7 +170,7 @@ conserved-quantity diagnostics.
     f[3] = 0.0;
 
     f[5] = -0.5641;
-    f[6] = 0.7171;
+    f[6] = 0.0;
     f[7] = 0.0;
     f[8] = 0.0;
 

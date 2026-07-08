@@ -55,13 +55,13 @@ parser.add_argument(
     nargs="+",
     default=None,
     type=float,
-    help="""Coordinate-system-specific raytracing domain parameters. Spherical/Cylindrical: GRID_PHYSICAL_SIZE. SinhSpherical: GRID_PHYSICAL_SIZE SINHW. SinhCylindrical: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ.""",
+    help="""Coordinate-system-specific raytracing domain parameters. Spherical/Cylindrical: GRID_PHYSICAL_SIZE. SinhSpherical: GRID_PHYSICAL_SIZE SINHW. SinhCylindrical: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ. SinhCylindricalv2n2: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE.""",
 )
 parser.add_argument(
     "--raytracing-coord-system",
     type=str,
     default=None,
-    help="""Override the generated project's coordinate system when --raytracing-time is enabled, e.g. Spherical, SinhSpherical, Cylindrical, or SinhCylindrical.""",
+    help="""Override the generated project's coordinate system when --raytracing-time is enabled, e.g. Spherical, SinhSpherical, Cylindrical, SinhCylindrical, or SinhCylindricalv2n2.""",
 )
 parser.add_argument(
     "--raytracing-Nxx",
@@ -81,9 +81,9 @@ parser.add_argument(
     help="""Override the generated project's black-hole z positions and masses, e.g. --raytracing-bhs 0.5 -0.5 0.5 0.5.""",
 )
 parser.add_argument(
-    "--raytracing-frozen-final-slice",
+    "--raytracing-static-christoffels-final",
     action="store_true",
-    help="""Emit one synthetic final raytracing slice at t_final whose metric matches the last ordinary slice and whose Christoffels are recomputed assuming partial_t g_mu_nu = 0.""",
+    help="""Emit one synthetic final raytracing slice at t_final + diagnostics_output_every whose metric matches the last ordinary slice and whose Christoffels are recomputed assuming partial_t g_mu_nu = 0.""",
 )
 args = parser.parse_args()
 
@@ -99,7 +99,9 @@ if parallelization not in ["openmp", "cuda"]:
 # Step 1.c: Raytracing spacetime output requires OpenMP, double precision,
 # and consistent raytracing-specific option combinations.
 enable_raytracing_data_output = args.raytracing_time is not None
-enable_raytracing_frozen_final_slice_output = args.raytracing_frozen_final_slice
+enable_raytracing_static_christoffels_final_output = (
+    args.raytracing_static_christoffels_final
+)
 
 if fp_type not in ("float", "double"):
     raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
@@ -116,8 +118,13 @@ if args.raytracing_domain is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-domain requires --raytracing-time.")
 if args.raytracing_nxx is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-Nxx requires --raytracing-time.")
-if enable_raytracing_frozen_final_slice_output and not enable_raytracing_data_output:
-    raise ValueError("--raytracing-frozen-final-slice requires --raytracing-time.")
+if (
+    enable_raytracing_static_christoffels_final_output
+    and not enable_raytracing_data_output
+):
+    raise ValueError(
+        "--raytracing-static-christoffels-final requires --raytracing-time."
+    )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
@@ -143,6 +150,8 @@ GammaDriving_eta = 1.0
 sinh_width = None
 sinh_width_rho = None
 sinh_width_z = None
+rho_slope = None
+z_slope = None
 if enable_raytracing_data_output:
     if args.raytracing_domain is None:
         raise ValueError("--raytracing-domain is required with --raytracing-time.")
@@ -174,6 +183,18 @@ if enable_raytracing_data_output:
                 """SinhCylindrical expects --raytracing-domain GRID_PHYSICAL_SIZE SINHWRHO SINHWZ."""
             )
         grid_physical_size, sinh_width_rho, sinh_width_z = domain
+    elif CoordSystem == "SinhCylindricalv2n2":
+        if len(domain) != 5:
+            raise ValueError(
+                """SinhCylindricalv2n2 expects --raytracing-domain GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE."""
+            )
+        (
+            grid_physical_size,
+            sinh_width_rho,
+            sinh_width_z,
+            rho_slope,
+            z_slope,
+        ) = domain
     else:
         raise ValueError(f"Unsupported raytracing coordinate system: {CoordSystem}")
 
@@ -185,6 +206,10 @@ if enable_raytracing_data_output:
         raise ValueError("--raytracing-domain SINHWRHO must be positive.")
     if sinh_width_z is not None and sinh_width_z <= 0.0:
         raise ValueError("--raytracing-domain SINHWZ must be positive.")
+    if rho_slope is not None and rho_slope <= 0.0:
+        raise ValueError("--raytracing-domain RHO_SLOPE must be positive.")
+    if z_slope is not None and z_slope <= 0.0:
+        raise ValueError("--raytracing-domain Z_SLOPE must be positive.")
 else:
     t_final = 7.5
     grid_physical_size = 7.5
@@ -195,6 +220,7 @@ Nxx_dict = {
     "SinhSpherical": [72, 12, 2],
     "Cylindrical": [72, 2, 12],
     "SinhCylindrical": [72, 2, 12],
+    "SinhCylindricalv2n2": [72, 2, 12],
     "Cartesian": [64, 64, 64],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
     "GeneralRFM_fisheyeN2": [128, 128, 128],
@@ -400,7 +426,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
     enable_raytracing_data_output=enable_raytracing_data_output,
-    enable_raytracing_frozen_final_slice_output=enable_raytracing_frozen_final_slice_output,
+    enable_raytracing_static_christoffels_final_output=enable_raytracing_static_christoffels_final_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -465,6 +491,15 @@ if CoordSystem == "SinhCylindrical":
     assert sinh_width_z is not None
     par.adjust_CodeParam_default("SINHWRHO", sinh_width_rho)
     par.adjust_CodeParam_default("SINHWZ", sinh_width_z)
+if CoordSystem == "SinhCylindricalv2n2":
+    assert sinh_width_rho is not None
+    assert sinh_width_z is not None
+    assert rho_slope is not None
+    assert z_slope is not None
+    par.adjust_CodeParam_default("SINHWRHO", sinh_width_rho)
+    par.adjust_CodeParam_default("SINHWZ", sinh_width_z)
+    par.adjust_CodeParam_default("rho_slope", rho_slope)
+    par.adjust_CodeParam_default("z_slope", z_slope)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("BH1_mass", default_BH1_mass)
 par.adjust_CodeParam_default("BH2_mass", default_BH2_mass)
@@ -478,7 +513,7 @@ if enable_bhahaha:
     par.adjust_CodeParam_default(
         "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
     )
-    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 150)
     par.adjust_CodeParam_default(
         "bah_M_scale",
         [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
@@ -486,18 +521,14 @@ if enable_bhahaha:
     par.adjust_CodeParam_default(
         "bah_max_search_radius",
         [
-            0.6 * default_BH1_mass,
-            0.6 * default_BH2_mass,
-            1.9 * (default_BH1_mass + default_BH2_mass),
+            1.0 * default_BH1_mass,
+            1.0 * default_BH2_mass,
+            2.4 * (default_BH1_mass + default_BH2_mass),
         ],
     )
     par.adjust_CodeParam_default(
         "bah_Theta_L2_times_M_tolerance",
         [2e-4, 2e-4, 2e-4],
-    )
-    par.adjust_CodeParam_default(
-        "bah_Nr_interp_max",
-        40,
     )
     par.adjust_CodeParam_default(
         "bah_enable_BBH_mode",
@@ -610,11 +641,26 @@ if enable_raytracing_data_output:
         sinh_width_rho_name = _format_output_name_value(sinh_width_rho)
         sinh_width_z_name = _format_output_name_value(sinh_width_z)
         domain_suffix = f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
+    elif CoordSystem == "SinhCylindricalv2n2":
+        assert sinh_width_rho is not None
+        assert sinh_width_z is not None
+        assert rho_slope is not None
+        assert z_slope is not None
+        sinh_width_rho_name = _format_output_name_value(sinh_width_rho)
+        sinh_width_z_name = _format_output_name_value(sinh_width_z)
+        rho_slope_name = _format_output_name_value(rho_slope)
+        z_slope_name = _format_output_name_value(z_slope)
+        domain_suffix = (
+            f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
+            f"rho-slope_{rho_slope_name}_z-slope_{z_slope_name}_"
+        )
 
-    frozen_name_suffix = (
-        "_frozen-final" if enable_raytracing_frozen_final_slice_output else ""
+    static_christoffels_name_suffix = (
+        "_static-christoffels-final"
+        if enable_raytracing_static_christoffels_final_output
+        else ""
     )
-    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}{frozen_name_suffix}.bin"
+    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}{static_christoffels_name_suffix}.bin"
     combined_output_path = os.path.join(
         "..", "raytracing_data", raytracing_combined_bin_name
     )
@@ -636,7 +682,7 @@ if enable_raytracing_data_output:
         "raytracing_Nxx": [nxx0, nxx1, nxx2],
         "raytracing_coord_system": CoordSystem,
         "raytracing_domain": domain,
-        "raytracing_frozen_final_slice": enable_raytracing_frozen_final_slice_output,
+        "raytracing_static_christoffels_final": enable_raytracing_static_christoffels_final_output,
         "raytracing_time": {
             "diagnostics_output_every": diagnostics_output_every,
             "t_final": t_final,

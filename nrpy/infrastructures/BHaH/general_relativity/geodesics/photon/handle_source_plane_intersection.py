@@ -148,8 +148,9 @@ def handle_source_plane_intersection() -> None:
         final_blueprint_data->termination_type = TERMINATION_TYPE_SOURCE_PLANE; // Flags the ray as successfully terminating on the source.
         final_blueprint_data->y_s = local_y_s;
         final_blueprint_data->z_s = local_z_s;
-        final_blueprint_data->t_s = t_intersect;
-        final_blueprint_data->L_s = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
+        // For source-plane hits, the intersection is the termination event.
+        final_blueprint_data->t_f = t_intersect;
+        final_blueprint_data->L_f = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
     } // END IF: radial filtering
     return false;
