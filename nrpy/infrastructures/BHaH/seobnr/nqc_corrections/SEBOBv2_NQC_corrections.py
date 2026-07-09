@@ -29,15 +29,19 @@ def register_CFunction_SEBOBv2_NQC_corrections() -> Union[None, pcg.NRPyEnv_type
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Computes and applies the Non Quasi-Circular (NQC) corrections to the inspiral waveform.
+Solves and applies SEBOBv2 (2,2) Non Quasi-Circular (NQC) corrections.
 
-@param commondata - Common data structure containing the model parameters.
-@return - Returns GSL_SUCCESS (0) on success or a nonzero error code on failure.
+The NQC coefficients match inspiral amplitude and waveform-frequency data at
+the attachment time to BOBv2-informed targets, then correct the low- and
+fine-sampled inspiral waveform.
+
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEBOBv2_NQC_corrections"
     params = "commondata_struct *restrict commondata"
     body = """
+// Step 1: Allocate primary arrays for NQC basis and waveform samples.
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
@@ -97,6 +101,7 @@ REAL radius, omega, prstar;
 double complex h22;
 size_t i;
 
+// Step 2: Build fine-sample NQC basis arrays.
 for (i = 0; i < commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   r[i] = commondata->dynamics_fine[IDX(i,R)];
@@ -110,9 +115,8 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Q3[i] = Q2[i] / sqrt(r[i]);
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-}
+} // END LOOP: for i over fine dynamics samples
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
-// Find t_ISCO:
 
 REAL t_peak = commondata->t_attach;
 size_t peak_idx = 0;
@@ -190,7 +194,8 @@ if (commondata->projected_attachment_active) {
 //not needed anymore
 //BOB_v2_find_tp_Omega0(commondata);
 BOB_v2_setup_peak_attachment(commondata);
-// Compute Q_cropped, P_cropped, t_cropped, phase_cropped, amp_cropped
+
+// Step 5: Crop NQC basis and waveform samples around the attachment time.
 size_t N = 5;
 size_t left = NRPYMAX(peak_idx, N) - N;
 size_t right = NRPYMIN(peak_idx + N , commondata->nsteps_fine);
@@ -205,7 +210,9 @@ for (i = left; i < right; i++){
   Q_cropped3[i - left] = Q3[i];
   P_cropped1[i - left] = P1[i];
   P_cropped2[i - left] = P2[i];
-}
+} // END LOOP: for i over cropped attachment samples
+
+// Step 6: Build NQC amplitude and frequency systems.
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 if (acc == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
@@ -291,7 +298,10 @@ else{
 }
 
 REAL omegas[2] , amps[3];
+// Step 7: Evaluate target BOB NQC RHS data.
 BOB_v2_NQC_rhs(commondata,amps,omegas);
+
+// Step 8: Solve for amplitude NQC coefficients.
 gsl_vector_set(A , 0 , amps[0] - amp_insp);
 gsl_vector_set(A , 1 , amps[1] - ampdot_insp);
 gsl_vector_set(A , 2 , amps[2] - ampddot_insp);
@@ -322,6 +332,7 @@ gsl_vector_free(a);
 gsl_vector_free(A);
 gsl_matrix_free(Q);
 
+// Step 9: Solve for phase NQC coefficients.
 gsl_vector *restrict b = gsl_vector_alloc(2);
 if (b == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
@@ -343,6 +354,7 @@ gsl_vector_free (b);
 gsl_vector_free(O);
 gsl_matrix_free(P);
 
+// Step 10: Release temporary interpolation arrays.
 free(times);
 free(Q1);
 free(Q2);
@@ -355,7 +367,7 @@ free(hamp);
 free(phase);
 free(phase_unwrapped);
 
-// apply the nqc correction
+// Step 11: Apply the NQC correction to low and fine waveform samples.
 commondata->nsteps_inspiral = commondata->nsteps_low + commondata->nsteps_fine;
 commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_inspiral*NUMMODES*sizeof(double complex));
 if (commondata->waveform_inspiral == NULL){
@@ -376,7 +388,7 @@ for (i = 0; i < commondata->nsteps_low; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i,STRAIN22)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN22)] *cexp(I * nqc_phase);
-}
+} // END LOOP: for i over low-resolution waveform samples
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   radius = commondata->dynamics_fine[IDX(i,R)];
@@ -390,7 +402,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN22)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN22)] * cexp(I * nqc_phase);
-}
+} // END LOOP: for i over fine-resolution waveform samples
 """
     cfc.register_CFunction(
         subdirectory="nqc_corrections",

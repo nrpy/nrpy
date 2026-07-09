@@ -32,9 +32,10 @@ def register_CFunction_SEOBNRv5_aligned_spin_augments() -> (
     includes = ["BHaH_defines.h"]
     desc = """
 Evaluates SEOBNRv5 Hamiltonian, instantaneous angular frequency, and circular angular frequency.
+
 These quantities are augmented to the dynamical variables for the calculation of the inspiral modes.
 
-@param commondata - The commondata struct containing the model parameters.
+@param[in,out] commondata The commondata struct containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_augments"

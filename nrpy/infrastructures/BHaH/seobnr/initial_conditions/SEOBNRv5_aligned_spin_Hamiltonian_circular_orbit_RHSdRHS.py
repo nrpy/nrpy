@@ -36,11 +36,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS(
     desc = """
 Combines the SEOBNRv5 circular orbit condition and it's Jacobian to pass to gsl/multiroots.
 
-@params x - The gsl_vector object containing the radial separation and angular momentum.
-@params params - The Common data structure containing the model parameters.
-@params f - The gsl_vector object to store the respective derivatives of the Hamiltonian.
-@params J - The gsl_matrix object to store the Jacobian of the circular orbit conditions.
-@returns - GSL_SUCCESS (0) as required by GSL.
+@param[in] x The gsl_vector object containing the radial separation and angular momentum.
+@param[in] params The Common data structure containing the model parameters.
+@param[out] f The gsl_vector object to store the respective derivatives of the Hamiltonian.
+@param[out] J The gsl_matrix object to store the Jacobian of the circular orbit conditions.
+@return GSL_SUCCESS (0) as required by GSL.
 """
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit_RHSdRHS"

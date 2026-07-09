@@ -18,6 +18,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+import subprocess
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
@@ -56,7 +57,7 @@ par.set_parval_from_str("fp_type", fp_type)
 
 # Code-generation-time parameters:
 project_name = "spinning_blackhole"
-CoordSystem = "Cartesian"
+CoordSystem = "SinhCylindrical"
 IDtype = "UIUCBlackHole"
 # IDtype = "OffsetKerrSchild"
 IDCoordSystem = "Spherical"
@@ -69,10 +70,14 @@ t_final = 1.0 * grid_physical_size
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
+    "SinhCylindrical": [72, 2, 72],
     "Cartesian": [64, 64, 64],
 }
 default_BH_mass = 1.0
-default_BH_spin_chi = +0.8
+spin_alignment_vector_params = ("chi_x", "chi_y", "chi_z")
+default_BH_spin_chiU = [0.0, 0.0, 0.8]
+if sum(chi_component * chi_component for chi_component in default_BH_spin_chiU) >= 1.0:
+    raise ValueError("default_BH_spin_chiU must satisfy |chi| < 1")
 MoL_method = "RK4"
 fd_order = 4
 radiation_BC_fd_order = 4
@@ -86,14 +91,28 @@ boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
 num_cuda_streams = 1
+enable_bhahaha = parallelization == "openmp"
+if enable_bhahaha and fp_type != "double":
+    raise ValueError(
+        "BHaHAHA integration currently requires --floating_point_precision double."
+    )
 
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
+
+uses_axisymmetric_coordinate_setup = False
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "2")
+    uses_axisymmetric_coordinate_setup = True
     OMP_collapse = 2  # about 2x faster
 if "Cylindrical" in CoordSystem:
     par.set_parval_from_str("symmetry_axes", "1")
+    uses_axisymmetric_coordinate_setup = True
     OMP_collapse = 2  # might be slightly faster
+if uses_axisymmetric_coordinate_setup and 2 not in Nxx_dict[CoordSystem]:
+    raise ValueError("Axisymmetric coordinate setup requires a reduced grid direction.")
 project_dir = os.path.join("project", project_name)
 
 # First clean the project directory, if it exists.
@@ -107,6 +126,43 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
 
+if enable_bhahaha:
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        max_horizons=1
+    )
+    BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics,
+        project_dir=project_dir,
+        use_cpp=(parallelization == "cuda"),
+    )
+
 if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunctions_HostDevice__operations()
     BHaH.parallelization.cuda_utilities.register_CFunction_find_global_minimum()
@@ -117,6 +173,9 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
     ID_persist_struct_str="",
+    spin_alignment_vector_params=(
+        spin_alignment_vector_params if IDtype == "UIUCBlackHole" else None
+    ),
 )
 
 BHaH.numerical_grids_and_timestep.register_CFunctions(
@@ -133,6 +192,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_nearest_diagnostics=True,
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
+    enable_bhahaha=enable_bhahaha,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=False
@@ -217,6 +277,9 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
 BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
+    set_of_CoordSystems=set_of_CoordSystems,
+)
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 #########################################################
@@ -227,12 +290,30 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 par.adjust_CodeParam_default("t_final", t_final)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
+if CoordSystem == "SinhCylindrical":
+    par.adjust_CodeParam_default("SINHWRHO", 0.4)
+    par.adjust_CodeParam_default("SINHWZ", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
 par.adjust_CodeParam_default("M", default_BH_mass)
 if IDtype == "UIUCBlackHole":
-    par.adjust_CodeParam_default("chi", default_BH_spin_chi)
+    for spin_param, default_spin_component in zip(
+        spin_alignment_vector_params, default_BH_spin_chiU
+    ):
+        par.adjust_CodeParam_default(spin_param, default_spin_component)
 elif IDtype == "OffsetKerrSchild":
-    par.adjust_CodeParam_default("a", default_BH_spin_chi * default_BH_mass)
+    spin_x, spin_y, spin_z = default_BH_spin_chiU
+    if spin_x != 0.0 or spin_y != 0.0:
+        raise ValueError(
+            "OffsetKerrSchild only supports z-aligned spin in this example."
+        )
+    par.adjust_CodeParam_default("a", spin_z * default_BH_mass)
+if enable_bhahaha:
+    # Set BHaHAHA defaults for the single apparent horizon around the spinning BH.
+    par.adjust_CodeParam_default("bah_initial_grid_x_center", [0.0])
+    par.adjust_CodeParam_default("bah_initial_grid_y_center", [0.0])
+    par.adjust_CodeParam_default("bah_initial_grid_z_center", [0.0])
+    par.adjust_CodeParam_default("bah_M_scale", [default_BH_mass])
+    par.adjust_CodeParam_default("bah_max_search_radius", [0.6 * default_BH_mass])
 
 BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create(
     project_dir=project_dir
@@ -250,19 +331,42 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
     project_dir=project_dir,
+    additional_includes=(
+        [os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_bhahaha else []
+    ),
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 
+post_params_struct_set_to_default = ""
+if IDtype == "UIUCBlackHole":
+    chi_x_name, chi_y_name, _ = spin_alignment_vector_params
+    post_params_struct_set_to_default = (
+        "validate_and_set_UIUC_spin_vector(&commondata);"
+    )
+    if uses_axisymmetric_coordinate_setup:
+        post_params_struct_set_to_default += rf"""
+if (commondata.{chi_x_name} != 0.0 || commondata.{chi_y_name} != 0.0) {{
+  fprintf(stderr,
+          "ERROR: tilted UIUC spin vectors require a full 3D grid; "
+          "this example uses an axisymmetric coordinate setup. "
+          "Set {chi_x_name}={chi_y_name}=0 or use Cartesian.\n");
+  exit(1);
+}} // END IF: tilted UIUC spin on axisymmetric reduced grid
+"""
+
 BHaH.main_c.register_CFunction_main_c(
     initial_data_desc=IDtype,
     MoL_method=MoL_method,
     boundary_conditions_desc=boundary_conditions_desc,
+    post_params_struct_set_to_default=post_params_struct_set_to_default,
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    enable_bhahaha=enable_bhahaha,
 )
 
 # SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
@@ -291,6 +395,10 @@ else:
         project_name=project_name,
         exec_or_library_name=project_name,
         compiler_opt_option="default",
+        addl_dirs_to_make=([BHaHAHA_subdir] if enable_bhahaha else []),
+        addl_libraries=(
+            [f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_bhahaha else []
+        ),
     )
 print(
     f"Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."

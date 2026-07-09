@@ -8,23 +8,7 @@ Author: Terrence Pierre Jacques
 """
 
 import nrpy.grid as gri  # NRPy+: Functionality for handling numerical grids
-import nrpy.params as par
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-
-# ==============================================================================
-# Code Parameters Registration
-# ==============================================================================
-# Register a parameter to control the frequency of Conservative-to-Primitive (C2P)
-# diagnostic output. This is useful for debugging C2P failures or monitoring
-# the health of the primitive recovery routine.
-_ = par.register_CodeParameter(
-    "int",
-    __name__,
-    "C2P_diagnostics_every",
-    2,
-    commondata=True,
-    add_to_parfile=True,
-)
 
 
 def register_all_grhd_gridfunctions(
