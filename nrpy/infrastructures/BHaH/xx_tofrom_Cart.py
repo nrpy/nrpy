@@ -200,8 +200,8 @@ def _generate_bracketed_radial_inverse_body(
         trial_residual = trial_map_fallback - rCart;
         if (!isfinite(trial_residual)) {{
 {failure_body}
-        }}
-      }}
+        }} // END IF: fallback residual is non-finite
+      }} // END IF: primary trial residual is non-finite
       if (trial_residual >= (REAL)0.0) {{
         high = trial_seed;
       }} else {{
