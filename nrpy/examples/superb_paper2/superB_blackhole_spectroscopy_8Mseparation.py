@@ -212,12 +212,12 @@ TP_solve(&ID_persist);
 """,
     free_ID_persist_struct_str=r"""
 {
-  extern void free_derivs (derivs * v, int n);  // <- Needed to free memory allocated by TwoPunctures.
-  // <- Free memory allocated within ID_persist.
-  // Now that we're finished with par.v and par.cf_v (needed in setting up ID, we can free up memory for TwoPunctures' grids...
-  free_derivs (&ID_persist.v,    ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
-  free_derivs (&ID_persist.cf_v, ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi);
-}
+  extern void free_derivs(derivs *v, int n);
+  const int num_tp_points =
+      ID_persist.npoints_A * ID_persist.npoints_B * ID_persist.npoints_phi;
+  free_derivs(&ID_persist.v, num_tp_points);
+  free_derivs(&ID_persist.cf_v, num_tp_points);
+} // END BLOCK: free TwoPunctures derivative storage
 """,
 )
 BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
