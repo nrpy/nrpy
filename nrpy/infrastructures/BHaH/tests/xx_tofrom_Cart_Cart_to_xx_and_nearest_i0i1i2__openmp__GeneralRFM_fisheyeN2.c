@@ -24,19 +24,20 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2(const params_struc
       fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n", (double)rCart,
               (double)Cartx, (double)Carty, (double)Cartz);
       exit(1);
-    } else if (rCart <= (REAL)1.0e-15) {
+    } else if (rCart <= (REAL)0.0) {
       xx[0] = (REAL)0.0;
       xx[1] = (REAL)0.0;
       xx[2] = (REAL)0.0;
     } else {
-      const REAL residual_tolerance = (REAL)1.0e-12 * NRPYMAX((REAL)1.0, rCart);
-      const REAL bracket_tolerance = (REAL)1.0e-12 * NRPYMAX((REAL)1.0, rCart);
+      const REAL radial_scale = rCart;
+      const REAL residual_tolerance = (REAL)1.0e-12 * radial_scale;
       REAL asymptotic_scale;
       asymptotic_scale = params->fisheye_a2 * params->fisheye_c;
 
       const REAL inv_asymptotic_scale = (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
       REAL low = (REAL)0.0;
-      REAL high = NRPYMAX(rCart * inv_asymptotic_scale, (REAL)1.0e-15);
+      REAL high = NRPYMAX(rCart * inv_asymptotic_scale, radial_scale);
+      const REAL bracket_tolerance = (REAL)1.0e-12 * NRPYMAX(high, radial_scale);
       REAL radial_seed = (REAL)0.5 * high;
       int bracket_found = 0;
       int converged = 0;
@@ -96,7 +97,7 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2(const params_struc
         REAL trial_seed = (REAL)0.5 * (low + high);
         if (isfinite(radial_map_prime) && fabs(radial_map_prime) > (REAL)1.0e-14) {
           const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
-          if (isfinite(newton_seed) && newton_seed > low && newton_seed < high) {
+          if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high) {
             trial_seed = newton_seed;
           }
         }
@@ -139,8 +140,8 @@ void Cart_to_xx_and_nearest_i0i1i2__rfm__GeneralRFM_fisheyeN2(const params_struc
             fprintf(stderr, "ERROR: bracketed inverse failed for GeneralRFM_fisheyeN2 (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n",
                     (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
             exit(1);
-          }
-        }
+          } // END IF: fallback residual is non-finite
+        } // END IF: primary trial residual is non-finite
         if (trial_residual >= (REAL)0.0) {
           high = trial_seed;
         } else {
