@@ -71,6 +71,14 @@ def register_CFunction_poisoning_set_inputs() -> None:
 
   POISON_INT(params->verbosity_level);
   POISON_INT(params->enable_eta_varying_alg_for_precision_common_horizon);
+
+  // Internal AKV cache state: leave in a safe disabled state for standalone API callers.
+  POISON_PTR(params->prev_akv_gp_z0_m1);
+  POISON_PTR(params->prev_akv_gp_z1_m1);
+  POISON_PTR(params->prev_akv_gp_z2_m1);
+  params->prev_akv_gp_Ntheta_m1 = 0;
+  params->prev_akv_gp_Nphi_m1 = 0;
+  params->prev_akv_gp_valid_m1 = 0;
 """
     cfc.register_CFunction(
         subdirectory="",

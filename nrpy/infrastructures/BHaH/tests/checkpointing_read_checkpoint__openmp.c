@@ -17,6 +17,12 @@
     }                                                                                                                                                \
   } while (0)
 
+#define BHAH_CHECKPOINT_MAGIC UINT64_C(0x42484148434B5054)
+#define BHAH_CHECKPOINT_VERSION_LEGACY 0U
+#define BHAH_CHECKPOINT_VERSION_BASE 1U
+#define BHAH_CHECKPOINT_VERSION_AKV_CACHE 2U
+#define BHAH_CHECKPOINT_VERSION_BHAHAHA_PARAM_STATE 3U
+
 /**
  * Read a checkpoint file.
  *
@@ -36,6 +42,17 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     fprintf(stderr, "read_checkpoint: FATAL: could not open %s for reading: %s\n", filename, strerror(errno));
     exit(EXIT_FAILURE);
   } // END IF fopen failed
+
+  uint32_t checkpoint_format_version = BHAH_CHECKPOINT_VERSION_LEGACY;
+  {
+    uint64_t checkpoint_magic = 0;
+    const size_t got_magic = fread(&checkpoint_magic, sizeof(uint64_t), 1, cp_file);
+    if (got_magic == 1 && checkpoint_magic == BHAH_CHECKPOINT_MAGIC) {
+      FREAD(&checkpoint_format_version, sizeof(uint32_t), 1, cp_file, filename, "checkpoint_format_version");
+    } else {
+      rewind(cp_file);
+    }
+  } // END BLOCK: detect checkpoint format version
 
   FREAD(commondata, sizeof(commondata_struct), 1, cp_file, filename, "commondata_struct");
 

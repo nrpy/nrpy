@@ -29,8 +29,8 @@ from nrpy.infrastructures.BHaH import (
 def register_CFunction_free_bhahaha_horizon_shape_data_all_horizons() -> None:
     """Register the BHaHAHA horizon-shape teardown helper."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Free memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
-for all horizons."""
+    desc = """Free memory allocated for horizon shape history arrays and previous AKV-mode
+buffers for all horizons."""
     cfunc_type = "void"
     name = "free_bhahaha_horizon_shape_data_all_horizons"
     params = "commondata_struct *restrict commondata"
@@ -40,7 +40,13 @@ for all horizons."""
     BHAH_FREE(current_horizon_params->prev_horizon_m1);
     BHAH_FREE(current_horizon_params->prev_horizon_m2);
     BHAH_FREE(current_horizon_params->prev_horizon_m3);
-  } // END LOOP: for h
+    BHAH_FREE(current_horizon_params->prev_akv_gp_z0_m1);
+    BHAH_FREE(current_horizon_params->prev_akv_gp_z1_m1);
+    BHAH_FREE(current_horizon_params->prev_akv_gp_z2_m1);
+    current_horizon_params->prev_akv_gp_valid_m1 = 0;
+    current_horizon_params->prev_akv_gp_Ntheta_m1 = 0;
+    current_horizon_params->prev_akv_gp_Nphi_m1 = 0;
+  } // END LOOP: for h over all horizons
 """
     cfc.register_CFunction(
         includes=includes,
@@ -396,7 +402,8 @@ def string_for_static_func_initialize_bhahaha_solver_params_and_shapes() -> str:
  * 1. Gets a pointer to the current horizon's `bhahaha_params_and_data_struct`.
  * 2. If `is_first_call_for_shapes` is true:
  *    a. Calculates max Ntheta and Nphi for this horizon.
- *    b. Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, and `prev_horizon_m3`.
+ *    b. Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, `prev_horizon_m3`,
+ *       and the cached previous AKV gridpoint modes.
  *    c. Exits if memory allocation fails.
  * 3. Copies non-persistent solver parameters (verbosity, max_iterations, CFL, tolerances,
  *    M_scale, eta_damping, KO_strength, multigrid resolutions) from `commondata`
@@ -418,15 +425,23 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
     // STEP 2.a: Calculates max Ntheta and Nphi for this horizon.
     const int Ntheta_max_this_h = commondata->bah_Ntheta_array_multigrid[commondata->bah_num_resolutions_multigrid - 1];
     const int Nphi_max_this_h = commondata->bah_Nphi_array_multigrid[commondata->bah_num_resolutions_multigrid - 1];
-    // STEP 2.b: Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, and `prev_horizon_m3`.
+    // STEP 2.b: Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, `prev_horizon_m3`,
+    // and the cached previous AKV gridpoint modes.
     current_horizon_params->prev_horizon_m1 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
     current_horizon_params->prev_horizon_m2 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
     current_horizon_params->prev_horizon_m3 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
+    current_horizon_params->prev_akv_gp_z0_m1 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
+    current_horizon_params->prev_akv_gp_z1_m1 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
+    current_horizon_params->prev_akv_gp_z2_m1 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
     // STEP 2.c: Exits if memory allocation fails.
-    if (!current_horizon_params->prev_horizon_m1 || !current_horizon_params->prev_horizon_m2 || !current_horizon_params->prev_horizon_m3) {
-      fprintf(stderr, "ERROR: Memory allocation failed for prev_horizon shape data for horizon %d.\n", h);
+    if (!current_horizon_params->prev_horizon_m1 || !current_horizon_params->prev_horizon_m2 || !current_horizon_params->prev_horizon_m3 ||
+        !current_horizon_params->prev_akv_gp_z0_m1 || !current_horizon_params->prev_akv_gp_z1_m1 || !current_horizon_params->prev_akv_gp_z2_m1) {
+      fprintf(stderr, "ERROR: Memory allocation failed for BHaHAHA history data for horizon %d.\n", h);
       exit(EXIT_FAILURE);
     } // END IF: memory allocation failed for shape data
+    current_horizon_params->prev_akv_gp_valid_m1 = 0;
+    current_horizon_params->prev_akv_gp_Ntheta_m1 = 0;
+    current_horizon_params->prev_akv_gp_Nphi_m1 = 0;
   } // END IF: is_first_call_for_shapes
 
   // STEP 3: Copies non-persistent solver parameters from `commondata` to `current_horizon_params`.
