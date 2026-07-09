@@ -39,7 +39,7 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
     """
     Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D.
 
-    Uses i0/i1/i2 variable names so IDX3P(...) works unchanged.
+    Uses i0/i1/i2 variable names to emit global 3D indices with IDX3GENERAL_64(...).
 
     :param cfg: Plane configuration dict with keys "fixed_dim", "fixed_val", and "loop_dims".
     :param plane: Plane selector used to choose field suffixes ("xy" or "yz").
