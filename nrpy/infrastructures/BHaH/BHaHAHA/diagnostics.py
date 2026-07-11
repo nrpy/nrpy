@@ -43,7 +43,7 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
         is_commondata=True,
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "sys/time.h"]
     prefunc = r"""
 /**
  * Displays spin values based on provided circumference ratio comparisons.
@@ -181,9 +181,18 @@ calculations, norm evaluations, and detailed final iteration analyses.
         return;
 
       if (commondata->bhahaha_params_and_data->enable_spectre_spin_diagnostic) {
+        struct timeval spectre_spin_start_time, spectre_spin_end_time;
+        gettimeofday(&spectre_spin_start_time, NULL);
         const int spin_rc = bah_diagnostics_spectre_spin(commondata, griddata);
+        gettimeofday(&spectre_spin_end_time, NULL);
+        bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+        const REAL spectre_spin_elapsed_seconds =
+            (spectre_spin_end_time.tv_sec + spectre_spin_end_time.tv_usec / 1.0e6) -
+            (spectre_spin_start_time.tv_sec + spectre_spin_start_time.tv_usec / 1.0e6);
+        printf("NRPy_BHaHAHA SpECTRE spin diagnostic elapsed time (Iter %d, H%d): %.6f s\n",
+               commondata->bhahaha_params_and_data->iteration_external_input, commondata->bhahaha_params_and_data->which_horizon,
+               spectre_spin_elapsed_seconds);
         if (spin_rc != BHAHAHA_SUCCESS) {
-          bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
           bhahaha_diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
           bhahaha_diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
           bhahaha_diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;

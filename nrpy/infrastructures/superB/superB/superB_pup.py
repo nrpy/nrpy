@@ -228,6 +228,9 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   p | bp.verbosity_level;
   p | bp.enable_eta_varying_alg_for_precision_common_horizon;
   p | bp.enable_spectre_spin_diagnostic;
+  p | bp.spectre_spin_akv_seed_valid;
+  p | bp.spectre_spin_akv_seed_Ntheta;
+  p | bp.spectre_spin_akv_seed_Nphi;
   p | bp.t_m1;
   p | bp.t_m2;
   p | bp.t_m3;
@@ -250,6 +253,9 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   pup_optional_REAL_array(p, &bp.prev_horizon_m1, pup_bhahaha_shape_points(commondata), "prev_horizon_m1");
   pup_optional_REAL_array(p, &bp.prev_horizon_m2, pup_bhahaha_shape_points(commondata), "prev_horizon_m2");
   pup_optional_REAL_array(p, &bp.prev_horizon_m3, pup_bhahaha_shape_points(commondata), "prev_horizon_m3");
+  pup_optional_REAL_array(p, &bp.spectre_spin_akv_modes_m1, 3 * pup_bhahaha_shape_points(commondata), "spectre_spin_akv_modes_m1");
+  if (bp.spectre_spin_akv_modes_m1 == nullptr)
+    bp.spectre_spin_akv_seed_valid = 0;
   pup_bhahaha_input_metric_workspace(p, bp, commondata);
 } // END FUNCTION: pup_bhahaha_params_and_data_struct
 

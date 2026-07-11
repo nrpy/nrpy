@@ -155,6 +155,13 @@ typedef struct {
   // EXTERNAL NR CODE MUST ALLOCATE: max(Ntheta) x max(Nphi) doubles for each of these, but does not set them!
   REAL *prev_horizon_m1, *prev_horizon_m2, *prev_horizon_m3;
 
+  // Persistent SpECTRE AKV eigensolve seed data.
+  // Internal BHaHAHA state only; not a physical diagnostic.
+  int spectre_spin_akv_seed_valid;
+  int spectre_spin_akv_seed_Ntheta;
+  int spectre_spin_akv_seed_Nphi;
+  REAL *spectre_spin_akv_modes_m1;
+
   // DO NOT TOUCH: Persistent quantities set by BHaHAHA.
   // External NR code times at which previous horizons were found.
   REAL t_m1, t_m2, t_m3;
@@ -226,7 +233,7 @@ typedef struct {
   REAL spin_chi_x_spectre;
   REAL spin_chi_y_spectre;
   REAL spin_chi_z_spectre;
-  
+
 } bhahaha_diagnostics_struct;
 
 static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct *restrict diags) {

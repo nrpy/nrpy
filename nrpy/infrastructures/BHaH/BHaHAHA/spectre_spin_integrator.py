@@ -17,12 +17,13 @@ Derivation and AKV convention summary:
 - The runtime potential solve discretizes the symmetric scalar AKV weak form
   K(eta,z) = int (Delta eta)(Delta z) dA
            - int R D_A eta D^A z dA,
-  M(eta,z) = int D_A eta D^A z dA, with K z = lambda M z and constants
-  removed by an area-weighted mean-zero constraint.
+  M(eta,z) = int D_A eta D^A z dA, with K z = lambda M z. Constants and
+  the centered-FD phi-Nyquist checkerboard are removed by weighted constraints.
 - Normalization is part of the convention, not a post-processing detail:
   rescaling z_alpha rescales S_alpha. This file therefore normalizes each
-  centered potential with int z_alpha^2 dA = A^3/(48*pi^2) before evaluating
-  S_alpha = (1/(8*pi)) int z_alpha Omega dA.
+  centered potential triad with int z_alpha z_beta dA =
+  delta_alpha_beta A^3/(48*pi^2) before evaluating S_alpha =
+  (1/(8*pi)) int z_alpha Omega dA.
 
 Author: Ralston Graves
         ralstonkgraves **at** gmail **dot** com
@@ -484,6 +485,8 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
         prefunc += (
             r"""
 #include "akv_primme.h"
+#include <float.h>
+#include <string.h>
 
 #ifndef PRIMME_VERSION_MAJOR
 #define BHAHAHA_PRIMME_USES_LEGACY_MATVEC 1
@@ -535,12 +538,13 @@ typedef struct {
   const spectre_spin_csr_matrix *restrict K;
   const spectre_spin_csr_matrix *restrict M;
   const REAL *restrict mu;
+  const REAL *restrict nyq;
   const int *restrict red_to_full;
   const int *restrict full_to_red;
   int nfull;
   int nred;
-  int anchor;
-  REAL mu_anchor;
+  int anchor_plus;
+  int anchor_minus;
   REAL *restrict full_x;
   REAL *restrict full_y;
 } spectre_spin_primme_ctx;
@@ -768,57 +772,273 @@ static void spectre_spin_csr_matvec(const spectre_spin_csr_matrix *restrict csr,
   } // END LOOP: for row over CSR matrix rows
 } // END FUNCTION: spectre_spin_csr_matvec
 
+static int spectre_spin_active_index(const int j1, const int j2, const int Ntheta);
+
+/**
+ * Print the mass-matrix response of a centered checkerboard mode.
+ *
+ * @param[in] name Checkerboard mode name.
+ * @param[in] M Mass matrix in compressed sparse row storage.
+ * @param Ntheta Number of active theta points.
+ * @param Nphi Number of active phi points.
+ * @param[in] mu Surface quadrature weights.
+ * @param area Surface area.
+ * @param[out] x Full-space checkerboard scratch vector.
+ * @param[out] Mx Mass-matrix product scratch vector.
+ */
+static void spectre_spin_debug_mass_mode(
+    const char *restrict name,
+    const spectre_spin_csr_matrix *restrict M,
+    const int Ntheta,
+    const int Nphi,
+    const REAL *restrict mu,
+    const REAL area,
+    REAL *restrict x,
+    REAL *restrict Mx) {
+  const int N = Ntheta * Nphi;
+
+  for (int j2 = 0; j2 < Nphi; j2++) {
+    for (int j1 = 0; j1 < Ntheta; j1++) {
+      const int p = spectre_spin_active_index(j1, j2, Ntheta);
+
+      if (strcmp(name, "phi_checkerboard") == 0)
+        x[p] = (j2 % 2 == 0) ? 1.0 : -1.0;
+      else if (strcmp(name, "theta_checkerboard") == 0)
+        x[p] = (j1 % 2 == 0) ? 1.0 : -1.0;
+      else
+        x[p] = ((j1 + j2) % 2 == 0) ? 1.0 : -1.0;
+    } // END LOOP: for j1 over active theta points
+  } // END LOOP: for j2 over active phi points
+
+  REAL mean = 0.0;
+  for (int p = 0; p < N; p++)
+    mean += mu[p] * x[p];
+  mean /= area;
+
+  for (int p = 0; p < N; p++)
+    x[p] -= mean;
+
+  spectre_spin_csr_matvec(M, x, Mx);
+
+  REAL l2 = 0.0;
+  REAL mquad = 0.0;
+  REAL mnorm = 0.0;
+  for (int p = 0; p < N; p++) {
+    l2 += mu[p] * x[p] * x[p];
+    mquad += x[p] * Mx[p];
+    mnorm += Mx[p] * Mx[p];
+  } // END LOOP: for p over full-space grid points
+
+  printf("\nAKV full-space M-null debug: %s Ntheta=%d Nphi=%d "
+         "L2=%+.17e xTMx=%+.17e xTMx/L2=%+.17e ||Mx||=%+.17e\n",
+         name, Ntheta, Nphi, l2, mquad,
+         mquad / fmax(l2, DBL_MIN), sqrt(mnorm));
+} // END FUNCTION: spectre_spin_debug_mass_mode
+
+/**
+ * Print weighted-constraint residuals and the norm of an AKV mode.
+ *
+ * @param[in] label Mode label.
+ * @param N Number of full-space grid points.
+ * @param[in] mu Surface quadrature weights.
+ * @param[in] nyq Phi-Nyquist checkerboard vector.
+ * @param[in] z Full-space AKV mode.
+ */
+static void spectre_spin_debug_constraints(
+    const char *restrict label,
+    const int N,
+    const REAL *restrict mu,
+    const REAL *restrict nyq,
+    const REAL *restrict z) {
+  REAL s0 = 0.0;
+  REAL s1 = 0.0;
+  REAL l2 = 0.0;
+
+  for (int p = 0; p < N; p++) {
+    s0 += mu[p] * z[p];
+    s1 += mu[p] * nyq[p] * z[p];
+    l2 += mu[p] * z[p] * z[p];
+  } // END LOOP: for p over full-space grid points
+
+  printf("AKV constraint debug: %s mean=%+.17e nyq=%+.17e L2=%+.17e\n",
+         label, s0, s1, l2);
+} // END FUNCTION: spectre_spin_debug_constraints
+
+/**
+ * Remove the weighted constant and phi-Nyquist components from a mode.
+ *
+ * @param N Number of full-space grid points.
+ * @param[in] mu Surface quadrature weights.
+ * @param[in] nyq Phi-Nyquist checkerboard vector.
+ * @param area Surface area.
+ * @param[in,out] z Full-space AKV mode.
+ * @return BHAHAHA_SUCCESS on success, or a normalization error code.
+ */
+static int spectre_spin_remove_mean_and_nyq(
+    const int N,
+    const REAL *restrict mu,
+    const REAL *restrict nyq,
+    const REAL area,
+    REAL *restrict z) {
+  REAL q = 0.0;
+  REAL s0 = 0.0;
+  REAL s1 = 0.0;
+
+  for (int p = 0; p < N; p++) {
+    q += mu[p] * nyq[p];
+    s0 += mu[p] * z[p];
+    s1 += mu[p] * nyq[p] * z[p];
+  } // END LOOP: for p over full-space grid points
+
+  const REAL det = area * area - q * q;
+  if (!(det > 0.0) || !isfinite(det))
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+
+  const REAL c0 = (area * s0 - q * s1) / det;
+  const REAL c1 = (-q * s0 + area * s1) / det;
+
+  if (!isfinite(c0) || !isfinite(c1))
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+
+  for (int p = 0; p < N; p++)
+    z[p] -= c0 + c1 * nyq[p];
+
+  return BHAHAHA_SUCCESS;
+} // END FUNCTION: spectre_spin_remove_mean_and_nyq
+
 /**
  * Seed reduced-space eigenvectors from centered coordinate functions.
  *
  * @param N Number of full-space grid points.
  * @param Nred Number of reduced-space grid points.
  * @param[in] red_to_full Map from reduced-space indices to full-space indices.
+ * @param[in] mu Surface quadrature weights.
+ * @param[in] nyq Phi-Nyquist checkerboard vector.
+ * @param area Surface area.
  * @param[in] x_ref Reference coordinate functions.
- * @param[in] x_centroid Area centroid.
+ * @param[out] scratch Full-space scratch vector.
  * @param[out] evecs_red Initial reduced-space eigenvector guesses.
  */
-static void spectre_spin_seed_coordinate_reduced(const int N, const int Nred, const int *restrict red_to_full, const REAL *restrict x_ref,
-                                                 const REAL x_centroid[3], double *restrict evecs_red) {
+static void spectre_spin_seed_coordinate_reduced(const int N, const int Nred, const int *restrict red_to_full, const REAL *restrict mu,
+                                                 const REAL *restrict nyq, const REAL area, const REAL *restrict x_ref,
+                                                 REAL *restrict scratch, double *restrict evecs_red) {
   for (int mode = 0; mode < 3; mode++) {
+    for (int p = 0; p < N; p++)
+      scratch[p] = x_ref[(size_t)mode * (size_t)N + p];
+
+    const int status = spectre_spin_remove_mean_and_nyq(N, mu, nyq, area, scratch);
+    if (status != BHAHAHA_SUCCESS) {
+      for (int r = 0; r < Nred; r++)
+        evecs_red[(size_t)mode * (size_t)Nred + r] = 0.0;
+      continue;
+    }
+
     for (int r = 0; r < Nred; r++) {
       const int full = red_to_full[r];
-      evecs_red[(size_t)mode * (size_t)Nred + r] = (double)(x_ref[(size_t)mode * (size_t)N + full] - x_centroid[mode]);
+      evecs_red[(size_t)mode * (size_t)Nred + r] = (double)scratch[full];
     } // END LOOP: for r over reduced-space grid points
   } // END LOOP: for mode over coordinate seed modes
 } // END FUNCTION: spectre_spin_seed_coordinate_reduced
 
 /**
- * Expand a reduced mean-zero vector into full-space coordinates.
+ * Seed reduced-space eigenvectors from saved full-surface scalar modes.
+ *
+ * @param N Number of full-space grid points.
+ * @param Nred Number of reduced-space grid points.
+ * @param[in] red_to_full Map from reduced-space indices to full-space indices.
+ * @param[in] mu Surface quadrature weights.
+ * @param[in] nyq Phi-Nyquist checkerboard vector.
+ * @param area Surface area.
+ * @param[in] saved_modes Previously orthonormalized full-surface scalar modes.
+ * @param[out] scratch Full-space scratch vector.
+ * @param[out] evecs_red Initial reduced-space eigenvector guesses.
+ */
+static void spectre_spin_seed_saved_modes_reduced(const int N, const int Nred, const int *restrict red_to_full, const REAL *restrict mu,
+                                                  const REAL *restrict nyq, const REAL area, const REAL *restrict saved_modes,
+                                                  REAL *restrict scratch, double *restrict evecs_red) {
+  for (int mode = 0; mode < 3; mode++) {
+    for (int p = 0; p < N; p++)
+      scratch[p] = saved_modes[(size_t)mode * (size_t)N + p];
+
+    const int status = spectre_spin_remove_mean_and_nyq(N, mu, nyq, area, scratch);
+    if (status != BHAHAHA_SUCCESS) {
+      for (int r = 0; r < Nred; r++)
+        evecs_red[(size_t)mode * (size_t)Nred + r] = 0.0;
+      continue;
+    }
+
+    for (int r = 0; r < Nred; r++) {
+      const int full = red_to_full[r];
+      evecs_red[(size_t)mode * (size_t)Nred + r] = (double)scratch[full];
+    } // END LOOP: for r over reduced-space grid points
+  } // END LOOP: for mode over saved seed modes
+} // END FUNCTION: spectre_spin_seed_saved_modes_reduced
+
+/**
+ * Expand a reduced vector into full-space coordinates satisfying both the
+ * weighted mean-zero and weighted phi-Nyquist orthogonality constraints.
  *
  * @param[in] ctx PRIMME matrix-vector context.
  * @param[in] xred Reduced-space vector.
- * @param[out] xfull Full-space vector satisfying the weighted mean constraint.
+ * @param[out] xfull Full-space vector satisfying both constraints.
  */
 static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx *restrict ctx, const double *restrict xred, REAL *restrict xfull) {
   for (int i = 0; i < ctx->nfull; i++)
     xfull[i] = 0.0;
-  REAL anchor_sum = 0.0;
+
+  REAL s0 = 0.0;
+  REAL s1 = 0.0;
+
   for (int r = 0; r < ctx->nred; r++) {
     const int full = ctx->red_to_full[r];
     xfull[full] = (REAL)xred[r];
-    anchor_sum += ctx->mu[full] * xfull[full];
+    s0 += ctx->mu[full] * xfull[full];
+    s1 += ctx->mu[full] * ctx->nyq[full] * xfull[full];
   } // END LOOP: for r over reduced-space entries
-  xfull[ctx->anchor] = -anchor_sum / ctx->mu_anchor;
+
+  const int a0 = ctx->anchor_plus;
+  const int a1 = ctx->anchor_minus;
+
+  const REAL A00 = ctx->mu[a0];
+  const REAL A01 = ctx->mu[a1];
+  const REAL A10 = ctx->mu[a0] * ctx->nyq[a0];
+  const REAL A11 = ctx->mu[a1] * ctx->nyq[a1];
+
+  const REAL det = A00 * A11 - A01 * A10;
+
+  xfull[a0] = (-s0 * A11 + A01 * s1) / det;
+  xfull[a1] = (-A00 * s1 + s0 * A10) / det;
 } // END FUNCTION: spectre_spin_expand_reduced
 
 /**
- * Project a full-space operator result back into reduced coordinates.
+ * Project a full-space operator result back through the transpose of the
+ * two-constraint reduced-space expansion map.
  *
  * @param[in] ctx PRIMME matrix-vector context.
  * @param[in] yfull Full-space vector.
  * @param[out] yred Reduced-space projected vector.
  */
 static void spectre_spin_project_reduced(const spectre_spin_primme_ctx *restrict ctx, const REAL *restrict yfull, double *restrict yred) {
-  const REAL y_anchor = yfull[ctx->anchor];
+  const int a0 = ctx->anchor_plus;
+  const int a1 = ctx->anchor_minus;
+
+  const REAL A00 = ctx->mu[a0];
+  const REAL A01 = ctx->mu[a1];
+  const REAL A10 = ctx->mu[a0] * ctx->nyq[a0];
+  const REAL A11 = ctx->mu[a1] * ctx->nyq[a1];
+
+  const REAL det = A00 * A11 - A01 * A10;
+
   for (int r = 0; r < ctx->nred; r++) {
-    const int full = ctx->red_to_full[r];
-    yred[r] = (double)(yfull[full] - (ctx->mu[full] / ctx->mu_anchor) * y_anchor);
+    const int p = ctx->red_to_full[r];
+
+    const REAL b0 = ctx->mu[p];
+    const REAL b1 = ctx->mu[p] * ctx->nyq[p];
+
+    const REAL c0 = (-b0 * A11 + A01 * b1) / det;
+    const REAL c1 = (-A00 * b1 + b0 * A10) / det;
+
+    yred[r] = (double)(yfull[p] + c0 * yfull[a0] + c1 * yfull[a1]);
   } // END LOOP: for r over reduced-space entries
 } // END FUNCTION: spectre_spin_project_reduced
 
@@ -1187,14 +1407,16 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
  *   M(eta,z) = int grad eta . grad z dA
  *   K z = lambda M z
  *
- * Constants are removed by an area-weighted mean-zero reduced space. The three
- * lowest modes are aligned to measurement-frame reference potentials and
- * normalized with the scalar-potential convention:
- * int (z_alpha - <z_alpha>)^2 dA = A^3 / (48*pi^2).
+ * Constants and the centered-FD phi-Nyquist checkerboard are removed by a
+ * two-constraint reduced space. The three lowest modes are aligned to
+ * measurement-frame reference potentials and normalized with the
+ * scalar-potential convention:
+ * int z_alpha^2 dA = A^3 / (48*pi^2).
  */
 static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                                                const REAL *restrict auxevol_gfs, REAL *restrict spectre_spin_gfs) {
   const int grid = 0;
+  bhahaha_params_and_data_struct *restrict horizon_params = commondata->bhahaha_params_and_data;
   const params_struct *restrict params = &griddata[grid].params;
   const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs;
   REAL *restrict xx[3];
@@ -1227,15 +1449,19 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   const int Ntheta = Nxx1;
   const int Nphi = Nxx2;
   const int N = Ntheta * Nphi;
-  const int Nred = N - 1;
+  const int Nred = N - 2;
   if (Nred < 3)
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
+  int have_saved_seed = horizon_params != NULL && horizon_params->spectre_spin_akv_seed_valid &&
+                        horizon_params->spectre_spin_akv_seed_Ntheta == Ntheta && horizon_params->spectre_spin_akv_seed_Nphi == Nphi &&
+                        horizon_params->spectre_spin_akv_modes_m1 != NULL;
 
   const REAL *restrict weights;
   int weight_stencil_size;
   bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights, &weight_stencil_size);
 
   REAL *restrict mu = (REAL *)malloc((size_t)N * sizeof(REAL));
+  REAL *restrict nyq = (REAL *)malloc((size_t)N * sizeof(REAL));
   REAL *restrict sqrtq = (REAL *)malloc((size_t)N * sizeof(REAL));
   REAL *restrict ricci = (REAL *)malloc((size_t)N * sizeof(REAL));
   REAL *restrict qUU00 = (REAL *)malloc((size_t)N * sizeof(REAL));
@@ -1249,10 +1475,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   double *restrict resnorms = (double *)malloc(3 * sizeof(double));
   REAL *restrict evecs_full = (REAL *)malloc((size_t)3 * (size_t)N * sizeof(REAL));
   REAL *restrict modes = (REAL *)malloc((size_t)3 * (size_t)N * sizeof(REAL));
-  if (mu == NULL || sqrtq == NULL || ricci == NULL || qUU00 == NULL || qUU01 == NULL || qUU11 == NULL || x_ref == NULL ||
+  if (mu == NULL || nyq == NULL || sqrtq == NULL || ricci == NULL || qUU00 == NULL || qUU01 == NULL || qUU11 == NULL || x_ref == NULL ||
       red_to_full == NULL || full_to_red == NULL || evals == NULL || evecs_red == NULL || resnorms == NULL || evecs_full == NULL ||
       modes == NULL) {
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1275,8 +1502,10 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   const REAL surface_weight = dxx1 * dxx2;
   REAL area = 0.0;
   REAL x_centroid[3] = {0.0, 0.0, 0.0};
-  int anchor = 0;
-  REAL mu_anchor = 0.0;
+  int anchor_plus = -1;
+  int anchor_minus = -1;
+  REAL mu_anchor_plus = -1.0;
+  REAL mu_anchor_minus = -1.0;
 
   for (int j2 = 0; j2 < Nphi; j2++) {
     const int i2 = NGHOSTS + j2;
@@ -1301,6 +1530,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       if (!(detq > 0.0) || !isfinite(detq) || !(spin_area_density > 0.0) || !isfinite(spin_area_density) ||
           !isfinite(spin_ricci_scalar)) {
         free(mu);
+        free(nyq);
         free(sqrtq);
         free(ricci);
         free(qUU00);
@@ -1321,9 +1551,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       qUU00[p] = q11 / detq;
       qUU01[p] = -q01 / detq;
       qUU11[p] = q00 / detq;
+      nyq[p] = (j2 % 2 == 0) ? 1.0 : -1.0;
       mu[p] = spin_area_density * weight1 * weight2 * surface_weight;
       if (!(mu[p] > 0.0) || !isfinite(mu[p])) {
         free(mu);
+        free(nyq);
         free(sqrtq);
         free(ricci);
         free(qUU00);
@@ -1346,14 +1578,23 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       area += mu[p];
       for (int a = 0; a < 3; a++)
         x_centroid[a] += x_ref[a * N + p] * mu[p];
-      if (mu[p] > mu_anchor) {
-        mu_anchor = mu[p];
-        anchor = p;
+      if (nyq[p] > 0.0) {
+        if (mu[p] > mu_anchor_plus) {
+          mu_anchor_plus = mu[p];
+          anchor_plus = p;
+        }
+      } else {
+        if (mu[p] > mu_anchor_minus) {
+          mu_anchor_minus = mu[p];
+          anchor_minus = p;
+        }
       }
     }
   }
-  if (!(area > 0.0) || !(mu_anchor > 0.0) || !isfinite(area) || !isfinite(mu_anchor)) {
+  if (!(area > 0.0) || !isfinite(area) || anchor_plus < 0 || anchor_minus < 0 ||
+      !(mu_anchor_plus > 0.0) || !(mu_anchor_minus > 0.0) || !isfinite(mu_anchor_plus) || !isfinite(mu_anchor_minus)) {
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1372,13 +1613,39 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   for (int a = 0; a < 3; a++)
     x_centroid[a] /= area;
 
-  for (int p = 0, r = 0; p < N; p++) {
+  if (have_saved_seed) {
+    for (int p = 0; have_saved_seed && p < 3 * N; p++)
+      have_saved_seed &= isfinite(horizon_params->spectre_spin_akv_modes_m1[p]);
+    if (!have_saved_seed)
+      horizon_params->spectre_spin_akv_seed_valid = 0;
+  } // END IF: check saved SpECTRE AKV seed data
+
+  int reduced_count = 0;
+  for (int p = 0; p < N; p++) {
     full_to_red[p] = -1;
-    if (p != anchor) {
-      full_to_red[p] = r;
-      red_to_full[r] = p;
-      r++;
+    if (p != anchor_plus && p != anchor_minus) {
+      full_to_red[p] = reduced_count;
+      red_to_full[reduced_count] = p;
+      reduced_count++;
     }
+  }
+  if (reduced_count != Nred) {
+    free(mu);
+    free(nyq);
+    free(sqrtq);
+    free(ricci);
+    free(qUU00);
+    free(qUU01);
+    free(qUU11);
+    free(x_ref);
+    free(red_to_full);
+    free(full_to_red);
+    free(evals);
+    free(evecs_red);
+    free(resnorms);
+    free(evecs_full);
+    free(modes);
+    return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
   }
 
   spectre_spin_triplet_builder K_builder;
@@ -1391,6 +1658,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     if (K_builder.entries != NULL)
       spectre_spin_builder_free(&K_builder);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1484,6 +1752,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     spectre_spin_builder_free(&K_builder);
     spectre_spin_builder_free(&M_builder);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1510,6 +1779,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     if (K_csr.rowptr != NULL)
       spectre_spin_csr_free(&K_csr);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1534,6 +1804,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(full_x);
     free(full_y);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1554,14 +1825,24 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       .K = &K_csr,
       .M = &M_csr,
       .mu = mu,
+      .nyq = nyq,
       .red_to_full = red_to_full,
       .full_to_red = full_to_red,
       .nfull = N,
       .nred = Nred,
-      .anchor = anchor,
-      .mu_anchor = mu_anchor,
+      .anchor_plus = anchor_plus,
+      .anchor_minus = anchor_minus,
       .full_x = full_x,
       .full_y = full_y};
+
+  if (horizon_params != NULL && horizon_params->verbosity_level >= 2) {
+    spectre_spin_debug_mass_mode(
+        "phi_checkerboard", &M_csr, Ntheta, Nphi, mu, area, full_x, full_y);
+    spectre_spin_debug_mass_mode(
+        "theta_checkerboard", &M_csr, Ntheta, Nphi, mu, area, full_x, full_y);
+    spectre_spin_debug_mass_mode(
+        "theta_phi_checkerboard", &M_csr, Ntheta, Nphi, mu, area, full_x, full_y);
+  } // END IF: debug-level AKV mass-matrix diagnostics are enabled
 
   primme_params primme;
   primme_initialize(&primme);
@@ -1569,13 +1850,12 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   primme.nLocal = Nred;
   primme.numEvals = 3;
 
-  
   // Target the smallest-magnitude eigenvalues near zero.
   static double target_shift = 0.0;
   primme.target = primme_closest_abs;
   primme.numTargetShifts = 1;
   primme.targetShifts = &target_shift;
-  
+
   primme.matrixMatvec = spectre_spin_primme_K_matvec;
   primme.massMatrixMatvec = spectre_spin_primme_M_matvec;
   primme.matrixMatvec_type = primme_op_double;
@@ -1587,22 +1867,34 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   primme.eps = 1.0e-6;
   primme.maxMatvecs = 50000;
   primme.maxOuterIterations = 5000;
-  primme.printLevel = 1;
+  if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
+    primme.printLevel = 3;
+  else if (horizon_params != NULL && horizon_params->verbosity_level >= 1)
+    primme.printLevel = 2;
+  else
+    primme.printLevel = 1;
   primme_set_method(PRIMME_DEFAULT_MIN_TIME, &primme);
   primme.initSize = 3;
   primme.maxBasisSize = 60;
-  primme.minRestartSize = 20;
+  primme.minRestartSize = 30;
   primme.maxBlockSize = 4;
-  spectre_spin_seed_coordinate_reduced(N, Nred, red_to_full, x_ref, x_centroid, evecs_red);
+  if (have_saved_seed) {
+    spectre_spin_seed_saved_modes_reduced(N, Nred, red_to_full, mu, nyq, area, horizon_params->spectre_spin_akv_modes_m1, full_y, evecs_red);
+  } else {
+    spectre_spin_seed_coordinate_reduced(N, Nred, red_to_full, mu, nyq, area, x_ref, full_y, evecs_red);
+  } // END IF: saved SpECTRE AKV modes are available
 
   const int primme_status = dprimme(evals, evecs_red, resnorms, &primme);
   primme_free(&primme);
   if (primme_status != 0) {
+    if (horizon_params != NULL)
+      horizon_params->spectre_spin_akv_seed_valid = 0;
     spectre_spin_csr_free(&K_csr);
     spectre_spin_csr_free(&M_csr);
     free(full_x);
     free(full_y);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1620,11 +1912,14 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   }
   for (int a = 0; a < 3; a++) {
     if (!isfinite(evals[a]) || !isfinite(resnorms[a])) {
+      if (horizon_params != NULL)
+        horizon_params->spectre_spin_akv_seed_valid = 0;
       spectre_spin_csr_free(&K_csr);
       spectre_spin_csr_free(&M_csr);
       free(full_x);
       free(full_y);
       free(mu);
+      free(nyq);
       free(sqrtq);
       free(ricci);
       free(qUU00);
@@ -1645,6 +1940,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   for (int mode = 0; mode < 3; mode++) {
     spectre_spin_expand_reduced(&ctx, &evecs_red[(size_t)mode * (size_t)Nred], &evecs_full[(size_t)mode * (size_t)N]);
   }
+  static const char *const expanded_constraint_labels[3] = {
+      "expanded_mode0", "expanded_mode1", "expanded_mode2"};
+  if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
+    for (int mode = 0; mode < 3; mode++)
+      spectre_spin_debug_constraints(expanded_constraint_labels[mode], N, mu, nyq, &evecs_full[(size_t)mode * (size_t)N]);
 
   const REAL area_radius = sqrt(area / (4.0 * M_PI));
   for (int p = 0; p < N; p++)
@@ -1664,11 +1964,14 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   REAL O[3][3];
   status = spectre_spin_procrustes(C, O);
   if (status != BHAHAHA_SUCCESS) {
+    if (horizon_params != NULL)
+      horizon_params->spectre_spin_akv_seed_valid = 0;
     spectre_spin_csr_free(&K_csr);
     spectre_spin_csr_free(&M_csr);
     free(full_x);
     free(full_y);
     free(mu);
+    free(nyq);
     free(sqrtq);
     free(ricci);
     free(qUU00);
@@ -1692,32 +1995,93 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         modes[a * N + p] += O[a][mode] * evecs_full[mode * N + p];
     }
   }
+  static const char *const aligned_constraint_labels[3] = {
+      "aligned_mode0", "aligned_mode1", "aligned_mode2"};
+  if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
+    for (int a = 0; a < 3; a++)
+      spectre_spin_debug_constraints(aligned_constraint_labels[a], N, mu, nyq, &modes[(size_t)a * (size_t)N]);
 
   const REAL target_potential_norm = area * area * area / (48.0 * M_PI * M_PI);
   if (!(target_potential_norm > 0.0) || !isfinite(target_potential_norm))
     status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
   for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++) {
-    REAL mean = 0.0;
-    for (int p = 0; p < N; p++)
-      mean += mu[p] * modes[a * N + p];
-    mean /= area;
+    REAL *restrict za = &modes[(size_t)a * (size_t)N];
+    status = spectre_spin_remove_mean_and_nyq(N, mu, nyq, area, za);
+
+    for (int pass = 0; status == BHAHAHA_SUCCESS && pass < 2; pass++) {
+      for (int b = 0; status == BHAHAHA_SUCCESS && b < a; b++) {
+        const REAL *restrict zb = &modes[(size_t)b * (size_t)N];
+        REAL dot = 0.0;
+        for (int p = 0; p < N; p++)
+          dot += mu[p] * za[p] * zb[p];
+
+        const REAL coeff = dot / target_potential_norm;
+        if (!isfinite(coeff))
+          status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+        for (int p = 0; status == BHAHAHA_SUCCESS && p < N; p++)
+          za[p] -= coeff * zb[p];
+      } // END LOOP: for b over previously orthonormalized modes
+
+      if (status == BHAHAHA_SUCCESS)
+        status = spectre_spin_remove_mean_and_nyq(N, mu, nyq, area, za);
+    } // END LOOP: for pass over reorthogonalization passes
+
     REAL norm = 0.0;
-    for (int p = 0; p < N; p++) {
-      const REAL centered = modes[a * N + p] - mean;
-      norm += mu[p] * centered * centered;
-    }
-    if (!(norm > 0.0) || !isfinite(norm)) {
+    for (int p = 0; status == BHAHAHA_SUCCESS && p < N; p++)
+      norm += mu[p] * za[p] * za[p];
+    if (status == BHAHAHA_SUCCESS && (!(norm > 0.0) || !isfinite(norm)))
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
-      break;
-    }
-    const REAL scale = sqrt(target_potential_norm / norm);
-    if (!isfinite(scale)) {
+
+    const REAL scale = status == BHAHAHA_SUCCESS ? sqrt(target_potential_norm / norm) : 0.0;
+    if (status == BHAHAHA_SUCCESS && !isfinite(scale))
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
-      break;
-    }
-    for (int p = 0; p < N; p++)
-      modes[a * N + p] = scale * (modes[a * N + p] - mean);
-  }
+    for (int p = 0; status == BHAHAHA_SUCCESS && p < N; p++)
+      za[p] *= scale;
+  } // END LOOP: for a over AKV modes
+  static const char *const normalized_constraint_labels[3] = {
+      "normalized_mode0", "normalized_mode1", "normalized_mode2"};
+  if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
+    for (int a = 0; status == BHAHAHA_SUCCESS && a < 3; a++)
+      spectre_spin_debug_constraints(normalized_constraint_labels[a], N, mu, nyq, &modes[(size_t)a * (size_t)N]);
+
+  if (status == BHAHAHA_SUCCESS && horizon_params != NULL && horizon_params->verbosity_level >= 2) {
+    printf("\nAKV normalized-mode matrix debug:\n");
+
+    for (int b = 0; b < 3; b++) {
+      spectre_spin_csr_matvec(&M_csr, &modes[(size_t)b * (size_t)N], full_y);
+
+      for (int a = 0; a < 3; a++) {
+        REAL Gab = 0.0;
+        REAL Mab = 0.0;
+
+        for (int p = 0; p < N; p++) {
+          const REAL za = modes[(size_t)a * (size_t)N + p];
+          const REAL zb = modes[(size_t)b * (size_t)N + p];
+          Gab += mu[p] * za * zb;
+          Mab += za * full_y[p];
+        }
+
+        printf("AKV mode Gram: a=%d b=%d L2/target=%+.17e M=%+.17e\n",
+               a, b, Gab / target_potential_norm, Mab);
+      } // END LOOP: for a over normalized AKV modes
+    } // END LOOP: for b over mass-matrix AKV mode products
+
+    for (int b = 0; b < 3; b++) {
+      spectre_spin_csr_matvec(&K_csr, &modes[(size_t)b * (size_t)N], full_y);
+
+      for (int a = 0; a < 3; a++) {
+        REAL Kab = 0.0;
+
+        for (int p = 0; p < N; p++) {
+          const REAL za = modes[(size_t)a * (size_t)N + p];
+          Kab += za * full_y[p];
+        }
+
+        printf("AKV mode K matrix: a=%d b=%d K=%+.17e\n", a, b, Kab);
+      } // END LOOP: for a over normalized AKV modes
+    } // END LOOP: for b over stiffness-matrix AKV mode products
+  } // END IF: eigensolve succeeded and debug-level AKV diagnostics are enabled
+
 
   if (status == BHAHAHA_SUCCESS) {
 #pragma omp parallel for
@@ -1747,13 +2111,22 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     }
     if (finite_error)
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+    if (status == BHAHAHA_SUCCESS && horizon_params != NULL && horizon_params->spectre_spin_akv_modes_m1 != NULL) {
+      memcpy(horizon_params->spectre_spin_akv_modes_m1, modes, (size_t)3 * (size_t)N * sizeof(REAL));
+      horizon_params->spectre_spin_akv_seed_Ntheta = Ntheta;
+      horizon_params->spectre_spin_akv_seed_Nphi = Nphi;
+      horizon_params->spectre_spin_akv_seed_valid = 1;
+    } // END IF: final SpECTRE AKV modes are ready for reuse
   }
+  if (status != BHAHAHA_SUCCESS && horizon_params != NULL)
+    horizon_params->spectre_spin_akv_seed_valid = 0;
 
   spectre_spin_csr_free(&K_csr);
   spectre_spin_csr_free(&M_csr);
   free(full_x);
   free(full_y);
   free(mu);
+  free(nyq);
   free(sqrtq);
   free(ricci);
   free(qUU00);
@@ -2020,6 +2393,17 @@ if (Oabs > spin_norm_tolerance && normI > spin_norm_tolerance) {
     free(spectre_spin_gfs);
     return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
 } // END ELSE IF: no usable spin direction for nonzero vorticity
+
+
+if (commondata->bhahaha_params_and_data != NULL &&
+    commondata->bhahaha_params_and_data->verbosity_level >= 2)
+    printf("AKV spin debug: ZOU=(%+.17e,%+.17e,%+.17e) "
+           "Salpha=(%+.17e,%+.17e,%+.17e) Salpha_norm=%+.17e "
+           "normI=%+.17e S=%+.17e\n",
+           ZOU[0], ZOU[1], ZOU[2],
+           SalphaU[0], SalphaU[1], SalphaU[2],
+           Salpha_norm, normI, S);
+
 
 const REAL M_irr_squared = A / (16.0 * M_PI);
 if (!(M_irr_squared > 0.0) || !isfinite(M_irr_squared)) {

@@ -21,9 +21,9 @@ from nrpy.infrastructures import BHaH
 
 
 def register_CFunction_free_bhahaha_horizon_shape_data_all_horizons() -> None:
-    """Register the BHaHAHA horizon-shape teardown helper."""
+    """Register the BHaHAHA persistent horizon-data teardown helper."""
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
-    desc = """Free memory allocated for horizon shape history arrays (`prev_horizon_m1/m2/m3`)
+    desc = """Free memory allocated for persistent BHaHAHA horizon data
 for all horizons."""
     cfunc_type = "void"
     name = "free_bhahaha_horizon_shape_data_all_horizons"
@@ -34,6 +34,7 @@ for all horizons."""
     BHAH_FREE(current_horizon_params->prev_horizon_m1);
     BHAH_FREE(current_horizon_params->prev_horizon_m2);
     BHAH_FREE(current_horizon_params->prev_horizon_m3);
+    BHAH_FREE(current_horizon_params->spectre_spin_akv_modes_m1);
   } // END LOOP: for h over all horizons
 """
     cfc.register_CFunction(
@@ -342,7 +343,7 @@ static void check_multigrid_resolution_inputs(const commondata_struct *restrict 
  * 1. Gets a pointer to the current horizon's `bhahaha_params_and_data_struct`.
  * 2. If `is_first_call_for_shapes` is true:
  *    a. Calculates max Ntheta and Nphi for this horizon.
- *    b. Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, and `prev_horizon_m3`.
+ *    b. Allocates memory for persistent horizon shape and SpECTRE AKV seed data.
  *    c. Exits if memory allocation fails.
  * 3. Copies non-persistent solver parameters (verbosity, max_iterations, CFL, tolerances,
  *    M_scale, eta_damping, KO_strength, multigrid resolutions) from `commondata`
@@ -363,15 +364,24 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
     // STEP 2.a: Calculates max Ntheta and Nphi for this horizon.
     const int Ntheta_max_this_h = commondata->bah_Ntheta_array_multigrid[commondata->bah_num_resolutions_multigrid - 1];
     const int Nphi_max_this_h = commondata->bah_Nphi_array_multigrid[commondata->bah_num_resolutions_multigrid - 1];
-    // STEP 2.b: Allocates memory for `prev_horizon_m1`, `prev_horizon_m2`, and `prev_horizon_m3`.
+    // STEP 2.b: Allocates memory for persistent horizon shape and SpECTRE AKV seed data.
     current_horizon_params->prev_horizon_m1 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
     current_horizon_params->prev_horizon_m2 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
     current_horizon_params->prev_horizon_m3 = (REAL *)malloc(Ntheta_max_this_h * Nphi_max_this_h * sizeof(REAL));
+    const size_t spin_seed_size = (size_t)3 * (size_t)Ntheta_max_this_h * (size_t)Nphi_max_this_h;
+    current_horizon_params->spectre_spin_akv_modes_m1 = (REAL *)malloc(spin_seed_size * sizeof(REAL));
     // STEP 2.c: Exits if memory allocation fails.
     if (!current_horizon_params->prev_horizon_m1 || !current_horizon_params->prev_horizon_m2 || !current_horizon_params->prev_horizon_m3) {
       fprintf(stderr, "ERROR: Memory allocation failed for prev_horizon shape data for horizon %d.\n", h);
       exit(EXIT_FAILURE);
     } // END IF: memory allocation failed for shape data
+    if (!current_horizon_params->spectre_spin_akv_modes_m1) {
+      fprintf(stderr, "ERROR: Memory allocation failed for SpECTRE AKV seed data for horizon %d.\n", h);
+      exit(EXIT_FAILURE);
+    } // END IF: memory allocation failed for SpECTRE AKV seed data
+    current_horizon_params->spectre_spin_akv_seed_valid = 0;
+    current_horizon_params->spectre_spin_akv_seed_Ntheta = -1;
+    current_horizon_params->spectre_spin_akv_seed_Nphi = -1;
   } // END IF: is_first_call_for_shapes
 
   // STEP 3: Copies non-persistent solver parameters from `commondata` to `current_horizon_params`.
