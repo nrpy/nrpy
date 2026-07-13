@@ -94,9 +94,15 @@ carry facts and sources, and excluded artifacts stay out of the KB.
   `tasks1.md` through `tasks6.md` are exact coordination exemptions. Never
   catalog, route, stage, move, or delete them as KB content without direction.
 - Trusted-value files are source evidence, not hand-authored prose pages.
-- Python edits, if any accidentally occur, require `black .` only in an owned
-  clean detached worktree or local copy outside shared `/work`, plus the
-  single-file static-analysis script for each modified Python file.
+- Handwritten Python edits, if any accidentally occur, require `black .` only
+  in an isolated, user-owned intended-change worktree or copy with no unrelated
+  modifications, plus the single-file static-analysis script for each modified
+  handwritten Python file. Before invoking that wrapper, apply the target-path
+  and execution-safety gate in [Static Analysis](../validation/static-analysis.md);
+  gate failure blocks completion pending separately authorized wrapper
+  hardening. Every accepted file must report Pylint **10.00/10.00**. Generated
+  trusted `*/tests/*.py` data is exempt from per-file analysis, but its
+  handwritten owner is not.
 
 ## Sources
 

@@ -13,7 +13,7 @@ the whole tree first.
 | [Equations](wiki/equations/index.md) | Symbolic equation families, GR and SEOBNR routes, support helpers, and trusted expression validation. |
 | [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, and JAX. |
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
-| [Validation](wiki/validation/index.md) | Static analysis and generated-project CI. |
+| [Validation](wiki/validation/index.md) | Test and oracle policy, static analysis, expression validation, and generated-project CI. |
 | [Glossary](wiki/glossary.md) | Canonical terms. |
 | [Catalog](wiki/catalog.md) | Global page inventory and query-routing terms. |
 | [Workflows](wiki/workflows.md) | KB ingest, query, and maintenance procedures. |
@@ -33,7 +33,7 @@ the whole tree first.
 | Change equation modules or expression validation | [Equations](wiki/equations/index.md) |
 | Work on BHaH, ETLegacy, CarpetX, superB, or JAX generation | [Infrastructures](wiki/infrastructures/index.md) |
 | Run or compare example generators | [Examples](wiki/examples/index.md) |
-| Inspect static analysis, expression validation, or generated-project CI | [Validation](wiki/validation/index.md) |
+| Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
 
 ## Source-Tracking And Date Policy

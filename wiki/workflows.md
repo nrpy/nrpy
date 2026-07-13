@@ -10,10 +10,9 @@ they should compound. Maintenance work registers sources first, updates the
 owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
-`PYTHONPATH=.` when there is no editable install, Python edits require
-`black .` in an owned clean detached worktree or local copy outside shared
-`/work`, and every modified Python file gets the single-file static-analysis
-script.
+`PYTHONPATH=.` when there is no editable install. Modified handwritten Python
+requires `black .` in an isolated user-owned intended-change worktree or copy,
+then individual single-file static analysis and Pylint **10.00/10.00**.
 
 ## Search Order
 
@@ -142,9 +141,14 @@ when the dimension does not apply; a date value uses `MM-DD-YYYY`.
 
 ## Safe Reproduction
 
-Do not execute generators, builds, or blanket formatters in `/work`. Inspect
-side effects first, then use an owned clean detached worktree or local copy under
-`mktemp`, scoped inputs/outputs, and time/resource limits. Record command,
+In the shared repository working tree, run only demonstrably side-effect-free
+scoped checks. Run generators, builds, oracle creation or update, and blanket
+formatters only in an isolated user-owned intended-change worktree or copy with
+no unrelated changes.
+Inspect side effects first, use owned disposable cache and output, and impose
+time/resource limits. Retain no incidental output and never clear or overwrite
+ambient or shared cache. No coordination exception permits mutation in the
+shared working tree. Record command,
 working directory, observed assertion, result, limits, cleanup, and behavioral
 tuple when relevant. Network, installs, remote CI, and external toolchains need
 user authority. Never reset or clean shared `project/` output.
@@ -180,11 +184,24 @@ keeps only the durable lesson.
 ## NRPy Workflow Notes
 
 For direct example runs without an editable install, append `.` to
-`PYTHONPATH`. Run `black .` only in an owned clean detached worktree or local
-copy outside shared `/work`, and run
-`./.github/single_file_static_analysis.sh <path.py>` for each modified Python
-file. Trusted values under `*/tests/*.py` are regenerated from owning modules,
-not hand-edited; current governance declares no single-file-analysis exception.
+`PYTHONPATH`. Run `black .` only in an isolated, user-owned intended-change
+worktree or copy with no unrelated modifications, inspect its diff, and run
+`./.github/single_file_static_analysis.sh <path.py>` for each modified
+handwritten Python file; each must report Pylint **10.00/10.00**. Inspect the
+wrapper's command construction, the target's direct-execution effects, and every
+invoked tool's cache and filesystem output effects. The current wrapper
+dispatches interpolated command strings through `eval`. Before invocation,
+require a repository-relative argument whose resolved target stays in the
+repository, is a regular non-symlink file, contains no `..` component, does not
+begin with `-`, and matches `^[A-Za-z0-9_./-]+$`. A failing path blocks invocation
+until separately authorized wrapper hardening. Run an accepted path only in the
+isolated intended-change tree or copy; disable or redirect every writable tool
+cache and filesystem output to an owned disposable location, then inspect
+repository status. Generated trusted `*/tests/*.py` data is exempt from per-file
+analysis, but its handwritten owner is not. [Code Test
+Policy](validation/code-test-policy.md) owns test selection; [Test Oracles And
+Safe Updates](validation/test-oracles-and-safe-updates.md) owns oracle format
+and the two-process update procedure.
 Generated C/CUDA projects, generated thorns, generated Charm++
 projects, and generated JAX projects are normally products of Python
 generators; cite the generator unless a generated artifact is deliberately
@@ -201,6 +218,9 @@ registered as frozen evidence.
 
 ## See Also
 
-- [Schema](SCHEMA.md)
-- [Lint Checks](lint/CHECKS.md)
-- [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
+- Depends on: [Schema](SCHEMA.md)
+- See also: [Lint Checks](lint/CHECKS.md)
+- See also: [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
+- See also: [Static Analysis](validation/static-analysis.md)
+- See also: [Code Test Policy](validation/code-test-policy.md)
+- See also: [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md)

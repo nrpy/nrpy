@@ -21,9 +21,12 @@ code.
 ### Formatting And Artifacts
 
 Python uses 4-space indentation and lets Black decide line wrapping. Run
-`black .` only in an owned clean detached worktree or local copy outside shared
-`/work`, then run `./.github/single_file_static_analysis.sh <path-to-file.py>`
-for each modified Python file. Do not add binary files, images, archives,
+`black .` only in an isolated, user-owned intended-change worktree or copy with
+no unrelated modifications, inspect its diff, then run
+`./.github/single_file_static_analysis.sh <path-to-file.py>` for each modified
+handwritten Python file; every file must report Pylint
+**10.00/10.00**. [Static Analysis](../validation/static-analysis.md) owns exact
+mechanics and current enforcement gaps. Do not add binary files, images, archives,
 compiled artifacts, or other non-text assets in ordinary pull requests;
 redesign the change as text or discuss a maintainer exception.
 
@@ -118,16 +121,19 @@ lowercase form in new code.
 
 ### Main Blocks, Doctests, And Organization
 
-Runnable non-test, non-`__init__.py` modules under `nrpy/equations/` and its
-subdirectories should start their `if __name__ == "__main__":` block with the
-standard doctest runner: import `doctest` and `sys`, run `doctest.testmod()`,
-print a pass/fail message, and exit with status `1` on failure. The same
-pattern is strongly encouraged for runnable `nrpy/infrastructures/*/*.py`
-modules and recommended elsewhere when useful.
+Runnable non-test, non-`__init__.py` equation modules start their
+`if __name__ == "__main__":` block with the canonical failure runner: import
+`doctest` and `sys`, run `doctest.testmod()`, print a pass/fail message, and exit
+with status `1` on failure. Runnable infrastructure modules should use the same
+shape. A runner is useful only when doctest prompts exist or meaningful subsequent
+owner validation runs. Empty or placeholder runners and wrappers duplicating an
+owner doctest are not coverage. [Code Test Policy](../validation/code-test-policy.md)
+owns placement, meaningfulness, framework, and validation-layer rules.
 
 In equation modules, symbolic validation and trusted-results generation may
 follow the doctest-runner prefix inside the same main block. Imports used only
-by that block belong inside it. Outside `nrpy/infrastructures/*/*.py`, doctests
+by that block belong inside it; other test-only imports stay inside doctests or
+the `__main__` scope. Outside `nrpy/infrastructures/*/*.py`, doctests
 that invoke Python-driven C/C++ generation are discouraged unless they provide
 signal that cheaper symbolic or structural checks cannot provide.
 
@@ -153,5 +159,7 @@ string manipulation or local tidiness; inline them at the point of use.
 
 - Parent: [Architecture](index.md)
 - Validated by: [Static Analysis](../validation/static-analysis.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
 - See also: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
 - See also: [C And Embedded C Style](c-and-embedded-c-style.md)

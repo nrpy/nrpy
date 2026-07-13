@@ -25,6 +25,12 @@ Configured GitHub job map:
 | `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
 
+A successful named build can establish only named generation plus toolchain
+compile/link compatibility. Generation completion or file existence is not a
+semantic result; build does not prove runtime, and process completion does not
+prove semantics. [Code Test Policy](code-test-policy.md) owns validation-layer
+names, proof limits, the status-only gate, and the narrow examples exception.
+
 Einstein Toolkit documents Cactus testsuites as regression comparisons, not
 convergence or physics-correctness tests; see official
 [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case),
@@ -45,6 +51,8 @@ configuration; the checked-in `WaveToyNRPy` test sets `RELTOL 1e-11`. NRPy's
 workflow parses the testsuite summary and fails on a nonzero failure count.
 Neither regression route proves physical accuracy beyond its stated fixtures or
 inputs, and workflow configuration does not prove the jobs most recently passed.
+The Charm++ process-success cell is retained descriptive legacy, not precedent
+for adding another generic status-only build or runtime cell.
 
 The local `.github/full_nrpy_local_ci.sh` helper is separate from GitHub job
 coverage. It installs dependencies, performs broad static analysis, invokes 28
@@ -88,6 +96,7 @@ generated file has been deliberately registered as frozen evidence.
 ## See Also
 
 - Parent: [Validation](index.md)
+- Depends on: [Code Test Policy](code-test-policy.md)
 - Contrasts with: [Static Analysis](static-analysis.md)
 - See also: [Glossary](../glossary.md)
 - See also: [Workflows](../workflows.md)

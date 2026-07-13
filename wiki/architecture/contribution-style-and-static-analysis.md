@@ -5,25 +5,35 @@
 
 ## Summary
 
-The KB files contributor rules for new or modified code into focused leaves for Python style, C/embedded-C style, equation setup style, infrastructure code style, and static analysis. These rules are not claims that every legacy file already conforms. Python changes require Black formatting in an owned clean detached worktree or local copy outside shared `/work`, plus single-file static analysis for every modified Python file. Documentation-only Markdown changes do not require Python static analysis unless source files are accidentally edited.
+The KB files contributor rules for new or modified code into focused leaves for Python style, C/embedded-C style, equation setup style, infrastructure code style, and static analysis. These rules are not claims that every legacy file already conforms. Handwritten Python changes require Black formatting in an isolated user-owned intended-change tree, plus single-file static analysis and Pylint **10.00/10.00** for every modified file. Documentation-only Markdown changes do not require Python static analysis unless source files are accidentally edited.
 
 ## Detail
 
-For Python source changes, run `black .` only in an owned clean detached
-worktree or local copy outside shared `/work`. Then run
+For Python source changes, run `black .` only in an isolated, user-owned
+intended-change worktree or copy with no unrelated modifications, then inspect
+its diff. Run
 `./.github/single_file_static_analysis.sh <path-to-file.py>` on each modified
-Python file. The local script checks Black, isort, mypy in strict mode with
-untyped calls allowed, pylint with a local threshold of 9.91, pydocstyle, and
-darglint, then executes the target file. That execution runs doctests only when
-the target's `__main__` path invokes a doctest runner.
+handwritten Python file. The local script checks Black, isort, mypy in strict mode with
+untyped calls allowed, Pylint, pydocstyle, and darglint, then executes the target
+file. Each handwritten file must report Pylint **10.00/10.00**. Inspect direct-
+execution effects before running the script; [Static
+Analysis](../validation/static-analysis.md) owns exact mechanics and current
+enforcement gaps.
 
-The broader CI static-analysis job scans Python files while excluding generated projects, build directories, trusted-value test directories, the obsolete `./nrpy/examples/visualization_scripts/*` path, and selected special cases. That exclusion does not match current `nrpy/examples/geodesic_visualizations/**`, so current geodesic visualization companions remain in the scan. Configured checks and thresholds are not identical to the local script: for example, the workflow applies Black only on Python 3.10 or newer, skips isort and mypy on selected older versions, and uses a 9.5 pylint threshold, while the local single-file script always schedules those tools and uses 9.91. Generated-project validation runs in separate jobs.
+The broader CI static-analysis job scans Python files while excluding generated
+projects, build directories, trusted-value test directories, the obsolete
+`./nrpy/examples/visualization_scripts/*` path, and selected special cases. That
+exclusion does not match current `nrpy/examples/geodesic_visualizations/**`, so
+current geodesic visualization companions remain in the scan. Configured CI
+checks differ from the local script; Static Analysis owns those details.
+Generated-project validation runs in separate jobs.
 
 Trusted numerical value files are a special source class. They live under
 `*/tests/`, contain generated reference values, and are regenerated from their
-owning module rather than hand-edited. Current governance still requires the
-single-file script when such a Python file is modified. Legitimate trusted-output
-changes should be explained in the commit message.
+owning module rather than hand-edited. Generated trusted data is exempt from the
+single-file script, but its handwritten owner is not. [Test Oracles And Safe
+Updates](../validation/test-oracles-and-safe-updates.md) owns store admission
+and update safety.
 
 Style expectations include Black formatting, isort import grouping, canonical NRPy aliases such as `import nrpy.c_codegen as ccg` and `import nrpy.c_function as cfc`, Sphinx/reST docstrings, explicit return annotations, and the established doctest runner pattern for runnable equation modules. C and embedded C follow the project C/H style, including 2-space indentation, Doxygen-style function docs where required, and informative `// END ...` comments on non-trivial closing braces. Infrastructure generators add extra rules for `CodeParameter` registration scope, meaningful doctests, parallel codegen discovery guards, and BHaH symbolic-codegen helper use.
 
@@ -44,5 +54,8 @@ Artifact rules apply to documentation and code work: do not add binary files, im
 - See also: [C And Embedded C Style](c-and-embedded-c-style.md)
 - See also: [Equation Setup Style](../equations/equation-setup-style.md)
 - See also: [Infrastructure Code Style](../infrastructures/infrastructure-code-style.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Validated by: [Static Analysis](../validation/static-analysis.md)
 - Depends on: [Generated Output Boundaries](generated-output-boundaries.md)
 - See also: [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md)

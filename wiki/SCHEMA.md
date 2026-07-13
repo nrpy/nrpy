@@ -289,11 +289,12 @@ or rendered artifacts remain excluded from `wiki/` and `raw/`.
 
 ## Safe Reproduction
 
-Never run generators, builds, or blanket formatters in `/work`. Inspect a
-command for hardcoded output, deletion, network, installation, and external-tool
-effects first. Use an owned clean detached worktree or local copy under
-`mktemp`, apply only scoped changes, choose an owned output root, and impose
-timeouts/resource limits. Record the exact command, working directory,
+Never run generators, builds, or blanket formatters in the shared repository
+working tree. Inspect a command for hardcoded output, deletion, network,
+installation, and external-tool effects first. Use an isolated, user-owned
+intended-change worktree or copy with no unrelated modifications, apply only
+scoped changes, choose an owned output root, and impose timeouts/resource
+limits. Record the exact command, working directory,
 assertion, result, limits, cleanup, and behavioral tuple where behavior was
 tested. Network, installation, remote CI, and external toolchains need user
 authority. Never reset or delete shared generated output.

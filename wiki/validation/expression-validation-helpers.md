@@ -14,6 +14,11 @@ dictionary comparison under the limits below.
 
 ## Detail
 
+Prefer an exact analytic, symbolic, or semantic invariant when practical. When
+sampled regression fits the contract, follow the caller safeguards in [Test
+Oracles And Safe Updates](test-oracles-and-safe-updates.md); this page retains
+the current helper mechanics and their limits.
+
 The module uses `precision = 30` as the standard decimal precision. Relative
 comparison tolerance is `10 ** (-4.0 / 5.0 * precision)` where the helper uses
 the module constant, or `10 ** (-4.0 / 5.0 * mp.dps)` where it uses the current
@@ -37,12 +42,15 @@ Dictionary comparison is positional, not key-safe. `assert_equal()` iterates
 the two processed dictionaries with `zip()`: it does not check equal lengths or
 equal key sets, and extra entries on the longer side are ignored. Same-length
 dictionaries with different keys are compared in sorted-key order. Callers that
-need dictionary-structure validation must check keys and lengths separately.
+use dictionary `assert_equal()` must check equal lengths and key sets first
+unless positional comparison is explicitly documented.
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
 That exact-zero comparison happens after the conversion helper has applied its
-near-zero retry behavior.
+near-zero retry behavior. Regression calls with free symbols must pass
+`fixed_mpfs_for_free_symbols=True`; symbol-free results remain numerical
+evaluations, not formal identity proofs.
 
 Free-symbol substitution has two modes. Fixed mode seeds Python `random` per
 symbol with
@@ -51,6 +59,9 @@ Here `hex_offset` changes the integer base argument passed to `int(...)`; it
 does not change the MD5 string or the symbol string being hashed. Non-fixed
 mode uses ordinary random values. Symbols named `PI` or `M_PI` are assigned
 `mp.pi`; symbols named `SQRT1_2` or `M_SQRT1_2` are assigned `1 / sqrt(2)`.
+Fixed mode is repeatable only under documented current runtime assumptions; it
+does not guarantee bitwise stability across Python, SymPy, mpmath, platform, or
+codegen versions.
 
 Single-expression conversion first sets `mp.dps = precision` and returns
 `mpf(0.0)` immediately for exact SymPy zero. Otherwise it runs
@@ -83,10 +94,11 @@ directory if needed. `compare_or_generate_trusted_results()` writes that file
 when missing and compares against it when present.
 
 Missing-file generation creates a baseline; it does not independently establish
-that baseline as scientifically correct. Review defining expressions and the
-generated diff before accepting a new trusted file. Existing-file comparison
-checks regression against stored numbers only under the chosen substitutions
-and tolerance.
+that baseline as scientifically correct or count as a successful comparison.
+Candidate review and acceptance follow the isolated two-process procedure in
+[Test Oracles And Safe Updates](test-oracles-and-safe-updates.md). Existing-file
+comparison checks regression against stored numbers only under the chosen
+substitutions and tolerance.
 
 Trusted comparison imports the caller-relative module path with `importlib`
 and expects a `trusted_dict`. It first checks only the dictionary lengths; when
@@ -110,7 +122,8 @@ time evolution, boundary conditions, executable output, or convergence.
 
 ## See Also
 
-- [Validation](index.md)
-- [Trusted Expression Pipeline](../equations/trusted-expression-pipeline.md)
-- [Static Analysis](static-analysis.md)
-- [Reference Metrics](../core/reference-metrics.md)
+- Parent: [Validation](index.md)
+- Depends on: [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md)
+- See also: [Trusted Expression Pipeline](../equations/trusted-expression-pipeline.md)
+- Validated by: [Static Analysis](static-analysis.md)
+- See also: [Reference Metrics](../core/reference-metrics.md)

@@ -5,23 +5,28 @@
 
 ## Summary
 
-Equation modules fingerprint symbolic expressions by evaluating them at a
-deterministic high-precision sample point and comparing those values with a
-sibling trusted file under `tests/`. This can detect expression drift under the
-sampled conditions; it is not a formal symbolic-equality proof. The same
-mechanics cover BSSN, GR conversions and diagnostics, GRHD, wave, elliptic,
+When exact or semantic invariants are impractical, equation modules can sample
+symbolic expressions at a deterministic high-precision point and compare those
+values with a sibling trusted file under `tests/`. This can detect expression
+drift under sampled conditions; it is not a formal symbolic-equality proof. The
+same mechanics cover BSSN, GR conversions and diagnostics, GRHD, wave, elliptic,
 TOV, SEOBNR/BOB, and most geometry-support helpers. Quaternion tensor rotation
 is a confirmed doctest-only exception.
 
 ## Detail
 
-The common equation-module flow is:
+Prefer an exact analytic, symbolic, or semantic invariant. When sampled
+regression is appropriate, the common equation-module flow is:
 
-1. Build a dictionary from object state or explicit expression names.
+1. Build a dictionary with stable descriptive keys from object state or
+   explicit expression names.
 2. Call `process_dictionary_of_expressions(...)`, usually with
    `fixed_mpfs_for_free_symbols=True`.
 3. Call `compare_or_generate_trusted_results(...)` with the owning module path,
    working directory, trusted-file basename, and processed results.
+
+Separately, before a direct dictionary `assert_equal(...)` call, check equal
+lengths and key sets unless positional comparison is explicitly documented.
 
 Equation entry points currently pass
 `fixed_mpfs_for_free_symbols=True`. For each ordinary free symbol,
@@ -29,6 +34,9 @@ Equation entry points currently pass
 MD5 text digest of that symbol and assigns one `mpf` value in `[0, 1)`. This is
 deterministic sampling, not domain-aware test-data selection. `PI` and `M_PI`
 instead receive `mp.pi`; `SQRT1_2` and `M_SQRT1_2` receive `1/sqrt(2)`.
+Repeatability is limited to documented current runtime assumptions; fixed
+sampling does not guarantee bitwise stability across Python, SymPy, mpmath,
+platform, or codegen versions.
 
 `process_dictionary_of_expressions` sorts dictionary items, ignores keys
 containing `funcform`, recursively flattens lists, and names flattened entries
@@ -63,17 +71,20 @@ key names or equal lengths. It performs no explicit finite-value validation, so
 a `NaN` difference can false-pass. The GR `nrpylatex/test_parse_BSSN.py`
 cross-check uses this helper, so that test is also a deterministic sampled
 comparison of the parsed and handwritten expression sets.
+[Code Test Policy](../validation/code-test-policy.md) treats it as a unique
+retained cross-representation harness, not precedent for a new standalone
+runner, and owns test placement and meaningfulness.
 
 `output_trusted` writes only the needed `mpmath` imports plus `trusted_dict`, and
-formats the file with Black. A count or value mismatch tells maintainers to
-delete the stale trusted file and rerun the owning module only when the new
-result is independently understood and accepted.
+formats the file with Black. Its delete-and-rerun diagnostic is helper behavior,
+not a safe update procedure. Candidate creation, independent review, and final
+comparison must follow [Test Oracles And Safe
+Updates](../validation/test-oracles-and-safe-updates.md).
 
 Trusted-value files under `*/tests/*.py` are treated specially. They should
 contain only generated `mpf` or `mpc` data, no module docstrings, no functions,
 and no classes. The preserved agent rules say not to hand-edit trusted values;
-regenerate them from the owning module and explain the reason in the commit
-message.
+store admission and safe regeneration belong to Test Oracles And Safe Updates.
 
 Family pages own the implementation-specific validation inventory. In compact
 form, current coverage includes BSSN quantities/RHSs/constraints, ADM/BSSN and
@@ -117,6 +128,8 @@ These evidence levels are distinct:
 
 - Parent: [Equations](index.md)
 - Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - Example: [BSSN Family](general-relativity/bssn-family.md)
 - Example: [GRHD](grhd.md)
 - Example: [Wave Equation](wave-equation.md)
