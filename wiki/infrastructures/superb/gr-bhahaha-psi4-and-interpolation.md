@@ -1,6 +1,6 @@
 # GR, BHaHAHA, Psi4, And Interpolation
 
-> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed · Last reconciled: 07-07-2026
+> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -128,6 +128,13 @@ spin diagnostics; the Psi4 page owns the Weyl scalar and tetrad construction;
 this superB page owns how generated services schedule, transport, unpack, and
 adapt those quantities at runtime.
 
+Validation is asymmetric. Configured CI runs the default collision project,
+which exercises a distributed superB/BHaHAHA program path, but does not assert
+horizon files or interpolation payload values. It builds but does not run the
+spectroscopy project, so Psi4 shell interpolation and decomposition are not
+runtime-proven there. No distributed run or result check was performed during
+this KB audit, and workflow configuration does not prove latest success.
+
 ## Sources
 
 - [BHaH_implementation.py](../../../nrpy/infrastructures/superB/BHaH_implementation.py) - `register_CFunction_bhahaha_find_horizons`, `register_bhahaha_commondata_and_params`, `build_bhahaha_prefunc`, `generate_bssn_to_adm_codegen`, `register_CFunction_free_bhahaha_horizon_shape_data_all_horizons`
@@ -139,6 +146,7 @@ adapt those quantities at runtime.
 - [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - `enable_BHaHAHA`
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `enable_psi4`, `enable_BHaHAHA`
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `BHAHAHA_FIND_HORIZONS_SETUP`, `BHAHAHA_FIND_HORIZONS_FIND_AND_WRITE_TO_FILE`, `psi4_shell_angular_grid_t`, `unpack_interpolation_buffer`
+- [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
 
 ## See Also
 

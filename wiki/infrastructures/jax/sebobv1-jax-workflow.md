@@ -1,6 +1,6 @@
 # SEBOBv1 JAX Workflow
 
-> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: confirmed · Last reconciled: 07-06-2026
+> Current SEBOBv1 JAX entry workflow and the implemented SEOBNRv5 aligned-spin coefficient surface. · Status: contested · Last reconciled: 07-13-2026
 > Up: [JAX](index.md)
 
 ## Summary
@@ -63,8 +63,14 @@ tables for final-spin values and the real/imaginary `(2,2)` QNM data, computes
 frequency, rescaled timestep, coefficients, `rISCO`, `rstop`, QNM values,
 `M_f`, and `a_f`. That emitted return currently mismatches the generated
 dataclass until `a_f` is registered or the return signature is changed; this
-contested claim is tracked in the [Contradictions](../../contradictions.md)
-register.
+route is known to generate the package text, but is not known to return a
+usable `Commondata` coefficient object.
+
+Claim status: contested; contradiction: CONTR-0002.
+See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
+pages, validation limits, and the executable resolution test. This is a
+descriptive contradiction record; it is not yet a migrated claim-evidence
+block.
 
 The symbolic source behind this narrow surface is
 `SEOBNR_aligned_spin_constants`. Its constructor defines symbolic masses and
@@ -82,6 +88,11 @@ example projects, then runs `python -m nrpy.examples.sebobv1_jax` without a
 following `make` step for the generated Python/JAX project. Do not cite
 generated `project/sebobv1_jax/` files as source evidence unless a maintainer
 deliberately freezes and registers such output.
+
+No generated-package install, generated import, coefficient-function call, or
+returned-field assertion appears in those configured jobs. The generator was
+not executed during this KB audit, and workflow configuration proves job shape,
+not a latest successful run.
 
 ## Sources
 

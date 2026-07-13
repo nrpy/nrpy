@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 07-07-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -124,6 +124,13 @@ volume-integration report updates `commondata.log10_current_residual` from the
 `post_MoL_step_forward_in_time` hook that calls `stop_conditions_check` and
 ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 
+Current configured CI builds the elliptic and spectroscopy variants without
+running them, then runs only the collision variant. Thus elliptic residual-stop
+behavior, spectroscopy/Psi4 synchronization, checkpoint/restart, and direct
+payload/result checks remain `not-run`; source inspection establishes emitted
+control flow but not those runtime outcomes. No generator, build, or distributed
+run was performed during this KB audit.
+
 ## Sources
 
 - [numerical_grids.py](../../../nrpy/infrastructures/superB/numerical_grids.py) - `register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare`, `register_CFunction_numerical_grids_chare`, `register_CFunctions`
@@ -135,6 +142,7 @@ ends through `mainProxy.done()` when `commondata.stop_relaxation` is set.
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `cahdprefactor_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX0`, `MAP_GLOBAL_TO_LOCAL_IDX0`, `MOL_PRE_RK_UPDATE`, `INITIALDATA_BIN_ONE`, `nonlocalinnerbc_struct`
+- [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
 
 ## See Also
 

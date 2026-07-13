@@ -1,6 +1,6 @@
 # Black Hole Evolution
 
-> Route the lightweight single-patch BH@H black-hole evolution example to its generated-application context. · Status: confirmed · Last reconciled: 06-29-2026
+> Route the lightweight single-patch BH@H black-hole evolution example to its generated-application context. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -8,7 +8,8 @@
 `python -m nrpy.examples.two_blackholes_collide` is the compact public
 single-patch BH@H numerical-relativity example. It evolves Brill-Lindquist
 binary black-hole initial data in a spherical curvilinear setup and writes a
-buildable project under `project/two_blackholes_collide/`.
+project under `project/two_blackholes_collide/`. The generator deletes and
+recreates that fixed directory; preserve prior generated output before reruns.
 
 ## Detail
 
@@ -16,6 +17,9 @@ The README presents this as the closest public example of the single-patch BH@H
 workflow and notes that it is intentionally lightweight. The generator itself
 sets the BHaH infrastructure, defaults to OpenMP unless `--cuda` is supplied,
 uses `double` precision by default, and rejects raytracing output for CUDA.
+Configured Ubuntu/macOS CI generates and builds only the default OpenMP path.
+The local helper configures a CUDA build, but neither route runs the evolution
+or checks scientific output; runtime remains manual/unverified here.
 
 The source configuration uses `CoordSystem = "Spherical"`,
 `IDtype = "BrillLindquist"`, Cartesian initial-data coordinates, `OnePlusLog`

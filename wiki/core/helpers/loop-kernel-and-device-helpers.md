@@ -1,6 +1,6 @@
 # Loop Kernel And Device Helpers
 
-> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 06-29-2026
+> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary
@@ -13,7 +13,7 @@
 
 `loop()` normalizes scalar loop inputs into lists, requires the index, lower-bound, upper-bound, increment, and pragma lists to have the same length, and emits nested loops. Without a body it returns `(header, footer)`. With `loop_body`, it returns one full loop string. When `tile_size` is supplied, it adds an outer block loop with a `B` suffix and uses `NRPYMIN(<upper>, <block> + <tile>)` for the inner-loop upper bound; the helper emits that macro use but does not define the macro.
 
-`GPUKernel` wraps a generated kernel body in a `CFunction`. Its constructor records the body, decorators, parameter dictionary, generated name, launch dictionary, optional stream parameter, CUDA error-check policy, and BHaH thread-tiling suffix. A launch dictionary is required only for the exact default decorator string `decorators == "__global__"`. If the function is not host-only and `streamid_param` is enabled, `streamid` is prepended to the generated argument list.
+`GPUKernel` wraps a generated kernel body in a `CFunction`. Its constructor records the body, decorators, parameter dictionary, generated name, launch dictionary, optional stream parameter, CUDA error-check policy, and BHaH thread-tiling suffix. A launch dictionary is required only for the exact default decorator string `decorators == "__global__"`. If `streamid_param` is enabled and the decorator string does not contain `__host__`, `streamid` is prepended to the generated argument dictionary. This is a substring test, not semantic classification of a host-only function.
 
 `generate_launch_block()` derives CUDA launch setup only when a launch dictionary is present and the decorator string contains `__global__`. `threads_per_block` is padded to three dimensions or defaults to `32,1,1`. The launch dictionary must include `blocks_per_grid`: a nonempty list is padded to three dimensions and used directly, while an empty list requests computed grid dimensions from `params->Nxx_plus_2NGHOSTS*` and the thread counts. Optional `stream` and shared-memory (`sm`) entries add launch arguments, and the final launch settings string becomes the CUDA triple-chevron suffix used by `c_function_call()`.
 

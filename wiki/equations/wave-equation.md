@@ -1,6 +1,6 @@
 # Wave Equation
 
-> Map the scalar wave-equation RHS and exact-solution modules. · Status: confirmed · Last reconciled: 06-29-2026
+> Map the scalar wave-equation RHS and exact-solution modules. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -41,8 +41,17 @@ origin-safe `uu_exactsoln_r0` and `vv_exactsoln_r0` expressions.
 Validation follows the trusted-expression pipeline in each module's
 `__main__` block. The Cartesian RHS has a single trusted variant; the
 curvilinear RHS checks Cartesian, Spherical, SinhSpherical, SinhCylindrical,
-and SinhSymTP variants; the initial-data module checks both `PlaneWave` and
-`SphericalGaussian` exact solutions.
+and SinhSymTP variants, all with `enable_rfm_precompute=False`; the
+initial-data module checks both `PlaneWave` and `SphericalGaussian` exact
+solutions. Thus the implemented precompute branch has no wave-module trusted
+variant in this entry point.
+
+These trusted files sample symbolic outputs at one deterministic free-symbol
+assignment. They do not prove that the continuous expressions satisfy the PDE
+for all coordinates, that finite-difference generated code builds or runs, or
+that a numerical evolution converges. Build/run and numerical-result evidence
+belongs to [First Wave Equation Run](../examples/first-wave-equation-run.md) and
+the relevant infrastructure and validation owners.
 
 ## Sources
 

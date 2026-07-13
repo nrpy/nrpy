@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-06-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -111,6 +111,28 @@ Use typed `See Also` labels when the relation is known:
 New or substantially edited leaves should use typed labels for non-parent
 links when doing so improves traversal.
 
+### Page Status Decision Matrix
+
+Apply status to page content, not merely to source age:
+
+- `contested`: an unresolved conflict changes the Summary or normal routed
+  answer, invalidates an interface, command, or guarantee, or affects more than
+  one required Detail claim.
+- `stale`: living-source drift makes the principal answer or required details
+  unreliable and reconciliation is unfinished.
+- `provisional`: useful structure exists, but direct evidence or reconciliation
+  is incomplete and no source conflict is known.
+- `confirmed`: principal answer and Summary remain valid. Any active defect is
+  one bounded, noncentral Detail claim; current defect text is directly
+  supported; no interface, command, or guarantee is falsely stated; and the
+  affected claim has an inline contradiction marker and explicit non-guarantee.
+
+A claim may accurately describe stale source-side messaging while its page
+remains `confirmed` under this matrix. Page status and claim status are distinct.
+Catalog status must equal page-header status; routers use catalog status
+`router` and date `n/a`. Status centrality remains arbiter review, not keyword
+lint.
+
 ## Citation Rules
 
 Code citations use a relative path plus a stable symbol, function, class,
@@ -142,6 +164,62 @@ public APIs, generated-output boundaries, CI guarantees, source authority
 decisions, contradiction decisions, and claims where a nearby source paragraph
 could plausibly be misread.
 
+### Claim And Evidence Contract
+
+This contract applies to these high-risk claim classes: public APIs;
+public/scientific contracts; user-facing commands and interfaces;
+generated-output boundaries; CI guarantees; source-authority decisions;
+contradiction decisions; and claims whose nearby source paragraph could
+plausibly be misread.
+
+This contract takes prospective effect after its 07-13-2026 adoption change.
+High-risk claims that predate it, plus claims materially changed in that same
+adoption change, form the initial baseline. Unless an exact block is already
+present, those baseline claims remain uncovered; the adoption change asserts no
+completed claim-evidence-block coverage. Migrate a baseline claim when it or its
+deciding source is next materially changed after adoption.
+
+After that adoption boundary, place this exact block immediately after each new
+or materially changed high-risk claim in the owning leaf's `Detail` section.
+For an active contradiction, place the block in the matching `### CONTR-*`
+subsection of `wiki/contradictions.md`, never in the fixed 13-column register
+row:
+
+```text
+Claim evidence:
+- Claim: exact qualified text, including conditions and non-guarantees
+- Role: descriptive behavior, normative rule, public/scientific contract, CI behavior, or generated evidence
+- Deciding authority: registered source plus stable symbol or heading
+- Corroboration: separate source plus stable locator, or `none available` plus a reason
+```
+
+For a behavioral claim, append:
+
+```text
+- Validation: `inspected=<pass|fail|not-run>; generated=<pass|fail|not-run>; built=<pass|fail|not-run>; run=<pass|fail|not-run>; result_checked=<pass|fail|not-run>`
+- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>; date=<MM-DD-YYYY|not-run|not-applicable>`
+```
+
+Do not claim completed block coverage before the exact block is present.
+
+Deciding authority depends on role:
+
+- descriptive current behavior: code decides; targeted tests corroborate only
+  exercised conditions;
+- normative KB or contributor rule: current owning governance or configuration
+  decides; implementation divergence opens a contradiction;
+- intended public or scientific contract: owning stable specification and
+  targeted tests decide; code divergence needs an authority exception and a
+  contradiction;
+- CI behavior: workflow/configuration proves configured job shape, never a
+  latest successful run;
+- generated evidence: proves only its pinned generation context;
+- synthesis or neighboring-page agreement: never independent authority.
+
+Only a behavioral claim receives the validation and dimensions lines.
+Structural, navigation, normative, provenance, and symbolic claims use
+claim-appropriate evidence instead.
+
 ## Query Filing
 
 One-off answers do not need filing. File durable answers when they span three
@@ -165,6 +243,61 @@ root, or global navigation.
 Create navigation depth only from real fan-out. Do not create empty leaves,
 padding routers, or single-child padding directories. Promote a broad leaf
 into a router only when there is enough sourced content to split into children.
+
+`AGENTS.md` links to top-level branch routers and global support hubs. Other
+routers link to immediate child leaves or child routers, their parent/root, and
+global support hubs. Root task shortcuts still enter through a branch router;
+they do not bypass it.
+
+## Contradiction Contract
+
+The register columns are exactly:
+
+`ID | Claim | Claim status | Source A | Source B | Authority decision | Affected pages | Page-status rationale | Owner/trigger | Resolution test | Opened | Resolved | Notes`
+
+IDs use immutable `CONTR-0001` form. Active claim status is `contested` or
+`stale`; closed rows use `resolved` and a resolution date. Every active affected
+page contains an exact marker outside code fences:
+
+```text
+Claim status: contested; contradiction: CONTR-0001.
+```
+
+Use `stale` in the same form where applicable. The row links every affected
+page, each marker links back by ID, and catalog/page status follows the matrix
+above. Resolution needs an executable test or deterministic inspection and a
+nonempty owner/trigger. Before closure, inspect source-map reverse dependents,
+pages citing either source, catalog aliases/key symbols, current affected pages,
+typed neighbors, and targeted exact/key-phrase wiki hits.
+
+## Checker And Frozen Scope
+
+Default `python tools/kb_lint.py` runs all deterministic checks. `--all` remains
+an identical compatibility alias and must not be described as stronger.
+
+Link and Obsidian-wikilink checks govern `AGENTS.md`, `wiki/**/*.md`, and
+`raw/SOURCES.md`. Preserved `raw/source-docs/**/*.md` snapshots are immutable
+and exempt from link/wikilink rewriting; source-tracking metadata and date bans
+still govern them. Hard failures cover deterministic structure only. Dynamic
+symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
+manual or report-only.
+
+Commissioned root `plan1.md` through `plan5.md`, `plan_synth.md`, and
+`tasks1.md` through `tasks6.md` are coordination exemptions, not KB content.
+Other planning, ranking, log, scan, report, generated, binary, archive, image,
+or rendered artifacts remain excluded from `wiki/` and `raw/`.
+
+## Safe Reproduction
+
+Never run generators, builds, or blanket formatters in the shared repository
+working tree. Inspect a command for hardcoded output, deletion, network,
+installation, and external-tool effects first. Use an isolated, user-owned
+intended-change worktree or copy with no unrelated modifications, apply only
+scoped changes, choose an owned output root, and impose timeouts/resource
+limits. Record the exact command, working directory,
+assertion, result, limits, cleanup, and behavioral tuple where behavior was
+tested. Network, installation, remote CI, and external toolchains need user
+authority. Never reset or delete shared generated output.
 
 ## Canonical Terms
 

@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 06-30-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 07-12-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -162,9 +162,12 @@ mode-tagged text files.
 
 `spin_weight_minus2_sph_harmonics` is registered in the BHaH special-functions
 branch. It registers `swm2sh_maximum_l_mode_to_compute` in commondata and emits
-a switch over generated `l,m` pairs. Out-of-range requests print an error and
-exit, so the decomposition generator must register enough modes for the
-requested extraction.
+a switch over every `m` in the inclusive source range `[-l, +l]` for every
+generated `l`. Out-of-range requests print an error and exit, so the
+decomposition generator must register enough modes for the requested
+extraction. This inclusive infrastructure generator is distinct from the
+equation helper's narrower current test sweep; the equation-side validation gap
+does not remove `m=+l` cases from emitted BHaH C.
 
 ## Sources
 
@@ -201,4 +204,5 @@ requested extraction.
 - Depends on: [Initial Data](../../equations/general-relativity/initial-data.md)
 - Depends on: [Metric Conversions And Matter](../../equations/general-relativity/metric-conversions-and-matter.md)
 - Depends on: [Psi4 And Tetrads](../../equations/general-relativity/psi4-and-tetrads.md)
+- Depends on: [Geometry And Special-Function Support](../../equations/geometry-and-special-function-support.md)
 - See also: [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)

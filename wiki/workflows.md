@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-06-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -10,10 +10,9 @@ they should compound. Maintenance work registers sources first, updates the
 owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
-`PYTHONPATH=.` when there is no editable install, Python edits require Black
-before commit, and every modified Python file gets the single-file
-static-analysis script unless it is a generated trusted-value file under
-`*/tests/*.py`.
+`PYTHONPATH=.` when there is no editable install. Modified handwritten Python
+requires `black .` in an isolated user-owned intended-change worktree or copy,
+then individual single-file static analysis and Pylint **10.00/10.00**.
 
 ## Search Order
 
@@ -100,16 +99,72 @@ generated evidence, docs, external specs, then background sources.
 
 ## Contradiction And Stale Claims
 
-When sources disagree, create or update a row in
-[contradictions.md](contradictions.md) before changing the affected claim's
-status to `contested`. Record the competing sources, authority decision,
-affected pages, opened date, and next action.
+When sources disagree, create or update a structured
+`CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
+the affected claim's status to `contested`. Record exact claim/status,
+competing sources, authority decision, complete affected-page links,
+page-status rationale, owner/trigger, resolution test, opened/resolved dates,
+and notes. Put `Claim status: contested; contradiction: CONTR-0001.` on every
+active affected page; use `stale` in the same form when applicable.
 
 When a living source has moved and reconciliation cannot finish in the same
 change, mark affected pages `stale`, add or update the contradiction/staleness
 row, and record the blocked reconciliation reason there. When a claim is
 reconciled, update affected pages and close or revise the row in
 [contradictions.md](contradictions.md).
+
+Before closure, review source-map reverse dependents, all pages citing either
+source, catalog aliases/key symbols, current affected pages, typed neighbors,
+and targeted exact/key-phrase wiki hits. Remove active markers only after every
+affected page is reconciled and the resolution test passes.
+
+## Claim Adjudication
+
+The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) is
+prospective after its 07-13-2026 adoption change. High-risk claims predating it
+and claims changed in that same adoption change remain baseline-uncovered unless
+an exact block is present; that adoption change asserts no completed block
+coverage. When a baseline claim or its deciding source is next materially
+changed after adoption, add the exact block immediately after the claim in its
+owning `Detail` section. For an active contradiction, add it to the matching
+`### CONTR-*` subsection, never the fixed register row. Add validation and
+dimensions only for behavioral claims. Use code for descriptive behavior;
+owning
+governance/configuration for normative rules; stable specification plus targeted
+tests for intended public/scientific contracts; workflow/configuration for CI
+job shape; and frozen generated evidence only for its pinned context. Synthesis
+agreement is never authority. Navigation, structure, provenance,
+status, symbolic definition, and normative rules do not receive behavioral
+validation lines. In every behavioral dimension, use an exact value when
+exercised, `not-run` when applicable but unexercised, and `not-applicable` only
+when the dimension does not apply; a date value uses `MM-DD-YYYY`.
+
+## Safe Reproduction
+
+In the shared repository working tree, run only demonstrably side-effect-free
+scoped checks. Run generators, builds, oracle creation or update, and blanket
+formatters only in an isolated user-owned intended-change worktree or copy with
+no unrelated changes.
+Inspect side effects first, use owned disposable cache and output, and impose
+time/resource limits. Retain no incidental output and never clear or overwrite
+ambient or shared cache. No coordination exception permits mutation in the
+shared working tree. Record command,
+working directory, observed assertion, result, limits, cleanup, and behavioral
+tuple when relevant. Network, installs, remote CI, and external toolchains need
+user authority. Never reset or clean shared `project/` output.
+
+## Deterministic Checks
+
+Run:
+
+```bash
+python tools/kb_lint.py
+git diff --check
+```
+
+Expected success is exit 0; linter prints `KB lint passed.` `--all` is an
+identical compatibility alias, not stronger coverage. Inventory commands are
+diagnostics, never semantic completeness proof.
 
 ## Page Move Or Delete
 
@@ -129,11 +184,25 @@ keeps only the durable lesson.
 ## NRPy Workflow Notes
 
 For direct example runs without an editable install, append `.` to
-`PYTHONPATH`. Python code changes require `black .` before commit, and each
-modified Python file requires `./.github/single_file_static_analysis.sh
-<path.py>` before commit. Trusted values under `*/tests/*.py` are regenerated
-from owning modules, not hand-edited, and are exempt from single-file static
-analysis. Generated C/CUDA projects, generated thorns, generated Charm++
+`PYTHONPATH`. Run `black .` only in an isolated, user-owned intended-change
+worktree or copy with no unrelated modifications, inspect its diff, and run
+`./.github/single_file_static_analysis.sh <path.py>` for each modified
+handwritten Python file; each must report Pylint **10.00/10.00**. Inspect the
+wrapper's command construction, the target's direct-execution effects, and every
+invoked tool's cache and filesystem output effects. The current wrapper
+dispatches interpolated command strings through `eval`. Before invocation,
+require a repository-relative argument whose resolved target stays in the
+repository, is a regular non-symlink file, contains no `..` component, does not
+begin with `-`, and matches `^[A-Za-z0-9_./-]+$`. A failing path blocks invocation
+until separately authorized wrapper hardening. Run an accepted path only in the
+isolated intended-change tree or copy; disable or redirect every writable tool
+cache and filesystem output to an owned disposable location, then inspect
+repository status. Generated trusted `*/tests/*.py` data is exempt from per-file
+analysis, but its handwritten owner is not. [Code Test
+Policy](validation/code-test-policy.md) owns test selection; [Test Oracles And
+Safe Updates](validation/test-oracles-and-safe-updates.md) owns oracle format
+and the two-process update procedure.
+Generated C/CUDA projects, generated thorns, generated Charm++
 projects, and generated JAX projects are normally products of Python
 generators; cite the generator unless a generated artifact is deliberately
 registered as frozen evidence.
@@ -141,13 +210,17 @@ registered as frozen evidence.
 ## Sources
 
 - [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
-- [original-agents.md](../raw/source-docs/original-agents.md) - `## Required Checks`
+- [coding_style.md](../coding_style.md) - `## Python Coding Style`, `### Formatting`
+- [original-agents.md](../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 - [README.md](../README.md) - `## Contributor Setup`
 - [single_file_static_analysis.sh](../.github/single_file_static_analysis.sh) - `run_test_step`
 - [main.yml](../.github/workflows/main.yml) - `static-analysis`
 
 ## See Also
 
-- [Schema](SCHEMA.md)
-- [Lint Checks](lint/CHECKS.md)
-- [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
+- Depends on: [Schema](SCHEMA.md)
+- See also: [Lint Checks](lint/CHECKS.md)
+- See also: [Contribution Style And Static Analysis](architecture/contribution-style-and-static-analysis.md)
+- See also: [Static Analysis](validation/static-analysis.md)
+- See also: [Code Test Policy](validation/code-test-policy.md)
+- See also: [Test Oracles And Safe Updates](validation/test-oracles-and-safe-updates.md)

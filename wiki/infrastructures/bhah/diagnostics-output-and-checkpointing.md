@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 06-29-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-12-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -146,6 +146,12 @@ arrays, and refill them from the checkpoint. This keeps raw pointer values from
 the old process out of the restarted runtime while preserving horizon-history
 data.
 
+Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
+generate and build default BHaH examples without running a
+write/restart/read sequence. File integrity, restored values, CUDA restart,
+multipatch selection, and BHaHAHA horizon-history restart are therefore
+`not-run` runtime outcomes in this KB audit.
+
 ## Sources
 
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `_register_CFunction_diagnostics`
@@ -165,6 +171,7 @@ data.
 - [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create`, `BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`
+- [main.yml](../../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`
 
 ## See Also
 

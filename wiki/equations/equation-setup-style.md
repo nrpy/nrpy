@@ -1,6 +1,6 @@
 # Equation Setup Style
 
-> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional · Last reconciled: 07-06-2026
+> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional · Last reconciled: 07-13-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -8,9 +8,9 @@
 Equation modules build symbolic expressions explicitly with SymPy and
 `nrpy.indexedexp`, avoid broad simplification and pattern substitution, use
 standard tensor and derivative suffixes, and validate outputs through trusted
-numerical dictionaries. The style contract favors explicit loops, exact
-fractions, stable result-key names, and regenerated trusted files over
-hand-edited golden values.
+numerical dictionaries only when sampled regression is meaningful. The style
+contract favors explicit loops, exact fractions, stable result-key names, and
+exact or semantic invariants before sampled golden data.
 
 ## Detail
 
@@ -73,10 +73,14 @@ SymPy symbols carry expected suffix and component encoding.
 
 ### Trusted Expression Validation
 
-Equation modules validate symbolic outputs by building a dictionary that maps
-stable expression names to SymPy expressions, processing it with
-`ve.process_dictionary_of_expressions(...)`, then comparing or generating a
-trusted file with `ve.compare_or_generate_trusted_results(...)`.
+Prefer an exact analytic, symbolic, or semantic invariant. When sampled
+trusted-result regression is appropriate, equation modules build a dictionary
+that maps stable descriptive names to SymPy expressions, process it with
+`ve.process_dictionary_of_expressions(...)` using fixed substitutions for free
+symbols, and pass the processed results to
+`ve.compare_or_generate_trusted_results(...)`. Separately, before a direct
+dictionary `ve.assert_equal(...)` call, check equal lengths and key sets unless
+positional comparison is explicitly documented.
 
 Expression keys must match the corresponding `trusted_dict` keys in
 `tests/<module>*.py`. Use established names such as `*_rhs`, `*_expr_list_*`,
@@ -87,8 +91,15 @@ Trusted-value files under `*/tests/` are generated artifacts. They contain only
 the needed `mpf` or `mpc` import with `# type: ignore` and a `trusted_dict`
 mapping keys to high-precision values. They have no module docstrings,
 functions, or classes. Do not hand-edit trusted values. For legitimate
-algorithm changes, delete the stale trusted file, rerun the owning module to
-regenerate it, and explain the reason in the commit message.
+algorithm changes, follow the isolated, independently reviewed two-process
+procedure in [Test Oracles And Safe
+Updates](../validation/test-oracles-and-safe-updates.md). That page owns store
+admission, format, and update safety.
+
+Do not add golden data merely to satisfy a test count. A meaningful doctest-only
+equation module, including quaternion tensor rotation, is valid when no sampled
+oracle is needed. [Code Test Policy](../validation/code-test-policy.md) owns
+owner-runner placement and the meaningful-contract gate.
 
 Key validation APIs are `assert_equal(vardict_1, vardict_2)`, `check_zero`,
 `process_dictionary_of_expressions`, `compare_against_trusted`,
@@ -113,6 +124,7 @@ handling, plotting, binary parsing, or similar non-core analysis.
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### SymPy`, `### Indexed Expressions`, `### Expression Construction`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Expression Validation`, `### Prohibited / Restricted Dependencies`
+- [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`, module `__main__` path
 
 ## See Also
 
@@ -120,4 +132,6 @@ handling, plotting, binary parsing, or similar non-core analysis.
 - Depends on: [Indexed Expressions](../core/indexed-expressions.md)
 - Validated by: [Trusted Expression Pipeline](trusted-expression-pipeline.md)
 - Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - See also: [Contribution Style And Static Analysis](../architecture/contribution-style-and-static-analysis.md)

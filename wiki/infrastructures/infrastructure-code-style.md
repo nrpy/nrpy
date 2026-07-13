@@ -1,6 +1,6 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-06-2026
+> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-13-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -23,10 +23,12 @@ aggregators with a flat namespace.
 
 The standard module shape is: module docstring with author info, imports, the
 main registration function, optional reusable helper functions, and an optional
-`if __name__ == "__main__":` doctest-runner prefix. For modules under
+`if __name__ == "__main__":` doctest-runner prefix when the module has prompts
+or meaningful follow-on owner validation. For modules under
 `nrpy/equations/`, that doctest-runner prefix is required as the opening main
-block pattern; for infrastructure modules it is strongly encouraged when the
-module is runnable.
+block pattern; runnable infrastructure modules should use the same canonical
+failure-runner shape. Empty and placeholder runners are not coverage. [Code Test
+Policy](../validation/code-test-policy.md) owns placement and meaningfulness.
 
 Registration functions should imitate the C function they register. Declare
 `desc`, `cfunc_type`, `name`, `params`, `body`, and related values on separate
@@ -54,24 +56,36 @@ Infrastructure registration functions use `Doctests:` as the final docstring
 section label immediately before `>>>` lines. Older variants such as
 `Doctest:` and `DocTests:` exist; use `Doctests:` in new code.
 
-For stable generated C text, the standard doctest pattern imports
+For complete, stable, predominantly handwritten generated C text, the standard
+doctest pattern imports
 `validate_strings` and `clang_format` inside the doctest, clears
 `cfc.CFunction_dict`, registers the target function, formats
 `full_function`, and compares against a trusted file with `validate_strings`.
-Use `file_ext="cu"` for CUDA and `"c"` otherwise.
+Generate through the public registration, header, or file path; normalize every
+new or regenerated full-text baseline. Use `file_ext="cu"` for CUDA and `"c"`
+otherwise. Untouched raw baselines remain historical until regenerated.
 
 Golden-output doctests are most appropriate in `nrpy/infrastructures/*/*.py`,
 where registration functions are a core public interface. Avoid generated C
 trusted files for C functions whose bodies are dominated by large SymPy-derived
 kernels; SymPy and codegen details make those exact strings brittle. Prefer
-symbolic validation or cheaper structural checks for such functions.
+upstream symbolic or semantic validation for such functions, not incidental
+assignment substrings. [Test Oracles And Safe
+Updates](../validation/test-oracles-and-safe-updates.md) owns source selection,
+focused assertions, variant coverage, clean state, and safe updates. A missing-
+file creation branch captures a candidate; it is not a passing comparison.
 
 Do not add trivial doctests whose main assertion is that Python-based C/C++
 generation ran, a `CFunction` registered, a registration function returned, or
 an object could be called. Missing doctests are acceptable when the only
-practical doctest would be such a low-value generated-text spot check. If a
-`Doctests:` block contains `# FIXME`, complete it in a follow-up or remove it
-when the real doctest is ready.
+practical doctest would be such a low-value generated-text spot check. Do not
+add `# FIXME` placeholder blocks. Existing placeholders are legacy; cleanup on
+an unrelated touch remains maintainer judgment.
+
+BHaH `compile_Makefile()` contains a retained unsafe external-compilation
+doctest. It is not precedent. A substantive touch follows the scoped-CI
+migration rule, or the strictly bounded no-expansion fallback only when
+migration is outside authorized scope, in Test Oracles And Safe Updates.
 
 ### Parallel Codegen Registration
 
@@ -173,6 +187,7 @@ checks integer return codes immediately, and returns early when
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Doctests`, `### Parallel Codegen Pattern`, `### Black Suppression`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### C Function Registration from Python`, `### BHaH Symbolic Codegen Rules`, `### Inlining Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Standard Struct Pointer Params`, `### Gridfunction Naming / Grouping`, `### Memory / Error Handling`
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `compile_Makefile`
 
 ## See Also
 
@@ -180,4 +195,6 @@ checks integer return codes immediately, and returns early when
 - Depends on: [C Function Registry](../core/c-function-registry.md)
 - Depends on: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
 - Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
 - See also: [C And Embedded C Style](../architecture/c-and-embedded-c-style.md)

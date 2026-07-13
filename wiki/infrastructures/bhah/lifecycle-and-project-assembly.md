@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-06-2026
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -51,6 +51,19 @@ same core runtime state, advances while `commondata->time` is below
 reference-metric data
 through library-call entrypoints instead of a generated process `main`.
 
+`nrpy.examples.manga_bhah_lib` selects this library boundary explicitly:
+`exec_or_library_name="libbhah_lib"` and `create_lib=True` produce
+`libbhah_lib.so` on Linux or `libbhah_lib.dylib` on Darwin. Its final generic
+prints still say to run `./bhah_lib` and find parameters in `bhah_lib.par`.
+Those messages are stale: this route has no executable entrypoint, its parser
+registration is commented out, and it does not call the default-parfile writer.
+
+Claim status: stale; contradiction: CONTR-0001.
+See [CONTR-0001](../../contradictions.md#contr-0001) for authority, affected
+pages, validation limits, and the executable resolution test. This is a
+descriptive contradiction record; it is not yet a migrated claim-evidence
+block.
+
 `output_CFunctions_function_prototypes_and_construct_Makefile` turns the
 registered `CFunction_dict` into a buildable generated project. It validates
 library/executable options, writes registered C functions and
@@ -80,6 +93,7 @@ frozen evidence.
 - [README.md](../../../README.md) - `Standalone BHaH Generators`, `What Gets Generated?`
 - [main_c.py](../../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [bhah_lib.py](../../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`, `BHaH_struct`
+- [manga_bhah_lib.py](../../../nrpy/examples/manga_bhah_lib.py) - commented parser registration, `exec_or_library_name="libbhah_lib"`, `create_lib=True`, final build/run/parfile prints
 - [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `output_CFunctions_function_prototypes_and_construct_Makefile`, `compile_Makefile`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`
 

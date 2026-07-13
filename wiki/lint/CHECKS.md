@@ -1,6 +1,6 @@
 # Lint Checks
 
-> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-06-2026
+> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -16,7 +16,8 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - `find wiki raw -type f ! -name '*.md' -print` returns no files.
 - `find . -maxdepth 1 -type f -name '*kb*instructions*.md' -print` returns no
   root KB instruction file.
-- `rg -n '\[\[' AGENTS.md wiki raw` returns no Obsidian-style links.
+- `rg -n '\[\[' AGENTS.md wiki raw/SOURCES.md` returns no Obsidian-style
+  links. Frozen `raw/source-docs/**/*.md` snapshots are immutable exemptions.
 - A marker scan returns no unfilled dates, to-do markers, or template text.
 - No removed source-tracking metadata appears in governed KB files, including
   `raw/source-docs/**/*.md`: no hash digest values of any algorithm (`sha256`
@@ -32,6 +33,9 @@ carry facts and sources, and excluded artifacts stay out of the KB.
   `raw/SOURCES.md` resolve within the repository. Frozen snapshots under
   `raw/source-docs/` are preserved verbatim and exempt from link resolution;
   their metadata checks still apply.
+- `python tools/kb_lint.py` runs all deterministic checks and prints `KB lint
+  passed.` on success. `--all` is an identical compatibility alias, not a
+  stronger mode.
 
 ## Router Checks
 
@@ -44,11 +48,14 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - Routers generally have no `Sources` section and carry no unique durable
   implementation facts.
 - Routers link only to immediate children plus parent, root, or global hubs.
+- Root task shortcuts enter a top-level branch router instead of bypassing it.
 
 ## Compounding Memory Checks
 
 - Every `wiki/**/*.md` page appears exactly once in [catalog.md](../catalog.md),
   including routers, leaves, and governance/support pages.
+- Catalog targets equal the live wiki page set exactly. Catalog status/date
+  metadata agrees with page headers; router rows use `router` and `n/a`.
 - Catalog rows are one-line navigation aids only; they do not replace leaf
   reading, leaf `Sources`, or source-backed detail.
 - Every glossary term has an owner page link, an explicit external/background
@@ -68,21 +75,40 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - Every cited file or symbol exists, and every cited authority is registered in
   [raw/SOURCES.md](../../raw/SOURCES.md) directly or through a clearly named
   aggregate row.
+- Literal source links in `Sources` resolve and their repository paths are
+  registered. Semantic truth, dynamic/generated symbols, and C/CUDA macros are
+  manual checks.
+
+## Contradiction Checks
+
+- Contradiction rows use unique `CONTR-0001` IDs and all schema columns. Active
+  rows use `contested`/`stale`, valid dates, linked affected pages, nonempty
+  rationale/owner/resolution test, and matching page markers/backlinks.
 
 ## NRPy Baseline
 
 - No generated project output, binaries, images, archives, rendered artifacts,
   scratch reports, token/latest reports, or planning/ranking artifacts are
   added.
+- Commissioned root `plan1.md` through `plan5.md`, `plan_synth.md`, and
+  `tasks1.md` through `tasks6.md` are exact coordination exemptions. Never
+  catalog, route, stage, move, or delete them as KB content without direction.
 - Trusted-value files are source evidence, not hand-authored prose pages.
-- Python edits, if any accidentally occur, require `black .` and the
-  single-file static-analysis script for each modified Python file, except
-  trusted-value files under `*/tests/*.py`.
+- Handwritten Python edits, if any accidentally occur, require `black .` only
+  in an isolated, user-owned intended-change worktree or copy with no unrelated
+  modifications, plus the single-file static-analysis script for each modified
+  handwritten Python file. Before invoking that wrapper, apply the target-path
+  and execution-safety gate in [Static Analysis](../validation/static-analysis.md);
+  gate failure blocks completion pending separately authorized wrapper
+  hardening. Every accepted file must report Pylint **10.00/10.00**. Generated
+  trusted `*/tests/*.py` data is exempt from per-file analysis, but its
+  handwritten owner is not.
 
 ## Sources
 
 - [kb-instructions.md](../../raw/source-docs/kb-instructions.md) - section 7.8 for `wiki/lint/CHECKS.md`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
+- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 
 ## See Also
 
