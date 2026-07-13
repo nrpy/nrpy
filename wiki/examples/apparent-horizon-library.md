@@ -1,6 +1,6 @@
 # Apparent Horizon Library
 
-> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed · Last reconciled: 06-30-2026
+> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -10,6 +10,11 @@ BHaHAHA apparent-horizon library. It builds the BHaHAHA C function registry,
 writes a library project under the requested output root, emits the public
 `BHaHAHA.h` header, and creates a static archive target named from the
 finite-difference order.
+
+The generator deletes and recreates its selected output directory. Preserve
+prior library output before rerunning. Configured Ubuntu/macOS codegen jobs
+generate and build the default static library; they do not run a solver or
+establish horizon-finding accuracy, and workflow YAML is not latest-pass proof.
 
 Horizon-enabled evolution examples call this generator as a dependency, then
 register BHaH-facing horizon orchestration in their own generated applications.

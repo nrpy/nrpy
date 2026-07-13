@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-06-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-12-2026
 
 ## Summary
 
@@ -100,16 +100,60 @@ generated evidence, docs, external specs, then background sources.
 
 ## Contradiction And Stale Claims
 
-When sources disagree, create or update a row in
-[contradictions.md](contradictions.md) before changing the affected claim's
-status to `contested`. Record the competing sources, authority decision,
-affected pages, opened date, and next action.
+When sources disagree, create or update a structured
+`CONTR-0001`-form row in [contradictions.md](contradictions.md) before changing
+the affected claim's status to `contested`. Record exact claim/status,
+competing sources, authority decision, complete affected-page links,
+page-status rationale, owner/trigger, resolution test, opened/resolved dates,
+and notes. Put `Claim status: contested; contradiction: CONTR-0001.` on every
+active affected page; use `stale` in the same form when applicable.
 
 When a living source has moved and reconciliation cannot finish in the same
 change, mark affected pages `stale`, add or update the contradiction/staleness
 row, and record the blocked reconciliation reason there. When a claim is
 reconciled, update affected pages and close or revise the row in
 [contradictions.md](contradictions.md).
+
+Before closure, review source-map reverse dependents, all pages citing either
+source, catalog aliases/key symbols, current affected pages, typed neighbors,
+and targeted exact/key-phrase wiki hits. Remove active markers only after every
+affected page is reconciled and the resolution test passes.
+
+## Claim Adjudication
+
+For each P0/P1 claim, record exact qualified text, role, registered deciding
+authority plus stable locator, and distinct corroboration or honest `none
+available` reason. Use code for descriptive behavior; owning
+governance/configuration for normative rules; stable specification plus targeted
+tests for intended public/scientific contracts; workflow/configuration for CI
+job shape; and frozen generated evidence only for its pinned context. Do not use
+synthesis agreement as authority.
+
+Attach the validation tuple only when the claim asserts behavior. Navigation,
+structure, provenance, status, symbolic definition, and normative rules use
+their corresponding deterministic evidence instead.
+
+## Safe Reproduction
+
+Do not execute generators, builds, or blanket formatters in `/work`. Inspect
+side effects first, then use an owned clean detached worktree or local copy under
+`mktemp`, scoped inputs/outputs, and time/resource limits. Record command,
+working directory, observed assertion, result, limits, cleanup, and behavioral
+tuple when relevant. Network, installs, remote CI, and external toolchains need
+user authority. Never reset or clean shared `project/` output.
+
+## Deterministic Checks
+
+Run:
+
+```bash
+python tools/kb_lint.py
+git diff --check
+```
+
+Expected success is exit 0; linter prints `KB lint passed.` `--all` is an
+identical compatibility alias, not stronger coverage. Inventory commands are
+diagnostics, never semantic completeness proof.
 
 ## Page Move Or Delete
 

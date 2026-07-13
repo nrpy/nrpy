@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-06-2026
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -13,6 +13,12 @@ evolution, `blackhole_spectroscopy.py` for a TwoPunctures-backed binary with
 checkpointing and Psi4 diagnostics, `spinning_blackhole.py` for a single
 spinning UIUC black hole, and `kasner_exact_evolution.py` for a vacuum Kasner
 benchmark.
+
+Each generator deletes and recreates its fixed project directory. Configured
+GitHub codegen generates and builds the default OpenMP path for the first three,
+but omits Kasner and runs no executable. The local helper configures OpenMP and
+CUDA builds for the first three, omits Kasner, and also runs no executable or
+scientific check. Preserve output before reruns; runtime remains manual here.
 
 ## Detail
 

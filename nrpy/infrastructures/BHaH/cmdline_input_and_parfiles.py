@@ -197,12 +197,12 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
     char *saveptr;
     val_token = strtok_r(value_copy, ",", &saveptr);
     while (val_token != NULL) {
-      safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
-      count++;
-      if (count > MAX_ARRAY_SIZE) {
+      if (count >= MAX_ARRAY_SIZE) {
         fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
         exit(1);
-      } // END IF (count > MAX_ARRAY_SIZE): Check for exceeding maximum array size
+      } // END IF (count >= MAX_ARRAY_SIZE): Check bounds before writing values[count]
+      safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
+      count++;
       val_token = strtok_r(NULL, ",", &saveptr);
     } // END while (val_token != NULL): Split value_copy into tokens using comma as delimiter
     *value_count = count;
@@ -755,8 +755,10 @@ def register_CFunction_cmdline_input_and_parfile_parser(
                            parameters defined in the parameter file.
 
     Doctests:
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> par.glb_code_params_dict.clear()
     >>> cfc.CFunction_dict.clear()
+    >>> par.set_parval_from_str("parallelization", "openmp")
     >>> _mode = par.register_CodeParameter(
     ...     "char[32]", "CodeParameters_c_files", "runtime_mode", "default",
     ...     commondata=True, add_to_parfile=True, add_to_set_CodeParameters_h=False
@@ -765,6 +767,11 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     ...     "example_project", cmdline_inputs=["runtime_mode"]
     ... )
     >>> generated = cfc.CFunction_dict["cmdline_input_and_parfile_parser"].full_function
+    >>> validate_strings(
+    ...     clang_format(generated),
+    ...     "cmdline_input_and_parfile_parser__openmp",
+    ...     file_ext="c",
+    ... )
     >>> "read_chararray(argv[argc - number_of_steerable_parameters + 0]" in generated
     True
     >>> "commondata->runtime_mode" in generated

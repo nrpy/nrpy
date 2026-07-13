@@ -1,14 +1,15 @@
 # Conformally Flat Elliptic
 
-> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 06-29-2026
+> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Equations](index.md)
 
 ## Summary
 
 The conformally flat elliptic modules build the symbolic pieces for
-NRPyElliptic binary-puncture initial data. One module owns the hyperbolic
+NRPyElliptic Bowen-York binary-puncture initial data. One module owns the hyperbolic
 relaxation RHSs for the nonsingular correction `uu`; the other constructs the
 background conformal factor and Bowen-York extrinsic-curvature source terms.
+This is not the BHaH integration of the separate TwoPunctures library.
 
 ## Detail
 
@@ -29,6 +30,12 @@ code can separately evaluate the elliptic residual and the hyperbolized
 evolution RHS. Stable generated-code names are exposed through
 `NRPyElliptic_RHSs_varname_to_expr_dict`.
 
+The expression contains `(psi_background + uu)**(-7)` and the source
+construction contains puncture-distance denominators. These builders do not
+guard singular evaluation points or select a numerical domain, boundary
+conditions, relaxation-wave profile, or stopping criterion; those are caller
+and infrastructure responsibilities.
+
 `compute_psi_background_and_ADD_times_AUU` owns the source-term construction
 for two punctures on a conformally flat background. It registers bare masses,
 the puncture separation parameter `zPunc`, both punctures' linear momenta, and
@@ -46,6 +53,17 @@ term module generates representative `psi_background_<Coord>` and
 `ADD_times_AUU_<Coord>` trusted values for Spherical, SinhSpherical,
 Cartesian, SinhCylindrical, and SinhSymTP.
 
+All RHS trusted variants use `enable_rfm_precompute=False`; the implemented
+precompute branch is not selected by this module entry point. Trusted matching
+checks sampled symbolic values only. It does not show that a generated solver
+builds, reaches a steady state, satisfies boundary conditions, or attains any
+residual or physical-accuracy threshold. Performance and accuracy claims in the
+NRPyElliptic paper describe its reported solver configuration, not evidence for
+every current backend or option in this repository.
+
+BHaH `TwoPunctures` generated-C registration and persistent-library lifecycle
+belong to [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
+
 ## Sources
 
 - [ConformallyFlat_RHSs.py](../../nrpy/equations/nrpyelliptic/ConformallyFlat_RHSs.py) - `HyperbolicRelaxationCurvilinearRHSs`, `NRPyElliptic_RHSs_varname_to_expr_dict`
@@ -55,7 +73,7 @@ Cartesian, SinhCylindrical, and SinhSymTP.
 - [ConformallyFlat_RHSs_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Spherical.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Cartesian.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Cartesian.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Spherical.py) - `trusted_dict`
-- [NRPyElliptic paper](https://arxiv.org/abs/2111.02424) - background for hyperbolic relaxation and conformally flat binary-puncture initial data
+- [NRPyElliptic paper](https://arxiv.org/abs/2111.02424) - defining scientific background for hyperbolic relaxation and conformally flat binary-puncture initial data
 
 ## See Also
 

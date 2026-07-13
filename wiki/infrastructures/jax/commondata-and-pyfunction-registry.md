@@ -1,6 +1,6 @@
 # Commondata And PyFunction Registry
 
-> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 07-06-2026
+> Consumer view of JAX shared-data and generated-function registries. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [JAX](index.md)
 
 ## Summary
@@ -30,9 +30,15 @@ not check that the four input lists have equal lengths; ordinary Python `zip()`
 truncation therefore defines how many entries are registered. In
 `nrpy.examples.sebobv1_jax`, the observed call supplies fourteen names and
 descriptions but thirteen dtypes and defaults, so the final listed `a_f` field
-is not passed to `register_commondata_param()` by that batch call. This
-contested claim is tracked in the [Contradictions](../../contradictions.md)
-register.
+is not passed to `register_commondata_param()` by that batch call. The emitted
+coefficient function nevertheless passes `a_f` into `Commondata(...)`; project
+generation therefore does not guarantee that this generated function can
+construct the generated dataclass.
+
+Claim status: contested; contradiction: CONTR-0002.
+See [CONTR-0002](../../contradictions.md#contr-0002) for authority, affected
+pages, validation limits, and the executable resolution test. This is P1
+descriptive contradiction record.
 
 `generate_commondata_dataclass()` turns the current registry contents into the
 generated `Commondata.py` module text. It emits `from dataclasses import

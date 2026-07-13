@@ -5,7 +5,7 @@
 | Page | Go here when... |
 | --- | --- |
 | [Overview](overview.md) | You need the high-level map of NRPy, its source families, and its generated outputs. |
-| [Build And Run](build-and-run.md) | You need install paths, direct-run setup, prerequisites, or the first standalone workflow. |
+| [Build And Run](build-and-run.md) | You need install paths, package command entry points, direct-run setup, prerequisites, or the first standalone workflow. |
 | [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md) | You need the path from SymPy equations through C function registration into a generated project. |
 | [Generated Output Boundaries](generated-output-boundaries.md) | You need to tell handwritten source from generated projects, thorns, Charm++ output, JAX output, or artifacts. |
 | [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md) | You need the practical style, artifact, trusted-value, and static-analysis rules for code changes. |

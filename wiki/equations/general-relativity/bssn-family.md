@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-05-2026
+> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -38,6 +38,15 @@ dictionaries. Gauge validation is driven by the supported lapse and shift option
 names in `BSSN_gauge_RHSs`, while coordinate and reference-metric variants stay
 validation evidence rather than new page scope.
 
+The `general_relativity/nrpylatex` subpackage is aggregate-covered here rather
+than a separate equation family. `test_parse_BSSN.py::test_example_BSSN` parses
+one embedded BSSN equation block with the external `nrpylatex.parse_latex`, then
+uses `validate_expressions.assert_equal` to compare parsed quantities with the
+handwritten Cartesian `RbarDD_gridfunctions` BSSN RHS, default gauge RHS,
+constraints, and Ricci tensor. Because `assert_equal` evaluates both sides at a
+fixed sampled point, this is a deterministic sampled-numerical cross-check, not
+a formal symbolic identity proof and not a build, runtime, or accuracy test.
+
 The style contract for these modules is part of their interface: tensor
 construction uses explicit loops, established suffixes such as `U`, `D`, `DD`,
 `dD`, `dDD`, `dupD`, and `rhs`, and validation keys must stay aligned with the
@@ -52,6 +61,8 @@ corresponding trusted files.
 - [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
 - [BSSN_quantities_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py) - `trusted_dict`
 - [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py) - `trusted_dict`
+- [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
+- [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py) - `assert_equal`
 - [original-agents.md](../../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
 
 ## See Also

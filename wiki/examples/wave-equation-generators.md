@@ -1,6 +1,6 @@
 # Wave Equation Generators
 
-> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 07-06-2026
+> Compare the Cartesian, curvilinear, and multicoordinate wave-equation example generators. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -35,6 +35,12 @@ cd project/wave_equation_cartesian
 make
 ./wave_equation_cartesian
 ```
+
+Preserve any wanted prior project output before generation. Configured
+Ubuntu/macOS CI generates and builds all three default OpenMP projects, but
+does not run their executables or compare diagnostic errors. The local helper
+also configures CUDA generation/build for curvilinear and multicoordinate
+projects only; it performs no GPU runtime or numerical check.
 
 For the other two workflows, replace `wave_equation_cartesian` with
 `wave_equation_curvilinear` or `wave_equation_multicoordinates`. From a

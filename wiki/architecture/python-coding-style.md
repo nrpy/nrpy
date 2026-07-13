@@ -1,15 +1,20 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-06-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-12-2026
 > Up: [Architecture](index.md)
 
 ## Summary
 
-Python source follows Black formatting, isort import grouping, canonical NRPy
+New or modified Python source should follow Black formatting, isort import grouping, canonical NRPy
 module aliases, Sphinx/reStructuredText docstrings, explicit return type
 annotations, and conservative helper-function use. `__init__.py` files and
 generated trusted-value files are special cases: both omit module docstrings,
 and `__init__.py` files stay as bare explicit import aggregators.
+
+This leaf records contributor rules, not a claim that every legacy source file
+already conforms. Preserve intentional compatibility patterns when an owning
+source or test requires them; do not use legacy exceptions as templates for new
+code.
 
 ## Detail
 

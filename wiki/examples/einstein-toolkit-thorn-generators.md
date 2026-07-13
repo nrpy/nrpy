@@ -1,6 +1,6 @@
 # Einstein Toolkit Thorn Generators
 
-> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain NRPy's Einstein Toolkit thorn-generation examples and checked-in ET fixtures. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -34,10 +34,10 @@ Per-generator map:
 
 | Generator | Output family | Thorn names | Validation route |
 | --- | --- | --- | --- |
-| `carpet_wavetoy_thorns.py` | ETLegacy/Carpet WaveToy thorns in `project/et_wavetoy/` | `WaveToyNRPy`, `IDWaveToyNRPy`, `diagWaveToyNRPy` | GitHub Actions `einsteintoolkit-validation` generates, links into ET, builds ET, and runs `WaveToyNRPy` testsuite. |
-| `carpet_baikal_thorns.py` | ETLegacy/Carpet Baikal thorns in `project/et_baikal/` | `Baikal`, `BaikalVacuum` | GitHub Actions `einsteintoolkit-validation` generates, links into ET, builds ET, and runs `Baikal` and `BaikalVacuum` testsuites. |
-| `carpetx_wavetoy_thorns.py` | CarpetX WaveToy thorns in `project/et_wavetoy/` | `WaveToyNRPyX`, `IDWaveToyNRPyX`, `diagWaveToyNRPyX` | Local full-CI script runs the generator and skips ET compile for `carpet*` scripts. |
-| `carpetx_baikal_thorns.py` | CarpetX Baikal thorns in `project/et_baikalx/` | `BaikalX`, `BaikalVacuumX` | Local full-CI script runs the generator and skips ET compile for `carpet*` scripts. |
+| `carpet_wavetoy_thorns.py` | ETLegacy/Carpet WaveToy thorns in `project/et_wavetoy/` | `WaveToyNRPy`, `IDWaveToyNRPy`, `diagWaveToyNRPy` | Configured GitHub `einsteintoolkit-validation` generation, ET build, and `WaveToyNRPy` testsuite. |
+| `carpet_baikal_thorns.py` | ETLegacy/Carpet Baikal thorns in `project/et_baikal/` | `Baikal`, `BaikalVacuum` | Configured GitHub `einsteintoolkit-validation` generation, ET build, and `Baikal`/`BaikalVacuum` testsuites. |
+| `carpetx_wavetoy_thorns.py` | CarpetX WaveToy thorns in `project/et_wavetoy/` | `WaveToyNRPyX`, `IDWaveToyNRPyX`, `diagWaveToyNRPyX` | Local helper invokes generation, then deliberately skips compile for every `carpet*` script; no configured CarpetX build/run test. |
+| `carpetx_baikal_thorns.py` | CarpetX Baikal thorns in `project/et_baikalx/` | `BaikalX`, `BaikalVacuumX` | Local helper invokes generation, then deliberately skips compile for every `carpet*` script; no configured CarpetX build/run test. |
 
 The ETLegacy/Carpet generators set `Infrastructure` to `ETLegacy`. Their
 generated C functions target Cactus/Carpet schedule and storage conventions:
@@ -97,7 +97,16 @@ WaveToy tests into `WaveToyNRPy/`, builds ET, and runs the `Baikal`,
 `BaikalVacuum`, and `WaveToyNRPy` testsuites. The local full-CI script also
 runs all four generator scripts and deliberately skips compiling paths whose
 script name contains `carpet`, so the CarpetX examples have a checked local
-generation route but no local ET build route in that script.
+generation command route but no local ET build route in that script. Neither
+configuration proves a latest successful run. The GitHub job does not invoke
+either `carpetx_*` generator.
+
+Einstein Toolkit's own [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case)
+documentation, heading `A test case is...`, defines Cactus testsuites as
+regression comparisons and explicitly distinguishes them from convergence or
+physics-correctness tests. Accordingly, the configured WaveToy/Baikal runs
+support exercised ETLegacy regression behavior under that container, not broad
+numerical correctness or CarpetX compatibility.
 
 ## Sources
 
@@ -114,7 +123,7 @@ generation route but no local ET build route in that script.
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`
 - [WaveToyNRPy_test.par](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test.par) - eight-iteration Carpet WaveToy test parfile
 - [uuGF.x.asc](../../nrpy/examples/et_WaveToyfiles/test/WaveToyNRPy_test/uuGF.x.asc) - checked-in fixture evidence for CarpetIOASCII `uuGF` x-line output
-- [README.md](../../README.md) - `Einstein Toolkit and CarpetX Generators`
+- [README.md](../../README.md) - `Einstein Toolkit and CarpetX Generators`; official [Einstein Toolkit test-case documentation](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`
 - [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`
 

@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 06-30-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -39,7 +39,7 @@ Array `CodeParameter` types are parsed only for C-style `REAL[N]` and `int[N]` s
 
 ### Registration Behavior
 
-`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, and `CarpetX`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.` but still returns a fresh SymPy symbol for that name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration.
+`register_gridfunctions()` normalizes one name or a list of names, reads `Infrastructure`, selects the subclass from `GF_CLASS_MAP`, stores new gridfunctions in `glb_gridfcs_dict`, and returns real SymPy symbols. Supported infrastructure keys are `BHaH`, `ETLegacy`, and `CarpetX`; an unknown key raises `ValueError`. Duplicate registration prints `Warning: Gridfunction <name> is already registered.`, leaves the existing registry object unchanged, and still returns a real SymPy symbol for the requested name. Per-gridfunction list-valued `f_infinity` and `wavespeed` inputs are indexed by position during registration; the helper does not prevalidate those list lengths.
 
 ### Parity
 

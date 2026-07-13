@@ -1,15 +1,16 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 06-29-2026
+> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Validation](index.md)
 
 ## Summary
 
 `nrpy/validate_expressions/validate_expressions.py` validates SymPy expressions
 by evaluating them at high precision with `mpmath`. This is high-precision
-numerical validation, not a formal symbolic proof. The same helpers support
+numerical spot validation, not a formal symbolic proof, runtime test, generated
+project test, or general scientific-accuracy guarantee. The same helpers support
 equality assertions, zero checks, trusted dictionary generation, and trusted
-dictionary comparison.
+dictionary comparison under the limits below.
 
 ## Detail
 
@@ -18,12 +19,23 @@ comparison tolerance is `10 ** (-4.0 / 5.0 * precision)` where the helper uses
 the module constant, or `10 ** (-4.0 / 5.0 * mp.dps)` where it uses the current
 `mpmath` decimal precision.
 
+The same module contains doctests for `assert_equal()`, `check_zero()`, and
+exact-zero conversion, and its `__main__` block runs them. No separate dedicated
+test module is checked in under `nrpy/validate_expressions/`; broader equation
+modules exercise these helpers through their own trusted-result paths.
+
 `assert_equal()` accepts either dictionaries or single expressions. Non-dict
 inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
 sides are processed with fixed `mpf` substitutions, and each paired numerical
 result is compared by relative error. A mismatch prints the failing key and
 error bound, then raises `AssertionError`; a passing check prints
 `Assertion Passed!` unless messages are suppressed.
+
+Dictionary comparison is positional, not key-safe. `assert_equal()` iterates
+the two processed dictionaries with `zip()`: it does not check equal lengths or
+equal key sets, and extra entries on the longer side are ignored. Same-length
+dictionaries with different keys are compared in sorted-key order. Callers that
+need dictionary-structure validation must check keys and lengths separately.
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
@@ -49,8 +61,10 @@ back to `mpc(sp.N(..., mp.dps))`.
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
 has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
-common-subexpression form at twice the standard precision. It collapses the
-result to `mp.mpf("0.0")` only if the higher-precision result is still below
+common-subexpression form at twice the standard precision. The retry does not
+forward `hex_offset`; in non-fixed mode it also draws new random substitutions.
+It therefore need not evaluate the same numerical point. The helper collapses
+the result to `mp.mpf("0.0")` only if the higher-precision result is still below
 the tolerance at that higher `mp.dps`; otherwise it keeps the original nonzero
 value and restores `mp.dps` to `precision`.
 
@@ -66,12 +80,23 @@ defines `trusted_dict`, formats the file with Black, and creates the `tests/`
 directory if needed. `compare_or_generate_trusted_results()` writes that file
 when missing and compares against it when present.
 
+Missing-file generation creates a baseline; it does not independently establish
+that baseline as scientifically correct. Review defining expressions and the
+generated diff before accepting a new trusted file. Existing-file comparison
+checks regression against stored numbers only under the chosen substitutions
+and tolerance.
+
 Trusted comparison imports the caller-relative module path with `importlib`
 and expects a `trusted_dict`. It first checks only the dictionary lengths; when
 the lengths differ, it reports the missing key set and tells maintainers how to
 regenerate a trusted file. When the lengths match, it iterates trusted keys and
 compares each value by relative error against `results_dict[key]`; a changed
 key with unchanged count will surface as `KeyError`.
+
+All expression checks sample numerical substitutions rather than proving an
+identity over a domain. A sampled point can miss a discrepancy or encounter a
+singularity/branch-sensitive case. The helpers do not exercise generated C/CUDA,
+time evolution, boundary conditions, executable output, or convergence.
 
 ## Sources
 

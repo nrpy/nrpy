@@ -1,16 +1,17 @@
 # GRHD
 
-> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed · Last reconciled: 06-29-2026
+> Map NRPy's general relativistic hydrodynamics equation builders, flux helpers, and validation coverage. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Equations](index.md)
 
 ## Summary
 
-The GRHD modules build Valencia-style symbolic hydrodynamics expressions on top
-of BSSN-derived ADM metric quantities. `GRHD_Equations` owns the conserved
+The GRHD modules build perfect-fluid, Valencia-style symbolic hydrodynamics
+expressions on top of BSSN-derived ADM metric quantities. `GRHD_Equations` owns the conserved
 variables, stress-energy tensors, fluxes, source terms, connection terms, and
 reference-metric rescalings; companion modules compute characteristic speeds,
 HLL interface fluxes, and no-branch min/max expressions used by generated C
-code.
+code. This equation slice does not add magnetic-field terms or primitive-state
+recovery.
 
 ## Detail
 
@@ -57,6 +58,13 @@ builds the face-centered four-metric from ADM face data, evaluates the right
 and left speeds, and returns the nonnegative `cmin` and `cmax` values required
 by HLL fluxes.
 
+These helpers assume caller-supplied physical states and usable denominators.
+`flux_dirn` is used as a spatial index and is not range-checked; intended values
+are `0`, `1`, or `2`. `find_cp_cm` divides by its quadratic coefficient `a`, and
+`HLL_solver` divides by `cmax + cmin`; neither function supplies a zero-
+denominator fallback. `find_cmax_cmin` also uses one face metric for both
+reconstructed states, as stated in its source docstring.
+
 `calculate_GRHD_Tmunu_and_contractions` evaluates the conserved variables and
 physical fluxes for one reconstructed side of a cell face. `calculate_HLL_fluxes`
 does that for right and left states, obtains `cmin` and `cmax`, and applies
@@ -75,6 +83,15 @@ paths. `GRHD_equations_Cartesian.py`, `GRHD_equations_Spherical.py`, and
 fluxes, source terms, connection terms, tensor rescalings, and coordinate
 variants. Separate trusted dictionaries validate characteristic speeds, HLL
 flux assembly, and the no-branch min/max helpers.
+
+That last evidence has an important boundary: the
+`Min_Max_and_Piecewise_Expressions.py` script replaces symbolic `nrpyAbs` with
+`sin`, `cos`, or `exp` before producing trusted values. It fingerprints the
+resulting sampled SymPy expressions but does not test the later `nrpyAbs`-to-C
+absolute-value lowering or prove the 0/1 mask semantics over coordinate
+domains. All cited trusted files are sampled expression checks, not generated
+build, runtime, shock-tube, conservation, convergence, or numerical-accuracy
+tests.
 
 ## Sources
 
