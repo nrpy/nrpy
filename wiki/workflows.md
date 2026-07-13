@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-12-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -10,10 +10,10 @@ they should compound. Maintenance work registers sources first, updates the
 owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
-`PYTHONPATH=.` when there is no editable install, Python edits require Black
-before commit, and every modified Python file gets the single-file
-static-analysis script unless it is a generated trusted-value file under
-`*/tests/*.py`.
+`PYTHONPATH=.` when there is no editable install, Python edits require
+`black .` in an owned clean detached worktree or local copy outside shared
+`/work`, and every modified Python file gets the single-file static-analysis
+script.
 
 ## Search Order
 
@@ -121,17 +121,24 @@ affected page is reconciled and the resolution test passes.
 
 ## Claim Adjudication
 
-For each P0/P1 claim, record exact qualified text, role, registered deciding
-authority plus stable locator, and distinct corroboration or honest `none
-available` reason. Use code for descriptive behavior; owning
+The [Claim And Evidence Contract](SCHEMA.md#claim-and-evidence-contract) is
+prospective after its 07-13-2026 adoption change. High-risk claims predating it
+and claims changed in that same adoption change remain baseline-uncovered unless
+an exact block is present; that adoption change asserts no completed block
+coverage. When a baseline claim or its deciding source is next materially
+changed after adoption, add the exact block immediately after the claim in its
+owning `Detail` section. For an active contradiction, add it to the matching
+`### CONTR-*` subsection, never the fixed register row. Add validation and
+dimensions only for behavioral claims. Use code for descriptive behavior;
+owning
 governance/configuration for normative rules; stable specification plus targeted
 tests for intended public/scientific contracts; workflow/configuration for CI
-job shape; and frozen generated evidence only for its pinned context. Do not use
-synthesis agreement as authority.
-
-Attach the validation tuple only when the claim asserts behavior. Navigation,
-structure, provenance, status, symbolic definition, and normative rules use
-their corresponding deterministic evidence instead.
+job shape; and frozen generated evidence only for its pinned context. Synthesis
+agreement is never authority. Navigation, structure, provenance,
+status, symbolic definition, and normative rules do not receive behavioral
+validation lines. In every behavioral dimension, use an exact value when
+exercised, `not-run` when applicable but unexercised, and `not-applicable` only
+when the dimension does not apply; a date value uses `MM-DD-YYYY`.
 
 ## Safe Reproduction
 
@@ -173,11 +180,12 @@ keeps only the durable lesson.
 ## NRPy Workflow Notes
 
 For direct example runs without an editable install, append `.` to
-`PYTHONPATH`. Python code changes require `black .` before commit, and each
-modified Python file requires `./.github/single_file_static_analysis.sh
-<path.py>` before commit. Trusted values under `*/tests/*.py` are regenerated
-from owning modules, not hand-edited, and are exempt from single-file static
-analysis. Generated C/CUDA projects, generated thorns, generated Charm++
+`PYTHONPATH`. Run `black .` only in an owned clean detached worktree or local
+copy outside shared `/work`, and run
+`./.github/single_file_static_analysis.sh <path.py>` for each modified Python
+file. Trusted values under `*/tests/*.py` are regenerated from owning modules,
+not hand-edited; current governance declares no single-file-analysis exception.
+Generated C/CUDA projects, generated thorns, generated Charm++
 projects, and generated JAX projects are normally products of Python
 generators; cite the generator unless a generated artifact is deliberately
 registered as frozen evidence.
@@ -185,7 +193,8 @@ registered as frozen evidence.
 ## Sources
 
 - [kb-instructions.md](../raw/source-docs/kb-instructions.md) - section 7.6 for `wiki/workflows.md`
-- [original-agents.md](../raw/source-docs/original-agents.md) - `## Required Checks`
+- [coding_style.md](../coding_style.md) - `## Python Coding Style`, `### Formatting`
+- [original-agents.md](../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 - [README.md](../README.md) - `## Contributor Setup`
 - [single_file_static_analysis.sh](../.github/single_file_static_analysis.sh) - `run_test_step`
 - [main.yml](../.github/workflows/main.yml) - `static-analysis`

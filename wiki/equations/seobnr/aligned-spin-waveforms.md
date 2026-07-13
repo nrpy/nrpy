@@ -1,6 +1,6 @@
 # Aligned-Spin Waveforms
 
-> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 07-12-2026
+> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -11,10 +11,11 @@ ingredients, flux construction, strain-mode construction, and the native
 Hamiltonian outputs and calibration/remnant quantities but does not own those
 fits.
 
-These are current symbolic ingredients for the quasi-circular, spinning,
-nonprecessing binary-black-hole SEOBNRv5HM model. Model-wide calibration and
-accuracy results in the scientific paper do not automatically validate this
-NRPy transcription or every generated consumer.
+These are current symbolic ingredients associated with the quasi-circular,
+spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The relationship to
+the unversioned current-latest paper page is unaudited model background;
+model-wide calibration and accuracy claims neither decide this transcription's
+contract nor validate every generated consumer.
 
 ## Detail
 
@@ -69,7 +70,7 @@ build generated code, integrate dynamics, or measure waveform accuracy.
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
-- [SEOBNRv5HM paper](https://arxiv.org/abs/2303.18039) - intended aligned-spin model and calibration context
+- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims are not yet audited to a pinned revision
 
 ## See Also
 

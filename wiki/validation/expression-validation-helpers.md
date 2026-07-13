@@ -1,6 +1,6 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-12-2026
+> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -27,9 +27,11 @@ modules exercise these helpers through their own trusted-result paths.
 `assert_equal()` accepts either dictionaries or single expressions. Non-dict
 inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
 sides are processed with fixed `mpf` substitutions, and each paired numerical
-result is compared by relative error. A mismatch prints the failing key and
-error bound, then raises `AssertionError`; a passing check prints
-`Assertion Passed!` unless messages are suppressed.
+result is compared by relative error. For finite values, a mismatch prints the
+failing key and error bound, then raises `AssertionError`; a passing check prints
+`Assertion Passed!` unless messages are suppressed. The implementation has no
+explicit finite-value check: a `NaN` difference makes the `>` predicate false
+and can produce a false pass.
 
 Dictionary comparison is positional, not key-safe. `assert_equal()` iterates
 the two processed dictionaries with `zip()`: it does not check equal lengths or
@@ -91,7 +93,9 @@ and expects a `trusted_dict`. It first checks only the dictionary lengths; when
 the lengths differ, it reports the missing key set and tells maintainers how to
 regenerate a trusted file. When the lengths match, it iterates trusted keys and
 compares each value by relative error against `results_dict[key]`; a changed
-key with unchanged count will surface as `KeyError`.
+key with unchanged count will surface as `KeyError`. It has no explicit
+finite-value check, so a computed `NaN` can be accepted against a finite trusted
+value.
 
 All expression checks sample numerical substitutions rather than proving an
 identity over a domain. A sampled point can miss a discrepancy or encounter a

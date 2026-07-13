@@ -1,6 +1,6 @@
 # Aligned-Spin Hamiltonian
 
-> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 07-12-2026
+> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -12,9 +12,11 @@ pieces, Hamiltonian derivatives, circular-orbit derivatives, and frequency-like
 quantities used by the waveform and orbital-evolution consumers.
 
 Scope is the source's current SEOBNRv5 aligned-spin implementation. The
-SEOBNRv5HM paper defines the intended quasi-circular, spinning,
-nonprecessing-binary-black-hole model; this page does not generalize these
-expressions to eccentric, precessing, or matter systems.
+unversioned current-latest SEOBNRv5HM paper page is unaudited model background
+for quasi-circular, spinning, nonprecessing binary black holes; it does not
+define or decide this page's intended contract until a specific revision is
+audited. This page does not generalize the expressions to eccentric, precessing,
+or matter systems.
 
 ## Detail
 
@@ -48,7 +50,7 @@ runtime-accuracy result.
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
 - [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py) - `trusted_dict`
-- [SEOBNRv5HM paper](https://arxiv.org/abs/2303.18039) - intended aligned-spin model scope and equations
+- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin model equations are not yet audited to a pinned revision
 
 ## See Also
 

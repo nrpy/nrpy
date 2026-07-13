@@ -1,26 +1,26 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-12-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Validation](index.md)
 
 ## Summary
 
-For Python source changes, run `black .` before commit and run
+For Python source changes, run `black .` only in an owned clean detached
+worktree or local copy outside shared `/work`. Run
 `./.github/single_file_static_analysis.sh <path.py>` for every modified Python
-file, except generated trusted-value files under `*/tests/*.py`. The
-single-file script checks formatting, imports, typing, linting, and docstrings,
-then executes the target file. That final step runs doctests only when the
-target's `__main__` path invokes a doctest runner.
+file. The single-file script checks formatting, imports, typing, linting, and
+docstrings, then executes the target file. That final step runs doctests only
+when the target's `__main__` path invokes a doctest runner.
 
 ## Detail
 
 Current `coding_style.md` owns the contributor commands: `black .` before
-commit and the single-file script for each modified Python file. The preserved
-agent instructions supply the narrower trusted-value exception and forbid using
-only a hand-picked subset. Generated reference-value files under
-`*/tests/*.py` are regenerated evidence rather than hand-authored modules and
-skip the single-file script; this exception does not cover arbitrary hand-written
-tests merely because their path contains `tests`.
+commit and the single-file script for each modified Python file. KB safe-
+reproduction governance further requires blanket formatters to run only in an
+owned clean detached worktree or local copy outside shared `/work`. Generated
+reference-value files under `*/tests/*.py` are regenerated evidence rather than
+hand-authored modules, but current governance declares no exception from the
+single-file script when such a Python file is modified.
 
 The single-file script expects exactly one Python file argument and must be run
 from repository root because it resolves `.pylintrc` there. It verifies the file
@@ -54,7 +54,7 @@ formatting, disabled warnings, and version-specific Pylint behavior.
 
 ## Sources
 
-- [../../coding_style.md](../../coding_style.md) - `Python Coding Style / Formatting`, `Static Analysis Configuration`; [../../raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks` trusted-value exception
+- [../../coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
 - [../../.github/single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `static-analysis`
 - [../../pyproject.toml](../../pyproject.toml) - `[tool.isort]`

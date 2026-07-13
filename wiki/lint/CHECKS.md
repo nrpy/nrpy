@@ -1,6 +1,6 @@
 # Lint Checks
 
-> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-12-2026
+> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -94,14 +94,15 @@ carry facts and sources, and excluded artifacts stay out of the KB.
   `tasks1.md` through `tasks6.md` are exact coordination exemptions. Never
   catalog, route, stage, move, or delete them as KB content without direction.
 - Trusted-value files are source evidence, not hand-authored prose pages.
-- Python edits, if any accidentally occur, require `black .` and the
-  single-file static-analysis script for each modified Python file, except
-  trusted-value files under `*/tests/*.py`.
+- Python edits, if any accidentally occur, require `black .` only in an owned
+  clean detached worktree or local copy outside shared `/work`, plus the
+  single-file static-analysis script for each modified Python file.
 
 ## Sources
 
 - [kb-instructions.md](../../raw/source-docs/kb-instructions.md) - section 7.8 for `wiki/lint/CHECKS.md`
-- [original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Formatting`
+- [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 
 ## See Also
 

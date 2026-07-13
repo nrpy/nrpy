@@ -1,6 +1,6 @@
 # Trusted Expression Pipeline
 
-> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -52,15 +52,17 @@ length mismatch.
 `10**(-4*mp.dps/5)` against the magnitude of the trusted value after converting
 that value to `mpc`. Consequently a trusted zero has a zero relative-error
 bound and must match exactly after conversion's near-zero handling. There is no
-separate absolute tolerance.
+separate absolute tolerance or explicit finite-value validation; a computed
+`NaN` can make the mismatch predicate false and pass.
 
 `assert_equal` is a related sampled-numerical check, despite its name. It
 processes both inputs with fixed substitutions and compares zipped result values
 using relative tolerance against their average. It does not establish a SymPy
 identity, and for dictionary inputs it does not independently assert matching
-key names or equal lengths. The GR `nrpylatex/test_parse_BSSN.py` cross-check
-uses this helper, so that test is also a deterministic sampled comparison of the
-parsed and handwritten expression sets.
+key names or equal lengths. It performs no explicit finite-value validation, so
+a `NaN` difference can false-pass. The GR `nrpylatex/test_parse_BSSN.py`
+cross-check uses this helper, so that test is also a deterministic sampled
+comparison of the parsed and handwritten expression sets.
 
 `output_trusted` writes only the needed `mpmath` imports plus `trusted_dict`, and
 formats the file with Black. A count or value mismatch tells maintainers to

@@ -1,6 +1,6 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-12-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-13-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -20,11 +20,12 @@ code.
 
 ### Formatting And Artifacts
 
-Python uses 4-space indentation and lets Black decide line wrapping. Run Black before committing Python changes, then run
-`./.github/single_file_static_analysis.sh <path-to-file.py>` for each modified
-Python file. Do not add binary files, images, archives, compiled artifacts, or
-other non-text assets in ordinary pull requests; redesign the change as text or
-discuss a maintainer exception.
+Python uses 4-space indentation and lets Black decide line wrapping. Run
+`black .` only in an owned clean detached worktree or local copy outside shared
+`/work`, then run `./.github/single_file_static_analysis.sh <path-to-file.py>`
+for each modified Python file. Do not add binary files, images, archives,
+compiled artifacts, or other non-text assets in ordinary pull requests;
+redesign the change as text or discuss a maintainer exception.
 
 ### Naming And Imports
 
@@ -42,10 +43,12 @@ gri`, `nrpy.reference_metric as refmetric`, `nrpy.c_function as cfc`,
 
 ### `__init__.py` Files
 
-Every `__init__.py` is a bare import aggregation file. It has no module-level
-docstring, no comments, and no executable code beyond explicit relative imports
-such as `from . import module` or `from .module import symbol`. Keep the
-namespace flat and explicit.
+New or modified `__init__.py` files should be bare import aggregation files.
+They should have no module-level docstring or comments and no executable code
+beyond explicit relative imports such as `from . import module` or
+`from .module import symbol`. Keep the namespace flat and explicit. The current
+`nrpy/infrastructures/BHaH/fisheye/__init__.py` is a legacy exception because it
+assigns `__all__`; verify package consumers before changing that file.
 
 ### Docstrings And Module Headers
 
@@ -66,7 +69,9 @@ dictionaries omit module docstrings.
 Use `Author:` for one author and `Authors:` for more than one; those are the
 only allowed metadata keys. Avoid nonstandard keys such as `Email:` or
 `Contributor:`, a singular `Author:` with multiple names, and mixed metadata
-styles in one file. Do not add authors not already present in the file.
+styles in one file. Legitimate authorship credit may be added when a contributor
+makes a substantive change; review it for formatting, consistency, and accuracy,
+not merely for absence from the previous author list.
 
 ### Python String Literals
 
@@ -139,6 +144,7 @@ string manipulation or local tidiness; inline them at the point of use.
 
 ## Sources
 
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Module Docstring Format`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Python Style`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Python String Literals`, `### Module Docstrings`, `### Type Hints`, `### Comments`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### if __name__ == "__main__":`, `### General Python Organization`, `## Quick Reference`

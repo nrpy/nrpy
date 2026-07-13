@@ -1,6 +1,6 @@
 # Runtime Data, Parameters, Headers, And CLI
 
-> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed. Last reconciled: 07-12-2026
+> BHaH route for generated runtime structs, parameter defaults, headers, parfiles, and command-line overrides. Status: confirmed. Last reconciled: 07-13-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -90,15 +90,21 @@ These CUDA statements describe emitted source paths and checked-in generated
 string evidence. Current `codegen-ubuntu` and `codegen-mac` workflow commands
 generate and build default example paths without `--cuda`; they do not prove a
 CUDA build or runtime result. No CUDA generator path, CUDA compilation, CUDA
-toolchain, or CUDA runtime was exercised for these statements. The isolated C
-parser regression harness is separate evidence for the array-bound claim above.
+toolchain, or CUDA runtime was exercised for these statements. Source inspection
+of `_C_PARSE_VALUE_FUNC` shows that the array bound is checked before
+`values[count]` is written. The registration-function doctest is configured to
+format generated C and compare it through `validate_strings` against caller-
+relative golden text; configuration alone does not prove that comparison ran or
+passed. No C parser was compiled or run, and no oversized-array runtime error
+path was exercised.
 
 ## Sources
 
 - [BHaH_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `output_BHaH_defines_h`, `register_BHaH_defines`, `parse_cparam_type`, `_register_param_structs`, `register_griddata_struct_and_return_griddata_struct_str`
 - [BHaH_device_defines_h.py](../../../nrpy/infrastructures/BHaH/BHaH_device_defines_h.py) - `CUDA_BHaH_device_defines_h`, `BHaH_CUDA_global_init_h`, `BHaH_CUDA_global_defines_h`, `output_device_headers`
 - [CodeParameters.py](../../../nrpy/infrastructures/BHaH/CodeParameters.py) - `register_CFunctions_params_commondata_struct_set_to_default`, `write_CodeParameters_h_files`
-- [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/BHaH/cmdline_input_and_parfiles.py) - `register_CFunction_cmdline_input_and_parfile_parser`, `generate_default_parfile`
+- [cmdline_input_and_parfiles.py](../../../nrpy/infrastructures/BHaH/cmdline_input_and_parfiles.py) - `_C_PARSE_VALUE_FUNC`, `register_CFunction_cmdline_input_and_parfile_parser` and its `Doctests:`, `generate_default_parfile`
+- [generic.py](../../../nrpy/helpers/generic.py) - `clang_format`, `validate_strings`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`, `register_CFunction_griddata_free__device`
 - [cuda_utilities.py](../../../nrpy/infrastructures/BHaH/parallelization/cuda_utilities.py) - `register_CFunctions_HostDevice__operations`, `register_CFunction_cpyHosttoDevice_commondata__constant`, `register_CFunction_cpyHosttoDevice_params__constant`, `register_CFunction_cpyHosttoDevice_bc_struct`, `register_CFunction_cpyDevicetoHost__grid`, `register_CFunction_cpyDevicetoHost__gf`, `register_CFunction_cpyHosttoDevice__gf`
 - [c_function.py](../../../nrpy/c_function.py) - `CFunction`, `generate_full_function`

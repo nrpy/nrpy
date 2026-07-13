@@ -1,6 +1,6 @@
 # Aligned-Spin Calibration And Remnant
 
-> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-12-2026
+> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -50,9 +50,9 @@ or UIB2016 calibration data and not a remnant-fit accuracy test.
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `compute_calibration_params`, `Kerr_ISCO_radius`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py) - `trusted_dict`
-- [SEOBNRv5HM paper](https://arxiv.org/abs/2303.18039) - Equations 78-81 and intended calibration context
-- [HBR2016 final-spin paper](https://arxiv.org/abs/1605.01938) - defining final-spin fit family
-- [UIB2016 final-state paper](https://arxiv.org/abs/1611.00332) - defining nonprecessing final-mass fit family and ancillary implementation
+- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; Equations 78-81 and calibration context are not yet audited to a pinned revision
+- [HBR2016 current latest paper page](https://arxiv.org/abs/1605.01938) - background orientation only; final-spin fit mapping is not yet audited to a pinned revision
+- [UIB2016 current latest paper page](https://arxiv.org/abs/1611.00332) - background orientation only; final-state fit and ancillary mapping are not yet audited to a pinned revision
 
 ## See Also
 

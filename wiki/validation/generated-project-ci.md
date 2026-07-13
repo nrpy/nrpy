@@ -1,6 +1,6 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-12-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -38,11 +38,13 @@ its pinned Charm++ path and exact tested projects. It does not runtime-test
 restart, Psi4 output, elliptic residual-stop behavior, active load balancing,
 TRAM, sections, priority, immediate, expedited, or zero-copy paths.
 
-Waveform comparisons are the only generated-project jobs that explicitly parse
-and numerically judge generated executable output. Their perturbation-derived
-relative regression criterion does not prove physical accuracy outside the ten
-input sets, and workflow configuration does not prove the jobs most recently
-passed.
+Waveform comparison helpers directly parse generated executable stdout and
+compute their own amplitude-plus-phase regression metric. The Cactus testsuite
+route instead delegates numerical comparison to its fixture and tolerance
+configuration; the checked-in `WaveToyNRPy` test sets `RELTOL 1e-11`. NRPy's
+workflow parses the testsuite summary and fails on a nonzero failure count.
+Neither regression route proves physical accuracy beyond its stated fixtures or
+inputs, and workflow configuration does not prove the jobs most recently passed.
 
 The local `.github/full_nrpy_local_ci.sh` helper is separate from GitHub job
 coverage. It installs dependencies, performs broad static analysis, invokes 28
@@ -72,6 +74,7 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
+- [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebob-consistency-test`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebobv2-consistency-test`

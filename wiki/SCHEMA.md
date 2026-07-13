@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-12-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
 
 ## Summary
 
@@ -166,10 +166,41 @@ could plausibly be misread.
 
 ### Claim And Evidence Contract
 
-Every P0/P1 claim records exact text, conditions and non-guarantees, claim role,
-registered deciding authority with stable symbol or heading, and a separate
-corroboration field. Corroboration may say `none available` only with a reason.
-Registration proves provenance, not correctness.
+This contract applies to these high-risk claim classes: public APIs;
+public/scientific contracts; user-facing commands and interfaces;
+generated-output boundaries; CI guarantees; source-authority decisions;
+contradiction decisions; and claims whose nearby source paragraph could
+plausibly be misread.
+
+This contract takes prospective effect after its 07-13-2026 adoption change.
+High-risk claims that predate it, plus claims materially changed in that same
+adoption change, form the initial baseline. Unless an exact block is already
+present, those baseline claims remain uncovered; the adoption change asserts no
+completed claim-evidence-block coverage. Migrate a baseline claim when it or its
+deciding source is next materially changed after adoption.
+
+After that adoption boundary, place this exact block immediately after each new
+or materially changed high-risk claim in the owning leaf's `Detail` section.
+For an active contradiction, place the block in the matching `### CONTR-*`
+subsection of `wiki/contradictions.md`, never in the fixed 13-column register
+row:
+
+```text
+Claim evidence:
+- Claim: exact qualified text, including conditions and non-guarantees
+- Role: descriptive behavior, normative rule, public/scientific contract, CI behavior, or generated evidence
+- Deciding authority: registered source plus stable symbol or heading
+- Corroboration: separate source plus stable locator, or `none available` plus a reason
+```
+
+For a behavioral claim, append:
+
+```text
+- Validation: `inspected=<pass|fail|not-run>; generated=<pass|fail|not-run>; built=<pass|fail|not-run>; run=<pass|fail|not-run>; result_checked=<pass|fail|not-run>`
+- Dimensions: `platform=<value|not-run|not-applicable>; tool_version=<value|not-run|not-applicable>; backend=<value|not-run|not-applicable>; precision=<value|not-run|not-applicable>; GPU=<value|not-run|not-applicable>; restart=<value|not-run|not-applicable>; distributed=<value|not-run|not-applicable>; error_path=<value|not-run|not-applicable>; options=<value|not-run|not-applicable>; date=<MM-DD-YYYY|not-run|not-applicable>`
+```
+
+Do not claim completed block coverage before the exact block is present.
 
 Deciding authority depends on role:
 
@@ -185,12 +216,9 @@ Deciding authority depends on role:
 - generated evidence: proves only its pinned generation context;
 - synthesis or neighboring-page agreement: never independent authority.
 
-Only a behavioral claim receives a validation tuple. Its checks are
-`inspected`, `generated`, `built`, `run`, and `result_checked`; its dimensions
-are platform, tool version, backend, precision, GPU, restart, distributed,
-error path, options, and date. Every cell is `pass`, `fail`, or `not-run`, with
-exact value where applicable. Structural, navigation, normative, provenance,
-and symbolic claims use claim-appropriate evidence instead.
+Only a behavioral claim receives the validation and dimensions lines.
+Structural, navigation, normative, provenance, and symbolic claims use
+claim-appropriate evidence instead.
 
 ## Query Filing
 

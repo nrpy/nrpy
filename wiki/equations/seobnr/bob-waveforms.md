@@ -1,6 +1,6 @@
 # BOB Waveforms
 
-> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed · Last reconciled: 07-12-2026
+> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -13,9 +13,11 @@ mode by mode. The BOBv2 module builds an uncalibrated news-to-strain waveform,
 stores peak-news fits, and exposes attachment quantities for the implemented
 `(2,2)` strain path.
 
-Current class symbols decide implemented outputs. SEBOB and BOBv2 papers decide
-the intended scientific constructions, but their model-level accuracy claims
-are not inherited by these sampled symbolic transcriptions.
+Current class symbols decide implemented outputs. The unversioned current-latest
+SEBOB and BOBv2 paper pages are unaudited model background; they do not decide
+the intended scientific contract until specific revisions and cited equations
+are audited. Their model-level accuracy claims are not inherited by these
+sampled symbolic transcriptions.
 
 ## Detail
 
@@ -79,8 +81,8 @@ its other peak-news fits are stored inputs, not implemented BOBv2 strain modes.
 - [BOB_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [BOB_aligned_spin_waveform_quantities_higher_modes.py](../../../nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities_higher_modes.py) - `trusted_dict`
 - [BOB_v2_waveform_quantities_kankani_etal.py](../../../nrpy/equations/seobnr/tests/BOB_v2_waveform_quantities_kankani_etal.py) - `trusted_dict`
-- [SEBOB paper](https://arxiv.org/abs/2508.20418) - intended EOB-to-BOB attachment and NQC construction
-- [BOBv2 paper](https://arxiv.org/abs/2510.25012) - intended news-based BOBv2 equations and dominant-mode validation scope
+- [SEBOB current latest paper page](https://arxiv.org/abs/2508.20418) - background orientation only; attachment/NQC mapping is not yet audited to a pinned revision
+- [BOBv2 current latest paper page](https://arxiv.org/abs/2510.25012) - background orientation only; equation/validation mapping is not yet audited to a pinned revision
 
 ## See Also
 

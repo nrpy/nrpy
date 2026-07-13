@@ -91,7 +91,8 @@ from nrpy.helpers.generic import superfast_uniq
 
 ### `__init__.py` Files
 
-- **Always lack module-level docstrings.** Every `__init__.py` in the codebase is a bare import aggregation file with no docstring, no comments, and no executable code beyond `from . import ...` or `from .module import ...` statements.
+- New or modified `__init__.py` files should lack module-level docstrings and remain bare explicit-relative-import aggregators.
+- `nrpy/infrastructures/BHaH/fisheye/__init__.py` is a current legacy exception because it assigns `__all__`; verify package consumers before changing it rather than assuming the assignment is either required or removable.
 - Use explicit relative imports for all submodules, maintaining a flat namespace.
 
 ```python

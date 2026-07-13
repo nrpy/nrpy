@@ -1,6 +1,6 @@
 # Conformally Flat Elliptic
 
-> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 07-12-2026
+> Map the NRPyElliptic conformally flat hyperbolic-relaxation equations and source terms. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -57,9 +57,10 @@ All RHS trusted variants use `enable_rfm_precompute=False`; the implemented
 precompute branch is not selected by this module entry point. Trusted matching
 checks sampled symbolic values only. It does not show that a generated solver
 builds, reaches a steady state, satisfies boundary conditions, or attains any
-residual or physical-accuracy threshold. Performance and accuracy claims in the
-NRPyElliptic paper describe its reported solver configuration, not evidence for
-every current backend or option in this repository.
+residual or physical-accuracy threshold. The relationship between current NRPy
+behavior and the unversioned current-latest NRPyElliptic paper page is unaudited
+model background; that page does not define or decide evidence for current
+backends, options, performance, or accuracy until a specific revision is audited.
 
 BHaH `TwoPunctures` generated-C registration and persistent-library lifecycle
 belong to [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
@@ -73,7 +74,7 @@ belong to [BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wi
 - [ConformallyFlat_RHSs_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_RHSs_Spherical.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Cartesian.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Cartesian.py) - `trusted_dict`
 - [ConformallyFlat_SourceTerms_Spherical.py](../../nrpy/equations/nrpyelliptic/tests/ConformallyFlat_SourceTerms_Spherical.py) - `trusted_dict`
-- [NRPyElliptic paper](https://arxiv.org/abs/2111.02424) - defining scientific background for hyperbolic relaxation and conformally flat binary-puncture initial data
+- [NRPyElliptic current latest paper page](https://arxiv.org/abs/2111.02424) - background orientation only; exact revision-to-claim mapping is not yet audited
 
 ## See Also
 
