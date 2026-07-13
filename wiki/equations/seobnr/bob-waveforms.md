@@ -1,6 +1,6 @@
 # BOB Waveforms
 
-> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed · Last reconciled: 06-29-2026
+> Map Backwards-One-Body waveform, NQC attachment, higher-mode, and BOBv2 symbolic quantities. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -12,6 +12,10 @@ attachment-time symbols. The higher-mode module applies the same BOB structure
 mode by mode. The BOBv2 module builds an uncalibrated news-to-strain waveform,
 stores peak-news fits, and exposes attachment quantities for the implemented
 `(2,2)` strain path.
+
+Current class symbols decide implemented outputs. SEBOB and BOBv2 papers decide
+the intended scientific constructions, but their model-level accuracy claims
+are not inherited by these sampled symbolic transcriptions.
 
 ## Detail
 
@@ -50,6 +54,8 @@ frequency, converts news to strain with a truncated series, and stores
 and attachment outputs `h_t_attach`, `hdot_t_attach`, `hddot_t_attach`,
 `w_t_attach`, and `wdot_t_attach`. The code documents this as an uncalibrated
 BOBv2 implementation whose ideal attachment point still requires calibration.
+Stored attachment quantities therefore must not be described as a calibrated
+BOBv2 waveform result.
 
 All three modules validate through the trusted-expression pipeline. The BOB
 `(2,2)` trusted dictionary pins `h`, `phi`, and attachment outputs. The
@@ -57,6 +63,13 @@ higher-mode trusted dictionary pins flattened mode keys for the supported mode
 set. The BOBv2 trusted dictionary removes the raw `newsNR` dictionary before
 validation, then adds explicit `news_Ap_*` keys so peak-news fits and attachment
 quantities are both covered.
+
+These validations instantiate fixed default classes and compare sampled
+symbolic values. They do not integrate an inspiral, perform attachment-point
+calibration, compare against numerical-relativity data, build generated code,
+or establish waveform mismatch or accuracy. The higher-mode BOB module exports
+seven modes, but current BOBv2 downstream construction consumes only `(2,2)`;
+its other peak-news fits are stored inputs, not implemented BOBv2 strain modes.
 
 ## Sources
 
@@ -66,6 +79,8 @@ quantities are both covered.
 - [BOB_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [BOB_aligned_spin_waveform_quantities_higher_modes.py](../../../nrpy/equations/seobnr/tests/BOB_aligned_spin_waveform_quantities_higher_modes.py) - `trusted_dict`
 - [BOB_v2_waveform_quantities_kankani_etal.py](../../../nrpy/equations/seobnr/tests/BOB_v2_waveform_quantities_kankani_etal.py) - `trusted_dict`
+- [SEBOB paper](https://arxiv.org/abs/2508.20418) - intended EOB-to-BOB attachment and NQC construction
+- [BOBv2 paper](https://arxiv.org/abs/2510.25012) - intended news-based BOBv2 equations and dominant-mode validation scope
 
 ## See Also
 

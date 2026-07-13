@@ -1,6 +1,6 @@
 # TOV Equations
 
-> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 06-29-2026
+> Map the symbolic Tolman-Oppenheimer-Volkoff ODE RHS module and validation hook. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -29,10 +29,20 @@ stellar surface rule, interpolation strategy, or generated C layout. Those are
 infrastructure responsibilities; this page owns only the symbolic ODE RHSs and
 their validation evidence.
 
+The expressions divide by `r_Schw`, by `1 - 2*M/r_Schw`, and, for the isotropic
+radius equation, by its square root. The class performs no origin expansion,
+horizon/domain check, or physical-state validation. A downstream integrator
+must supply its regular-center treatment and remain in the intended stellar
+domain.
+
 Validation is compact: the module's `__main__` path runs doctests, processes
 the class dictionary through the trusted-expression pipeline, and compares it
 against `nrpy/equations/tov/tests/TOV_equations.py`. The trusted dictionary
 covers the declared integration symbols and all four RHS attributes.
+
+That comparison is one deterministic sampled-symbol fingerprint. It does not
+integrate a star, enforce an equation of state or surface condition, build or
+run generated code, or establish mass-radius or numerical-accuracy results.
 
 ## Sources
 

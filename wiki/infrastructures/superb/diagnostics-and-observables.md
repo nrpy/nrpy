@@ -1,6 +1,6 @@
 # Diagnostics And Observables
 
-> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 07-07-2026
+> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -120,6 +120,12 @@ dispatcher samples `DIAG_RESIDUALGF` and `DIAG_UUGF` for the same output
 dimensions. This page treats those as superB output choices and leaves the
 equation definitions behind those gridfunctions to the equation pages.
 
+Current configured CI builds all three superB projects but runs only the
+collision executable. It does not inspect CkIO files, volume-reduction values,
+NRPyElliptic residual stopping, checkpoint/restart, or error paths. Those
+runtime outcomes are `not-run` in this KB audit; prose above describes local
+generator control flow plus Charm++ 8.0.0 API contracts, not observed output.
+
 ## Sources
 
 - [diagnostics.py](../../../nrpy/infrastructures/superB/diagnostics/diagnostics.py) - `register_all_diagnostics`, `_register_CFunction_diagnostics`
@@ -130,8 +136,9 @@ equation definitions behind those gridfunctions to the equation pages.
 - [nrpyelliptic/diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_diagnostics_code`, `diagnostics_ckio`, `contribute_localsums_for_diagnostic_volume_integ`, `report_sums_for_volume`
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `diagnostic_struct`, `DIAGNOSTICS_*`
-- [Charm++ libraries manual](https://github.com/charmplusplus/charm/blob/main/doc/libraries/manual.rst) - `CkIO`, `Using CkIO`, `Parallel Output API`
-- [Charm++ language manual](https://github.com/charmplusplus/charm/blob/main/doc/charm%2B%2B/manual.rst) - `Reductions on Chare Arrays`, `Built-in Reduction Types`
+- [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
+- [Charm++ 8.0.0 libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`; accessed 07-12-2026
+- [Charm++ 8.0.0 language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Reductions on Chare Arrays`, `Built-in Reduction Types`; accessed 07-12-2026
 
 ## See Also
 

@@ -1,6 +1,6 @@
 # Elliptic Initial Data
 
-> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 07-06-2026
+> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -16,6 +16,10 @@ Both examples solve the NRPyElliptic hyperbolic-relaxation system for
 conformally flat binary-black-hole initial data. This page is the example leaf
 for the workflow comparison; it does not create a separate non-example
 NRPyElliptic infrastructure page.
+
+Both generators delete and recreate their fixed project directories. Preserve
+prior generated output before rerunning. Build/run commands below are generated
+workflow instructions; they were not executed during this KB audit.
 
 ## Detail
 
@@ -77,7 +81,11 @@ Validation status is split the same way. The Ubuntu and macOS codegen jobs run
 `project/nrpyelliptic_conformally_flat`, and run `make clean`. The dedicated
 `charmpp-validation` workflow generates and builds
 `superB_nrpyelliptic_conformally_flat` inside a Charm++ Apptainer image.
-Generated `project/**` files are validation products, not documentation sources.
+Neither GitHub job runs its elliptic executable or checks residual convergence.
+The local helper additionally configures a CUDA generation/build for the
+standalone example, but does not run it. Generated `project/**` files are
+validation products, not documentation sources; workflow YAML proves configured
+shape, not latest success.
 
 ## Sources
 

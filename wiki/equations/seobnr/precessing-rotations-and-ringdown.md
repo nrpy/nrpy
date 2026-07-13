@@ -1,6 +1,6 @@
 # SEOBNR Precessing Rotations And Ringdown
 
-> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed · Last reconciled: 06-29-2026
+> Map co-precessing frame rotations, inertial polarizations, and precessing merger-ringdown frame quantities. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -17,8 +17,10 @@ frame to the co-precessing frame.
 
 `SEOBNRv5_Coprecessing_Rotations` defaults to the mode set `(2,2)`, `(2,1)`,
 `(3,3)`, `(3,2)`, `(4,4)`, `(4,3)`, and `(5,5)`. Callers may pass another
-nonempty list of `(l, m)` modes, but the constructor rejects negative `m`
-values because negative-mode symmetries are handled internally.
+nonempty list of `(l, m)` modes. The constructor directly rejects negative `m`
+values because negative-mode symmetries are handled internally; subsequent
+`wigner_d_small` calls reject `l < 0` and `|m| > l`. No duplicate-mode check is
+performed.
 
 The class first constructs the `J_f`-frame triad from symbols
 `J_f_x`, `J_f_y`, and `J_f_z`. To keep generated code well behaved near
@@ -50,6 +52,9 @@ It computes `chi_f_dot_L_f` and uses no-branch coordinate-bound helpers to
 select the prograde or retrograde precession-frequency expression. The selected
 frequency is stored as `omega_prec`.
 
+At `chi_f_dot_L_f == 0`, both strict branch masks vanish, so the current
+expression selects `omega_prec = 0`.
+
 The merger-ringdown class advances post-merger Euler angles as
 `alpha_merger_RD`, `beta_merger_RD`, and `gamma_merger_RD`. It declares
 J-frame QNM symbols for `(2,2)`, `(2,1)`, `(3,3)`, `(3,2)`, `(4,4)`, `(4,3)`,
@@ -62,6 +67,12 @@ module's trusted dictionary. Representative trusted keys cover rotation matrix
 entries, Euler-angle branches, inertial polarizations, post-merger Euler angles,
 `omega_prec`, and J-frame/P-frame QNM frequencies.
 
+The trusted rotation object uses only the default mode list, and the trusted
+merger-ringdown object uses its fixed implemented mode list. Alternate caller
+mode lists and Euler-pole branch selection in generated code have no separate
+runtime evidence here. Sampled symbolic matching does not prove orthonormality
+for all inputs, generated branch correctness, or waveform accuracy.
+
 ## Sources
 
 - [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_coprecessing_rotations_quantities.py) - `SEOBNRv5_Coprecessing_Rotations`, `wigner_d_small_template`, `wigner_d_small`, `_polarizations_from_angles`
@@ -70,6 +81,7 @@ entries, Euler-angle branches, inertial polarizations, post-merger Euler angles,
 - [SEOBNRv5_coprecessing_rotations_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_coprecessing_rotations_quantities.py) - `trusted_dict`
 - [SEOBNRv5_merger_ringdown.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_merger_ringdown.py) - `trusted_dict`
 - [Min_Max_and_Piecewise_Expressions.py](../../../nrpy/equations/grhd/Min_Max_and_Piecewise_Expressions.py) - `coord_greater_bound`, `coord_less_bound`
+- [SEOBNRv5PHM paper](https://arxiv.org/abs/2303.18046) - Equations 15, 18-22, and 26-28 used by the current symbolic transcription
 
 ## See Also
 

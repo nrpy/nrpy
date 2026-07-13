@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -13,6 +13,11 @@ kernels directly. `photon_geodesic_batch_integrator` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
 honors `--outdir`, and writes per-tile light-blueprint ZIP artifacts for the
 lensed-image renderer and diagnostic scripts.
+
+All generation, build, executable, trajectory, and rendering commands on this
+page are manual/source-supported. Neither GitHub workflow nor the local full-CI
+helper invokes these three generators. No runtime or numerical result was
+reproduced during this KB audit.
 
 ## Detail
 
@@ -40,7 +45,10 @@ constraint, integrates an eight-component state through `gsl_odeiv2_step_rkf45`,
 writes `trajectory.txt`, then reports final normalization and conserved-quantity
 errors. Its generated Makefile uses `$(shell gsl-config --cflags)` and
 `$(shell gsl-config --libs)`, so GSL is a build dependency sourced from the
-generator and not independently verified here.
+generator. Official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html)
+headings `Compiling and Linking` and `Linking programs with the library`
+describe the external header/linker prerequisite; exact `gsl-config` use is
+NRPy generator behavior.
 
 For a photon single-ray run:
 
@@ -96,7 +104,10 @@ The batch generator derives `project_dir` from `--outdir` plus
 `2x2` tile grid with `scan_density = 500`; CUDA uses `nvcc`, `-lcudart`,
 `-DUSE_GPU`, `.cu` sources, copied `cuda_intrinsics.h`, a default `1x1` tile
 grid, and `scan_density = 1000`. The CUDA runtime/toolchain facts are limited to
-the generator's compiler, flags, and copied helper declarations.
+the generator's compiler, flags, and copied helper declarations. NVIDIA's
+official [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html)
+heading `NVCC: The NVIDIA CUDA Compiler` establishes that `nvcc` belongs to the
+CUDA Toolkit; this page does not claim any GPU model/toolkit version was tested.
 
 The batch executable produces tiled `light_blueprint_XX_YY.zip` files in its
 project directory. Those ZIPs are generated artifacts, not KB sources. The
@@ -138,9 +149,9 @@ for that context.
 
 ## Sources
 
-- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `main_c`, `ode_gsl_wrapper_massive`, `gsl_odeiv2_step_rkf45`, `trajectory.txt`, `gsl-config`
+- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `main_c`, `ode_gsl_wrapper_massive`, `gsl_odeiv2_step_rkf45`, `trajectory.txt`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 - [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`, `main_c`, `p0_reverse_kernel`, `rkf45_stage_update`, `trajectory.txt`
-- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`
+- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `TERM_SPHERE`, `TERM_SOURCE_PLANE`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`, `_process_blueprint_tile`, `_load_texture`

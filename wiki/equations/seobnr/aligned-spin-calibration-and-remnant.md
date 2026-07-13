@@ -1,6 +1,6 @@
 # Aligned-Spin Calibration And Remnant
 
-> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 06-29-2026
+> Map SEOBNR aligned-spin calibration constants, remnant fits, and NR attachment data. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -16,8 +16,9 @@ time.
 `SEOBNR_aligned_spin_constants` accepts two mutually exclusive calibration
 flags: `calibration_no_spin` and `calibration_spin`. In nonspinning calibration
 mode it exposes `a6` and `Delta_t_NS` as symbols, sets `dSO` and `Delta_t_S` to
-zero, and expects the calibration workflow to provide nonspinning inputs. In
-spin calibration mode it computes the nonspinning pieces first, then exposes
+zero, and expects the calibration workflow to provide `chi1=chi2=0`. The class
+does not enforce that spin condition. In spin calibration mode it computes the
+nonspinning pieces first, then exposes
 `dSO` and `Delta_t_S` as symbols. In the default post-calibration mode it calls
 `compute_calibration_params()` and stores calibrated expressions such as
 `pyseobnr_a6`, `pyseobnr_dSO`, `Delta_t_NS`, and `Delta_t_S`.
@@ -27,6 +28,9 @@ computes remnant properties through `final_spin_non_precessing_HBR2016()` and
 `final_mass_non_precessing_UIB2016()`, stores the remnant outputs as `a_f` and
 `M_f`, evaluates `rISCO` with `Kerr_ISCO_radius(a_f)`, and forms `rstop` with
 the branchless coordinate comparison helpers used elsewhere in NRPy equations.
+For negative `Delta_t` the intended selected value is `-1`; for positive
+`Delta_t` it is `0.98*rISCO`; at exactly zero both strict-mask terms vanish and
+the expression returns zero.
 
 The class also stores NR-fitted attachment data in dictionaries keyed by mode
 strings. `hNR` and `omegaNR` cover `(2,2)`, `(3,3)`, `(2,1)`, `(4,4)`, `(4,3)`,
@@ -34,12 +38,21 @@ strings. `hNR` and `omegaNR` cover `(2,2)`, `(3,3)`, `(2,1)`, `(4,4)`, `(4,3)`,
 stable keys such as `hNR_22`, `omegaNR_22`, `hNR_55`, and `omegaNR_32` before
 calling the trusted-expression pipeline.
 
+Script validation instantiates only the default post-calibration mode. Neither
+`calibration_no_spin=True` nor `calibration_spin=True` has a sibling trusted
+variant here. The stored dictionary is sampled numerical evidence for the
+current formulas, not an independent reproduction of the SEOBNRv5HM, HBR2016,
+or UIB2016 calibration data and not a remnant-fit accuracy test.
+
 ## Sources
 
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `SEOBNR_aligned_spin_constants`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `compute_calibration_params`, `Kerr_ISCO_radius`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_constants.py) - `final_spin_non_precessing_HBR2016`, `final_mass_non_precessing_UIB2016`
 - [SEOBNRv5_aligned_spin_constants.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_constants.py) - `trusted_dict`
+- [SEOBNRv5HM paper](https://arxiv.org/abs/2303.18039) - Equations 78-81 and intended calibration context
+- [HBR2016 final-spin paper](https://arxiv.org/abs/1605.01938) - defining final-spin fit family
+- [UIB2016 final-state paper](https://arxiv.org/abs/1611.00332) - defining nonprecessing final-mass fit family and ancillary implementation
 
 ## See Also
 

@@ -1,6 +1,6 @@
 # Waveform JAX PN Generators
 
-> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 06-30-2026
+> Map SEOBNR/SEBOB waveform, JAX, and PN momentum example generators to generated project names, dependency classes, and example-owned consistency checks. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -73,6 +73,18 @@ JAX work are roadmap items in the example source, not completed workflow
 features. Existing JAX infrastructure pages own the generated-package lifecycle
 and the narrower Commondata/PyFunction details.
 
+Claim status: contested; contradiction: CONTR-0002. The generator supplies 14
+Commondata names and descriptions but only 13 dtypes and defaults. Batch
+registration uses `zip()`, so generated `Commondata.py` omits `a_f`, while the
+emitted coefficient function constructs `Commondata(..., a_f=a_f)`. See
+[CONTR-0002](../contradictions.md#contr-0002). GitHub codegen invokes only
+generation; it does not install/import the package, run the generated basic
+test, call the coefficient function, or validate any JAX accelerator/numerical
+result. The generated metadata declares `jax`, `jaxlib>=0.4.0`, and
+`numpy>=1.21.0`; official JAX [Installation](https://docs.jax.dev/en/latest/installation.html)
+under `Supported platforms` remains authority for current platform-specific JAX
+installation, not NRPy's workflow.
+
 `nrpy.examples.nrpypn_quasicircular_momenta` is the PN momentum utility
 generator. It writes `project/nrpypn_quasicircular_momenta/`, sets
 `Infrastructure` to `BHaH`, registers
@@ -99,13 +111,16 @@ error is no larger than the median trusted-vs-perturbed baseline error.
 These consistency scripts document the example workflow, not a new validation
 subsystem. The broader CI page is context for where generated projects are
 built and compared; this page stays scoped to what the example generators and
-their local helper scripts do.
+their local helper scripts do. Workflow YAML configures all nine SEOBNRv5
+approximant/calibration projects plus `sebobv2` for trusted/current builds and
+executable comparisons. This is real run/result-check coverage for those stated
+inputs, but no claim about latest CI success or general waveform accuracy.
 
 ## Sources
 
 - [seobnrv5_aligned_spin_inspiral.py](../../nrpy/examples/seobnrv5_aligned_spin_inspiral.py) - `argparse` flags, `project_name`, `register_CFunction_main_c`, `register_CFunction_cmdline_input_and_parfile_parser`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [sebobv2.py](../../nrpy/examples/sebobv2.py) - `project_name`, workflow docstring, `register_CFunction_main_c`, `register_CFunction_cmdline_input_and_parfile_parser`, `output_CFunctions_function_prototypes_and_construct_Makefile`
-- [sebobv1_jax.py](../../nrpy/examples/sebobv1_jax.py) - `project_name`, `Infrastructure`, `register_commondata_params`, `register_PyFunction_SEOBNRv5_aligned_spin_coefficients`, `output_PyFunction_files_and_construct_project`
+- [sebobv1_jax.py](../../nrpy/examples/sebobv1_jax.py) - `project_name`, `Infrastructure`, `register_commondata_params`, `register_PyFunction_SEOBNRv5_aligned_spin_coefficients`, `output_PyFunction_files_and_construct_project`; official JAX [Installation](https://docs.jax.dev/en/latest/installation.html) - `Supported platforms`
 - [nrpypn_quasicircular_momenta.py](../../nrpy/examples/nrpypn_quasicircular_momenta.py) - `project_name`, `register_CFunction_main_c`, `register_CFunction_NRPyPN_quasicircular_momenta`, `register_CFunction_cmdline_input_and_parfile_parser`
 - [sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `run_sebob`, `calculate_rmse`, `process_input_set`, `__main__`
 - [sebobv2_consistency_check.py](../../nrpy/examples/tests/sebobv2_consistency_check.py) - `run_sebobv2`, `calculate_rmse`, `process_input_set`, `__main__`

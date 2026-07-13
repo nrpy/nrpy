@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-07-2026
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -15,7 +15,8 @@ The three checked examples are `superB_two_blackholes_collide`,
 prints `make` as the build step, and runs as `./charmrun +pN ./<project_name>`
 with `+p4` shown by the examples and `+p2` used by CI for the collision run.
 Upstream Charm++ examples and tests can inform pattern matching, but they are
-not NRPy CI validation evidence.
+not NRPy CI validation evidence. Each generator deletes and recreates its fixed
+project directory; preserve prior output before rerunning.
 
 ## Detail
 
@@ -24,6 +25,14 @@ not NRPy CI validation evidence.
 | Two black holes collide | `python -m nrpy.examples.superB_two_blackholes_collide` | `project/superB_two_blackholes_collide/` | Python, Charm++ toolchain, `make`; BHaHAHA library is generated under the project because `enable_BHaHAHA = True` | `make`, then `./charmrun +p4 ./superB_two_blackholes_collide` | CI generates, builds with `make -j2`, and runs `./charmrun +p2 ./superB_two_blackholes_collide` |
 | Black-hole spectroscopy | `python -m nrpy.examples.superB_blackhole_spectroscopy` | `project/superB_blackhole_spectroscopy/` | Python, Charm++ toolchain, `make`, GSL, TwoPunctures headers copied by the generator; BHaHAHA and Psi4 services enabled | `make`, then `./charmrun +p4 ./superB_blackhole_spectroscopy`; the generator also prints `./charmrun +p4 ./superB_blackhole_spectroscopy +restart log` as the checkpoint restart command | CI generates and builds with `make -j2`; it does not run the executable or restart command in the current workflow |
 | Elliptic conformally flat | `python -m nrpy.examples.superB_nrpyelliptic_conformally_flat` | `project/superB_nrpyelliptic_conformally_flat/` | Python, Charm++ toolchain, `make`; no GSL flag in the example; `--floating_point_precision` accepts `float` or `double` tolerance branches | `make`, then `./charmrun +p4 ./superB_nrpyelliptic_conformally_flat` | CI generates and builds with `make -j2`; it does not run the executable in the current workflow |
+
+These are configured workflow facts, not latest-pass claims. The workflow pins
+its container environment to `/opt/charm-8.0.0`; this says nothing about newer
+Charm++ releases. Official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html)
+headings `Compiling the Example` and `Running the Example` corroborate the
+external toolchain shape: `charmc` compiles Charm++ applications and
+`charmrun +pN` launches them. NRPy's exact generated assets and CI scope still
+come from local generators and workflow YAML.
 
 All three examples set the generated infrastructure parameter to BHaH but
 assemble through superB helpers. That means they reuse BHaH equation,
@@ -107,7 +116,7 @@ infrastructure leaves.
 - [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `TwoPunctures`, `BHaHAHA`, `BHaH.checkpointing.register_CFunctions`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `--floating_point_precision`, `Nchare0`, `nrpyelliptic_project=True`
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `get_log10_residual_tolerance`, `post_MoL_step_forward_in_time`, `addl_libraries=["-module CkIO"]`
-- [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`
+- [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`; official [Charm++ Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`
 
 ## See Also

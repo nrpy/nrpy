@@ -1,6 +1,6 @@
 # C Function Registry
 
-> Core route for generated C function objects and registration. · Status: confirmed · Last reconciled: 06-30-2026
+> Core route for generated C function objects and registration. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -9,7 +9,7 @@
 
 ## Detail
 
-`CFunction` stores the output subdirectory, SIMD flag, includes, optional `prefunc` and `postfunc` text, Doxygen-style description, optional decorators, return type, function name, parameter string, body, optional code-parameter include behavior, coordinate-system wrapper metadata, and Einstein Toolkit metadata. Construction requires `name`, `desc`, and `body`; missing any of those fields raises a `ValueError`. It also validates that `includes` is a list and forbids passing `griddata_struct` into coordinate-specific wrapper functions.
+`CFunction` stores the output subdirectory, SIMD flag, includes, optional `prefunc` and `postfunc` text, Doxygen-style description, optional decorators, return type, function name, parameter string, body, optional code-parameter include behavior, coordinate-system wrapper metadata, and Einstein Toolkit metadata. Construction requires `name`, `desc`, and `body`; missing any of those fields raises a `ValueError`. A truthy non-list `includes` value raises `ValueError`, and passing `griddata_struct` into coordinate-specific wrapper-function parameters is forbidden. Empty falsey values bypass the constructor's includes-type check.
 
 Include handling preserves the caller's intent. During `generate_full_function()`, include entries containing `<` are emitted as angle-bracket includes such as `#include <math.h>`, while all other include strings become quoted includes such as `#include "set_CodeParameters.h"`. Non-string include entries raise a `TypeError`.
 
@@ -25,6 +25,8 @@ Einstein Toolkit metadata is stored directly on the `CFunction`: `ET_thorn_name`
 
 `register_CFunction()` computes the actual name and subdirectory, including any `__rfm__<CoordSystem>` suffix, rejects duplicate actual names already present in `CFunction_dict`, constructs the `CFunction`, and stores it under the actual generated name. BHaH shows the registry in normal use: `register_CFunction_main_c()` checks that required functions are already present in `CFunction_dict`, then registers the generated `main` function; `register_CFunctions_bhah_lib()` registers library-facing initialization, evolution, diagnostics, and finalization functions through the same registration mechanism.
 
+Import registry objects from `nrpy.c_function`. The empty `nrpy/__init__.py` does not re-export `CFunction`, `CFunction_dict`, or `register_CFunction`.
+
 `GPUKernel` is a helper-side producer of `CFunction` text and launch calls. Use [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md) for CUDA launch dictionaries, host/device wrapper choices, and GPU-kernel call-string behavior; this page remains the owner of the registry contract itself.
 
 ## Sources
@@ -32,6 +34,7 @@ Einstein Toolkit metadata is stored directly on the `CFunction`: `ET_thorn_name`
 - [nrpy/c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `prefix_with_star`, `generate_full_function`, `register_CFunction`, `function_name_and_subdir_with_CoordSystem`
 - [nrpy/infrastructures/BHaH/main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [nrpy/infrastructures/BHaH/bhah_lib.py](../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`
+- [nrpy/__init__.py](../../nrpy/__init__.py) - empty package initializer; no C-function registry re-exports
 
 ## See Also
 

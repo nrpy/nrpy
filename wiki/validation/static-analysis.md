@@ -1,6 +1,6 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-05-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -8,30 +8,42 @@
 For Python source changes, run `black .` before commit and run
 `./.github/single_file_static_analysis.sh <path.py>` for every modified Python
 file, except generated trusted-value files under `*/tests/*.py`. The
-single-file script checks formatting, imports, typing, linting, docstrings,
-docstring arguments, and doctests.
+single-file script checks formatting, imports, typing, linting, and docstrings,
+then executes the target file. That final step runs doctests only when the
+target's `__main__` path invokes a doctest runner.
 
 ## Detail
 
-The preserved agent instructions require the single-file static-analysis script
-on every modified Python file and explicitly forbid using only a hand-picked
-subset. They also record the trusted-value exception: generated reference-value
-files under `*/tests/*.py` are not hand-authored source modules and skip the
-single-file static-analysis script.
+Current `coding_style.md` owns the contributor commands: `black .` before
+commit and the single-file script for each modified Python file. The preserved
+agent instructions supply the narrower trusted-value exception and forbid using
+only a hand-picked subset. Generated reference-value files under
+`*/tests/*.py` are regenerated evidence rather than hand-authored modules and
+skip the single-file script; this exception does not cover arbitrary hand-written
+tests merely because their path contains `tests`.
 
-The single-file script expects one Python file argument. It verifies the file
-exists, prints the Python version, then runs `black --check`, `isort
+The single-file script expects exactly one Python file argument and must be run
+from repository root because it resolves `.pylintrc` there. It verifies the file
+exists, prints the Python version, then schedules `black --check`, `isort
 --check-only`, `mypy --strict --pretty --allow-untyped-calls`, `pylint` with
-`.pylintrc`, `pydocstyle`, `darglint -v 2`, and `python3 <file>` for doctests.
-Its Pylint gate fails below `9.91`.
+`.pylintrc`, `pydocstyle`, `darglint -v 2`, and `python3 <file>`. Its Pylint
+gate fails below `9.91`. Executing a file can run module-specific validation,
+generation, or other `__main__` side effects; inspect unfamiliar targets first.
 
-The GitHub `static-analysis` job runs across Ubuntu and Python-version matrices.
-It clears the NRPy cache, installs runtime and development dependencies, skips
-`__init__.py`, `project/`, `build/`, `*/tests/*`, `*manga*`, and visualization
-scripts, then runs doctests for non-example modules, Black on newer Python,
-isort and mypy on Python versions that support those checks, Pylint, pydocstyle,
-and darglint. That CI job has its own inline Pylint threshold, while the
-required local single-file script uses the stricter `9.91` threshold.
+The configured GitHub `static-analysis` matrix has Ubuntu 22.04 and 24.04 with
+Python `3.7.13`, `3.8.12`, `3.9.19`, and `3.x`, excluding only Ubuntu 24.04 with
+3.7.13. Its file discovery skips `__init__.py`, `project/`, `build/`, every
+`*/tests/*` path, and every path containing `manga`. It also names
+`./nrpy/examples/visualization_scripts/*`, but that path does not match the
+current `nrpy/examples/geodesic_visualizations/` directory; those current
+companion scripts are therefore not excluded by that rule.
+
+For discovered files, CI executes non-root, non-example modules as its doctest
+step; applies Black only on Python minor version 10 or newer; skips isort and
+mypy on 3.7.13 and 3.8.12; and applies Pylint, pydocstyle, and darglint on all
+matrix cells. Its inline Pylint threshold is `9.5`, not the local script's
+`9.91`. Workflow YAML proves this configured matrix and command shape, not a
+latest successful run.
 
 The config files supply the tool policy: `pyproject.toml` sets isort to the
 Black profile; `.mypy.ini` enables strict typed definitions, no implicit
@@ -42,7 +54,7 @@ formatting, disabled warnings, and version-specific Pylint behavior.
 
 ## Sources
 
-- [../../raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks`
+- [../../coding_style.md](../../coding_style.md) - `Python Coding Style / Formatting`, `Static Analysis Configuration`; [../../raw/source-docs/original-agents.md](../../raw/source-docs/original-agents.md) - `## Required Checks` trusted-value exception
 - [../../.github/single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `static-analysis`
 - [../../pyproject.toml](../../pyproject.toml) - `[tool.isort]`

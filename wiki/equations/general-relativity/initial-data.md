@@ -1,6 +1,6 @@
 # Initial Data
 
-> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 06-29-2026
+> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -42,6 +42,16 @@ Cartesian Brill-Lindquist and Kasner, plus spherical UIUCBlackHole,
 StaticTrumpet, and OffsetKerrSchild. The separate `ADM_to_BSSN_StaticTrumpet`
 trusted file covers the handoff from spherical ADM initial data into BSSN
 variables.
+
+Two similarly named binary-puncture paths are outside these two provider
+classes. [Conformally Flat Elliptic](../conformally-flat-elliptic.md) owns the
+equation-side NRPyElliptic Bowen-York source and hyperbolic-relaxation
+expressions. BHaH `TwoPunctures` is an external compact-object initial-data
+library integration, not a subpackage of `nrpy/equations`; its generated-C
+registration, persistent structure, interpolation, and cleanup belong to
+[BHaH GR Application Wiring](../../infrastructures/bhah/gr-application-wiring.md).
+Neither path is evidence that these `InitialData_*` classes produce
+TwoPunctures data.
 
 ## Sources
 

@@ -1,16 +1,20 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 07-06-2026
+> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 07-12-2026
 > Up: [Architecture](index.md)
 
 ## Summary
 
-C and embedded C use 2-space indentation, K&R braces, snake_case functions and
+New or modified C and embedded C should use 2-space indentation, K&R braces, snake_case functions and
 variables, UPPER_SNAKE_CASE macros and enum values, traditional header guards,
 and Doxygen comments for non-trivial functions. Generated C emitted from Python
 registration functions follows the same conventions, with raw triple-quoted
 strings for embedded bodies and informative `// END ...` comments on closing
 braces.
+
+This leaf records contributor rules, not a claim that every handwritten or
+generated legacy C fragment already conforms. Existing exceptions are evidence
+about current source, not automatic precedent for new code.
 
 ## Detail
 
