@@ -32,10 +32,11 @@ modules exercise these helpers through their own trusted-result paths.
 `assert_equal()` accepts either dictionaries or single expressions. Non-dict
 inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
 sides are processed with fixed `mpf` substitutions, and values at each common
-processed key are compared by relative error. Dictionary values must be SymPy
-expressions or recursively nested lists of them; unsupported leaves raise
-`TypeError`. Dictionary inputs must have identical raw key sets and list
-nesting; extra, missing, renamed, or differently shaped entries raise
+processed key are compared by relative error. Type hints cover scalar SymPy
+expressions and NRPy tensor ranks 1 through 4; recursive runtime validation
+requires every leaf to be a SymPy expression, and unsupported leaves raise
+`TypeError`. Dictionary inputs must have identical raw key sets and list nesting;
+extra, missing, renamed, or differently shaped entries raise
 `AssertionError` before value comparison. Among entries retained for numerical
 processing, a scalar name that would collide with a flattened tensor-leaf name
 also raises. Keys containing `funcform` participate in raw key, nesting, and
@@ -50,7 +51,7 @@ infinities compare equal, while one-sided NaNs, finite-versus-non-finite values,
 opposite infinities, or different finite companion components fail.
 
 Claim evidence:
-- Claim: `assert_equal()` requires SymPy-expression leaves, supports recursively nested lists, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
+- Claim: `assert_equal()` type-checks scalar expressions and NRPy tensor ranks 1 through 4, requires SymPy-expression leaves at runtime, supports recursive list validation, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
 - Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper

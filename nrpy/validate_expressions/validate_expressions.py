@@ -21,6 +21,17 @@ from mpmath import fabs, mp, mpc, mpf  # type: ignore
 # Typical value for precision is 30 significant digits.
 precision = 30
 
+# NRPy indexed expressions support tensor ranks 1 through 4. Enumerating each
+# concrete list shape avoids mutable-list invariance without weakening value
+# type checking.
+ExpressionValue = Union[
+    sp.Expr,
+    List[sp.Expr],
+    List[List[sp.Expr]],
+    List[List[List[sp.Expr]]],
+    List[List[List[List[sp.Expr]]]],
+]
+
 
 def flatten_tensor(tensor: List[Any]) -> List[Any]:
     """
@@ -38,7 +49,7 @@ def flatten_tensor(tensor: List[Any]) -> List[Any]:
     return flat_list
 
 
-def _expression_structure(expression: object) -> Tuple[object, ...]:
+def _expression_structure(expression: ExpressionValue) -> Tuple[object, ...]:
     """
     Describe supported expression/list nesting without including values.
 
@@ -108,18 +119,15 @@ def _nonfinite_values_match(
     return True
 
 
-# Dictionary values use Any to match heterogeneous expression dictionaries
-# throughout NRPy and avoid mutable-list invariance for typed tensors. Runtime
-# structure validation below still enforces recursively nested SymPy leaves.
 def assert_equal(
-    vardict_1: Union[Dict[str, Any], sp.Expr, str],
-    vardict_2: Union[Dict[str, Any], sp.Expr, int],
+    vardict_1: Union[Dict[str, ExpressionValue], sp.Expr, str],
+    vardict_2: Union[Dict[str, ExpressionValue], sp.Expr, int],
     suppress_message: bool = False,
 ) -> None:
     """
     Assert the equality of SymPy expressions or dictionaries containing SymPy expressions.
 
-    :param vardict_1: A scalar expression input or dictionary whose values are SymPy expressions or recursively nested lists of them.
+    :param vardict_1: A scalar expression input or dictionary whose values are SymPy expressions or rank-1 through rank-4 lists of them.
     :param vardict_2: A scalar expression input or dictionary of supported expression values to compare with vardict_1.
     :param suppress_message: If False, prints a success message when the assertion passes.
 
