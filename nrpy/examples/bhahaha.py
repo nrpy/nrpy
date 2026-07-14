@@ -284,9 +284,7 @@ for line_number, line in enumerate(lines):
         lines[line_number] = line + " " + " ".join(akv_primme_object_files)
         break
 else:
-    raise ValueError(
-        f"Could not find OBJ_FILES in generated Makefile: {makefile_path}"
-    )
+    raise ValueError(f"Could not find OBJ_FILES in generated Makefile: {makefile_path}")
 
 for line_number, line in enumerate(lines):
     if line.startswith("\t$(RM) "):

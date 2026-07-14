@@ -2296,10 +2296,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       (void)xx1;
       for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
 """
-        body = (
-            body.replace("@DIAGNOSTIC_PARAMETER_DEFINITIONS@", parameter_definitions)
-            .replace("@DIAGNOSTIC_COMMONDATA_DEFINITIONS@", commondata_definitions)
-        )
+        body = body.replace(
+            "@DIAGNOSTIC_PARAMETER_DEFINITIONS@", parameter_definitions
+        ).replace("@DIAGNOSTIC_COMMONDATA_DEFINITIONS@", commondata_definitions)
         body += precompute_c_code
         body += rf"""
       }} // END LOOP: for i0 over active radial horizon-grid slabs

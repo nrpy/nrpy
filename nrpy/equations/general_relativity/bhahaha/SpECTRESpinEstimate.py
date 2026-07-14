@@ -196,8 +196,7 @@ class SpECTRESpinEstimateClass:
             for i in range(3)
         ]
         self._sU = [
-            cast(sp.Expr, Th.sU[i].xreplace(surface_replacements))
-            for i in range(3)
+            cast(sp.Expr, Th.sU[i].xreplace(surface_replacements)) for i in range(3)
         ]
         self._zU = ixp.declarerank1("zU", dimension=3)
 
