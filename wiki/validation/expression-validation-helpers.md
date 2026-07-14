@@ -29,13 +29,14 @@ exact-zero conversion, and its `__main__` block runs them. No separate dedicated
 test module is checked in under `nrpy/validate_expressions/`; broader equation
 modules exercise these helpers through their own trusted-result paths.
 
-`assert_equal()` accepts either dictionaries or single expressions. Non-dict
-inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
-sides are processed with fixed `mpf` substitutions, and values at each common
-processed key are compared by relative error. Dictionary values must be SymPy
-expressions or recursively nested lists of them; unsupported leaves raise
-`TypeError`. Dictionary inputs must have identical raw key sets and list
-nesting; extra, missing, renamed, or differently shaped entries raise
+`assert_equal()` accepts either mappings or single expressions. Mapping inputs
+are shallow-copied into dictionaries, while scalar inputs are
+`sympify`-wrapped into one-entry dictionaries keyed by `""`; both sides are
+processed with fixed `mpf` substitutions, and values at each common processed
+key are compared by relative error. Mapping values must be SymPy expressions or
+recursively nested lists of them; unsupported leaves raise `TypeError`. Mapping
+inputs must have identical raw key sets and list nesting; extra, missing,
+renamed, or differently shaped entries raise
 `AssertionError` before value comparison. Among entries retained for numerical
 processing, a scalar name that would collide with a flattened tensor-leaf name
 also raises. Keys containing `funcform` participate in raw key, nesting, and
@@ -50,12 +51,12 @@ infinities compare equal, while one-sided NaNs, finite-versus-non-finite values,
 opposite infinities, or different finite companion components fail.
 
 Claim evidence:
-- Claim: `assert_equal()` requires SymPy-expression leaves, supports recursively nested lists, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
+- Claim: `assert_equal()` accepts mappings with runtime-validated values, requires SymPy-expression leaves, supports recursively nested lists, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
 - Role: descriptive behavior
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
-- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; read-only mapping, filter, and error-path tests remain colocated with the deciding helper
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, explicit funcform collision and leaf-type probes, and BSSN cross-representation run; date=07-13-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0 and 1.15.0.dev, mpmath 1.3.0, mypy 2.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=70 validator doctests, strict BSSN type checks, explicit funcform collision and leaf-type probes, and BSSN cross-representation runs; date=07-13-2026`
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
@@ -94,7 +95,7 @@ Claim evidence:
 - Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
 - Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=direct signed-infinity fallback doctests plus aggregate NaN and complex-fallback cases in 68 total validator doctests; date=07-13-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=direct signed-infinity fallback doctests plus aggregate NaN and complex-fallback cases in 70 total validator doctests; date=07-13-2026`
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
 has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
