@@ -40,11 +40,11 @@ import nrpy.params as par
 from nrpy.equations.general_relativity.bhahaha.SpECTRESpinEstimate import (
     SpECTRESpinEstimate,
 )
-from nrpy.helpers.generic import clang_format
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
 )
+from nrpy.helpers.generic import clang_format
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
     APPLY_PARITY_BRANCHLESS_PREFUNC,
 )
@@ -1525,7 +1525,8 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 
   if (Nxx0 != 1)
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-  if (Nxx2 % 2 != 0)
+  // The two-mode constraint is complete only for Nphi divisible by four.
+  if (Nxx2 % 4 != 0)
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
 
   const int Ntheta = Nxx1;
