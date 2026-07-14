@@ -12,7 +12,9 @@ glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
 `PYTHONPATH=.` when there is no editable install. Modified handwritten Python
 requires `black .` in an isolated user-owned intended-change worktree or copy,
-then individual single-file static analysis and Pylint **10.00/10.00**.
+then individual single-file static analysis. New handwritten files require
+Pylint **10.00/10.00**; existing tracked handwritten files must not regress
+from their grandfathered pre-change scores.
 
 ## Search Order
 
@@ -187,7 +189,9 @@ For direct example runs without an editable install, append `.` to
 `PYTHONPATH`. Run `black .` only in an isolated, user-owned intended-change
 worktree or copy with no unrelated modifications, inspect its diff, and run
 `./.github/single_file_static_analysis.sh <path.py>` for each modified
-handwritten Python file; each must report Pylint **10.00/10.00**. Inspect the
+handwritten Python file. A new handwritten file must report Pylint
+**10.00/10.00**. An existing tracked handwritten file must not regress from its
+pre-change score, including a grandfathered score at or below `9.5`. Inspect the
 wrapper's command construction, the target's direct-execution effects, and every
 invoked tool's cache and filesystem output effects. The current wrapper
 dispatches interpolated command strings through `eval`. Before invocation,

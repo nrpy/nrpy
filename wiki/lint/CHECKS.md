@@ -100,9 +100,11 @@ carry facts and sources, and excluded artifacts stay out of the KB.
   handwritten Python file. Before invoking that wrapper, apply the target-path
   and execution-safety gate in [Static Analysis](../validation/static-analysis.md);
   gate failure blocks completion pending separately authorized wrapper
-  hardening. Every accepted file must report Pylint **10.00/10.00**. Generated
-  trusted `*/tests/*.py` data is exempt from per-file analysis, but its
-  handwritten owner is not.
+  hardening. A newly added handwritten file must report Pylint
+  **10.00/10.00**. An existing tracked handwritten file must not regress from
+  its pre-change score, including a grandfathered score at or below `9.5`.
+  Generated trusted `*/tests/*.py` data is exempt from per-file analysis, but
+  its handwritten owner is not.
 
 ## Sources
 

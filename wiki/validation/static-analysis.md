@@ -7,10 +7,11 @@
 
 For modified handwritten Python, run `black .` from repository root only in an
 isolated, user-owned intended-change worktree or copy with no unrelated
-modifications, then inspect its diff. Run
-`./.github/single_file_static_analysis.sh <path.py>` for each file individually;
-the full gate must pass and report Pylint **10.00/10.00**. Current wrapper and
-CI thresholds do not by themselves guarantee that policy result.
+modifications, then inspect its diff. Run the single-file checks for each file.
+A newly added handwritten file must report Pylint **10.00/10.00**. An existing
+tracked handwritten file is grandfathered at its pre-change score, including a
+legacy score at or below `9.5`, but must not regress. Current wrapper and CI
+thresholds do not distinguish those classes or enforce this policy.
 
 ## Detail
 
@@ -21,6 +22,19 @@ its handwritten owner is not. A directory path never exempts legacy or
 exceptional handwritten Python, and this data exception does not admit new
 executable Python under ordinary `tests/` stores. See [Test Oracles And Safe
 Updates](test-oracles-and-safe-updates.md) for the store and update rules.
+
+Repository state before the proposed change decides the class. A handwritten
+Python path already tracked there is legacy even when modified; a newly added
+path is new. For legacy files, measure the base and proposed file with the same
+Pylint version and configuration and reject any lower proposed rating. This
+grandfathering permits preservation, not a score decrease. New paths have no
+legacy baseline and must score exactly `10.00/10.00`.
+
+Claim evidence:
+- Claim: Existing tracked handwritten Python files are grandfathered at their pre-change Pylint score without regression, including scores at or below `9.5`; newly added handwritten Python files must score `10.00/10.00`.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
+- Corroboration: [Code Test Policy](code-test-policy.md#static-summary), `### Static Summary`, applies the same prospective rule
 
 The single-file script expects exactly one Python file argument and must be run
 from repository root because it resolves `.pylintrc` there. It verifies the file
@@ -57,8 +71,11 @@ mypy on 3.7.13 and 3.8.12; and applies Pylint, pydocstyle, and darglint on all
 matrix cells. Its inline Pylint threshold is `9.5`, not the local script's
 `9.91`. Both `.pylintrc` and `.pylintrc_python36` set `fail-under=10`, but the
 wrapper and workflow suppress Pylint's own nonzero result while parsing ratings
-against their weaker floors. Therefore script or job success under these paths
-does not guarantee the required Pylint 10.00. Workflow YAML proves configured
+against their own floors. None compares an existing file with its pre-change
+rating or distinguishes a newly added file. Therefore the wrapper can reject a
+grandfathered legacy score below `9.91`, the workflow can reject one below
+`9.5`, and either can accept a new file below `10.00`; propagated config failure
+would also reject grandfathered legacy files. Workflow YAML proves configured
 matrix and command shape, not a latest successful run.
 
 Claim status: stale; contradiction: CONTR-0003.

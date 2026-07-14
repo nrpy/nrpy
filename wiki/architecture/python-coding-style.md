@@ -24,8 +24,10 @@ Python uses 4-space indentation and lets Black decide line wrapping. Run
 `black .` only in an isolated, user-owned intended-change worktree or copy with
 no unrelated modifications, inspect its diff, then run
 `./.github/single_file_static_analysis.sh <path-to-file.py>` for each modified
-handwritten Python file; every file must report Pylint
-**10.00/10.00**. [Static Analysis](../validation/static-analysis.md) owns exact
+handwritten Python file. A newly added handwritten file must report Pylint
+**10.00/10.00**. An existing tracked handwritten file must not regress from its
+pre-change score, including a grandfathered score at or below `9.5`. [Static
+Analysis](../validation/static-analysis.md) owns exact
 mechanics and current enforcement gaps. Do not add binary files, images, archives,
 compiled artifacts, or other non-text assets in ordinary pull requests;
 redesign the change as text or discuss a maintainer exception.

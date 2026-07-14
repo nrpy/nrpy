@@ -28,7 +28,7 @@ The project uses **Black** for automatic code formatting. Follow Black's output
 for line wrapping and other formatting details.
 
 Run `black .` before committing to ensure consistent formatting.
-For any modified Python file, also run `.github/single_file_static_analysis.sh <path-to-file.py>` before committing.
+For any modified handwritten Python file, also run `.github/single_file_static_analysis.sh <path-to-file.py>` before committing. Generated trusted `*/tests/*.py` data is exempt, but its handwritten owner is not.
 
 Binary files are not allowed in NRPy pull requests. Do not add images, archives,
 compiled artifacts, or other non-text assets. If a change appears to require one,
@@ -1021,9 +1021,14 @@ If a function is both declared (in a header) and defined (in a `.c` file), the c
 
 ## Static Analysis Configuration
 
-The `.github/single_file_static_analysis.sh` script enforces the following checks:
+The `.github/single_file_static_analysis.sh` script runs the following checks.
+The Pylint row states repository policy; the current wrapper does not yet
+enforce its new-versus-grandfathered distinction, as documented in
+[Static Analysis](wiki/validation/static-analysis.md).
 
-Run this script on every modified Python file before committing. This is the required pre-commit check for Python changes:
+Run this script on every modified handwritten Python file before committing.
+Generated trusted `*/tests/*.py` data is exempt, but its handwritten owner is
+not. This is the required pre-commit check for handwritten Python changes:
 
 ```bash
 ./.github/single_file_static_analysis.sh path/to/modified_file.py
@@ -1034,7 +1039,7 @@ Run this script on every modified Python file before committing. This is the req
 | **black** | Code formatting | `--check` mode |
 | **isort** | Import sorting | `--check-only` |
 | **mypy** | Type checking | `--strict --allow-untyped-calls` |
-| **pylint** | Code quality | `.pylintrc`, threshold ≥ 9.91/10 |
+| **pylint** | Code quality | New handwritten files: 10.00/10.00; existing tracked handwritten files: no regression from their pre-change score, including grandfathered scores at or below 9.5 |
 | **pydocstyle** | Docstring style | `.pydocstyle` config |
 | **darglint** | Docstring argument checking | `-v 2` (verbose) |
 | **doctests** | Embedded tests | `python3 <file>` |
@@ -1061,7 +1066,7 @@ Run this script on every modified Python file before committing. This is the req
 ## Additional Notes
 
 - All code contributions must pass the static analysis checks before being merged.
-- For Python changes, run `.github/single_file_static_analysis.sh` on each modified Python file, not just on a hand-picked subset.
+- For Python changes, run `.github/single_file_static_analysis.sh` on each modified handwritten Python file, not just on a hand-picked subset; generated trusted `*/tests/*.py` data is exempt.
 - **`body +=` for conditional C code**: When a C function body has sections that are conditionally included based on Python parameters, build the body string incrementally with `+=`:
   ```python
   body = ""
