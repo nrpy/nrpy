@@ -96,26 +96,41 @@ alone do not pass the [meaningful-contract gate](code-test-policy.md#meaningful-
 ### Expression Oracle Selection
 
 Prefer an exact analytic, symbolic, or semantic invariant when practical. When
-sampled regression is appropriate, the owner path must:
+sampled trusted-result regression is appropriate, the owner path must:
 
 1. build a dictionary with stable descriptive keys;
-2. check equal lengths and key sets before dictionary `assert_equal()`, unless
-   positional comparison is explicitly documented;
-3. process trusted results with `fixed_mpfs_for_free_symbols=True`; and
-4. compare through `compare_or_generate_trusted_results()` in the established
+2. process trusted results with `fixed_mpfs_for_free_symbols=True`; and
+3. compare through `compare_or_generate_trusted_results()` in the established
    owner path.
 
-Current `assert_equal()` applies fixed substitutions when free symbols exist
-but zips dictionary values without independently establishing equal lengths or
-key sets. Current `check_zero()` defaults to non-fixed substitutions.
+Direct dictionary `assert_equal()` calls must use stable keys. The helper itself
+rejects non-identical raw key sets and different list nesting. It rejects
+flattened-name collisions among numerically processed entries; `funcform` keys
+are omitted from numerical processing and collision checks. It has no
+positional dictionary mode.
 
 Claim evidence:
-- Claim: Current `assert_equal()` applies fixed substitutions when free symbols exist but zips dictionary values without independently establishing equal lengths or key sets; current `check_zero()` defaults to non-fixed substitutions.
+- Claim: Direct dictionary `assert_equal()` calls reject non-identical raw key sets, different list nesting, and flattened-name collisions among numerically processed entries; `funcform` keys are omitted from numerical processing and collision checks, and positional dictionary comparison is unsupported.
 - Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `check_zero`
-- Corroboration: [WaveEquation_RHSs.py](../../nrpy/equations/wave_equation/WaveEquation_RHSs.py), module `__main__` path, corroborates fixed trusted-result processing but not the helper limitations
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-run; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; error-path tests remain colocated with the deciding helper
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests plus explicit dictionary-structure and funcform-collision probes; date=07-13-2026`
+
+Current `assert_equal()` applies fixed substitutions when free symbols exist
+and enforces raw dictionary keys, list nesting, and collision-free flattened
+names among numerically processed entries. `funcform` keys are omitted from
+numerical processing and collision checks. Matching NaN components and
+same-signed infinities are explicit sentinels; non-finite mismatches fail.
+Current `check_zero()` defaults to non-fixed substitutions.
+
+Claim evidence:
+- Claim: Current `assert_equal()` applies fixed substitutions, enforces raw dictionary keys and list structure, rejects flattened-name collisions among numerically processed entries while omitting `funcform` keys from numerical processing and collision checks, and compares non-finite components explicitly; current `check_zero()` defaults to non-fixed substitutions.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`, `_nonfinite_values_match`, and `check_zero`
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises fixed substitutions and direct dictionary comparison; collision, filter, and non-finite error-path tests remain colocated with the deciding helper
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, explicit funcform collision and leaf-type probes, fixed substitutions, and trusted comparison; date=07-13-2026`
 
 Regression uses of `check_zero()` with free symbols must pass
 `fixed_mpfs_for_free_symbols=True`; truly symbol-free expressions do not need a

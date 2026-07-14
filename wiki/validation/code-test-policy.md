@@ -219,11 +219,20 @@ component, does not begin with `-`, and matches `^[A-Za-z0-9_./-]+$`. A failing
 path blocks invocation until separately authorized wrapper hardening. Run an
 accepted path only in the isolated intended-change tree or copy; disable or
 redirect every writable tool cache and filesystem output to an owned disposable
-location, then inspect repository status. Each file must pass the full gate and
-report Pylint **10.00/10.00**. Generated trusted `*/tests/*.py` data is
-exempt from per-file analysis; its owning handwritten module is not. Current
-automation must not be assumed to guarantee this policy. See [Static
+location, then inspect repository status. A newly added handwritten file must
+report Pylint **10.00/10.00**. An existing tracked handwritten file is
+grandfathered at its pre-change score, including a legacy score at or below
+`9.5`, but must not regress when base and proposed versions are measured with
+the same Pylint version and configuration. Generated trusted `*/tests/*.py`
+data is exempt from per-file analysis; its owning handwritten module is not.
+Current automation must not be assumed to guarantee this policy. See [Static
 Analysis](static-analysis.md) for command mechanics and enforcement details.
+
+Claim evidence:
+- Claim: New handwritten Python files require Pylint `10.00/10.00`; existing tracked handwritten files retain their pre-change rating without regression, including grandfathered scores at or below `9.5`.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
+- Corroboration: [Static Analysis](static-analysis.md) owns classification, baseline-comparison mechanics, and current enforcement gaps
 
 ### Decision Tree And Legacy Shapes
 
@@ -239,8 +248,9 @@ Analysis](static-analysis.md) for command mechanics and enforcement details.
    exception only when all twelve gates apply; status-only cases also need all
    six status conditions.
 7. No meaningful contract: add no behavioral test.
-8. Handwritten Python changed: use the isolated exact formatter and full per-
-   file static gate, including Pylint 10.00.
+8. Handwritten Python changed: use the isolated exact formatter and per-file
+   static checks; require Pylint 10.00 for a new file or no regression from the
+   pre-change rating for an existing tracked file.
 
 Three checked-in shapes are retained facts, not templates. This policy treats
 the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
@@ -281,7 +291,8 @@ for test count.
       concrete result, subprocess bounds, access authority, and exact claim.
 - [ ] State only what configuration or a named successful run establishes.
 - [ ] For every handwritten Python change, use isolated `black .`, inspect its
-      diff, pass the full per-file gate, and report Pylint 10.00.
+      diff, pass the per-file checks, and require Pylint 10.00 for a new file or
+      no regression from the base rating for an existing tracked file.
 - [ ] Follow the separate [oracle checklist](test-oracles-and-safe-updates.md#contributor-checklist)
       for stored evidence, variants, updates, and mutable state.
 

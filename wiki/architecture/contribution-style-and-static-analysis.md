@@ -5,7 +5,7 @@
 
 ## Summary
 
-The KB files contributor rules for new or modified code into focused leaves for Python style, C/embedded-C style, equation setup style, infrastructure code style, and static analysis. These rules are not claims that every legacy file already conforms. Handwritten Python changes require Black formatting in an isolated user-owned intended-change tree, plus single-file static analysis and Pylint **10.00/10.00** for every modified file. Documentation-only Markdown changes do not require Python static analysis unless source files are accidentally edited.
+The KB files contributor rules for new or modified code into focused leaves for Python style, C/embedded-C style, equation setup style, infrastructure code style, and static analysis. These rules are not claims that every legacy file already conforms. Handwritten Python changes require Black formatting in an isolated user-owned intended-change tree plus single-file static analysis. Newly added handwritten files require Pylint **10.00/10.00**; existing tracked handwritten files may retain, but not lower, their pre-change score, including grandfathered scores at or below `9.5`. Documentation-only Markdown changes do not require Python static analysis unless source files are accidentally edited.
 
 ## Detail
 
@@ -15,7 +15,8 @@ its diff. Run
 `./.github/single_file_static_analysis.sh <path-to-file.py>` on each modified
 handwritten Python file. The local script checks Black, isort, mypy in strict mode with
 untyped calls allowed, Pylint, pydocstyle, and darglint, then executes the target
-file. Each handwritten file must report Pylint **10.00/10.00**. Inspect direct-
+file. A new handwritten file must report Pylint **10.00/10.00**; an existing
+tracked handwritten file must not regress from its pre-change score. Inspect direct-
 execution effects before running the script; [Static
 Analysis](../validation/static-analysis.md) owns exact mechanics and current
 enforcement gaps.
