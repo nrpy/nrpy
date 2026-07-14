@@ -10,9 +10,8 @@ import copy
 import hashlib
 import importlib
 import random
-from collections.abc import Mapping as MappingABC
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 import black
 import sympy as sp
@@ -21,13 +20,6 @@ from mpmath import fabs, mp, mpc, mpf  # type: ignore
 # Contains the constants to be shared throughout all unittests.
 # Typical value for precision is 30 significant digits.
 precision = 30
-
-# Dictionary values enter through a runtime-validation boundary. ``object`` is
-# intentional: mutable lists are invariant, so a recursive ``List`` union would
-# reject ordinary typed tensors such as ``List[List[sp.Expr]]`` before the
-# structure and leaf checks below can validate them.
-ExpressionDictionary = Mapping[str, object]
-ExpressionInput = Union[ExpressionDictionary, sp.Expr, str, int]
 
 
 def flatten_tensor(tensor: List[Any]) -> List[Any]:
@@ -65,20 +57,6 @@ def _expression_structure(expression: object) -> Tuple[object, ...]:
         "assert_equal dictionary values must be SymPy expressions or nested lists "
         f"of SymPy expressions, not {type(expression).__name__}"
     )
-
-
-def _normalize_expression_input(expression_input: ExpressionInput) -> Dict[str, object]:
-    """
-    Convert one supported comparison input to a mutable expression dictionary.
-
-    :param expression_input: Scalar expression input or mapping to normalize.
-    :return: A shallow dictionary copy, or a one-entry dictionary for a scalar.
-    """
-    # Copy mappings so comparison never mutates a caller-owned mapping and all
-    # downstream helpers receive the concrete dictionary type they expect.
-    if isinstance(expression_input, MappingABC):
-        return dict(expression_input)
-    return {"": cast(sp.Expr, sp.sympify(expression_input))}
 
 
 def _nonfinite_values_match(
@@ -130,16 +108,19 @@ def _nonfinite_values_match(
     return True
 
 
+# Dictionary values use Any to match heterogeneous expression dictionaries
+# throughout NRPy and avoid mutable-list invariance for typed tensors. Runtime
+# structure validation below still enforces recursively nested SymPy leaves.
 def assert_equal(
-    vardict_1: ExpressionInput,
-    vardict_2: ExpressionInput,
+    vardict_1: Union[Dict[str, Any], sp.Expr, str],
+    vardict_2: Union[Dict[str, Any], sp.Expr, int],
     suppress_message: bool = False,
 ) -> None:
     """
-    Assert the equality of SymPy expressions or mappings containing SymPy expressions.
+    Assert the equality of SymPy expressions or dictionaries containing SymPy expressions.
 
-    :param vardict_1: A scalar expression input or mapping whose values are SymPy expressions or recursively nested lists of them.
-    :param vardict_2: A scalar expression input or mapping of supported expression values to compare with vardict_1.
+    :param vardict_1: A scalar expression input or dictionary whose values are SymPy expressions or recursively nested lists of them.
+    :param vardict_2: A scalar expression input or dictionary of supported expression values to compare with vardict_1.
     :param suppress_message: If False, prints a success message when the assertion passes.
 
     Dictionary inputs must have identical raw key sets and list nesting. Names
@@ -173,8 +154,6 @@ def assert_equal(
     >>> vardict_2 = {'A': 2*sin(x)*cos(x), 'B': cos(x)**2 - sin(x)**2}
     >>> assert_equal(vardict_1, vardict_2)
     Assertion Passed!
-    >>> from types import MappingProxyType
-    >>> assert_equal(MappingProxyType({'A': [x]}), {'A': [x]}, suppress_message=True)
     >>> vardict_1b = {'C': sin(2*x), 'D': cos(2*x)}
     >>> vardict_2b = {'C': 2*sin(x)*cos(x), 'D': cos(x)**2 - sin(x)**2 + 1}  # The +1 messes up the equality.
     >>> assert_equal(vardict_1b, vardict_2b)
@@ -234,24 +213,27 @@ def assert_equal(
     >>> assert_equal('(a^2 - b^2) - (a + b)*(a - b)', 0)
     Assertion Passed!
     """
-    dictionary_1 = _normalize_expression_input(vardict_1)
-    dictionary_2 = _normalize_expression_input(vardict_2)
+    # Scalar inputs share the dictionary comparison path after sympification.
+    if not isinstance(vardict_1, dict):
+        vardict_1 = {"": cast(sp.Expr, sp.sympify(vardict_1))}
+    if not isinstance(vardict_2, dict):
+        vardict_2 = {"": sp.sympify(vardict_2)}
 
-    if dictionary_1.keys() != dictionary_2.keys():
+    if vardict_1.keys() != vardict_2.keys():
         raise AssertionError
 
     # Compare raw nesting before flattening. Otherwise empty tensors disappear,
     # and differently shaped tensors can produce the same numbered leaf names.
-    for key in dictionary_1:
-        if _expression_structure(dictionary_1[key]) != _expression_structure(
-            dictionary_2[key]
+    for key in vardict_1:
+        if _expression_structure(vardict_1[key]) != _expression_structure(
+            vardict_2[key]
         ):
             raise AssertionError
 
     # Among numerically processed entries, a scalar key such as A_0 can collide
     # with the generated name for A[0]. Reject such dictionaries instead of
     # allowing a later assignment to hide one compared expression.
-    for dictionary in (dictionary_1, dictionary_2):
+    for dictionary in (vardict_1, vardict_2):
         processed_names = []
         for key, expression in dictionary.items():
             if "funcform" in key:
@@ -259,20 +241,20 @@ def assert_equal(
             if isinstance(expression, sp.Expr):
                 processed_names.append(str(key))
             else:
-                # _expression_structure() already proved every non-expression
-                # value here is a recursively valid list.
-                tensor = cast(List[Any], expression)
+                # Raw structure validation above guarantees every remaining
+                # dictionary value is a recursively valid list.
                 processed_names.extend(
-                    f"{key}_{index}" for index, _ in enumerate(flatten_tensor(tensor))
+                    f"{key}_{index}"
+                    for index, _ in enumerate(flatten_tensor(expression))
                 )
         if len(processed_names) != len(set(processed_names)):
             raise AssertionError
 
     vardict_1_results_dict = process_dictionary_of_expressions(
-        dictionary_1, fixed_mpfs_for_free_symbols=True
+        vardict_1, fixed_mpfs_for_free_symbols=True
     )
     vardict_2_results_dict = process_dictionary_of_expressions(
-        dictionary_2, fixed_mpfs_for_free_symbols=True
+        vardict_2, fixed_mpfs_for_free_symbols=True
     )
     # The raw precheck protects empty tensors and shape. This processed check is
     # a second guard against future changes in filtering or name generation.
