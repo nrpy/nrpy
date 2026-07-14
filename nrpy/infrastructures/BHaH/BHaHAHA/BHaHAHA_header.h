@@ -1,6 +1,8 @@
 #ifndef BHAHAHA_HEADER_H
 #define BHAHAHA_HEADER_H
 
+#include <stddef.h>
+
 // Definition of REAL data type, using double by default.
 #ifndef REAL
 #define REAL double
@@ -173,6 +175,15 @@ typedef struct {
   REAL z_center_m1, z_center_m2, z_center_m3;
 } bhahaha_params_and_data_struct;
 
+// Initialize internal persistent BHaHAHA state before any public setup helper
+// poisons or fills bhahaha_params_and_data_struct inputs.
+static inline void bah_initialize_params_and_data_internal_state(bhahaha_params_and_data_struct *restrict params) {
+  params->spectre_spin_akv_seed_valid = 0;
+  params->spectre_spin_akv_seed_Ntheta = -1;
+  params->spectre_spin_akv_seed_Nphi = -1;
+  params->spectre_spin_akv_modes_m1 = NULL;
+} // END FUNCTION: bah_initialize_params_and_data_internal_state
+
 //===============================================
 // C struct: bhahaha_diagnostics_struct
 // Contains diagnostic quantities computed by BHaHAHA.
@@ -245,8 +256,15 @@ static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct 
 //==================
 // PUBLIC FUNCTIONS
 //==================
+// (required once per freshly allocated bhahaha_params_and_data_struct): Initialize
+// internal persistent state before calling bah_poisoning_set_inputs() or bah_find_horizon().
+// If standalone code allocates spectre_spin_akv_modes_m1 for persistent SpECTRE
+// AKV seeding, allocate it after this initializer. Do not call this on every solve,
+// because valid SpECTRE AKV seed data are intentionally persistent.
+//
 // bah_poisoning_*(): Poison inputs into BHaHAHA and check whether the values have been set properly:
-// (highly recommended) Call bah_poisoning_set_inputs() before external NR code sets BHaHAHA inputs.
+// (highly recommended) After bah_initialize_params_and_data_internal_state(), call
+// bah_poisoning_set_inputs() before external NR code sets BHaHAHA inputs.
 void bah_poisoning_set_inputs(bhahaha_params_and_data_struct *restrict params);
 // (highly recommended) Call bah_poisoning_check_inputs() right before bah_find_horizon(), to check whether external NR code has set inputs properly.
 void bah_poisoning_check_inputs(const bhahaha_params_and_data_struct *restrict params);

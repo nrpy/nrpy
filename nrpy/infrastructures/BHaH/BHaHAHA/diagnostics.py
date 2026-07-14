@@ -189,9 +189,10 @@ calculations, norm evaluations, and detailed final iteration analyses.
         const REAL spectre_spin_elapsed_seconds =
             (spectre_spin_end_time.tv_sec + spectre_spin_end_time.tv_usec / 1.0e6) -
             (spectre_spin_start_time.tv_sec + spectre_spin_start_time.tv_usec / 1.0e6);
-        printf("NRPy_BHaHAHA SpECTRE spin diagnostic elapsed time (Iter %d, H%d): %.6f s\n",
-               commondata->bhahaha_params_and_data->iteration_external_input, commondata->bhahaha_params_and_data->which_horizon,
-               spectre_spin_elapsed_seconds);
+        if (commondata->bhahaha_params_and_data->verbosity_level > 0)
+          printf("NRPy_BHaHAHA SpECTRE spin diagnostic elapsed time (Iter %d, H%d): %.6f s\n",
+                 commondata->bhahaha_params_and_data->iteration_external_input, commondata->bhahaha_params_and_data->which_horizon,
+                 spectre_spin_elapsed_seconds);
         if (spin_rc != BHAHAHA_SUCCESS) {
           bhahaha_diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
           bhahaha_diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;

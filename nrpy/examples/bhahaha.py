@@ -246,39 +246,6 @@ akv_linkcheck_makefile_rule = "\n".join(
     ]
 )
 
-
-def patch_makefile_for_internal_akv_primme(makefile_path: Path) -> None:
-    """
-    Add BHaHAHA's frozen internal PRIMME objects to the generated Makefile.
-    :param makefile_path: Path to the generated Makefile to patch.
-    :raises ValueError: If the generated Makefile does not contain the expected
-            `OBJ_FILES` or clean-rule lines.
-    """
-    lines = makefile_path.read_text(encoding="utf-8").splitlines()
-    for line_number, line in enumerate(lines):
-        if line.startswith("OBJ_FILES = "):
-            lines[line_number] = line + " " + " ".join(akv_primme_object_files)
-            break
-    else:
-        raise ValueError(
-            f"Could not find OBJ_FILES in generated Makefile: {makefile_path}"
-        )
-
-    for line_number, line in enumerate(lines):
-        if line.startswith("\t$(RM) "):
-            lines[line_number] = line + " .akv_linkcheck .akv_linkcheck_main.c"
-            break
-    else:
-        raise ValueError(
-            f"Could not find clean rule in generated Makefile: {makefile_path}"
-        )
-
-    makefile_text = "\n".join(lines) + "\n"
-    makefile_text += "\n" + akv_primme_makefile_rule + "\n\n"
-    makefile_text += akv_linkcheck_makefile_rule + "\n"
-    makefile_path.write_text(makefile_text, encoding="utf-8")
-
-
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
@@ -309,7 +276,31 @@ if not Path(akv_primme_src, "primme.h").is_file():
     )
 
 shutil.copytree(akv_primme_src, akv_primme_dst)
-patch_makefile_for_internal_akv_primme(Path(project_dir) / "Makefile")
+
+makefile_path = Path(project_dir) / "Makefile"
+lines = makefile_path.read_text(encoding="utf-8").splitlines()
+for line_number, line in enumerate(lines):
+    if line.startswith("OBJ_FILES = "):
+        lines[line_number] = line + " " + " ".join(akv_primme_object_files)
+        break
+else:
+    raise ValueError(
+        f"Could not find OBJ_FILES in generated Makefile: {makefile_path}"
+    )
+
+for line_number, line in enumerate(lines):
+    if line.startswith("\t$(RM) "):
+        lines[line_number] = line + " .akv_linkcheck .akv_linkcheck_main.c"
+        break
+else:
+    raise ValueError(
+        f"Could not find clean rule in generated Makefile: {makefile_path}"
+    )
+
+makefile_text = "\n".join(lines) + "\n"
+makefile_text += "\n" + akv_primme_makefile_rule + "\n\n"
+makefile_text += akv_linkcheck_makefile_rule + "\n"
+makefile_path.write_text(makefile_text, encoding="utf-8")
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
 # Load the header file using pkgutil

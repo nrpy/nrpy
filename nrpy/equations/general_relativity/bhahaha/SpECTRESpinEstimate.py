@@ -171,7 +171,7 @@ class SpECTRESpinEstimateClass:
             sp.Symbol("f0_of_xx0"): self._h,
         }
 
-        theta_calc = ExpansionFunctionTheta[
+        Th = ExpansionFunctionTheta[
             (
                 f"{self.CoordSystem}_rfm_precompute"
                 if enable_rfm_precompute
@@ -183,20 +183,20 @@ class SpECTRESpinEstimateClass:
         # BHaHAHA symbolic construction from the evolved and AUXEVOL fields.
         self._gammaDD = [
             [
-                cast(sp.Expr, theta_calc.gammaDD[i][j].xreplace(surface_replacements))
+                cast(sp.Expr, Th.gammaDD[i][j].xreplace(surface_replacements))
                 for j in range(3)
             ]
             for i in range(3)
         ]
         self._KDD = [
             [
-                cast(sp.Expr, theta_calc.KDD[i][j].xreplace(surface_replacements))
+                cast(sp.Expr, Th.KDD[i][j].xreplace(surface_replacements))
                 for j in range(3)
             ]
             for i in range(3)
         ]
         self._sU = [
-            cast(sp.Expr, theta_calc.sU[i].xreplace(surface_replacements))
+            cast(sp.Expr, Th.sU[i].xreplace(surface_replacements))
             for i in range(3)
         ]
         self._zU = ixp.declarerank1("zU", dimension=3)

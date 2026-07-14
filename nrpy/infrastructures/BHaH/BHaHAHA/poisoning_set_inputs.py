@@ -1,8 +1,10 @@
 """
 Register the C function 'poisoning_set_inputs()' with NRPy2.
 
-This function poisons the inputs of a `bhahaha_params_and_data_struct` by setting
-`REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
+This function poisons the public inputs of a `bhahaha_params_and_data_struct` by
+setting `REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
+It does not initialize internal persistent state; standalone callers must call
+`bah_initialize_params_and_data_internal_state()` once before this function.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -15,11 +17,18 @@ def register_CFunction_poisoning_set_inputs() -> None:
     """
     Register the C function 'poisoning_set_inputs()' with NRPy2.
 
-    This function poisons the inputs of a `bhahaha_params_and_data_struct` by setting
-    `REAL` numbers to `NaN`, pointers to `NULL`, and integers to `-1`.
+    This function poisons the public inputs of a `bhahaha_params_and_data_struct`
+    by setting `REAL` numbers to `NaN`, pointers to `NULL`, and integers to
+    `-1`. It does not initialize internal persistent state; standalone callers
+    must call `bah_initialize_params_and_data_internal_state()` once before this
+    function.
     """
     includes = ["stdio.h", "stdlib.h", "stdint.h", "math.h", "BHaHAHA.h"]
-    desc = "Poison the inputs of bhahaha_params_and_data_struct by setting REALs to NaN, pointers to NULL, and ints to -1."
+    desc = (
+        "Poison the public inputs of bhahaha_params_and_data_struct by setting REALs to NaN, "
+        "pointers to NULL, and ints to -1. Internal persistent state must be initialized once "
+        "before calling this function."
+    )
     cfunc_type = "void"
     name = "poisoning_set_inputs"
     params = "bhahaha_params_and_data_struct *restrict params"

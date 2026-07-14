@@ -41,6 +41,10 @@ from nrpy.equations.general_relativity.bhahaha.SpECTRESpinEstimate import (
     SpECTRESpinEstimate,
 )
 from nrpy.helpers.generic import clang_format
+from nrpy.helpers.expression_utils import (
+    generate_definition_header,
+    get_params_commondata_symbols_from_expr_list,
+)
 from nrpy.infrastructures.BHaH.CurviBoundaryConditions.apply_bcs_inner_only import (
     APPLY_PARITY_BRANCHLESS_PREFUNC,
 )
@@ -78,7 +82,6 @@ def register_CFunction_diagnostics_spectre_spin(
     :param enable_fd_functions: Whether to enable finite-difference functions.
     :return: An NRPyEnv_type object if registration is successful, otherwise None.
     :raises ValueError: If a precompute gridfunction has an unsupported rank.
-
     """
     if par.parval_from_str("fp_type") != "double":
         raise ValueError(
@@ -94,9 +97,13 @@ def register_CFunction_diagnostics_spectre_spin(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "akv_primme.h"]
-    desc = r"""
-    Compute the SpECTRE-style dimensionless spin vector diagnostic and store it in the diagnostics struct.
-    """
+    desc = """Compute the SpECTRE-style dimensionless spin vector diagnostic.
+
+@param[in,out] commondata Global state receiving diagnostics and saved AKV modes.
+@param[in] griddata Grid and horizon-field data.
+@return BHAHAHA_SUCCESS on success; otherwise an allocation, geometry,
+PRIMME, or normalization diagnostic error code.
+"""
     cfunc_type = "int"
     cfunc_name = "diagnostics_spectre_spin"
     params = (
@@ -245,6 +252,80 @@ def register_CFunction_diagnostics_spectre_spin(
             *integrands_dict["zOmegaU"],
             integrands_dict["abs_omega_integrand"],
         ]
+
+        grid_parameter_names = [
+            *(f"Nxx{i}" for i in range(3)),
+            *(f"Nxx_plus_2NGHOSTS{i}" for i in range(3)),
+            "dxx1",
+            "dxx2",
+            "invdxx1",
+            "invdxx2",
+        ]
+        grid_parameter_symbols = [
+            par.glb_code_params_dict[name].symbol
+            for name in grid_parameter_names
+            if name in par.glb_code_params_dict
+        ]
+        local_definition_blocks = {}
+        for block_name, expressions in (
+            (
+                "spin_potential",
+                [
+                    area_density,
+                    integrands_dict["ricci_scalar"],
+                    *grid_parameter_symbols,
+                ],
+            ),
+            (
+                "diagnostic",
+                [*rhss_precompute, *sympy_expressions, *grid_parameter_symbols],
+            ),
+        ):
+            param_symbols, commondata_symbols = (
+                get_params_commondata_symbols_from_expr_list(expressions)
+            )
+            param_real_symbols = [
+                symbol
+                for symbol in param_symbols
+                if par.glb_code_params_dict[symbol].cparam_type == "REAL"
+            ]
+            param_typed_symbols = [
+                symbol
+                for symbol in param_symbols
+                if par.glb_code_params_dict[symbol].cparam_type
+                not in ("#define", "REAL")
+            ]
+            commondata_real_symbols = [
+                symbol
+                for symbol in commondata_symbols
+                if par.glb_code_params_dict[symbol].cparam_type == "REAL"
+            ]
+            commondata_typed_symbols = [
+                symbol
+                for symbol in commondata_symbols
+                if par.glb_code_params_dict[symbol].cparam_type
+                not in ("#define", "REAL")
+            ]
+            parameter_definition_chunks = [
+                generate_definition_header(param_real_symbols, var_access="params->"),
+                "\n".join(
+                    f"MAYBE_UNUSED const {par.glb_code_params_dict[symbol].cparam_type} {symbol} = params->{symbol};"
+                    for symbol in param_typed_symbols
+                ),
+            ]
+            commondata_definition_chunks = [
+                generate_definition_header(
+                    commondata_real_symbols, var_access="commondata->"
+                ),
+                "\n".join(
+                    f"MAYBE_UNUSED const {par.glb_code_params_dict[symbol].cparam_type} {symbol} = commondata->{symbol};"
+                    for symbol in commondata_typed_symbols
+                ),
+            ]
+            local_definition_blocks[block_name] = (
+                "\n".join(chunk for chunk in parameter_definition_chunks if chunk),
+                "\n".join(chunk for chunk in commondata_definition_chunks if chunk),
+            )
 
         ricci_c_code = ccg.c_codegen(
             [area_density, integrands_dict["ricci_scalar"]],
@@ -504,26 +585,26 @@ static const REAL spectre_spin_fd_second[SPECTRE_SPIN_FD_WIDTH] = {@FD_SECOND@};
 typedef struct {
   int col;
   REAL val;
-} spectre_spin_row_entry;
+} spectre_spin_row_entry_struct;
 
 typedef struct {
   int n;
-  spectre_spin_row_entry e[SPECTRE_SPIN_MAX_ROW_NNZ];
-} spectre_spin_sparse_row;
+  spectre_spin_row_entry_struct e[SPECTRE_SPIN_MAX_ROW_NNZ];
+} spectre_spin_sparse_row_struct;
 
 typedef struct {
   int row;
   int col;
   REAL val;
-} spectre_spin_triplet;
+} spectre_spin_triplet_struct;
 
 typedef struct {
   int rows;
   int cols;
   int nnz;
   int capacity;
-  spectre_spin_triplet *restrict entries;
-} spectre_spin_triplet_builder;
+  spectre_spin_triplet_struct *restrict entries;
+} spectre_spin_triplet_builder_struct;
 
 typedef struct {
   int rows;
@@ -532,11 +613,11 @@ typedef struct {
   int *restrict rowptr;
   int *restrict colind;
   REAL *restrict vals;
-} spectre_spin_csr_matrix;
+} spectre_spin_csr_matrix_struct;
 
 typedef struct {
-  const spectre_spin_csr_matrix *restrict K;
-  const spectre_spin_csr_matrix *restrict M;
+  const spectre_spin_csr_matrix_struct *restrict K;
+  const spectre_spin_csr_matrix_struct *restrict M;
   const REAL *restrict mu;
   const REAL *restrict nyq;
   const int *restrict red_to_full;
@@ -547,9 +628,9 @@ typedef struct {
   int anchor_minus;
   REAL *restrict full_x;
   REAL *restrict full_y;
-} spectre_spin_primme_ctx;
+} spectre_spin_primme_ctx_struct;
 
-static void spectre_spin_row_clear(spectre_spin_sparse_row *restrict row) {
+static void spectre_spin_row_clear(spectre_spin_sparse_row_struct *restrict row) {
   row->n = 0;
 } // END FUNCTION: spectre_spin_row_clear
 
@@ -561,7 +642,7 @@ static void spectre_spin_row_clear(spectre_spin_sparse_row *restrict row) {
  * @param val Entry value to add.
  * @return BHAHAHA_SUCCESS, or an error code if the row is full.
  */
-static int spectre_spin_row_add(spectre_spin_sparse_row *restrict row, const int col, const REAL val) {
+static int spectre_spin_row_add(spectre_spin_sparse_row_struct *restrict row, const int col, const REAL val) {
   if (val == 0.0)
     return BHAHAHA_SUCCESS;
   for (int i = 0; i < row->n; i++) {
@@ -583,7 +664,7 @@ static int spectre_spin_row_add(spectre_spin_sparse_row *restrict row, const int
  *
  * @param[in,out] row Sparse row to prune.
  */
-static void spectre_spin_row_prune(spectre_spin_sparse_row *restrict row) {
+static void spectre_spin_row_prune(spectre_spin_sparse_row_struct *restrict row) {
   int out = 0;
   for (int i = 0; i < row->n; i++) {
     if (row->e[i].val != 0.0 && isfinite(row->e[i].val)) {
@@ -602,13 +683,13 @@ static void spectre_spin_row_prune(spectre_spin_sparse_row *restrict row) {
  * @param initial_capacity Requested initial entry capacity.
  * @return BHAHAHA_SUCCESS, or an allocation error code.
  */
-static int spectre_spin_builder_init(spectre_spin_triplet_builder *restrict builder, const int rows, const int cols,
+static int spectre_spin_builder_init(spectre_spin_triplet_builder_struct *restrict builder, const int rows, const int cols,
                                      const int initial_capacity) {
   builder->rows = rows;
   builder->cols = cols;
   builder->nnz = 0;
   builder->capacity = initial_capacity > 0 ? initial_capacity : 1024;
-  builder->entries = (spectre_spin_triplet *)malloc((size_t)builder->capacity * sizeof(spectre_spin_triplet));
+  builder->entries = (spectre_spin_triplet_struct *)malloc((size_t)builder->capacity * sizeof(spectre_spin_triplet_struct));
   return builder->entries == NULL ? DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR : BHAHAHA_SUCCESS;
 } // END FUNCTION: spectre_spin_builder_init
 
@@ -617,7 +698,7 @@ static int spectre_spin_builder_init(spectre_spin_triplet_builder *restrict buil
  *
  * @param[in,out] builder Triplet builder to release.
  */
-static void spectre_spin_builder_free(spectre_spin_triplet_builder *restrict builder) {
+static void spectre_spin_builder_free(spectre_spin_triplet_builder_struct *restrict builder) {
   free(builder->entries);
   builder->entries = NULL;
   builder->nnz = 0;
@@ -633,15 +714,15 @@ static void spectre_spin_builder_free(spectre_spin_triplet_builder *restrict bui
  * @param val Entry value.
  * @return BHAHAHA_SUCCESS, or an allocation/geometry error code.
  */
-static int spectre_spin_builder_add(spectre_spin_triplet_builder *restrict builder, const int row, const int col, const REAL val) {
+static int spectre_spin_builder_add(spectre_spin_triplet_builder_struct *restrict builder, const int row, const int col, const REAL val) {
   if (val == 0.0)
     return BHAHAHA_SUCCESS;
   if (row < 0 || row >= builder->rows || col < 0 || col >= builder->cols || !isfinite(val))
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
   if (builder->nnz == builder->capacity) {
     const int new_capacity = builder->capacity < 1048576 ? 2 * builder->capacity : builder->capacity + 1048576;
-    spectre_spin_triplet *restrict new_entries =
-        (spectre_spin_triplet *)realloc(builder->entries, (size_t)new_capacity * sizeof(spectre_spin_triplet));
+    spectre_spin_triplet_struct *restrict new_entries =
+        (spectre_spin_triplet_struct *)realloc(builder->entries, (size_t)new_capacity * sizeof(spectre_spin_triplet_struct));
     if (new_entries == NULL)
       return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
     builder->entries = new_entries;
@@ -655,8 +736,8 @@ static int spectre_spin_builder_add(spectre_spin_triplet_builder *restrict build
 } // END FUNCTION: spectre_spin_builder_add
 
 static int spectre_spin_triplet_cmp(const void *a, const void *b) {
-  const spectre_spin_triplet *ta = (const spectre_spin_triplet *)a;
-  const spectre_spin_triplet *tb = (const spectre_spin_triplet *)b;
+  const spectre_spin_triplet_struct *ta = (const spectre_spin_triplet_struct *)a;
+  const spectre_spin_triplet_struct *tb = (const spectre_spin_triplet_struct *)b;
   if (ta->row != tb->row)
     return ta->row < tb->row ? -1 : 1;
   if (ta->col != tb->col)
@@ -674,7 +755,7 @@ static int spectre_spin_triplet_cmp(const void *a, const void *b) {
  * @param[in,out] csr Output CSR matrix.
  * @return BHAHAHA_SUCCESS, or an allocation error code.
  */
-static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict builder, spectre_spin_csr_matrix *restrict csr) {
+static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder_struct *restrict builder, spectre_spin_csr_matrix_struct *restrict csr) {
   csr->rows = builder->rows;
   csr->cols = builder->cols;
   csr->nnz = 0;
@@ -682,7 +763,7 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
   csr->colind = NULL;
   csr->vals = NULL;
 
-  qsort(builder->entries, (size_t)builder->nnz, sizeof(spectre_spin_triplet), spectre_spin_triplet_cmp);
+  qsort(builder->entries, (size_t)builder->nnz, sizeof(spectre_spin_triplet_struct), spectre_spin_triplet_cmp);
 
   int compressed_nnz = 0;
   for (int i = 0; i < builder->nnz;) {
@@ -746,7 +827,7 @@ static int spectre_spin_builder_to_csr(spectre_spin_triplet_builder *restrict bu
  *
  * @param[in,out] csr CSR matrix to release.
  */
-static void spectre_spin_csr_free(spectre_spin_csr_matrix *restrict csr) {
+static void spectre_spin_csr_free(spectre_spin_csr_matrix_struct *restrict csr) {
   free(csr->rowptr);
   free(csr->colind);
   free(csr->vals);
@@ -763,7 +844,7 @@ static void spectre_spin_csr_free(spectre_spin_csr_matrix *restrict csr) {
  * @param[in] x Input vector.
  * @param[out] y Output vector.
  */
-static void spectre_spin_csr_matvec(const spectre_spin_csr_matrix *restrict csr, const REAL *restrict x, REAL *restrict y) {
+static void spectre_spin_csr_matvec(const spectre_spin_csr_matrix_struct *restrict csr, const REAL *restrict x, REAL *restrict y) {
   for (int row = 0; row < csr->rows; row++) {
     REAL sum = 0.0;
     for (int jj = csr->rowptr[row]; jj < csr->rowptr[row + 1]; jj++)
@@ -788,7 +869,7 @@ static int spectre_spin_active_index(const int j1, const int j2, const int Nthet
  */
 static void spectre_spin_debug_mass_mode(
     const char *restrict name,
-    const spectre_spin_csr_matrix *restrict M,
+    const spectre_spin_csr_matrix_struct *restrict M,
     const int Ntheta,
     const int Nphi,
     const REAL *restrict mu,
@@ -982,7 +1063,7 @@ static void spectre_spin_seed_saved_modes_reduced(const int N, const int Nred, c
  * @param[in] xred Reduced-space vector.
  * @param[out] xfull Full-space vector satisfying both constraints.
  */
-static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx *restrict ctx, const double *restrict xred, REAL *restrict xfull) {
+static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx_struct *restrict ctx, const double *restrict xred, REAL *restrict xfull) {
   for (int i = 0; i < ctx->nfull; i++)
     xfull[i] = 0.0;
 
@@ -1018,7 +1099,7 @@ static void spectre_spin_expand_reduced(const spectre_spin_primme_ctx *restrict 
  * @param[in] yfull Full-space vector.
  * @param[out] yred Reduced-space projected vector.
  */
-static void spectre_spin_project_reduced(const spectre_spin_primme_ctx *restrict ctx, const REAL *restrict yfull, double *restrict yred) {
+static void spectre_spin_project_reduced(const spectre_spin_primme_ctx_struct *restrict ctx, const REAL *restrict yfull, double *restrict yred) {
   const int a0 = ctx->anchor_plus;
   const int a1 = ctx->anchor_minus;
 
@@ -1053,7 +1134,7 @@ static void spectre_spin_project_reduced(const spectre_spin_primme_ctx *restrict
  * @param ldy Leading dimension of the output block.
  * @param block_size Number of vectors in the block.
  */
-static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx *restrict ctx, const spectre_spin_csr_matrix *restrict A,
+static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx_struct *restrict ctx, const spectre_spin_csr_matrix_struct *restrict A,
                                                 const double *restrict x, const PRIMME_INT ldx, double *restrict y, const PRIMME_INT ldy,
                                                 const int block_size) {
   for (int block = 0; block < block_size; block++) {
@@ -1067,27 +1148,27 @@ static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx *r
 
 #ifdef BHAHAHA_PRIMME_USES_LEGACY_MATVEC
 static void spectre_spin_primme_K_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
-  spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->matrix;
+  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->matrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->K, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
   *err = 0;
 } // END FUNCTION: spectre_spin_primme_K_matvec
 
 static void spectre_spin_primme_M_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
-  spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->massMatrix;
+  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->massMatrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
   *err = 0;
 } // END FUNCTION: spectre_spin_primme_M_matvec
 #else
 static void spectre_spin_primme_K_matvec(void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize, primme_params *primme,
                                          int *err) {
-  spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->matrix;
+  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->matrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->K, (const double *)x, *ldx, (double *)y, *ldy, *blockSize);
   *err = 0;
 } // END FUNCTION: spectre_spin_primme_K_matvec
 
 static void spectre_spin_primme_M_matvec(void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize, primme_params *primme,
                                          int *err) {
-  spectre_spin_primme_ctx *restrict ctx = (spectre_spin_primme_ctx *)primme->massMatrix;
+  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->massMatrix;
   spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, *ldx, (double *)y, *ldy, *blockSize);
   *err = 0;
 } // END FUNCTION: spectre_spin_primme_M_matvec
@@ -1131,7 +1212,7 @@ static void spectre_spin_reflect_scalar_index(int *restrict j1, int *restrict j2
  * @param invdphi Inverse phi spacing.
  * @return BHAHAHA_SUCCESS, or an error code from sparse-row assembly.
  */
-static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row *restrict row, const int j1, const int j2, const int Ntheta,
+static int spectre_spin_build_scalar_derivative_row(spectre_spin_sparse_row_struct *restrict row, const int j1, const int j2, const int Ntheta,
                                                     const int Nphi, const int deriv_type, const REAL invdtheta, const REAL invdphi) {
   spectre_spin_row_clear(row);
   if (deriv_type == 0 || deriv_type == 2) {
@@ -1222,8 +1303,8 @@ static REAL spectre_spin_metric_deriv(const REAL *restrict gfs, const int gf, co
  * @param factor Scalar multiplier.
  * @return BHAHAHA_SUCCESS, or an error code from triplet assembly.
  */
-static int spectre_spin_add_outer(spectre_spin_triplet_builder *restrict builder, const spectre_spin_sparse_row *restrict a,
-                                  const spectre_spin_sparse_row *restrict b, const REAL factor) {
+static int spectre_spin_add_outer(spectre_spin_triplet_builder_struct *restrict builder, const spectre_spin_sparse_row_struct *restrict a,
+                                  const spectre_spin_sparse_row_struct *restrict b, const REAL factor) {
   if (factor == 0.0)
     return BHAHAHA_SUCCESS;
   for (int ia = 0; ia < a->n; ia++) {
@@ -1248,8 +1329,8 @@ static int spectre_spin_add_outer(spectre_spin_triplet_builder *restrict builder
  * @param q11 Inverse surface metric phi-phi component.
  * @return BHAHAHA_SUCCESS, or an error code from triplet assembly.
  */
-static int spectre_spin_add_gradient_form(spectre_spin_triplet_builder *restrict builder, const spectre_spin_sparse_row *restrict dtheta,
-                                          const spectre_spin_sparse_row *restrict dphi, const REAL factor, const REAL q00,
+static int spectre_spin_add_gradient_form(spectre_spin_triplet_builder_struct *restrict builder, const spectre_spin_sparse_row_struct *restrict dtheta,
+                                          const spectre_spin_sparse_row_struct *restrict dphi, const REAL factor, const REAL q00,
                                           const REAL q01, const REAL q11) {
   int status = spectre_spin_add_outer(builder, dtheta, dtheta, factor * q00);
   if (status != BHAHAHA_SUCCESS)
@@ -1422,7 +1503,8 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   REAL *restrict xx[3];
   for (int ww = 0; ww < 3; ww++)
     xx[ww] = griddata[grid].xx[ww];
-#include "set_CodeParameters.h"
+@SPIN_POTENTIAL_PARAMETER_DEFINITIONS@
+@SPIN_POTENTIAL_COMMONDATA_DEFINITIONS@
 
 #ifdef NDEBUG
   const REAL z_init = 0.0;
@@ -1437,9 +1519,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         spectre_spin_gfs[IDX4(ZU0GF, i0, i1, i2)] = z_init;
         spectre_spin_gfs[IDX4(ZU1GF, i0, i1, i2)] = z_init;
         spectre_spin_gfs[IDX4(ZU2GF, i0, i1, i2)] = z_init;
-      }
-    }
-  }
+      } // END LOOP: for i0 over active radial horizon-grid slabs
+    } // END LOOP: for i1 over physical theta horizon-grid points
+  } // END LOOP: for i2 over physical phi horizon-grid points
 
   if (Nxx0 != 1)
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
@@ -1494,7 +1576,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
-  }
+  } // END IF: spin-potential work-array allocation failed
 
   const int i0 = NGHOSTS;
   const REAL invdtheta = 1.0 / dxx1;
@@ -1545,7 +1627,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         free(evecs_full);
         free(modes);
         return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-      }
+      } // END IF: surface metric or curvature data are invalid
       sqrtq[p] = spin_area_density;
       ricci[p] = spin_ricci_scalar;
       qUU00[p] = q11 / detq;
@@ -1570,7 +1652,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         free(evecs_full);
         free(modes);
         return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-      }
+      } // END IF: surface quadrature weight is invalid
       const REAL hh = in_gfs[IDX4(HHGF, i0, i1, i2)];
       x_ref[0 * N + p] = hh * sin_theta * cos_phi;
       x_ref[1 * N + p] = hh * sin_theta * sin_phi;
@@ -1582,15 +1664,15 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         if (mu[p] > mu_anchor_plus) {
           mu_anchor_plus = mu[p];
           anchor_plus = p;
-        }
+        } // END IF: positive-Nyquist quadrature anchor is improved
       } else {
         if (mu[p] > mu_anchor_minus) {
           mu_anchor_minus = mu[p];
           anchor_minus = p;
-        }
-      }
-    }
-  }
+        } // END IF: negative-Nyquist quadrature anchor is improved
+      } // END ELSE: quadrature point has negative Nyquist parity
+    } // END LOOP: for j1 over theta points on the horizon surface
+  } // END LOOP: for j2 over phi points on the horizon surface
   if (!(area > 0.0) || !isfinite(area) || anchor_plus < 0 || anchor_minus < 0 ||
       !(mu_anchor_plus > 0.0) || !(mu_anchor_minus > 0.0) || !isfinite(mu_anchor_plus) || !isfinite(mu_anchor_minus)) {
     free(mu);
@@ -1609,7 +1691,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-  }
+  } // END IF: surface area or Nyquist anchors are invalid
   for (int a = 0; a < 3; a++)
     x_centroid[a] /= area;
 
@@ -1618,7 +1700,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       have_saved_seed &= isfinite(horizon_params->spectre_spin_akv_modes_m1[p]);
     if (!have_saved_seed)
       horizon_params->spectre_spin_akv_seed_valid = 0;
-  } // END IF: check saved SpECTRE AKV seed data
+  } // END IF: saved SpECTRE AKV seed data are available
 
   int reduced_count = 0;
   for (int p = 0; p < N; p++) {
@@ -1627,8 +1709,8 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       full_to_red[p] = reduced_count;
       red_to_full[reduced_count] = p;
       reduced_count++;
-    }
-  }
+    } // END IF: full-space point is not a constraint anchor
+  } // END LOOP: for p over full-space horizon points
   if (reduced_count != Nred) {
     free(mu);
     free(nyq);
@@ -1646,10 +1728,10 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return DIAG_SPECTRE_SPIN_POTENTIAL_GEOMETRY_ERROR;
-  }
+  } // END IF: reduced-space map has the wrong size
 
-  spectre_spin_triplet_builder K_builder;
-  spectre_spin_triplet_builder M_builder;
+  spectre_spin_triplet_builder_struct K_builder;
+  spectre_spin_triplet_builder_struct M_builder;
   const int initial_capacity = N * 512;
   int status = spectre_spin_builder_init(&K_builder, N, N, initial_capacity);
   if (status == BHAHAHA_SUCCESS)
@@ -1673,9 +1755,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return status;
-  }
+  } // END IF: sparse-matrix builder initialization failed
 
-  spectre_spin_sparse_row dtheta_row, dphi_row, dthetatheta_row, dthetaphi_row, dphiphi_row, lap_row;
+  spectre_spin_sparse_row_struct dtheta_row, dphi_row, dthetatheta_row, dthetaphi_row, dphiphi_row, lap_row;
   for (int j2 = 0; j2 < Nphi; j2++) {
     const int i2 = NGHOSTS + j2;
     for (int j1 = 0; j1 < Ntheta; j1++) {
@@ -1716,9 +1798,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
           for (int B = 0; B < 2; B++) {
             for (int D = 0; D < 2; D++)
               Gamma[C][A][B] += 0.5 * qinv[C][D] * (d_q[D][B][A] + d_q[A][D][B] - d_q[A][B][D]);
-          }
-        }
-      }
+          } // END LOOP: for B over surface-coordinate components
+        } // END LOOP: for A over surface-coordinate components
+      } // END LOOP: for C over surface-coordinate components
       const REAL gradtheta_coeff = -(qUU00[p] * Gamma[0][0][0] + 2.0 * qUU01[p] * Gamma[0][0][1] + qUU11[p] * Gamma[0][1][1]);
       const REAL gradphi_coeff = -(qUU00[p] * Gamma[1][0][0] + 2.0 * qUU01[p] * Gamma[1][0][1] + qUU11[p] * Gamma[1][1][1]);
 
@@ -1744,10 +1826,10 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         status = spectre_spin_add_gradient_form(&K_builder, &dtheta_row, &dphi_row, -mu[p] * ricci[p], qUU00[p], qUU01[p], qUU11[p]);
       if (status != BHAHAHA_SUCCESS)
         break;
-    }
+    } // END LOOP: for j1 over theta points in the AKV operator
     if (status != BHAHAHA_SUCCESS)
       break;
-  }
+  } // END LOOP: for j2 over phi points in the AKV operator
   if (status != BHAHAHA_SUCCESS) {
     spectre_spin_builder_free(&K_builder);
     spectre_spin_builder_free(&M_builder);
@@ -1767,9 +1849,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return status;
-  }
+  } // END IF: AKV sparse-operator assembly failed
 
-  spectre_spin_csr_matrix K_csr, M_csr;
+  spectre_spin_csr_matrix_struct K_csr, M_csr;
   status = spectre_spin_builder_to_csr(&K_builder, &K_csr);
   if (status == BHAHAHA_SUCCESS)
     status = spectre_spin_builder_to_csr(&M_builder, &M_csr);
@@ -1794,7 +1876,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return status;
-  }
+  } // END IF: sparse-to-CSR conversion failed
 
   REAL *restrict full_x = (REAL *)malloc((size_t)N * sizeof(REAL));
   REAL *restrict full_y = (REAL *)malloc((size_t)N * sizeof(REAL));
@@ -1819,9 +1901,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
-  }
+  } // END IF: CSR matrix-vector scratch allocation failed
 
-  spectre_spin_primme_ctx ctx = {
+  spectre_spin_primme_ctx_struct ctx = {
       .K = &K_csr,
       .M = &M_csr,
       .mu = mu,
@@ -1909,7 +1991,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR;
-  }
+  } // END IF: PRIMME eigensolve failed
   for (int a = 0; a < 3; a++) {
     if (!isfinite(evals[a]) || !isfinite(resnorms[a])) {
       if (horizon_params != NULL)
@@ -1934,12 +2016,12 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       free(evecs_full);
       free(modes);
       return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR;
-    }
-  }
+    } // END IF: PRIMME eigenpair contains a non-finite value
+  } // END LOOP: for a over PRIMME eigenpairs
 
   for (int mode = 0; mode < 3; mode++) {
     spectre_spin_expand_reduced(&ctx, &evecs_red[(size_t)mode * (size_t)Nred], &evecs_full[(size_t)mode * (size_t)N]);
-  }
+  } // END LOOP: for mode over reduced-space eigenvectors
   static const char *const expanded_constraint_labels[3] = {
       "expanded_mode0", "expanded_mode1", "expanded_mode2"};
   if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
@@ -1959,8 +2041,8 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       for (int p = 0; p < N; p++)
         overlap += full_y[p] * evecs_full[mode * N + p];
       C[a][mode] = overlap;
-    }
-  }
+    } // END LOOP: for mode over expanded AKV eigenvectors
+  } // END LOOP: for a over reference coordinate modes
   REAL O[3][3];
   status = spectre_spin_procrustes(C, O);
   if (status != BHAHAHA_SUCCESS) {
@@ -1986,15 +2068,15 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     free(evecs_full);
     free(modes);
     return status;
-  }
+  } // END IF: Procrustes alignment failed
 
   for (int a = 0; a < 3; a++) {
     for (int p = 0; p < N; p++) {
       modes[a * N + p] = 0.0;
       for (int mode = 0; mode < 3; mode++)
         modes[a * N + p] += O[a][mode] * evecs_full[mode * N + p];
-    }
-  }
+    } // END LOOP: for p over full-space horizon points
+  } // END LOOP: for a over aligned AKV modes
   static const char *const aligned_constraint_labels[3] = {
       "aligned_mode0", "aligned_mode1", "aligned_mode2"};
   if (horizon_params != NULL && horizon_params->verbosity_level >= 2)
@@ -2094,9 +2176,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
           spectre_spin_gfs[IDX4(ZU0GF, ii0, ii1, ii2)] = modes[0 * N + p];
           spectre_spin_gfs[IDX4(ZU1GF, ii0, ii1, ii2)] = modes[1 * N + p];
           spectre_spin_gfs[IDX4(ZU2GF, ii0, ii1, ii2)] = modes[2 * N + p];
-        }
-      }
-    }
+        } // END LOOP: for ii0 over active radial horizon-grid slabs
+      } // END LOOP: for j1 over theta points on the horizon surface
+    } // END LOOP: for j2 over phi points on the horizon surface
 
     int finite_error = 0;
 #pragma omp parallel for reduction(| : finite_error)
@@ -2106,9 +2188,9 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
           finite_error |= !isfinite(spectre_spin_gfs[IDX4(ZU0GF, ii0, i1, i2)]);
           finite_error |= !isfinite(spectre_spin_gfs[IDX4(ZU1GF, ii0, i1, i2)]);
           finite_error |= !isfinite(spectre_spin_gfs[IDX4(ZU2GF, ii0, i1, i2)]);
-        }
-      }
-    }
+        } // END LOOP: for ii0 over active radial horizon-grid slabs
+      } // END LOOP: for i1 over physical theta horizon-grid points
+    } // END LOOP: for i2 over physical phi horizon-grid points
     if (finite_error)
       status = DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
     if (status == BHAHAHA_SUCCESS && horizon_params != NULL && horizon_params->spectre_spin_akv_modes_m1 != NULL) {
@@ -2117,7 +2199,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       horizon_params->spectre_spin_akv_seed_Nphi = Nphi;
       horizon_params->spectre_spin_akv_seed_valid = 1;
     } // END IF: final SpECTRE AKV modes are ready for reuse
-  }
+  } // END IF: normalized AKV modes are available
   if (status != BHAHAHA_SUCCESS && horizon_params != NULL)
     horizon_params->spectre_spin_akv_seed_valid = 0;
 
@@ -2147,110 +2229,128 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
             .replace("@MAX_ROW_NNZ@", str(max_row_nnz))
             .replace("@FD_FIRST@", fd_first_coeffs)
             .replace("@FD_SECOND@", fd_second_coeffs)
+            .replace(
+                "@SPIN_POTENTIAL_PARAMETER_DEFINITIONS@",
+                local_definition_blocks["spin_potential"][0],
+            )
+            .replace(
+                "@SPIN_POTENTIAL_COMMONDATA_DEFINITIONS@",
+                local_definition_blocks["spin_potential"][1],
+            )
             .replace("@RICCI_CODE@", ricci_c_code.rstrip())
         )
 
+        parameter_definitions, commondata_definitions = local_definition_blocks[
+            "diagnostic"
+        ]
+
         # Step 6: Construct the body of the C function.
         body = r"""
-    const int grid=0;
-    const params_struct *restrict params = &griddata[grid].params;
-    REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
-    const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs; // for hh and its time-derivs
-    REAL *restrict xx[3];
-    for(int ww=0;ww<3;ww++) xx[ww] = griddata[grid].xx[ww];
-#include "set_CodeParameters.h"
+  const int grid = 0;
+  const params_struct *restrict params = &griddata[grid].params;
+  REAL *restrict auxevol_gfs = griddata[grid].gridfuncs.auxevol_gfs;
+  const REAL *restrict in_gfs = griddata[grid].gridfuncs.y_n_gfs; // for hh and its time-derivs
+  REAL *restrict xx[3];
+  for (int ww = 0; ww < 3; ww++)
+    xx[ww] = griddata[grid].xx[ww];
+@DIAGNOSTIC_PARAMETER_DEFINITIONS@
+@DIAGNOSTIC_COMMONDATA_DEFINITIONS@
 
-    const size_t spectre_spin_npoints =
-        (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
-    REAL *restrict spectre_spin_gfs =
-        (REAL *)malloc((size_t)NUM_SPECTRE_SPIN_SCRATCH_GFS * spectre_spin_npoints * sizeof(REAL));
-    if (spectre_spin_gfs == NULL)
-        return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
-    for (size_t idx = 0; idx < (size_t)NUM_SPECTRE_SPIN_SCRATCH_GFS * spectre_spin_npoints; idx++)
-        spectre_spin_gfs[idx] = (REAL)NAN;
+  const size_t spectre_spin_npoints =
+      (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
+  REAL *restrict spectre_spin_gfs =
+      (REAL *)malloc((size_t)NUM_SPECTRE_SPIN_SCRATCH_GFS * spectre_spin_npoints * sizeof(REAL));
+  if (spectre_spin_gfs == NULL)
+    return DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR;
+  for (size_t idx = 0; idx < (size_t)NUM_SPECTRE_SPIN_SCRATCH_GFS * spectre_spin_npoints; idx++)
+    spectre_spin_gfs[idx] = (REAL)NAN;
 
-    // This diagnostic owns private ZU0GF, ZU1GF, and ZU2GF scratch slots. After
-    // surface precompute and ghost-zone fill, bah_compute_spectre_spin_potentials()
-    // writes a normalized spin-potential basis before z_alpha * Omega is evaluated.
-    
-    // Initialize all RunSums accumulators to zero.
-    REAL A_sum = 0.0;
-    REAL XU_sum[3] = {0.0, 0.0, 0.0};
-    REAL R0_sum = 0.0;
-    REAL XRU_sum[3] = {0.0, 0.0, 0.0};
-    REAL O0_sum = 0.0;
-    REAL XOU_sum[3] = {0.0, 0.0, 0.0};
-    REAL ZOU_sum[3] = {0.0, 0.0, 0.0};
-    REAL Oabs_sum = 0.0;
-    
-    // Set integration weights (e.g., for Simpson's rule).
-    // This external function provides the 1D weights array.
-    const REAL *restrict weights;
-    int weight_stencil_size;
-    bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights, &weight_stencil_size);
+  // This diagnostic owns private ZU0GF, ZU1GF, and ZU2GF scratch slots. After
+  // surface precompute and ghost-zone fill, bah_compute_spectre_spin_potentials()
+  // writes a normalized spin-potential basis before z_alpha * Omega is evaluated.
 
-    // Precompute SE_qDD and SE_XD only where generated finite-difference
-    // stencils are valid.
+  // Initialize all RunSums accumulators to zero.
+  REAL A_sum = 0.0;
+  REAL XU_sum[3] = {0.0, 0.0, 0.0};
+  REAL R0_sum = 0.0;
+  REAL XRU_sum[3] = {0.0, 0.0, 0.0};
+  REAL O0_sum = 0.0;
+  REAL XOU_sum[3] = {0.0, 0.0, 0.0};
+  REAL ZOU_sum[3] = {0.0, 0.0, 0.0};
+  REAL Oabs_sum = 0.0;
+
+  // Set integration weights (e.g., for Simpson's rule).
+  // This external function provides the 1D weights array.
+  const REAL *restrict weights;
+  int weight_stencil_size;
+  bah_diagnostics_integration_weights(Nxx1, Nxx2, &weights, &weight_stencil_size);
+
+  // Precompute SE_qDD and SE_XD only where generated finite-difference
+  // stencils are valid.
 #pragma omp parallel for
-    for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
-        const REAL xx2 = xx[2][i2];
-        (void)xx2;
-        for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
-            const REAL xx1 = xx[1][i1];
-            (void)xx1;
-            for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
+  for (int i2 = NGHOSTS; i2 < NGHOSTS + Nxx2; i2++) {
+    const REAL xx2 = xx[2][i2];
+    (void)xx2;
+    for (int i1 = NGHOSTS; i1 < NGHOSTS + Nxx1; i1++) {
+      const REAL xx1 = xx[1][i1];
+      (void)xx1;
+      for (int i0 = NGHOSTS; i0 < NGHOSTS + Nxx0; i0++) {
 """
+        body = (
+            body.replace("@DIAGNOSTIC_PARAMETER_DEFINITIONS@", parameter_definitions)
+            .replace("@DIAGNOSTIC_COMMONDATA_DEFINITIONS@", commondata_definitions)
+        )
         body += precompute_c_code
         body += rf"""
-            }} // END LOOP: for i0 over active radial horizon-grid slabs
-        }} // END LOOP: for i1 over physical theta horizon-grid points
-    }} // END LOOP: for i2 over physical phi horizon-grid points
+      }} // END LOOP: for i0 over active radial horizon-grid slabs
+    }} // END LOOP: for i1 over physical theta horizon-grid points
+  }} // END LOOP: for i2 over physical phi horizon-grid points
 
-    {{
-        const int spectre_spin_precompute_gfs[{len(gf_macros)}] = {{{selected_precompute_gfs}}};
-        int spectre_spin_scratch_status = spectre_spin_check_finite_scratch_gfs(
-            spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
-            Nxx_plus_2NGHOSTS2, spectre_spin_precompute_gfs, {len(gf_macros)},
-            NGHOSTS, NGHOSTS + Nxx1, NGHOSTS, NGHOSTS + Nxx2, "physical precompute");
-        if (spectre_spin_scratch_status != BHAHAHA_SUCCESS) {{
-            free(spectre_spin_gfs);
-            return spectre_spin_scratch_status;
-        }}
-
-        apply_inner_bc_for_selected_spectre_spin_gfs(
-            &griddata[grid].bcstruct, spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0,
-            Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
-            spectre_spin_precompute_gfs, {len(gf_macros)}, spectre_spin_scratch_gf_parity);
-
-        spectre_spin_scratch_status = spectre_spin_check_finite_scratch_gfs(
-            spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
-            Nxx_plus_2NGHOSTS2, spectre_spin_precompute_gfs, {len(gf_macros)},
-            NGHOSTS - {fd_order // 2}, NGHOSTS + Nxx1 + {fd_order // 2},
-            NGHOSTS - {fd_order // 2}, NGHOSTS + Nxx2 + {fd_order // 2}, "ghost-zone fill");
-        if (spectre_spin_scratch_status != BHAHAHA_SUCCESS) {{
-            free(spectre_spin_gfs);
-            return spectre_spin_scratch_status;
-        }}
-    }} // END BLOCK: fill SE_qDD and SE_XD ghost zones before differentiating them
-
-    const int spin_potential_status =
-        bah_compute_spectre_spin_potentials(commondata, griddata, auxevol_gfs, spectre_spin_gfs);
-    if (spin_potential_status != BHAHAHA_SUCCESS) {{
-        free(spectre_spin_gfs);
-        return spin_potential_status;
+  {{
+    const int spectre_spin_precompute_gfs[{len(gf_macros)}] = {{{selected_precompute_gfs}}};
+    int spectre_spin_scratch_status = spectre_spin_check_finite_scratch_gfs(
+        spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
+        Nxx_plus_2NGHOSTS2, spectre_spin_precompute_gfs, {len(gf_macros)},
+        NGHOSTS, NGHOSTS + Nxx1, NGHOSTS, NGHOSTS + Nxx2, "physical precompute");
+    if (spectre_spin_scratch_status != BHAHAHA_SUCCESS) {{
+      free(spectre_spin_gfs);
+      return spectre_spin_scratch_status;
     }}
 
-    {{
-        const int spectre_spin_z_gfs[3] = {{ZU0GF, ZU1GF, ZU2GF}};
-        const int spectre_spin_z_status = spectre_spin_check_finite_scratch_gfs(
-            spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
-            Nxx_plus_2NGHOSTS2, spectre_spin_z_gfs, 3,
-            NGHOSTS, NGHOSTS + Nxx1, NGHOSTS, NGHOSTS + Nxx2, "spin-potential solve");
-        if (spectre_spin_z_status != BHAHAHA_SUCCESS) {{
-            free(spectre_spin_gfs);
-            return spectre_spin_z_status;
-        }}
+    apply_inner_bc_for_selected_spectre_spin_gfs(
+        &griddata[grid].bcstruct, spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0,
+        Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2,
+        spectre_spin_precompute_gfs, {len(gf_macros)}, spectre_spin_scratch_gf_parity);
+
+    spectre_spin_scratch_status = spectre_spin_check_finite_scratch_gfs(
+        spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
+        Nxx_plus_2NGHOSTS2, spectre_spin_precompute_gfs, {len(gf_macros)},
+        NGHOSTS - {fd_order // 2}, NGHOSTS + Nxx1 + {fd_order // 2},
+        NGHOSTS - {fd_order // 2}, NGHOSTS + Nxx2 + {fd_order // 2}, "ghost-zone fill");
+    if (spectre_spin_scratch_status != BHAHAHA_SUCCESS) {{
+      free(spectre_spin_gfs);
+      return spectre_spin_scratch_status;
     }}
+  }} // END BLOCK: fill SE_qDD and SE_XD ghost zones before differentiating them
+
+  const int spin_potential_status =
+      bah_compute_spectre_spin_potentials(commondata, griddata, auxevol_gfs, spectre_spin_gfs);
+  if (spin_potential_status != BHAHAHA_SUCCESS) {{
+    free(spectre_spin_gfs);
+    return spin_potential_status;
+  }}
+
+  {{
+    const int spectre_spin_z_gfs[3] = {{ZU0GF, ZU1GF, ZU2GF}};
+    const int spectre_spin_z_status = spectre_spin_check_finite_scratch_gfs(
+        spectre_spin_gfs, Nxx0, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1,
+        Nxx_plus_2NGHOSTS2, spectre_spin_z_gfs, 3,
+        NGHOSTS, NGHOSTS + Nxx1, NGHOSTS, NGHOSTS + Nxx2, "spin-potential solve");
+    if (spectre_spin_z_status != BHAHAHA_SUCCESS) {{
+      free(spectre_spin_gfs);
+      return spectre_spin_z_status;
+    }}
+  }}
 
 #pragma omp parallel
 {{
@@ -2288,7 +2388,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
         body += r"""
                 // The differential area element, excluding coordinate steps (dθ, dφ)
                 const REAL dA_unscaled = area_density * weight1 * weight2;
-                
+
                 // Accumulate into thread-private variables
                 A_sum_private += A_integrand * dA_unscaled;
                 XU_sum_private[0] += XU0_integrand * dA_unscaled;
@@ -2314,7 +2414,7 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     #pragma omp critical
     {
         A_sum += A_sum_private;
-        for(int i=0; i<3; ++i) {
+        for (int i = 0; i < 3; i++) {
             XU_sum[i]  += XU_sum_private[i];
             XRU_sum[i] += XRU_sum_private[i];
             XOU_sum[i] += XOU_sum_private[i];
