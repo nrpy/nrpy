@@ -11,7 +11,7 @@ import hashlib
 import importlib
 import random
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Union, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 import black
 import sympy as sp
@@ -20,6 +20,10 @@ from mpmath import fabs, mp, mpc, mpf  # type: ignore
 # Contains the constants to be shared throughout all unittests.
 # Typical value for precision is 30 significant digits.
 precision = 30
+
+ExpressionValue = Union[sp.Expr, List["ExpressionValue"]]
+ExpressionDictionary = Dict[str, ExpressionValue]
+ExpressionInput = Union[ExpressionDictionary, sp.Expr, str, int]
 
 
 def flatten_tensor(tensor: List[Any]) -> List[Any]:
@@ -38,23 +42,100 @@ def flatten_tensor(tensor: List[Any]) -> List[Any]:
     return flat_list
 
 
+def _expression_structure(expression: ExpressionValue) -> Tuple[object, ...]:
+    """
+    Describe supported expression/list nesting without including values.
+
+    :param expression: SymPy expression or recursively nested list to inspect.
+    :return: A tuple that preserves every list boundary and expression leaf.
+    :raises TypeError: If a leaf is not a SymPy expression.
+    """
+    if isinstance(expression, sp.Expr):
+        return ("expression",)
+    if isinstance(expression, list):
+        return (
+            "list",
+            tuple(_expression_structure(element) for element in expression),
+        )
+    raise TypeError(
+        "assert_equal dictionary values must be SymPy expressions or nested lists "
+        f"of SymPy expressions, not {type(expression).__name__}"
+    )
+
+
+def _nonfinite_values_match(
+    value_1: Union[mpc, mpf], value_2: Union[mpc, mpf]
+) -> Optional[bool]:
+    """
+    Compare non-finite components explicitly.
+
+    :param value_1: First numerical value.
+    :param value_2: Second numerical value.
+    :return: None when both values are finite, otherwise whether all components match.
+
+    Doctests:
+    >>> _nonfinite_values_match(mpf("1.0"), mpf("2.0")) is None
+    True
+    >>> _nonfinite_values_match(mpc(mp.nan, 1), mpc(mp.nan, 1))
+    True
+    >>> _nonfinite_values_match(mpc(mp.nan, 1), mpc(mp.nan, 2))
+    False
+    >>> _nonfinite_values_match(mpc(mp.nan, 0), mpc(0, mp.nan))
+    False
+    >>> _nonfinite_values_match(mpf("+inf"), mpf("+inf"))
+    True
+    >>> _nonfinite_values_match(mpf("+inf"), mpf("-inf"))
+    False
+    """
+    # Normalize real and complex inputs so component placement remains part of
+    # the sentinel contract.
+    value_1_mpc = mpc(value_1)
+    value_2_mpc = mpc(value_2)
+    # None tells callers to retain their existing finite tolerance comparison.
+    if mp.isfinite(value_1_mpc) and mp.isfinite(value_2_mpc):
+        return None
+
+    # Compare real and imaginary parts independently: NaN is equal only to NaN
+    # in the same component, while infinity must also keep its sign.
+    for component_1, component_2 in (
+        (value_1_mpc.real, value_2_mpc.real),
+        (value_1_mpc.imag, value_2_mpc.imag),
+    ):
+        if mp.isnan(component_1) or mp.isnan(component_2):
+            if not (mp.isnan(component_1) and mp.isnan(component_2)):
+                return False
+        elif mp.isinf(component_1) or mp.isinf(component_2):
+            if component_1 != component_2:
+                return False
+        elif component_1 != component_2:
+            return False
+    return True
+
+
 def assert_equal(
-    vardict_1: Union[
-        Dict[str, Union[sp.Expr, List[sp.Expr], List[List[sp.Expr]]]], sp.Expr, str
-    ],
-    vardict_2: Union[
-        Dict[str, Union[sp.Expr, List[sp.Expr], List[List[sp.Expr]]]], sp.Expr, int
-    ],
+    vardict_1: ExpressionInput,
+    vardict_2: ExpressionInput,
     suppress_message: bool = False,
 ) -> None:
     """
     Assert the equality of SymPy expressions or dictionaries containing SymPy expressions.
 
-    :param vardict_1: A SymPy expression or dictionary of SymPy expressions.
-    :param vardict_2: A SymPy expression or dictionary of SymPy expressions to compare with vardict_1.
+    :param vardict_1: A scalar expression input or dictionary whose values are SymPy expressions or recursively nested lists of them.
+    :param vardict_2: A scalar expression input or dictionary of supported expression values to compare with vardict_1.
     :param suppress_message: If False, prints a success message when the assertion passes.
 
-    :raises AssertionError: If the expressions or their elements are not equal.
+    Dictionary inputs must have identical raw key sets and list nesting. Names
+    generated for numerically processed leaves must not collide. Matching NaN
+    components and same-signed infinities compare equal; one-sided or differently
+    structured non-finite values do not. Keys containing ``funcform`` undergo
+    structural and leaf validation but are intentionally omitted from numerical
+    comparison and processed-name collision checks.
+
+    :raises AssertionError: If dictionary structure or numerical values differ.
+    :raises TypeError: If a dictionary leaf is not a SymPy expression.
+
+    Darglint cannot infer the ``TypeError`` propagated by recursive leaf validation.
+    # noqa: DAR402
 
     Doctests:
     >>> from sympy import sin, cos
@@ -80,6 +161,56 @@ def assert_equal(
     Traceback (most recent call last):
     ...
     AssertionError
+    >>> assert_equal({'A': sp.Integer(1)}, {'A': sp.Integer(1), 'B': sp.Integer(2)}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    AssertionError
+    >>> assert_equal({'A': sp.Integer(1)}, {'B': sp.Integer(1)}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    AssertionError
+    >>> assert_equal({'A': []}, {'B': []}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    AssertionError
+    >>> assert_equal({'A': [[x, x]]}, {'A': [x, x]}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    AssertionError
+    >>> assert_equal({'A': [[[x]]]}, {'A': [[[x]]]}, suppress_message=True)
+    >>> assert_equal({'A': [x], 'A_0': x}, {'A': [x], 'A_0': x}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    AssertionError
+    >>> assert_equal({'A_funcform': sp.Integer(1)}, {'A_funcform': sp.Integer(2)}, suppress_message=True)
+    >>> assert_equal({'A_funcform': [sp.Integer(1)], 'A_funcform_0': sp.Integer(2)}, {'A_funcform': [sp.Integer(9)], 'A_funcform_0': sp.Integer(8)}, suppress_message=True)
+    >>> assert_equal({'A_funcform': 1}, {'A_funcform': 1}, suppress_message=True)
+    Traceback (most recent call last):
+    ...
+    TypeError: assert_equal dictionary values must be SymPy expressions or nested lists of SymPy expressions, not int
+    >>> import contextlib
+    >>> import io
+    >>> rejected_nonfinite_mismatch = False
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     try:
+    ...         assert_equal(sp.nan, sp.Integer(1), suppress_message=True)
+    ...     except AssertionError:
+    ...         rejected_nonfinite_mismatch = True
+    >>> rejected_nonfinite_mismatch
+    True
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     assert_equal(sp.nan, sp.nan, suppress_message=True)
+    >>> rejected_infinity_mismatch = False
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     try:
+    ...         assert_equal(sp.oo, -sp.oo, suppress_message=True)
+    ...     except AssertionError:
+    ...         rejected_infinity_mismatch = True
+    >>> rejected_infinity_mismatch
+    True
+    >>> assert_equal(sp.oo, sp.oo, suppress_message=True)
+    >>> assert_equal(sp.oo + sp.I, sp.oo + sp.I, suppress_message=True)
+    >>> assert_equal(sp.zoo, sp.zoo, suppress_message=True)
     >>> assert_equal('(a^2 - b^2) - (a + b)*(a - b)', 0)
     Assertion Passed!
     """
@@ -88,18 +219,64 @@ def assert_equal(
     if not isinstance(vardict_2, dict):
         vardict_2 = {"": sp.sympify(vardict_2)}
 
+    if vardict_1.keys() != vardict_2.keys():
+        raise AssertionError
+
+    # Compare raw nesting before flattening. Otherwise empty tensors disappear,
+    # and differently shaped tensors can produce the same numbered leaf names.
+    for key in vardict_1:
+        if _expression_structure(vardict_1[key]) != _expression_structure(
+            vardict_2[key]
+        ):
+            raise AssertionError
+
+    # Among numerically processed entries, a scalar key such as A_0 can collide
+    # with the generated name for A[0]. Reject such dictionaries instead of
+    # allowing a later assignment to hide one compared expression.
+    for dictionary in (vardict_1, vardict_2):
+        processed_names = []
+        for key, expression in dictionary.items():
+            if "funcform" in key:
+                continue
+            if isinstance(expression, sp.Expr):
+                processed_names.append(str(key))
+            else:
+                processed_names.extend(
+                    f"{key}_{index}"
+                    for index, _ in enumerate(flatten_tensor(expression))
+                )
+        if len(processed_names) != len(set(processed_names)):
+            raise AssertionError
+
     vardict_1_results_dict = process_dictionary_of_expressions(
         vardict_1, fixed_mpfs_for_free_symbols=True
     )
     vardict_2_results_dict = process_dictionary_of_expressions(
         vardict_2, fixed_mpfs_for_free_symbols=True
     )
-    for var_1, var_2 in zip(vardict_1_results_dict, vardict_2_results_dict):
+    # The raw precheck protects empty tensors and shape. This processed check is
+    # a second guard against future changes in filtering or name generation.
+    if vardict_1_results_dict.keys() != vardict_2_results_dict.keys():
+        raise AssertionError
+
+    for var, value_1 in vardict_1_results_dict.items():
+        value_2 = vardict_2_results_dict[var]
+        # Resolve non-finite sentinels before subtraction, whose NaN result
+        # cannot participate safely in an ordered tolerance predicate.
+        nonfinite_values_match = _nonfinite_values_match(value_1, value_2)
+        if nonfinite_values_match is False:
+            print(
+                f"Error on {var}: non-finite values do not match: {value_1} != {value_2}"
+            )
+            raise AssertionError
+        if nonfinite_values_match is True:
+            continue
+
         tolerance = 10 ** (-4.0 / 5.0 * precision)
-        abs_diff = fabs(vardict_1_results_dict[var_1] - vardict_2_results_dict[var_2])
-        avg = (vardict_1_results_dict[var_1] + vardict_2_results_dict[var_2]) / 2
+        abs_diff = fabs(value_1 - value_2)
+        avg = (value_1 + value_2) / 2
         if abs_diff > fabs(avg) * tolerance:
-            print(f"Error on {var_1}: {abs_diff} > {fabs(avg) * tolerance}")
+            print(f"Error on {var}: {abs_diff} > {fabs(avg) * tolerance}")
             raise AssertionError
 
     if not suppress_message:
@@ -118,6 +295,12 @@ def inject_mpfs_into_cse_expression(
     :param replaced: List of tuples containing simplified expressions from SymPy's cse algorithm.
     :param reduced: List of reduced expressions from SymPy's cse algorithm.
     :return: Numerical value of the expression as either mpf or mpc.
+
+    Doctests:
+    >>> inject_mpfs_into_cse_expression({}, [], [sp.oo])
+    mpf('+inf')
+    >>> inject_mpfs_into_cse_expression({}, [], [-sp.oo])
+    mpf('-inf')
     """
     # Original logic, assumes reduced list only has one element
     reduced_expr = reduced[0]
@@ -136,7 +319,7 @@ def inject_mpfs_into_cse_expression(
             res = mp.nan
             print(
                 "inject_mpfs_into_cse_expression warning: after making replacements, found NaN.\n"
-                "   Seems to happen in SymTP Jacobians: rfm.Jac_dUrfm_dDSphUD[i][0]\n",
+                "   The caller must validate it against an explicit matching sentinel.\n",
                 free_symbols_dict_orig,
                 replaced,
                 reduced,
@@ -146,8 +329,29 @@ def inject_mpfs_into_cse_expression(
                 rhs_numeric = rhs.xreplace(partial_env).xreplace(free_symbols_dict)
                 print(lhs, "=", rhs_numeric, rhs_numeric.evalf())  # helpful debug print
                 partial_env[lhs] = rhs_numeric.evalf(n=mp.dps)
+        # SymPy infinities do not pass through mpf() on every supported stack.
+        elif reduced_expr == sp.oo:
+            res = mpf("+inf")
+        elif reduced_expr == -sp.oo:
+            res = mpf("-inf")
         else:
-            res = mpc(sp.N(reduced_expr, mp.dps))
+            # Convert real and imaginary components separately. mpc() cannot
+            # consume SymPy expressions such as oo + I or zoo directly.
+            real_expr, imag_expr = reduced_expr.as_real_imag()
+
+            def sympy_component_to_mpf(component: sp.Expr) -> mpf:
+                if component == sp.nan:
+                    return mp.nan
+                if component == sp.oo:
+                    return mpf("+inf")
+                if component == -sp.oo:
+                    return mpf("-inf")
+                return mpf(sp.N(component, mp.dps))
+
+            res = mpc(
+                sympy_component_to_mpf(real_expr),
+                sympy_component_to_mpf(imag_expr),
+            )
     return res
 
 
@@ -398,8 +602,42 @@ def compare_against_trusted(
     :param trusted_file_basename: The base name for the trusted file.
     :param results_dict: The dictionary containing the results to compare against trusted.
 
+    Matching NaN components and same-signed infinities are accepted as explicit
+    sentinels. A non-finite value never matches a finite value or a differently
+    structured non-finite value.
+
     :raises ImportError: If the trusted dictionary module cannot be imported.
     :raises ValueError: If there's a mismatch in the number of tested expressions or their values.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> from nrpy.tests.reference_metric_GeneralRFM_fisheyeN2 import trusted_dict
+    >>> module_path = str(Path.cwd() / "nrpy/reference_metric.py")
+    >>> cwd = str(Path.cwd())
+    >>> matching_results = dict(trusted_dict)
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     compare_against_trusted(module_path, cwd, "reference_metric_GeneralRFM_fisheyeN2", matching_results)
+    >>> finite_for_trusted_nan = dict(trusted_dict)
+    >>> finite_for_trusted_nan["Cart_to_xx_0"] = mpf("1.0")
+    >>> rejected_finite_for_trusted_nan = False
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     try:
+    ...         compare_against_trusted(module_path, cwd, "reference_metric_GeneralRFM_fisheyeN2", finite_for_trusted_nan)
+    ...     except ValueError:
+    ...         rejected_finite_for_trusted_nan = True
+    >>> rejected_finite_for_trusted_nan
+    True
+    >>> nan_for_trusted_finite = dict(trusted_dict)
+    >>> nan_for_trusted_finite["Cartx"] = mp.nan
+    >>> rejected_nan_for_trusted_finite = False
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     try:
+    ...         compare_against_trusted(module_path, cwd, "reference_metric_GeneralRFM_fisheyeN2", nan_for_trusted_finite)
+    ...     except ValueError:
+    ...         rejected_nan_for_trusted_finite = True
+    >>> rejected_nan_for_trusted_finite
+    True
     """
     # Calculate the relative path to the directory where the trusted file will be stored
     trusted_file_relpath = Path(os_path_abspath).relative_to(os_getcwd).parent
@@ -436,18 +674,33 @@ def compare_against_trusted(
         )
 
     for key in trusted_results_dict:
-        # We compare relative error here. Pass if abs_diff <= |trusted value| * tolerance
-        tolerance = 10 ** (-4.0 / 5.0 * mp.dps)
-        abs_diff = results_dict[key] - mpc(trusted_results_dict[key])
-        if fabs(abs_diff) > fabs(mpc(trusted_results_dict[key])) * tolerance:
-            raise ValueError(
-                "\n*** FAILURE ***\n"
-                f"****{key}**** mismatch in {trusted_file_basename}! {fabs(abs_diff)} >= {fabs(mpc(trusted_results_dict[key]))} * {tolerance} disagreement\n"
-                f"{results_dict[key]} <- computed result,\n{trusted_results_dict[key]} <- trusted value in file {trusted_file_relpath}/tests/{trusted_file_basename}.py\n"
-                f"If you trust the new version, then delete {trusted_file_relpath}/tests/{trusted_file_basename}.py and rerun to generate a new version.\n"
-                "BE SURE TO INDICATE THE REASON FOR UPDATING THE TRUSTED FILE IN THE COMMIT MESSAGE.\n"
-                "***************\n"
+        computed_value = results_dict[key]
+        trusted_value = mpc(trusted_results_dict[key])
+        # A matching sentinel is intentional evidence; every one-sided or
+        # differently structured non-finite result is a hard mismatch.
+        nonfinite_values_match = _nonfinite_values_match(computed_value, trusted_value)
+        if nonfinite_values_match is True:
+            continue
+        if nonfinite_values_match is False:
+            disagreement = "non-finite values do not match"
+        else:
+            # We compare relative error here. Pass if abs_diff <= |trusted value| * tolerance
+            abs_diff = computed_value - trusted_value
+            tolerance = 10 ** (-4.0 / 5.0 * mp.dps)
+            if fabs(abs_diff) <= fabs(trusted_value) * tolerance:
+                continue
+            disagreement = (
+                f"{fabs(abs_diff)} > {fabs(trusted_value)} * {tolerance} disagreement"
             )
+
+        raise ValueError(
+            "\n*** FAILURE ***\n"
+            f"****{key}**** mismatch in {trusted_file_basename}! {disagreement}\n"
+            f"{computed_value} <- computed result,\n{trusted_results_dict[key]} <- trusted value in file {trusted_file_relpath}/tests/{trusted_file_basename}.py\n"
+            f"If you trust the new version, then delete {trusted_file_relpath}/tests/{trusted_file_basename}.py and rerun to generate a new version.\n"
+            "BE SURE TO INDICATE THE REASON FOR UPDATING THE TRUSTED FILE IN THE COMMIT MESSAGE.\n"
+            "***************\n"
+        )
 
     print(f"*** PASS *** {trusted_file_basename} expressions successfully validated.")
 

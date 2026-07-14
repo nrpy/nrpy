@@ -31,19 +31,31 @@ modules exercise these helpers through their own trusted-result paths.
 
 `assert_equal()` accepts either dictionaries or single expressions. Non-dict
 inputs are `sympify`-wrapped into one-entry dictionaries keyed by `""`, both
-sides are processed with fixed `mpf` substitutions, and each paired numerical
-result is compared by relative error. For finite values, a mismatch prints the
-failing key and error bound, then raises `AssertionError`; a passing check prints
-`Assertion Passed!` unless messages are suppressed. The implementation has no
-explicit finite-value check: a `NaN` difference makes the `>` predicate false
-and can produce a false pass.
+sides are processed with fixed `mpf` substitutions, and values at each common
+processed key are compared by relative error. Dictionary values must be SymPy
+expressions or recursively nested lists of them; unsupported leaves raise
+`TypeError`. Dictionary inputs must have identical raw key sets and list
+nesting; extra, missing, renamed, or differently shaped entries raise
+`AssertionError` before value comparison. Among entries retained for numerical
+processing, a scalar name that would collide with a flattened tensor-leaf name
+also raises. Keys containing `funcform` participate in raw key, nesting, and
+leaf validation but are intentionally omitted from numerical comparison and
+processed-name collision checks. There is no positional dictionary mode.
 
-Dictionary comparison is positional, not key-safe. `assert_equal()` iterates
-the two processed dictionaries with `zip()`: it does not check equal lengths or
-equal key sets, and extra entries on the longer side are ignored. Same-length
-dictionaries with different keys are compared in sorted-key order. Callers that
-use dictionary `assert_equal()` must check equal lengths and key sets first
-unless positional comparison is explicitly documented.
+For finite values, a mismatch prints the failing key and error bound, then
+raises `AssertionError`; a passing check prints `Assertion Passed!` unless
+messages are suppressed. Non-finite components are handled before subtraction:
+matching NaNs in the same real or imaginary component and same-signed
+infinities compare equal, while one-sided NaNs, finite-versus-non-finite values,
+opposite infinities, or different finite companion components fail.
+
+Claim evidence:
+- Claim: `assert_equal()` requires SymPy-expression leaves, supports recursively nested lists, rejects non-identical raw key sets and different list nesting, rejects flattened-name collisions among numerically processed entries, omits structurally valid `funcform` keys from numerical comparison and collision checks, and explicitly distinguishes matching from mismatched non-finite components.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; filter and error-path tests remain colocated with the deciding helper
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, explicit funcform collision and leaf-type probes, and BSSN cross-representation run; date=07-13-2026`
 
 `check_zero()` sends one expression through `convert_one_expression_to_mpfmpc()`
 and returns whether the final numerical result is exactly `mp.mpf("0.0")`.
@@ -69,8 +81,20 @@ Single-expression conversion first sets `mp.dps = precision` and returns
 and common subexpressions, injects `mpf` values with `xreplace`, and evaluates
 common-subexpression replacements at the current `mp.dps`. The reduced
 expression is converted to `mpf` first. If that raises `TypeError`, an
-`sp.nan` result takes the diagnostic print path; other non-real results fall
-back to `mpc(sp.N(..., mp.dps))`.
+`sp.nan` result takes the diagnostic print path, positive and negative SymPy
+infinities convert explicitly to their `mpmath` counterparts, and other
+non-real results are split into real and imaginary components before each
+finite, NaN, or infinity component is converted and combined as `mpc`. On the
+recorded SymPy 1.14.0/mpmath 1.3.0 stack, both signed SymPy infinities raise
+`TypeError` in the initial `mpf` conversion and exercise the explicit fallback.
+
+Claim evidence:
+- Claim: `inject_mpfs_into_cse_expression()` first attempts `mpf` conversion; SymPy NaN uses the diagnostic fallback, on the recorded SymPy 1.14.0/mpmath 1.3.0 stack signed SymPy infinities raise `TypeError` and use the explicit signed-infinity fallback, and other non-real fallback values are converted component by component before constructing an `mpc` value.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `inject_mpfs_into_cse_expression`
+- Corroboration: none available; direct signed-infinity and `assert_equal()` doctests are colocated with the deciding helper, and no separate source exercises every conversion branch
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=direct signed-infinity fallback doctests plus aggregate NaN and complex-fallback cases in 68 total validator doctests; date=07-13-2026`
 
 Near-zero handling is a retry, not symbolic simplification. If a nonzero result
 has magnitude below `10 ** (-4.0 / 5.0 * mp.dps)`, the helper reruns the same
@@ -101,13 +125,23 @@ comparison checks regression against stored numbers only under the chosen
 substitutions and tolerance.
 
 Trusted comparison imports the caller-relative module path with `importlib`
-and expects a `trusted_dict`. It first checks only the dictionary lengths; when
-the lengths differ, it reports the missing key set and tells maintainers how to
-regenerate a trusted file. When the lengths match, it iterates trusted keys and
-compares each value by relative error against `results_dict[key]`; a changed
-key with unchanged count will surface as `KeyError`. It has no explicit
-finite-value check, so a computed `NaN` can be accepted against a finite trusted
-value.
+and expects a `trusted_dict`. It first checks dictionary lengths; when the
+lengths differ, it reports the missing key set and tells maintainers how to
+regenerate a trusted file. When lengths match, it iterates trusted keys and
+compares each value against `results_dict[key]`; a changed key with unchanged
+count surfaces as `KeyError`. Finite values use relative error. Non-finite
+values use the same component-aware rule as `assert_equal()`: intentional NaN
+sentinels or same-signed infinities pass only when both sides match, and a
+computed NaN against a finite trusted value, or a finite result against a
+trusted NaN, raises `ValueError`.
+
+Claim evidence:
+- Claim: `compare_against_trusted()` uses relative error for finite values, accepts matching NaN components and same-signed infinities, and raises `ValueError` for finite/non-finite or differently structured non-finite mismatches.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
+- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation plus both trusted-NaN mismatch doctests; date=07-13-2026`
 
 All expression checks sample numerical substitutions rather than proving an
 identity over a domain. A sampled point can miss a discrepancy or encounter a

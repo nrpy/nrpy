@@ -25,8 +25,19 @@ regression is appropriate, the common equation-module flow is:
 3. Call `compare_or_generate_trusted_results(...)` with the owning module path,
    working directory, trusted-file basename, and processed results.
 
-Separately, before a direct dictionary `assert_equal(...)` call, check equal
-lengths and key sets unless positional comparison is explicitly documented.
+Direct dictionary `assert_equal(...)` calls require structural equality. The
+helper rejects any missing, extra, or renamed raw key and different list
+nesting. It rejects flattened-name collisions among numerically processed
+entries; `funcform` keys are omitted from numerical processing and collision
+checks. It does not provide a positional dictionary mode.
+
+Claim evidence:
+- Claim: Direct dictionary `assert_equal(...)` calls reject non-identical raw key sets, different list nesting, and flattened-name collisions among numerically processed entries; `funcform` keys are omitted from numerical processing and collision checks, and no positional dictionary mode exists.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; error-path tests remain colocated with the deciding helper
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests plus explicit dictionary-structure and funcform-collision probes; date=07-13-2026`
 
 Equation entry points currently pass
 `fixed_mpfs_for_free_symbols=True`. For each ordinary free symbol,
@@ -60,17 +71,36 @@ length mismatch.
 `10**(-4*mp.dps/5)` against the magnitude of the trusted value after converting
 that value to `mpc`. Consequently a trusted zero has a zero relative-error
 bound and must match exactly after conversion's near-zero handling. There is no
-separate absolute tolerance or explicit finite-value validation; a computed
-`NaN` can make the mismatch predicate false and pass.
+separate absolute tolerance. Before finite subtraction, the helper compares
+non-finite components explicitly: matching NaN sentinels and same-signed
+infinities pass, while any finite/non-finite or differently structured
+non-finite mismatch raises `ValueError`.
+
+Claim evidence:
+- Claim: `compare_against_trusted()` accepts matching NaN components and same-signed infinities, while finite/non-finite or differently structured non-finite mismatches raise `ValueError`.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
+- Corroboration: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, supplies three intentional trusted NaN sentinels exercised by the reference-metric owner run
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation plus both trusted-NaN mismatch doctests; date=07-13-2026`
 
 `assert_equal` is a related sampled-numerical check, despite its name. It
-processes both inputs with fixed substitutions and compares zipped result values
-using relative tolerance against their average. It does not establish a SymPy
-identity, and for dictionary inputs it does not independently assert matching
-key names or equal lengths. It performs no explicit finite-value validation, so
-a `NaN` difference can false-pass. The GR `nrpylatex/test_parse_BSSN.py`
-cross-check uses this helper, so that test is also a deterministic sampled
-comparison of the parsed and handwritten expression sets.
+processes both inputs with fixed substitutions, rejects dictionary structure
+differences, and compares finite result values using relative tolerance against
+their average. Matching non-finite components are explicit sentinels; mismatches
+fail. It still does not establish a SymPy identity. The GR
+`nrpylatex/test_parse_BSSN.py` cross-check uses this helper, so that test is also
+a deterministic sampled comparison of the parsed and handwritten expression
+sets.
+
+Claim evidence:
+- Claim: `assert_equal()` rejects dictionary-structure differences, compares finite processed values by relative error, accepts matching non-finite components, and rejects non-finite mismatches; it remains a sampled numerical comparison rather than a symbolic identity proof.
+- Role: descriptive behavior
+- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal` and `_nonfinite_values_match`
+- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises the sampled dictionary comparison against independently constructed BSSN expressions
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0, NRPyLaTeX 1.4.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests and BSSN cross-representation run; date=07-13-2026`
+
 [Code Test Policy](../validation/code-test-policy.md) treats it as a unique
 retained cross-representation harness, not precedent for a new standalone
 runner, and owns test placement and meaningfulness.
