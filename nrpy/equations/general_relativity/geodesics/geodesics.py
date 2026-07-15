@@ -411,7 +411,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
         r"""
         Generate the normalized 9-component photon RHS used by the numerical build.
 
-        This formulation follows the Bohn-style normalized photon evolution
+        This formulation is a normalized photon evolution
         system, using coordinate time ``t`` as the independent variable and the
         state
 
@@ -438,8 +438,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
 
         All geometric quantities are constructed directly from the generic
         placeholder four-metric ``metric_g4DD`` and its first derivatives
-        ``metric_g4DD_dD``. No separate BSSN, ADM, or four-Christoffel payload
-        is required.
+        ``metric_g4DD_dD``.
 
         Reference:
         Bohn et al., "What does a binary black hole merger look like?"
@@ -617,8 +616,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
         ``\gamma^{ij} \Pi_i \Pi_j = 1``,
 
         where ``\gamma^{ij}`` is the inverse of the spatial block ``g_ij`` of
-        the generic placeholder four-metric ``metric_g4DD``. No separate BSSN,
-        ADM, or four-Christoffel payload is required.
+        the generic placeholder four-metric ``metric_g4DD``.
 
         This helper returns the left-hand side of that relation. A normalized-
         photon diagnostic should therefore compare the returned scalar against
