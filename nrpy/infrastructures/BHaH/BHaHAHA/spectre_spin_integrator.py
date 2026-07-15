@@ -1374,7 +1374,9 @@ static int spectre_spin_jacobi_eigen_3x3(const REAL input[3][3], REAL evals[3], 
       q = 2;
       max_offdiag = fabs(a[1][2]);
     } // END IF: a[1][2] is the largest candidate off-diagonal entry
-    if (max_offdiag < 1.0e-13)
+    const REAL matrix_scale = fmax(fabs(a[0][0]),
+                          fmax(fabs(a[1][1]), fabs(a[2][2])));
+    if (max_offdiag <= 64.0 * DBL_EPSILON * matrix_scale)
       break;
     const REAL tau = (a[q][q] - a[p][p]) / (2.0 * a[p][q]);
     const REAL t = copysign(1.0 / (fabs(tau) + sqrt(1.0 + tau * tau)), tau);
@@ -1435,7 +1437,8 @@ static REAL spectre_spin_det3(const REAL A[3][3]) {
  *
  * @param[in] C Correlation matrix between numerical and reference modes.
  * @param[out] O Orientation-preserving orthogonal alignment matrix.
- * @return BHAHAHA_SUCCESS, or an error code if the alignment is singular.
+ * @return BHAHAHA_SUCCESS, or a normalization error if the alignment is
+ * singular or the result is not orthogonal to roundoff.
  */
 static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
   REAL CtC[3][3] = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
@@ -1449,10 +1452,9 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
   int status = spectre_spin_jacobi_eigen_3x3(CtC, evals, V);
   if (status != BHAHAHA_SUCCESS)
     return status;
-  for (int i = 0; i < 3; i++) {
-    if (!(evals[i] > 0.0) || !isfinite(evals[i]))
-      return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
-  } // END LOOP: for i over Procrustes singular values
+  if (!(evals[2] > 0.0) || !isfinite(evals[2]) ||
+      evals[0] <= 128.0 * DBL_EPSILON * evals[2])
+    return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
 
   REAL invsqrt[3] = {1.0 / sqrt(evals[0]), 1.0 / sqrt(evals[1]), 1.0 / sqrt(evals[2])};
   for (int a = 0; a < 3; a++) {
@@ -1474,6 +1476,16 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
       } // END LOOP: for b over orientation-corrected output matrix columns
     } // END LOOP: for a over orientation-corrected output matrix rows
   } // END IF: Procrustes rotation needs orientation correction
+  for (int i = 0; i < 3; i++) {
+      for (int j = 0; j < 3; j++) {
+      REAL dot = 0.0;
+      for (int k = 0; k < 3; k++)
+        dot += O[k][i] * O[k][j];
+      const REAL identity_ij = (i == j) ? 1.0 : 0.0;
+      if (!isfinite(dot) || fabs(dot - identity_ij) > 256.0 * DBL_EPSILON)
+        return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
+    } // END LOOP: for j over Procrustes matrix columns
+  } // END LOOP: for i over Procrustes matrix columns
   return BHAHAHA_SUCCESS;
 } // END FUNCTION: spectre_spin_procrustes
 
