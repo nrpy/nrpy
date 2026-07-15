@@ -755,6 +755,59 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
 
     
 
+
+    @staticmethod
+    def photon_momentum_to_normalized_quantities() -> Tuple[sp.Expr, List[sp.Expr]]:
+        r"""
+        Convert direct photon momentum variables to normalized photon quantities.
+
+        This helper is intended for the numerical photon initialization pipeline,
+        where a one-time conversion is needed from the legacy direct four-momentum
+        state ``(p^0, p^1, p^2, p^3)`` to the normalized variables used by the
+        Bohn-style coordinate-time evolution system:
+
+        ``u = \ln|\alpha p^0|``
+
+        ``\Pi_i = p_i / (\alpha p^0)``
+
+        The conversion uses only the generic placeholder metric ``metric_g4DD``
+        and direct four-momentum ``pU`` so it can be consumed by a dedicated
+        photon-side infrastructure helper that operates after the initial camera
+        geometry has been seeded and the local metric has been interpolated.
+
+        :return: Tuple containing ``u`` and the 3-component covariant normalized
+            spatial momentum ``PiD``.
+        """
+        pU = ixp.declarerank1("pU", dimension=4)
+        g4DD = ixp.declarerank2("metric_g4DD", symmetry="sym01", dimension=4)
+        g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
+
+        # ADM lapse from the inverse four-metric:
+        # alpha = 1 / sqrt(-g^00)
+        alpha = sp.sympify(1) / sp.sqrt(-g4UU[0][0])
+
+        # Lower the spatial momentum index:
+        # p_i = g_i0 p^0 + g_ij p^j
+        pD = ixp.zerorank1(dimension=3)
+        for i in range(3):
+            pD[i] = g4DD[i + 1][0] * pU[0]
+            for j in range(3):
+                pD[i] += g4DD[i + 1][j + 1] * pU[j + 1]
+
+        # The normalization denominator shared by u and Pi_i:
+        # alpha p^0
+        alpha_p0 = alpha * pU[0]
+
+        # Normalized variables:
+        # u = ln|alpha p^0|
+        # Pi_i = p_i / (alpha p^0)
+        u = sp.log(sp.Abs(alpha_p0))
+        PiD = ixp.zerorank1(dimension=3)
+        for i in range(3):
+            PiD[i] = pD[i] / alpha_p0
+
+        return u, PiD
+
     @staticmethod
     def symbolic_g4DD_recipe_from_bssn_grid_basis(
         bssn_coord_system: str,
