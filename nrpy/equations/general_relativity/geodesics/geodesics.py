@@ -407,6 +407,251 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
 
     return pos_rhs + mom_rhs + path_len_rhs
 
+    def geodesic_eom_rhs_photon_normalized(self) -> List[sp.Expr]:
+        r"""
+        Generate the normalized 9-component photon RHS used by the numerical build.
+
+        This formulation follows the Bohn-style normalized photon evolution
+        system, using coordinate time ``t`` as the independent variable and the
+        state
+
+        ``(\lambda, x, y, z, u, \Pi_1, \Pi_2, \Pi_3, L_{\mathrm{Euler}})``,
+
+        where
+
+        ``u = \ln|\alpha p^0|``
+
+        and
+
+        ``\Pi_i = p_i / (\alpha p^0)``.
+
+        The returned equations assume the past-directed branch conventional for
+        reverse ray tracing, so
+
+        ``d\lambda / dt = -\alpha e^{-u}``.
+
+        The ninth equation evolves the proper spatial distance measured by a
+        local Eulerian observer. Since this formulation uses coordinate time
+        rather than the affine parameter as its independent variable,
+
+        ``dL_{\mathrm{Euler}} / dt = \alpha``.
+
+        All geometric quantities are constructed directly from the generic
+        placeholder four-metric ``metric_g4DD`` and its first derivatives
+        ``metric_g4DD_dD``. No separate BSSN, ADM, or four-Christoffel payload
+        is required.
+
+        Reference:
+        Bohn et al., "What does a binary black hole merger look like?"
+        (See Eqs. (4) and (5))
+
+        :return: A list of 9 SymPy expressions for the normalized photon RHS.
+        """
+        g4DD = ixp.declarerank2(
+            "metric_g4DD",
+            symmetry="sym01",
+            dimension=4,
+        )
+
+        # g4DD_dD[mu][nu][sigma] = partial_sigma g_{mu nu}
+        g4DD_dD = ixp.declarerank3(
+            "metric_g4DD_dD",
+            symmetry="sym01",
+            dimension=4,
+        )
+
+        # The normalized variables use the lapse, shift, and inverse spatial
+        # metric. These are algebraic combinations of the supplied four-metric,
+        # not additional numerical payload fields.
+        g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
+        alpha = sp.sympify(1) / sp.sqrt(-g4UU[0][0])
+
+        gammaDD = ixp.zerorank2(dimension=3)
+        for i in range(3):
+            for j in range(3):
+                gammaDD[i][j] = g4DD[i + 1][j + 1]
+        gammaUU, _ = ixp.symm_matrix_inverter3x3(gammaDD)
+
+        betaU = ixp.zerorank1(dimension=3)
+        for i in range(3):
+            betaU[i] = -g4UU[0][i + 1] / g4UU[0][0]
+
+        # Evolved variables for the normalized photon formulation:
+        # f[0] = lambda
+        # f[1:4] = x^i
+        # f[4] = u = ln|alpha p^0|
+        # f[5:8] = Pi_i = p_i / (alpha p^0)
+        # f[8] = L_Euler
+        u = sp.Symbol("u", real=True)
+        PiD = ixp.declarerank1("PiD", dimension=3)
+
+        # Raise the covariant normalized momentum:
+        # Pi^i = gamma^ij Pi_j
+        PiU = ixp.zerorank1(dimension=3)
+        for i in range(3):
+            PiU[i] = sp.sympify(0)
+            for j in range(3):
+                PiU[i] += gammaUU[i][j] * PiD[j]
+
+        # Coordinate-time tangent:
+        # V^mu = dx^mu / dt = p^mu / p^0
+        # V^0 = 1
+        # V^i = alpha Pi^i - beta^i
+        coordinate_velocityU = ixp.zerorank1(dimension=4)
+        coordinate_velocityU[0] = sp.sympify(1)
+
+        pos_rhs = []
+        for i in range(3):
+            coordinate_velocityU[i + 1] = alpha * PiU[i] - betaU[i]
+            pos_rhs.append(coordinate_velocityU[i + 1])
+
+        # Normalized contravariant momentum:
+        # p^mu / (alpha p^0) = V^mu / alpha
+        normalized_pU = ixp.zerorank1(dimension=4)
+        for mu in range(4):
+            normalized_pU[mu] = coordinate_velocityU[mu] / alpha
+
+        # Differentiate alpha = (-g^00)^(-1/2) directly from the metric:
+        # alpha_,sigma = (1/2) alpha^3 (g^00)_,sigma
+        # (g^00)_,sigma = -g^0mu g^0nu g_munu,sigma
+        alpha_dD = ixp.zerorank1(dimension=4)
+        for sigma in range(4):
+            g4UU00_dD = sp.sympify(0)
+            for mu in range(4):
+                for nu in range(4):
+                    g4UU00_dD -= (
+                        g4UU[0][mu]
+                        * g4UU[0][nu]
+                        * g4DD_dD[mu][nu][sigma]
+                    )
+            alpha_dD[sigma] = sp.Rational(1, 2) * alpha**3 * g4UU00_dD
+
+        # The time component of the contravariant geodesic equation gives
+        # d/dt ln|p^0| = -Gamma^0_munu V^mu V^nu. Construct only the required
+        # contraction directly from g_munu and its first derivatives.
+        Gamma0_contract = sp.sympify(0)
+        for mu in range(4):
+            for nu in range(mu, 4):
+                Gamma0_munu = sp.sympify(0)
+                for rho in range(4):
+                    Gamma0_munu += (
+                        sp.Rational(1, 2)
+                        * g4UU[0][rho]
+                        * (
+                            g4DD_dD[rho][nu][mu]
+                            + g4DD_dD[rho][mu][nu]
+                            - g4DD_dD[mu][nu][rho]
+                        )
+                    )
+
+                term = (
+                    Gamma0_munu
+                    * coordinate_velocityU[mu]
+                    * coordinate_velocityU[nu]
+                )
+                if mu != nu:
+                    term *= 2
+                Gamma0_contract += term
+
+        # u = ln|alpha p^0|, so
+        # du/dt = V^mu alpha_,mu / alpha
+        #         - Gamma^0_munu V^mu V^nu
+        alpha_transport = sp.sympify(0)
+        for mu in range(4):
+            alpha_transport += alpha_dD[mu] * coordinate_velocityU[mu]
+
+        u_rhs_expr = alpha_transport / alpha - Gamma0_contract
+        u_rhs = [u_rhs_expr]
+
+        # The covariant geodesic equation can be written as
+        # dp_i/dlambda = (1/2) g_munu,i p^mu p^nu. Therefore,
+        # dPi_i/dt = (alpha/2) g_munu,i
+        #             [p^mu/(alpha p^0)] [p^nu/(alpha p^0)]
+        #           - (du/dt) Pi_i.
+        Pi_rhs = ixp.zerorank1(dimension=3)
+        for i in range(3):
+            metric_derivative_contract = sp.sympify(0)
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    term = (
+                        g4DD_dD[mu][nu][i + 1]
+                        * normalized_pU[mu]
+                        * normalized_pU[nu]
+                    )
+                    if mu != nu:
+                        term *= 2
+                    metric_derivative_contract += term
+
+            Pi_rhs[i] = (
+                sp.Rational(1, 2) * alpha * metric_derivative_contract
+                - u_rhs_expr * PiD[i]
+            )
+
+        # First Equation: Affine Parameter Evolution
+        # Reverse ray tracing uses the past-directed branch:
+        # dlambda/dt = -alpha exp(-u)
+        lambda_rhs = [-alpha * sp.exp(-u)]
+
+        # Ninth Equation: Eulerian Distance Evolution
+        # The direct photon formulation uses
+        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha p^0.
+        #
+        # Here coordinate time is the independent variable, so
+        # dL_Euler/dt = (dL_Euler/dlambda) (dlambda/dt)
+        #              = alpha p^0 / p^0
+        #              = alpha.
+        path_len_rhs = [alpha]
+
+        return lambda_rhs + pos_rhs + u_rhs + Pi_rhs + path_len_rhs
+
+
+
+
+    def normalization_constraint_photon_normalized(self) -> sp.Expr:
+        r"""
+        Generate the normalized photon null constraint from the four-metric.
+
+        The normalized photon formulation evolves the covariant spatial momentum
+        ``\Pi_i`` and should satisfy
+
+        ``\gamma^{ij} \Pi_i \Pi_j = 1``,
+
+        where ``\gamma^{ij}`` is the inverse of the spatial block ``g_ij`` of
+        the generic placeholder four-metric ``metric_g4DD``. No separate BSSN,
+        ADM, or four-Christoffel payload is required.
+
+        This helper returns the left-hand side of that relation. A normalized-
+        photon diagnostic should therefore compare the returned scalar against
+        ``1``.
+
+        :return: A SymPy expression for ``\gamma^{ij} \Pi_i \Pi_j``.
+        """
+        g4DD = ixp.declarerank2(
+            "metric_g4DD",
+            symmetry="sym01",
+            dimension=4,
+        )
+
+        # The spatial metric is the spatial block of the four-metric:
+        # gamma_ij = g_ij
+        gammaDD = ixp.zerorank2(dimension=3)
+        for i in range(3):
+            for j in range(3):
+                gammaDD[i][j] = g4DD[i + 1][j + 1]
+        gammaUU, _ = ixp.symm_matrix_inverter3x3(gammaDD)
+
+        PiD = ixp.declarerank1("PiD", dimension=3)
+
+        constraint = sp.sympify(0)
+        for i in range(3):
+            for j in range(i, 3):
+                term = gammaUU[i][j] * PiD[i] * PiD[j]
+                if i != j:
+                    term *= 2
+                constraint += term
+
+        return constraint
+
     def hamiltonian_constraint_photon(self) -> sp.Expr:
         r"""
         Symbolically derive p^0 from the Hamiltonian constraint for a photon particle.
@@ -507,6 +752,8 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
                 constraint += term
 
         return constraint
+
+    
 
     @staticmethod
     def symbolic_g4DD_recipe_from_bssn_grid_basis(
