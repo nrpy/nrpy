@@ -243,7 +243,7 @@ class GeodesicEquations:
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[1])
 
-    def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
+    def geodesic_eom_rhs_photon_christoffel(self) -> List[sp.Expr]:
         r"""
         Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
@@ -317,6 +317,95 @@ class GeodesicEquations:
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
+    
+    
+def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
+    r"""
+    Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
+
+    The equations of motion are:
+
+        d(x^\alpha)/d(\lambda) = p^\alpha
+
+        d(p^\alpha)/d(\lambda)
+            = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
+
+    where the Christoffel symbols are computed from the 4-metric and its
+    partial derivatives:
+
+        \Gamma^\alpha_{\mu\nu}
+            = 1/2 g^{\alpha\beta}
+              (g_{\beta\nu,\mu} + g_{\beta\mu,\nu} - g_{\mu\nu,\beta})
+
+    The ninth ODE provides a diagnostic for the spatial distance traveled
+    by the photon, as measured by a local Eulerian observer:
+
+        dL_Euler/d\lambda = p^0 / sqrt(-g^00)
+
+    :return: A list of 9 SymPy expressions for the RHS of the ODEs.
+    """
+    pU = ixp.declarerank1("pU", dimension=4)
+    pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
+
+    g4DD = ixp.declarerank2(
+        "metric_g4DD",
+        symmetry="sym01",
+        dimension=4,
+    )
+
+    # g4DD_dD[mu][nu][sigma] = partial_sigma g_{mu nu}
+    g4DD_dD = ixp.declarerank3(
+        "metric_g4DD_dD",
+        symmetry="sym01",
+        dimension=4,
+    )
+
+    # Compute the inverse metric g^{mu nu}.
+    g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
+
+    # Compute the Christoffel symbols from g4DD and g4DD_dD.
+    Gamma4UDD = ixp.zerorank3(dimension=4)
+
+    for alpha in range(4):
+        for mu in range(4):
+            for nu in range(4):
+                sum_term = sp.sympify(0)
+
+                for beta in range(4):
+                    sum_term += (
+                        g4UU[alpha][beta]
+                        * (
+                            g4DD_dD[beta][nu][mu]
+                            + g4DD_dD[beta][mu][nu]
+                            - g4DD_dD[mu][nu][beta]
+                        )
+                    )
+
+                Gamma4UDD[alpha][mu][nu] = sp.Rational(1, 2) * sum_term
+
+    # Compute the four momentum equations.
+    mom_rhs = ixp.zerorank1(dimension=4)
+
+    for alpha in range(4):
+        sum_term = sp.sympify(0)
+
+        # Exploit symmetry by summing over the upper triangle of (mu, nu).
+        for mu in range(4):
+            for nu in range(mu, 4):
+                term = Gamma4UDD[alpha][mu][nu] * pU[mu] * pU[nu]
+
+                if mu != nu:
+                    term *= 2
+
+                sum_term += term
+
+        mom_rhs[alpha] = -sum_term
+
+    # Ninth Equation: Eulerian Distance Evolution
+    # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+    path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
+
+    return pos_rhs + mom_rhs + path_len_rhs
 
     def hamiltonian_constraint_photon(self) -> sp.Expr:
         r"""

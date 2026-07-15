@@ -119,15 +119,15 @@ def calculate_ode_rhs_kernel(
 
     preamble_lines.extend(
         [
-            "\n    //==========================================\n    // CHRISTOFFEL CONNECTION UNPACKING\n    //==========================================",
-            "// Load Christoffel symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$ from the pre-calculated memory bundle.",
+            "\n    //==========================================\n    // Metric Deritive UNPACKING\n    //==========================================",
+            "// Load Metric deritive symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$ from the pre-calculated memory bundle.",
         ]
     )
     curr_idx = 0
     for a in range(4):
-        for m in range(4):
-            for n in range(m, 4):
-                comp_name = f"conn_Gamma4UDD{a}{m}{n}"
+        for m in range(a, 4):
+            for n in range(4):
+                comp_name = f"metric_g4DD_dD{a}{m}{n}"
                 if comp_name in used_symbol_names:
                     preamble_lines.append(
                         f"const double {comp_name} = d_connection_bundle[IDX_CONN({curr_idx}, i)]; // Maps the connection component $\\Gamma^{{{a}}}_{{{m}{n}}}$ from global memory to a thread-local register."

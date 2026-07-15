@@ -41,9 +41,9 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics import (
     normalization_constraint,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import (
-    azimuthal_symmetry_spatial_lagrange_interpolation,
-    numerical_interpolation,
-    temporal_lagrange_interpolation,
+    azimuthal_symmetry_spatial_lagrange_interpolation_metric_derivatives,
+    numerical_interpolation_metric_derivatives,
+    temporal_lagrange_interpolation_metric_derivatives,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     batch_integrator_numerical,
@@ -332,21 +332,22 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     g4DD_metric.g4DD_metric(
         analytical_geodesic_data_0.g4DD, analytical_metric_0, PARTICLE
     )
+    #Using metric deritive data
     connections.connections(
-        analytical_geodesic_data_0.Gamma4UDD, analytical_metric_0, PARTICLE
+        analytical_geodesic_data_0.g4DD_dD, analytical_metric_0, PARTICLE
     )
 
     # Step 5.d: Register numerical interpolation helpers.
     register_azimuthal_interp = (
-        azimuthal_symmetry_spatial_lagrange_interpolation.register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation
+        azimuthal_symmetry_spatial_lagrange_interpolation_metric_derivatives.register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation
     )
     register_azimuthal_interp(
         coord_system_numerical, enable_simd=enable_simd, project_dir=project_dir
     )
-    temporal_lagrange_interpolation.register_CFunction_temporal_lagrange_interpolation(
+    temporal_lagrange_interpolation_metric_derivatives.register_CFunction_temporal_lagrange_interpolation(
         enable_simd=enable_simd, project_dir=project_dir
     )
-    numerical_interpolation.register_CFunction_numerical_interpolation(
+    numerical_interpolation_metric_derivatives.register_CFunction_numerical_interpolation(
         coord_system_numerical,
         enable_simd=enable_simd,
         project_dir=project_dir,
