@@ -313,9 +313,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
             )
 
         core_body_list.append("""
-  // Next perform Newton-Raphson iterations as needed:
-  const REAL XX_TOLERANCE = 1e-12;  // that's 1 part in 1e12 dxxi.
-  const REAL F_OF_XX_TOLERANCE = 1e-12;  // tolerance of function for which we're finding the root.
+  // Next perform safeguarded Newton-Raphson iterations as needed:
+  const REAL F_OF_XX_TOLERANCE = 1e-12;  // Tolerance of function for which we're finding the root.
   const int ITER_MAX = 100;
   int iter;
 """)
@@ -340,36 +339,90 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
                 core_body_list.append(f"""
   {{
   int tolerance_has_been_met = 0;
+  int bracket_contains_root = 1;
   iter = 0;
-  REAL xx{i} = (REAL)0.5 * (params->xxmin{i} + params->xxmax{i});
-  while(iter < ITER_MAX && !tolerance_has_been_met) {{
-    REAL f_of_xx{i}, fprime_of_xx{i};
+  REAL xx{i}_lo = params->xxmin{i};
+  REAL xx{i}_hi = params->xxmax{i};
+  REAL xx{i} = xx{i}_lo;
+  REAL f_of_xx{i}, fprime_of_xx{i};
 
 {nr_codegen_output}
-    if(fprime_of_xx{i} == (REAL)0.0) {{
-      break;
-    }}
-    const REAL xx{i}_np1 = xx{i} - f_of_xx{i} / fprime_of_xx{i};
+  REAL f_of_xx{i}_lo = f_of_xx{i};
 
-    if( fabs(xx{i} - xx{i}_np1) <= XX_TOLERANCE * params->dxx{i} && fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE ) {{
-      tolerance_has_been_met = 1;
-    }}
-    xx{i} = xx{i}_np1;
-    iter++;
-  }} // END Newton-Raphson iterations to compute xx{i}
-  if(iter >= ITER_MAX || !tolerance_has_been_met) {{
+  xx{i} = xx{i}_hi;
+
+{nr_codegen_output}
+  REAL f_of_xx{i}_hi = f_of_xx{i};
+
+  if(fabs(f_of_xx{i}_lo) <= F_OF_XX_TOLERANCE) {{
+    xx{i} = xx{i}_lo;
+    tolerance_has_been_met = 1;
+  }} // END IF: lower physical-grid coordinate is the inverse root
+  else if(fabs(f_of_xx{i}_hi) <= F_OF_XX_TOLERANCE) {{
+    xx{i} = xx{i}_hi;
+    tolerance_has_been_met = 1;
+  }} // END ELSE IF: upper physical-grid coordinate is the inverse root
+  else if((f_of_xx{i}_lo < (REAL)0.0 && f_of_xx{i}_hi < (REAL)0.0) ||
+          (f_of_xx{i}_lo > (REAL)0.0 && f_of_xx{i}_hi > (REAL)0.0)) {{
+    bracket_contains_root = 0;
+  }} // END ELSE IF: physical-grid coordinate range does not bracket inverse root
+  else {{
+    xx{i} = (REAL)0.5 * (xx{i}_lo + xx{i}_hi);
+    while(iter < ITER_MAX && !tolerance_has_been_met) {{
+
+{nr_codegen_output}
+      if(fabs(f_of_xx{i}) <= F_OF_XX_TOLERANCE) {{
+        tolerance_has_been_met = 1;
+      }} // END IF: Newton iterate is the inverse root
+      else {{
+        if((f_of_xx{i}_lo < (REAL)0.0 && f_of_xx{i} < (REAL)0.0) ||
+           (f_of_xx{i}_lo > (REAL)0.0 && f_of_xx{i} > (REAL)0.0)) {{
+          xx{i}_lo = xx{i};
+          f_of_xx{i}_lo = f_of_xx{i};
+        }} // END IF: inverse root lies above current iterate
+        else {{
+          xx{i}_hi = xx{i};
+          f_of_xx{i}_hi = f_of_xx{i};
+        }} // END ELSE: inverse root lies below current iterate
+
+        REAL xx{i}_trial = (REAL)0.5 * (xx{i}_lo + xx{i}_hi);
+        if(fprime_of_xx{i} != (REAL)0.0) {{
+          const REAL xx{i}_newton = xx{i} - f_of_xx{i} / fprime_of_xx{i};
+          if(xx{i}_newton > xx{i}_lo && xx{i}_newton < xx{i}_hi)
+            xx{i}_trial = xx{i}_newton;
+        }} // END IF: Newton proposal has a nonzero derivative
+
+        xx{i} = xx{i}_trial;
+      }} // END ELSE: update bracket and select safeguarded Newton trial
+      iter++;
+    }} // END WHILE: safeguarded Newton-Raphson iterations to compute xx{i}
+  }} // END ELSE: physical-grid coordinate range brackets inverse root
+  if(!bracket_contains_root) {{
 #ifdef __CUDA_ARCH__
-    printf("ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+    printf("ERROR: inverse root for {CoordSystem} is outside xx{i}=[%.15e,%.15e]: f(min),f(max), x,y,z = %.15e %.15e %.15e %.15e %.15e\\n",
+           (double)params->xxmin{i}, (double)params->xxmax{i}, (double)f_of_xx{i}_lo, (double)f_of_xx{i}_hi,
+           (double)Cartx, (double)Carty, (double)Cartz);
+    asm("trap;");
+#else
+    fprintf(stderr, "ERROR: inverse root for {CoordSystem} is outside xx{i}=[%.15e,%.15e]: f(min),f(max), x,y,z = %.15e %.15e %.15e %.15e %.15e\\n",
+            (double)params->xxmin{i}, (double)params->xxmax{i}, (double)f_of_xx{i}_lo, (double)f_of_xx{i}_hi,
+            (double)Cartx, (double)Carty, (double)Cartz);
+    exit(1);
+#endif
+  }} // END IF: physical-grid coordinate range does not bracket inverse root
+  else if(!tolerance_has_been_met) {{
+#ifdef __CUDA_ARCH__
+    printf("ERROR: safeguarded Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
            (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     asm("trap;");
 #else
-    fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
+    fprintf(stderr, "ERROR: safeguarded Newton-Raphson failed for {CoordSystem}: xx{i}=%.15e, x,y,z = %.15e %.15e %.15e\\n",
             (double)xx{i}, (double)Cartx, (double)Carty, (double)Cartz);
     exit(1);
 #endif
-  }}
+  }} // END ELSE IF: safeguarded Newton-Raphson did not converge
   xx[{i}] = xx{i};
-  }}
+  }} // END BLOCK: inverse coordinate xx{i}
 """)
     else:
         # Step 2.b: Handle purely analytical inversions.

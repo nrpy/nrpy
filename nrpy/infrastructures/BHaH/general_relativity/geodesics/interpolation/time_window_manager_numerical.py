@@ -166,6 +166,11 @@ def time_window_manager_numerical() -> None:
 
 #define TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES 4096ULL
 #define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES 96ULL
+#define TIME_WINDOW_MANAGER_NUMERICAL_RT_COORDINATE_COMPONENT_COUNT 3ULL
+#define TIME_WINDOW_MANAGER_NUMERICAL_RT_G4_COMPONENT_COUNT 10ULL
+#define TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT \
+  (TIME_WINDOW_MANAGER_NUMERICAL_RT_COORDINATE_COMPONENT_COUNT + \
+   TIME_WINDOW_MANAGER_NUMERICAL_RT_G4_COMPONENT_COUNT)
 
 #define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES 16U
 #define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_ALIGNMENT_BYTES 24U
@@ -845,8 +850,10 @@ def time_window_manager_numerical() -> None:
         const int temporal_interp_half_width,
         params_struct *restrict params) {
       unsigned char header_bytes[TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES];
-      static const unsigned char expected_magic[16] = "NRPYRTSTACK4D";
-      const uint64_t expected_point_record_bytes = 53ULL * (uint64_t)sizeof(double);
+      static const unsigned char expected_magic[16] = "NRPYRTSTACKMET1";
+      const uint64_t expected_point_record_bytes =
+          TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT *
+          (uint64_t)sizeof(double);
       uint64_t expected_point_record_count = 1ULL;
 
       if (ntwm == NULL)

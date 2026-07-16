@@ -28,9 +28,9 @@ inverse coordinate Jacobian generated directly from
 such as ``SinhCylindricalv2n2`` inherit their stretching factors from the
 reference-metric definition rather than from duplicated handwritten formulas.
 
-The existing payload stride remains unchanged at 53 doubles per point:
-three coordinates, ten metric values, and forty stored Christoffel values.
-The forty stored Christoffel values are intentionally ignored by this helper.
+Each payload record contains 13 doubles per point: three Cartesian coordinates
+followed by ten metric values. The spatial helper skips the coordinate prefix
+and reconstructs metric derivatives directly from the stored metric values.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -62,7 +62,10 @@ AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES = r"""
   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT \
   (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT)
-#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT 53
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT 3
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT \
+  (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT + \
+   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT)
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH 32
 // Status codes returned by the azimuthal-symmetry spatial Lagrange helper.
 typedef enum {
@@ -311,8 +314,8 @@ static void azimuthal_symmetry_spatial_lagrange_inverse_jacobian(
 /**
  * Accumulate metric values and two native derivatives from one payload record.
  *
- * The record begins with the ten Cartesian-basis metric components. Its
- * following forty stored Christoffel components are intentionally ignored.
+ * The record begins with the ten Cartesian-basis metric components after its
+ * three Cartesian coordinate values have been skipped by the caller.
  *
  * @param value_weight Two-dimensional Lagrange value weight.
  * @param interp_0_derivative_weight Derivative weight in the first native interpolation direction.
@@ -622,11 +625,10 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
 
     desc = r"""Interpolate the Cartesian metric and its spatial derivatives.
 
-The helper retains the existing numerical payload and output ABI for a quick
-metric-derivative test. It reads only the ten metric values from each 53-double
-point record and ignores the following forty stored Christoffel values. It
-interpolates the metric and analytically differentiates the same native 2D
-Lagrange reconstruction in both non-phi directions.
+The helper reads the ten metric values from each 13-double point record after
+the three Cartesian coordinate values. It interpolates the metric and
+analytically differentiates the same native 2D Lagrange reconstruction in both
+non-phi directions.
 
 Axisymmetry is handled without phi interpolation. Metric values and the two
 interpolated native derivatives are rotated from one stored reference-phi plane
