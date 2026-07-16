@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Sequence, Tuple, cast
 
-INPUT_SLICE_MAGIC = "NRPYRTDATA4D"
-COMBINED_MAGIC = "NRPYRTSTACK4D"
+INPUT_SLICE_MAGIC = "NRPYRTMETRIC1"
+COMBINED_MAGIC = "NRPYRTSTACKMET1"
 
 FIXED_HEADER_BYTES = 4096
 DEFAULT_ALIGNMENT = 4096
@@ -362,7 +362,6 @@ def parse_input_slice_file(path: Path) -> InputSliceInfo:
         _ = _read_u32(fp, "serialized_real_bytes")
         _read_u32(fp, "record_component_count")
         _read_u32(fp, "metric_component_count")
-        _read_u32(fp, "christoffel_component_count")
         _ = _read_u32(fp, "point_record_real_count")
         point_record_bytes = _read_u32(fp, "point_record_bytes")
         _ = _read_u32(fp, "payload_includes_ghost_zones")

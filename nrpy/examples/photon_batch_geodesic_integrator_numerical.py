@@ -44,6 +44,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     azimuthal_symmetry_spatial_lagrange_interpolation_metric_derivatives,
     numerical_interpolation_metric_derivatives,
     temporal_lagrange_interpolation_metric_derivatives,
+    temporal_lagrange_interpolation_metric_derivatives_c1_startup,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     batch_integrator_numerical,
@@ -55,9 +56,13 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     handle_window_plane_intersection,
     main,
     p0_reverse_kernel,
+    photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
+    rkf45_5th_state,
+    rkf45_numerical_control,
     rkf45_stage_update,
     set_initial_conditions_kernel,
+    normalization_constraint_photon_normalized,
 )
 
 
@@ -150,6 +155,13 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         help="""Initial coordinate time assigned to the photon batch.""",
     )
     parser.add_argument(
+        "--eom",
+        type=str,
+        choices=("geodesic", "normalized"),
+        default="geodesic",
+        help="""Photon equations of motion: direct affine-parameter geodesics or normalized coordinate-time evolution.""",
+    )
+    parser.add_argument(
         "--brill-lindquist-bhs",
         nargs=4,
         type=float,
@@ -161,6 +173,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         parser.print_help()
         sys.exit(0)
     args = parser.parse_args()
+    normalized_eom = args.eom == "normalized"
 
     _require(
         os.path.basename(args.bin_name) == args.bin_name,
@@ -305,10 +318,16 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # placeholder-based expressions and do not require spacetime-specific state.
     generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
     coordinate_symbols = list(sp.symbols("t x y z", real=True))
-    geodesic_rhs = generic_geodesic_equations.geodesic_eom_rhs_photon()
+    geodesic_rhs = (
+        generic_geodesic_equations.geodesic_eom_rhs_photon_normalized()
+        if normalized_eom
+        else generic_geodesic_equations.geodesic_eom_rhs_photon()
+    )
     p0_photon = generic_geodesic_equations.hamiltonian_constraint_photon()
     normalization_constraint_expr = (
-        generic_geodesic_equations.normalization_constraint()
+        generic_geodesic_equations.normalization_constraint_photon_normalized()
+        if normalized_eom
+        else generic_geodesic_equations.normalization_constraint()
     )
     analytical_geodesic_data_0 = geo.Geodesic_Equations[
         f"{analytical_metric_0}_{PARTICLE}"
@@ -321,18 +340,30 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     set_initial_conditions_kernel.set_initial_conditions_kernel(SPACETIME)
 
     p0_reverse_kernel.p0_reverse_kernel(p0_photon)
+    if normalized_eom:
+        u_expr, PiD_exprs = (
+            geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
+        )
+        photon_momentum_to_normalized_kernel.photon_momentum_to_normalized_kernel(
+            u_expr, PiD_exprs
+        )
 
     # Step 5.b: Register normalization diagnostics.
-    normalization_constraint.normalization_constraint(
-        normalization_constraint_expr, PARTICLE
-    )
+    if normalized_eom:
+        normalization_constraint_photon_normalized.normalization_constraint_photon_normalized(
+            normalization_constraint_expr
+        )
+    else:
+        normalization_constraint.normalization_constraint(
+            normalization_constraint_expr, PARTICLE
+        )
 
     # Step 5.c: Register the lower analytic spacetime workers used outside the
     # early-time numerical interval and on one reconstructed stencil edge.
     g4DD_metric.g4DD_metric(
         analytical_geodesic_data_0.g4DD, analytical_metric_0, PARTICLE
     )
-    #Using metric deritive data
+    # Using metric deritive data
     connections.connections(
         analytical_geodesic_data_0.g4DD_dD, analytical_metric_0, PARTICLE
     )
@@ -347,6 +378,9 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     temporal_lagrange_interpolation_metric_derivatives.register_CFunction_temporal_lagrange_interpolation(
         enable_simd=enable_simd, project_dir=project_dir
     )
+    temporal_lagrange_interpolation_metric_derivatives_c1_startup.register_CFunction_temporal_lagrange_interpolation_c1_startup(
+        enable_simd=enable_simd, project_dir=project_dir
+    )
     numerical_interpolation_metric_derivatives.register_CFunction_numerical_interpolation(
         coord_system_numerical,
         enable_simd=enable_simd,
@@ -355,11 +389,20 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     )
 
     # Step 5.e: Register RKF45 evolution kernels.
-    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(geodesic_rhs, coordinate_symbols)
-    rkf45_stage_update.rkf45_stage_update()
-    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
-        enable_numerical_time_window_step_cap=True
+    calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
+        geodesic_rhs, coordinate_symbols, normalized_eom=normalized_eom
     )
+    rkf45_stage_update.rkf45_stage_update()
+    if normalized_eom:
+        rkf45_5th_state.rkf45_5th_state()
+        rkf45_numerical_control.rkf45_numerical_control(
+            normalization_constraint_expr,
+            enable_numerical_time_window_step_cap=True,
+        )
+    else:
+        rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
+            enable_numerical_time_window_step_cap=True
+        )
 
     # Step 5.f: Register event-detection and boundary-intersection kernels.
     find_event_time_and_state.find_event_time_and_state()
@@ -373,7 +416,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # already pull in the shared slot/time-window helpers on demand. Calling
     # them again here would append duplicate definitions into BHaH_defines.h.
     batch_integrator_numerical.batch_integrator_numerical(
-        SPACETIME, coord_system_numerical
+        SPACETIME, coord_system_numerical, normalized_eom=normalized_eom
     )
     main.main(SPACETIME, integrator_mode)
 
@@ -444,19 +487,19 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # Step 6.c: Set interpolation-order defaults.
     par.glb_code_params_dict[
         "numerical_spacetime_spatial_interp_order"
-    ].defaultvalue = 1
+    ].defaultvalue = 3
     par.glb_code_params_dict[
         "numerical_spacetime_temporal_interp_order"
     ].defaultvalue = 3
 
     # Step 6.d: Set initial-condition defaults.
-    par.glb_code_params_dict["t_start"].defaultvalue = args.time_start
+    par.glb_code_params_dict["t_start"].defaultvalue = 28.0  # args.time_start
     par.glb_code_params_dict["scan_density"].defaultvalue = 100
 
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
-    par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
+    par.glb_code_params_dict["p_t_max"].defaultvalue = 3.0 if normalized_eom else 1000.0
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
+    par.glb_code_params_dict["r_escape"].defaultvalue = 25.0
 
     # Step 6.f: Set the lower analytic / numerical transition defaults.
     par.glb_code_params_dict["t_metric_0"].defaultvalue = args.t_metric_0
@@ -482,10 +525,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
 
     # Step 6.h: Set time-window manager defaults.
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 5.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
+    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -150.0
 
     # Step 6.i: Set source-plane geometry defaults.
-    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = -1000.0
+    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = -40.0
     par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0
     par.glb_code_params_dict["source_plane_center_z"].defaultvalue = 0.0
 
@@ -493,8 +536,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["source_plane_normal_y"].defaultvalue = 0.0
     par.glb_code_params_dict["source_plane_normal_z"].defaultvalue = 0.0
 
-    par.glb_code_params_dict["source_r_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["source_r_min"].defaultvalue = 2.0
+    par.glb_code_params_dict["source_r_max"].defaultvalue = 100.0
+    par.glb_code_params_dict["source_r_min"].defaultvalue = 0.0
 
     par.glb_code_params_dict["source_up_vec_x"].defaultvalue = 0.0
     par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 0.0
@@ -521,14 +564,20 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
 
     # Step 6.l: Set RKF45 controller defaults.
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.05
+    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = (
+        -0.05 if normalized_eom else 0.05
+    )
     par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1.0e-8
     par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1.0e-8
     par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1.0e-15
+    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1.0e-4
+    if normalized_eom:
+        par.glb_code_params_dict["rkf45_constraint_tolerance"].defaultvalue = 1.0e0
+        par.glb_code_params_dict["rkf45_log_energy_tolerance"].defaultvalue = 1.0e0
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
     print(f" -> Numerical coordinate system: {coord_system_numerical}")
+    print(f" -> Photon equations of motion: {args.eom}")
     print(f" -> Numerical domain: {domain}")
     if sinhw_numerical is not None:
         print(f" -> Numerical SINHW: {sinhw_numerical}")

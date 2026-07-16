@@ -40,10 +40,7 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
-from nrpy.infrastructures.BHaH.diagnostics import (
-    output_raytracing_data,
-    output_raytracing_data_static_christoffels,
-)
+from nrpy.infrastructures.BHaH.diagnostics import output_raytracing_data
 
 
 def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
@@ -55,7 +52,6 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
     enable_raytracing_data_output: bool = False,
-    enable_raytracing_static_christoffels_final_output: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -107,14 +103,8 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_data_output: If True, include a call to
         output_raytracing_data(...) on output steps. This export writes the
-        physical time together with final Cartesian metric and Christoffel
-        component data needed directly by the raytracer.
-    :param enable_raytracing_static_christoffels_final_output: If True, emit
-        one extra synthetic raytracing slice on the last diagnostics step
-        before the evolution exits. The extra slice stores
-        simulation_time = t_final + diagnostics_output_every, reuses the same
-        metric as the last normal slice, and recomputes the Christoffels under
-        the frozen-metric assumption partial_t g_mu_nu = 0.
+        physical time together with final Cartesian metric data. The raytracer
+        derives metric derivatives and Christoffel symbols after loading it.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
     """
@@ -225,14 +215,8 @@ fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
     }} // END LOOP: for grid over runtime grids
 
     {"const int raytracing_output_index = (int)round(currtime / outevery);" + newline if enable_raytracing_data_output else ""}
-    {"// Export final Cartesian raytracing data from the current BSSN state." if enable_raytracing_data_output else ""}
+    {"// Export final Cartesian metric data from the current BSSN state." if enable_raytracing_data_output else ""}
     {"output_raytracing_data(commondata, griddata, raytracing_output_index);" + newline if enable_raytracing_data_output else ""}
-    {"const REAL raytracing_next_evolution_time = currtime + currdt;" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
-    {"const int raytracing_normal_slice_is_before_t_final = currtime < commondata->t_final;" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
-    {"const int raytracing_next_evolution_step_reaches_or_exits_t_final = raytracing_next_evolution_time >= commondata->t_final;" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
-    {"if (raytracing_normal_slice_is_before_t_final && raytracing_next_evolution_step_reaches_or_exits_t_final) {" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
-    {"  output_raytracing_data_static_christoffels(commondata, griddata, raytracing_output_index + 1);" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
-    {"} // END IF: emit static-Christoffels final raytracing slice" + newline if enable_raytracing_data_output and enable_raytracing_static_christoffels_final_output else ""}
 
     // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
@@ -278,12 +262,10 @@ def register_all_diagnostics(
     enable_interp_diagnostics: bool,
     enable_volume_integration_diagnostics: bool,
     enable_rfm_precompute: bool = False,
-    enable_RbarDD_gridfunctions: bool = False,
     enable_free_auxevol: bool = True,
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
     enable_raytracing_data_output: bool = False,
-    enable_raytracing_static_christoffels_final_output: bool = False,
 ) -> None:
     """
     Register and stage diagnostics-related C code and helper headers.
@@ -315,26 +297,15 @@ def register_all_diagnostics(
         generated project. When raytracing export is enabled, this flag is passed
         through to the generated exporter so the emitted tensor expressions and
         serialized metadata match the active reference-metric pathway.
-    :param enable_RbarDD_gridfunctions: Whether the generated project registers a
-        separate Ricci evaluation path that populates the RbarDD gridfunctions
-        required by raytracing export.
     :param enable_free_auxevol: Currently ignored and has no effect on emitted C code.
         The MoL scratch free/restore hooks remain commented out in the generated driver.
     :param enable_psi4_diagnostics: If True, decompose psi4 into spin-weight -2 spherical harmonics
         (driver call only).
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_data_output: If True, register and call the
-        raytracing slice-data exporter that writes final Cartesian metric and
-        Christoffel data during the evolution.
-    :param enable_raytracing_static_christoffels_final_output: If True, also
-        register and call a synthetic final raytracing exporter that writes
-        one extra slice at t_final + diagnostics_output_every with
-        static-Christoffels final data.
+        raytracing slice-data exporter that writes final Cartesian metric data
+        during the evolution.
     :raises ValueError: If raytracing-data export is enabled for CUDA code generation.
-    :raises ValueError: If raytracing-data export is enabled without
-        ``enable_rfm_precompute=True``.
-    :raises ValueError: If raytracing-data export is enabled without
-        ``enable_RbarDD_gridfunctions=True``.
     :raises ValueError: If raytracing-data export is enabled for more than one
         coordinate system. Note: these exporters also currently support only
         one runtime grid; generated C aborts unless commondata->NUMGRIDS == 1.
@@ -356,20 +327,7 @@ def register_all_diagnostics(
         parallelization = cast(str, par.parval_from_str("parallelization"))
         if parallelization == "cuda":
             raise ValueError(
-                "Raytracing binary exporters currently support only host/OpenMP "
-                "builds. Add host-only Ricci/RHS extraction before enabling CUDA."
-            )
-        if not enable_rfm_precompute:
-            raise ValueError(
-                "Raytracing binary exporters currently require "
-                "enable_rfm_precompute=True because the generated exporter reuses "
-                "the rfm-precompute Ricci_eval() and rhs_eval() call signatures."
-            )
-        if not enable_RbarDD_gridfunctions:
-            raise ValueError(
-                "Raytracing binary exporters currently require "
-                "enable_RbarDD_gridfunctions=True so Ricci_eval() is registered "
-                "before rhs_eval() is reused for same-slice export."
+                "Raytracing binary exporters currently support only host/OpenMP builds."
             )
         if len(set_of_CoordSystems) != 1:
             raise ValueError(
@@ -387,21 +345,13 @@ def register_all_diagnostics(
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_bhahaha=enable_bhahaha,
         enable_raytracing_data_output=enable_raytracing_data_output,
-        enable_raytracing_static_christoffels_final_output=enable_raytracing_static_christoffels_final_output,
     )
     if enable_raytracing_data_output:
         raytracing_coord_system = next(iter(set_of_CoordSystems))
         output_raytracing_data.register_CFunction_output_raytracing_data(
             CoordSystem=raytracing_coord_system,
             enable_rfm_precompute=enable_rfm_precompute,
-            enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
         )
-        if enable_raytracing_static_christoffels_final_output:
-            output_raytracing_data_static_christoffels.register_CFunction_output_raytracing_data_static_christoffels(
-                CoordSystem=raytracing_coord_system,
-                enable_rfm_precompute=enable_rfm_precompute,
-                enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
-            )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:
             BHaH.diagnostics.diagnostics_nearest_grid_center.register_CFunction_diagnostics_nearest_grid_center(

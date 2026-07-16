@@ -31,12 +31,14 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 def batch_integrator_numerical(
     spacetime_name: str,
     dataset_coord_system: str,
+    normalized_eom: bool = False,
 ) -> None:
     r"""
     Construct the CPU numerical-spacetime photon batch integrator.
 
     :param spacetime_name: Spacetime identifier used by photon-specific initial-condition helpers.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
+    :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
     :raises ValueError: If the configured parallelization mode is not OpenMP.
 
     Doctests:
@@ -62,7 +64,11 @@ def batch_integrator_numerical(
         )
     if dataset_coord_system in ("Spherical", "SinhSpherical"):
         phi_dim = 2
-    elif dataset_coord_system in ("Cylindrical", "SinhCylindrical", "SinhCylindricalv2n2"):
+    elif dataset_coord_system in (
+        "Cylindrical",
+        "SinhCylindrical",
+        "SinhCylindricalv2n2",
+    ):
         phi_dim = 1
     else:
         raise ValueError(
@@ -185,6 +191,93 @@ def batch_integrator_numerical(
         "&all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
     )
 
+    normalized_momentum_conversion = (
+        "photon_momentum_to_normalized_kernel("
+        "d_f_bundle[0], d_metric_bundle[0], chunk_size, 0);"
+        if normalized_eom
+        else ""
+    )
+    fifth_state_declaration = (
+        """
+    // Scratchpad storing the 5th-order RKF45 candidate state prior to acceptance.
+    double *d_f_5th_bundle[2];"""
+        if normalized_eom
+        else ""
+    )
+    fifth_state_allocation = (
+        """
+        {malloc_device}(d_f_5th_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate 5th-order candidate scratchpad.""".format(
+            malloc_device=malloc_device
+        )
+        if normalized_eom
+        else ""
+    )
+    fifth_state_free = (
+        """
+            {free_device}(d_f_5th_bundle[s]); // Purges the 5th-order candidate state scratchpad.""".format(
+            free_device=free_device
+        )
+        if normalized_eom
+        else ""
+    )
+    initial_interpolation_parameter = "commondata->t_start" if normalized_eom else "0.0"
+    normalization_kernel_name = (
+        "normalization_constraint_photon_normalized"
+        if normalized_eom
+        else "normalization_constraint_photon"
+    )
+    normalization_error_expr = (
+        "fabs(d_norm_bundle[norm_i].C - 1.0)"
+        if normalized_eom
+        else "fabs(d_norm_bundle[norm_i].C)"
+    )
+    rkf45_control_name = (
+        "rkf45_numerical_control" if normalized_eom else "rkf45_finalize_and_control"
+    )
+
+    if normalized_eom:
+        finalize_current = """
+            // Candidate-state step: build the 5th-order RKF45 state.
+            rkf45_5th_state(d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_f_5th_bundle[current], active_chunks[current], current);
+            // Evaluate the metric at the 5th-order candidate for normalized constraint control.
+            numerical_interpolation(
+                commondata,
+                &numerical_params,
+                &spatial_context,
+                &numerical_window,
+                d_f_5th_bundle[current],
+                d_metric_bundle[current],
+                NULL,
+                active_chunks[current],
+                current);
+            // Finalize the normalized coordinate-time RKF45 step.
+            rkf45_numerical_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_f_5th_bundle[current], d_metric_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current], current);"""
+        finalize_next = """
+                // Candidate-state step: build the 5th-order RKF45 state.
+                rkf45_5th_state(d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_f_5th_bundle[next], active_chunks[next], next);
+                // Evaluate the metric at the 5th-order candidate for normalized constraint control.
+                numerical_interpolation(
+                    commondata,
+                    &numerical_params,
+                    &spatial_context,
+                    &numerical_window,
+                    d_f_5th_bundle[next],
+                    d_metric_bundle[next],
+                    NULL,
+                    active_chunks[next],
+                    next);
+                // Finalize the normalized coordinate-time RKF45 step.
+                rkf45_numerical_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_f_5th_bundle[next], d_metric_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next], next);"""
+    else:
+        finalize_current = """
+            // Finalize step: apply Cash-Karp error control to update the integration
+            // baseline and step size $h$.
+            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current], current);"""
+        finalize_next = """
+                // Finalize step: apply Cash-Karp error control to update the upcoming
+                // integration baseline and step size $h$.
+                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next], next);"""
+
     def memcpy_cpu(dest: str, src: str, size: str) -> str:
         return f"memcpy({dest}, {src}, {size});"
 
@@ -273,6 +366,7 @@ def batch_integrator_numerical(
     double *d_f_start_bundle[2];
     // Scratchpad tracking the intermediate cumulative RKF45 stage updates.
     double *d_f_temp_bundle[2];
+{fifth_state_declaration}
     // Scratchpad tracking the history state $f^\mu_{{n-1}}$ for geometric intersection detection.
     double *d_f_prev_bundle[2];
     // Scratchpad tracking the history state $f^\mu_{{n-2}}$ for geometric intersection detection.
@@ -328,6 +422,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
         {malloc_device}(d_f_start_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f_{{start}}$ scratchpad.
         {malloc_device}(d_f_temp_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate temporary stage scratchpad.
+{fifth_state_allocation}
         {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
         {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
@@ -563,6 +658,7 @@ def batch_integrator_numerical(
 
         // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ natively on the active pipeline.
         p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
+        {normalized_momentum_conversion}
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating memory transfer of the 9 constrained state vector $f^\mu$ components.
             {memcpy_cpu("f_bridge[0] + c_k * BUNDLE_CAPACITY", "d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
@@ -602,11 +698,11 @@ def batch_integrator_numerical(
             all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
         }} // END LOOP: for sync_k over 9 to propagate historical derivatives
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
-        all_photons_host.affine_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the affine parameter $\lambda$.
+        all_photons_host.affine_param[sync_i] = {initial_interpolation_parameter}; // Sets the initial interpolation parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        all_photons_host.affine_param_p[sync_i] = 0.0; // Initializes the first historical affine parameter $\lambda_{{n-1}}$.
-        all_photons_host.affine_param_p_p[sync_i] = 0.0; // Initializes the second historical affine parameter $\lambda_{{n-2}}$.
+        all_photons_host.affine_param_p[sync_i] = {initial_interpolation_parameter}; // Initializes the first historical interpolation parameter.
+        all_photons_host.affine_param_p_p[sync_i] = {initial_interpolation_parameter}; // Initializes the second historical interpolation parameter.
         all_photons_host.window_event_found[sync_i] = false; // Sets the observer window intersection logical lock to false.
         all_photons_host.source_event_found[sync_i] = false; // Sets the source emission intersection logical lock to false.
 
@@ -795,9 +891,7 @@ def batch_integrator_numerical(
                 rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
             }} // END LOOP: for stage over 6 to execute RKF45 stages
 
-            // Finalize step: apply Cash-Karp error control to update the integration
-            // baseline and step size $h$.
-            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
+{finalize_current}
             attempted_rkf45_steps_since_print += active_chunks[current];
             // Event step: detect geometric events and record intersection coordinate
             // states on the active buffer.
@@ -964,9 +1058,7 @@ def batch_integrator_numerical(
                     rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
                 }} // END LOOP: for stage over 6 to execute RKF45 stages
 
-                // Finalize step: apply Cash-Karp error control to update the upcoming
-                // integration baseline and step size $h$.
-                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next]{stream_arg_next});
+{finalize_next}
                 attempted_rkf45_steps_since_print += active_chunks[next];
                 // Event step: detect geometric events and record intersection
                 // coordinate states on the alternate buffer.
@@ -1104,7 +1196,7 @@ def batch_integrator_numerical(
             // each ray's current consecutive retry depth rather than a binary "this attempt was rejected" flag.
             long int batch_rejections = 0;
 
-            // Loop iterator $sum_i$ scanning the finalized status bridge after rkf45_finalize_and_control() has classified every attempted ray.
+            // Loop iterator $sum_i$ scanning the finalized status bridge after {rkf45_control_name}() has classified every attempted ray.
             // A status of REJECTED means the current attempt failed error control and the ray will be re-queued into the same slot with its
             // adapted step size, so this produces the intended per-chunk rejection count for the dashboard percentage readout.
             for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
@@ -1170,8 +1262,8 @@ def batch_integrator_numerical(
 
             double max_err_norm = 0.0;
             long int worst_ray_norm = -1;
-            double max_err_norm_non_pt_big = 0.0;
-            long int worst_ray_norm_non_pt_big = -1;
+            double max_err_norm_excluding_failures = 0.0;
+            long int worst_ray_norm_excluding_failures = -1;
 
             for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {{
                 const int norm_slot_idx = slot_get_index(
@@ -1227,7 +1319,7 @@ def batch_integrator_numerical(
                         chunk_size,
                         0);
 
-                    normalization_constraint_photon(
+                    {normalization_kernel_name}(
                         d_f_bundle[0],
                         d_metric_bundle[0],
                         d_norm_bundle,
@@ -1236,7 +1328,7 @@ def batch_integrator_numerical(
 
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
                         const long int master_idx = chunk_buffer[0][norm_i];
-                        const double current_norm_err = fabs(d_norm_bundle[norm_i].C);
+                        const double current_norm_err = {normalization_error_expr};
                         if (!isfinite(current_norm_err)) {{
                             normalization_failure_mode = 3;
                             normalization_failure_ray = master_idx;
@@ -1248,10 +1340,11 @@ def batch_integrator_numerical(
                             worst_ray_norm = master_idx;
                         }} // END IF: current_norm_err > max_err_norm
                         if (all_photons_host.status[master_idx] != FAILURE_PT_TOO_BIG &&
-                            current_norm_err > max_err_norm_non_pt_big) {{
-                            max_err_norm_non_pt_big = current_norm_err;
-                            worst_ray_norm_non_pt_big = master_idx;
-                        }} // END IF: current_norm_err updates the non-FAILURE_PT_TOO_BIG maximum
+                            all_photons_host.status[master_idx] != FAILURE_RKF45_REJECTION_LIMIT &&
+                            current_norm_err > max_err_norm_excluding_failures) {{
+                            max_err_norm_excluding_failures = current_norm_err;
+                            worst_ray_norm_excluding_failures = master_idx;
+                        }} // END IF: current_norm_err updates the maximum excluding designated failures
                     }} // END LOOP: for norm_i over chunk_size to scan constraint values
                 }} // END WHILE: norm_tsm.slot_counts[norm_slot_idx] > 0 to process the terminal slot
             }} // END LOOP: for norm_slot_idx down to 0 to process all terminal slots
@@ -1285,9 +1378,9 @@ def batch_integrator_numerical(
                 max_err_norm,
                 worst_ray_norm);
             printf(
-                "  Max Absolute Error, excluding FAILURE_PT_TOO_BIG: %e (Ray %ld)\n",
-                max_err_norm_non_pt_big,
-                worst_ray_norm_non_pt_big);
+                "  Max Absolute Error, excluding FAILURE_PT_TOO_BIG; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
+                max_err_norm_excluding_failures,
+                worst_ray_norm_excluding_failures);
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization constraint
 
         // Final output step: process escaped photons intersecting the celestial
@@ -1328,6 +1421,7 @@ def batch_integrator_numerical(
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
+{fifth_state_free}
             {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
             {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.

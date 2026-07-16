@@ -49,6 +49,14 @@ import nrpy.examples.geodesic_visualizations.blueprint_config_and_schema as cfg
 _WORKER_SOURCE_TEX: Optional[npt.NDArray[np.float64]] = None
 _WORKER_SPHERE_TEX: Optional[npt.NDArray[np.float64]] = None
 
+# Fixed high-contrast colors for opt-in termination diagnostics.
+DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
+    (cfg.TERM_FAIL_RKF45, "TERM_FAIL_RKF45", (255, 0, 168)),
+    (cfg.TERM_FAIL_T_MAX, "TERM_FAIL_T_MAX", (255, 122, 0)),
+    (cfg.TERM_FAIL_SLOT, "TERM_FAIL_SLOT", (182, 255, 0)),
+    (cfg.TERM_FAIL_GENERIC, "TERM_FAIL_GENERIC", (0, 229, 255)),
+)
+
 
 def _init_worker(
     source_tex: npt.NDArray[np.float64], sphere_tex: npt.NDArray[np.float64]
@@ -246,8 +254,12 @@ def _accumulate_ray_hits_jit(
     sphere_tex: npt.NDArray[np.float64],
     local_pixel_acc: npt.NDArray[np.float64],
     local_count_acc: npt.NDArray[np.int32],
+    local_debug_term_types: npt.NDArray[np.int8],
     term_source: int,
     term_sphere: int,
+    term_fail_rkf45: int,
+    term_fail_generic: int,
+    enable_debug: bool,
 ) -> None:
     # JIT-compiled core math loop for mapping rays to pixels.
     # Bypasses the GIL and executes in optimized machine code.
@@ -307,6 +319,14 @@ def _accumulate_ray_hits_jit(
             local_pixel_acc[py, px, 2] += sphere_tex[py_sph, px_sph, 2]
             local_count_acc[py, px] += 1
 
+        # Preserve requested integration failures for the opt-in debug overlay.
+        if (
+            enable_debug
+            and term_fail_rkf45 <= term <= term_fail_generic
+            and term < local_debug_term_types[py, px]
+        ):
+            local_debug_term_types[py, px] = term
+
 
 def _process_blueprint_tile(
     zip_filename: str,
@@ -320,11 +340,15 @@ def _process_blueprint_tile(
     output_pixel_width: int,
     output_pixel_height: int,
     source_image_width: float,
+    enable_debug: bool,
 ) -> Tuple[
     npt.NDArray[np.int64],
     npt.NDArray[np.int64],
     npt.NDArray[np.float32],
     npt.NDArray[np.int32],
+    npt.NDArray[np.int64],
+    npt.NDArray[np.int64],
+    npt.NDArray[np.int8],
 ]:
     # Worker function to process a blueprint tile archive and return sparse arrays.
     # Reads binary chunks, passes arrays to the JIT-compiled math function,
@@ -341,11 +365,28 @@ def _process_blueprint_tile(
     local_count_acc = np.zeros(
         (output_pixel_height, output_pixel_width), dtype=np.int32
     )
+    if enable_debug:
+        local_debug_term_types = np.full(
+            (output_pixel_height, output_pixel_width),
+            cfg.TERM_ACTIVE,
+            dtype=np.int8,
+        )
+    else:
+        local_debug_term_types = np.empty((0, 0), dtype=np.int8)
 
     with zipfile.ZipFile(zip_filename, "r") as zf:
         bin_files = [name for name in zf.namelist() if name.endswith(".bin")]
         if not bin_files:
-            return np.array([]), np.array([]), np.array([]), np.array([])
+            empty_int64 = np.array([], dtype=np.int64)
+            return (
+                empty_int64,
+                empty_int64,
+                np.array([], dtype=np.float32),
+                np.array([], dtype=np.int32),
+                empty_int64,
+                empty_int64,
+                np.array([], dtype=np.int8),
+            )
 
         with zf.open(bin_files[0], "r") as f:
             while True:
@@ -377,8 +418,12 @@ def _process_blueprint_tile(
                     _WORKER_SPHERE_TEX,
                     local_pixel_acc,
                     local_count_acc,
+                    local_debug_term_types,
                     cfg.TERM_SOURCE_PLANE,
                     cfg.TERM_SPHERE,
+                    cfg.TERM_FAIL_RKF45,
+                    cfg.TERM_FAIL_GENERIC,
+                    enable_debug,
                 )
 
     # --- SPARSE MAP-REDUCE COMPRESSION ---
@@ -388,7 +433,62 @@ def _process_blueprint_tile(
     flat_colors = local_pixel_acc[hit_mask].astype(np.float32)
     flat_counts = local_count_acc[hit_mask]
 
-    return flat_y, flat_x, flat_colors, flat_counts
+    if enable_debug:
+        debug_mask = local_debug_term_types < cfg.TERM_ACTIVE
+        debug_flat_y, debug_flat_x = np.nonzero(debug_mask)
+        debug_flat_term_types = local_debug_term_types[debug_mask]
+    else:
+        debug_flat_y = np.array([], dtype=np.int64)
+        debug_flat_x = np.array([], dtype=np.int64)
+        debug_flat_term_types = np.array([], dtype=np.int8)
+
+    return (
+        flat_y,
+        flat_x,
+        flat_colors,
+        flat_counts,
+        debug_flat_y,
+        debug_flat_x,
+        debug_flat_term_types,
+    )
+
+
+def _add_debug_legend(img: "Image.Image") -> None:  # type: ignore[name-defined]
+    """Add the fixed failure-color key in the image's bottom-right corner."""
+    # pylint: disable=import-outside-toplevel, import-error
+    from PIL import ImageDraw, ImageFont
+
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    padding = 4
+    swatch_size = 8
+    line_height = 11
+    labels = [failure_info[1] for failure_info in DEBUG_FAILURE_INFO]
+    text_width = max(int(draw.textlength(label, font=font)) for label in labels)
+    legend_width = 3 * padding + swatch_size + text_width
+    legend_height = 2 * padding + line_height * len(DEBUG_FAILURE_INFO)
+    left = max(0, img.width - legend_width - padding)
+    top = max(0, img.height - legend_height - padding)
+
+    # Draw last so the key is visually distinct from ray-traced pixels.
+    draw.rectangle((left, top, img.width - 1, img.height - 1), fill=(0, 0, 0))
+    for index, (_, label, color) in enumerate(DEBUG_FAILURE_INFO):
+        y_coord = top + padding + index * line_height
+        draw.rectangle(
+            (
+                left + padding,
+                y_coord,
+                left + padding + swatch_size,
+                y_coord + swatch_size,
+            ),
+            fill=color,
+        )
+        draw.text(
+            (left + 2 * padding + swatch_size, y_coord - 2),
+            label,
+            fill=(255, 255, 255),
+            font=font,
+        )
 
 
 def _save_image_to_file(img: "Image.Image", output_filename: str) -> None:  # type: ignore[name-defined]
@@ -433,6 +533,8 @@ def generate_static_lensed_image(
     display_image: bool = True,
     custom_sphere_image: bool = False,
     custom_source_image: bool = False,
+    enable_debug: bool = False,
+    include_debug_key: bool = False,
 ) -> None:
     """
     Generate a static lensed image from geodesic blueprint data.
@@ -455,6 +557,8 @@ def generate_static_lensed_image(
     :param display_image: If True, opens the resulting image using the default viewer.
     :param custom_sphere_image: Whether the sphere texture came from a custom CLI override.
     :param custom_source_image: Whether the source texture came from a custom CLI override.
+    :param enable_debug: Whether to overlay requested integration failures with fixed colors.
+    :param include_debug_key: Whether to add the debug failure-color key to the image.
     """
     # pylint: disable=import-outside-toplevel, import-error
     from PIL import Image
@@ -489,6 +593,12 @@ def generate_static_lensed_image(
     count_accumulator = np.zeros(
         (output_pixel_height, output_pixel_width), dtype=np.int32
     )
+    if enable_debug:
+        debug_term_types = np.full(
+            (output_pixel_height, output_pixel_width), cfg.TERM_ACTIVE, dtype=np.int8
+        )
+    else:
+        debug_term_types = np.empty((0, 0), dtype=np.int8)
 
     record_size_bytes = cfg.BLUEPRINT_DTYPE.itemsize
     chunk_bytes = chunk_size * record_size_bytes
@@ -522,16 +632,31 @@ def generate_static_lensed_image(
                     output_pixel_width,
                     output_pixel_height,
                     source_image_width,
+                    enable_debug,
                 )
             )
 
         # Merge the sparse 1D local accumulators back into the main global accumulator
         for i, future in enumerate(as_completed(futures)):
-            flat_y, flat_x, flat_colors, flat_counts = future.result()
+            (
+                flat_y,
+                flat_x,
+                flat_colors,
+                flat_counts,
+                debug_flat_y,
+                debug_flat_x,
+                debug_flat_term_types,
+            ) = future.result()
 
             if len(flat_counts) > 0:
                 np.add.at(pixel_accumulator, (flat_y, flat_x), flat_colors)
                 np.add.at(count_accumulator, (flat_y, flat_x), flat_counts)
+            if enable_debug and len(debug_flat_term_types) > 0:
+                np.minimum.at(
+                    debug_term_types,
+                    (debug_flat_y, debug_flat_x),
+                    debug_flat_term_types,
+                )
 
             print(f"  -> Completed tile {i + 1}/{len(blueprint_filenames)}.")
 
@@ -541,11 +666,16 @@ def generate_static_lensed_image(
     final_image_float[hit_mask] = (
         pixel_accumulator[hit_mask] / count_accumulator[hit_mask, np.newaxis]
     )
+    if enable_debug:
+        for term_type, _, color in DEBUG_FAILURE_INFO:
+            final_image_float[debug_term_types == term_type] = np.array(color) / 255.0
 
     # Convert float64 to uint8 (0-255) and save
     img = Image.fromarray(
         (np.clip(final_image_float, 0, 1) * 255).astype(np.uint8), "RGB"
     )
+    if enable_debug and include_debug_key:
+        _add_debug_legend(img)
     _save_image_to_file(img, output_filename)
 
     if display_image:

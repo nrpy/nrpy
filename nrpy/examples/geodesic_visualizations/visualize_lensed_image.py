@@ -105,9 +105,22 @@ def main() -> None:
         default=None,
         help="Optional path to a custom source-plane texture image.",
     )
+    parser.add_argument(
+        "--debug",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="key",
+        help=(
+            "Color RKF45, maximum-time, slot, and generic integration failures. "
+            "Pass 'key' to also add the color key to the image."
+        ),
+    )
 
     # The parsed arguments struct contains all runtime configurations.
     args = parser.parse_args()
+    if args.debug not in (None, "", "key"):
+        parser.error("--debug accepts no argument or the optional argument 'key'.")
 
     # Absolute script directory ensures paths resolve independently of execution context.
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -178,6 +191,11 @@ def main() -> None:
         print(f"Using custom source texture: {source_image}")
 
     print(f"Rendering image to: {args.output}...")
+    if args.debug is not None:
+        print("Debug failure-color key:")
+        for term_type, label, color in rli.DEBUG_FAILURE_INFO:
+            color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
+            print(f"  {term_type}: {label} = {color_hex}")
 
     # Static image generator merges geodesic blueprint with texture maps for final image.
     rli.generate_static_lensed_image(
@@ -192,6 +210,8 @@ def main() -> None:
         window_height=args.window_height,
         custom_sphere_image=args.sphere_image is not None,
         custom_source_image=args.source_image is not None,
+        enable_debug=args.debug is not None,
+        include_debug_key=args.debug == "key",
     )
 
     print("Visualization complete!")

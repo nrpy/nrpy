@@ -1297,6 +1297,8 @@ def time_window_manager_numerical() -> None:
       const int center_pos = temporal_interp_half_width;
       const double center_time = ntwm->slice_times[center_slice];
 
+      // Step 1: Return the conceptual centered stencil nodes that are currently
+      // backed by the active mmap, or report one missing edge for caller fill.
       for (int s = 0; s < temporal_num_points; s++) {
         const int offset = s - center_pos;
         const double desired_time = center_time +

@@ -26,7 +26,9 @@ import nrpy.params as par
 
 
 def calculate_ode_rhs_kernel(
-    geodesic_rhs_expressions: List[sp.Expr], coordinate_symbols: List[sp.Symbol]
+    geodesic_rhs_expressions: List[sp.Expr],
+    coordinate_symbols: List[sp.Symbol],
+    normalized_eom: bool = False,
 ) -> None:
     r"""
     Provide the global kernel registration for computing the ODE right-hand side.
@@ -41,6 +43,8 @@ def calculate_ode_rhs_kernel(
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations
         representing the geodesic equations.
     :param coordinate_symbols: The spatial and temporal coordinate variables in order.
+    :param normalized_eom: Whether the state stores normalized photon variables
+        ``u`` and ``PiD_i`` instead of direct four-momentum ``pU_i``.
     :raises ValueError: If the provided geodesic expression list is empty.
     """
     if not geodesic_rhs_expressions:
@@ -89,17 +93,30 @@ def calculate_ode_rhs_kernel(
                 f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)]; // Maps the coordinate ${str(sym)}$ from global memory to a thread-local register."
             )
 
-    preamble_lines.extend(
-        [
-            "\n    //==========================================\n    // MOMENTUM UNPACKING\n    //==========================================",
-            "// Load contravariant four-momenta $p^{\\mu}$ from the global state bundle.",
-        ]
-    )
-    for j in range(4):
-        if f"pU{j}" in used_symbol_names:
+    if normalized_eom:
+        preamble_lines.extend(
+            [
+                "\n    //==========================================\n    // NORMALIZED MOMENTUM UNPACKING\n    //==========================================",
+                "// Load the normalized photon energy and covariant spatial momentum.",
+                "const double u = d_f_temp_bundle[IDX_F(4, i)];",
+            ]
+        )
+        for j in range(3):
             preamble_lines.append(
-                f"const double pU{j} = d_f_temp_bundle[IDX_F({j+4}, i)]; // Maps the momentum component $p^{{{j}}}$ from global memory to a thread-local register."
+                f"const double PiD{j} = d_f_temp_bundle[IDX_F({j + 5}, i)];"
             )
+    else:
+        preamble_lines.extend(
+            [
+                "\n    //==========================================\n    // MOMENTUM UNPACKING\n    //==========================================",
+                "// Load contravariant four-momenta $p^{\\mu}$ from the global state bundle.",
+            ]
+        )
+        for j in range(4):
+            if f"pU{j}" in used_symbol_names:
+                preamble_lines.append(
+                    f"const double pU{j} = d_f_temp_bundle[IDX_F({j+4}, i)]; // Maps the momentum component $p^{{{j}}}$ from global memory to a thread-local register."
+                )
 
     preamble_lines.extend(
         [

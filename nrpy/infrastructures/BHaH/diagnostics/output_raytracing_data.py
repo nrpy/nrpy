@@ -2,15 +2,13 @@
 Register a C function that exports Cartesian-output-basis raytracing data.
 
 This module generates a BHaH diagnostics helper that, on each scheduled output
-step, recomputes same-slice Ricci/RHS data, evaluates the Cartesian covariant
-four-metric and four-Christoffel symbols from the native BSSN evolution state
-using the transformed symbolic recipes in
-``nrpy.equations.general_relativity.geodesics.geodesics``, and writes a
-stable binary payload for later raytracing.
+step, evaluates the Cartesian covariant four-metric from the native BSSN
+evolution state using the transformed symbolic recipe in
+``nrpy.equations.general_relativity.geodesics.geodesics``, and writes a stable
+binary payload for later raytracing.
 
-The payload stores the final Cartesian tensor data directly. No later
-reconstruction or runtime tensor basis transformation is
-required to recover the metric and Christoffels written here.
+The payload stores the final Cartesian metric directly. The raytracer derives
+metric derivatives and Christoffel symbols from the stored metric data.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -54,7 +52,6 @@ def _validate_fixed_width_string(text: str, field_bytes: int, label: str) -> Non
 def register_CFunction_output_raytracing_data(
     CoordSystem: str,
     enable_rfm_precompute: bool,
-    enable_RbarDD_gridfunctions: bool,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register the Cartesian-output-basis raytracing binary exporter.
@@ -68,14 +65,9 @@ def register_CFunction_output_raytracing_data(
     1. Cartesian coordinates ``(x, y, z)``.
     2. The 10 unique covariant four-metric components ``g4DD`` in a fixed
        upper-triangular order.
-    3. The 40 unique four-Christoffel components ``Gamma4UDD`` with the lower
-       pair serialized in upper-triangular order.
 
-    The exporter evaluates Cartesian tensor expressions only on interior
-    points. This keeps the finite-difference derivative path consistent with
-    the current BHaH infrastructure and avoids writing connection data at
-    points where the centered stencil would step beyond the available
-    storage. Cartesian coordinates are evaluated on the full logical grid.
+    The exporter evaluates Cartesian metric expressions only on interior
+    points. Cartesian coordinates are evaluated on the full logical grid.
     Ghost-zone tensor payload records are then filled using the existing BHaH
     boundary ordering: pure outer ghost zones are extrapolated first, and
     inner-boundary records are copied from their mapped source records in
@@ -86,15 +78,9 @@ def register_CFunction_output_raytracing_data(
     :param CoordSystem: Coordinate system used by the evolved BSSN state.
     :param enable_rfm_precompute: Whether the generated project uses
         reference-metric precomputation.
-    :param enable_RbarDD_gridfunctions: Whether the generated project registers
-        a separate Ricci evaluation path that populates the RbarDD gridfunctions
-        consumed by the exported geodesic data.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If ``CoordSystem`` is not a string.
     :raises ValueError: If ``enable_rfm_precompute`` is not a bool.
-    :raises ValueError: If ``enable_RbarDD_gridfunctions`` is not a bool.
-    :raises ValueError: If ``enable_rfm_precompute`` is False.
-    :raises ValueError: If ``enable_RbarDD_gridfunctions`` is False.
     :raises ValueError: If the generated project uses CUDA parallelization.
     """
     if not isinstance(CoordSystem, str):
@@ -106,24 +92,6 @@ def register_CFunction_output_raytracing_data(
             "enable_rfm_precompute must be a bool, "
             f"got {type(enable_rfm_precompute).__name__}"
         )
-    if not isinstance(enable_RbarDD_gridfunctions, bool):
-        raise ValueError(
-            "enable_RbarDD_gridfunctions must be a bool, "
-            f"got {type(enable_RbarDD_gridfunctions).__name__}"
-        )
-    if not enable_rfm_precompute:
-        raise ValueError(
-            "Raytracing binary exporters currently require "
-            "enable_rfm_precompute=True because the generated exporter reuses "
-            "the rfm-precompute Ricci_eval() and rhs_eval() call signatures."
-        )
-    if not enable_RbarDD_gridfunctions:
-        raise ValueError(
-            "Raytracing binary exporters currently require "
-            "enable_RbarDD_gridfunctions=True so Ricci_eval() is registered "
-            "before rhs_eval() is reused for same-slice export."
-        )
-
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -131,8 +99,7 @@ def register_CFunction_output_raytracing_data(
     parallelization = cast(str, par.parval_from_str("parallelization"))
     if parallelization == "cuda":
         raise ValueError(
-            "Raytracing binary exporters currently support only host/OpenMP builds. "
-            "Add host-only Ricci/RHS extraction before enabling CUDA."
+            "Raytracing binary exporters currently support only host/OpenMP builds."
         )
 
     # Import the BSSN quantities module so the conformal-factor parameter is registered.
@@ -141,23 +108,16 @@ def register_CFunction_output_raytracing_data(
 
     # pylint: disable-next=import-outside-toplevel
     from nrpy.equations.general_relativity.geodesics.geodesics import (
-        symbolic_christoffel_recipe_from_bssn_grid_basis,
         symbolic_g4DD_recipe_from_bssn_grid_basis,
     )
 
-    # Step 1: Build the transformed symbolic recipes for the exported tensors.
+    # Step 1: Build the transformed symbolic recipe for the exported metric.
     g4DD = symbolic_g4DD_recipe_from_bssn_grid_basis(
         bssn_coord_system=CoordSystem,
         target_basis="Cartesian",
         enable_bssn_rfm_precompute=enable_rfm_precompute,
     )
-    Gamma4UDD = symbolic_christoffel_recipe_from_bssn_grid_basis(
-        bssn_coord_system=CoordSystem,
-        target_basis="Cartesian",
-        enable_bssn_rfm_precompute=enable_rfm_precompute,
-    )
-
-    # Step 2: Define the on-disk tensor component ordering.
+    # Step 2: Define the on-disk metric component ordering.
     metric_components: List[Tuple[Tuple[int, int], str]] = [
         ((0, 0), "g4DD00"),
         ((0, 1), "g4DD01"),
@@ -170,22 +130,9 @@ def register_CFunction_output_raytracing_data(
         ((2, 3), "g4DD23"),
         ((3, 3), "g4DD33"),
     ]
-    christoffel_components: List[Tuple[Tuple[int, int, int], str]] = []
-    for alpha in range(4):
-        for mu in range(4):
-            for nu in range(mu, 4):
-                christoffel_components.append(
-                    ((alpha, mu, nu), f"Gamma4UDD{alpha}{mu}{nu}")
-                )
-
     # Step 3: Flatten the symbolic expressions into the serialized record layout.
     expr_list = [g4DD[mu][nu] for (mu, nu), _ in metric_components]
-    expr_list.extend(
-        Gamma4UDD[alpha][mu][nu] for (alpha, mu, nu), _ in christoffel_components
-    )
-
     lhs_list = [f"REAL {name}" for _, name in metric_components]
-    lhs_list.extend(f"REAL {name}" for _, name in christoffel_components)
 
     # Step 4: Ask the shared expression helpers which runtime parameters the
     #         symbolic recipes need, then generate the corresponding C locals.
@@ -206,11 +153,10 @@ def register_CFunction_output_raytracing_data(
     # Step 5: Define the fixed-width header schema.
     record_component_names = ["x", "y", "z"]
     record_component_names.extend(name for _, name in metric_components)
-    record_component_names.extend(name for _, name in christoffel_components)
-    header_label = "NRPy RT spacetime data"
+    header_label = "NRPy RT metric data"
     record_component_name_bytes = 24
     header_label_bytes = 32
-    format_name = "Cartesian g4DD+Gamma4UDD"
+    format_name = "Cartesian g4DD"
     format_name_bytes = 32
     target_basis_name = "Cartesian"
     basis_name_bytes = 16
@@ -218,13 +164,11 @@ def register_CFunction_output_raytracing_data(
     loop_order_name = "i2maj_i0fast"
     loop_order_name_bytes = 16
     metric_component_name_bytes = 16
-    gamma_component_name_bytes = 16
     num_metric_components = len(metric_components)
-    num_gamma_components = len(christoffel_components)
     num_record_components = len(record_component_names)
-    point_record_real_count = 3 + num_metric_components + num_gamma_components
+    point_record_real_count = 3 + num_metric_components
     point_record_bytes = 8 * point_record_real_count
-    num_u32_header_fields = 19
+    num_u32_header_fields = 18
     num_u64_header_fields = 15
     num_f64_header_fields = 15
     cf_convention_bytes = format_name_bytes
@@ -241,7 +185,6 @@ def register_CFunction_output_raytracing_data(
         + cf_convention_bytes
         + num_record_components * record_component_name_bytes
         + num_metric_components * metric_component_name_bytes
-        + num_gamma_components * gamma_component_name_bytes
     )
     cf_convention = cast(str, par.parval_from_str("EvolvedConformalFactor_cf"))
 
@@ -260,10 +203,6 @@ def register_CFunction_output_raytracing_data(
         _validate_fixed_width_string(
             component_name, metric_component_name_bytes, "metric_component_names"
         )
-    for _, component_name in christoffel_components:
-        _validate_fixed_width_string(
-            component_name, gamma_component_name_bytes, "christoffel_component_names"
-        )
 
     # Step 6: Build the interior-point evaluation kernel for one output record.
     loop_body = rf"""
@@ -281,10 +220,6 @@ def register_CFunction_output_raytracing_data(
       payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
       (uint64_t)Nxx_plus_2NGHOSTS1_u32, (uint64_t)Nxx_plus_2NGHOSTS2_u32);
   const uint64_t base_index = point_index * (uint64_t)point_record_real_count;
-  const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
-  const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
-  const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
-  MAYBE_UNUSED const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
   const REAL *restrict in_gfs = y_n_gfs;
 
 {ccg.c_codegen(
@@ -302,12 +237,6 @@ def register_CFunction_output_raytracing_data(
             f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
         )
         component_index += 1
-    for _, name in christoffel_components:
-        loop_body += (
-            f"  payload_buffer[base_index + {component_index}] = (double){name};\n"
-        )
-        component_index += 1
-
     # Step 7: Wrap the pointwise kernel in the standard BHaH interior loop.
     loop = BHaH.simple_loop.simple_loop(
         loop_body=loop_body,
@@ -335,7 +264,7 @@ def register_CFunction_output_raytracing_data(
         "BHaH_function_prototypes.h",
     ]
     desc = """
-Export final Cartesian-basis metric and Christoffel data for raytracing.
+Export final Cartesian-basis metric data for raytracing.
 
 This function writes at most one binary file per diagnostics output to:
 
@@ -350,22 +279,13 @@ ghost zones.
 Each point record contains:
   - Cartesian coordinates x, y, z,
   - the 10 unique covariant four-metric components
-      (00, 01, 02, 03, 11, 12, 13, 22, 23, 33),
-  - the 40 unique four-Christoffel components serialized by nested
-      (alpha, mu, nu) order with nu >= mu.
-
-The Cartesian tensor expressions are evaluated directly from the transformed
+      (00, 01, 02, 03, 11, 12, 13, 22, 23, 33).
+The Cartesian metric expressions are evaluated directly from the transformed
 symbolic recipes in geodesics.py. The exporter does not perform a second
 runtime tensor basis transformation after importing those recipes.
 
-Before evaluating the Christoffels, the exporter refreshes same-slice
-auxiliary data using:
-  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
-  rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
-
-where rhs_gfs is a temporary EVOL-sized scratch buffer allocated inside this
-function. The exporter evaluates Cartesian coordinates on the full logical
-grid and evaluates the Cartesian tensors only on interior logical-grid points.
+The exporter evaluates Cartesian coordinates on the full logical grid and
+evaluates the Cartesian metric only on interior logical-grid points.
 It then fills pure outer ghost-zone tensor fields using the existing BHaH
 2nd-order extrapolation ordering and copies inner-boundary ghost-zone tensor
 fields from their mapped source records in bcstruct. Point records are
@@ -730,7 +650,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const bc_struct *restrict bcstruct = &griddata[0].bcstruct;
   const rfm_struct *restrict rfmstruct = griddata[0].rfmstruct;
   const REAL *restrict y_n_gfs = griddata[0].gridfuncs.y_n_gfs;
-  REAL *restrict auxevol_gfs = griddata[0].gridfuncs.auxevol_gfs;
   REAL *restrict xx[3] = {{
       griddata[0].xx[0],
       griddata[0].xx[1],
@@ -744,7 +663,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const uint32_t serialized_real_bytes = 8U;
   const uint32_t record_component_count = {num_record_components}U;
   const uint32_t metric_component_count = {num_metric_components}U;
-  const uint32_t christoffel_component_count = {num_gamma_components}U;
   const uint32_t point_record_real_count = {point_record_real_count}U;
   const uint32_t point_record_bytes = {point_record_bytes}U;
   const uint32_t payload_includes_ghost_zones = 1U;
@@ -824,7 +742,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
       (double)params->Cart_originy,
       (double)params->Cart_originz,
   }};
-  const char magic[16] = "NRPYRTDATA4D";
+  const char magic[16] = "NRPYRTMETRIC1";
 
   char final_filename[256];
   char temporary_filename[256];
@@ -895,50 +813,14 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     exit(1);
   }} // END IF: fdopen failed
 
-  const uint64_t Nxx_plus_2NGHOSTS_tot = raytracing_data_mul_u64_or_abort(
-      raytracing_data_mul_u64_or_abort(
-          (uint64_t)params->Nxx_plus_2NGHOSTS0,
-          (uint64_t)params->Nxx_plus_2NGHOSTS1,
-          "Nxx_plus_2NGHOSTS0*Nxx_plus_2NGHOSTS1"),
-      (uint64_t)params->Nxx_plus_2NGHOSTS2,
-      "Nxx_plus_2NGHOSTS_tot");
-  const uint64_t rhs_gfs_bytes_u64 = raytracing_data_mul_u64_or_abort(
-      raytracing_data_mul_u64_or_abort(
-          (uint64_t)NUM_EVOL_GFS,
-          Nxx_plus_2NGHOSTS_tot,
-          "rhs_gfs value count"),
-      (uint64_t)sizeof(REAL),
-      "rhs_gfs byte count");
-  const size_t rhs_gfs_bytes =
-      raytracing_data_size_t_from_u64_or_abort(
-          rhs_gfs_bytes_u64, "rhs_gfs byte count");
-  REAL *restrict rhs_gfs;
-  BHAH_MALLOC(rhs_gfs, rhs_gfs_bytes);
-  if (rhs_gfs == NULL) {{
-    fclose(fp);
-    remove(temporary_filename);
-    raytracing_data_abort_with_message(
-        "Error: output_raytracing_data could not allocate temporary rhs_gfs storage.");
-  }} // END IF: rhs scratch allocation failed
-
   double *restrict payload_buffer;
   BHAH_MALLOC(payload_buffer, point_records_bytes_size_t);
   if (payload_buffer == NULL) {{
-    BHAH_FREE(rhs_gfs);
     fclose(fp);
     remove(temporary_filename);
     raytracing_data_abort_with_message(
         "Error: output_raytracing_data could not allocate the raytracing payload buffer.");
   }} // END IF: payload buffer allocation failed
-
-"""
-    if enable_RbarDD_gridfunctions:
-        body += r"""  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
-"""
-    body += r"""
-  rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
-"""
-    body += r"""
 
   // Step 1: Write the fixed-size file header in documented little-endian field order.
   raytracing_data_write_or_abort(fp, magic, sizeof(char), 16, "magic");
@@ -948,8 +830,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   raytracing_data_write_u32_or_abort(fp, serialized_real_bytes, "serialized_real_bytes");
   raytracing_data_write_u32_or_abort(fp, record_component_count, "record_component_count");
   raytracing_data_write_u32_or_abort(fp, metric_component_count, "metric_component_count");
-  raytracing_data_write_u32_or_abort(
-      fp, christoffel_component_count, "christoffel_component_count");
   raytracing_data_write_u32_or_abort(fp, point_record_real_count, "point_record_real_count");
   raytracing_data_write_u32_or_abort(fp, point_record_bytes, "point_record_bytes");
   raytracing_data_write_u32_or_abort(
@@ -1030,11 +910,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             "  raytracing_data_write_fixed_length_string_or_abort("
             f'fp, "{component_name}", {metric_component_name_bytes}, "metric_component_names");\n'
         )
-    for _, component_name in christoffel_components:
-        body += (
-            "  raytracing_data_write_fixed_length_string_or_abort("
-            f'fp, "{component_name}", {gamma_component_name_bytes}, "christoffel_component_names");\n'
-        )
     body += r"""
 
   // Step 2: Write the physical simulation time.
@@ -1064,7 +939,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     } // END LOOP: for i1 over full logical-grid x1 indices
   } // END LOOP: for i2 over full logical-grid x2 indices
 
-  // Step 4: Evaluate Cartesian metric and Christoffels into interior tensor payload records.
+  // Step 4: Evaluate the Cartesian metric into interior tensor payload records.
 """
     body += loop
     body += r"""
@@ -1138,7 +1013,6 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
 
   // Step 7: Finalize the file and install it without overwriting an existing output.
   BHAH_FREE(payload_buffer);
-  BHAH_FREE(rhs_gfs);
 
   if (fflush(fp) != 0) {
     const int saved_errno = errno;

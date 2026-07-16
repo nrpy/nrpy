@@ -12,7 +12,7 @@ Author: Dalton J. Moone
 
 # Step 0.a: Import standard Python modules.
 import logging
-from typing import Dict, List, Optional, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 # Step 0.b: Import third-party modules
 import sympy as sp
@@ -317,95 +317,91 @@ class GeodesicEquations:
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
-    
-    
-def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
-    r"""
-    Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
-    The equations of motion are:
+    def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
+        r"""
+        Generate the symbolic right-hand-side for the 9 photon geodesic ODEs.
 
-        d(x^\alpha)/d(\lambda) = p^\alpha
+        The equations of motion are:
 
-        d(p^\alpha)/d(\lambda)
-            = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
+            d(x^\alpha)/d(\lambda) = p^\alpha
 
-    where the Christoffel symbols are computed from the 4-metric and its
-    partial derivatives:
+            d(p^\alpha)/d(\lambda)
+                = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu
 
-        \Gamma^\alpha_{\mu\nu}
-            = 1/2 g^{\alpha\beta}
-              (g_{\beta\nu,\mu} + g_{\beta\mu,\nu} - g_{\mu\nu,\beta})
+        where the Christoffel symbols are computed from the 4-metric and its
+        partial derivatives:
 
-    The ninth ODE provides a diagnostic for the spatial distance traveled
-    by the photon, as measured by a local Eulerian observer:
+            \Gamma^\alpha_{\mu\nu}
+                = 1/2 g^{\alpha\beta}
+                  (g_{\beta\nu,\mu} + g_{\beta\mu,\nu} - g_{\mu\nu,\beta})
 
-        dL_Euler/d\lambda = p^0 / sqrt(-g^00)
+        The ninth ODE provides a diagnostic for the spatial distance traveled
+        by the photon, as measured by a local Eulerian observer:
 
-    :return: A list of 9 SymPy expressions for the RHS of the ODEs.
-    """
-    pU = ixp.declarerank1("pU", dimension=4)
-    pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
+            dL_Euler/d\lambda = p^0 / sqrt(-g^00)
 
-    g4DD = ixp.declarerank2(
-        "metric_g4DD",
-        symmetry="sym01",
-        dimension=4,
-    )
+        :return: A list of 9 SymPy expressions for the RHS of the ODEs.
+        """
+        pU = ixp.declarerank1("pU", dimension=4)
+        pos_rhs = [pU[0], pU[1], pU[2], pU[3]]
 
-    # g4DD_dD[mu][nu][sigma] = partial_sigma g_{mu nu}
-    g4DD_dD = ixp.declarerank3(
-        "metric_g4DD_dD",
-        symmetry="sym01",
-        dimension=4,
-    )
+        g4DD = ixp.declarerank2(
+            "metric_g4DD",
+            symmetry="sym01",
+            dimension=4,
+        )
 
-    # Compute the inverse metric g^{mu nu}.
-    g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
+        # g4DD_dD[mu][nu][sigma] = partial_sigma g_{mu nu}
+        g4DD_dD = ixp.declarerank3(
+            "metric_g4DD_dD",
+            symmetry="sym01",
+            dimension=4,
+        )
 
-    # Compute the Christoffel symbols from g4DD and g4DD_dD.
-    Gamma4UDD = ixp.zerorank3(dimension=4)
+        # Compute the inverse metric g^{mu nu}.
+        g4UU, _ = ixp.symm_matrix_inverter4x4(g4DD)
 
-    for alpha in range(4):
-        for mu in range(4):
-            for nu in range(4):
-                sum_term = sp.sympify(0)
+        # Compute the Christoffel symbols from g4DD and g4DD_dD.
+        Gamma4UDD = ixp.zerorank3(dimension=4)
 
-                for beta in range(4):
-                    sum_term += (
-                        g4UU[alpha][beta]
-                        * (
+        for alpha in range(4):
+            for mu in range(4):
+                for nu in range(4):
+                    sum_term = sp.sympify(0)
+
+                    for beta in range(4):
+                        sum_term += g4UU[alpha][beta] * (
                             g4DD_dD[beta][nu][mu]
                             + g4DD_dD[beta][mu][nu]
                             - g4DD_dD[mu][nu][beta]
                         )
-                    )
 
-                Gamma4UDD[alpha][mu][nu] = sp.Rational(1, 2) * sum_term
+                    Gamma4UDD[alpha][mu][nu] = sp.Rational(1, 2) * sum_term
 
-    # Compute the four momentum equations.
-    mom_rhs = ixp.zerorank1(dimension=4)
+        # Compute the four momentum equations.
+        mom_rhs = ixp.zerorank1(dimension=4)
 
-    for alpha in range(4):
-        sum_term = sp.sympify(0)
+        for alpha in range(4):
+            sum_term = sp.sympify(0)
 
-        # Exploit symmetry by summing over the upper triangle of (mu, nu).
-        for mu in range(4):
-            for nu in range(mu, 4):
-                term = Gamma4UDD[alpha][mu][nu] * pU[mu] * pU[nu]
+            # Exploit symmetry by summing over the upper triangle of (mu, nu).
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    term = Gamma4UDD[alpha][mu][nu] * pU[mu] * pU[nu]
 
-                if mu != nu:
-                    term *= 2
+                    if mu != nu:
+                        term *= 2
 
-                sum_term += term
+                    sum_term += term
 
-        mom_rhs[alpha] = -sum_term
+            mom_rhs[alpha] = -sum_term
 
-    # Ninth Equation: Eulerian Distance Evolution
-    # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
-    path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
+        # Ninth Equation: Eulerian Distance Evolution
+        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+        path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
-    return pos_rhs + mom_rhs + path_len_rhs
+        return pos_rhs + mom_rhs + path_len_rhs
 
     def geodesic_eom_rhs_photon_normalized(self) -> List[sp.Expr]:
         r"""
@@ -415,7 +411,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
         system, using coordinate time ``t`` as the independent variable and the
         state
 
-        ``(\lambda, x, y, z, u, \Pi_1, \Pi_2, \Pi_3, L_{\mathrm{Euler}})``,
+        ``(t, x, y, z, u, \Pi_1, \Pi_2, \Pi_3, \lambda)``,
 
         where
 
@@ -425,16 +421,10 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
 
         ``\Pi_i = p_i / (\alpha p^0)``.
 
-        The returned equations assume the past-directed branch conventional for
-        reverse ray tracing, so
+        The ninth equation evolves the affine parameter along the past-directed
+        branch conventional for reverse ray tracing:
 
         ``d\lambda / dt = -\alpha e^{-u}``.
-
-        The ninth equation evolves the proper spatial distance measured by a
-        local Eulerian observer. Since this formulation uses coordinate time
-        rather than the affine parameter as its independent variable,
-
-        ``dL_{\mathrm{Euler}} / dt = \alpha``.
 
         All geometric quantities are constructed directly from the generic
         placeholder four-metric ``metric_g4DD`` and its first derivatives
@@ -476,11 +466,11 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
             betaU[i] = -g4UU[0][i + 1] / g4UU[0][0]
 
         # Evolved variables for the normalized photon formulation:
-        # f[0] = lambda
+        # f[0] = t
         # f[1:4] = x^i
         # f[4] = u = ln|alpha p^0|
         # f[5:8] = Pi_i = p_i / (alpha p^0)
-        # f[8] = L_Euler
+        # f[8] = lambda
         u = sp.Symbol("u", real=True)
         PiD = ixp.declarerank1("PiD", dimension=3)
 
@@ -518,11 +508,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
             g4UU00_dD = sp.sympify(0)
             for mu in range(4):
                 for nu in range(4):
-                    g4UU00_dD -= (
-                        g4UU[0][mu]
-                        * g4UU[0][nu]
-                        * g4DD_dD[mu][nu][sigma]
-                    )
+                    g4UU00_dD -= g4UU[0][mu] * g4UU[0][nu] * g4DD_dD[mu][nu][sigma]
             alpha_dD[sigma] = sp.Rational(1, 2) * alpha**3 * g4UU00_dD
 
         # The time component of the contravariant geodesic equation gives
@@ -543,11 +529,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
                         )
                     )
 
-                term = (
-                    Gamma0_munu
-                    * coordinate_velocityU[mu]
-                    * coordinate_velocityU[nu]
-                )
+                term = Gamma0_munu * coordinate_velocityU[mu] * coordinate_velocityU[nu]
                 if mu != nu:
                     term *= 2
                 Gamma0_contract += term
@@ -573,9 +555,7 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
             for mu in range(4):
                 for nu in range(mu, 4):
                     term = (
-                        g4DD_dD[mu][nu][i + 1]
-                        * normalized_pU[mu]
-                        * normalized_pU[nu]
+                        g4DD_dD[mu][nu][i + 1] * normalized_pU[mu] * normalized_pU[nu]
                     )
                     if mu != nu:
                         term *= 2
@@ -586,25 +566,15 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
                 - u_rhs_expr * PiD[i]
             )
 
-        # First Equation: Affine Parameter Evolution
+        # First Equation: Coordinate-Time Evolution
+        time_rhs = [sp.sympify(1)]
+
+        # Ninth Equation: Affine Parameter Evolution
         # Reverse ray tracing uses the past-directed branch:
         # dlambda/dt = -alpha exp(-u)
         lambda_rhs = [-alpha * sp.exp(-u)]
 
-        # Ninth Equation: Eulerian Distance Evolution
-        # The direct photon formulation uses
-        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha p^0.
-        #
-        # Here coordinate time is the independent variable, so
-        # dL_Euler/dt = (dL_Euler/dlambda) (dlambda/dt)
-        #              = alpha p^0 / p^0
-        #              = alpha.
-        path_len_rhs = [alpha]
-
-        return lambda_rhs + pos_rhs + u_rhs + Pi_rhs + path_len_rhs
-
-
-
+        return time_rhs + pos_rhs + u_rhs + Pi_rhs + lambda_rhs
 
     def normalization_constraint_photon_normalized(self) -> sp.Expr:
         r"""
@@ -750,9 +720,6 @@ def geodesic_eom_rhs_photon(self) -> List[sp.Expr]:
                 constraint += term
 
         return constraint
-
-    
-
 
     @staticmethod
     def photon_momentum_to_normalized_quantities() -> Tuple[sp.Expr, List[sp.Expr]]:

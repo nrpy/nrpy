@@ -6,9 +6,8 @@ this example sets up a complete C code for solving the GR field
   equations in curvilinear coordinates on a cell-centered grid,
   using a reference metric approach.
 
-Optionally, this script can generate metric and Christoffel spacetime
-data for raytracing workflows and write a helper script that combines
-raytracing time slices.
+Optionally, this script can generate metric spacetime data for raytracing
+workflows and write a helper script that combines raytracing time slices.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -48,7 +47,7 @@ parser.add_argument(
     default=None,
     type=float,
     metavar=("T_FINAL", "DIAGNOSTICS_OUTPUT_EVERY"),
-    help="""Enable metric and Christoffel raytracing spacetime outputs and set the final time and diagnostics output cadence. Currently supported only for OpenMP builds with double precision.""",
+    help="""Enable metric raytracing spacetime outputs and set the final time and diagnostics output cadence. Currently supported only for OpenMP builds with double precision.""",
 )
 parser.add_argument(
     "--raytracing-domain",
@@ -80,11 +79,6 @@ parser.add_argument(
     metavar=("Z_1", "Z_2", "M_1", "M_2"),
     help="""Override the generated project's black-hole z positions and masses, e.g. --raytracing-bhs 0.5 -0.5 0.5 0.5.""",
 )
-parser.add_argument(
-    "--raytracing-static-christoffels-final",
-    action="store_true",
-    help="""Emit one synthetic final raytracing slice at t_final + diagnostics_output_every whose metric matches the last ordinary slice and whose Christoffels are recomputed assuming partial_t g_mu_nu = 0.""",
-)
 args = parser.parse_args()
 
 
@@ -99,9 +93,6 @@ if parallelization not in ["openmp", "cuda"]:
 # Step 1.c: Raytracing spacetime output requires OpenMP, double precision,
 # and consistent raytracing-specific option combinations.
 enable_raytracing_data_output = args.raytracing_time is not None
-enable_raytracing_static_christoffels_final_output = (
-    args.raytracing_static_christoffels_final
-)
 
 if fp_type not in ("float", "double"):
     raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
@@ -118,14 +109,6 @@ if args.raytracing_domain is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-domain requires --raytracing-time.")
 if args.raytracing_nxx is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-Nxx requires --raytracing-time.")
-if (
-    enable_raytracing_static_christoffels_final_output
-    and not enable_raytracing_data_output
-):
-    raise ValueError(
-        "--raytracing-static-christoffels-final requires --raytracing-time."
-    )
-
 par.set_parval_from_str("Infrastructure", "BHaH")
 par.set_parval_from_str("parallelization", parallelization)
 par.set_parval_from_str("fp_type", fp_type)
@@ -421,12 +404,10 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_interp_diagnostics=False,
     enable_volume_integration_diagnostics=True,
     enable_rfm_precompute=enable_rfm_precompute,
-    enable_RbarDD_gridfunctions=separate_Ricci_and_BSSN_RHS,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
     enable_raytracing_data_output=enable_raytracing_data_output,
-    enable_raytracing_static_christoffels_final_output=enable_raytracing_static_christoffels_final_output,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -655,12 +636,7 @@ if enable_raytracing_data_output:
             f"rho-slope_{rho_slope_name}_z-slope_{z_slope_name}_"
         )
 
-    static_christoffels_name_suffix = (
-        "_static-christoffels-final"
-        if enable_raytracing_static_christoffels_final_output
-        else ""
-    )
-    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}{static_christoffels_name_suffix}.bin"
+    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}.bin"
     combined_output_path = os.path.join(
         "..", "raytracing_data", raytracing_combined_bin_name
     )
@@ -682,7 +658,6 @@ if enable_raytracing_data_output:
         "raytracing_Nxx": [nxx0, nxx1, nxx2],
         "raytracing_coord_system": CoordSystem,
         "raytracing_domain": domain,
-        "raytracing_static_christoffels_final": enable_raytracing_static_christoffels_final_output,
         "raytracing_time": {
             "diagnostics_output_every": diagnostics_output_every,
             "t_final": t_final,
