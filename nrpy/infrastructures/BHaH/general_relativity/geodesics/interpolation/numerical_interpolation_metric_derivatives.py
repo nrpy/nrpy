@@ -37,9 +37,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimut
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation_metric_derivatives import (
     register_CFunction_temporal_lagrange_interpolation,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation_metric_derivatives_c1_startup import (
-    register_CFunction_temporal_lagrange_interpolation_c1_startup,
-)
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
     time_window_manager_numerical,
 )
@@ -70,9 +67,8 @@ def register_CFunction_numerical_interpolation(
     `time_window_manager_numerical`, spatially interpolate only the mapped
     numerical stencil subset, fill lower missing stencil nodes by spatially
     interpolating the first stored numerical slice, fill upper missing stencil
-    nodes by reusing the final stored numerical slice, and then perform either
-    C1-constrained startup interpolation for lower padded stencils or ordinary
-    temporal interpolation for fully numerical stencils.
+    nodes by reusing the final stored numerical slice, and then perform
+    ordinary temporal interpolation on the reconstructed full stencil.
 
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
         must be `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
@@ -186,10 +182,6 @@ def register_CFunction_numerical_interpolation(
         register_CFunction_temporal_lagrange_interpolation(
             enable_simd=enable_simd, project_dir=project_dir
         )
-    if "temporal_lagrange_interpolation_c1_startup" not in cfc.CFunction_dict:
-        register_CFunction_temporal_lagrange_interpolation_c1_startup(
-            enable_simd=enable_simd, project_dir=project_dir
-        )
     metric_worker_0 = f"g4DD_metric_{analytical_metric_0}"
     conn_worker_0 = f"connections_{analytical_metric_0}"
     prefunc_lines = []
@@ -223,9 +215,8 @@ for times at or below `t_metric_0`, freezes the numerical spacetime to the
 final stored slice for times at or above that final slice time, and otherwise
 reconstructs one mixed temporal stencil. Lower missing stencil nodes use a
 fresh spatial interpolation of the first stored numerical slice, whereas upper
-missing nodes reuse the final stored numerical slice. A lower padded stencil
-uses the C1 startup temporal helper to enforce zero metric time derivatives at
-`t_metric_0`; fully numerical stencils use ordinary temporal interpolation.
+missing nodes reuse the final stored numerical slice. Every reconstructed
+stencil uses ordinary temporal interpolation.
 
 The design goal is to let all photons in the chunk reuse the same mapped
 numerical-spacetime payload window rather than loading numerical grids
@@ -535,27 +526,12 @@ independently ray-by-ray.
           } // END IF: full ordered stencil reconstruction remained valid
 
           if (!ray_failed) {
-            // Step 6: Use the C1 startup reconstruction only when the centered
-            // stencil contains lower static padding; otherwise use ordinary
-            // temporal interpolation on a fully numerical stencil.
-            const int has_lower_static_padding =
-                num_missing_slices > 0 && missing_is_lower;
-            if (has_lower_static_padding) {
-              const int temporal_status =
-                  temporal_lagrange_interpolation_c1_startup(
-                      commondata, full_slice_times, g4dd_slices,
-                      gamma4udd_slices, t_metric_0, t, g4dd_local,
-                      gamma4udd_local);
-              if (temporal_status !=
-                  TEMPORAL_LAGRANGE_INTERP_C1_STARTUP_SUCCESS)
-                ray_failed = 1;
-            } else {
-              const int temporal_status = temporal_lagrange_interpolation(
-                  commondata, full_slice_times, g4dd_slices, gamma4udd_slices,
-                  t, g4dd_local, gamma4udd_local);
-              if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS)
-                ray_failed = 1;
-            } // END ELSE: fully numerical stencil used ordinary interpolation
+            // Step 6: Interpolate the reconstructed stencil in physical time.
+            const int temporal_status = temporal_lagrange_interpolation(
+                commondata, full_slice_times, g4dd_slices, gamma4udd_slices, t,
+                g4dd_local, gamma4udd_local);
+            if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS)
+              ray_failed = 1;
           } // END IF: reconstructed stencil was ready for temporal interpolation
         } // END ELSE: spatial interpolation succeeded for the mapped numerical stencil subset
       } // END ELSE: adaptive stencil query succeeded for this mixed ray
