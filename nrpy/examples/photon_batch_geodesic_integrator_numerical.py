@@ -55,14 +55,14 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     handle_source_plane_intersection,
     handle_window_plane_intersection,
     main,
+    normalization_constraint_photon_normalized,
     p0_reverse_kernel,
     photon_momentum_to_normalized_kernel,
-    rkf45_finalize_and_control_kernel,
     rkf45_5th_state,
+    rkf45_finalize_and_control_kernel,
     rkf45_numerical_control,
     rkf45_stage_update,
     set_initial_conditions_kernel,
-    normalization_constraint_photon_normalized,
 )
 
 
@@ -507,6 +507,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["dt_numerical_spacetime_data"].defaultvalue = (
         args.dt_spacetime_data
     )
+    # Keep sparse retained-slice debugging disabled for normal runs.
+    par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue = 1
 
     # Step 6.f.i: Set Brill-Lindquist black-hole defaults only when requested.
     if use_brill_lindquist_bhs:

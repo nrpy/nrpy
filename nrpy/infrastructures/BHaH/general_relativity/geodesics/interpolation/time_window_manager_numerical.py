@@ -42,8 +42,9 @@ def time_window_manager_numerical() -> None:
     `rkf45_max_delta_t`. Exact physical slice times are cached from the
     combined-file slice table and queried through binary search, so the
     mapped slot window remains correct even when stored output times are not
-    uniformly spaced. The matching RKF45 step-size cap is enforced in the
-    companion finalization kernel.
+    uniformly spaced. The debugging-only time-slice stride selects every nth
+    stored slice without changing the combined container. The matching RKF45
+    step-size cap is enforced in the companion finalization kernel.
 
     Doctests:
     >>> time_window_manager_numerical()
@@ -52,8 +53,10 @@ def time_window_manager_numerical() -> None:
     True
     >>> "time_window_manager_numerical_lower_bound_slice_time" in generated
     True
-    >>> "time_window_manager_numerical_nearest_slice_for_time" in generated
+    >>> "time_window_manager_numerical_nearest_selected_slice_for_time" in generated
     True
+    >>> par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue
+    1
     """
     from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
         time_slot_manager_helpers,
@@ -116,6 +119,19 @@ def time_window_manager_numerical() -> None:
 
     # Step 2: Register the shared backward-time RKF45 lookahead parameter.
     _ = par.register_CodeParameter(
+        "int",
+        __name__,
+        "numerical_spacetime_time_slice_stride",
+        1,
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Debugging-only stride between selected numerical-spacetime time "
+            "slices. Set to 1 for normal runs; 2 selects slices 0, 2, 4, "
+            "and so on, while 3 selects slices 0, 3, 6, and so on."
+        ),
+    )
+    _ = par.register_CodeParameter(
         "REAL",
         __name__,
         "rkf45_max_delta_t",
@@ -136,9 +152,9 @@ def time_window_manager_numerical() -> None:
         commondata=True,
         add_to_parfile=True,
         description=(
-            "Uniform physical coordinate-time spacing used when one temporal "
-            "interpolation stencil extends beyond the mapped numerical "
-            "time-slice range and synthetic edge times must be supplied."
+            "Uniform physical coordinate-time spacing between adjacent stored "
+            "slices. The debugging-only time-slice stride multiplies this "
+            "spacing when synthetic temporal-stencil edge times are supplied."
         ),
     )
 
@@ -219,11 +235,12 @@ def time_window_manager_numerical() -> None:
       double *slice_times; // Exact physical coordinate times cached from the slice table.
       uint64_t *slice_payload_offsets; // Per-slice payload offsets cached from the slice table.
       uint64_t *slice_payload_bytes; // Per-slice payload byte counts cached from the slice table.
+      uint64_t time_slice_stride; // Debugging-only stride between selected stored slices.
 
       int temporal_interp_half_width; // Centered temporal interpolation half-width n.
       int temporal_interp_num_points; // Number of temporal interpolation points, 2n + 1.
       double max_backward_dt_lookahead; // Maximum backward coordinate-time RKF45 lookahead from commondata.
-      double dt_numerical_spacetime_data; // Uniform physical time spacing used to synthesize unmapped stencil-node times.
+      double dt_numerical_spacetime_data; // Uniform physical spacing between adjacent stored slices.
 
       uint64_t mapped_first_slice; // First mapped slice, inclusive.
       uint64_t mapped_last_slice_exclusive; // One past the final mapped slice.
@@ -677,29 +694,58 @@ def time_window_manager_numerical() -> None:
     } // END FUNCTION: time_window_manager_numerical_upper_bound_slice_time
 
     /**
-     * Return the cached slice index nearest to one physical target time.
+     * Return the final slice index selected by the debugging time-slice stride.
+     *
+     * @param[in] ntwm Numerical time-window manager with a validated stride.
+     * @return Final selected stored slice index.
+     */
+    static inline uint64_t time_window_manager_numerical_final_selected_slice(
+        const NumericalTimeWindowManager *ntwm) {
+      return ((ntwm->num_time_slices - 1ULL) / ntwm->time_slice_stride) *
+          ntwm->time_slice_stride;
+    } // END FUNCTION: time_window_manager_numerical_final_selected_slice
+
+    /**
+     * Return the selected slice index nearest to one physical target time.
      *
      * @param[in] ntwm Numerical time-window manager with cached exact slice times.
      * @param target_time Physical coordinate time to bracket.
-     * @return Nearest cached slice index.
+     * @return Nearest selected stored slice index.
      */
-    static inline uint64_t time_window_manager_numerical_nearest_slice_for_time(
+    static inline uint64_t time_window_manager_numerical_nearest_selected_slice_for_time(
         const NumericalTimeWindowManager *ntwm,
         const double target_time) {
       const uint64_t right =
           time_window_manager_numerical_lower_bound_slice_time(ntwm, target_time);
+      const uint64_t final_selected_slice =
+          time_window_manager_numerical_final_selected_slice(ntwm);
 
       if (right == 0ULL)
         return 0ULL;
       if (right >= ntwm->num_time_slices)
-        return ntwm->num_time_slices - 1ULL;
+        return final_selected_slice;
 
-      const double dt_right = fabs(ntwm->slice_times[right] - target_time);
-      const double dt_left = fabs(target_time - ntwm->slice_times[right - 1ULL]);
+      uint64_t right_selected_slice =
+          (right / ntwm->time_slice_stride) * ntwm->time_slice_stride;
+      if (right_selected_slice < right) {
+        if (right_selected_slice >= final_selected_slice)
+          return final_selected_slice;
+        right_selected_slice += ntwm->time_slice_stride;
+      } // END IF: first selected slice at or above the raw lower bound needed alignment
+
+      if (right_selected_slice == 0ULL)
+        return 0ULL;
+
+      const uint64_t left_selected_slice =
+          right_selected_slice - ntwm->time_slice_stride;
+      const double dt_right =
+          fabs(ntwm->slice_times[right_selected_slice] - target_time);
+      const double dt_left =
+          fabs(target_time - ntwm->slice_times[left_selected_slice]);
       if (dt_left <= dt_right)
-        return right - 1ULL;
-      return right;
-    } // END FUNCTION: time_window_manager_numerical_nearest_slice_for_time
+        return left_selected_slice;
+      return right_selected_slice;
+    } // END FUNCTION: time_window_manager_numerical_nearest_selected_slice_for_time
 
     //==========================================
     // NUMERICAL WINDOW LIFETIME MANAGEMENT
@@ -734,6 +780,7 @@ def time_window_manager_numerical() -> None:
       ntwm->slice_times = NULL;
       ntwm->slice_payload_offsets = NULL;
       ntwm->slice_payload_bytes = NULL;
+      ntwm->time_slice_stride = 0ULL;
       ntwm->temporal_interp_half_width = 0;
       ntwm->temporal_interp_num_points = 0;
       ntwm->max_backward_dt_lookahead = 0.0;
@@ -866,6 +913,10 @@ def time_window_manager_numerical() -> None:
               TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
+      const int numerical_spacetime_time_slice_stride =
+          commondata->numerical_spacetime_time_slice_stride;
+      if (numerical_spacetime_time_slice_stride < 1)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       const double max_backward_dt_lookahead = commondata->rkf45_max_delta_t;
       if (!isfinite(max_backward_dt_lookahead) || max_backward_dt_lookahead < 0.0)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
@@ -886,6 +937,8 @@ def time_window_manager_numerical() -> None:
 
       ntwm->temporal_interp_half_width = temporal_interp_half_width;
       ntwm->temporal_interp_num_points = 2 * temporal_interp_half_width + 1;
+      ntwm->time_slice_stride =
+          (uint64_t)numerical_spacetime_time_slice_stride;
       ntwm->max_backward_dt_lookahead = max_backward_dt_lookahead;
       ntwm->dt_numerical_spacetime_data = dt_numerical_spacetime_data;
       ntwm->page_size = page_size;
@@ -932,6 +985,14 @@ def time_window_manager_numerical() -> None:
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: trusted fixed-header navigation fields were not usable
+      const uint64_t final_selected_slice =
+          time_window_manager_numerical_final_selected_slice(ntwm);
+      const uint64_t num_selected_slices =
+          final_selected_slice / ntwm->time_slice_stride + 1ULL;
+      if (num_selected_slices < (uint64_t)ntwm->temporal_interp_num_points) {
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: debugging-selected numerical slices could not support the temporal stencil
 
       const off_t file_size = lseek(ntwm->fd, 0, SEEK_END);
       if (file_size < (off_t)TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES) {
@@ -1042,8 +1103,10 @@ def time_window_manager_numerical() -> None:
      * The upper side covers the centered temporal-interpolation halo above the
      * slot, while the lower side covers both the centered halo and the extra
      * backward-time RKF45 lookahead stored in
-     * ntwm->max_backward_dt_lookahead. This asymmetry matches backward
-     * raytracing, where photons move toward lower coordinate time.
+     * ntwm->max_backward_dt_lookahead. The selected-slice stride scales the
+     * halo in raw slice indices. The contiguous mmap can therefore include
+     * skipped raw payloads, but interpolation never dereferences them. This
+     * stride behavior is for debugging; normal runs use a stride of one.
      */
     static inline int time_window_manager_numerical_required_grid_range(
         const NumericalTimeWindowManager *ntwm,
@@ -1095,34 +1158,49 @@ def time_window_manager_numerical() -> None:
         center_last = right;
       } // END ELSE: cached upper-bound time had one slice above it
 
+      const uint64_t final_selected_slice =
+          time_window_manager_numerical_final_selected_slice(ntwm);
+      uint64_t selected_center_first =
+          (center_first / ntwm->time_slice_stride) * ntwm->time_slice_stride;
+      uint64_t selected_center_last =
+          (center_last / ntwm->time_slice_stride) * ntwm->time_slice_stride;
+      if (selected_center_last < center_last) {
+        if (selected_center_last >= final_selected_slice) {
+          selected_center_last = final_selected_slice;
+        } else {
+          selected_center_last += ntwm->time_slice_stride;
+        } // END ELSE: one higher selected slice remained inside the stored range
+      } // END IF: upper slot endpoint required alignment to a selected slice
+
       // Conceptually, for temporal half-width n, centered interpolation uses
       // 2n + 1 slices. A photon anywhere in the slot may therefore need
       // about n + 1 halo slices outside the queried coordinate-time
       // interval. Since photons evolve backward in time, the queried
       // interval is extended below the slot before the halo is applied.
       const uint64_t halo =
-          (uint64_t)ntwm->temporal_interp_half_width + 1ULL;
+          ((uint64_t)ntwm->temporal_interp_half_width + 1ULL) *
+          ntwm->time_slice_stride;
       const uint64_t required_first =
-          (center_first < halo) ? 0ULL : center_first - halo;
-      uint64_t required_last_exclusive = ntwm->num_time_slices;
+          (selected_center_first < halo) ? 0ULL : selected_center_first - halo;
+      uint64_t required_last = final_selected_slice;
 
-      if (center_last < ntwm->num_time_slices - 1ULL) {
-        const uint64_t unclipped_last_exclusive = center_last + halo + 1ULL;
-        required_last_exclusive =
-            (unclipped_last_exclusive > ntwm->num_time_slices)
-                ? ntwm->num_time_slices
-                : unclipped_last_exclusive;
-      } // END IF: upper conservative halo endpoint remained inside the stored slice range
+      if (selected_center_last < final_selected_slice) {
+        required_last =
+            (halo >= final_selected_slice ||
+             selected_center_last > final_selected_slice - halo)
+                ? final_selected_slice
+                : selected_center_last + halo;
+      } // END IF: upper conservative halo endpoint remained inside the selected slice range
 
-      if (required_last_exclusive > ntwm->num_time_slices ||
-          required_last_exclusive <= required_first) {
+      if (required_last >= ntwm->num_time_slices ||
+          required_last < required_first || required_last == UINT64_MAX) {
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
       } // END IF: clipped conservative slot mapping window was outside the trusted file
 
       *first_slice = required_first;
-      *last_slice_exclusive = required_last_exclusive;
+      *last_slice_exclusive = required_last + 1ULL;
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_required_grid_range
 
@@ -1145,6 +1223,7 @@ def time_window_manager_numerical() -> None:
           ntwm->slice_times == NULL ||
           ntwm->slice_payload_offsets == NULL ||
           ntwm->slice_payload_bytes == NULL ||
+          ntwm->time_slice_stride == 0ULL ||
           ntwm->num_time_slices < 2ULL ||
           ntwm->num_time_slices < (uint64_t)ntwm->temporal_interp_num_points ||
           ntwm->payload_bytes_total == 0ULL ||
@@ -1257,14 +1336,14 @@ def time_window_manager_numerical() -> None:
      * @pre The caller provides arrays of length at least `2*temporal_interp_half_width + 1`.
      *
      * @note This routine always constructs the same conceptual centered
-     * stencil of `2*n+1` time nodes around the nearest cached numerical
-     * slice. Nodes currently backed by the active mmap are returned through
-     * `slice_indices`, `slice_times`, and `slice_payloads`, while nodes that
-     * conceptually belong to the stencil but fall outside the active mmap are
-     * returned only through `missing_slice_times`, using the trusted uniform
-     * spacing `ntwm->dt_numerical_spacetime_data`. The missing nodes are
-     * assumed contiguous at one stencil edge; the helper does not attempt to
-     * diagnose unsupported internal holes.
+     * stencil of `2*n+1` selected time nodes around the nearest selected
+     * numerical slice. Nodes currently backed by the active mmap are returned
+     * through `slice_indices`, `slice_times`, and `slice_payloads`, while
+     * nodes that conceptually belong to the stencil but fall outside the
+     * active mmap are returned only through `missing_slice_times`, using the
+     * trusted stored-slice spacing multiplied by the debugging-only stride.
+     * The missing nodes are assumed contiguous at one stencil edge; the
+     * helper does not attempt to diagnose unsupported internal holes.
      */
     static inline int time_window_manager_numerical_stencil_for_time(
         const NumericalTimeWindowManager *ntwm,
@@ -1285,6 +1364,7 @@ def time_window_manager_numerical() -> None:
           slice_payloads == NULL || num_available_slices == NULL ||
           missing_slice_times == NULL || num_missing_slices == NULL ||
           ntwm->slice_times == NULL || ntwm->mapped_base == NULL ||
+          ntwm->time_slice_stride == 0ULL ||
           !isfinite(photon_time) ||
           !isfinite(ntwm->dt_numerical_spacetime_data) ||
           ntwm->dt_numerical_spacetime_data <= 0.0) {
@@ -1300,34 +1380,44 @@ def time_window_manager_numerical() -> None:
       *num_missing_slices = 0;
 
       const uint64_t center_slice =
-          time_window_manager_numerical_nearest_slice_for_time(ntwm, photon_time);
+          time_window_manager_numerical_nearest_selected_slice_for_time(
+              ntwm, photon_time);
+      const uint64_t final_selected_slice =
+          time_window_manager_numerical_final_selected_slice(ntwm);
       const int center_pos = temporal_interp_half_width;
       const double center_time = ntwm->slice_times[center_slice];
+      const double selected_slice_dt =
+          ntwm->dt_numerical_spacetime_data * (double)ntwm->time_slice_stride;
+      if (!isfinite(selected_slice_dt) || selected_slice_dt <= 0.0)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       // Step 1: Return the conceptual centered stencil nodes that are currently
       // backed by the active mmap, or report one missing edge for caller fill.
       for (int s = 0; s < temporal_num_points; s++) {
         const int offset = s - center_pos;
         const double desired_time = center_time +
-            (double)offset * ntwm->dt_numerical_spacetime_data;
+            (double)offset * selected_slice_dt;
         int desired_slice_valid = 1;
         uint64_t desired_slice = 0ULL;
 
         if (offset < 0) {
           const uint64_t lower_offset = (uint64_t)(-offset);
-          if (center_slice < lower_offset) {
+          if (lower_offset > center_slice / ntwm->time_slice_stride) {
             desired_slice_valid = 0;
           } else {
-            desired_slice = center_slice - lower_offset;
-          } // END ELSE: conceptual stencil node stayed inside the lower stored-slice range
+            desired_slice =
+                center_slice - lower_offset * ntwm->time_slice_stride;
+          } // END ELSE: conceptual stencil node stayed inside the lower selected-slice range
         } else {
           const uint64_t upper_offset = (uint64_t)offset;
-          if (center_slice > UINT64_MAX - upper_offset) {
+          if (upper_offset >
+              (final_selected_slice - center_slice) / ntwm->time_slice_stride) {
             desired_slice_valid = 0;
           } else {
-            desired_slice = center_slice + upper_offset;
-          } // END ELSE: conceptual stencil node stayed inside the upper stored-slice range
-        } // END ELSE: conceptual stencil node was on or above the center slice
+            desired_slice =
+                center_slice + upper_offset * ntwm->time_slice_stride;
+          } // END ELSE: conceptual stencil node stayed inside the upper selected-slice range
+        } // END ELSE: conceptual stencil node was on or above the selected center slice
 
         if (desired_slice_valid &&
             desired_slice < ntwm->num_time_slices) {

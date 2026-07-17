@@ -9,11 +9,11 @@ writes the 40-component Christoffel bundle only when requested.
 
 Operationally, this wrapper is the bridge between the data-management layer
 and the numerical interpolation helpers. For each photon, it either spatially
-interpolates the first stored numerical slice directly or asks the numerical
+interpolates the first selected numerical slice directly or asks the numerical
 time-window manager for one adaptive centered temporal stencil. In the mixed
 case, the wrapper spatially interpolates only the mapped numerical stencil
-subset, fills lower missing stencil nodes from the first stored numerical
-slice, fills upper missing stencil nodes by freezing the final stored
+subset, fills lower missing stencil nodes from the first selected numerical
+slice, fills upper missing stencil nodes by freezing the final selected
 numerical slice, and then runs the temporal helper once on the reconstructed
 full stencil to recover the final tensors at the photon coordinate time.
 
@@ -59,15 +59,15 @@ def register_CFunction_numerical_interpolation(
     window itself; instead, it assumes a caller already mapped a conservative
     slot-based window and then evaluates every ray in one chunk against that
     shared mapped data. Rays at or below `t_metric_0` spatially interpolate
-    the first stored numerical slice directly, treating that slice as static.
-    Rays at or above the final stored numerical slice time use that final
+    the first selected numerical slice directly, treating that slice as static.
+    Rays at or above the final selected numerical slice time use that final
     numerical slice directly, treating the numerical spacetime as frozen in
     time thereafter. Rays between those bounds use the adaptive
     `time_window_manager_numerical_stencil_for_time()` contract from
     `time_window_manager_numerical`, spatially interpolate only the mapped
     numerical stencil subset, fill lower missing stencil nodes by spatially
-    interpolating the first stored numerical slice, fill upper missing stencil
-    nodes by reusing the final stored numerical slice, and then perform
+    interpolating the first selected numerical slice, fill upper missing stencil
+    nodes by reusing the final selected numerical slice, and then perform
     ordinary temporal interpolation on the reconstructed full stencil.
 
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
@@ -163,11 +163,10 @@ def register_CFunction_numerical_interpolation(
         commondata=True,
         add_to_parfile=True,
         description=(
-            "Coordinate time of the final stored numerical slice. The "
+            "Coordinate time of the final selected numerical slice. The "
             "numerical interpolation wrapper validates this user-facing value "
-            "against the exact final slice time loaded from the combined "
-            "dataset within two times dt_numerical_spacetime_data and "
-            "freezes the numerical spacetime thereafter."
+            "against the selected stride endpoint within two selected time "
+            "steps and freezes the numerical spacetime thereafter."
         ),
     )
 
@@ -210,12 +209,12 @@ def register_CFunction_numerical_interpolation(
 The caller supplies an active numerical time window, a spatial interpolation
 context, and one chunk of photon states in the same Structure-of-Arrays bundle
 layout used by the analytic geodesic interpolation kernel. This CPU wrapper
-parallelizes over rays, spatially interpolates the first stored numerical slice
+parallelizes over rays, spatially interpolates the first selected numerical slice
 for times at or below `t_metric_0`, freezes the numerical spacetime to the
-final stored slice for times at or above that final slice time, and otherwise
+final selected slice for times at or above that final slice time, and otherwise
 reconstructs one mixed temporal stencil. Lower missing stencil nodes use a
-fresh spatial interpolation of the first stored numerical slice, whereas upper
-missing nodes reuse the final stored numerical slice. Every reconstructed
+fresh spatial interpolation of the first selected numerical slice, whereas upper
+missing nodes reuse the final selected numerical slice. Every reconstructed
 stencil uses ordinary temporal interpolation.
 
 The design goal is to let all photons in the chunk reuse the same mapped
@@ -266,7 +265,8 @@ independently ray-by-ray.
   // Step 0: Validate the mapped numerical window pointers before reading any
   // of their fields.
   if (numerical_window == NULL || numerical_window->slice_times == NULL ||
-      numerical_window->num_time_slices < 1ULL) {
+      numerical_window->num_time_slices < 1ULL ||
+      numerical_window->time_slice_stride == 0ULL) {
     #pragma omp parallel for
     for (long int i = 0; i < chunk_size; i++) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
@@ -278,13 +278,17 @@ independently ray-by-ray.
     return;
   } // END IF: mapped numerical window metadata was unavailable
   const uint64_t first_slice_index = 0ULL;
-  const uint64_t final_slice_index = numerical_window->num_time_slices - 1ULL;
+  const uint64_t final_slice_index =
+      time_window_manager_numerical_final_selected_slice(numerical_window);
   const REAL t_final_numerical_slice =
       (REAL)numerical_window->slice_times[final_slice_index];
-  // The user-facing t_numerical_end must identify the final stored numerical
-  // slice to within two trusted dataset time steps.
+  const REAL selected_slice_dt =
+      dt_numerical_spacetime_data *
+      (REAL)numerical_window->time_slice_stride;
+  // The user-facing t_numerical_end must identify the final selected numerical
+  // slice to within two selected time steps.
   const REAL t_numerical_end_tolerance =
-      2.0 * dt_numerical_spacetime_data;
+      2.0 * selected_slice_dt;
   // The mapped numerical window and the temporal helper must agree on the
   // centered temporal stencil width before any variable-length arrays are
   // sized from runtime data.
@@ -295,6 +299,8 @@ independently ray-by-ray.
       !isfinite((double)t_numerical_end) ||
       !isfinite((double)dt_numerical_spacetime_data) ||
       dt_numerical_spacetime_data <= 0.0 ||
+      !isfinite((double)selected_slice_dt) ||
+      selected_slice_dt <= 0.0 ||
       !isfinite((double)t_final_numerical_slice) ||
       t_metric_0 >= t_numerical_end) {
     #pragma omp parallel for
@@ -310,12 +316,12 @@ independently ray-by-ray.
   if (fabs((double)(t_numerical_end - t_final_numerical_slice)) >
       (double)t_numerical_end_tolerance) {
     fprintf(stderr,
-            "ERROR: commondata->t_numerical_end=%e differs from the final numerical slice time=%e "
-            "by more than 2*dt_numerical_spacetime_data=%e.\n",
+            "ERROR: commondata->t_numerical_end=%e differs from the final selected numerical slice time=%e "
+            "by more than 2*selected_slice_dt=%e.\n",
             (double)t_numerical_end, (double)t_final_numerical_slice,
             (double)t_numerical_end_tolerance);
     exit(1);
-  } // END IF: t_numerical_end was inconsistent with the final numerical slice time
+  } // END IF: t_numerical_end was inconsistent with the final selected numerical slice time
   const int temporal_num_points = 2 * temporal_half_width + 1;
   if (temporal_num_points != numerical_window->temporal_interp_num_points) {
     #pragma omp parallel for
@@ -358,8 +364,8 @@ independently ray-by-ray.
     // Step 1: Dispatch directly to a static numerical endpoint when this ray
     // is outside the mixed temporal-interpolation region. At and below
     // t_metric_0, interpolate the first stored slice in space only, so its
-    // metric time derivatives remain zero. At or above the final stored slice
-    // time, likewise use the final slice in space only.
+    // metric time derivatives remain zero. At or above the final selected
+    // slice time, likewise use the final slice in space only.
     if (t <= t_metric_0) {
       const double *first_slice_payloads[1];
       first_slice_payloads[0] =
@@ -373,7 +379,7 @@ independently ray-by-ray.
                 1, first_slice_payloads, g4dd_local, gamma4udd_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
-      } // END ELSE: first stored numerical slice was available for direct spatial interpolation
+      } // END ELSE: first selected numerical slice was available for direct spatial interpolation
     } else if (t >= t_final_numerical_slice) {
       const double *final_slice_payloads[1];
       final_slice_payloads[0] =
@@ -387,7 +393,7 @@ independently ray-by-ray.
                 1, final_slice_payloads, g4dd_local, gamma4udd_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
-      } // END ELSE: final stored numerical slice was available for direct spatial interpolation
+      } // END ELSE: final selected numerical slice was available for direct spatial interpolation
     } else {
       // Step 2: Recover one adaptive numerical stencil from the slot-level
       // time window shared by the whole chunk.
@@ -416,7 +422,7 @@ independently ray-by-ray.
 
           // Step 4: Centered lower-boundary stencils pad their missing negative
           // time nodes from the static first numerical slice. Freeze the final
-          // stored numerical slice for ordinary upper missing nodes.
+          // selected numerical slice for ordinary upper missing nodes.
           if (num_missing_slices > 0) {
             missing_is_upper =
                 missing_slice_times[0] >
@@ -443,7 +449,7 @@ independently ray-by-ray.
                     gamma4udd_missing_local[comp] =
                         GAMMA_SLICE(gamma4udd_available, last_available_slot, comp);
                   } // END LOOP: for comp over upper frozen Christoffel components
-                } // END ELSE: upper missing stencil edge reached the final stored numerical slice
+                } // END ELSE: upper missing stencil edge reached the final selected numerical slice
               } else {
                 const double *first_slice_payloads[1];
                 first_slice_payloads[0] =
@@ -460,8 +466,8 @@ independently ray-by-ray.
                   if (first_slice_spatial_status !=
                       AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
                     ray_failed = 1;
-                } // END ELSE: first stored numerical slice was available for lower stencil padding
-              } // END ELSE: lower missing stencil edge uses the first stored numerical slice
+                } // END ELSE: first selected numerical slice was available for lower stencil padding
+              } // END ELSE: lower missing stencil edge uses the first selected numerical slice
             } // END ELSE: missing stencil edge classification was usable
           } // END IF: one stencil edge must be synthesized
 
