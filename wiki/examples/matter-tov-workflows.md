@@ -1,6 +1,6 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 07-12-2026
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 07-19-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -174,7 +174,7 @@ separate from executable run instructions.
 
 - [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`, `CoordSystem`, `IDtype`, `IDCoordSystem`
 - [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `register_CFunction_TOVola_interp`, `register_CFunction_TOVola_solve`, `register_CFunction_initial_data`
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `register_CFunctions`, `register_CFunctions_function_prototypes_and_construct_Makefile`
+- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
 - [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `parallelization`, `project_name`, `CoordSystem`, `IDtype`
 - [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `enable_T4munu`, `rhs_string`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `IDType`, `grhayl_setup_str`

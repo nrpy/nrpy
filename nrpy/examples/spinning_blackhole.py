@@ -274,7 +274,9 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
         "static constexpr" if parallelization == "cuda" else "static const"
     ),
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(

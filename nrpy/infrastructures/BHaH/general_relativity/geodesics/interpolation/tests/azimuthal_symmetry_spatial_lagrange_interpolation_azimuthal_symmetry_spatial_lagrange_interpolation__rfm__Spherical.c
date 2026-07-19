@@ -274,7 +274,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__Spherical(const azim
   int center_idx[3];
 
   // Step 2: Convert the target Cartesian point to native spherical coordinates.
-  Cart_to_xx_and_nearest_i0i1i2(params, xCart, xx_target, center_idx);
+  Cart_to_xx_and_nearest_i0i1i2_assume_valid(params, xCart, xx_target, center_idx);
 
   const REAL target_r = xx_target[0];
   const REAL target_theta = xx_target[1];

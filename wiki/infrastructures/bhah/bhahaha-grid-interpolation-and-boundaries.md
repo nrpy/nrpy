@@ -1,6 +1,6 @@
 # BHaHAHA Grid, Interpolation, And Boundaries
 
-> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain how BHaHAHA builds its spherical grids, moves metric data through interpolation layers, and applies local boundary metadata. · Status: confirmed · Last reconciled: 07-19-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -37,9 +37,12 @@ the stable public input layout remains the Cartesian ADM order in the header.
 around the current horizon center with cell-centered theta and phi and the
 radial array already chosen for the horizon search. Each destination point is
 converted to the source reference-metric coordinates with
-`Cart_to_xx_and_nearest_i0i1i2`, then
+`Cart_to_xx_and_nearest_i0i1i2_assume_valid`, then
 `interpolation_3d_general__uniform_src_grid` samples the selected BSSN
-gridfunctions from the generated BHaH evolution grid. For each sampled point,
+gridfunctions from the generated BHaH evolution grid. These preconstructed
+targets supply an `int[3]` index buffer to the converter even though the
+indices are not retained; this path neither uses the nullable index-output path
+nor adds converter-side runtime bounds validation. For each sampled point,
 `basis_transform_BSSN_rfm_to_Cartesian_single_point` moves native-basis BSSN
 data to Cartesian basis, and `BHaHAHA_BSSN_to_ADM_Cartesian` writes ADM
 `gammaDD` and `KDD` into the BHaHAHA input buffer.

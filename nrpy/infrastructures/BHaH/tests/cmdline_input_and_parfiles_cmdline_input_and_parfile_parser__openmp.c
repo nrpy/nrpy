@@ -196,7 +196,7 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
       if (count >= MAX_ARRAY_SIZE) {
         fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
         exit(1);
-      } // END IF (count >= MAX_ARRAY_SIZE): Check bounds before writing values[count]
+      } // END IF: count reached MAX_ARRAY_SIZE
       safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
       count++;
       val_token = strtok_r(NULL, ",", &saveptr);

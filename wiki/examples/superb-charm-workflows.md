@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-12-2026
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-19-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -113,7 +113,7 @@ infrastructure leaves.
 - [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `project_name`, `CoordSystem`, `Nchare0`, `enable_BHaHAHA`
 - [superB_two_blackholes_collide.py](../../nrpy/examples/superB_two_blackholes_collide.py) - `bhahaha.py`, `register_CFunction_superB_pup_routines`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `--paper`, `project_name`, `enable_charm_checkpointing`, `enable_psi4`, `addl_CFLAGS`
-- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `TwoPunctures`, `BHaHAHA`, `BHaH.checkpointing.register_CFunctions`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [superB_blackhole_spectroscopy.py](../../nrpy/examples/superB_blackhole_spectroscopy.py) - `TwoPunctures`, `BHaHAHA`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `project_name`, `--floating_point_precision`, `Nchare0`, `nrpyelliptic_project=True`
 - [superB_nrpyelliptic_conformally_flat.py](../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `get_log10_residual_tolerance`, `post_MoL_step_forward_in_time`, `addl_libraries=["-module CkIO"]`
 - [README.md](../../README.md) - `Prerequisites by Workflow`, `superB / Charm++ Generators`, `What Gets Generated?`; official [Charm++ Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`

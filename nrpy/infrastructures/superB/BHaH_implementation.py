@@ -833,7 +833,7 @@ def string_for_spherical_interp_setup_steps_1_to_4() -> str:
         const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
         const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
         int Cart_to_i0i1i2_not_stored_to_save_memory[3];
-        Cart_to_xx_and_nearest_i0i1i2(params, xCart, (*dst_x0x1x2_interp)[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
+        Cart_to_xx_and_nearest_i0i1i2_assume_valid(params, xCart, (*dst_x0x1x2_interp)[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
       } // END LOOP: for ir (spherical grid setup)
     } // END LOOP: for itheta (spherical grid setup)
   } // END LOOP: for iphi (#pragma omp parallel for, spherical grid setup)

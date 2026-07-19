@@ -273,7 +273,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     # SIMD intrinsics in MoL is not properly supported -- MoL update loops are not properly bounds checked.
     rational_const_alias="static constexpr" if parallelization == "cuda" else "const",
 )
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 

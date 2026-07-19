@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-12-2026.
+> trigger re-ingest. Last audited: 07-19-2026.
 
 ## Aggregate Sources
 
@@ -14,7 +14,7 @@
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
 | `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 365 files. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 367 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |
@@ -89,6 +89,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py` | living |
+| `nrpy/infrastructures/BHaH/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/main_c.py` | living |
 | `nrpy/infrastructures/BHaH/bhah_lib.py` | living |
 | `nrpy/infrastructures/BHaH/Makefile_helpers.py` | living |
@@ -96,6 +97,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living |
+| `nrpy/infrastructures/BHaH/checkpointing.py` | living |
+| `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |

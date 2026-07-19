@@ -90,9 +90,8 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - No generated project output, binaries, images, archives, rendered artifacts,
   scratch reports, token/latest reports, or planning/ranking artifacts are
   added.
-- Commissioned root `plan1.md` through `plan5.md`, `plan_synth.md`, and
-  `tasks1.md` through `tasks6.md` are exact coordination exemptions. Never
-  catalog, route, stage, move, or delete them as KB content without direction.
+- Root coordination artifacts are outside KB scope. Never catalog, route,
+  stage, move, or delete them as KB content without direction.
 - Trusted-value files are source evidence, not hand-authored prose pages.
 - Handwritten Python edits, if any accidentally occur, require `black .` only
   in an isolated, user-owned intended-change worktree or copy with no unrelated

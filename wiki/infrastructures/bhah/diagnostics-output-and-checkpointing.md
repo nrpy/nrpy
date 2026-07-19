@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-12-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-19-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -16,7 +16,8 @@ Checkpointing is a separate generated pair, `read_checkpoint()` and
 `write_checkpoint()`. Checkpoints are convergence-factor named binary files that
 store `commondata`, optional BHaHAHA horizon history, per-grid metadata, and a
 compact selected-point payload for all evolved gridfunctions. Restart validates
-grid shape and coordinate-system hash before rebuilding `y_n_gfs`.
+checkpoint metadata, grid shape, coordinate-system hash, allocation sizes, and
+serialized point indices before reallocating and restoring `y_n_gfs`.
 
 ## Detail
 
@@ -113,44 +114,89 @@ inverse timestep, physical time per hour, and ETA. `diagnostics()` calls it
 after the diagnostics-output conditional, so progress cadence is independent of
 diagnostics cadence.
 
-`register_CFunctions` in `checkpointing.py` registers `read_checkpoint` and
-`write_checkpoint`, plus the commondata parameter `checkpoint_every`.
-Checkpoint filenames are `checkpoint-conv_factor%.2f.dat`. A nonpositive
-`checkpoint_every` disables writes; otherwise `write_checkpoint()` uses the same
-nearest-output-time test as diagnostics. Writes are fatal on open or partial
-`fwrite` failure. CUDA writes first copy device params and every evolved
-gridfunction to host. For each grid, the writer stores `params_struct`, a
-selected point count, selected flat point indices, and a compact
+`register_CFunction_read_checkpoint` in `read_checkpoint.py` and
+`register_CFunction_write_checkpoint` in `write_checkpoint.py` independently
+register the generated `read_checkpoint()` and `write_checkpoint()` CFunctions.
+Within this split path, the writer registrar owns the commondata
+`checkpoint_every` `CodeParameter`; checkpoint-using examples call the reader
+and writer registrars separately. Checkpoint filenames remain
+`checkpoint-conv_factor%.2f.dat`. A
+nonpositive `checkpoint_every` disables writes; otherwise `write_checkpoint()`
+uses the same nearest-output-time test as diagnostics. Writes are fatal on open
+or partial `fwrite` failure. CUDA writes first copy device params and every
+evolved gridfunction to host. For each grid, the writer stores `params_struct`,
+a selected point count, selected flat point indices, and a compact
 `NUM_EVOL_GFS * count` payload. With multipatch enabled, selected points are
 owned interiors, buffer-zone points, and outer-boundary points; otherwise every
 point is selected. MoL intermediate-stage storage is freed before compacting and
 reallocated after the grid payload is written.
 
-`read_checkpoint()` returns `0` when the named checkpoint file does not exist.
-If `griddata == NULL`, it reads only `commondata`, closes the file, and returns
-`1`; this supports rebuilding grid metadata before reading the payload. A full
-read verifies every `FREAD`, checks per-grid dimensions and `CoordSystem_hash`
-against the rebuilt grid, rejects invalid selected-point counts, reallocates
-host or pinned/device `y_n_gfs`, zero-fills the rebuilt evolved storage, scatters
-the compact payload into `IDX4pt(gf, point)` positions, and copies restored
-data back to the device when CUDA is active. At the end it sets `t_0 = time` and
-`nn_0 = nn` so progress and restart bookkeeping start from the restored state.
+Current `BHaH` package aggregation and updated checkpoint-using examples use
+the split owners. The tracked `checkpointing.py` nevertheless remains directly
+importable and still defines its own older reader, writer, and combined
+`register_CFunctions` wrapper; that old writer independently registers another
+`checkpoint_every` owner. The module is not a forwarding or deprecation shim,
+and its reader lacks the split reader's checks described below. Explicit legacy
+submodule imports can therefore still reach a duplicate, less-hardened
+implementation; no equivalence, compatibility, or current-canonical guarantee
+applies to that direct-import path.
 
-BHaHAHA checkpointing is guarded by `enable_bhahaha`. Writes sanitize pointer
-fields in a `commondata` copy before serializing it, validate that each horizon
-has either all three previous-shape arrays or none, and then store a per-horizon
-presence byte plus `prev_horizon_m1/m2/m3` data at the finest multigrid
-resolution. Reads sanitize deserialized commondata pointers, read the presence
-bytes, validate the horizon-shape dimensions, allocate the three previous-shape
-arrays, and refill them from the checkpoint. This keeps raw pointer values from
-the old process out of the restarted runtime while preserving horizon-history
-data.
+`read_checkpoint()` returns `0` when the named checkpoint file does not exist.
+After reading `commondata`, it requires `NUMGRIDS` in `1..MAXNUMGRIDS`. With
+BHaHAHA enabled, it also checks the deserialized horizon count against the
+`bhahaha_params_and_data` capacity and the positive multigrid-resolution count
+against both angular-dimension array capacities before those values control
+pointer sanitization or loops. If `griddata == NULL`, the reader then closes the
+file and returns `1`; metadata-only restart therefore retains these
+commondata-level checks while deferring payload restoration until grids have
+been rebuilt.
+
+For BHaHAHA horizon-history payloads, the reader bounds the finest-resolution
+index, requires positive angular dimensions, and rejects overflow in the
+angular point product and `REAL` allocation size. For each rebuilt grid, it
+requires positive dimensions, checks their products against `SIZE_MAX`, and
+requires the point total to fit the retained `int` representation. It verifies
+checkpoint dimensions and `CoordSystem_hash` against the rebuilt grid, bounds
+the compact selected-point count by the rebuilt point total, rejects overflow
+in evolved-gridfunction element counts and allocation byte counts, and skips
+compact allocations and reads when that count is zero. Before scatter it checks
+every serialized flat point index against the rebuilt grid, then uses explicit
+`size_t` offsets for both destination and compact-payload indexing. A successful
+full read reallocates host or pinned/device `y_n_gfs`, zero-fills it, scatters
+the compact values, copies restored data to the device when CUDA is active, and
+sets `t_0 = time` and `nn_0 = nn`.
+
+BHaHAHA checkpointing remains guarded by `enable_bhahaha`. Writes sanitize
+pointer fields in a `commondata` copy, require each horizon to have all three
+previous-shape arrays or none, and store a presence byte plus
+`prev_horizon_m1/m2/m3` data at the finest multigrid resolution. The split
+writer does not have equivalent reader hardening: its BHaHAHA path indexes the
+angular-dimension arrays and computes their `size_t` product before checking the
+finest-resolution index and positive dimensions, and it does not bound those
+indices by array capacity or check product/allocation overflow. Malformed
+writer-side BHaHAHA metadata is therefore not guaranteed to fail safely. Reads
+still sanitize deserialized pointers, allocate present shape arrays, and refill
+them from the checkpoint, preserving horizon-history data without reusing old
+process pointer values.
+
+Claim evidence:
+- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded compact counts and serialized point indices, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
+- Role: descriptive behavior
+- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/checkpointing.py::register_CFunctions`
+- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, direct-import, or restart paths
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader/writer source baselines plus BHaHAHA reader ordering assertions; date=07-19-2026`
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a
 write/restart/read sequence. File integrity, restored values, CUDA restart,
 multipatch selection, and BHaHAHA horizon-history restart are therefore
-`not-run` runtime outcomes in this KB audit.
+`not-run` runtime outcomes in this KB audit. The four default reader/writer
+`.c`/`.cu` baselines were regenerated in an isolated copy, matched the intended
+files byte-for-byte, and passed a second fresh-process comparison. That proves
+normalized emitted-source regression only; it does not establish compilation,
+restart, malformed-input behavior, BHaHAHA source variants, GPU execution, or
+runtime results.
 
 ## Sources
 
@@ -168,7 +214,11 @@ multipatch selection, and BHaHAHA horizon-history restart are therefore
 - [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py) - `register_CFunction_output_raytracing_data`
 - [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `parse_stage1_file`, `write_combined_file_atomically`, `main`
 - [progress_indicator.py](../../../nrpy/infrastructures/BHaH/diagnostics/progress_indicator.py) - `register_CFunction_progress_indicator`
-- [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
+- [BHaH package initializer](../../../nrpy/infrastructures/BHaH/__init__.py) - package import list for `read_checkpoint` and `write_checkpoint`
+- [read_checkpoint.py](../../../nrpy/infrastructures/BHaH/read_checkpoint.py) - `register_CFunction_read_checkpoint`
+- [write_checkpoint.py](../../../nrpy/infrastructures/BHaH/write_checkpoint.py) - `register_CFunction_write_checkpoint`
+- [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - retained `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
+- [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create`, `BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`
 - [main.yml](../../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`

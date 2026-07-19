@@ -282,10 +282,9 @@ still govern them. Hard failures cover deterministic structure only. Dynamic
 symbols, semantic truth, modal wording, generated names, and C/CUDA macros stay
 manual or report-only.
 
-Commissioned root `plan1.md` through `plan5.md`, `plan_synth.md`, and
-`tasks1.md` through `tasks6.md` are coordination exemptions, not KB content.
-Other planning, ranking, log, scan, report, generated, binary, archive, image,
-or rendered artifacts remain excluded from `wiki/` and `raw/`.
+Root coordination artifacts are not KB content. Planning, ranking, log, scan,
+report, generated, binary, archive, image, and rendered artifacts remain
+excluded from `wiki/` and `raw/`.
 
 ## Safe Reproduction
 

@@ -49,7 +49,7 @@ import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
-    register_CFunction__Cart_to_xx_and_nearest_i0i1i2,
+    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
 )
 
 AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES = r"""
@@ -167,7 +167,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         project_dir=project_dir,
         subdirectory="./",
     )
-    register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 
     includes = [
         "BHaH_defines.h",
@@ -438,7 +438,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_about_z(
   int center_idx[3];
 
   // Step 2: Convert the target Cartesian point to native spherical coordinates.
-  Cart_to_xx_and_nearest_i0i1i2(params, xCart, xx_target, center_idx);
+  Cart_to_xx_and_nearest_i0i1i2_assume_valid(params, xCart, xx_target, center_idx);
 
   const REAL target_r = xx_target[0];
   const REAL target_theta = xx_target[1];
