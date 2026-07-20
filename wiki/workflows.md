@@ -1,6 +1,6 @@
 # Workflows
 
-> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-13-2026
+> Procedures for ingesting, querying, and maintaining the KB. · Status: confirmed · Last reconciled: 07-20-2026
 
 ## Summary
 
@@ -11,10 +11,8 @@ owning leaf, then fixes nearby links, catalog entries, source-map rows, and
 glossary terms.
 NRPy code changes keep their normal project workflow: direct example runs need
 `PYTHONPATH=.` when there is no editable install. Modified handwritten Python
-requires `black .` in an isolated user-owned intended-change worktree or copy,
-then individual single-file static analysis. New handwritten files require
-Pylint **10.00/10.00**; existing tracked handwritten files must not regress
-from their grandfathered pre-change scores.
+follows [Static Analysis](validation/static-analysis.md); the generated
+trusted-data exemption applies only to data, not its handwritten owner.
 
 ## Search Order
 
@@ -186,23 +184,10 @@ keeps only the durable lesson.
 ## NRPy Workflow Notes
 
 For direct example runs without an editable install, append `.` to
-`PYTHONPATH`. Run `black .` only in an isolated, user-owned intended-change
-worktree or copy with no unrelated modifications, inspect its diff, and run
-`./.github/single_file_static_analysis.sh <path.py>` for each modified
-handwritten Python file. A new handwritten file must report Pylint
-**10.00/10.00**. An existing tracked handwritten file must not regress from its
-pre-change score, including a grandfathered score at or below `9.5`. Inspect the
-wrapper's command construction, the target's direct-execution effects, and every
-invoked tool's cache and filesystem output effects. The current wrapper
-dispatches interpolated command strings through `eval`. Before invocation,
-require a repository-relative argument whose resolved target stays in the
-repository, is a regular non-symlink file, contains no `..` component, does not
-begin with `-`, and matches `^[A-Za-z0-9_./-]+$`. A failing path blocks invocation
-until separately authorized wrapper hardening. Run an accepted path only in the
-isolated intended-change tree or copy; disable or redirect every writable tool
-cache and filesystem output to an owned disposable location, then inspect
-repository status. Generated trusted `*/tests/*.py` data is exempt from per-file
-analysis, but its handwritten owner is not. [Code Test
+`PYTHONPATH`. For modified handwritten Python, follow [Static
+Analysis](validation/static-analysis.md), including its isolation, target-safety,
+cache, and classification requirements. Generated trusted `*/tests/*.py` data
+is exempt from per-file analysis, but its handwritten owner is not. [Code Test
 Policy](validation/code-test-policy.md) owns test selection; [Test Oracles And
 Safe Updates](validation/test-oracles-and-safe-updates.md) owns oracle format
 and the two-process update procedure.
@@ -217,8 +202,6 @@ registered as frozen evidence.
 - [coding_style.md](../coding_style.md) - `## Python Coding Style`, `### Formatting`
 - [original-agents.md](../raw/source-docs/original-agents.md) - historical `## Required Checks`; current `coding_style.md` decides conflicts
 - [README.md](../README.md) - `## Contributor Setup`
-- [single_file_static_analysis.sh](../.github/single_file_static_analysis.sh) - `run_test_step`
-- [main.yml](../.github/workflows/main.yml) - `static-analysis`
 
 ## See Also
 

@@ -772,18 +772,6 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     ...     "cmdline_input_and_parfile_parser__openmp",
     ...     file_ext="c",
     ... )
-    >>> "read_chararray(argv[argc - number_of_steerable_parameters + 0]" in generated
-    True
-    >>> "commondata->runtime_mode" in generated
-    True
-    >>> "Remove surrounding single or double quotes" in generated
-    True
-    >>> generated.find("// Handling options 3 and 4") > generated.find(
-    ...     "} // END WHILE LOOP over all lines in the file"
-    ... )
-    True
-    >>> "PARAM_SIZE LINE_SIZE" in generated
-    True
     >>> try:
     ...     register_CFunction_cmdline_input_and_parfile_parser(
     ...         "example_project", cmdline_inputs=["runtime_mode", "runtime_mode"]

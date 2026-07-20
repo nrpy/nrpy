@@ -18,6 +18,11 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH.rotation import (
+    so3_apply_R_to_vector,
+    so3_apply_RT_to_vector,
+    so3_build_R_from_hats,
+)
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -127,6 +132,33 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
     Setting up reference_metric[GeneralRFM_fisheyeN2]...
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    ...        "Cartesian", gridding_approach="multipatch"
+    ...    )
+    ...    expected_names = {
+    ...        f"{name}__rfm__Cartesian",
+    ...        "so3_build_R_from_hats",
+    ...        "so3_apply_RT_to_vector",
+    ...    }
+    ...    assert set(cfc.CFunction_dict) == expected_names
+    ...    expected_decorator = "__host__ __device__" if parallelization == "cuda" else ""
+    ...    assert all(
+    ...        cfc.CFunction_dict[func_name].cfunc_decorators.strip()
+    ...        == expected_decorator
+    ...        for func_name in expected_names
+    ...    )
+    ...    generated_str = clang_format(
+    ...        cfc.CFunction_dict[f"{name}__rfm__Cartesian"].full_function
+    ...    )
+    ...    validation_desc = f"{name}__{parallelization}__Cartesian__multipatch"
+    ...    _ = validate_strings(
+    ...        generated_str,
+    ...        validation_desc,
+    ...        file_ext="cu" if parallelization == "cuda" else "c",
+    ...    )
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -139,6 +171,11 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
         )
 
     parallelization = par.parval_from_str("parallelization")
+    if gridding_approach == "multipatch":
+        if "so3_build_R_from_hats" not in cfc.CFunction_dict:
+            so3_build_R_from_hats.register_CFunction_so3_build_R_from_hats()
+        if "so3_apply_RT_to_vector" not in cfc.CFunction_dict:
+            so3_apply_RT_to_vector.register_CFunction_so3_apply_RT_to_vector()
 
     rfm = refmetric.reference_metric[CoordSystem]
     rfm_obj = rfm
@@ -149,7 +186,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
     if is_generalrfm and not is_fisheye_provider:
         raise ValueError(
-            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2."
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2_assume_valid."
         )
     num_transitions = int(provider_meta.get("num_transitions", -1))
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
@@ -442,7 +479,7 @@ if(params->grid_rotates) {
   {
 """)
         body_parts.append(core_body)
-        body_parts.append("  }\n")
+        body_parts.append("  } // END BLOCK: Cartesian-to-grid conversion\n")
     else:
         body_parts.append(core_body)
 
@@ -492,6 +529,56 @@ def register_CFunction_xx_to_Cart(
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_xx_to_Cart(
+    ...        "Cartesian", gridding_approach="multipatch"
+    ...    )
+    ...    expected_names = {
+    ...        f"{name}__rfm__Cartesian",
+    ...        "so3_build_R_from_hats",
+    ...        "so3_apply_R_to_vector",
+    ...    }
+    ...    assert set(cfc.CFunction_dict) == expected_names
+    ...    expected_decorator = "__host__ __device__" if parallelization == "cuda" else ""
+    ...    assert all(
+    ...        cfc.CFunction_dict[func_name].cfunc_decorators.strip()
+    ...        == expected_decorator
+    ...        for func_name in expected_names
+    ...    )
+    ...    generated_str = clang_format(
+    ...        cfc.CFunction_dict[f"{name}__rfm__Cartesian"].full_function
+    ...    )
+    ...    validation_desc = f"{name}__{parallelization}__Cartesian__multipatch"
+    ...    _ = validate_strings(
+    ...        generated_str,
+    ...        validation_desc,
+    ...        file_ext="cu" if parallelization == "cuda" else "c",
+    ...    )
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> _ = register_CFunction_xx_to_Cart("Cartesian")
+    >>> assert not {
+    ...     "so3_build_R_from_hats",
+    ...     "so3_apply_R_to_vector",
+    ...     "so3_apply_RT_to_vector",
+    ... } & set(cfc.CFunction_dict)
+    >>> converter_registrars = (
+    ...     register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
+    ...     register_CFunction_xx_to_Cart,
+    ... )
+    >>> for registrar_order in (converter_registrars, converter_registrars[::-1]):
+    ...     cfc.CFunction_dict.clear()
+    ...     for registrar in registrar_order:
+    ...         _ = registrar("Cartesian", gridding_approach="multipatch")
+    ...     assert set(cfc.CFunction_dict) == {
+    ...         "Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Cartesian",
+    ...         "xx_to_Cart__rfm__Cartesian",
+    ...         "so3_build_R_from_hats",
+    ...         "so3_apply_R_to_vector",
+    ...         "so3_apply_RT_to_vector",
+    ...     }
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -504,6 +591,11 @@ def register_CFunction_xx_to_Cart(
         )
 
     parallelization = par.parval_from_str("parallelization")
+    if gridding_approach == "multipatch":
+        if "so3_build_R_from_hats" not in cfc.CFunction_dict:
+            so3_build_R_from_hats.register_CFunction_so3_build_R_from_hats()
+        if "so3_apply_R_to_vector" not in cfc.CFunction_dict:
+            so3_apply_R_to_vector.register_CFunction_so3_apply_R_to_vector()
 
     rfm = refmetric.reference_metric[CoordSystem]
     is_generalrfm = CoordSystem.startswith("GeneralRFM")

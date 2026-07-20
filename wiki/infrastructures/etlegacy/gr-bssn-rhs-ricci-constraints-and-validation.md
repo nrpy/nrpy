@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 07-06-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -100,16 +100,9 @@ then calls `compare_or_generate_trusted_results()` itself, its generated
 basenames omit the `KO...` segment and use the local `enable_improvements`
 loop variable.
 
-Trusted RHS evidence currently consists of these generated `trusted_dict`
-files. They are coverage artifacts, not prose documentation, and their numeric
-dictionaries are not summarized here:
-
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py`
+ETLegacy has six backend-local RHS trusted baselines: four covariant cases span
+both `T4munu` states and both improvements states, while two noncovariant
+KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources
 
@@ -128,6 +121,7 @@ dictionaries are not summarized here:
 - [ETLegacy](index.md)
 - [MoL, Boundaries, Symmetry, And RHS Initialization](mol-boundaries-symmetry-and-rhs-initialization.md)
 - [GR ADM/BSSN, Slicing, And Matter Coupling](gr-adm-bssn-slicing-and-matter-coupling.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md)
 - [Finite Difference](../../core/finite-difference.md)
+- Contrasts with: [CarpetX GR BSSN RHS, Ricci, Constraints, And Validation](../carpetx/gr-bssn-rhs-ricci-constraints-and-validation.md)

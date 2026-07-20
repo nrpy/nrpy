@@ -1,6 +1,6 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-13-2026
+> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -16,19 +16,13 @@ per-grid or per-point kernels.
 
 ### Module Organization
 
-An infrastructure Python file usually registers one primary C function through
-`register_CFunction_<name>()`. Module filenames use snake_case and directly
-describe purpose. `__init__.py` files stay as explicit relative import
-aggregators with a flat namespace.
+Generic Python module, import, header, and helper rules follow [Python Coding
+Style](../architecture/python-coding-style.md); generic test placement, runner,
+and meaningfulness rules follow [Code Test
+Policy](../validation/code-test-policy.md).
 
-The standard module shape is: module docstring with author info, imports, the
-main registration function, optional reusable helper functions, and an optional
-`if __name__ == "__main__":` doctest-runner prefix when the module has prompts
-or meaningful follow-on owner validation. For modules under
-`nrpy/equations/`, that doctest-runner prefix is required as the opening main
-block pattern; runnable infrastructure modules should use the same canonical
-failure-runner shape. Empty and placeholder runners are not coverage. [Code Test
-Policy](../validation/code-test-policy.md) owns placement and meaningfulness.
+An infrastructure Python file usually registers one primary C function through
+`register_CFunction_<name>()`.
 
 Registration functions should imitate the C function they register. Declare
 `desc`, `cfunc_type`, `name`, `params`, `body`, and related values on separate
@@ -55,32 +49,16 @@ as side effects.
 Infrastructure registration functions use `Doctests:` as the final docstring
 section label immediately before `>>>` lines. Older variants such as
 `Doctest:` and `DocTests:` exist; use `Doctests:` in new code.
+Placeholder handling is owned by [Code Test
+Policy](../validation/code-test-policy.md).
 
-For complete, stable, predominantly handwritten generated C text, the standard
-doctest pattern imports
-`validate_strings` and `clang_format` inside the doctest, clears
-`cfc.CFunction_dict`, registers the target function, formats
-`full_function`, and compares against a trusted file with `validate_strings`.
-Generate through the public registration, header, or file path; normalize every
-new or regenerated full-text baseline. Use `file_ext="cu"` for CUDA and `"c"`
-otherwise. Untouched raw baselines remain historical until regenerated.
-
-Golden-output doctests are most appropriate in `nrpy/infrastructures/*/*.py`,
-where registration functions are a core public interface. Avoid generated C
-trusted files for C functions whose bodies are dominated by large SymPy-derived
-kernels; SymPy and codegen details make those exact strings brittle. Prefer
-upstream symbolic or semantic validation for such functions, not incidental
-assignment substrings. [Test Oracles And Safe
-Updates](../validation/test-oracles-and-safe-updates.md) owns source selection,
-focused assertions, variant coverage, clean state, and safe updates. A missing-
-file creation branch captures a candidate; it is not a passing comparison.
-
-Do not add trivial doctests whose main assertion is that Python-based C/C++
-generation ran, a `CFunction` registered, a registration function returned, or
-an object could be called. Missing doctests are acceptable when the only
-practical doctest would be such a low-value generated-text spot check. Do not
-add `# FIXME` placeholder blocks. Existing placeholders are legacy; cleanup on
-an unrelated touch remains maintainer judgment.
+Golden-output doctests fit stable, predominantly handwritten generated C text
+owned by a public infrastructure registration, header, or file generator. For
+large SymPy/codegen-dominated kernels, prefer upstream symbolic or semantic
+validation rather than exact generated text or incidental substrings. [Test
+Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md) owns
+oracle mechanics, selection, focused assertions, variant coverage, state, and
+safe updates.
 
 BHaH `compile_Makefile()` contains a retained unsafe external-compilation
 doctest. It is not precedent. A substantive touch follows the scoped-CI
@@ -112,13 +90,8 @@ fields: `subdirectory`, `includes`, optional `prefunc`, `desc`, `cfunc_type`,
 Helper C functions emitted before the main function are generated as strings
 and concatenated into `prefunc`.
 
-Inline C and Python functions that do not save real code by existing
-separately. Private/module-local Python helpers, including leading-underscore
-helpers, need at least two real call sites unless an external API, callback, or
-test harness requires a named function. Separate C helper functions only when
-they are called from multiple locations or have more than roughly 10-15 lines
-of actual logic. Do not keep functions whose docstring is longer than the body
-or that simply return one expression.
+Separate C helper functions only when they are called from multiple locations
+or have more than roughly 10-15 lines of actual logic.
 
 ### BHaH Symbolic Codegen Rules
 
@@ -197,4 +170,5 @@ checks integer return codes immediately, and returns early when
 - Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)
 - Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Depends on: [Python Coding Style](../architecture/python-coding-style.md)
 - See also: [C And Embedded C Style](../architecture/c-and-embedded-c-style.md)

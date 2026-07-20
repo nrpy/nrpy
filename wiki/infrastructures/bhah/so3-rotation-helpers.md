@@ -1,6 +1,6 @@
 # SO(3) Rotation Helpers
 
-> Map the BHaH generated-C SO(3) helper layer for rotation matrices, hat vectors, and axis-angle recovery. Status: confirmed. Last reconciled: 07-02-2026
+> Map the BHaH generated-C SO(3) helper layer for rotation matrices, hat vectors, and axis-angle recovery. Status: confirmed. Last reconciled: 07-20-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -30,6 +30,22 @@ the eight helper-specific registration functions:
 `register_CFunction_so3_relative_R_dst_from_src`,
 `register_CFunction_so3_left_multiply_hats_with_R`, and
 `register_CFunction_so3_find_nU_and_dphi_from_unit_vectors`.
+
+When `parallelization` is `cuda`, exactly the three helpers used directly by
+the multipatch coordinate converters--`so3_build_R_from_hats`,
+`so3_apply_R_to_vector`, and `so3_apply_RT_to_vector`--emit
+`__host__ __device__` on definitions and prototypes. Their OpenMP forms have no
+decorator. The other five SO(3) helpers remain host-only in both modes. This
+narrow device closure lets the coordinate converters call the required matrix
+and vector operations from a CUDA kernel without changing unrelated helpers.
+
+Claim evidence:
+- Claim: Exactly the matrix builder and the `R`/`R^T` vector helpers emit CUDA host/device definitions and prototypes; the other five helpers remain host-only, and OpenMP forms remain undecorated.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/rotation/so3_build_R_from_hats.py`, `so3_apply_R_to_vector.py`, and `so3_apply_RT_to_vector.py` - their public registrars
+- Corroboration: none available; owner doctests and emitted-source inspection are not independent evidence.
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=three converter-facing helpers, five unchanged host-only helpers; date=07-20-2026`
 
 The common convention is that `R` maps rotating-frame components to fixed-frame
 components. Thus `v_fixed = R v_rot`, while `R^T` maps fixed-frame components

@@ -1,6 +1,6 @@
 # C Function Registry
 
-> Core route for generated C function objects and registration. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for generated C function objects and registration. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -29,6 +29,9 @@ Import registry objects from `nrpy.c_function`. The empty `nrpy/__init__.py` doe
 
 `GPUKernel` is a helper-side producer of `CFunction` text and launch calls. Use [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md) for CUDA launch dictionaries, host/device wrapper choices, and GPU-kernel call-string behavior; this page remains the owner of the registry contract itself.
 
+For interface-change and compatibility-shim rules, use [Contribution Style And
+Static Analysis](../architecture/contribution-style-and-static-analysis.md).
+
 ## Sources
 
 - [nrpy/c_function.py](../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `prefix_with_star`, `generate_full_function`, `register_CFunction`, `function_name_and_subdir_with_CoordSystem`
@@ -39,6 +42,7 @@ Import registry objects from `nrpy.c_function`. The empty `nrpy/__init__.py` doe
 ## See Also
 
 - Parent: [Core APIs](index.md)
+- Depends on: [Contribution Style And Static Analysis](../architecture/contribution-style-and-static-analysis.md)
 - Depends on: [C Codegen](c-codegen.md)
 - Depends on: [Gridfunctions And Parameters](gridfunctions-and-parameters.md)
 - See also: [Loop Kernel And Device Helpers](helpers/loop-kernel-and-device-helpers.md)

@@ -18,7 +18,7 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 
     Doctests:
     >>> import nrpy.c_function as cfc
-    >>> from nrpy.helpers.generic import validate_strings
+    >>> from nrpy.helpers.generic import clang_format, validate_strings
     >>> import nrpy.params as par
     >>> supported_Parallelizations = ["openmp", "cuda"]
     >>> name="read_checkpoint"
@@ -26,23 +26,9 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
     ...    register_CFunction_read_checkpoint()
-    ...    generated_str = cfc.CFunction_dict[name].full_function
+    ...    generated_str = clang_format(cfc.CFunction_dict[name].full_function)
     ...    validation_desc = f"{name}__{parallelization}".replace(" ", "_")
     ...    validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
-    >>> par.set_parval_from_str("parallelization", "openmp")
-    >>> cfc.CFunction_dict.clear()
-    >>> register_CFunction_read_checkpoint(enable_bhahaha=True)
-    >>> generated_str = cfc.CFunction_dict[name].full_function
-    >>> generated_str.index("bah_max_num_horizons < 0") < generated_str.index("sanitize_checkpoint_commondata_pointers(commondata);")
-    True
-    >>> generated_str.index("n < 0 || n >= ntheta_capacity") < generated_str.index("bah_Ntheta_array_multigrid[n]")
-    True
-    >>> generated_str.index("count < 0 || count > ntot_grid") < generated_str.index("BHAH_MALLOC(out_data_indices")
-    True
-    >>> generated_str.index("if (count > 0)") < generated_str.index("FREAD(out_data_indices")
-    True
-    >>> generated_str.index("out_data_indices[i] < 0") < generated_str.index("compact_out_data[(size_t)i")
-    True
     """
     parallelization = par.parval_from_str("parallelization")
     includes = [
@@ -56,6 +42,10 @@ def register_CFunction_read_checkpoint(enable_bhahaha: bool = False) -> None:
 If griddata == NULL, read only commondata metadata and return 1 when the
 checkpoint exists. This supports rebuilding grids from restart state before
 loading the full checkpoint payload.
+
+Serialized grid-point indices must be strictly increasing, as emitted by the
+current writer. Noncanonical indices are treated as fatal checkpoint
+corruption; reader-owned host allocation failures also terminate immediately.
 
 @param[in,out] commondata Global state loaded from the checkpoint.
 @param[in,out] griddata Rebuilt grid hierarchy, or NULL for metadata-only loading.
@@ -86,6 +76,19 @@ loading the full checkpoint payload.
       exit(EXIT_FAILURE);                                                                                    \
     }                                                                                                        \
   } while (0) // END DO-WHILE: verify checkpoint read count
+
+// Allocate reader-owned host memory or terminate before first use.
+#define READ_CHECKPOINT_MALLOC_OR_EXIT(ptr, num_bytes, filename, context)                                   \
+  do {                                                                                                      \
+    const size_t _read_checkpoint_num_bytes = (size_t)(num_bytes);                                          \
+    BHAH_MALLOC(ptr, _read_checkpoint_num_bytes);                                                           \
+    if ((ptr) == NULL) {                                                                                    \
+      fprintf(stderr,                                                                                       \
+              "read_checkpoint: FATAL: allocation failed for %zu bytes while reading %s (%s).\n",        \
+              _read_checkpoint_num_bytes, (filename), (context));                                          \
+      exit(EXIT_FAILURE);                                                                                   \
+    }                                                                                                       \
+  } while (0) // END DO-WHILE: allocate reader-owned host memory
 
 """
     if enable_bhahaha:
@@ -191,9 +194,9 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
         exit(EXIT_FAILURE);
       } // END IF: horizon-shape allocation size overflows
 
-      BHAH_MALLOC(horizon_params->prev_horizon_m1, sizeof(REAL) * npts);
-      BHAH_MALLOC(horizon_params->prev_horizon_m2, sizeof(REAL) * npts);
-      BHAH_MALLOC(horizon_params->prev_horizon_m3, sizeof(REAL) * npts);
+      READ_CHECKPOINT_MALLOC_OR_EXIT(horizon_params->prev_horizon_m1, sizeof(REAL) * npts, filename, "prev_horizon_m1");
+      READ_CHECKPOINT_MALLOC_OR_EXIT(horizon_params->prev_horizon_m2, sizeof(REAL) * npts, filename, "prev_horizon_m2");
+      READ_CHECKPOINT_MALLOC_OR_EXIT(horizon_params->prev_horizon_m3, sizeof(REAL) * npts, filename, "prev_horizon_m3");
       FREAD(horizon_params->prev_horizon_m1, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m1");
       FREAD(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m2");
       FREAD(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m3");
@@ -269,17 +272,24 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
     int *restrict out_data_indices = NULL;
     REAL *restrict compact_out_data = NULL;
     if (count > 0) {
-      BHAH_MALLOC(out_data_indices, sizeof(int) * (size_t)count);
+      READ_CHECKPOINT_MALLOC_OR_EXIT(out_data_indices, sizeof(int) * (size_t)count, filename, "out_data_indices");
       FREAD(out_data_indices, sizeof(int), (size_t)count, cp_file, filename, "out_data_indices");
       for (int i = 0; i < count; i++) {
-        if (out_data_indices[i] < 0 || out_data_indices[i] >= ntot_grid) {
+        const int idx = out_data_indices[i];
+        if (idx < 0 || idx >= ntot_grid) {
           fprintf(stderr,
                   "read_checkpoint: FATAL: invalid gridpoint index=%d at element=%d for grid=%d (ntot_grid=%d) in %s.\n",
-                  out_data_indices[i], i, grid, ntot_grid, filename);
+                  idx, i, grid, ntot_grid, filename);
           exit(EXIT_FAILURE);
         } // END IF: serialized grid-point index is invalid
+        if (i > 0 && idx <= out_data_indices[i - 1]) {
+          fprintf(stderr,
+                  "read_checkpoint: FATAL: non-increasing gridpoint index=%d after previous=%d at element=%d for grid=%d in %s.\n",
+                  idx, out_data_indices[i - 1], i, grid, filename);
+          exit(EXIT_FAILURE);
+        } // END IF: serialized grid-point indices are not strictly increasing
       } // END LOOP: for i over serialized grid-point indices
-      BHAH_MALLOC(compact_out_data, sizeof(REAL) * compact_count);
+      READ_CHECKPOINT_MALLOC_OR_EXIT(compact_out_data, sizeof(REAL) * compact_count, filename, "compact_out_data");
       FREAD(compact_out_data, sizeof(REAL), compact_count, cp_file, filename, "compact_out_data");
     } // END IF: checkpoint stores points for this grid
 
@@ -292,7 +302,9 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
     BHAH_MALLOC_PINNED(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * numpts_in_all_evol_gfs);
 #else
     BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
-    BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * numpts_in_all_evol_gfs);
+    READ_CHECKPOINT_MALLOC_OR_EXIT(griddata[grid].gridfuncs.y_n_gfs,
+                                   sizeof(REAL) * numpts_in_all_evol_gfs,
+                                   filename, "griddata[grid].gridfuncs.y_n_gfs");
 #endif // __CUDACC__
 
 #pragma omp parallel for

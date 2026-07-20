@@ -1,6 +1,6 @@
 # GR Poststep Repairs
 
-> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 07-06-2026
+> ETLegacy lapse flooring and conformal-metric determinant correction after MoL steps. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -36,10 +36,8 @@ reconstructed `gammabarDD` satisfies `det(gammabar) = det(gammahat)`.
 
 The determinant repair is also an all-points `MoL_PostStep` kernel with SIMD
 disabled. It reads the six independent `hDD` gridfunctions and writes the same
-six gridfunctions everywhere. The implementation comments explain the SIMD
-choice in terms of cube-root support and all-points memory safety; this page
-therefore documents the actual generated expression and schedule, not unrelated
-or misleading docstring text in neighboring functions.
+six gridfunctions everywhere; source comments cite cube-root support and
+all-points memory safety for the SIMD choice.
 
 ## Sources
 
@@ -52,3 +50,5 @@ or misleading docstring text in neighboring functions.
 - [GR ADM/BSSN, Slicing, And Matter Coupling](gr-adm-bssn-slicing-and-matter-coupling.md)
 - [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
 - [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Contrasts with: [CarpetX GR Poststep Repairs](../carpetx/gr-poststep-repairs.md)

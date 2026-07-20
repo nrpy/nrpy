@@ -1,6 +1,6 @@
 # Lint Checks
 
-> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
+> Mechanical and review checks for the Markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
 
 ## Summary
 
@@ -90,8 +90,10 @@ carry facts and sources, and excluded artifacts stay out of the KB.
 - No generated project output, binaries, images, archives, rendered artifacts,
   scratch reports, token/latest reports, or planning/ranking artifacts are
   added.
-- Root coordination artifacts are outside KB scope. Never catalog, route,
-  stage, move, or delete them as KB content without direction.
+- Root planning/task coordination artifacts that satisfy the
+  [Schema naming grammar](../SCHEMA.md#coordination-artifacts) remain outside KB
+  scope; matching alone does not authorize cataloging, routing, staging,
+  moving, or deletion.
 - Trusted-value files are source evidence, not hand-authored prose pages.
 - Handwritten Python edits, if any accidentally occur, require `black .` only
   in an isolated, user-owned intended-change worktree or copy with no unrelated

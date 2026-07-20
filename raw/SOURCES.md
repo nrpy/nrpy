@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-19-2026.
+> trigger re-ingest. Last audited: 07-20-2026.
 
 ## Aggregate Sources
 

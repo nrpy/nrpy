@@ -1,6 +1,6 @@
 # Equation Setup Style
 
-> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional · Last reconciled: 07-13-2026
+> Symbolic equation construction, naming, validation, and dependency rules for NRPy equation modules. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -78,19 +78,10 @@ trusted-result regression is appropriate, equation modules build a dictionary
 that maps stable descriptive names to SymPy expressions, process it with
 `ve.process_dictionary_of_expressions(...)` using fixed substitutions for free
 symbols, and pass the processed results to
-`ve.compare_or_generate_trusted_results(...)`. A direct dictionary
-`ve.assert_equal(...)` call rejects non-identical raw key sets, different list
-nesting, and flattened-name collisions among entries retained for numerical
-processing; `funcform` keys are omitted from numerical processing and collision
-checks. Positional dictionary comparison is unsupported.
-
-Claim evidence:
-- Claim: Direct dictionary `ve.assert_equal(...)` calls reject non-identical raw key sets, different list nesting, and flattened-name collisions among numerically processed entries; `funcform` keys are omitted from numerical processing and collision checks, and positional dictionary comparison is unsupported.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`
-- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; error-path tests remain colocated with the deciding helper
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests plus explicit dictionary-structure and funcform-collision probes; date=07-13-2026`
+`ve.compare_or_generate_trusted_results(...)`. Direct dictionary comparisons
+must also use stable descriptive keys. [Expression Validation
+Helpers](../validation/expression-validation-helpers.md) owns helper behavior
+and limitations.
 
 Expression keys must match the corresponding `trusted_dict` keys in
 `tests/<module>*.py`. Use established names such as `*_rhs`, `*_expr_list_*`,
@@ -111,10 +102,6 @@ equation module, including quaternion tensor rotation, is valid when no sampled
 oracle is needed. [Code Test Policy](../validation/code-test-policy.md) owns
 owner-runner placement and the meaningful-contract gate.
 
-Key validation APIs are `assert_equal(vardict_1, vardict_2)`, `check_zero`,
-`process_dictionary_of_expressions`, `compare_against_trusted`,
-`output_trusted`, and `compare_or_generate_trusted_results`.
-
 ### Dependencies
 
 Do not import `re` for simple string manipulation that direct string methods
@@ -134,7 +121,7 @@ handling, plotting, binary parsing, or similar non-core analysis.
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Equation Setup Rules`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### SymPy`, `### Indexed Expressions`, `### Expression Construction`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Expression Validation`, `### Prohibited / Restricted Dependencies`
-- [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `assert_equal`, `compare_or_generate_trusted_results`
+- [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `assert_equal`, `compare_or_generate_trusted_results`
 - [tensor_rotation.py](../../nrpy/equations/quaternion_rotations/tensor_rotation.py) - `rotate`, module `__main__` path
 
 ## See Also

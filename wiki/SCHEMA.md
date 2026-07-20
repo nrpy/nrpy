@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-13-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
 
 ## Summary
 
@@ -285,6 +285,20 @@ manual or report-only.
 Root coordination artifacts are not KB content. Planning, ranking, log, scan,
 report, generated, binary, archive, image, and rendered artifacts remain
 excluded from `wiki/` and `raw/`.
+
+### Coordination Artifacts
+
+The coordination naming grammar applies only to Markdown files at repository
+root. A qualifying lowercase basename starts exactly with `plan`, `task`, or
+`tasks`, may append a decimal number directly, and may then append nonempty
+lowercase alphanumeric tags separated by a single hyphen or underscore.
+
+Maintenance terms for audit, scan, report, log, latest, token, rank, or ranking
+work are reserved when they form a basename segment; plural and numbered forms
+are reserved too. A name containing a reserved segment is never coordination-
+exempt. Matching the coordination grammar is necessary but not sufficient:
+commissioned context decides whether the file is a coordination artifact, and
+the name grants no authority to file, stage, move, or delete it as KB content.
 
 ## Safe Reproduction
 

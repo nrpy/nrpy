@@ -1,6 +1,6 @@
 # CarpetX GR BSSN RHS, Ricci, Constraints, And Validation
 
-> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 07-06-2026
+> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -117,16 +117,9 @@ all-improvements states; because it performs the trusted comparison outside
 `register_CFunction_rhs_eval()`, those basenames omit the `KO...` segment and
 use the local `enable_improvements` loop variable.
 
-Trusted RHS evidence currently consists of these CarpetX `trusted_dict` files.
-They are validation evidence, not prose authority, and their numeric contents
-are not summarized here:
-
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py`
+CarpetX has six backend-local RHS trusted baselines: four covariant cases span
+both `T4munu` states and both improvements states, while two noncovariant
+KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources
 
@@ -145,9 +138,9 @@ are not summarized here:
 - [CarpetX](index.md)
 - [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
 - [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md)
 - [C Codegen](../../core/c-codegen.md)
 - [Finite Difference](../../core/finite-difference.md)
 - [Reference Metrics](../../core/reference-metrics.md)
-- [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md)
+- Contrasts with: [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md)

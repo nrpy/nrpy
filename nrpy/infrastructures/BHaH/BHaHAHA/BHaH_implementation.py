@@ -400,7 +400,7 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
  * 3. Allocates memory for destination reference-metric coordinates (`dst_x0x1x2_interp`). Exits on failure.
  * 4. Populates `dst_x0x1x2_interp`: For each point on the spherical grid (defined by `radii`,
  *    theta, phi around `x_center`, `y_center`, `z_center`), converts its Cartesian
- *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2`.
+ *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2_assume_valid`.
  * 5. Initializes source gridfunction pointers (`src_gf_ptrs`) for the required BSSN variables from `y_n_gfs`.
  * 6. Allocates temporary memory for interpolated BSSN variables at spherical grid points
  *    (`dst_data_ptrs_bssn`). Exits on failure.

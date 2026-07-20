@@ -50,5 +50,5 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__RingHoleySinhSpherical(con
     Cart_to_i0i1i2[0] = (int)((xx[0] - params->xxmin0) / params->dxx0 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[1] = (int)((xx[1] - params->xxmin1) / params->dxx1 + (REAL)NGHOSTS);
     Cart_to_i0i1i2[2] = (int)((xx[2] - params->xxmin2) / params->dxx2 + (REAL)NGHOSTS);
-  }
+  } // END BLOCK: Cartesian-to-grid conversion
 } // END FUNCTION: Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__RingHoleySinhSpherical

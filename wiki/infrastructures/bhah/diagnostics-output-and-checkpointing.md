@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-19-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-20-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -160,11 +160,16 @@ checkpoint dimensions and `CoordSystem_hash` against the rebuilt grid, bounds
 the compact selected-point count by the rebuilt point total, rejects overflow
 in evolved-gridfunction element counts and allocation byte counts, and skips
 compact allocations and reads when that count is zero. Before scatter it checks
-every serialized flat point index against the rebuilt grid, then uses explicit
-`size_t` offsets for both destination and compact-payload indexing. A successful
-full read reallocates host or pinned/device `y_n_gfs`, zero-fills it, scatters
-the compact values, copies restored data to the device when CUDA is active, and
-sets `t_0 = time` and `nn_0 = nn`.
+every serialized flat point index against the rebuilt grid and requires the
+sequence to be strictly increasing. Duplicate or descending destinations are
+therefore fatal before compact-payload allocation, read, or OpenMP scatter; the
+uniqueness guarantee removes conflicting scatter destinations. A reader-local
+checked wrapper covers all ordinary host allocations: the three optional
+horizon-history arrays, serialized indices, compact payload, and OpenMP
+`y_n_gfs`. Device and pinned allocations retain their existing paths. A
+successful full read zero-fills the restored storage, scatters with explicit
+`size_t` offsets, copies data to the device when CUDA is active, and sets
+`t_0 = time` and `nn_0 = nn`.
 
 BHaHAHA checkpointing remains guarded by `enable_bhahaha`. Writes sanitize
 pointer fields in a `commondata` copy, require each horizon to have all three
@@ -180,23 +185,23 @@ them from the checkpoint, preserving horizon-history data without reusing old
 process pointer values.
 
 Claim evidence:
-- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded compact counts and serialized point indices, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
+- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
 - Role: descriptive behavior
 - Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/checkpointing.py::register_CFunctions`
-- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, direct-import, or restart paths
+- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, direct-import, or restart paths
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader/writer source baselines plus BHaHAHA reader ordering assertions; date=07-19-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=07-20-2026`
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
-generate and build default BHaH examples without running a
-write/restart/read sequence. File integrity, restored values, CUDA restart,
-multipatch selection, and BHaHAHA horizon-history restart are therefore
-`not-run` runtime outcomes in this KB audit. The four default reader/writer
-`.c`/`.cu` baselines were regenerated in an isolated copy, matched the intended
-files byte-for-byte, and passed a second fresh-process comparison. That proves
-normalized emitted-source regression only; it does not establish compilation,
-restart, malformed-input behavior, BHaHAHA source variants, GPU execution, or
-runtime results.
+generate and build default BHaH examples without running a write/restart/read
+sequence. File integrity, restored values, CUDA restart, multipatch selection,
+malformed-input rejection, allocation failure, and BHaHAHA horizon-history
+restart are therefore `not-run` runtime outcomes in this KB audit. The two
+changed default reader `.c`/`.cu` baselines were regenerated in an isolated
+copy and passed a second fresh-process comparison; retained writer baselines
+were unchanged. That proves normalized emitted-source regression only; it does
+not establish compilation, restart, malformed-input behavior, BHaHAHA source
+variants, GPU execution, or runtime results.
 
 ## Sources
 

@@ -18,12 +18,28 @@
     }                                                                                                                                                \
   } while (0) // END DO-WHILE: verify checkpoint read count
 
+// Allocate reader-owned host memory or terminate before first use.
+#define READ_CHECKPOINT_MALLOC_OR_EXIT(ptr, num_bytes, filename, context)                                                                            \
+  do {                                                                                                                                               \
+    const size_t _read_checkpoint_num_bytes = (size_t)(num_bytes);                                                                                   \
+    BHAH_MALLOC(ptr, _read_checkpoint_num_bytes);                                                                                                    \
+    if ((ptr) == NULL) {                                                                                                                             \
+      fprintf(stderr, "read_checkpoint: FATAL: allocation failed for %zu bytes while reading %s (%s).\n", _read_checkpoint_num_bytes, (filename),    \
+              (context));                                                                                                                            \
+      exit(EXIT_FAILURE);                                                                                                                            \
+    }                                                                                                                                                \
+  } while (0) // END DO-WHILE: allocate reader-owned host memory
+
 /**
  * Read a checkpoint file.
  *
  * If griddata == NULL, read only commondata metadata and return 1 when the
  * checkpoint exists. This supports rebuilding grids from restart state before
  * loading the full checkpoint payload.
+ *
+ * Serialized grid-point indices must be strictly increasing, as emitted by the
+ * current writer. Noncanonical indices are treated as fatal checkpoint
+ * corruption; reader-owned host allocation failures also terminate immediately.
  *
  * @param[in,out] commondata Global state loaded from the checkpoint.
  * @param[in,out] griddata Rebuilt grid hierarchy, or NULL for metadata-only loading.
@@ -112,16 +128,22 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     int *restrict out_data_indices = NULL;
     REAL *restrict compact_out_data = NULL;
     if (count > 0) {
-      BHAH_MALLOC(out_data_indices, sizeof(int) * (size_t)count);
+      READ_CHECKPOINT_MALLOC_OR_EXIT(out_data_indices, sizeof(int) * (size_t)count, filename, "out_data_indices");
       FREAD(out_data_indices, sizeof(int), (size_t)count, cp_file, filename, "out_data_indices");
       for (int i = 0; i < count; i++) {
-        if (out_data_indices[i] < 0 || out_data_indices[i] >= ntot_grid) {
-          fprintf(stderr, "read_checkpoint: FATAL: invalid gridpoint index=%d at element=%d for grid=%d (ntot_grid=%d) in %s.\n", out_data_indices[i],
-                  i, grid, ntot_grid, filename);
+        const int idx = out_data_indices[i];
+        if (idx < 0 || idx >= ntot_grid) {
+          fprintf(stderr, "read_checkpoint: FATAL: invalid gridpoint index=%d at element=%d for grid=%d (ntot_grid=%d) in %s.\n", idx, i, grid,
+                  ntot_grid, filename);
           exit(EXIT_FAILURE);
         } // END IF: serialized grid-point index is invalid
+        if (i > 0 && idx <= out_data_indices[i - 1]) {
+          fprintf(stderr, "read_checkpoint: FATAL: non-increasing gridpoint index=%d after previous=%d at element=%d for grid=%d in %s.\n", idx,
+                  out_data_indices[i - 1], i, grid, filename);
+          exit(EXIT_FAILURE);
+        } // END IF: serialized grid-point indices are not strictly increasing
       } // END LOOP: for i over serialized grid-point indices
-      BHAH_MALLOC(compact_out_data, sizeof(REAL) * compact_count);
+      READ_CHECKPOINT_MALLOC_OR_EXIT(compact_out_data, sizeof(REAL) * compact_count, filename, "compact_out_data");
       FREAD(compact_out_data, sizeof(REAL), compact_count, cp_file, filename, "compact_out_data");
     } // END IF: checkpoint stores points for this grid
 
@@ -134,7 +156,8 @@ int read_checkpoint(commondata_struct *restrict commondata, griddata_struct *res
     BHAH_MALLOC_PINNED(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * numpts_in_all_evol_gfs);
 #else
     BHAH_FREE(griddata[grid].gridfuncs.y_n_gfs);
-    BHAH_MALLOC(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * numpts_in_all_evol_gfs);
+    READ_CHECKPOINT_MALLOC_OR_EXIT(griddata[grid].gridfuncs.y_n_gfs, sizeof(REAL) * numpts_in_all_evol_gfs, filename,
+                                   "griddata[grid].gridfuncs.y_n_gfs");
 #endif // __CUDACC__
 
 #pragma omp parallel for

@@ -72,8 +72,13 @@ GLOBAL_HUB_NAMES = {
     "source-map.md",
     "contradictions.md",
 }
-COMMISSIONED_COORDINATION_RE = re.compile(
-    r"^(?:plan[1-5][.]md|plan_synth[.]md|tasks[1-6][.]md)$"
+ROOT_COORDINATION_RE = re.compile(
+    r"^(?:plan|tasks?)(?:[0-9]+)?(?:[-_][a-z0-9]+)*[.]md$"
+)
+ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE = re.compile(
+    r"(?:^|[._-])(?:audit|scan|report|log|latest|token|rank|ranking)s?[0-9]*"
+    r"(?:$|[._-])",
+    re.IGNORECASE,
 )
 # Removed source-tracking metadata bans: no hash digest values of any
 # algorithm, no Mtime/Hash manifest columns, no Mtime values, and no
@@ -1428,9 +1433,12 @@ def _check_root_artifacts(failures: List[str]) -> None:
     """
     allowed_root_docs = {"AGENTS.md", "README.md", "CITATION.md", "coding_style.md"}
     for path in ROOT.glob("*.md"):
-        if path.name in allowed_root_docs or COMMISSIONED_COORDINATION_RE.fullmatch(
-            path.name
-        ):
+        if path.name in allowed_root_docs:
+            continue
+        if ROOT_PROHIBITED_ARTIFACT_SEGMENT_RE.search(path.name):
+            _fail(failures, path, None, "root-level KB maintenance artifact")
+            continue
+        if ROOT_COORDINATION_RE.fullmatch(path.name):
             continue
         if (
             re.fullmatch(r".*kb.*instructions.*[.]md", path.name, re.IGNORECASE)

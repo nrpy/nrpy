@@ -951,7 +951,7 @@ def build_bhahaha_prefunc(
  * 4. Populate `dst_x0x1x2_interp`: For each spherical grid point
  *    (r, theta, phi around x_center, y_center, z_center), convert
  *    Cartesian coordinates to reference-metric coordinates using
- *    `Cart_to_xx_and_nearest_i0i1i2`.
+ *    `Cart_to_xx_and_nearest_i0i1i2_assume_valid`.
  * 5. Allocate arrays for interpolated BSSN variables
  *    (`dst_data_ptrs_bssn`). Exits on failure.
  *

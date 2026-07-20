@@ -195,7 +195,9 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
 )
 
 for CoordSystem in set_of_CoordSystems:
-    BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
+    BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+        CoordSystem
+    )
     BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 

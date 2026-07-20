@@ -1,6 +1,6 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-13-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -12,23 +12,19 @@ generated trusted-value files are special cases: both omit module docstrings,
 and `__init__.py` files stay as bare explicit import aggregators.
 
 This leaf records contributor rules, not a claim that every legacy source file
-already conforms. Preserve intentional compatibility patterns when an owning
-source or test requires them; do not use legacy exceptions as templates for new
-code.
+already conforms. Existing untouched compatibility shims are factual and
+nonprecedential; do not add or expand them. Interface changes follow the
+current-commit consistency policy in [Contribution Style And Static
+Analysis](contribution-style-and-static-analysis.md).
 
 ## Detail
 
 ### Formatting And Artifacts
 
-Python uses 4-space indentation and lets Black decide line wrapping. Run
-`black .` only in an isolated, user-owned intended-change worktree or copy with
-no unrelated modifications, inspect its diff, then run
-`./.github/single_file_static_analysis.sh <path-to-file.py>` for each modified
-handwritten Python file. A newly added handwritten file must report Pylint
-**10.00/10.00**. An existing tracked handwritten file must not regress from its
-pre-change score, including a grandfathered score at or below `9.5`. [Static
-Analysis](../validation/static-analysis.md) owns exact
-mechanics and current enforcement gaps. Do not add binary files, images, archives,
+Python uses 4-space indentation and lets Black decide line wrapping. Modified
+handwritten files follow [Static Analysis](../validation/static-analysis.md),
+which owns all static-analysis mechanics and applicability. Do not add binary
+files, images, archives,
 compiled artifacts, or other non-text assets in ordinary pull requests;
 redesign the change as text or discuss a maintainer exception.
 
@@ -163,5 +159,5 @@ string manipulation or local tidiness; inline them at the point of use.
 - Validated by: [Static Analysis](../validation/static-analysis.md)
 - Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
-- See also: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
+- Depends on: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
 - See also: [C And Embedded C Style](c-and-embedded-c-style.md)

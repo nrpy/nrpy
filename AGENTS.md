@@ -55,12 +55,22 @@ not by stored fingerprints.
 
 Rules for maintaining this KB live in [wiki/SCHEMA.md](wiki/SCHEMA.md).
 
+## Protected Workflow File
+
+Do not modify `.github/workflows/main.yml` unless the user explicitly
+authorizes changing that exact file in the current request. General requests
+to implement a plan, add tests, improve validation, or add CI coverage do not
+grant this permission. When a change would otherwise require editing this
+file, leave it unchanged and report the required workflow change to the user.
+
 ## KB Checker And Coordination Scope
 
 `python tools/kb_lint.py` is the canonical deterministic KB structure check.
 `--all` is a compatibility alias with identical coverage, not a stronger mode.
 
-Commissioned `plan1.md` through `plan5.md`, `plan_synth.md`, and `tasks1.md`
-through `tasks6.md` are coordination artifacts. They may remain untracked and
-are exempt from KB routing/catalog checks. Never file, stage, move, or delete
-them as KB content unless the user directs that action.
+Commissioned root-level planning and task Markdown files that follow the
+[Coordination Artifacts](wiki/SCHEMA.md#coordination-artifacts) naming grammar
+are coordination artifacts. They may remain untracked and are exempt from KB
+routing/catalog checks. A matching name alone does not establish that a file
+was commissioned. Never file, stage, move, or delete a coordination artifact as
+KB content unless the user directs that action.
