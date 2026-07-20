@@ -4,6 +4,9 @@ This repository carries a plain-markdown knowledge base for NRPy. Start here,
 follow a few links, and synthesize from the compiled pages instead of grepping
 the whole tree first.
 
+Central Engineering Policy: Prefer the simplest sufficient implementation;
+reject abstractions without demonstrated need.
+
 ## Router
 
 | Go to | Use it for |
