@@ -45,8 +45,8 @@ def handle_window_plane_intersection() -> None:
     # Define the Doxygen-formatted description for the C function.
     desc = r""" Processes a window plane intersection without terminating the trajectory.
 
-    @param f_local Thread-local array containing the 9-component photon state $f^\mu$.
-    @param lam_intersect The explicit affine parameter $\lambda$ of the intersection.
+    @param f_local Thread-local intersection state; slot zero contains coordinate time.
+    @param physical_lambda Physical affine parameter $\lambda$ at the intersection.
     @param final_blueprint_data Pointer to the blueprint structure $b_i$ for data persistence.
 
     Algorithm:
@@ -61,7 +61,7 @@ def handle_window_plane_intersection() -> None:
     # Define the specific C arguments passed into the kernel.
     params = (
         "const double *restrict f_local, "
-        "const double lam_intersect, "
+        "const double physical_lambda, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
     if parallelization != "cuda":
@@ -144,7 +144,7 @@ def handle_window_plane_intersection() -> None:
         final_blueprint_data->y_w = local_y_w; // Store local horizontal offset in persistent struct.
         final_blueprint_data->z_w = local_z_w; // Store local vertical offset in persistent struct.
         final_blueprint_data->t_w = t_intersect; // Persistent coordinate time of crossing.
-        final_blueprint_data->L_w = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
+        final_blueprint_data->L_w = physical_lambda; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
     } // END IF: intersection is within active window bounds
 

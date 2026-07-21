@@ -5,8 +5,8 @@ This module emits the spatial stage of the numerical-spacetime interpolation
 pipeline used by the geodesic integrators. The generated C API evaluates one
 spatial position ``(x, y, z)`` against caller-supplied mapped time-slice
 payloads. It writes the normally interpolated Cartesian-basis ``g4DD`` values
-and temporarily repurposes the existing 40-component ``Gamma4UDD`` output
-buffer to store first Cartesian derivatives of the metric.
+and the 40-component ``g4DD_dD`` output buffer of first Cartesian metric
+derivatives.
 
 The derivative bundle is serialized in symmetric metric-component order,
 with derivative direction fastest. For metric pairs
@@ -57,11 +57,9 @@ AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES = r"""
 // Constants for azimuthal-symmetry spatial Lagrange interpolation.
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI 3.14159265358979323846264338327950288
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT 10
-#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT 40
-#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT \
-  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT 40
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT \
-  (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT)
+  (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT)
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT 3
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT \
   (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT + \
@@ -108,9 +106,8 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     This is the first stage of the numerical-spacetime interpolation pipeline.
     For one requested photon position and one set of already-mapped numerical
     time slices, it computes the interpolated Cartesian-basis metric and its
-    Cartesian spatial derivatives on each supplied slice. The existing
-    40-component connection output is used as a temporary metric-derivative
-    bundle with all time-derivative entries set to zero.
+    Cartesian spatial derivatives on each supplied slice. The 40-component
+    metric-derivative bundle has all time-derivative entries set to zero.
 
     :param CoordSystem: Coordinate system used by the source dataset; must be
         `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
@@ -403,7 +400,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
                 const int num_target_slices,
                 const double *const *restrict slice_payloads,
                 REAL *restrict g4dd_out,
-                REAL *restrict gamma4udd_out"""
+                REAL *restrict g4dd_dD_out"""
     # Step 4: Use placeholder replacement for generated symbols so the raw C
     # body can keep ordinary braces instead of escaped f-string braces.
     body = (
@@ -411,7 +408,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   // Step 1: Validate pointers, then convert the target Cartesian point to
   // native coordinates.
   if (context == NULL || commondata == NULL || params == NULL ||
-      slice_payloads == NULL || g4dd_out == NULL || gamma4udd_out == NULL ||
+      slice_payloads == NULL || g4dd_out == NULL || g4dd_dD_out == NULL ||
       num_target_slices <= 0)
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
 
@@ -586,7 +583,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
         &g4dd_out[which_slice *
                   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
     REAL *restrict metric_derivative_slice_out =
-        &gamma4udd_out[
+        &g4dd_dD_out[
             which_slice *
             AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT];
 
@@ -637,8 +634,8 @@ components is obtained by analytically differentiating that rotation. The
 native derivative index is then transformed to Cartesian with the inverse
 Jacobian generated from `reference_metric[CoordSystem].Jac_dUrfm_dDCartUD`.
 
-`gamma4udd_out` is temporarily repurposed as a 40-component metric derivative
-bundle. For symmetric metric pairs `(00, 01, 02, 03, 11, 12, 13, 22, 23, 33)`,
+`g4dd_dD_out` is a 40-component metric-derivative bundle. For symmetric
+metric pairs `(00, 01, 02, 03, 11, 12, 13, 22, 23, 33)`,
 each four-value group is `(d/dt, d/dx, d/dy, d/dz)`. This spatial helper sets
 all ten time derivatives to zero.
 
@@ -651,7 +648,7 @@ all ten time derivatives to zero.
 @param num_target_slices Number of mapped slice payload pointers.
 @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
 @param[out] g4dd_out Flat metric output, ten values per slice.
-@param[out] gamma4udd_out Temporary metric derivative output, forty values per slice.
+@param[out] g4dd_dD_out Metric-derivative output, forty values per slice.
 @return Interpolation status code.
 """
 
@@ -675,7 +672,13 @@ all ten time derivatives to zero.
 
 
 def _indent_c_code(code: str, spaces: int) -> str:
-    """Indent generated C code by a fixed number of spaces."""
+    """
+    Indent generated C code by a fixed number of spaces.
+
+    :param code: Generated C code to indent.
+    :param spaces: Number of leading spaces for each nonempty line.
+    :return: Indented generated C code.
+    """
     prefix = " " * spaces
     return "\n".join(prefix + line if line else line for line in code.splitlines())
 
@@ -687,6 +690,9 @@ def _build_inverse_jacobian_c_code(CoordSystem: str) -> str:
     Native coordinate symbols remain local aliases `xx0`, `xx1`, and `xx2`.
     All other free symbols are registered reference-metric CodeParameters and
     are emitted as members of `params`.
+
+    :param CoordSystem: Reference-metric coordinate system.
+    :return: C assignments for the inverse coordinate Jacobian.
     """
     rfm = reference_metric[CoordSystem]
     expressions: List[sp.Expr] = []
@@ -720,7 +726,13 @@ def _build_inverse_jacobian_c_code(CoordSystem: str) -> str:
 
 
 def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
-    """Return sparse source-index terms for one active z-axis rotation row."""
+    """
+    Return sparse source-index terms for one active z-axis rotation row.
+
+    :param output_index: Cartesian tensor index after rotation.
+    :return: Source index, sign, cosine power, and sine power tuples.
+    :raises ValueError: If ``output_index`` is unsupported.
+    """
     if output_index == 0:
         return [(0, 1, 0, 0)]
     if output_index == 1:
@@ -738,7 +750,15 @@ def _format_scaled_source_term(
     cos_power: int,
     sin_power: int,
 ) -> str:
-    """Format one signed trigonometric monomial times a source component."""
+    """
+    Format one signed trigonometric monomial times a source component.
+
+    :param source_expr: Source-array expression for the monomial.
+    :param coefficient: Signed integer coefficient.
+    :param cos_power: Power of ``cos_delta``.
+    :param sin_power: Power of ``sin_delta``.
+    :return: Formatted C expression for the monomial.
+    """
     factors: List[str] = []
     coefficient_abs = abs(coefficient)
     if coefficient_abs != 1:
@@ -751,7 +771,14 @@ def _format_scaled_source_term(
 
 
 def _emit_wrapped_assignment(lhs: str, terms: List[str]) -> str:
-    """Emit one wrapped C assignment from signed monomial terms."""
+    """
+    Emit one wrapped C assignment from signed monomial terms.
+
+    :param lhs: Left-hand-side C expression.
+    :param terms: Signed monomial expressions to add.
+    :return: Wrapped C assignment.
+    :raises ValueError: If ``terms`` is empty.
+    """
     if not terms:
         raise ValueError("Cannot emit an assignment from an empty term list.")
     lines = [f"  {lhs} = {terms[0]}"]
@@ -765,7 +792,13 @@ def _emit_wrapped_assignment(lhs: str, terms: List[str]) -> str:
 
 
 def _metric_rotation_term_map(mu: int, nu: int) -> Dict[Tuple[int, int, int], int]:
-    """Collect polynomial rotation coefficients for one metric component."""
+    """
+    Collect polynomial rotation coefficients for one metric component.
+
+    :param mu: First Cartesian metric index.
+    :param nu: Second Cartesian metric index.
+    :return: Source-index and trigonometric-power coefficient map.
+    """
     term_map: Dict[Tuple[int, int, int], int] = {}
     for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
         for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
@@ -781,7 +814,13 @@ def _metric_rotation_term_map(mu: int, nu: int) -> Dict[Tuple[int, int, int], in
 def _format_metric_term_map(
     term_map: Dict[Tuple[int, int, int], int], source_array: str
 ) -> List[str]:
-    """Format a collected metric rotation term map for emitted C code."""
+    """
+    Format a collected metric rotation term map for emitted C code.
+
+    :param term_map: Source-index and trigonometric-power coefficient map.
+    :param source_array: C array holding unrotated metric components.
+    :return: Formatted C expressions for nonzero rotation terms.
+    """
     terms: List[str] = []
     for source_idx, cos_power, sin_power in sorted(term_map):
         coefficient = term_map[(source_idx, cos_power, sin_power)]
@@ -797,14 +836,28 @@ def _format_metric_term_map(
 
 
 def _build_metric_rotation_terms(mu: int, nu: int, source_array: str) -> List[str]:
-    """Build terms for one rotated serialized metric component."""
+    """
+    Build terms for one rotated serialized metric component.
+
+    :param mu: First Cartesian metric index.
+    :param nu: Second Cartesian metric index.
+    :param source_array: C array holding unrotated metric components.
+    :return: Formatted C expressions for the rotated metric component.
+    """
     return _format_metric_term_map(_metric_rotation_term_map(mu, nu), source_array)
 
 
 def _build_metric_rotation_derivative_terms(
     mu: int, nu: int, source_array: str
 ) -> List[str]:
-    """Differentiate one rotated metric component with respect to azimuth."""
+    """
+    Differentiate one rotated metric component with respect to azimuth.
+
+    :param mu: First Cartesian metric index.
+    :param nu: Second Cartesian metric index.
+    :param source_array: C array holding unrotated metric components.
+    :return: Formatted C expressions for the azimuthal derivative.
+    """
     derivative_map: Dict[Tuple[int, int, int], int] = {}
     for (source_idx, cos_power, sin_power), coefficient in _metric_rotation_term_map(
         mu, nu

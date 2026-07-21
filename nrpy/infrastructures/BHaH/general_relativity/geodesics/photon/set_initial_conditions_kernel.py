@@ -43,15 +43,15 @@ batch_structs_c_code = r"""
 
     // Defines the specific exit condition for a photon's integration loop.
     typedef enum {
-        TERMINATION_TYPE_CELESTIAL_SPHERE, // 0: Photon escaped to infinity.
-        TERMINATION_TYPE_SOURCE_PLANE,     // 1: Photon successfully hit the source emission plane.
-        FAILURE_PT_TOO_BIG,                // 2: Integration failed due to unbounded momentum $p_t$.
-        FAILURE_RKF45_REJECTION_LIMIT,     // 3: Adaptive step-size rejected too many consecutive times.
-        FAILURE_T_MAX_EXCEEDED,            // 4: Integration exceeded maximum allowable physical coordinate time $t$.
-        FAILURE_SLOT_MANAGER_ERROR,        // 5: TimeSlotManager failed to allocate or retrieve the photon.
-        TERMINATION_TYPE_FAILURE,          // 6: Generic unclassified numerical failure.
-        ACTIVE,                            // 7: Photon is currently undergoing integration.
-        REJECTED,                          // 8: Photon RKF45 step was rejected.
+        TERMINATION_TYPE_COORD_RADIUS_EXCEEDED, // 0: Coordinate-radius escape limit exceeded.
+        TERMINATION_TYPE_SOURCE_PLANE, // 1: Photon hit the source emission plane.
+        FAILURE_ENERGY_LIMIT_EXCEEDED, // 2: Mode-specific energy measure exceeded energy_max.
+        FAILURE_RKF45_REJECTION_LIMIT, // 3: Adaptive step size was rejected too many times.
+        FAILURE_T_MAX_EXCEEDED, // 4: Maximum physical coordinate time was exceeded.
+        FAILURE_SLOT_MANAGER_ERROR, // 5: TimeSlotManager failed to handle the photon.
+        TERMINATION_TYPE_FAILURE, // 6: Generic unclassified numerical failure.
+        ACTIVE, // 7: Photon is currently undergoing integration.
+        REJECTED, // 8: Photon RKF45 step was rejected.
     } termination_type_t; // END ENUM: termination_type_t
 
     // Stores the final physical properties of a photon upon integration termination.
@@ -73,12 +73,12 @@ batch_structs_c_code = r"""
     // Flattened SoA Struct (Master Storage)
     // ==========================================
     typedef struct {
-        double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
+        double *f; // Flattened state vector: t, x, y, z, mode-specific energy, p^x, p^y, p^z, aux.
         double *f_p; // State vector at the previous integration step.
         double *f_p_p; // State vector at two integration steps prior.
-        double *affine_param; // Current affine parameter $\lambda$ for the trajectory.
-        double *affine_param_p; // Affine parameter $\lambda$ at the previous step.
-        double *affine_param_p_p; // Affine parameter $\lambda$ at two steps prior.
+        double *integration_param; // Current mode-dependent integration parameter.
+        double *integration_param_p; // Integration parameter at the previous step.
+        double *integration_param_p_p; // Integration parameter at two steps prior.
         double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
@@ -98,11 +98,15 @@ batch_structs_c_code = r"""
 """
 
 
-def set_initial_conditions_kernel(spacetime_name: str) -> None:
+def set_initial_conditions_kernel(
+    spacetime_name: str,
+    normalized_eom: bool = False,
+) -> None:
     """
     Register the C function and device kernel for Cartesian photon initialization.
 
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
+    :param normalized_eom: Whether to initialize the normalized photon state layout.
     """
     if "photon_batch_structs" not in par.glb_extras_dict.get("BHaH_defines", {}):
         Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
@@ -148,6 +152,18 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Dynamic architecture detection.
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
+    initial_state_parameter = "0.0" if normalized_eom else f"{cd_access}t_start"
+    normalized_tracker_initialization = (
+        """
+    for (long int ray = 0; ray < num_rays; ++ray) {
+        all_photons->integration_param[ray] = commondata->t_start;
+        all_photons->integration_param_p[ray] = commondata->t_start;
+        all_photons->integration_param_p_p[ray] = commondata->t_start;
+    } // END LOOP: for ray over normalized coordinate-time trackers
+"""
+        if normalized_eom
+        else ""
+    )
 
     # Dictionary mapping for GPU/CPU kernel arguments.
     arg_dict = {
@@ -230,7 +246,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // INITIAL STATE POPULATION
     //==========================================
     // Write the starting position and spatial momentum explicitly to the VRAM bundle.
-    d_f_bundle[IDX_F(0, c)] = {cd_access}t_start; // Coordinate time $t$
+    d_f_bundle[IDX_F(0, c)] = {initial_state_parameter}; // Initial state parameter.
     d_f_bundle[IDX_F(1, c)] = {cd_access}camera_pos_x; // Spatial position $x$
     d_f_bundle[IDX_F(2, c)] = {cd_access}camera_pos_y; // Spatial position $y$
     d_f_bundle[IDX_F(3, c)] = {cd_access}camera_pos_z; // Spatial position $z$
@@ -263,7 +279,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     #undef IDX_F
     #undef IDX_H
-    """.replace("{cd_access}", cd_access)
+    """.replace("{cd_access}", cd_access).replace(
+        "{initial_state_parameter}", initial_state_parameter
+    )
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
@@ -485,7 +503,10 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     BHAH_FREE_DEVICE(d_f_bundle);
     BHAH_FREE_DEVICE(d_h_bundle);
-    """.replace("{host_loop_code}", str(host_loop_code))
+{normalized_tracker_initialization}
+    """.replace("{host_loop_code}", str(host_loop_code)).replace(
+        "{normalized_tracker_initialization}", normalized_tracker_initialization
+    )
 
     # Establish the final strings to satisfy the Translation Unit Inlining Mandate.
     prefunc = f"{kernel_prefunc}"
@@ -498,7 +519,8 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
-    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
+    temporal momentum $p^t = 0$ and initializes direct or normalized state
+    parameters for downstream constraint solvers.
 
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.

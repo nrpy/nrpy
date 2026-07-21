@@ -1,17 +1,12 @@
 """
-Orchestrator for the CPU numerical-spacetime photon geodesic integrator.
+Orchestrator for the CPU numerical-spacetime single-photon geodesic integrator.
 
-This module constructs the C project that evolves batched photon trajectories
-through a numerical spacetime sourced from the combined raytracing ``.bin``
-generated from ``two_blackholes_collide.py --raytracing-time ...``.
-
-The generated code keeps the existing Structure-of-Arrays photon pipeline and
-adaptive RKF45 stepping, while metric and first metric-derivative evaluations
-use the numerical interpolation helpers fed by the combined numerical-
-spacetime dataset. The numerical spacetime is frozen to its final stored slice
-after `t_numerical_end`.
-
-This example currently generates a CPU/OpenMP project.
+This module constructs the standalone C project that evolves one photon through
+a numerical spacetime sourced from the combined raytracing ``.bin`` generated
+from ``two_blackholes_collide.py --raytracing-time ...``. It retains the batch
+example's command-line inputs, numerical interpolation setup, parameter
+defaults, and RKF45 registrations, but selects the single-photon integrator and
+writes accepted trajectory states to ``trajectory.txt``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -24,7 +19,6 @@ import sys
 
 import sympy as sp
 
-import nrpy.c_function as cfc
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.equations.general_relativity.geodesics import geodesics as geo
@@ -42,20 +36,14 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     temporal_lagrange_interpolation_c1,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
-    batch_integrator_numerical,
-    calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
-    event_detection_manager_kernel,
-    find_event_time_and_state,
-    handle_source_plane_intersection,
-    handle_window_plane_intersection,
-    main_batch,
+    main_single,
     normalization_constraint_photon_normalized,
     p0_reverse_kernel,
     photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
-    set_initial_conditions_kernel,
+    single_integrator_numerical,
 )
 
 
@@ -82,7 +70,7 @@ if __name__ == "__main__":
 python3 two_blackholes_collide.py --raytracing-time T_FINAL DIAGNOSTICS_OUTPUT_EVERY --raytracing-coord-system CoordSystem --raytracing-Nxx NXX0 NXX1 NXX2 --raytracing-domain ...
 
 Then rerun this photon script using the .bin filename printed to the terminal by two_blackholes_collide.py, e.g.:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_rho-slope_0p0625_z-slope_0p0625_72_2_12.bin --coord-system-numerical SinhCylindricalv2n2 --domain 7.5 0.25 0.4 0.0625 0.0625 --t-numerical-initial 5.0 --t-numerical-end 100.0 --dt-spacetime-data 0.5""",
+python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_rho-slope_0p0625_z-slope_0p0625_72_2_12.bin --coord-system-numerical SinhCylindricalv2n2 --domain 7.5 0.25 0.4 0.0625 0.0625 --t-numerical-initial 5.0 --t-numerical-end 100.0 --dt-spacetime-data 0.5""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -133,7 +121,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "--time-start",
         type=float,
         default=28.0,
-        help="""Initial coordinate time assigned to the photon batch.""",
+        help="""Initial coordinate time assigned to the photon.""",
     )
     parser.add_argument(
         "--eom",
@@ -200,15 +188,13 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         )
     assert grid_physical_size is not None
     _require(grid_physical_size > 0.0, "GRID_PHYSICAL_SIZE must be positive.")
-
     # Step 2: Define strict project constants and simulation targets
-    project_name = "photon_batch_geodesic_integrator_numerical"
-    exec_name = "photon_batch_geodesic_integrator_numerical"
+    project_name = "photon_single_geodesic_integrator_numerical"
+    exec_name = "photon_single_geodesic_integrator_numerical"
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
 
     # Step 2.a: Define the target spacetime and particle type.
     SPACETIME = "Numerical"
-    integrator_mode = "Numerical"
     PARTICLE = "photon"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
     coord_system_numerical = args.coord_system_numerical
@@ -226,7 +212,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "CoordSystem_to_register_CodeParameters", coord_system_numerical
     )
 
-    # Step 4: Build the symbolic photon data used by numerical evolution.
+    # Step 4: Build generic symbolic photon data for numerical evolution.
     print(f" -> Assembling symbolic data for {GEO_KEY}...")
     # Step 4.a: Bypass __init__ because these symbolic helper methods build
     # placeholder-based expressions and do not require spacetime-specific state.
@@ -243,15 +229,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         if normalized_eom
         else generic_geodesic_equations.normalization_constraint()
     )
-
     # Step 5: Register C functions in split-pipeline order.
     print(" -> Registering C functions and local CodeParameters...")
 
-    # Step 5.a: Register initialization kernels.
-    set_initial_conditions_kernel.set_initial_conditions_kernel(
-        SPACETIME, normalized_eom=normalized_eom
-    )
-
+    # Step 5.a: Register the initial null solve.
     p0_reverse_kernel.p0_reverse_kernel(p0_photon)
     if normalized_eom:
         u_expr, PiD_exprs = (
@@ -291,7 +272,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         normalized_eom=normalized_eom,
     )
 
-    # Step 5.d: Register RKF45 evolution kernels.
+    # Step 5.e: Register RKF45 evolution kernels.
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_rhs,
         coordinate_symbols,
@@ -304,36 +285,15 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         normalized_eom=normalized_eom,
     )
 
-    # Step 5.e: Register event-detection and boundary-intersection kernels.
-    find_event_time_and_state.find_event_time_and_state()
-    handle_source_plane_intersection.handle_source_plane_intersection()
-    handle_window_plane_intersection.handle_window_plane_intersection()
-    event_detection_manager_kernel.event_detection_manager_kernel(
-        normalized_eom=normalized_eom
+    # Step 5.f: Register the single-photon integration function and C entry point.
+    # The numerical interpolation and RKF45 registrations above pull in the
+    # shared slot/time-window helpers required by the single integrator.
+    single_integrator_numerical.single_integrator_numerical(
+        SPACETIME,
+        coord_system_numerical,
+        normalized_eom=normalized_eom,
     )
-    calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
-        normalized_eom=normalized_eom
-    )
-
-    # Step 5.f: Register project-level orchestration helpers.
-    # The numerical interpolation and RKF45 finalization registrations above
-    # already pull in the shared slot/time-window helpers on demand. Calling
-    # them again here would append duplicate definitions into BHaH_defines.h.
-    batch_integrator_numerical.batch_integrator_numerical(
-        SPACETIME, coord_system_numerical, normalized_eom=normalized_eom
-    )
-    main_batch.main(SPACETIME, integrator_mode, normalized_eom=normalized_eom)
-
-    # Step 5.g: Remove helper registrations emitted only through other kernels.
-    # The event manager emits its local event helpers through prefunc, so keeping
-    # standalone registrations would add unused source files and prototypes.
-    internal_funcs_to_remove = [
-        "find_event_time_and_state",
-        "handle_source_plane_intersection",
-        "handle_window_plane_intersection",
-    ]
-    for internal_func in internal_funcs_to_remove:
-        cfc.CFunction_dict.pop(internal_func, None)
+    main_single.main_single("single_integrator_numerical")
 
     # Step 6: Override CodeParameter defaults before parfile generation.
     print(" -> Overriding desired photon CodeParameters before .par generation...")
@@ -384,17 +344,17 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     ].defaultvalue = 3
 
     # Step 6.d: Set initial-condition defaults.
-    par.glb_code_params_dict["t_start"].defaultvalue = 28.0  # args.time_start
+    par.glb_code_params_dict["t_start"].defaultvalue = args.time_start
     par.glb_code_params_dict["scan_density"].defaultvalue = 100
 
-    # Step 6.e: Set batch-integrator and numerical-limit defaults.
+    # Step 6.e: Set single-integrator and numerical-limit defaults.
     par.glb_code_params_dict["energy_max"].defaultvalue = (
         3.0 if normalized_eom else 1000.0
     )
     par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 25.0
 
-    # Step 6.f: Set numerical-spacetime time-range defaults.
+    # Step 6.f: Set the lower analytic / numerical transition defaults.
     par.glb_code_params_dict["t_numerical_initial"].defaultvalue = (
         args.t_numerical_initial
     )
@@ -405,30 +365,14 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # Keep sparse retained-slice debugging disabled for normal runs.
     par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue = 1
 
-    # Step 6.g: Cap coordinate-time growth per accepted RKF45 step.
+    # Step 6.f: Cap coordinate-time growth per accepted RKF45 step.
     par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 0.5
 
-    # Step 6.h: Set time-window manager defaults.
+    # Step 6.g: Set time-window manager defaults.
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 5.0
     par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -150.0
 
-    # Step 6.i: Set source-plane geometry defaults.
-    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = -40.0
-    par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_center_z"].defaultvalue = 0.0
-
-    par.glb_code_params_dict["source_plane_normal_x"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_plane_normal_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_z"].defaultvalue = 0.0
-
-    par.glb_code_params_dict["source_r_max"].defaultvalue = 100.0
-    par.glb_code_params_dict["source_r_min"].defaultvalue = 0.0
-
-    par.glb_code_params_dict["source_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 1.0
-
-    # Step 6.j: Set camera window geometry defaults.
+    # Step 6.h: Set camera window geometry defaults.
     par.glb_code_params_dict["camera_pos_x"].defaultvalue = 10.0
     par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
     par.glb_code_params_dict["camera_pos_z"].defaultvalue = 0.0
@@ -444,11 +388,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
     par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
 
-    # Step 6.k: Set the fixed CPU tiling defaults.
-    par.glb_code_params_dict["window_tiles_width"].defaultvalue = 1
-    par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
-
-    # Step 6.l: Set RKF45 controller defaults.
+    # Step 6.i: Set RKF45 controller defaults.
     par.glb_code_params_dict["numerical_initial_h"].defaultvalue = (
         -0.05 if normalized_eom else 0.05
     )
@@ -472,7 +412,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     print(f" -> t_numerical_end: {args.t_numerical_end}")
     print(f" -> dt_spacetime_data: {args.dt_spacetime_data}")
 
-    # Step 6.m: Generate C code for parameter handling.
+    # Step 6.k: Generate C code for parameter handling.
     print(" -> Generating parameter handling code...")
     CPs.write_CodeParameters_h_files(project_dir=project_dir, set_commondata_only=True)
     CPs.register_CFunctions_params_commondata_struct_set_to_default()
@@ -480,16 +420,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         project_dir=project_dir, project_name=project_name
     )
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
-        project_name=project_name,
-        cmdline_inputs=[
-            "source_r_min",
-            "source_r_max",
-            "window_width",
-            "window_height",
-            "window_tiles_width",
-            "window_tiles_height",
-            "scan_density",
-        ],
+        project_name=project_name
     )
 
     # Step 7: Assemble the generated C project.
@@ -559,75 +490,26 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         CC=compiler,
         src_code_file_ext=ext,
     )
-    # Step 8: Copy helper scripts and print usage instructions.
+    # Step 8: Copy the trajectory visualizer and print usage instructions.
     vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
-    vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
-    config_src = os.path.join(vis_dir, "blueprint_config_and_schema.py")
-    render_src = os.path.join(vis_dir, "render_lensed_image.py")
-    blueprint_analysis_src = os.path.join(vis_dir, "blueprint_analysis.py")
+    vis_script_src = os.path.join(vis_dir, "visualize_trajectory.py")
+    if os.path.exists(vis_script_src):
+        shutil.copy(vis_script_src, project_dir)
+    else:
+        print(
+            "Warning: visualize_trajectory.py was not found; the integrator "
+            "project was still generated."
+        )
 
-    for script_src in (
-        vis_script_src,
-        config_src,
-        render_src,
-        blueprint_analysis_src,
-    ):
-        shutil.copy(script_src, project_dir)
-
-    # Step 8.a: Build helper commands from CodeParameter defaults.
-    c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
-    c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
-    c_window_width = float(par.glb_code_params_dict["window_width"].defaultvalue)
-    c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
-    c_tiles_width = int(par.glb_code_params_dict["window_tiles_width"].defaultvalue)
-    c_tiles_height = int(par.glb_code_params_dict["window_tiles_height"].defaultvalue)
-    c_pixel_width = 450
-    data_request_file = "numerical_spacetime_data_request.json"
-    data_prep_command = f"python3 combined_raytracing_bin_helper.py {data_request_file}"
     parfile_path = os.path.join(project_dir, f"{project_name}.par")
-
-    vis_command = " ".join(
-        [
-            "python3 visualize_lensed_image.py",
-            f"--source_r_min {c_r_min}",
-            f"--source_r_max {c_r_max}",
-            f"--window_width {c_window_width}",
-            f"--window_height {c_window_height}",
-            f"--window_tiles_width {c_tiles_width}",
-            f"--window_tiles_height {c_tiles_height}",
-            f"--pixel_width {c_pixel_width}",
-        ]
-    )
 
     print(f"Finished! Now go into {project_dir}.")
     print(f"    Parameter file can be found at {parfile_path}\n")
-    print("    To prepare the required numerical spacetime data, run:")
-    print(f"    {data_prep_command}\n")
-    print("    Then build and run the photon executable:")
+    print("    Build and run the photon executable:")
     print("    make")
-    print(f"    ./{exec_name}\n")
-    print(
-        """    To generate the lensed image after running the C executable, ensure you have the required Python packages:"""
-    )
-    print("    pip install matplotlib numpy numba Pillow\n")
-    print(
-        "    Then, execute the visualization script directly from the project directory:"
-    )
-    print(f"    {vis_command}\n")
-    print("    To use your own celestial sphere image, add:")
-    print("    --sphere_image /path/to/celestial_sphere.png")
-    print("    To use your own source image, add:")
-    print("    --source_image /path/to/source_image.png\n")
-
-    blueprint_command = " ".join(
-        [
-            "python3 blueprint_analysis.py",
-            f"--window_tiles_width {c_tiles_width}",
-            f"--window_tiles_height {c_tiles_height}",
-            f"--window_width {c_window_width}",
-            f"--window_height {c_window_height}",
-        ]
-    )
-
-    print("    To run the blueprint diagnostic:")
-    print(f"    {blueprint_command}\n")
+    print(f"    ./{exec_name} {project_name}.par\n")
+    print("    Accepted trajectory samples are written to trajectory.txt.")
+    print("    To generate the trajectory plot, install the required Python packages:")
+    print("    pip install matplotlib numpy\n")
+    print("    To visualize the trajectory, run:")
+    print("    python3 visualize_trajectory.py --particle_type Photon\n")

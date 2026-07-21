@@ -183,7 +183,7 @@ def visualize_trajectory(
         f"  Final Pos   (x, y, z): ({data[-1, 2]:>8.4f}, {data[-1, 3]:>8.4f}, "
         f"{data[-1, 4]:>8.4f})"
     )
-    print(f"  Total Affine/Proper Parameter: {data[-1, 0]:>8.4f}")
+    print(f"  Total Path Parameter: {data[-1, 0]:>8.4f}")
 
     # Step 3: Launch Visualization.
     print("\n[i] Creating 3D representation...")

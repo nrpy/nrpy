@@ -28,9 +28,9 @@ BLUEPRINT_DTYPE = np.dtype(
         ("z_s", "f8"),  # Vertical coordinate on the source (accretion disk) plane
         ("final_theta", "f8"),  # Final polar angle on the celestial sphere
         ("final_phi", "f8"),  # Final azimuthal angle on the celestial sphere
-        ("L_w", "f8"),  # Affine parameter at window intersection
+        ("L_w", "f8"),  # Physical affine parameter at window intersection
         ("t_w", "f8"),  # Coordinate time at window intersection
-        ("L_f", "f8"),  # Affine parameter when the photon terminated
+        ("L_f", "f8"),  # Physical affine parameter when the photon terminated
         ("t_f", "f8"),  # Coordinate time when the photon terminated
     ],
     align=False,
@@ -46,14 +46,15 @@ BLUEPRINT_NORM_ABS_ARCHIVE_TEMPLATE = (
 # Step 2: Termination enums.
 # These integers identify the fate of a photon ray.
 # They must remain synchronized with 'termination_type_t' in the C-header files.
-TERM_SPHERE = 0  # Ray escaped to the far-field (Celestial Sphere)
+TERM_COORD_RADIUS_EXCEEDED = 0  # Ray exceeded the coordinate-radius escape limit
 TERM_SOURCE_PLANE = 1  # Ray hit the accretion disk / source plane
-TERM_FAIL_PT_BIG = 2  # Numerical failure: momentum component $p_t$ exceeded bounds
-TERM_FAIL_RKF45 = 3  # Numerical failure: RKF45 integrator could not converge
-TERM_FAIL_T_MAX = 4  # Ray exceeded the maximum allowed integration time
-TERM_FAIL_SLOT = 5  # Slot manager error (temporal binning failure)
-TERM_FAIL_GENERIC = 6  # Unspecified integration failure
+TERM_ENERGY_LIMIT_EXCEEDED = 2  # Mode-specific energy measure exceeded energy_max
+TERM_RKF45_REJECTION_LIMIT = 3  # RKF45 rejected too many consecutive steps
+TERM_T_MAX_EXCEEDED = 4  # Ray exceeded the maximum allowed coordinate time
+TERM_SLOT_MANAGER_ERROR = 5  # Slot manager failed to handle the ray
+TERM_FAILURE = 6  # Unspecified integration failure
 TERM_ACTIVE = 7  # Ray is still being processed (should not appear in final blueprints)
+TERM_REJECTED = 8  # Ray is in a rejected RKF45 stage (not a final status)
 
 # Step 3: Physics and scene parameters.
 MASS_OF_BLACK_HOLE = 1.0  # Normalized mass ($M$)

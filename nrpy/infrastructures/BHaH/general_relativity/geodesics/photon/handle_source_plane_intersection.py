@@ -59,8 +59,8 @@ def handle_source_plane_intersection() -> None:
 
     desc = r""" Processes a terminal intersection with the source emission plane.
 
-    @param source_event_f_intersect Thread-local state array holding the 9-component intersection state $f^\mu$.
-    @param lam_intersect The explicit affine parameter $\lambda$ of the intersection.
+    @param source_event_f_intersect Thread-local intersection state; slot zero contains coordinate time.
+    @param physical_lambda Physical affine parameter $\lambda$ at the intersection.
     @param final_blueprint_data Pointer to the local blueprint structure $b_i$ to store impact geometries.
 
     Algorithm:
@@ -74,7 +74,7 @@ def handle_source_plane_intersection() -> None:
 
     params = (
         "const double *restrict source_event_f_intersect, "
-        "const double lam_intersect, "
+        "const double physical_lambda, "
         "blueprint_data_t *restrict final_blueprint_data"
     )
     if parallelization != "cuda":
@@ -150,7 +150,7 @@ def handle_source_plane_intersection() -> None:
         final_blueprint_data->z_s = local_z_s;
         // For source-plane hits, the intersection is the termination event.
         final_blueprint_data->t_f = t_intersect;
-        final_blueprint_data->L_f = lam_intersect; // Explicit $\lambda$ mapped to persistent blueprint.
+        final_blueprint_data->L_f = physical_lambda; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
     } // END IF: radial filtering
     return false;

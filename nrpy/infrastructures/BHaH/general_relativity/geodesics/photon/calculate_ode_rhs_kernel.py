@@ -28,31 +28,110 @@ import nrpy.params as par
 def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr],
     coordinate_symbols: List[sp.Symbol],
+    use_metric_derivative_rhs: bool = False,
     normalized_eom: bool = False,
 ) -> None:
     r"""
     Provide the global kernel registration for computing the ODE right-hand side.
 
     The generated kernel maps memory tensor data into thread-local registers matching
-    the symbols expected by the generated geodesic equations. It computes the nine
-    derivative components and writes them to the stage offset in the RKF45 derivative
-    bundle. A boundary guard prevents out-of-bounds memory access for threads
-    exceeding the active chunk. The stage index dictates the offset for memory
-    alignment.
+    the symbols expected by the generated geodesic equations. Direct geodesic
+    evolution receives Christoffel symbols, while numerical-spacetime evolution
+    receives first metric derivatives. Normalized evolution uses coordinate time from
+    the integration-parameter bundle at each Cash-Karp stage. The kernel computes the
+    nine derivative components and writes them to the stage offset in the RKF45
+    derivative bundle.
 
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations
         representing the geodesic equations.
     :param coordinate_symbols: The spatial and temporal coordinate variables in order.
+    :param use_metric_derivative_rhs: Whether the RHS consumes first metric
+        derivatives instead of Christoffel symbols.
     :param normalized_eom: Whether the state stores normalized photon variables
         ``u`` and ``PiD_i`` instead of direct four-momentum ``pU_i``.
-    :raises ValueError: If the provided geodesic expression list is empty.
+    :raises ValueError: If the provided geodesic expression list is empty, or if
+        normalized evolution is requested without metric derivatives.
     """
     if not geodesic_rhs_expressions:
         raise ValueError(
             "geodesic_rhs_expressions must contain at least one mathematical expression."
         )
+    if normalized_eom and not use_metric_derivative_rhs:
+        raise ValueError(
+            "normalized_eom requires use_metric_derivative_rhs because normalized "
+            "photon evolution is defined from the metric and its first derivatives."
+        )
 
     parallelization = par.parval_from_str("parallelization")
+
+    # Select the generated RHS input contract once for this registration.
+    if use_metric_derivative_rhs:
+        geometry_bundle_arg_name = "d_metric_derivative_bundle"
+        geometry_bundle_description = "first metric-derivative bundle"
+        geometry_index_macro = "IDX_METRIC_DERIVATIVE"
+        geometry_symbol_prefix = "metric_g4DD_dD"
+        geometry_components = [
+            (mu, nu, sigma)
+            for mu in range(4)
+            for nu in range(mu, 4)
+            for sigma in range(4)
+        ]
+        geometry_index_comment = (
+            "IDX_METRIC_DERIVATIVE maps a symmetric metric component and its "
+            "derivative direction to the flattened metric-derivative bundle."
+        )
+    else:
+        geometry_bundle_arg_name = "d_christoffel_bundle"
+        geometry_bundle_description = "Christoffel-symbol bundle"
+        geometry_index_macro = "IDX_CHRISTOFFEL"
+        geometry_symbol_prefix = "conn_Gamma4UDD"
+        geometry_components = [
+            (alpha, mu, nu)
+            for alpha in range(4)
+            for mu in range(4)
+            for nu in range(mu, 4)
+        ]
+        geometry_index_comment = (
+            "IDX_CHRISTOFFEL maps a Christoffel component to the flattened "
+            "Christoffel-symbol bundle."
+        )
+
+    if normalized_eom:
+        integration_parameter_args = {
+            "d_integration_param_bundle": "const double *restrict",
+            "d_h": "const double *restrict",
+        }
+        coordinate_time_preamble = r"""
+    // Coordinate time is the independent integration parameter in normalized evolution.
+    double rkf45_stage_time_fraction = 0.0;
+    switch (stage) {
+      case 1:
+        rkf45_stage_time_fraction = 0.0;
+        break;
+      case 2:
+        rkf45_stage_time_fraction = 1.0 / 4.0;
+        break;
+      case 3:
+        rkf45_stage_time_fraction = 3.0 / 8.0;
+        break;
+      case 4:
+        rkf45_stage_time_fraction = 12.0 / 13.0;
+        break;
+      case 5:
+        rkf45_stage_time_fraction = 1.0;
+        break;
+      case 6:
+        rkf45_stage_time_fraction = 1.0 / 2.0;
+        break;
+      default:
+        break;
+    } // END SWITCH: select Cash-Karp stage time fraction
+    const double t = d_integration_param_bundle[i] +
+                     rkf45_stage_time_fraction * d_h[i];
+    """
+    else:
+        integration_parameter_args = {}
+        coordinate_time_preamble = ""
 
     # Identify all unique mathematical symbols used in the generated RHS expressions.
     used_symbol_names = {
@@ -63,7 +142,8 @@ def calculate_ode_rhs_kernel(
     arg_dict_cuda = {
         "d_f_temp_bundle": "const double *restrict",
         "d_metric_bundle": "const double *restrict",
-        "d_connection_bundle": "const double *restrict",
+        geometry_bundle_arg_name: "const double *restrict",
+        **integration_parameter_args,
         "d_k_bundle": "double *restrict",
         "stage": "const int",
         "chunk_size": "const long int",
@@ -72,7 +152,8 @@ def calculate_ode_rhs_kernel(
     arg_dict_host = {
         "d_f_temp_bundle": "const double *restrict",
         "d_metric_bundle": "const double *restrict",
-        "d_connection_bundle": "const double *restrict",
+        geometry_bundle_arg_name: "const double *restrict",
+        **integration_parameter_args,
         "d_k_bundle": "double *restrict",
         "stage": "const int",
         "chunk_size": "const long int",
@@ -84,14 +165,22 @@ def calculate_ode_rhs_kernel(
         "//==========================================",
         "// STATE VECTOR & COORDINATE UNPACKING",
         "//==========================================",
-        "// Load spacetime coordinates $x^{\\mu}$ from the global state bundle.",
+        "// Load spatial coordinates from the global state bundle.",
     ]
 
     for j, sym in enumerate(coordinate_symbols):
-        if str(sym) in used_symbol_names:
+        if j == 0:
+            if not normalized_eom and str(sym) in used_symbol_names:
+                preamble_lines.append(
+                    f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)];"
+                )
+        elif str(sym) in used_symbol_names:
             preamble_lines.append(
-                f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)]; // Maps the coordinate ${str(sym)}$ from global memory to a thread-local register."
+                f"const double {str(sym)} = d_f_temp_bundle[IDX_F({j}, i)];"
             )
+
+    if coordinate_time_preamble and str(coordinate_symbols[0]) in used_symbol_names:
+        preamble_lines.append(coordinate_time_preamble)
 
     if normalized_eom:
         preamble_lines.extend(
@@ -136,20 +225,16 @@ def calculate_ode_rhs_kernel(
 
     preamble_lines.extend(
         [
-            "\n    //==========================================\n    // Metric Deritive UNPACKING\n    //==========================================",
-            "// Load Metric deritive symbols $\\Gamma^{\\alpha}_{\\mu\\nu}$ from the pre-calculated memory bundle.",
+            "\n    //==========================================\n    // GEOMETRY UNPACKING\n    //==========================================",
+            f"// Load symbols from the {geometry_bundle_description}.",
         ]
     )
-    curr_idx = 0
-    for a in range(4):
-        for m in range(a, 4):
-            for n in range(4):
-                comp_name = f"metric_g4DD_dD{a}{m}{n}"
-                if comp_name in used_symbol_names:
-                    preamble_lines.append(
-                        f"const double {comp_name} = d_connection_bundle[IDX_CONN({curr_idx}, i)]; // Maps the connection component $\\Gamma^{{{a}}}_{{{m}{n}}}$ from global memory to a thread-local register."
-                    )
-                curr_idx += 1
+    for geometry_index, component_indices in enumerate(geometry_components):
+        comp_name = f"{geometry_symbol_prefix}{''.join(map(str, component_indices))}"
+        if comp_name in used_symbol_names:
+            preamble_lines.append(
+                f"const double {comp_name} = {geometry_bundle_arg_name}[{geometry_index_macro}({geometry_index}, i)];"
+            )
 
     preamble_unpacking_str = "\n    ".join(preamble_lines)
 
@@ -201,8 +286,8 @@ def calculate_ode_rhs_kernel(
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the state bundle.
     // IDX_METRIC maps a component to the flattened symmetric metric bundle.
     #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the metric bundle.
-    // IDX_CONN maps a component to the flattened Christoffel connection bundle.
-    #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the connection bundle.
+    // {geometry_index_comment}
+    #define {geometry_index_macro}(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
     // IDX_K maps a stage and component triplet to the flattened derivative bundle.
     #define IDX_K(s, c, ray_id) (((s) - 1) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id)) // Computes the 1D index for the RKF45 derivative bundle.
 
@@ -236,7 +321,7 @@ def calculate_ode_rhs_kernel(
     //==========================================
     #undef IDX_F
     #undef IDX_METRIC
-    #undef IDX_CONN
+    #undef {geometry_index_macro}
     #undef IDX_K
     """
 
@@ -267,29 +352,56 @@ def calculate_ode_rhs_kernel(
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Orchestrates the memory kernel for computing the photon geodesic ODE right-hand sides.
+    desc_lines = [
+        r"""Orchestrates the memory kernel for computing photon geodesic ODE right-hand sides.
 
-    @param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in memory.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
-    @param d_connection_bundle Pointer to the pre-calculated connection bundle $\Gamma^{\alpha}_{\beta\gamma}$ in memory.
-    @param d_k_bundle Pointer to the massive derivative bundle array in memory.
-    @param stage The current RKF45 stage index used to offset the write location.
-    @param chunk_size The number of active rays in the current bundle batch.
-    """
+@param d_f_temp_bundle Pointer to the intermediate state bundle $f^{\mu}$ in memory.
+@param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.""",
+        f"@param {geometry_bundle_arg_name} Pointer to the pre-calculated "
+        f"{geometry_bundle_description} in memory.",
+    ]
+    if normalized_eom:
+        desc_lines.extend(
+            [
+                "@param d_integration_param_bundle Pointer to the base coordinate-time bundle.",
+                "@param d_h Pointer to the per-ray RKF45 step-size bundle.",
+            ]
+        )
+    desc_lines.extend(
+        [
+            "@param d_k_bundle Pointer to the flattened derivative bundle.",
+            "@param stage Current RKF45 stage index used to select the write offset.",
+            "@param chunk_size Number of active rays in the bundle batch.",
+            "@param stream_idx Active execution stream identifier.",
+        ]
+    )
+    desc = "\n".join(desc_lines)
 
     cfunc_type = "void"
 
     name = "calculate_ode_rhs_kernel"
 
-    params = (
-        "const double *restrict d_f_temp_bundle, "
-        "const double *restrict d_metric_bundle, "
-        "const double *restrict d_connection_bundle, "
-        "double *restrict d_k_bundle, "
-        "const int stage, "
-        "const long int chunk_size,"
-        "const int stream_idx"
+    params_list = [
+        "const double *restrict d_f_temp_bundle",
+        "const double *restrict d_metric_bundle",
+        f"const double *restrict {geometry_bundle_arg_name}",
+    ]
+    if normalized_eom:
+        params_list.extend(
+            [
+                "const double *restrict d_integration_param_bundle",
+                "const double *restrict d_h",
+            ]
+        )
+    params_list.extend(
+        [
+            "double *restrict d_k_bundle",
+            "const int stage",
+            "const long int chunk_size",
+            "const int stream_idx",
+        ]
     )
+    params = ", ".join(params_list)
 
     include_CodeParameters_h = False
 

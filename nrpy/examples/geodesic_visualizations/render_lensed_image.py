@@ -51,10 +51,11 @@ _WORKER_SPHERE_TEX: Optional[npt.NDArray[np.float64]] = None
 
 # Fixed high-contrast colors for opt-in termination diagnostics.
 DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
-    (cfg.TERM_FAIL_RKF45, "TERM_FAIL_RKF45", (255, 0, 168)),
-    (cfg.TERM_FAIL_T_MAX, "TERM_FAIL_T_MAX", (255, 122, 0)),
-    (cfg.TERM_FAIL_SLOT, "TERM_FAIL_SLOT", (182, 255, 0)),
-    (cfg.TERM_FAIL_GENERIC, "TERM_FAIL_GENERIC", (0, 229, 255)),
+    (cfg.TERM_ENERGY_LIMIT_EXCEEDED, "TERM_ENERGY_LIMIT_EXCEEDED", (255, 0, 0)),
+    (cfg.TERM_RKF45_REJECTION_LIMIT, "TERM_RKF45_REJECTION_LIMIT", (255, 0, 168)),
+    (cfg.TERM_T_MAX_EXCEEDED, "TERM_T_MAX_EXCEEDED", (255, 122, 0)),
+    (cfg.TERM_SLOT_MANAGER_ERROR, "TERM_SLOT_MANAGER_ERROR", (182, 255, 0)),
+    (cfg.TERM_FAILURE, "TERM_FAILURE", (0, 229, 255)),
 )
 
 
@@ -257,7 +258,7 @@ def _accumulate_ray_hits_jit(
     local_debug_term_types: npt.NDArray[np.int8],
     term_source: int,
     term_sphere: int,
-    term_fail_rkf45: int,
+    term_energy_limit: int,
     term_fail_generic: int,
     enable_debug: bool,
 ) -> None:
@@ -322,7 +323,7 @@ def _accumulate_ray_hits_jit(
         # Preserve requested integration failures for the opt-in debug overlay.
         if (
             enable_debug
-            and term_fail_rkf45 <= term <= term_fail_generic
+            and term_energy_limit <= term <= term_fail_generic
             and term < local_debug_term_types[py, px]
         ):
             local_debug_term_types[py, px] = term
@@ -420,9 +421,9 @@ def _process_blueprint_tile(
                     local_count_acc,
                     local_debug_term_types,
                     cfg.TERM_SOURCE_PLANE,
-                    cfg.TERM_SPHERE,
-                    cfg.TERM_FAIL_RKF45,
-                    cfg.TERM_FAIL_GENERIC,
+                    cfg.TERM_COORD_RADIUS_EXCEEDED,
+                    cfg.TERM_ENERGY_LIMIT_EXCEEDED,
+                    cfg.TERM_FAILURE,
                     enable_debug,
                 )
 
@@ -454,7 +455,11 @@ def _process_blueprint_tile(
 
 
 def _add_debug_legend(img: "Image.Image") -> None:  # type: ignore[name-defined]
-    """Add the fixed failure-color key in the image's bottom-right corner."""
+    """
+    Add the fixed failure-color key in the image's bottom-right corner.
+
+    :param img: Image receiving the failure-color legend.
+    """
     # pylint: disable=import-outside-toplevel, import-error
     from PIL import ImageDraw, ImageFont
 

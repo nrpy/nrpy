@@ -46,7 +46,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         __name__,
         [
             "r_escape",
-            "p_t_max",
+            "energy_max",
             "numerical_initial_h",
         ],
         [150.0, 1e3, 0.1],
@@ -75,6 +75,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
     This function acts as the primary loop for evaluating photon geodesics $x^\mu$.
     It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$.
+    Its integration parameter is the physical affine parameter $\lambda$.
     The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to memory scratchpads.
     Mapping tensors to memory respects the hardware limit per thread on modern architectures.
 
@@ -188,8 +189,8 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     {malloc_pinned}(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
     // {pin_comment} the second derivative $\ddot{{f}}^\mu$.
     {malloc_pinned}(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the physical affine parameter $\lambda$.
-    {malloc_pinned}(all_photons_host.affine_param, sizeof(double) * num_rays);
+    // {pin_comment} the physical integration parameter $\lambda$.
+    {malloc_pinned}(all_photons_host.integration_param, sizeof(double) * num_rays);
     // {pin_comment} individual integration step sizes $h$.
     {malloc_pinned}(all_photons_host.h, sizeof(double) * num_rays);
     // {pin_comment} the trajectory termination status.
@@ -201,9 +202,9 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     // {pin_comment} the previous source emission boundary state.
     {malloc_pinned}(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-1}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p, sizeof(double) * num_rays);
+    {malloc_pinned}(all_photons_host.integration_param_p, sizeof(double) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-2}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
+    {malloc_pinned}(all_photons_host.integration_param_p_p, sizeof(double) * num_rays);
     // {pin_comment} the observer window intersection lock.
     {malloc_pinned}(all_photons_host.window_event_found, sizeof(bool) * num_rays);
     // {pin_comment} the source emission plane intersection lock.
@@ -222,8 +223,8 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     double *f_p_bridge[2];
     // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for memory transfers.
     double *f_p_p_bridge[2];
-    // Bridge array staging the affine parameter $\lambda$ for memory transfers.
-    double *affine_bridge[2];
+    // Bridge array staging the integration parameter $\lambda$ for memory transfers.
+    double *integration_param_bridge[2];
     // Bridge array staging the current integration step size $h$ for memory transfers.
     double *h_bridge[2];
     // Bridge array staging the current trajectory termination status for memory transfers.
@@ -234,10 +235,10 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     bool *on_pos_window_prev_bridge[2];
     // Bridge array staging the previous source emission boundary side flag for memory transfers.
     bool *on_pos_source_prev_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-1}}$ for chunked memory transfers.
-    double *affine_p_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-2}}$ for chunked memory transfers.
-    double *affine_p_p_bridge[2];
+    // Bridge array staging the historical integration parameter $\lambda_{{n-1}}$ for chunked memory transfers.
+    double *integration_param_p_bridge[2];
+    // Bridge array staging the historical integration parameter $\lambda_{{n-2}}$ for chunked memory transfers.
+    double *integration_param_p_p_bridge[2];
     // Bridge array staging the observer window event lock for memory transfers.
     bool *window_event_found_bridge[2];
     // Bridge array staging the source emission event lock for memory transfers.
@@ -266,8 +267,8 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     double *d_k_bundle[2];
     // Array regulating active integration step sizing $h$.
     double *d_h[2];
-    // Array regulating total affine parameter progress $\lambda$.
-    double *d_affine[2];
+    // Array regulating total integration parameter progress $\lambda$.
+    double *d_integration_param[2];
     // Array holding the current trajectory status limits.
     termination_type_t *d_status[2];
     // Array tracking sequential error rejections per photon.
@@ -276,10 +277,10 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     bool *d_on_pos_window_prev[2];
     // Array flagging the previous source emission boundary side.
     bool *d_on_pos_source_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-1}}$.
-    double *d_affine_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-2}}$.
-    double *d_affine_pre_prev[2];
+    // Array tracking historical integration parameter $\lambda_{{n-1}}$.
+    double *d_integration_param_prev[2];
+    // Array tracking historical integration parameter $\lambda_{{n-2}}$.
+    double *d_integration_param_pre_prev[2];
     // Array guarding the window intersection coordinates from multi-trigger overwrites.
     bool *d_window_event_found[2];
     // Array guarding the source intersection coordinates from multi-trigger overwrites.
@@ -294,14 +295,14 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         {malloc_pinned}(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
         {malloc_pinned}(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
         {malloc_pinned}(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
-        {malloc_pinned}(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
+        {malloc_pinned}(integration_param_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
         {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
         {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
         {malloc_pinned}(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
         {malloc_pinned}(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
-        {malloc_pinned}(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
-        {malloc_pinned}(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
+        {malloc_pinned}(integration_param_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
+        {malloc_pinned}(integration_param_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
         {malloc_pinned}(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
         {malloc_pinned}(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
 
@@ -315,13 +316,13 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         {malloc_device}(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
-        {malloc_device}(d_affine[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
+        {malloc_device}(d_integration_param[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
         {malloc_device}(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
         {malloc_device}(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
         {malloc_device}(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
-        {malloc_device}(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
-        {malloc_device}(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
+        {malloc_device}(d_integration_param_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
+        {malloc_device}(d_integration_param_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
         {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
         {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
@@ -511,11 +512,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
         }} // END LOOP: for sync_k over 9 to propagate historical derivatives
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
-        all_photons_host.affine_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the affine parameter $\lambda$.
+        all_photons_host.integration_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the integration parameter $\lambda$.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        all_photons_host.affine_param_p[sync_i] = 0.0; // Initializes the first historical affine parameter $\lambda_{{n-1}}$.
-        all_photons_host.affine_param_p_p[sync_i] = 0.0; // Initializes the second historical affine parameter $\lambda_{{n-2}}$.
+        all_photons_host.integration_param_p[sync_i] = 0.0; // Initializes the first historical integration parameter $\lambda_{{n-1}}$.
+        all_photons_host.integration_param_p_p[sync_i] = 0.0; // Initializes the second historical integration parameter $\lambda_{{n-2}}$.
         all_photons_host.window_event_found[sync_i] = false; // Sets the observer window intersection logical lock to false.
         all_photons_host.source_event_found[sync_i] = false; // Sets the source emission intersection logical lock to false.
 
@@ -578,11 +579,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                 h_bridge[current][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
                 status_bridge[current][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                 retries_bridge[current][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
-                affine_bridge[current][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
+                integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter $\lambda$ into the transfer bridge.
                 on_pos_window_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
                 on_pos_source_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
-                affine_p_bridge[current][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
-                affine_p_p_bridge[current][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
+                integration_param_p_bridge[current][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the historical integration parameter $\lambda_{{ n-1}}$ into the transfer bridge.
+                integration_param_p_p_bridge[current][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the historical integration parameter $\lambda_{{ n-2}}$ into the transfer bridge.
                 window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
                 source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
             }} // END LOOP: for bridge_i over active_chunks[current] to pack 1D arrays
@@ -601,16 +602,16 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {memcpy_async("d_status[current]", "status_bridge[current]", "sizeof(termination_type_t) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_retries[current]", "retries_bridge[current]", "sizeof(int) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine[current]", "affine_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
+            // Host-to-Device transfer: Asynchronously pushes integration parameters $\lambda$ to VRAM strictly on stream [current] to minimize latency.
+            {memcpy_async("d_integration_param[current]", "integration_param_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_on_pos_window_prev[current]", "on_pos_window_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_on_pos_source_prev[current]", "on_pos_source_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine_prev[current]", "affine_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine_pre_prev[current]", "affine_p_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
+            // Host-to-Device transfer: Asynchronously pushes historical integration parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [current] to minimize latency.
+            {memcpy_async("d_integration_param_prev[current]", "integration_param_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
+            // Host-to-Device transfer: Asynchronously pushes historical integration parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [current] to minimize latency.
+            {memcpy_async("d_integration_param_pre_prev[current]", "integration_param_p_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [current] to minimize latency.
             {memcpy_async("d_window_event_found[current]", "window_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
             // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [current] to minimize latency.
@@ -635,9 +636,9 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             }} // END LOOP: for stage over 6 to execute RKF45 stages
 
             // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
-            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
+            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_integration_param[current], d_retries[current], active_chunks[current]{stream_arg_current});
             // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the active stream.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 state vector components.
                 // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the active stream.
@@ -653,16 +654,16 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {memcpy_async("status_bridge[current]", "d_status[current]", "sizeof(termination_type_t) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves active rejection counts back to CPU RAM asynchronously on the active stream.
             {memcpy_async("retries_bridge[current]", "d_retries[current]", "sizeof(int) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves total affine progression $\lambda$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_bridge[current]", "d_affine[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
+            // Device-to-Host transfer: Retrieves total integration-parameter progression $\lambda$ back to CPU RAM asynchronously on the active stream.
+            {memcpy_async("integration_param_bridge[current]", "d_integration_param[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves updated window boundary flags back to CPU RAM asynchronously on the active stream.
             {memcpy_async("on_pos_window_prev_bridge[current]", "d_on_pos_window_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves updated source boundary flags back to CPU RAM asynchronously on the active stream.
             {memcpy_async("on_pos_source_prev_bridge[current]", "d_on_pos_source_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_p_bridge[current]", "d_affine_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_p_p_bridge[current]", "d_affine_pre_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
+            // Device-to-Host transfer: Retrieves historical integration parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the active stream.
+            {memcpy_async("integration_param_p_bridge[current]", "d_integration_param_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
+            // Device-to-Host transfer: Retrieves historical integration parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the active stream.
+            {memcpy_async("integration_param_p_p_bridge[current]", "d_integration_param_pre_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves active window locks back to CPU RAM asynchronously on the active stream.
             {memcpy_async("window_event_found_bridge[current]", "d_window_event_found[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
             // Device-to-Host transfer: Retrieves active source locks back to CPU RAM asynchronously on the active stream.
@@ -696,11 +697,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                     h_bridge[next][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
                     status_bridge[next][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                     retries_bridge[next][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
-                    affine_bridge[next][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
+                    integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter $\lambda$ into the transfer bridge.
                     on_pos_window_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
                     on_pos_source_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
-                    affine_p_bridge[next][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
-                    affine_p_p_bridge[next][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
+                    integration_param_p_bridge[next][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the historical integration parameter $\lambda_{{ n-1}}$ into the transfer bridge.
+                    integration_param_p_p_bridge[next][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the historical integration parameter $\lambda_{{ n-2}}$ into the transfer bridge.
                     window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
                     source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
                 }} // END LOOP: for bridge_i over active_chunks[next] to pack 1D arrays
@@ -719,16 +720,16 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                 {memcpy_async("d_status[next]", "status_bridge[next]", "sizeof(termination_type_t) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_retries[next]", "retries_bridge[next]", "sizeof(int) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine[next]", "affine_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
+                // Host-to-Device transfer: Asynchronously pushes integration parameters $\lambda$ to VRAM strictly on stream [next] to overlap execution.
+                {memcpy_async("d_integration_param[next]", "integration_param_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_on_pos_window_prev[next]", "on_pos_window_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_on_pos_source_prev[next]", "on_pos_source_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine_prev[next]", "affine_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine_pre_prev[next]", "affine_p_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
+                // Host-to-Device transfer: Asynchronously pushes historical integration parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [next] to overlap execution.
+                {memcpy_async("d_integration_param_prev[next]", "integration_param_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
+                // Host-to-Device transfer: Asynchronously pushes historical integration parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [next] to overlap execution.
+                {memcpy_async("d_integration_param_pre_prev[next]", "integration_param_p_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [next] to overlap execution.
                 {memcpy_async("d_window_event_found[next]", "window_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
                 // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [next] to overlap execution.
@@ -753,9 +754,9 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                 }} // END LOOP: for stage over 6 to execute RKF45 stages
 
                 // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the upcoming integration baseline.
-                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next]{stream_arg_next});
+                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_integration_param[next], d_retries[next], active_chunks[next]{stream_arg_next});
                 // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the alternate stream.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_affine[next], d_affine_prev[next], d_affine_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 upcoming state vector components.
                     // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     {memcpy_async("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
@@ -770,16 +771,16 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                 {memcpy_async("status_bridge[next]", "d_status[next]", "sizeof(termination_type_t) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming active rejection counts back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("retries_bridge[next]", "d_retries[next]", "sizeof(int) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming total affine progression $\lambda$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_bridge[next]", "d_affine[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
+                // Device-to-Host transfer: Retrieves upcoming total integration-parameter progression $\lambda$ back to CPU RAM asynchronously on the alternate stream.
+                {memcpy_async("integration_param_bridge[next]", "d_integration_param[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming updated window boundary flags back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("on_pos_window_prev_bridge[next]", "d_on_pos_window_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming updated source boundary flags back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("on_pos_source_prev_bridge[next]", "d_on_pos_source_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_p_bridge[next]", "d_affine_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_p_p_bridge[next]", "d_affine_pre_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
+                // Device-to-Host transfer: Retrieves upcoming historical integration parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the alternate stream.
+                {memcpy_async("integration_param_p_bridge[next]", "d_integration_param_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
+                // Device-to-Host transfer: Retrieves upcoming historical integration parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the alternate stream.
+                {memcpy_async("integration_param_p_p_bridge[next]", "d_integration_param_pre_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming active window locks back to CPU RAM asynchronously on the alternate stream.
                 {memcpy_async("window_event_found_bridge[next]", "d_window_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
                 // Device-to-Host transfer: Retrieves upcoming active source locks back to CPU RAM asynchronously on the alternate stream.
@@ -806,11 +807,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                     all_photons_host.h[m_idx] = h_bridge[current][fin_i]; // Unpacks the synchronized step size $h$ into the global Host matrix.
                     all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
                     all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
-                    all_photons_host.affine_param[m_idx] = affine_bridge[current][fin_i]; // Unpacks the synchronized affine parameter $\lambda$ into the global Host matrix.
+                    all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter $\lambda$ into the global Host matrix.
                     all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[current][fin_i]; // Unpacks the synchronized window boundary flag into the global Host matrix.
                     all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[current][fin_i]; // Unpacks the synchronized source boundary flag into the global Host matrix.
-                    all_photons_host.affine_param_p[m_idx] = affine_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-1}}$ into the global Host matrix.
-                    all_photons_host.affine_param_p_p[m_idx] = affine_p_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-2}}$ into the global Host matrix.
+                    all_photons_host.integration_param_p[m_idx] = integration_param_p_bridge[current][fin_i]; // Unpacks the synchronized historical integration parameter $\lambda_{{ n-1}}$ into the global Host matrix.
+                    all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized historical integration parameter $\lambda_{{ n-2}}$ into the global Host matrix.
                     all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i]; // Unpacks the synchronized window lock into the global Host matrix.
                     all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i]; // Unpacks the synchronized source lock into the global Host matrix.
                 }} // END LOOP: for fin_i over active_chunks[current] to unpack 1D arrays
@@ -984,14 +985,14 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {free_pinned}(f_bridge[s]); // Purges the state vector $f^\mu$ bridge.
             {free_pinned}(f_p_bridge[s]); // Purges the first derivative $\dot{{f}}^\mu$ bridge.
             {free_pinned}(f_p_p_bridge[s]); // Purges the second derivative $\ddot{{f}}^\mu$ bridge.
-            {free_pinned}(affine_bridge[s]); // Purges the affine parameter $\lambda$ bridge.
+            {free_pinned}(integration_param_bridge[s]); // Purges the integration parameter $\lambda$ bridge.
             {free_pinned}(h_bridge[s]); // Purges the integration step size $h$ bridge.
             {free_pinned}(status_bridge[s]); // Purges the trajectory status bridge.
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
             {free_pinned}(on_pos_window_prev_bridge[s]); // Purges the observer window boundary flag bridge.
             {free_pinned}(on_pos_source_prev_bridge[s]); // Purges the source emission boundary flag bridge.
-            {free_pinned}(affine_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ bridge.
-            {free_pinned}(affine_p_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ bridge.
+            {free_pinned}(integration_param_p_bridge[s]); // Purges the historical integration parameter $\lambda_{{n-1}}$ bridge.
+            {free_pinned}(integration_param_p_p_bridge[s]); // Purges the historical integration parameter $\lambda_{{n-2}}$ bridge.
             {free_pinned}(window_event_found_bridge[s]); // Purges the observer window intersection lock bridge.
             {free_pinned}(source_event_found_bridge[s]); // Purges the source emission intersection lock bridge.
 
@@ -1005,13 +1006,13 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {free_device}(d_connection_bundle[s]); // Purges the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
-            {free_device}(d_affine[s]); // Purges the total affine parameter progress $\lambda$ scratchpad.
+            {free_device}(d_integration_param[s]); // Purges the total integration parameter progress $\lambda$ scratchpad.
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
             {free_device}(d_on_pos_window_prev[s]); // Purges the previous observer window boundary side scratchpad.
             {free_device}(d_on_pos_source_prev[s]); // Purges the previous source emission boundary side scratchpad.
-            {free_device}(d_affine_prev[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ scratchpad.
-            {free_device}(d_affine_pre_prev[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ scratchpad.
+            {free_device}(d_integration_param_prev[s]); // Purges the historical integration parameter $\lambda_{{n-1}}$ scratchpad.
+            {free_device}(d_integration_param_pre_prev[s]); // Purges the historical integration parameter $\lambda_{{n-2}}$ scratchpad.
             {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
             {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
@@ -1106,18 +1107,18 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {free_pinned}(final_cq_host); // Purges pinned final diagnostic data buffer.
         }} // END IF: commondata->perform_conservation_check to evaluate numerical drift on the CPU
 
-        // Host Memory Free: Purges the primary Host array states $f^\mu$ and affine parameters $\lambda$.
+        // Host Memory Free: Purges the primary Host array states $f^\mu$ and integration parameters $\lambda$.
         {free_pinned}(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
         {free_pinned}(all_photons_host.f_p); // Purges the primary Host array first derivative $\dot{{f}}^\mu$.
         {free_pinned}(all_photons_host.f_p_p); // Purges the primary Host array second derivative $\ddot{{f}}^\mu$.
-        {free_pinned}(all_photons_host.affine_param); // Purges the primary Host array affine parameter $\lambda$.
+        {free_pinned}(all_photons_host.integration_param); // Purges the primary Host array integration parameter $\lambda$.
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
         {free_pinned}(all_photons_host.on_positive_side_of_window_prev); // Purges the primary Host array observer window boundary flag.
         {free_pinned}(all_photons_host.on_positive_side_of_source_prev); // Purges the primary Host array source emission boundary flag.
-        {free_pinned}(all_photons_host.affine_param_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-1}}$.
-        {free_pinned}(all_photons_host.affine_param_p_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-2}}$.
+        {free_pinned}(all_photons_host.integration_param_p); // Purges the primary Host array historical integration parameter $\lambda_{{n-1}}$.
+        {free_pinned}(all_photons_host.integration_param_p_p); // Purges the primary Host array historical integration parameter $\lambda_{{n-2}}$.
         {free_pinned}(all_photons_host.window_event_found); // Purges the primary Host array observer window intersection lock.
         {free_pinned}(all_photons_host.source_event_found); // Purges the primary Host array source emission intersection lock.
 

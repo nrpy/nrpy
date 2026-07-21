@@ -18,9 +18,8 @@ upper-triangular ordering consumed by the geodesic interpolation kernels:
 `g4DD00, g4DD01, g4DD02, g4DD03, g4DD11, g4DD12, g4DD13, g4DD22, g4DD23,
 g4DD33`.
 
-For temporary compatibility with the existing geodesic connection-bundle API,
-the 40-component `Gamma4UDD`-sized bundle stores metric first derivatives
-instead of Christoffel symbols. Its ordering is metric-pair outermost and
+The 40-component `g4DD_dD` bundle stores metric first derivatives. Its
+ordering is metric-pair outermost and
 derivative direction innermost:
 `g4DD_dD000, g4DD_dD001, g4DD_dD002, g4DD_dD003, g4DD_dD010, ...,
 g4DD_dD333`, where the final index is `(t, x, y, z) = (0, 1, 2, 3)`.
@@ -51,12 +50,12 @@ from nrpy.helpers.generic import copy_files
 TEMPORAL_LAGRANGE_INTERP_DEFINES = r"""
 // Constants for temporal Lagrange interpolation.
 #define TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT 10
-#define TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT 40
+#define TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_COMPONENT_COUNT 40
 #define TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_DIRECTION_COUNT 4
 #define TEMPORAL_LAGRANGE_INTERP_TEMPORAL_DERIVATIVE_INDEX 0
 #define TEMPORAL_LAGRANGE_INTERP_TENSOR_COMPONENT_COUNT \
   (TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + \
-   TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT)
+   TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_COMPONENT_COUNT)
 #define TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH 32
 
 // Status codes returned by the temporal Lagrange interpolation helper.
@@ -183,9 +182,8 @@ The metric bundle ordering is:
 `g4DD00, g4DD01, g4DD02, g4DD03, g4DD11, g4DD12, g4DD13, g4DD22, g4DD23,
 g4DD33`.
 
-For temporary compatibility, the 40-component `gamma4udd`-named bundle stores
-metric derivatives with metric-pair outermost and derivative direction
-innermost:
+The 40-component `g4dd_dD` bundle stores metric derivatives with metric-pair
+outermost and derivative direction innermost:
 `g4DD_dD000, g4DD_dD001, g4DD_dD002, g4DD_dD003, g4DD_dD010, ...,
 g4DD_dD333`. The final index is `(t, x, y, z) = (0, 1, 2, 3)`. Thus bundle
 slot `4*p` receives the temporal derivative of metric component `p`, while
@@ -196,12 +194,12 @@ Cartesian spatial derivatives.
 @param[in] slice_times Trusted, finite, strictly increasing physical coordinate
 times for the supplied slices.
 @param[in] g4dd_slices Flat per-slice metric components in kernel order.
-@param[in] gamma4udd_slices Flat per-slice metric derivatives in temporary
-connection-bundle storage order.
+@param[in] g4dd_dD_slices Flat per-slice metric derivatives in metric-pair
+outermost storage order.
 @param[in] t_target Target physical coordinate time.
 @param[out] g4dd_out Final interpolated metric components.
-@param[out] gamma4udd_out Final metric first derivatives in temporary
-connection-bundle storage order.
+@param[out] g4dd_dD_out Final metric first derivatives in metric-pair
+outermost storage order.
 @return `TEMPORAL_LAGRANGE_INTERP_SUCCESS` on success, or
 `TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER` if the configured interpolation
 half-width is outside the supported range.
@@ -214,10 +212,10 @@ half-width is outside the supported range.
     params = """const commondata_struct *restrict commondata,
                 const REAL *restrict slice_times,
                 const REAL *restrict g4dd_slices,
-                const REAL *restrict gamma4udd_slices,
+                const REAL *restrict g4dd_dD_slices,
                 const REAL t_target,
                 REAL *restrict g4dd_out,
-                REAL *restrict gamma4udd_out"""
+                REAL *restrict g4dd_dD_out"""
     body = r"""
   // Step 1: Build the shared nonuniform barycentric Lagrange basis and its
   // analytic derivative in normalized physical time.
@@ -317,7 +315,7 @@ half-width is outside the supported range.
     const int temporal_derivative_slot =
         TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_DIRECTION_COUNT * comp +
         TEMPORAL_LAGRANGE_INTERP_TEMPORAL_DERIVATIVE_INDEX;
-    gamma4udd_out[temporal_derivative_slot] =
+    g4dd_dD_out[temporal_derivative_slot] =
         sum_lagrange_x0_simd(
             interp_order, component_series, coeff_dt_normalized) /
         time_scale;
@@ -340,11 +338,11 @@ half-width is outside the supported range.
 
       for (int s = 0; s < interp_order; s++) {
         component_series[s] =
-            gamma4udd_slices[
-                s * TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT +
+            g4dd_dD_slices[
+                s * TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_COMPONENT_COUNT +
                 derivative_slot];
       } // END LOOP: for s over trusted spatial-derivative slices for one component
-      gamma4udd_out[derivative_slot] =
+      g4dd_dD_out[derivative_slot] =
           sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
     } // END LOOP: for derivative_direction over Cartesian spatial directions
   } // END LOOP: for metric_comp over serialized metric components

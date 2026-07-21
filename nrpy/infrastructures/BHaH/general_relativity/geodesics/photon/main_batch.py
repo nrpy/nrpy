@@ -1,4 +1,4 @@
-# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main.py
+# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py
 """
 Defines the main() C function for the geodesic integration pipeline.
 
@@ -28,7 +28,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
+def main(
+    spacetime_name: str,
+    integrator_mode: str = "Analytical",
+    normalized_eom: bool = False,
+) -> None:
     """
     Register the master orchestrator C function for the geodesic integrator.
 
@@ -36,13 +40,18 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
 
     :param spacetime_name: Metric name for numerical integration.
     :param integrator_mode: Batch-integrator implementation to emit.
+    :param normalized_eom: Whether numerical evolution uses coordinate time as
+        its integration parameter.
     :raises ValueError: If `integrator_mode` is not supported.
+    :raises ValueError: If normalized evolution is requested for analytical mode.
     """
     if integrator_mode not in ("Analytical", "Numerical"):
         raise ValueError(
             "integrator_mode must be either 'Analytical' or 'Numerical'; "
             f"found '{integrator_mode}'."
         )
+    if normalized_eom and integrator_mode != "Numerical":
+        raise ValueError("normalized_eom is supported only for numerical mode.")
 
     diagnostic_flag_name = (
         "perform_normalization_check"
@@ -113,6 +122,27 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
         if integrator_mode == "Analytical"
         else ""
     )
+    numerical_spacetime_telemetry = (
+        """
+    printf("--- Numerical Spacetime ---\\n");
+    printf("Data File: %s\\n", commondata.numerical_spacetime_bin_path);
+    printf("Metric Time Range: %.2f to %.2f\\n", commondata.t_numerical_initial, commondata.t_numerical_end);
+    printf("Slice Spacing / Stride: %.6f / %d\\n", commondata.dt_numerical_spacetime_data, commondata.numerical_spacetime_time_slice_stride);
+    printf("RKF45 Time-Window Cap: %.2f\\n", commondata.rkf45_max_delta_t);
+"""
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    eom_telemetry = (
+        """
+    printf("Equations of Motion: Normalized coordinate-time evolution\\n");
+    printf("Log-Energy Tolerance: %e\\n", commondata.rkf45_log_energy_tolerance);
+"""
+        if normalized_eom
+        else """
+    printf("Equations of Motion: Affine-parameter geodesic evolution\\n");
+"""
+    )
 
     # Step 1: Register Tiling Parameters
     par.register_CodeParameter(
@@ -177,6 +207,7 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
     printf("=============================================\\n");
     printf("Spacetime Metric: {spacetime_name}\\n");
 {analytic_spacetime_telemetry}
+{numerical_spacetime_telemetry}
 
     printf("--- Camera & Window Plane ---\\n");
     printf("Camera Pos (x, y, z): %.2f, %.2f, %.2f\\n", commondata.camera_pos_x, commondata.camera_pos_y, commondata.camera_pos_z);
@@ -197,12 +228,13 @@ def main(spacetime_name: str, integrator_mode: str = "Analytical") -> None:
     printf("--- Temporal & Boundary Conditions ---\\n");
     printf("Start Time (t_start): %.2f\\n", commondata.t_start);
     printf("Escape Radius (r_escape): %.2f\\n", commondata.r_escape);
-    printf("Max Momentum (p_t,max): %.2f\\n", commondata.p_t_max);
+    printf("Energy Limit (energy_max): %.2f\\n", commondata.energy_max);
 
     printf("--- Batch Integrator & RKF45 Settings ---\\n");
     printf("Initial Step Size (h_initial): %.2f\\n", commondata.numerical_initial_h);
     printf("Min / Max Step (h_min / h_max): %e / %.2f\\n", commondata.rkf45_h_min, commondata.rkf45_h_max);
     printf("Abs / Rel Tolerance: %e / %e\\n", commondata.rkf45_absolute_error_tolerance, commondata.rkf45_error_tolerance);
+{eom_telemetry}
     printf("Adaptive Step Damping: 0.90\\n");
     printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
     printf("{diagnostic_flag_label}: %d\\n", commondata.{diagnostic_flag_name});

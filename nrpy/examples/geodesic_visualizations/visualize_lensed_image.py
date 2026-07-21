@@ -112,7 +112,7 @@ def main() -> None:
         default=None,
         metavar="key",
         help=(
-            "Color RKF45, maximum-time, slot, and generic integration failures. "
+            "Color energy-limit, RKF45, maximum-time, slot, and generic failures. "
             "Pass 'key' to also add the color key to the image."
         ),
     )

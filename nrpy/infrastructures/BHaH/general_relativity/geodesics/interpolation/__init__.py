@@ -1,7 +1,7 @@
 from . import (
-    azimuthal_symmetry_spatial_lagrange_interpolation_metric_derivatives,
-    numerical_interpolation_metric_derivatives,
-    temporal_lagrange_interpolation_metric_derivatives,
-    temporal_lagrange_interpolation_metric_derivatives_c1_startup,
+    azimuthal_symmetry_spatial_lagrange_interpolation,
+    numerical_interpolation,
+    temporal_lagrange_interpolation,
+    temporal_lagrange_interpolation_c1,
     time_window_manager_numerical,
 )

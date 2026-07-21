@@ -110,10 +110,10 @@ def plot_heatmaps(data: "npt.NDArray[np.void]") -> None:
     axes[1].set_xlabel("$y_s$")
     axes[1].set_ylabel("$z_s$")
 
-    # Step 3: Celestial Sphere (phi, theta) - Filtering for TERM_SPHERE.
+    # Step 3: Celestial Sphere (phi, theta) - Filtering for coordinate-radius exits.
     # Maps rays that escaped to 'infinity'.
     # theta is the polar angle [0, pi], phi is the azimuthal angle [0, 2pi].
-    sphere_mask = data["termination_type"] == cfg.TERM_SPHERE
+    sphere_mask = data["termination_type"] == cfg.TERM_COORD_RADIUS_EXCEEDED
     if np.any(sphere_mask):
         hb2 = axes[2].hexbin(
             phi[sphere_mask],
@@ -206,17 +206,18 @@ def plot_norm_abs_log_histogram(
     bin_edges_list = cast(List[float], bin_edges.tolist())
 
     enum_label_by_value: Dict[int, str] = {
-        cfg.TERM_SPHERE: "TERM_SPHERE",
+        cfg.TERM_COORD_RADIUS_EXCEEDED: "TERM_COORD_RADIUS_EXCEEDED",
         cfg.TERM_SOURCE_PLANE: "TERM_SOURCE_PLANE",
-        cfg.TERM_FAIL_PT_BIG: r"TERM_FAIL_PT_BIG ($p^t$ too big)",
-        cfg.TERM_FAIL_RKF45: "TERM_FAIL_RKF45",
-        cfg.TERM_FAIL_T_MAX: "TERM_FAIL_T_MAX",
-        cfg.TERM_FAIL_SLOT: "TERM_FAIL_SLOT",
-        cfg.TERM_FAIL_GENERIC: "TERM_FAIL_GENERIC",
+        cfg.TERM_ENERGY_LIMIT_EXCEEDED: "TERM_ENERGY_LIMIT_EXCEEDED",
+        cfg.TERM_RKF45_REJECTION_LIMIT: "TERM_RKF45_REJECTION_LIMIT",
+        cfg.TERM_T_MAX_EXCEEDED: "TERM_T_MAX_EXCEEDED",
+        cfg.TERM_SLOT_MANAGER_ERROR: "TERM_SLOT_MANAGER_ERROR",
+        cfg.TERM_FAILURE: "TERM_FAILURE",
         cfg.TERM_ACTIVE: "TERM_ACTIVE",
+        cfg.TERM_REJECTED: "TERM_REJECTED",
     }
 
-    # Step 4: Draw one histogram trace per enum, forcing p^t-too-big to black.
+    # Step 4: Draw one histogram trace per enum, forcing energy-limit failures to black.
     fig, ax = plt.subplots(figsize=(10, 6))
     color_cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", ["C0"])
     color_index = 0
@@ -226,7 +227,7 @@ def plot_norm_abs_log_histogram(
         enum_mask = plotted_termination_types == enum_value
         enum_norm_abs = plotted_norm_abs[enum_mask]
 
-        if enum_value == cfg.TERM_FAIL_PT_BIG:
+        if enum_value == cfg.TERM_ENERGY_LIMIT_EXCEEDED:
             color = "black"
         else:
             color = color_cycle[color_index % len(color_cycle)]
@@ -497,9 +498,9 @@ def diagnose_blueprint(
         print(f"  Raw Enum {e:2d}: {c:12,} rays ({c/total_rays*100:6.2f}%)")
 
     print(
-        f"\n  [Config Current]: SPHERE = {cfg.TERM_SPHERE}, "
+        f"\n  [Config Current]: COORD_RADIUS_EXCEEDED = {cfg.TERM_COORD_RADIUS_EXCEEDED}, "
         f"SOURCE_PLANE = {cfg.TERM_SOURCE_PLANE}, "
-        f"FAIL_PT_BIG = {cfg.TERM_FAIL_PT_BIG}"
+        f"ENERGY_LIMIT_EXCEEDED = {cfg.TERM_ENERGY_LIMIT_EXCEEDED}"
     )
     print(
         "  -> If your raw enums above do NOT match these, update blueprint_config_and_schema.py."

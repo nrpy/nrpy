@@ -47,7 +47,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     handle_source_plane_intersection,
     handle_window_plane_intersection,
     interpolation_kernel,
-    main,
+    main_batch,
     p0_reverse_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
@@ -104,7 +104,9 @@ if __name__ == "__main__":
     print(" -> Registering C functions and local CodeParameters...")
 
     # Step 5.a: Register initialization kernels.
-    set_initial_conditions_kernel.set_initial_conditions_kernel(SPACETIME)
+    set_initial_conditions_kernel.set_initial_conditions_kernel(
+        SPACETIME, normalized_eom=False
+    )
 
     if geodesic_data.p0_photon is None:
         raise ValueError(f"p0_photon is None for {GEO_KEY}")
@@ -121,22 +123,29 @@ if __name__ == "__main__":
     # Step 5.c: Register RKF45 evolution kernels.
     interpolation_kernel.interpolation_kernel(SPACETIME)
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
-        geodesic_data.geodesic_rhs, geodesic_data.xx
+        geodesic_data.geodesic_eom_rhs_photon_christoffel(),
+        geodesic_data.xx,
+        use_metric_derivative_rhs=False,
+        normalized_eom=False,
     )
     rkf45_stage_update.rkf45_stage_update()
-    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel()
+    rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
+        normalized_eom=False
+    )
 
     # Step 5.d: Register event-detection and boundary-intersection kernels.
     find_event_time_and_state.find_event_time_and_state()
     handle_source_plane_intersection.handle_source_plane_intersection()
     handle_window_plane_intersection.handle_window_plane_intersection()
-    event_detection_manager_kernel.event_detection_manager_kernel()
-    calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal()
+    event_detection_manager_kernel.event_detection_manager_kernel(normalized_eom=False)
+    calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
+        normalized_eom=False
+    )
 
     # Step 5.e: Register project-level orchestration helpers.
     time_slot_manager_helpers.time_slot_manager_helpers()
     batch_integrator_analytical.batch_integrator_analytical(SPACETIME)
-    main.main(SPACETIME)
+    main_batch.main(SPACETIME, normalized_eom=False)
 
     # Step 5.f: Remove helper registrations emitted only through other kernels.
     # The event manager emits its local event helpers through prefunc, so keeping
@@ -162,7 +171,7 @@ if __name__ == "__main__":
     par.glb_code_params_dict["a_spin"].defaultvalue = 0.9
 
     # Step 6.b: Set batch-integrator and numerical-limit defaults.
-    par.glb_code_params_dict["p_t_max"].defaultvalue = 1000.0
+    par.glb_code_params_dict["energy_max"].defaultvalue = 1000.0
     par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
     par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
     par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
