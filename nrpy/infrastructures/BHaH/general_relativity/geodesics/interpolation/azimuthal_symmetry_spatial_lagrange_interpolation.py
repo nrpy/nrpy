@@ -165,7 +165,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         package="nrpy.infrastructures.BHaH.interpolation",
         filenames_list=["interpolation_lagrange_uniform.h"],
         project_dir=project_dir,
-        subdirectory="./",
+        subdirectory="interpolation",
     )
     register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
 
@@ -173,7 +173,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
         "<stdint.h>",
-        "interpolation_lagrange_uniform.h",
+        "interpolation/interpolation_lagrange_uniform.h",
     ]
 
     prefunc = r"""
