@@ -93,6 +93,11 @@ _METRIC_COMPONENT_ORDER: Tuple[Tuple[int, int], ...] = (
 _METRIC_COMPONENT_INDEX: Dict[Tuple[int, int], int] = {
     component: idx for idx, component in enumerate(_METRIC_COMPONENT_ORDER)
 }
+# Add future coordinate systems here. Values are (phi dimension, first
+# interpolation dimension, second interpolation dimension).
+_COORDINATE_SYSTEM_DIMENSIONS: Dict[str, Tuple[int, int, int]] = {
+    "SinhCylindricalv2n2": (1, 0, 2),
+}
 
 
 def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
@@ -110,8 +115,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     metric-derivative bundle has all time-derivative entries set to zero.
 
     :param CoordSystem: Coordinate system used by the source dataset; must be
-        `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
-        `"SinhCylindrical"`, or `"SinhCylindricalv2n2"`.
+        `"SinhCylindricalv2n2"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
@@ -147,9 +151,23 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     ...     else:
     ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
     """
+    # Step 1: Validate high-level code-generation assumptions and determine
+    # which native coordinates define the 2D interpolation grid.
+    if CoordSystem not in _COORDINATE_SYSTEM_DIMENSIONS:
+        supported_coord_systems = ", ".join(
+            f"'{coord_system}'" for coord_system in _COORDINATE_SYSTEM_DIMENSIONS
+        )
+        raise ValueError(
+            "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
+            "implemented only for CoordSystem in ("
+            f"{supported_coord_systems}); found "
+            f"'{CoordSystem}'."
+        )
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
+
+    phi_dim, interp_dim0, interp_dim1 = _COORDINATE_SYSTEM_DIMENSIONS[CoordSystem]
 
     _ = par.register_CodeParameter(
         "int",
@@ -167,25 +185,6 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "azimuthal_symmetry_spatial_lagrange_interpolation",
         AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES,
     )
-
-    # Step 1: Validate high-level code-generation assumptions and determine
-    # which native coordinates define the 2D interpolation grid.
-    if CoordSystem in ("Spherical", "SinhSpherical"):
-        phi_dim, interp_dim0, interp_dim1 = 2, 0, 1
-    elif CoordSystem in (
-        "Cylindrical",
-        "SinhCylindrical",
-        "SinhCylindricalv2n2",
-    ):
-        phi_dim, interp_dim0, interp_dim1 = 1, 0, 2
-    else:
-        raise ValueError(
-            "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
-            "implemented only for CoordSystem in ('Spherical', "
-            "'SinhSpherical', 'Cylindrical', 'SinhCylindrical', "
-            "'SinhCylindricalv2n2'); found "
-            f"'{CoordSystem}'."
-        )
 
     # Step 2: Ensure required helper headers are copied into the project.
     if not enable_simd:
