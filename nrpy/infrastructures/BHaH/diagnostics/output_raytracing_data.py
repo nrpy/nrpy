@@ -536,17 +536,17 @@ def register_CFunction_output_raytracing_data(
     all_rhs_bindings = ""
     if raytracing_data_mode in ("g4DD_d0", "GammaUDD"):
         rhs_bindings = """
-  const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
-  const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
-  const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
-  const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
+  MAYBE_UNUSED const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
 """
     if raytracing_data_mode == "all":
         all_rhs_bindings = """
-  const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
-  const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
-  const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
-  const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
+  MAYBE_UNUSED const REAL alpha_d0 = rhs_gfs[IDX4pt(ALPHAGF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d00 = rhs_gfs[IDX4pt(VETU0GF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d01 = rhs_gfs[IDX4pt(VETU1GF, idx3)];
+  MAYBE_UNUSED const REAL vetU_d02 = rhs_gfs[IDX4pt(VETU2GF, idx3)];
 """
 
     loop = ""
@@ -790,7 +790,7 @@ static uint32_t raytracing_data_u32_from_nonnegative_int_or_abort(
  * @param[in] label  Label for the error message.
  * @return The sum a + b.
  */
-static uint64_t raytracing_data_add_u64_or_abort(
+MAYBE_UNUSED static uint64_t raytracing_data_add_u64_or_abort(
     const uint64_t a,
     const uint64_t b,
     const char *restrict label

@@ -233,7 +233,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     # CONDITIONAL HOST ORCHESTRATION
     # ==========================================
     if parallelization == "cuda":
-        host_to_device_transfer = f"""
+        host_to_device_transfer = rf"""
     //==========================================
     // ASYNC MEMORY TRANSFER (HOST TO DEVICE)
     //==========================================
