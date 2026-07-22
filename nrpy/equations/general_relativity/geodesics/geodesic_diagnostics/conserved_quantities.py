@@ -258,45 +258,21 @@ class GeodesicDiagnostics:
         Sigma = x**2 + y**2 + z**2 - a_spin**2
         r_sq = (Sigma + sp.sqrt(Sigma**2 + 4 * a_spin**2 * z**2)) / 2
 
-        # Define r and rho for p_theta calculation
-        r = sp.sqrt(r_sq)
-        rho_sq = x**2 + y**2
-        rho = sp.sqrt(rho_sq)
-
-        # Calculate p_theta correctly by projecting 4-momentum onto theta basis vector
-        # p_theta = (x*p_x + y*p_y) * cot(theta) - r*p_z*sin(theta)
-        # Using identities for Kerr-Schild coordinates:
-        # cot(theta) = (z * sqrt(r^2 + a^2)) / (r * rho)
-        # sin(theta) = rho / sqrt(r^2 + a^2)
-
-        sqrt_r2_plus_a2 = sp.sqrt(r_sq + a_spin**2)
-
-        # Factor for (x*px + y*py) term
-        factor_1 = (z * sqrt_r2_plus_a2) / (r * rho)
-
-        # Factor for p_z term
-        factor_2 = (r * rho) / sqrt_r2_plus_a2
-
-        p_theta = factor_1 * (x * p_x + y * p_y) - factor_2 * p_z
-        p_theta_sq = p_theta**2
-
-        # Geometric identity: 1/sin^2(theta) = (r^2 + a^2) / rho^2
-        inv_sin_theta_sq = (r_sq + a_spin**2) / rho_sq
-
+        # Cartesian Kerr identity, valid on the existing analytic domain r_sq > 0.
+        # The excluded branch disk contains r_sq == 0; its boundary is the Kerr ring.
+        r2_plus_a2 = r_sq + a_spin**2
+        radial_momentum_projection = x * p_x + y * p_y
         if self.particle_type == "massive":
-            # Q = p_theta^2 + cos^2(theta) * (a^2(1 - E^2) + L_z^2/sin^2(theta))
-            # cos^2(theta) = z^2/r^2
-            # Assumes mass m=1 (4-velocity normalization)
-            second_term = (z**2 / r_sq) * (
-                a_spin**2 * (1 - E**2) + L_z**2 * inv_sin_theta_sq
-            )
+            mu_sq = sp.Integer(1)
         else:
-            # Q = p_theta^2 + cos^2(theta) * (-a^2 E^2 + L_z^2/sin^2(theta))
-            second_term = (z**2 / r_sq) * (
-                -(a_spin**2) * E**2 + L_z**2 * inv_sin_theta_sq
-            )
+            mu_sq = sp.Integer(0)
 
-        Q_formula = p_theta_sq + second_term
+        Q_formula = (
+            z**2 * r2_plus_a2 / r_sq * (p_x**2 + p_y**2)
+            - 2 * z * radial_momentum_projection * p_z
+            + r_sq * (x**2 + y**2) / r2_plus_a2 * p_z**2
+            + z**2 * a_spin**2 / r_sq * (mu_sq - E**2)
+        )
 
         return cast(sp.Expr, Q_formula)
 

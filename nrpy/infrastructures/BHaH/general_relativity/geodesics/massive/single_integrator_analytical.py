@@ -69,7 +69,7 @@ def single_integrator_analytical(spacetime: str, particle: str) -> None:
             "initial_x",
             "initial_y",
             "initial_z",
-            "energy_max",
+            "evolution_measure_max",
             "r_escape",
         ],
         [
@@ -138,7 +138,7 @@ conserved-quantity diagnostics.
 
     cfunc_type = "int"
     name = "single_integrator_analytical"
-    params = "void"
+    params = "int argc, const char *argv[]"
 
     body = rf"""
     // ==========================================
@@ -146,9 +146,7 @@ conserved-quantity diagnostics.
     // ==========================================
     commondata_struct commondata;
     commondata_struct_set_to_default(&commondata);
-
-    commondata.M_scale = 1.0;
-    commondata.a_spin = 0.9;
+    cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
     printf("Starting Massive Geodesic Integrator...\n");
     printf("spacetime: {spacetime}, M=%.2f, a=%.2f\n", commondata.M_scale, commondata.a_spin);
@@ -251,7 +249,7 @@ conserved-quantity diagnostics.
         break;
       }} // END IF: GSL integration step failed
 
-      if (fabs(y[4]) > commondata.energy_max) {{
+      if (fabs(y[4]) > commondata.evolution_measure_max) {{
         printf("Temporal four-velocity component |u^t| exceeded numerical limit.\n");
         break;
       }} // END IF: temporal four-velocity exceeded the configured bound

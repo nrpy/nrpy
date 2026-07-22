@@ -31,7 +31,7 @@ def register_struct_definitions() -> None:
     photon_soa_def = r"""
     // Single-ray compatibility layout used by conserved-quantity diagnostics.
     typedef struct {
-      double *f;            // State: t, x, y, z, p^t, p^x, p^y, p^z, Eulerian distance.
+      double *f;            // State: t, x, y, z, p^0, p^1, p^2, p^3, Eulerian distance.
       double *integration_param; // Direct-mode affine integration parameter.
     } PhotonStateSoA; // END STRUCT: PhotonStateSoA
     """
@@ -81,9 +81,8 @@ def single_integrator_analytical(
             "initial_eulerian_distance",
             "initial_h",
             "r_escape",
-            "energy_max",
         ],
-        [0.0] * 12,
+        [0.0] * 11,
         commondata=True,
         add_to_parfile=True,
     )
@@ -118,14 +117,12 @@ conserved-quantity diagnostics.
     params = "int argc, const char *argv[]"
 
     body = rf"""
-    (void)argc;
-    (void)argv;
-
     // ==========================================
     // STRUCTURAL SETUP & PARAMETERS
     // ==========================================
     commondata_struct commondata;
     commondata_struct_set_to_default(&commondata);
+    cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
     const long int num_rays = 1;
     const long int chunk_size = 1;
@@ -286,10 +283,10 @@ conserved-quantity diagnostics.
         break;
       }} // END IF: particle crossed the escape radius
 
-      if (fabs(f[4]) > commondata.energy_max) {{
-        printf("Energy measure exceeded numerical limit.\n");
+      if (fabs(f[4]) > commondata.evolution_measure_max) {{
+        printf("Evolution measure exceeded numerical limit.\n");
         break;
-      }} // END IF: energy measure exceeded the configured bound
+      }} // END IF: evolution measure exceeded the configured bound
 
       if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
         printf(
@@ -355,11 +352,11 @@ conserved-quantity diagnostics.
         body=body,
     )
 
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
-    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
-    par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
+    par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1e-17)
+    par.adjust_CodeParam_default("rkf45_error_tolerance", 1e-17)
+    par.adjust_CodeParam_default("rkf45_h_max", 10.0)
+    par.adjust_CodeParam_default("rkf45_h_min", 1e-20)
+    par.adjust_CodeParam_default("rkf45_max_retries", 15)
 
 
 if __name__ == "__main__":

@@ -121,7 +121,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
             f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$."
         )
 
-    # Map the temporal and spatial momenta ($p_t, p_x, p_y, p_z$).
+    # Map the temporal and spatial momenta ($p^0, p^1, p^2, p^3$).
     for i in range(4):
         preamble_lines.append(
             f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory."

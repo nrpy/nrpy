@@ -105,24 +105,24 @@ if __name__ == "__main__":
         cfc.CFunction_dict.pop(internal_func, None)
 
     # Step 6: Set relevant CodeParameter defaults.
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-17
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-17
-    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-20
-    par.glb_code_params_dict["rkf45_max_retries"].defaultvalue = 15
-    par.glb_code_params_dict["initial_t"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_x"].defaultvalue = 4.0123
-    par.glb_code_params_dict["initial_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_z"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_p_x"].defaultvalue = -0.5641
-    par.glb_code_params_dict["initial_p_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_p_z"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_integration_param"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_eulerian_distance"].defaultvalue = 0.0
-    par.glb_code_params_dict["initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["r_escape"].defaultvalue = 150.0
-    par.glb_code_params_dict["energy_max"].defaultvalue = 1000.0
-    par.glb_code_params_dict["max_steps"].defaultvalue = 200000
+    par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1e-17)
+    par.adjust_CodeParam_default("rkf45_error_tolerance", 1e-17)
+    par.adjust_CodeParam_default("rkf45_h_max", 10.0)
+    par.adjust_CodeParam_default("rkf45_h_min", 1e-20)
+    par.adjust_CodeParam_default("rkf45_max_retries", 15)
+    par.adjust_CodeParam_default("initial_t", 0.0)
+    par.adjust_CodeParam_default("initial_x", 4.0123)
+    par.adjust_CodeParam_default("initial_y", 0.0)
+    par.adjust_CodeParam_default("initial_z", 0.0)
+    par.adjust_CodeParam_default("initial_p_x", -0.5641)
+    par.adjust_CodeParam_default("initial_p_y", 0.0)
+    par.adjust_CodeParam_default("initial_p_z", 0.0)
+    par.adjust_CodeParam_default("initial_integration_param", 0.0)
+    par.adjust_CodeParam_default("initial_eulerian_distance", 0.0)
+    par.adjust_CodeParam_default("initial_h", 0.1)
+    par.adjust_CodeParam_default("r_escape", 150.0)
+    par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
+    par.adjust_CodeParam_default("max_steps", 200000)
 
     # Step 7: Generate headers, default parameters, and the Makefile.
     print("Generating header files and Makefile...")

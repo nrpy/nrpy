@@ -167,65 +167,65 @@ if __name__ == "__main__":
     print(" -> Overriding desired CodeParameters before .par generation...")
 
     # Step 6.a: Set analytic spacetime defaults.
-    par.glb_code_params_dict["M_scale"].defaultvalue = 1.0
-    par.glb_code_params_dict["a_spin"].defaultvalue = 0.9
+    par.adjust_CodeParam_default("M_scale", 1.0)
+    par.adjust_CodeParam_default("a_spin", 0.9)
 
     # Step 6.b: Set batch-integrator and numerical-limit defaults.
-    par.glb_code_params_dict["energy_max"].defaultvalue = 1000.0
-    par.glb_code_params_dict["perform_conservation_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 100.0
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 100.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -1000.0
+    par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
+    par.adjust_CodeParam_default("perform_conservation_check", True)
+    par.adjust_CodeParam_default("r_escape", 100.0)
+    par.adjust_CodeParam_default("slot_manager_delta_t", 100.0)
+    par.adjust_CodeParam_default("slot_manager_t_min", -1000.0)
 
     # Step 6.c: Set source-plane geometry defaults.
-    par.glb_code_params_dict["source_plane_center_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_center_z"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_plane_normal_z"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_r_max"].defaultvalue = 20.0
-    par.glb_code_params_dict["source_r_min"].defaultvalue = 6.0
-    par.glb_code_params_dict["source_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["source_up_vec_y"].defaultvalue = 1.0
-    par.glb_code_params_dict["source_up_vec_z"].defaultvalue = 0.0
+    par.adjust_CodeParam_default("source_plane_center_x", 0.0)
+    par.adjust_CodeParam_default("source_plane_center_y", 0.0)
+    par.adjust_CodeParam_default("source_plane_center_z", 0.0)
+    par.adjust_CodeParam_default("source_plane_normal_x", 0.0)
+    par.adjust_CodeParam_default("source_plane_normal_y", 0.0)
+    par.adjust_CodeParam_default("source_plane_normal_z", 1.0)
+    par.adjust_CodeParam_default("source_r_max", 20.0)
+    par.adjust_CodeParam_default("source_r_min", 6.0)
+    par.adjust_CodeParam_default("source_up_vec_x", 0.0)
+    par.adjust_CodeParam_default("source_up_vec_y", 1.0)
+    par.adjust_CodeParam_default("source_up_vec_z", 0.0)
 
     # Step 6.d: Set camera window geometry defaults.
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 51.0
-    par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 10.2
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 50.0
-    par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["original_window_center_z"].defaultvalue = 10.0
-    par.glb_code_params_dict["window_height"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_width"].defaultvalue = 1.0
+    par.adjust_CodeParam_default("camera_pos_x", 51.0)
+    par.adjust_CodeParam_default("camera_pos_y", 0.0)
+    par.adjust_CodeParam_default("camera_pos_z", 10.2)
+    par.adjust_CodeParam_default("original_window_center_x", 50.0)
+    par.adjust_CodeParam_default("original_window_center_y", 0.0)
+    par.adjust_CodeParam_default("original_window_center_z", 10.0)
+    par.adjust_CodeParam_default("window_height", 1.0)
+    par.adjust_CodeParam_default("window_up_vec_x", 0.0)
+    par.adjust_CodeParam_default("window_up_vec_y", 0.0)
+    par.adjust_CodeParam_default("window_up_vec_z", 1.0)
+    par.adjust_CodeParam_default("window_width", 1.0)
 
     # Step 6.e: Set window tiling defaults for the selected backend.
     if parallelization_mode == "cuda":
-        par.glb_code_params_dict["window_tiles_width"].defaultvalue = 1
-        par.glb_code_params_dict["window_tiles_height"].defaultvalue = 1
+        par.adjust_CodeParam_default("window_tiles_width", 1)
+        par.adjust_CodeParam_default("window_tiles_height", 1)
     else:
-        par.glb_code_params_dict["window_tiles_width"].defaultvalue = 2
-        par.glb_code_params_dict["window_tiles_height"].defaultvalue = 2
+        par.adjust_CodeParam_default("window_tiles_width", 2)
+        par.adjust_CodeParam_default("window_tiles_height", 2)
 
     # Step 6.f: Set RKF45 controller defaults.
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = 0.1
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1e-10
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1e-10
-    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1e-15
+    par.adjust_CodeParam_default("numerical_initial_h", 0.1)
+    par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1e-10)
+    par.adjust_CodeParam_default("rkf45_error_tolerance", 1e-10)
+    par.adjust_CodeParam_default("rkf45_h_max", 10.0)
+    par.adjust_CodeParam_default("rkf45_h_min", 1e-15)
 
     # Step 6.g: Set initial-condition defaults.
-    par.glb_code_params_dict["t_start"].defaultvalue = 1000.0
+    par.adjust_CodeParam_default("t_start", 1000.0)
 
     # Step 6.h: Set default scan density for the selected backend.
     if parallelization_mode == "cuda":
-        par.glb_code_params_dict["scan_density"].defaultvalue = 1000
+        par.adjust_CodeParam_default("scan_density", 1000)
     else:
-        par.glb_code_params_dict["scan_density"].defaultvalue = 500
+        par.adjust_CodeParam_default("scan_density", 500)
 
     # Step 6.i: Generate C code for parameter handling.
     print(" -> Generating parameter handling code...")
@@ -352,12 +352,14 @@ if __name__ == "__main__":
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
     config_src = os.path.join(vis_dir, "blueprint_config_and_schema.py")
     render_src = os.path.join(vis_dir, "render_lensed_image.py")
+    blueprint_io_src = os.path.join(vis_dir, "blueprint_io.py")
     blueprint_analysis_src = os.path.join(vis_dir, "blueprint_analysis.py")
 
     for script_src in (
         vis_script_src,
         config_src,
         render_src,
+        blueprint_io_src,
         blueprint_analysis_src,
     ):
         shutil.copy(script_src, project_dir)

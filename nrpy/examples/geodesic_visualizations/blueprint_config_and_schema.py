@@ -10,7 +10,19 @@ Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
+import struct
+
 import numpy as np
+
+# Native, same-build artifact contract. Cross-endian persistence is intentionally
+# outside this contract.
+BLUEPRINT_MAGIC = b"NRPYBP01"
+BLUEPRINT_SCHEMA_VERSION = 1
+BLUEPRINT_HEADER_FORMAT = "=8sIIIIIIIIQ"
+BLUEPRINT_HEADER_SIZE = 48
+BLUEPRINT_RECORD_SIZE = 84
+if struct.calcsize(BLUEPRINT_HEADER_FORMAT) != BLUEPRINT_HEADER_SIZE:
+    raise RuntimeError("BLUEPRINT_HEADER_FORMAT does not match header size")
 
 # Step 1: Core data structures.
 # This dtype MUST match the 'blueprint_data_t' struct in the C code.
@@ -20,27 +32,34 @@ BLUEPRINT_DTYPE = np.dtype(
     [
         (
             "termination_type",
-            np.int32,
+            "=i4",
         ),  # Enum indicating where the ray ended (e.g., Sphere, Disk)
-        ("y_w", "f8"),  # Local horizontal coordinate on the camera window
-        ("z_w", "f8"),  # Local vertical coordinate on the camera window
-        ("y_s", "f8"),  # Horizontal coordinate on the source (accretion disk) plane
-        ("z_s", "f8"),  # Vertical coordinate on the source (accretion disk) plane
-        ("final_theta", "f8"),  # Final polar angle on the celestial sphere
-        ("final_phi", "f8"),  # Final azimuthal angle on the celestial sphere
-        ("L_w", "f8"),  # Physical affine parameter at window intersection
-        ("t_w", "f8"),  # Coordinate time at window intersection
-        ("L_f", "f8"),  # Physical affine parameter when the photon terminated
-        ("t_f", "f8"),  # Coordinate time when the photon terminated
+        ("y_w", "=f8"),  # Local horizontal coordinate on the camera window
+        ("z_w", "=f8"),  # Local vertical coordinate on the camera window
+        ("y_s", "=f8"),  # Horizontal coordinate on the source (accretion disk) plane
+        ("z_s", "=f8"),  # Vertical coordinate on the source (accretion disk) plane
+        ("final_theta", "=f8"),  # Final polar angle on the celestial sphere
+        ("final_phi", "=f8"),  # Final azimuthal angle on the celestial sphere
+        ("L_w", "=f8"),  # Physical affine parameter at window intersection
+        ("t_w", "=f8"),  # Coordinate time at window intersection
+        ("L_f", "=f8"),  # Physical affine parameter when the photon terminated
+        ("t_f", "=f8"),  # Coordinate time when the photon terminated
     ],
     align=False,
 )
-BLUEPRINT_NORM_ABS_DTYPE = np.dtype("f8")
+if BLUEPRINT_DTYPE.itemsize != BLUEPRINT_RECORD_SIZE:
+    raise RuntimeError("BLUEPRINT_DTYPE does not match blueprint_data_t size")
+BLUEPRINT_FIELDS = BLUEPRINT_DTYPE.fields
+assert BLUEPRINT_FIELDS is not None
+if BLUEPRINT_FIELDS["termination_type"][1] != 0:
+    raise RuntimeError("termination_type offset changed in BLUEPRINT_DTYPE")
+if BLUEPRINT_FIELDS["y_w"][1] != 4:
+    raise RuntimeError("y_w offset changed in BLUEPRINT_DTYPE")
+if BLUEPRINT_FIELDS["t_f"][1] != 76:
+    raise RuntimeError("t_f offset changed in BLUEPRINT_DTYPE")
+BLUEPRINT_NORM_ABS_DTYPE = np.dtype("=f8")
 BLUEPRINT_NORM_ABS_FILENAME_TEMPLATE = (
     "light_blueprint_norm_abs_{tile_x:02d}_{tile_y:02d}.bin"
-)
-BLUEPRINT_NORM_ABS_ARCHIVE_TEMPLATE = (
-    "light_blueprint_norm_abs_{tile_x:02d}_{tile_y:02d}.zip"
 )
 
 # Step 2: Termination enums.
@@ -48,7 +67,7 @@ BLUEPRINT_NORM_ABS_ARCHIVE_TEMPLATE = (
 # They must remain synchronized with 'termination_type_t' in the C-header files.
 TERM_COORD_RADIUS_EXCEEDED = 0  # Ray exceeded the coordinate-radius escape limit
 TERM_SOURCE_PLANE = 1  # Ray hit the accretion disk / source plane
-TERM_ENERGY_LIMIT_EXCEEDED = 2  # Mode-specific energy measure exceeded energy_max
+TERM_EVOLUTION_MEASURE_EXCEEDED = 2  # Evolution measure exceeded its configured limit
 TERM_RKF45_REJECTION_LIMIT = 3  # RKF45 rejected too many consecutive steps
 TERM_T_MAX_EXCEEDED = 4  # Ray exceeded the maximum allowed coordinate time
 TERM_SLOT_MANAGER_ERROR = 5  # Slot manager failed to handle the ray

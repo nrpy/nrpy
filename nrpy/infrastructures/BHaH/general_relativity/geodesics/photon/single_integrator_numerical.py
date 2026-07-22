@@ -75,7 +75,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     typedef enum {
       TERMINATION_TYPE_COORD_RADIUS_EXCEEDED,
       TERMINATION_TYPE_SOURCE_PLANE,
-      FAILURE_ENERGY_LIMIT_EXCEEDED,
+      FAILURE_EVOLUTION_MEASURE_EXCEEDED,
       FAILURE_RKF45_REJECTION_LIMIT,
       FAILURE_T_MAX_EXCEEDED,
       FAILURE_SLOT_MANAGER_ERROR,
@@ -129,8 +129,8 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     par.register_CodeParameters(
         "REAL",
         __name__,
-        ["r_escape", "energy_max", "numerical_initial_h"],
-        [150.0, 1.0e3, 0.05],
+        ["r_escape"],
+        [150.0],
         commondata=True,
         add_to_parfile=True,
     )
@@ -239,7 +239,7 @@ the integration parameter and time is f[0].
   const char *status_names[] = {{
     "TERMINATION_TYPE_COORD_RADIUS_EXCEEDED",
     "TERMINATION_TYPE_SOURCE_PLANE",
-    "FAILURE_ENERGY_LIMIT_EXCEEDED",
+    "FAILURE_EVOLUTION_MEASURE_EXCEEDED",
     "FAILURE_RKF45_REJECTION_LIMIT",
     "FAILURE_T_MAX_EXCEEDED",
     "FAILURE_SLOT_MANAGER_ERROR",
@@ -695,11 +695,11 @@ the integration parameter and time is f[0].
       }} // END IF: accepted photon state crossed the escape sphere
 
       // f[4] is p^0 for direct evolution and the normalized log-energy measure otherwise.
-      if (fabs(f[4]) > commondata.energy_max) {{
-        *status = FAILURE_ENERGY_LIMIT_EXCEEDED;
-        printf("Energy measure exceeded %.15e.\n", commondata.energy_max);
+      if (fabs(f[4]) > commondata.evolution_measure_max) {{
+        *status = FAILURE_EVOLUTION_MEASURE_EXCEEDED;
+        printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
         break;
-      }} // END IF: accepted energy measure exceeded the configured limit
+      }} // END IF: accepted evolution measure exceeded the configured limit
     }} else if (*status == REJECTED)
       continue;
     else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{

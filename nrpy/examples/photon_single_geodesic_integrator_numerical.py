@@ -333,8 +333,8 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         )
     )
 
-    par.glb_code_params_dict["numerical_spacetime_bin_path"].defaultvalue = (
-        numerical_spacetime_bin_path
+    par.adjust_CodeParam_default(
+        "numerical_spacetime_bin_path", numerical_spacetime_bin_path
     )
 
     # Step 6.b: Match the dataset reference-metric defaults used by the
@@ -360,68 +360,60 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
     par.adjust_CodeParam_default("z_slope", z_slope)
 
     # Step 6.c: Set interpolation-order defaults.
-    par.glb_code_params_dict[
-        "numerical_spacetime_spatial_interp_order"
-    ].defaultvalue = 3
-    par.glb_code_params_dict[
-        "numerical_spacetime_temporal_interp_order"
-    ].defaultvalue = 3
+    par.adjust_CodeParam_default("numerical_spacetime_spatial_interp_order", 3)
+    par.adjust_CodeParam_default("numerical_spacetime_temporal_interp_order", 3)
 
     # Step 6.d: Set initial-condition defaults.
-    par.glb_code_params_dict["t_start"].defaultvalue = args.time_start
-    par.glb_code_params_dict["scan_density"].defaultvalue = 100
+    par.adjust_CodeParam_default("t_start", args.time_start)
+    par.adjust_CodeParam_default("scan_density", 100)
 
     # Step 6.e: Set single-integrator and numerical-limit defaults.
-    par.glb_code_params_dict["energy_max"].defaultvalue = (
-        3.0 if normalized_eom else 1000.0
+    par.adjust_CodeParam_default(
+        "evolution_measure_max", 3.0 if normalized_eom else 1000.0
     )
-    par.glb_code_params_dict["perform_normalization_check"].defaultvalue = True
-    par.glb_code_params_dict["r_escape"].defaultvalue = 25.0
+    par.adjust_CodeParam_default("perform_normalization_check", True)
+    par.adjust_CodeParam_default("r_escape", 25.0)
 
     # Step 6.f: Set the lower analytic / numerical transition defaults.
-    par.glb_code_params_dict["t_numerical_initial"].defaultvalue = (
-        args.t_numerical_initial
-    )
-    par.glb_code_params_dict["t_numerical_end"].defaultvalue = args.t_numerical_end
-    par.glb_code_params_dict["dt_numerical_spacetime_data"].defaultvalue = (
-        args.dt_spacetime_data
-    )
+    par.adjust_CodeParam_default("t_numerical_initial", args.t_numerical_initial)
+    par.adjust_CodeParam_default("t_numerical_end", args.t_numerical_end)
+    par.adjust_CodeParam_default("dt_numerical_spacetime_data", args.dt_spacetime_data)
     # Keep sparse retained-slice debugging disabled for normal runs.
-    par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue = 1
+    par.adjust_CodeParam_default("numerical_spacetime_time_slice_stride", 1)
 
     # Step 6.f: Cap coordinate-time growth per accepted RKF45 step.
-    par.glb_code_params_dict["rkf45_max_delta_t"].defaultvalue = 0.5
+    par.adjust_CodeParam_default("rkf45_max_delta_t", 0.5)
 
     # Step 6.g: Set time-window manager defaults.
-    par.glb_code_params_dict["slot_manager_delta_t"].defaultvalue = 5.0
-    par.glb_code_params_dict["slot_manager_t_min"].defaultvalue = -150.0
+    par.adjust_CodeParam_default("slot_manager_delta_t", 5.0)
+    par.adjust_CodeParam_default("slot_manager_t_min", -150.0)
 
     # Step 6.h: Set camera window geometry defaults.
-    par.glb_code_params_dict["camera_pos_x"].defaultvalue = 10.0
-    par.glb_code_params_dict["camera_pos_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["camera_pos_z"].defaultvalue = 0.0
+    par.adjust_CodeParam_default("camera_pos_x", 10.0)
+    par.adjust_CodeParam_default("camera_pos_y", 0.0)
+    par.adjust_CodeParam_default("camera_pos_z", 0.0)
 
-    par.glb_code_params_dict["original_window_center_x"].defaultvalue = 9.5
-    par.glb_code_params_dict["original_window_center_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["original_window_center_z"].defaultvalue = 0.0
+    par.adjust_CodeParam_default("original_window_center_x", 9.5)
+    par.adjust_CodeParam_default("original_window_center_y", 0.0)
+    par.adjust_CodeParam_default("original_window_center_z", 0.0)
 
-    par.glb_code_params_dict["window_height"].defaultvalue = 1.0
-    par.glb_code_params_dict["window_width"].defaultvalue = 1.0
+    par.adjust_CodeParam_default("window_height", 1.0)
+    par.adjust_CodeParam_default("window_width", 1.0)
 
-    par.glb_code_params_dict["window_up_vec_x"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_y"].defaultvalue = 0.0
-    par.glb_code_params_dict["window_up_vec_z"].defaultvalue = 1.0
+    par.adjust_CodeParam_default("window_up_vec_x", 0.0)
+    par.adjust_CodeParam_default("window_up_vec_y", 0.0)
+    par.adjust_CodeParam_default("window_up_vec_z", 1.0)
 
     # Step 6.i: Set RKF45 controller defaults.
-    par.glb_code_params_dict["numerical_initial_h"].defaultvalue = (
-        -0.05 if normalized_eom else 0.05
+    par.adjust_CodeParam_default(
+        "numerical_initial_h", -0.05 if normalized_eom else 0.05
     )
-    par.glb_code_params_dict["rkf45_absolute_error_tolerance"].defaultvalue = 1.0e-8
-    par.glb_code_params_dict["rkf45_error_tolerance"].defaultvalue = 1.0e-8
-    par.glb_code_params_dict["rkf45_h_max"].defaultvalue = 10.0
-    par.glb_code_params_dict["rkf45_h_min"].defaultvalue = 1.0e-4
+    par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1.0e-8)
+    par.adjust_CodeParam_default("rkf45_error_tolerance", 1.0e-8)
+    par.adjust_CodeParam_default("rkf45_h_max", 10.0)
+    par.adjust_CodeParam_default("rkf45_h_min", 1.0e-4)
     if normalized_eom:
-        par.glb_code_params_dict["rkf45_log_energy_tolerance"].defaultvalue = 1.0e0
+        par.adjust_CodeParam_default("rkf45_log_energy_tolerance", 1.0e0)
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
     print(f" -> Numerical coordinate system: {coord_system_numerical}")

@@ -32,6 +32,8 @@ from nrpy.helpers.loop import loop
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
+    #include <stddef.h>
+
     // Maximum number of photons processed per batch to fit within L1/L2 cache.
     #define BUNDLE_CAPACITY 524288
 
@@ -45,7 +47,7 @@ batch_structs_c_code = r"""
     typedef enum {
         TERMINATION_TYPE_COORD_RADIUS_EXCEEDED, // 0: Coordinate-radius escape limit exceeded.
         TERMINATION_TYPE_SOURCE_PLANE, // 1: Photon hit the source emission plane.
-        FAILURE_ENERGY_LIMIT_EXCEEDED, // 2: Mode-specific energy measure exceeded energy_max.
+        FAILURE_EVOLUTION_MEASURE_EXCEEDED, // 2: Evolution measure exceeded its configured limit.
         FAILURE_RKF45_REJECTION_LIMIT, // 3: Adaptive step size was rejected too many times.
         FAILURE_T_MAX_EXCEEDED, // 4: Maximum physical coordinate time was exceeded.
         FAILURE_SLOT_MANAGER_ERROR, // 5: TimeSlotManager failed to handle the photon.
@@ -54,9 +56,25 @@ batch_structs_c_code = r"""
         REJECTED, // 8: Photon RKF45 step was rejected.
     } termination_type_t; // END ENUM: termination_type_t
 
+    // Native same-build metadata for one serialized blueprint tile.
+    #define BLUEPRINT_MAGIC "NRPYBP01"
+    #define BLUEPRINT_SCHEMA_VERSION 1U
+    typedef struct {
+        char magic[8];
+        uint32_t native_schema_version;
+        uint32_t header_size;
+        uint32_t record_size;
+        uint32_t tx;
+        uint32_t ty;
+        uint32_t tiles_w;
+        uint32_t tiles_h;
+        uint32_t scan_density;
+        uint64_t record_count;
+    } __attribute__((packed)) blueprint_header_t; // END STRUCT: blueprint_header_t
+
     // Stores the final physical properties of a photon upon integration termination.
     typedef struct {
-        termination_type_t termination_type; // The exit condition of the photon.
+        int32_t termination_type; // Fixed-width serialized exit condition.
         double y_w; // Local $y$-coordinate intersection on the observer window.
         double z_w; // Local $z$-coordinate intersection on the observer window.
         double y_s; // Local $y$-coordinate intersection on the source plane.
@@ -68,6 +86,30 @@ batch_structs_c_code = r"""
         double L_f; // Affine parameter $\lambda$ when the photon terminated.
         double t_f; // Physical coordinate time $t$ when the photon terminated.
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
+
+    _Static_assert(sizeof(blueprint_header_t) == 48, "blueprint_header_t size changed");
+    _Static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
+    _Static_assert(offsetof(blueprint_header_t, native_schema_version) == 8, "blueprint header version offset changed");
+    _Static_assert(offsetof(blueprint_header_t, header_size) == 12, "blueprint header size offset changed");
+    _Static_assert(offsetof(blueprint_header_t, record_size) == 16, "blueprint header record size offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tx) == 20, "blueprint header tx offset changed");
+    _Static_assert(offsetof(blueprint_header_t, ty) == 24, "blueprint header ty offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tiles_w) == 28, "blueprint header tiles_w offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tiles_h) == 32, "blueprint header tiles_h offset changed");
+    _Static_assert(offsetof(blueprint_header_t, scan_density) == 36, "blueprint header scan offset changed");
+    _Static_assert(offsetof(blueprint_header_t, record_count) == 40, "blueprint header count offset changed");
+    _Static_assert(sizeof(blueprint_data_t) == 84, "blueprint_data_t size changed");
+    _Static_assert(offsetof(blueprint_data_t, termination_type) == 0, "blueprint termination offset changed");
+    _Static_assert(offsetof(blueprint_data_t, y_w) == 4, "blueprint y_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, z_w) == 12, "blueprint z_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, y_s) == 20, "blueprint y_s offset changed");
+    _Static_assert(offsetof(blueprint_data_t, z_s) == 28, "blueprint z_s offset changed");
+    _Static_assert(offsetof(blueprint_data_t, final_theta) == 36, "blueprint final_theta offset changed");
+    _Static_assert(offsetof(blueprint_data_t, final_phi) == 44, "blueprint final_phi offset changed");
+    _Static_assert(offsetof(blueprint_data_t, L_w) == 52, "blueprint L_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, t_w) == 60, "blueprint t_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, L_f) == 68, "blueprint L_f offset changed");
+    _Static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
 
     // ==========================================
     // Flattened SoA Struct (Master Storage)

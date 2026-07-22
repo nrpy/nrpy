@@ -25,6 +25,7 @@ Author: Dalton J. Moone
 """
 
 import nrpy.c_function as cfc
+import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (
     time_slot_manager_helpers,
@@ -44,12 +45,8 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "r_escape",
-            "energy_max",
-            "numerical_initial_h",
-        ],
-        [150.0, 1e3, 0.1],
+        ["r_escape"],
+        [150.0],
         commondata=True,
         add_to_parfile=True,
     )
@@ -63,6 +60,53 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     )
 
     parallelization = par.parval_from_str("parallelization")
+
+    # Initialize the complete serialized record once before any event writes.
+    init_arg_dict = {
+        "num_rays": "const long int",
+        "d_results_buffer": "blueprint_data_t *restrict",
+    }
+    if parallelization == "cuda":
+        init_loop = """
+        const long int i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= num_rays) return;
+        """
+        init_loop_end = ""
+        init_launch_dict = {
+            "threads_per_block": ["256", "1", "1"],
+            "blocks_per_grid": ["(num_rays + 255) / 256", "1", "1"],
+        }
+    else:
+        init_loop = """
+        #pragma omp parallel for
+        for (long int i = 0; i < num_rays; ++i) {
+        """
+        init_loop_end = "        }\n"
+        init_launch_dict = None
+    init_kernel_body = f"""
+    {init_loop}
+        d_results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
+        d_results_buffer[i].y_w = 0.0;
+        d_results_buffer[i].z_w = 0.0;
+        d_results_buffer[i].y_s = 0.0;
+        d_results_buffer[i].z_s = 0.0;
+        d_results_buffer[i].final_theta = 0.0;
+        d_results_buffer[i].final_phi = 0.0;
+        d_results_buffer[i].L_w = 0.0;
+        d_results_buffer[i].t_w = 0.0;
+        d_results_buffer[i].L_f = 0.0;
+        d_results_buffer[i].t_f = 0.0;
+    {init_loop_end}
+    """
+    init_prefunc, init_launch = parallel_utils.generate_kernel_and_launch_code(
+        kernel_name="initialize_blueprint_data",
+        kernel_body=init_kernel_body,
+        arg_dict_cuda=init_arg_dict,
+        arg_dict_host=init_arg_dict,
+        parallelization=parallelization,
+        launch_dict=init_launch_dict,
+        cfunc_decorators="__global__" if parallelization == "cuda" else "",
+    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
 
@@ -333,6 +377,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     blueprint_data_t *d_results_buffer;
     // {dev_comment} the blueprint results buffer to avoid mid-computation memory transfers.
     {malloc_device}(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
+    {init_launch}
 
     // Host-bound struct managing temporal binning of photon trajectories $x^\mu$.
     TimeSlotManager tsm;
@@ -377,7 +422,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     long int mismatch_x = 0; // Counter tracking validation failures for the spatial coordinate $x$.
     long int mismatch_y = 0; // Counter tracking validation failures for the spatial coordinate $y$.
     long int mismatch_z = 0; // Counter tracking validation failures for the spatial coordinate $z$.
-    long int mismatch_pt = 0; // Counter tracking validation failures for the temporal momentum $p_t$.
+    long int mismatch_p0 = 0; // Counter tracking validation failures for the temporal momentum $p^0$.
     long int mismatch_lam = 0; // Counter tracking validation failures for the distance traveled.
 
     for (long int p = 0; p < num_rays; p++) {{ // Loop iterator index $p$ mapping to a unique photon trajectory $x^\mu$ during diagnostic validation.
@@ -385,24 +430,24 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         const double x_check = all_photons_host.f[1 * num_rays + p]; // Evaluates the current spatial coordinate $x$ from the Host SoA.
         const double y_check = all_photons_host.f[2 * num_rays + p]; // Evaluates the current spatial coordinate $y$ from the Host SoA.
         const double z_check = all_photons_host.f[3 * num_rays + p]; // Evaluates the current spatial coordinate $z$ from the Host SoA.
-        const double pt_check = all_photons_host.f[4 * num_rays + p]; // Evaluates the initial temporal momentum $p_t$ from the Host SoA.
+        const double p0_check = all_photons_host.f[4 * num_rays + p]; // Evaluates the initial temporal momentum $p^0$ from the Host SoA.
         const double lam_check = all_photons_host.f[8 * num_rays + p]; // Evaluates the initial distance traveled from the Host SoA.
 
         bool fail_t = fabs(t_check - commondata->t_start) > 1e-10; // Boolean flag indicating temporal coordinate $t$ validation failure.
         bool fail_x = fabs(x_check - commondata->camera_pos_x) > 1e-10; // Boolean flag indicating spatial coordinate $x$ validation failure.
         bool fail_y = fabs(y_check - commondata->camera_pos_y) > 1e-10; // Boolean flag indicating spatial coordinate $y$ validation failure.
         bool fail_z = fabs(z_check - commondata->camera_pos_z) > 1e-10; // Boolean flag indicating spatial coordinate $z$ validation failure.
-        bool fail_pt = fabs(pt_check) > 1e-15; // Boolean flag indicating temporal momentum $p_t$ validation failure.
+        bool fail_p0 = fabs(p0_check) > 1e-15; // Boolean flag indicating temporal momentum $p^0$ validation failure.
         bool fail_lam = fabs(lam_check) > 1e-15; // Boolean flag indicating distance traveled validation failure.
 
         if (fail_t) mismatch_t++; // Increments the validation failure counter for temporal coordinate $t$.
         if (fail_x) mismatch_x++; // Increments the validation failure counter for spatial coordinate $x$.
         if (fail_y) mismatch_y++; // Increments the validation failure counter for spatial coordinate $y$.
         if (fail_z) mismatch_z++; // Increments the validation failure counter for spatial coordinate $z$.
-        if (fail_pt) mismatch_pt++; // Increments the validation failure counter for temporal momentum $p_t$.
+        if (fail_p0) mismatch_p0++; // Increments the validation failure counter for temporal momentum $p^0$.
         if (fail_lam) mismatch_lam++; // Increments the validation failure counter for the distance traveled.
 
-        if (fail_t || fail_x || fail_y || fail_z || fail_pt || fail_lam) {{
+        if (fail_t || fail_x || fail_y || fail_z || fail_p0 || fail_lam) {{
             init_mismatch_count++; // Increments the total accumulation of trajectory structural validation failures.
         }} // END IF: validate initialization coordinates
     }} // END LOOP: for p over num_rays to validate initialization
@@ -463,12 +508,12 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
         if (metric_nan_count > 0) {{
             // This is a soft warning to highlight numerical metric singularities without aborting the physics engine.
-            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays have invalid Metric G_mu_nu before p_t solve.\n", init_batch, metric_nan_count);
+            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays have invalid Metric G_mu_nu before p^0 solve.\n", init_batch, metric_nan_count);
         }} // END IF: metric_nan_count > 0 to print diagnostic
         // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         {free_pinned}(metric_diag_bridge);
 
-        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ natively on the active pipeline.
+        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p^0$ natively on the active pipeline.
         p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating memory transfer of the 9 constrained state vector $f^\mu$ components.
@@ -490,7 +535,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
         if (nan_count > 0) {{
             // This is a soft warning alerting to unresolved constraints $p_\mu p^\mu = 0$ for isolated trajectories.
-            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays contain NaN in state f^mu after p_t solve.\n", init_batch, nan_count);
+            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays contain NaN in state f^mu after p^0 solve.\n", init_batch, nan_count);
         }} // END IF: nan_count > 0 to print diagnostic
     }} // END LOOP: for init_batch over num_batches to evaluate initialization constraints
 
@@ -1131,6 +1176,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
     cfc.register_CFunction(
         includes=includes,
+        prefunc=init_prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

@@ -5,7 +5,7 @@ Provides the C orchestrator for geometric event detection.
 This module provides the high-level logic for detecting crossings of the observer
 window and the source emission plane. It generates a C kernel that reads the current
 and historical integration state bundles from global device memory into local arrays
-to evaluate energy limits and coordinate-radius bounds before verifying
+to evaluate evolution-measure limits and coordinate-radius bounds before verifying
 physical plane intersections. The geometric boundaries remain mathematically immutable
 across all rendered tiles, ensuring consistent hit detection depth. The kernel calls
 downstream interpolation routines to resolve precise boundary crossing coordinates
@@ -28,15 +28,6 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     :param normalized_eom: Whether the state stores affine parameter in ``f[0]``
         and coordinate time in the integration-parameter tracker.
     """
-    par.register_CodeParameters(
-        "REAL",
-        __name__,
-        ["energy_max"],
-        [1e5],
-        commondata=True,
-        add_to_parfile=True,
-    )
-
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
 
@@ -135,15 +126,15 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
-    // MODE-SPECIFIC ENERGY LIMIT CHECK
+    // MODE-SPECIFIC EVOLUTION-MEASURE LIMIT CHECK
     //==========================================
     // Direct evolution stores $p^0$ in f[4]; normalized evolution stores its log-energy measure.
     const double energy_measure = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
 
-    if (AbsCUDA(energy_measure) > {cd_access}energy_max) {{
-        d_status_bundle[i] = FAILURE_ENERGY_LIMIT_EXCEEDED; // Stops a ray whose energy measure exceeded its limit.
+    if (AbsCUDA(energy_measure) > {cd_access}evolution_measure_max) {{
+        d_status_bundle[i] = FAILURE_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
         {escape_statement}
-    }} // END IF: mode-specific energy limit exceeded
+    }} // END IF: mode-specific evolution-measure limit exceeded
 
     // Terminated photons cleanly bypass the geometric evaluation logic.
     if (d_status_bundle[i] != ACTIVE) {escape_statement}

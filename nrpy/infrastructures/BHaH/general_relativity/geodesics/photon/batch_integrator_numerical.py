@@ -89,12 +89,8 @@ def batch_integrator_numerical(
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "r_escape",
-            "energy_max",
-            "numerical_initial_h",
-        ],
-        [150.0, 1e3, 0.05],
+        ["r_escape"],
+        [150.0],
         commondata=True,
         add_to_parfile=True,
     )
@@ -615,7 +611,7 @@ def batch_integrator_numerical(
         if (metric_nan_count > 0) {{
             fprintf(stderr,
                     "ERROR: Init Batch %ld: %ld rays have invalid numerical metric "
-                    "G_mu_nu before p_t solve.\n",
+                    "G_mu_nu before p^0 solve.\n",
                     init_batch,
                     metric_nan_count);
             {free_pinned}(metric_diag_bridge);
@@ -626,7 +622,7 @@ def batch_integrator_numerical(
         // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         {free_pinned}(metric_diag_bridge);
 
-        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ natively on the active pipeline.
+        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p^0$ natively on the active pipeline.
         p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
         {normalized_momentum_conversion}
 
@@ -650,13 +646,13 @@ def batch_integrator_numerical(
         if (nonfinite_count > 0) {{
             fprintf(stderr,
                     "ERROR: Init Batch %ld: %ld rays contain nonfinite state values "
-                    "after p_t solve. Aborting numerical batch integration.\n",
+                    "after p^0 solve. Aborting numerical batch integration.\n",
                     init_batch,
                     nonfinite_count);
             time_window_manager_numerical_free(&numerical_window);
             slot_manager_free(&tsm);
             exit(1);
-        }} // END IF: nonfinite_count > 0 to abort on invalid post-p_t states
+        }} // END IF: nonfinite_count > 0 to abort on invalid post-p^0 states
     }} // END LOOP: for init_batch over num_batches to evaluate initialization constraints
 
 
@@ -1313,7 +1309,7 @@ def batch_integrator_numerical(
                             max_err_norm = current_norm_err;
                             worst_ray_norm = master_idx;
                         }} // END IF: current_norm_err > max_err_norm
-                        if (all_photons_host.status[master_idx] != FAILURE_ENERGY_LIMIT_EXCEEDED &&
+                        if (all_photons_host.status[master_idx] != FAILURE_EVOLUTION_MEASURE_EXCEEDED &&
                             all_photons_host.status[master_idx] != FAILURE_RKF45_REJECTION_LIMIT &&
                             current_norm_err > max_err_norm_excluding_failures) {{
                             max_err_norm_excluding_failures = current_norm_err;
@@ -1352,7 +1348,7 @@ def batch_integrator_numerical(
                 max_err_norm,
                 worst_ray_norm);
             printf(
-                "  Max Absolute Error, excluding FAILURE_ENERGY_LIMIT_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
+                "  Max Absolute Error, excluding FAILURE_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
                 max_err_norm_excluding_failures,
                 worst_ray_norm_excluding_failures);
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization constraint

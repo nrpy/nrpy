@@ -107,16 +107,21 @@ def rkf45_finalize_and_control_kernel(
         "rkf45_absolute_error_tolerance",
         "rkf45_h_min",
         "rkf45_h_max",
+        "evolution_measure_max",
     ]
-    real_param_defaults: List[Union[str, int, float]] = [1e-8, 1e-8, 1e-10, 10.0]
+    real_param_defaults: List[Union[str, int, float]] = [
+        1e-8,
+        1e-8,
+        1e-10,
+        10.0,
+        1.0e3,
+    ]
     if normalized_eom:
         real_param_names.append("rkf45_log_energy_tolerance")
         real_param_defaults.append(1e-8)
-    # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The caller owns registration of the shared lookahead and slot-lattice
-    # CodeParameters before this kernel consumes them.
+    # The finalizer owns shared RKF45 setup consumed by all photon orchestrators.
     real_param_names.append("numerical_initial_h")
-    real_param_defaults.append(1.0)
+    real_param_defaults.append(0.1)
     par.register_CodeParameters(
         "REAL",
         __name__,

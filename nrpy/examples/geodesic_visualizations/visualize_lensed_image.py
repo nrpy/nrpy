@@ -29,7 +29,11 @@ except ImportError:
 
 
 def main() -> None:
-    """Parse parameters and orchestrate lensed image creation."""
+    """
+    Parse parameters and orchestrate lensed image creation.
+
+    :raises FileNotFoundError: If a tile is missing from an otherwise present set.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # The default output path is strictly local.
@@ -112,7 +116,7 @@ def main() -> None:
         default=None,
         metavar="key",
         help=(
-            "Color energy-limit, RKF45, maximum-time, slot, and generic failures. "
+            "Color evolution-measure, RKF45, maximum-time, slot, and generic failures. "
             "Pass 'key' to also add the color key to the image."
         ),
     )
@@ -125,24 +129,27 @@ def main() -> None:
     # Absolute script directory ensures paths resolve independently of execution context.
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Deterministically build the expected file paths based on tile dimensions.
-    blueprint_zips = []
-    for i in range(args.window_tiles_width):
-        for j in range(args.window_tiles_height):
-            zip_filename = f"light_blueprint_{i:02d}_{j:02d}.zip"
-            zip_filepath = os.path.join(script_dir, zip_filename)
-
-            # Existence check prevents reading missing or uncompiled blueprints.
-            if not os.path.exists(zip_filepath):
-                print(f"WARNING: Expected tile missing at '{zip_filepath}'.")
-            else:
-                blueprint_zips.append(zip_filepath)
-
-    if not blueprint_zips:
-        print("ERROR: No blueprint zip files found to process.")
+    first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
+    if not os.path.exists(first_tile):
+        print(
+            f"No native blueprint artifacts found in {script_dir}; nothing to render."
+        )
         return
 
-    print(f"Loading {len(blueprint_zips)} blueprint tiles...")
+    # Deterministically build the expected file paths based on tile dimensions.
+    blueprint_files = []
+    for i in range(args.window_tiles_width):
+        for j in range(args.window_tiles_height):
+            blueprint_filename = f"light_blueprint_{i:02d}_{j:02d}.bin"
+            blueprint_filepath = os.path.join(script_dir, blueprint_filename)
+
+            if not os.path.exists(blueprint_filepath):
+                raise FileNotFoundError(
+                    f"Expected tile missing at '{blueprint_filepath}'."
+                )
+            blueprint_files.append(blueprint_filepath)
+
+    print(f"Loading {len(blueprint_files)} blueprint tiles...")
 
     # The custom sphere image overrides the default downloaded texture when provided.
     if args.sphere_image is None:
@@ -205,9 +212,7 @@ def main() -> None:
         source_image_width=source_physical_width,
         sphere_image=sphere_image,
         source_image=source_image,
-        blueprint_filenames=blueprint_zips,
-        window_width=args.window_width,
-        window_height=args.window_height,
+        blueprint_filenames=blueprint_files,
         custom_sphere_image=args.sphere_image is not None,
         custom_source_image=args.source_image is not None,
         enable_debug=args.debug is not None,

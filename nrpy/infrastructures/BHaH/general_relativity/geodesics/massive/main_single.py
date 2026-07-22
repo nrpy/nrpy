@@ -1,8 +1,8 @@
 """
 Register the C entry point for a single massive-particle integrator.
 
-The massive integrator has no command-line arguments, so this helper emits a
-minimal ``main(void)`` that forwards directly to the registered integrator.
+The helper emits a standard ``main(argc, argv)`` that forwards command-line
+arguments to the registered integrator.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -15,7 +15,7 @@ def main_single(integrator_name: str) -> None:
     """
     Register a C ``main`` that forwards to a single-particle integrator.
 
-    :param integrator_name: C function taking no arguments and returning ``int``.
+    :param integrator_name: C function taking ``argc, argv`` and returning ``int``.
     :raises ValueError: If ``integrator_name`` is not a valid C identifier.
     """
     if not integrator_name.isidentifier():
@@ -28,8 +28,8 @@ def main_single(integrator_name: str) -> None:
         desc="Forward the executable entry point to the selected massive-particle integrator.",
         cfunc_type="int",
         name="main",
-        params="void",
-        body=f"return {integrator_name}();",
+        params="int argc, const char *argv[]",
+        body=f"return {integrator_name}(argc, argv);",
     )
 
 
