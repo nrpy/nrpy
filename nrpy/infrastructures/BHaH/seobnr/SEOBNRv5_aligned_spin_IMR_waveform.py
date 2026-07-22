@@ -30,14 +30,19 @@ def register_CFunction_SEOBNRv5_aligned_spin_IMR_waveform(
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Evaluates the (2,2) mode for the waveform by combining the inspiral and merger ringdown modes.
+Builds the aligned-spin (2,2) inspiral-merger-ringdown waveform.
 
-@param commondata - Common data structure containing the model parameters.
+The inspiral is interpolated through the attachment time. The ringdown segment
+uses either the native SEOBNRv5 merger-ringdown model or the BOB model,
+depending on how this function was registered.
+
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_IMR_waveform"
     params = "commondata_struct *restrict commondata"
     body = """
+// Step 1: Interpolate inspiral modes and allocate amplitude and phase arrays.
 size_t i;
 const REAL dT = commondata->dt/(commondata->total_mass*4.925490947641266978197229498498379006e-6);
 SEOBNRv5_aligned_spin_interpolate_modes(commondata , dT);
@@ -62,14 +67,17 @@ if (h22_wrapped_phase_new == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for h22_wrapped_phase_new\\n");
   exit(1);
 }
+// Step 2: Extract interpolated inspiral amplitude and phase samples.
 for(i = 0; i < commondata->nsteps_inspiral; i++){
   times_new[i] = commondata->waveform_inspiral[IDX_WF(i,TIME)];
   h22 = commondata->waveform_inspiral[IDX_WF(i,STRAIN)];
   h22_amp_new[i] = cabs(h22);
   h22_wrapped_phase_new[i] = carg(h22);
-}
+} // END LOOP: for i over inspiral samples
 SEOBNRv5_aligned_spin_unwrap(h22_wrapped_phase_new,h22_phase_new,commondata->nsteps_inspiral);
 free(h22_wrapped_phase_new);
+
+// Step 3: Select matching index and allocate ringdown arrays.
 size_t idx_match = gsl_interp_bsearch(times_new,commondata->t_attach,0, commondata->nsteps_inspiral);
 if (times_new[idx_match] > commondata->t_attach){
   idx_match--;
@@ -94,12 +102,14 @@ if (ringdown_phase == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), malloc() failed to for ringdown_phase\\n");
   exit(1);
 }
+// Step 4: Build ringdown sample times.
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_time[i] = t_match + (i + 1) * dT;
-}
+} // END LOOP: for i over ringdown sample times
 """
     if use_seobnrv5_merger_ringdown:
         body += """
+// Step 5: Build native merger-ringdown initial data at the match time.
 size_t left = NRPYMAX(5,idx_match) - 5;
 size_t right = NRPYMIN(commondata->nsteps_inspiral,idx_match + 5);
 REAL times_cropped[right-left] , amps_cropped[right-left] , phases_cropped[right-left];
@@ -107,7 +117,7 @@ for (i = left; i < right; i++){
   times_cropped[i - left] = times_new[i];
   amps_cropped[i - left] = h22_amp_new[i];
   phases_cropped[i - left] = h22_phase_new[i];
-}
+} // END LOOP: for i over cropped inspiral samples
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 if (acc == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_IMR_waveform(), gsl_interp_accel_alloc failed to initialize\\n");
@@ -135,14 +145,16 @@ SEOBNRv5_aligned_spin_merger_waveform_from_times(ringdown_time,ringdown_amp,ring
 """
     else:
         body += """
+// Step 5: Build BOB ringdown samples and align their phase.
 const REAL phase_match = h22_phase_new[idx_match + 1];
 BOB_aligned_spin_waveform_from_times(ringdown_time,ringdown_amp,ringdown_phase,nsteps_ringdown,commondata);
 const REAL true_sign = copysign(1.,phase_match);
 for(i = 0; i < nsteps_ringdown; i++){
   ringdown_phase[i] = true_sign*ringdown_phase[i] + phase_match;
-}
+} // END LOOP: for i over BOB ringdown phases
 """
     body += """
+// Step 6: Combine inspiral and ringdown into the IMR waveform.
 commondata->nsteps_IMR = idx_match + 1 + nsteps_ringdown;
 commondata->waveform_IMR = (double complex *)malloc(NUMMODES * commondata->nsteps_IMR*sizeof(double complex));
 if (commondata->waveform_IMR == NULL){
@@ -153,7 +165,7 @@ for (i = 0; i <= idx_match; i++){
   commondata->waveform_IMR[IDX_WF(i,TIME)] = times_new[i] - commondata->t_attach;
   h22 = h22_amp_new[i] * cexp(I * h22_phase_new[i]);
   commondata->waveform_IMR[IDX_WF(i,STRAIN)] = h22;
-}
+} // END LOOP: for i over inspiral IMR samples
 free(h22_amp_new);
 free(h22_phase_new);
 free(times_new);
@@ -162,7 +174,7 @@ for(i = 0; i < nsteps_ringdown; i++){
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,TIME)] = ringdown_time[i] - commondata->t_attach;
   h22 = ringdown_amp[i] * cexp(I * ringdown_phase[i]);
   commondata->waveform_IMR[IDX_WF(i + 1 + idx_match,STRAIN)] = h22;
-}
+} // END LOOP: for i over ringdown IMR samples
 free(ringdown_time);
 free(ringdown_phase);
 free(ringdown_amp);

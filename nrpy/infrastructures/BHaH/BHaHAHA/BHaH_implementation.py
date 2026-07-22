@@ -400,7 +400,7 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
  * 3. Allocates memory for destination reference-metric coordinates (`dst_x0x1x2_interp`). Exits on failure.
  * 4. Populates `dst_x0x1x2_interp`: For each point on the spherical grid (defined by `radii`,
  *    theta, phi around `x_center`, `y_center`, `z_center`), converts its Cartesian
- *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2`.
+ *    coordinates to reference-metric coordinates using `Cart_to_xx_and_nearest_i0i1i2_assume_valid`.
  * 5. Initializes source gridfunction pointers (`src_gf_ptrs`) for the required BSSN variables from `y_n_gfs`.
  * 6. Allocates temporary memory for interpolated BSSN variables at spherical grid points
  *    (`dst_data_ptrs_bssn`). Exits on failure.
@@ -468,7 +468,7 @@ static void BHaHAHA_interpolate_metric_data_nrpy(const commondata_struct *restri
         const int idx3 = IDX3_SPH_INTERP_LOCAL(ir, itheta, iphi);
         const REAL xCart[3] = {x_center + r * sintheta * cosphi, y_center + r * sintheta * sinphi, z_center + r * costheta};
         int Cart_to_i0i1i2_not_stored_to_save_memory[3];
-        Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_x0x1x2_interp[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
+        Cart_to_xx_and_nearest_i0i1i2_assume_valid(params, xCart, dst_x0x1x2_interp[idx3], Cart_to_i0i1i2_not_stored_to_save_memory);
       } // END LOOP: for ir (spherical grid setup)
     } // END LOOP: for itheta (spherical grid setup)
   } // END LOOP: for iphi over spherical interpolation grid setup

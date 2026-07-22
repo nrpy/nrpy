@@ -1,7 +1,7 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
-#include "differentiate_interpolation_lagrange_uniform.h"
-#include "interpolation_lagrange_uniform.h"
+#include "interpolation/differentiate_interpolation_lagrange_uniform.h"
+#include "interpolation/interpolation_lagrange_uniform.h"
 #include <math.h>
 #include <stdint.h>
 
@@ -234,7 +234,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   const REAL xCart[3] = {x, y, z};
   REAL xx_target[3];
   int center_idx[3];
-  Cart_to_xx_and_nearest_i0i1i2__rfm__SinhCylindricalv2n2(params, xCart, xx_target, center_idx);
+  Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(params, xCart, xx_target, center_idx);
 
   const REAL target_interp_0 = xx_target[0];
   const REAL target_interp_1 = xx_target[2];

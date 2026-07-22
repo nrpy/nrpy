@@ -27,15 +27,16 @@ def register_CFunction_find_local_minimum_index() -> Union[None, pcg.NRPyEnv_typ
         return None
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Finds the local minimum index in an array. 
+Finds the local minimum index in an array.
+
 Implements the logic of scipy.argrelmin with order = 3 and clipped indexing.
-However, it returns the index of the first minimum from the left, 
+However, it returns the index of the first minimum from the left,
 as required by SEOBNRv5_aligned_spin_iterative_refinement.
 
-@param arr - The array to search for the minimum in.
-@param size - The size of the array.
-@param order - The maximum array index shift to consider for the minimum.
-@returns - The index of the local minimum in the array or -1 if no minimum is found.
+@param[in] arr The array to search for the minimum in.
+@param size The size of the array.
+@param order The maximum array index shift to consider for the minimum.
+@return The index of the local minimum in the array or -1 if no minimum is found.
 """
     cfunc_type = "size_t"
     name = "find_local_minimum_index"

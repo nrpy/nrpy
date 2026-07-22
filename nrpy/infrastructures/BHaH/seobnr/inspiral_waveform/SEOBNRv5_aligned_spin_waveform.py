@@ -56,9 +56,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform() -> (
     desc = """
 Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for a single timestep.
 
-@param dynamics - Array of dynamical variables.
-@param commondata - Common data structure containing the model parameters.
-@return - The (2,2) mode of the SEOBNRv5 inspiral waveform.
+@param[in] dynamics Array of dynamical variables.
+@param[in] commondata Common data structure containing the model parameters.
+@return The (2,2) mode of the SEOBNRv5 inspiral waveform.
 """
     cfunc_type = "double complex"
     prefunc = "#include<complex.h>"
@@ -74,7 +74,7 @@ const REAL phi = dynamics[PHI];
 const REAL Hreal = dynamics[H];
 const REAL Omega = dynamics[OMEGA];
 const REAL Omega_circ = dynamics[OMEGA_CIRC];
-//compute
+// Evaluate the generated factorized inspiral waveform expressions.
 """
     body += khat2_code
     body += """

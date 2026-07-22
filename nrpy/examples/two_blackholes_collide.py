@@ -295,9 +295,12 @@ enable_CAKO = True
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
-basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
+if enable_bhahaha and fp_type != "double":
+    raise ValueError(
+        "BHaHAHA integration currently requires --floating_point_precision double."
+    )
 
 BHaHAHA_subdir = "BHaHAHA"
 if fd_order != 6:
@@ -478,11 +481,13 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
         "static constexpr" if parallelization == "cuda" else "static const"
     ),
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
-    set_of_CoordSystems=basis_transform_CoordSystems,
+    set_of_CoordSystems=set_of_CoordSystems,
 )
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 

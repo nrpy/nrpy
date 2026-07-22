@@ -1,5 +1,8 @@
 # NRPy Project Coding Style Guide
 
+> Human-facing reference for contributors. These rules may also be duplicated
+> in the KB under `wiki/` so LLM agents can route through compiled pages.
+
 ## Overview
 
 This document provides a comprehensive style guide for the NRPy project, a numerical relativity framework that generates C code from Python/SymPy expressions. The coding standards described herein are enforced by CI tooling and must be followed by all contributors.
@@ -10,10 +13,12 @@ This document provides a comprehensive style guide for the NRPy project, a numer
 
 1. [Python Coding Style](#python-coding-style)
 2. [Equation Setup Patterns](#equation-setup-patterns)
-3. [Infrastructure Code Patterns](#infrastructure-code-patterns)
-4. [C/H Coding Style](#ch-coding-style)
-5. [Static Analysis Configuration](#static-analysis-configuration)
-6. [Style Comparison Summary](#style-comparison-summary)
+3. [Coordinate Bounds-Check Prohibition](#coordinate-bounds-check-prohibition)
+4. [API And ABI Compatibility-Shim Prohibition](#api-and-abi-compatibility-shim-prohibition)
+5. [Infrastructure Code Patterns](#infrastructure-code-patterns)
+6. [C/H Coding Style](#ch-coding-style)
+7. [Static Analysis Configuration](#static-analysis-configuration)
+8. [Style Comparison Summary](#style-comparison-summary)
 
 ---
 
@@ -25,7 +30,7 @@ The project uses **Black** for automatic code formatting. Follow Black's output
 for line wrapping and other formatting details.
 
 Run `black .` before committing to ensure consistent formatting.
-For any modified Python file, also run `.github/single_file_static_analysis.sh <path-to-file.py>` before committing.
+For any modified handwritten Python file, also run `.github/single_file_static_analysis.sh <path-to-file.py>` before committing. Generated trusted `*/tests/*.py` data is exempt, but its handwritten owner is not.
 
 Binary files are not allowed in NRPy pull requests. Do not add images, archives,
 compiled artifacts, or other non-text assets. If a change appears to require one,
@@ -88,7 +93,8 @@ from nrpy.helpers.generic import superfast_uniq
 
 ### `__init__.py` Files
 
-- **Always lack module-level docstrings.** Every `__init__.py` in the codebase is a bare import aggregation file with no docstring, no comments, and no executable code beyond `from . import ...` or `from .module import ...` statements.
+- New or modified `__init__.py` files should lack module-level docstrings and remain bare explicit-relative-import aggregators.
+- `nrpy/infrastructures/BHaH/fisheye/__init__.py` is a current legacy exception because it assigns `__all__`; verify package consumers before changing it rather than assuming the assignment is either required or removable.
 - Use explicit relative imports for all submodules, maintaining a flat namespace.
 
 ```python
@@ -427,9 +433,87 @@ Style rules:
 
 ---
 
+## Coordinate Bounds-Check Prohibition
+
+Coordinate-admission checks are request-gated. Do not add, expand, strengthen,
+duplicate, relocate, or factor logic into a helper when its purpose or effect is
+to validate, bound, clamp, reject, abort, skip, return status for, alter control
+flow for, select interpolation for, or classify coordinate values, logical
+coordinates, or coordinate-derived indices, candidates, or stencils by
+finiteness, domain, patch or grid-interior membership, representability, or
+range. This applies in all handwritten, emitted, and generated languages and to
+functions, methods, callers, helpers, wrappers, lambdas, inline functions,
+templates, and function-like macros.
+
+Authorization exists only when the current task's user-authored request
+expressly requests coordinate bounds checking and names the exact target.
+Prior reviews or plans, generic requests to fix, harden, review, or address
+undefined behavior, theoretical undefined behavior, and an inferred need do
+not authorize such a change. Existing checks are grandfathered unchanged and
+are not precedent for new or expanded checks.
+
+This rule does not prohibit genuinely non-coordinate storage safety over
+already-produced discrete values, including serialized indices, array or buffer
+extents, counts, allocation overflow, storage capacity, or distributed
+ownership. Existing interpolation-stencil storage, distributed-ownership, and
+boundary-classification checks may remain unchanged; new or expanded
+coordinate-derived stencil-membership checks still require the named
+authorization above.
+
+This prohibition overrides `### Defensive Guard Evidence`: caller evidence,
+reproduction, or a test can support an authorized coordinate-admission check,
+but cannot authorize one without the current task's qualifying user-authored
+request.
+
+---
+
+## API And ABI Compatibility-Shim Prohibition
+
+Never add or expand an API or ABI compatibility shim. Prohibited shims include
+aliases or re-exports, deprecated forwarders, obsolete generated symbols,
+prototypes, or header declarations, dual registrations, old-signature or
+old-option translation, and CLI, configuration, or schema bridges whose purpose
+or effect is to keep a superseded interface usable.
+
+An interface change must atomically update every affected current-commit definition,
+caller, registry entry, generated header and prototype, document, test, and
+golden, then remove the superseded surface in the same change. NRPy's only
+interface-stability requirement is self-consistency within the current commit.
+
+Existing untouched shims may remain as factual legacy only. They are
+nonprecedential, provide no implicit authorization, and must not be copied or
+expanded. This policy does not authorize unrelated cleanup, mass API deletion,
+or other changes outside the current task.
+
+This prohibition does not ban a minimal internal adapter that connects distinct
+active interfaces genuinely required by producers and consumers in the current
+commit. Such an adapter must not expose or translate an obsolete name,
+signature, option, symbol, or version.
+
+---
+
 ## Infrastructure Code Patterns
 
 The following patterns are standard for NRPy infrastructure code:
+
+### Defensive Guard Evidence
+
+Before adding a defensive guard, trace all in-repository callers and identify a
+concrete path by which the guarded state can occur. Add the guard only when a
+public untrusted-input boundary, a caller's documented contract, a reproduced
+failure, or another realistic runtime path establishes a strong likelihood that
+the guard is needed. A theoretically invalid value or language-level undefined
+behavior is not sufficient evidence by itself for an internal trusted path.
+
+Preserve `*_assume_valid` contracts when callers already establish their
+preconditions. Do not duplicate calculations from an owning conversion or
+validation helper merely to protect against states its callers cannot
+realistically supply. When a failure can propagate between pipeline stages,
+stop or classify that failure at the stage boundary that owns propagation
+instead of adding speculative sanitation in a downstream numerical helper.
+Tests for a new guard must exercise the realistic caller path; direct synthetic
+calls with otherwise unreachable values do not establish that the production
+guard is needed.
 
 ### Module Organization
 
@@ -572,7 +656,7 @@ cfc.register_CFunction(
     prefunc=prefunc,           # Optional: helper functions emitted before main function
     desc=desc,                 # Multi-line description
     cfunc_type=cfunc_type,     # Return type: "void", "int", "REAL", "const char *"
-    name=name,                 # Function name (snake_case)
+    name=name,                 # Generated function name
     params=params,             # Parameter string
     include_CodeParameters_h=False,
     body=body,                 # Main function body as raw string
@@ -587,11 +671,31 @@ C code embedded in Python registration functions follows these conventions:
 - **Raw strings** (`r"""..."""`) are used for C code bodies to avoid escape character issues.
 - **f-strings with doubled braces** (`rf"""...{var}..."""`) are used when Python variable interpolation is needed. Braces in C code (e.g., struct initializers, loop bodies) must be doubled: `{{`, `}}`.
 - Interpolated expressions in `rf"""..."""` strings must be Python 3.7-compatible and easy to read. Variables, attributes, and simple calls are acceptable; compute complex expressions on preceding lines before interpolation.
-- **C code indentation** inside raw strings uses 2 spaces (matching the C style guide), regardless of the Python indentation level.
-
-For readability, embedded C inside raw strings should use 2-space indentation when practical, but do not churn indentation across modules that are already valid.
 - **`#include` directives** inside C bodies use `#include "set_CodeParameters.h"` when `include_CodeParameters_h=True`.
 - **String replacement** is used to adapt generated C code: `.replace("auxevol_gfs[IDX4(", "commondata->interp_src_gfs[IDX4(SRC_")`.
+
+For C, CUDA, and header text stored or assembled in Python generators, raw
+tabulation or tabs, indentation,
+dedentation or reindentation, spacing or alignment, wrapping, brace placement or
+layout cosmetics must never be reviewed, enforced, or repaired. Final generated
+layout belongs exclusively to the
+existing `clang_format`/`clang-format` normalization. If an emission path lacks
+final normalization, do not compensate with raw-string cosmetics or helpers.
+This exemption does not cover `// END ...` closing-brace comments: handwritten
+C/CUDA/H must follow the full [Section 10](#10-end-curly-brace-comments) rules,
+and Python-generated C/CUDA/H must follow Section 10's semantic marker subset.
+
+Do not add a Python function, method, lambda, wrapper, utility, transform,
+postprocessor, or other special routine whose purpose is to format those strings
+cosmetically by hand. Do not review or enforce any casing, prefix, suffix,
+`snake_case`, or other naming style for generated identifiers. Exact current API,
+registry, prototype, compiler, collision-avoidance, and semantic requirements
+remain enforceable.
+
+This exemption is formatting-only. Raw/rf string and doubled-brace validity,
+interpolation correctness, semantic execution order, Doxygen and interface
+content accuracy, syntax, compiler behavior, and runtime behavior remain in
+scope.
 
 #### BHaH symbolic codegen rules
 
@@ -606,10 +710,7 @@ For new BHaH infrastructure generators that emit ordinary per-grid or per-point 
 - Construct symbolic expressions immediately before they are consumed by `c_codegen()` or `simple_loop()`. Do not build `expr_list`, `lhs_list`, tensor declarations, or supporting symbolic state far earlier in the function than the code-generation call that uses them.
 - Register gridfunctions, parity tables, and other registration-time metadata in the same local part of the function where they are actually needed. Do not front-load unrelated setup before `desc`, `name`, `params`, or other basic C-function metadata when that setup is specific to a later code-generation block.
 - When assembling emitted C bodies, prefer a top-to-bottom `body += ...` construction that follows the generated C execution order. Avoid proliferating temporary string fragments or helper functions whose primary purpose is to manufacture pieces of C text.
-- Do not introduce Python helper functions whose only purpose is to indent, dedent, reindent, or otherwise cosmetically format emitted C fragments that will later be normalized by `clang_format`/`clang-format`. Append the raw C fragments directly in execution order; let the C formatter handle indentation in the generated file.
 - Add short comments at jarring transitions in registration functions so readers understand why the flow changes abruptly. In particular, annotate jumps such as “register DIAG gridfunctions before building parity tables” or “construct the symbolic kernel immediately before `c_codegen()`” instead of leaving those shifts implicit.
-
-**Raw-string indentation note**: Embedded C inside raw strings may appear with minor indentation variance across modules due to historical edits. The requirement is that the C is valid and consistently readable; do not mechanically re-indent unless you are fixing a functional or formatting issue.
 
 ```python
 body = rf"""
@@ -713,7 +814,9 @@ C functions consistently use these struct pointer patterns:
 
 ### Grid Function (GF) Naming Conventions
 
-Grid functions follow a strict naming convention encoding tensor type and indices:
+Gridfunction names are semantic registry and interface keys that encode tensor
+type and indices. These patterns do not establish a universal naming style for
+other generated C/CUDA/H identifiers:
 - **Scalars**: `HHGF`, `VVGF`, `WWGF`, `TRKGF`, `CFGF`
 - **Rank-2 symmetric tensors**: `HDD00GF`, `HDD01GF`, `HDD11GF`, etc. (DD = covariant)
 - **Traceless extrinsic curvature**: `ADD00GF`, `ADD01GF`, etc.
@@ -782,9 +885,15 @@ Grid functions follow a strict naming convention encoding tensor type and indice
 
 ### C Code Comment Patterns
 
-- Block comments with `//` style, not `/* */`
-- End-of-block comments follow the standard in [Section 10](#10-end-curly-brace-comments)
-- Function documentation in `desc=` parameter of `register_CFunction()`
+- Generic raw comment whitespace and layout conventions apply only to
+  handwritten C/CUDA/H.
+- In both handwritten and Python-generated C/CUDA/H, every non-trivial closing
+  brace must follow the applicable mandatory `// END ...` rules in
+  [Section 10](#10-end-curly-brace-comments); generated strings use its semantic
+  marker subset.
+- Generated comment and `desc=` text remains subject to semantic accuracy and
+  valid documentation syntax. Other raw comment whitespace and layout is not
+  enforced for generator strings.
 
 ### Struct Field Organization
 
@@ -801,6 +910,17 @@ Fields are grouped by purpose with clear comment separators:
 ---
 
 ## C/H Coding Style
+
+Except for the mandatory [Section 10](#10-end-curly-brace-comments) rules, the
+raw indentation, tab, spacing, alignment, line-length, naming, brace-layout, and
+generic comment-layout rules in this section apply only to handwritten
+C/CUDA/H.
+They do not apply to C/CUDA/H strings stored or assembled in Python generators;
+the formatter-ownership rule under
+[Embedded C Code String Conventions](#embedded-c-code-string-conventions)
+controls those strings. Semantic correctness, current interfaces, documentation
+content and valid syntax, compiler behavior, and runtime behavior remain in
+scope for both handwritten and generated code.
 
 ### 1. Indentation
 
@@ -904,12 +1024,29 @@ static inline void diag_write_header(FILE *file_ptr, const char *coord_names, co
 
 ### 10. End-Curly-Brace Comments
 
-Every closing brace that ends a non-trivial block must carry a `// END ...` comment in new code. Rules:
+In Python-generated C/CUDA/H, review and enforce only this semantic marker
+subset for every closing brace that ends a non-trivial block:
+
+- A C/C++ `//` line-comment `END` marker is present.
+- The marker uses the correct syntactic-construct keyword.
+- A colon separates the keyword from the description.
+- The description is accurate, meaningful, and preserves high-signal semantic
+  context.
+- The description contains at most five words.
+
+Do not review or enforce exact whitespace (including the single-space
+convention), alignment, wrapping, placement, or brace shape for generated
+strings. The remaining rules in this section are the full handwritten
+C/CUDA/H rules only.
+
+In new handwritten C/CUDA/H, every closing brace that ends a non-trivial block
+must carry a `// END ...` comment. Rules:
 
 - Keyword is ALL-CAPS after `// ` (with one space).
 - A colon follows the keyword in all cases.
 - Single-statement control-flow bodies must not use curly braces in new code. Write the statement directly under the control-flow header instead of introducing a one-statement braced block.
 - Every end-curly-brace comment includes a brief description; there are no block-type exceptions.
+- The description contains at most five words.
 - Primary goal: let the reader identify at a glance exactly what the brace is closing.
 - Use the keyword to identify the syntactic construct being closed; use the description to preserve the highest-signal semantic context.
 - Do not throw away useful context just to force a generic label. If a block corresponds to a named step, algorithm phase, special case, or resource-management section, keep that information in the description.
@@ -918,7 +1055,7 @@ Every closing brace that ends a non-trivial block must carry a `// END ...` comm
 - For all other blocks, briefly describe the condition or purpose.
 - Prefer the description of what the block is doing or handling, not the fact that a check occurred. For example, prefer `destination-point allocation failed` over `malloc check`, and `convergence or iteration-limit stop conditions` over `check stop conditions`.
 - For index loops, do not stop at `grid index` when the domain is known. Prefer `theta points on the horizon surface`, `phi points in the external-input grid`, `multigrid resolution entries`, etc.
-- For anonymous scoped blocks that correspond to numbered procedural comments, keep that number in the description when it helps orientation; e.g. `Step 10 free interpolation-source boundary-condition structures`.
+- For anonymous scoped blocks that correspond to numbered procedural comments, keep that number in the description when it helps orientation; e.g. `Step 10 free boundary structures`.
 - No trailing period. No parentheses after function names. Bare function name only.
 
 | Block type | Format | Example |
@@ -929,15 +1066,15 @@ Every closing brace that ends a non-trivial block must carry a `// END ...` comm
 | `if` block | `} // END IF: brief condition` | `} // END IF: fill_r_min_ghosts flag check` |
 | `else if` block | `} // END ELSE IF: brief condition` | `} // END ELSE IF: num_resolutions_multigrid > 0` |
 | `else` block | `} // END ELSE: brief description` | `} // END ELSE: not enable_BBH_mode` |
-| `switch` block | `} // END SWITCH: brief description` | `} // END SWITCH: select gridfunctions requiring inner boundary conditions` |
+| `switch` block | `} // END SWITCH: brief description` | `} // END SWITCH: select inner-boundary gridfunctions` |
 | OpenMP parallel | `} // END OMP PARALLEL: brief description` | `} // END OMP PARALLEL: reduce per-thread diagnostics` |
 | OpenMP critical | `} // END OMP CRITICAL: brief description` | `} // END OMP CRITICAL: update shared centroid diagnostics` |
 | OpenMP `for` loop | `} // END LOOP: for <var> over <range/purpose>` | `} // END LOOP: for idx over all grid points` |
-| Anonymous scoping block | `} // END BLOCK: description` | `} // END BLOCK: gettimeofday() sanity check` |
+| Anonymous scoping block | `} // END BLOCK: description` | `} // END BLOCK: Cartesian-to-grid conversion` |
 
 `do...while` loops end with `} while (condition);` — append the comment after the semicolon: `} while (condition); // END DO-WHILE: brief description`.
 
-Prefer descriptions like `Step 10 free allocated memory for boundary condition structures` or `BSSN-to-ADM transformation` over low-signal text like `generic cleanup block` or `step`.
+Prefer descriptions like `Step 10 free boundary structures` or `BSSN-to-ADM transformation` over low-signal text like `generic cleanup block` or `step`.
 
 Avoid weak but formally compliant comments such as:
 
@@ -950,8 +1087,8 @@ Prefer:
 
 - `} // END IF: destination-point allocation failed`
 - `} // END IF: interpolation routine returned error`
-- `} // END LOOP: for i1 over theta points on the horizon surface`
-- `} // END BLOCK: theta/phi stencil bounds and center-index sanity checks`
+- `} // END LOOP: for i1 over horizon theta`
+- `} // END BLOCK: theta/phi stencil and center-index checks`
 
 Do not write one-statement braced blocks such as:
 
@@ -990,7 +1127,14 @@ If a function is both declared (in a header) and defined (in a `.c` file), the c
 - For functions returning integer error codes, enumerate the outcomes: e.g. `@return 0 on success, -1 on allocation failure`, or reference the specific enum values.
 - Use `@note` for important usage constraints, `@warning` for correctness hazards, `@pre` for preconditions.
 
-**`desc=` strings in `register_CFunction()` calls** follow the same tag conventions — no dash, no `@brief`, correct directional qualifiers, no `@return` for void. The `/**`/` */` delimiters are emitted by the framework and must not appear in the `desc=` string itself. Multiline `desc` strings must use triple double-quotes whenever possible; use `rf"""..."""` only when interpolation is necessary. Keep interpolated expressions Python 3.7-compatible and compute complex expressions on preceding lines before interpolation.
+**`desc=` strings in `register_CFunction()` calls** must carry accurate
+interface documentation and valid Doxygen tag syntax: correct directional
+qualifiers, no `@return` for `void`, and no emitted `/**`/` */` delimiters in the
+string itself. Do not enforce raw blank-line placement, indentation, alignment,
+or wrapping in generated `desc` text; final emitted layout belongs to the
+formatter. Multiline strings use triple double-quotes whenever possible and
+`rf"""..."""` only when interpolation is necessary. Keep interpolation
+Python-3.7-compatible and compute complex expressions on preceding lines.
 
 ```c
 /**
@@ -1017,9 +1161,14 @@ If a function is both declared (in a header) and defined (in a `.c` file), the c
 
 ## Static Analysis Configuration
 
-The `.github/single_file_static_analysis.sh` script enforces the following checks:
+The `.github/single_file_static_analysis.sh` script runs the following checks.
+The Pylint row states repository policy; the current wrapper does not yet
+enforce its new-versus-grandfathered distinction, as documented in
+[Static Analysis](wiki/validation/static-analysis.md).
 
-Run this script on every modified Python file before committing. This is the required pre-commit check for Python changes:
+Run this script on every modified handwritten Python file before committing.
+Generated trusted `*/tests/*.py` data is exempt, but its handwritten owner is
+not. This is the required pre-commit check for handwritten Python changes:
 
 ```bash
 ./.github/single_file_static_analysis.sh path/to/modified_file.py
@@ -1030,7 +1179,7 @@ Run this script on every modified Python file before committing. This is the req
 | **black** | Code formatting | `--check` mode |
 | **isort** | Import sorting | `--check-only` |
 | **mypy** | Type checking | `--strict --allow-untyped-calls` |
-| **pylint** | Code quality | `.pylintrc`, threshold ≥ 9.91/10 |
+| **pylint** | Code quality | New handwritten files: 10.00/10.00; existing tracked handwritten files: no regression from their pre-change score, including grandfathered scores at or below 9.5 |
 | **pydocstyle** | Docstring style | `.pydocstyle` config |
 | **darglint** | Docstring argument checking | `-v 2` (verbose) |
 | **doctests** | Embedded tests | `python3 <file>` |
@@ -1040,7 +1189,7 @@ Run this script on every modified Python file before committing. This is the req
 
 ## Style Comparison Summary
 
-| Aspect | Python | C |
+| Aspect | Python | Handwritten C/CUDA/H |
 |--------|--------|---|
 | Indentation | 4 spaces | 2 spaces |
 | Line length | Determined by Black formatting | ~100 characters |
@@ -1057,7 +1206,7 @@ Run this script on every modified Python file before committing. This is the req
 ## Additional Notes
 
 - All code contributions must pass the static analysis checks before being merged.
-- For Python changes, run `.github/single_file_static_analysis.sh` on each modified Python file, not just on a hand-picked subset.
+- For Python changes, run `.github/single_file_static_analysis.sh` on each modified handwritten Python file, not just on a hand-picked subset; generated trusted `*/tests/*.py` data is exempt.
 - **`body +=` for conditional C code**: When a C function body has sections that are conditionally included based on Python parameters, build the body string incrementally with `+=`:
   ```python
   body = ""

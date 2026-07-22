@@ -161,13 +161,13 @@ def register_CFunction_temporal_lagrange_interpolation(
         package="nrpy.infrastructures.BHaH.interpolation",
         filenames_list=["interpolation_lagrange_uniform.h"],
         project_dir=project_dir,
-        subdirectory="./",
+        subdirectory="interpolation",
     )
 
     includes = [
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
-        "interpolation_lagrange_uniform.h",
+        "interpolation/interpolation_lagrange_uniform.h",
     ]
 
     desc = r"""Interpolate the selected geometry bundle in physical time.

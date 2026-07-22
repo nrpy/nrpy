@@ -131,7 +131,7 @@ void psi4_spinweightm2_shell_fill_points(const params_struct *restrict params, c
       const REAL xCart[3] = {R_ext * sin_theta * cos_phi, R_ext * sin_theta * sin_phi, R_ext * cos_theta};
       int i0i1i2[3];
       REAL dst_xx[3];
-      Cart_to_xx_and_nearest_i0i1i2(params, xCart, dst_xx, i0i1i2);
+      Cart_to_xx_and_nearest_i0i1i2_assume_valid(params, xCart, dst_xx, i0i1i2);
 
       dst_pts[idx][0] = dst_xx[0];
       dst_pts[idx][1] = dst_xx[1];

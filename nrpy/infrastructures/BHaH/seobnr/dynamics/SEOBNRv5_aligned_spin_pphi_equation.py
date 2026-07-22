@@ -29,9 +29,9 @@ def register_CFunction_SEOBNRv5_pphi_equation() -> Union[None, pcg.NRPyEnv_type]
     desc = """
 Evaluate the angular momentum equation for the SEOBNRv5 post-adiabatic equations of motion.
 
-@params x - The angular momentum.
-@params params - The Common data structure containing the model parameters.
-@returns - The angular momentum equation.
+@param x The angular momentum.
+@param[in] params The Common data structure containing the model parameters.
+@return The angular momentum equation.
 """
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_pphi_equation"

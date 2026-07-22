@@ -51,7 +51,7 @@ import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
-    register_CFunction__Cart_to_xx_and_nearest_i0i1i2,
+    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
 )
 from nrpy.reference_metric import reference_metric
 
@@ -215,10 +215,10 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
             "interpolation_lagrange_uniform.h",
         ],
         project_dir=project_dir,
-        subdirectory="./",
+        subdirectory="interpolation",
     )
-    register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-    cart_to_xx_name = f"Cart_to_xx_and_nearest_i0i1i2__rfm__{CoordSystem}"
+    register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
+    cart_to_xx_name = f"Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__{CoordSystem}"
     storage_exprs = {
         interp_dim0: "interp_0_storage_stencil[u]",
         interp_dim1: "interp_1_storage_stencil[v]",
@@ -230,8 +230,8 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "BHaH_function_prototypes.h",
         "<math.h>",
         "<stdint.h>",
-        "differentiate_interpolation_lagrange_uniform.h",
-        "interpolation_lagrange_uniform.h",
+        "interpolation/differentiate_interpolation_lagrange_uniform.h",
+        "interpolation/interpolation_lagrange_uniform.h",
     ]
     # Step 3: Emit the shared payload-index helper, then build only the
     # selected method's remaining generated helpers.

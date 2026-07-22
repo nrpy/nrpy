@@ -19,7 +19,7 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
     """
-    Register CFunction for computing the (2,2) mode of SEOBNRv5 given the dynamics.
+    Register CFunction for computing SEOBNRv5 higher modes given the dynamics.
 
     :return: None if in registration phase, else the updated NRPy environment.
     """
@@ -29,9 +29,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_waveform_from_dynamics() -> (
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
-Calculates the (2,2) mode of the SEOBNRv5 inspiral waveform for the low- and fine-sampled ODE trajectory.
+Calculates the SEOBNRv5 inspiral waveform modes for the low- and fine-sampled ODE trajectory.
 
-@param commondata - Common data structure containing the model parameters.
+@param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_waveform_from_dynamics"
@@ -55,9 +55,8 @@ if (commondata->waveform_fine == NULL){
   exit(1);
 }
 
-//low sampling
+// Step 1: Evaluate all stored inspiral modes on the low-sampled dynamics.
 for (i = 0; i < commondata->nsteps_low; i++) {
-  //assign
   dynamics[TIME] = commondata->dynamics_low[IDX(i,TIME)];
   dynamics[R] = commondata->dynamics_low[IDX(i,R)];
   dynamics[PHI] = commondata->dynamics_low[IDX(i,PHI)];
@@ -67,8 +66,6 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   dynamics[OMEGA] = commondata->dynamics_low[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_low[IDX(i,OMEGA_CIRC)];
 
-  //compute
-  //store
   SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_low[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_low[IDX_WF(i,STRAIN22)] = strain_modes_single_timestep[STRAIN22-1];
@@ -78,10 +75,10 @@ for (i = 0; i < commondata->nsteps_low; i++) {
   commondata->waveform_low[IDX_WF(i,STRAIN44)] = strain_modes_single_timestep[STRAIN44-1];
   commondata->waveform_low[IDX_WF(i,STRAIN43)] = strain_modes_single_timestep[STRAIN43-1];
   commondata->waveform_low[IDX_WF(i,STRAIN55)] = strain_modes_single_timestep[STRAIN55-1];
-}
-//high sampling
+} // END LOOP: for i over low-sampled inspiral dynamics
+
+// Step 2: Evaluate all stored inspiral modes on the fine-sampled dynamics.
 for (i = 0; i < commondata->nsteps_fine; i++) {
-  //assign
   dynamics[TIME] = commondata->dynamics_fine[IDX(i,TIME)];
   dynamics[R] = commondata->dynamics_fine[IDX(i,R)];
   dynamics[PHI] = commondata->dynamics_fine[IDX(i,PHI)];
@@ -91,8 +88,6 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   dynamics[OMEGA] = commondata->dynamics_fine[IDX(i,OMEGA)];
   dynamics[OMEGA_CIRC] = commondata->dynamics_fine[IDX(i,OMEGA_CIRC)];
 
-  //compute
-  //store only 2,2 mode for now, higher modes will be stored in a future update
   SEOBNRv5_aligned_spin_waveform(dynamics, commondata, strain_modes_single_timestep);
   commondata->waveform_fine[IDX_WF(i,TIME)] = dynamics[TIME];
   commondata->waveform_fine[IDX_WF(i,STRAIN22)] = strain_modes_single_timestep[STRAIN22-1];
@@ -104,7 +99,7 @@ for (i = 0; i < commondata->nsteps_fine; i++) {
   commondata->waveform_fine[IDX_WF(i,STRAIN55)] = strain_modes_single_timestep[STRAIN55-1];
   
 
-}
+} // END LOOP: for i over fine-sampled inspiral dynamics
 free(strain_modes_single_timestep);
 """
     cfc.register_CFunction(

@@ -31,8 +31,8 @@ def register_CFunction_SEOBNRv5_aligned_spin_interpolate_modes() -> (
     desc = """
 Interpolates the (2,2) inspiral modes and stores them in the waveform_inspiral array with constant spacing.
 
-@param commondata - Common data structure containing the model parameters.
-@param dT - Time step for interpolation.
+@param[in,out] commondata Common data structure containing the model parameters.
+@param dT Time step for interpolation.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_interpolate_modes"

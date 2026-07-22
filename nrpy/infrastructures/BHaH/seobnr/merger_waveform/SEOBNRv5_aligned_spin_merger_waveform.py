@@ -40,14 +40,14 @@ def register_CFunction_SEOBNRv5_aligned_spin_merger_waveform() -> (
     desc = """
 Calculates the (2,2) mode of the native SEOBNRv5 merger-ringdown model at a single timestep.
 
-@params t - Time at which to evaluate the waveform.
-@params t_0 - Attachment time.
-@params h_0 - Amplitude at attachment time.
-@params hdot_0 - Amplitude derivative at attachment time.
-@params phi_0 - Phase at attachment time.
-@params phidot_0 - Angular frequency at attachment time.
-@params commondata - Common data structure containing the model parameters.
-@params waveform - Array to store the amplitude and phase of the waveform.
+@param t Time at which to evaluate the waveform.
+@param t_0 Attachment time.
+@param h_0 Amplitude at attachment time.
+@param hdot_0 Amplitude derivative at attachment time.
+@param phi_0 Phase at attachment time.
+@param phidot_0 Angular frequency at attachment time.
+@param[in] commondata Common data structure containing the model parameters.
+@param[out] waveform Array to store the amplitude and phase of the waveform.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_merger_waveform"
@@ -59,7 +59,7 @@ const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 const REAL omega_qnm = commondata->omega_qnm;
 const REAL tau_qnm = commondata->tau_qnm;
-//compute
+// Evaluate the generated native SEOBNRv5 merger-ringdown expressions.
 """
     body += SEOBNRv5_code
     body += """

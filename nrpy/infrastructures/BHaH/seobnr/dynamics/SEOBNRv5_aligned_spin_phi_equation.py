@@ -29,9 +29,9 @@ def register_CFunction_SEOBNRv5_phi_equation() -> Union[None, pcg.NRPyEnv_type]:
     desc = """
 Evaluate the phase equation for the SEOBNRv5 post-adiabatic equations of motion.
 
-@params r - The radial separation.
-@params params - The Common data structure containing the model parameters.
-@returns - The phase equation.
+@param r The radial separation.
+@param[in] params The Common data structure containing the model parameters.
+@return The phase equation.
 """
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_phi_equation"
