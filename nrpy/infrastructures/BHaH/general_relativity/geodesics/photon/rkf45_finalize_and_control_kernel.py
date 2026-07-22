@@ -21,9 +21,9 @@ uses its log-energy tolerance in the embedded error norm.
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
 also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
 numerical-spacetime ray tracing remains inside the mapped time window.
-The companion numerical time-window manager owns registration of
-`rkf45_max_delta_t` because it also consumes that runtime parameter when
-building the required mmap slice window.
+The numerical photon example registers the companion time-window manager before
+registering this kernel, so that the shared `rkf45_max_delta_t` parameter exists
+when the accepted-step cap is emitted.
 
 Together, the time-window manager and this kernel enforce one shared contract:
 the manager maps enough lower-time numerical data for one photon slot assuming
@@ -62,9 +62,8 @@ def rkf45_finalize_and_control_kernel(
 
     :param enable_numerical_time_window_step_cap: Whether to cap accepted RKF45
         step sizes so numerical-spacetime interpolation remains inside the
-        currently mapped time window. When enabled, this registration also
-        ensures the numerical time-window helper owns and registers the shared
-        slot-lattice and lookahead CodeParameters first.
+        currently mapped time window. The caller must register the numerical
+        time-window manager separately before enabling this option.
     :param normalized_eom: Whether the nine-component state uses normalized
         photon variables with coordinate time as its integration parameter.
 
@@ -103,19 +102,6 @@ def rkf45_finalize_and_control_kernel(
     >>> "rkf45_constraint_tolerance" not in generated
     True
     """
-    if (
-        enable_numerical_time_window_step_cap
-        and "time_window_manager_numerical"
-        not in (par.glb_extras_dict.get("BHaH_defines", {}))
-    ):
-        # Import lazily to avoid a package-level circular import between the
-        # photon and interpolation aggregation modules.
-        from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (  # pylint: disable=import-outside-toplevel
-            time_window_manager_numerical,
-        )
-
-        time_window_manager_numerical()
-
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
         "rkf45_absolute_error_tolerance",
@@ -127,9 +113,8 @@ def rkf45_finalize_and_control_kernel(
         real_param_names.append("rkf45_log_energy_tolerance")
         real_param_defaults.append(1e-8)
     # The accepted-step cap is emitted only for numerical-spacetime builds.
-    # The companion time_window_manager_numerical() helper owns and registers
-    # the shared lookahead and slot-lattice CodeParameters before this kernel
-    # consumes them.
+    # The caller owns registration of the shared lookahead and slot-lattice
+    # CodeParameters before this kernel consumes them.
     real_param_names.append("numerical_initial_h")
     real_param_defaults.append(1.0)
     par.register_CodeParameters(

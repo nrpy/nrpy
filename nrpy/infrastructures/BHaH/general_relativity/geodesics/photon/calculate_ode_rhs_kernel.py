@@ -15,7 +15,7 @@ Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
-from typing import List
+from typing import List, Optional
 
 import sympy as sp
 
@@ -24,12 +24,15 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
+SUPPORTED_INTERPOLATION_METHODS = ("g4DD", "g4DD_d0", "GammaUDD")
+
 
 def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr],
     coordinate_symbols: List[sp.Symbol],
-    use_metric_derivative_rhs: bool = False,
+    use_metric_derivative_rhs: Optional[bool] = None,
     normalized_eom: bool = False,
+    interpolation_method: Optional[str] = None,
 ) -> None:
     r"""
     Provide the global kernel registration for computing the ODE right-hand side.
@@ -45,30 +48,38 @@ def calculate_ode_rhs_kernel(
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations
         representing the geodesic equations.
     :param coordinate_symbols: The spatial and temporal coordinate variables in order.
-    :param use_metric_derivative_rhs: Whether the RHS consumes first metric
-        derivatives instead of Christoffel symbols.
+    :param use_metric_derivative_rhs: Legacy selection for whether the RHS
+        consumes first metric derivatives instead of Christoffel symbols. If
+        `interpolation_method` is supplied, it determines the selection.
     :param normalized_eom: Whether the state stores normalized photon variables
         ``u`` and ``PiD_i`` instead of direct four-momentum ``pU_i``.
-    :raises ValueError: If the provided geodesic expression list is empty, or if
-        normalized evolution is requested without metric derivatives.
+    :param interpolation_method: Numerical data method selected at Python code
+        generation time. ``GammaUDD`` selects the Christoffel RHS; the other
+        methods select the metric-derivative RHS.
+    :raises ValueError: If the provided geodesic expression list is empty or if
+        `interpolation_method` is unsupported.
     """
     if not geodesic_rhs_expressions:
         raise ValueError(
             "geodesic_rhs_expressions must contain at least one mathematical expression."
         )
-    if normalized_eom and not use_metric_derivative_rhs:
-        raise ValueError(
-            "normalized_eom requires use_metric_derivative_rhs because normalized "
-            "photon evolution is defined from the metric and its first derivatives."
-        )
+    if interpolation_method is not None:
+        if interpolation_method not in SUPPORTED_INTERPOLATION_METHODS:
+            raise ValueError(
+                "interpolation_method must be one of "
+                f"{SUPPORTED_INTERPOLATION_METHODS}; found '{interpolation_method}'."
+            )
+        selected_use_metric_derivative_rhs = interpolation_method != "GammaUDD"
+    else:
+        selected_use_metric_derivative_rhs = bool(use_metric_derivative_rhs)
 
     parallelization = par.parval_from_str("parallelization")
 
     # Select the generated RHS input contract once for this registration.
-    if use_metric_derivative_rhs:
-        geometry_bundle_arg_name = "d_metric_derivative_bundle"
+    geometry_bundle_arg_name = "d_rhs_geometry_bundle"
+    geometry_index_macro = "IDX_RHS_GEOMETRY"
+    if selected_use_metric_derivative_rhs:
         geometry_bundle_description = "first metric-derivative bundle"
-        geometry_index_macro = "IDX_METRIC_DERIVATIVE"
         geometry_symbol_prefix = "metric_g4DD_dD"
         geometry_components = [
             (mu, nu, sigma)
@@ -77,13 +88,11 @@ def calculate_ode_rhs_kernel(
             for sigma in range(4)
         ]
         geometry_index_comment = (
-            "IDX_METRIC_DERIVATIVE maps a symmetric metric component and its "
+            "IDX_RHS_GEOMETRY maps a symmetric metric component and its "
             "derivative direction to the flattened metric-derivative bundle."
         )
     else:
-        geometry_bundle_arg_name = "d_christoffel_bundle"
         geometry_bundle_description = "Christoffel-symbol bundle"
-        geometry_index_macro = "IDX_CHRISTOFFEL"
         geometry_symbol_prefix = "conn_Gamma4UDD"
         geometry_components = [
             (alpha, mu, nu)
@@ -92,7 +101,7 @@ def calculate_ode_rhs_kernel(
             for nu in range(mu, 4)
         ]
         geometry_index_comment = (
-            "IDX_CHRISTOFFEL maps a Christoffel component to the flattened "
+            "IDX_RHS_GEOMETRY maps a Christoffel component to the flattened "
             "Christoffel-symbol bundle."
         )
 

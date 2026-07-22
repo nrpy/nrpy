@@ -50,6 +50,17 @@ parser.add_argument(
     help="""Enable metric raytracing spacetime outputs and set the final time and diagnostics output cadence. Currently supported only for OpenMP builds with double precision.""",
 )
 parser.add_argument(
+    "--raytracing-data-mode",
+    choices=("g4DD", "g4DD_d0", "GammaUDD", "all"),
+    default="g4DD",
+    help="""Raytracing data written by the spacetime evolution. 'all' writes all three method-specific datasets in one evolution.""",
+)
+parser.add_argument(
+    "--raytracing-static-christoffels",
+    action="store_true",
+    help="""Use static-spacetime Christoffels for the output slice nearest to T_FINAL when the selected mode includes GammaUDD.""",
+)
+parser.add_argument(
     "--raytracing-domain",
     nargs="+",
     default=None,
@@ -93,6 +104,7 @@ if parallelization not in ["openmp", "cuda"]:
 # Step 1.c: Raytracing spacetime output requires OpenMP, double precision,
 # and consistent raytracing-specific option combinations.
 enable_raytracing_data_output = args.raytracing_time is not None
+raytracing_data_mode = args.raytracing_data_mode
 
 if fp_type not in ("float", "double"):
     raise ValueError("--floating_point_precision must be either 'float' or 'double'.")
@@ -103,6 +115,18 @@ if enable_raytracing_data_output and fp_type != "double":
 
 if args.cuda and enable_raytracing_data_output:
     raise ValueError("--raytracing-time is currently supported only for OpenMP builds.")
+if not enable_raytracing_data_output and args.raytracing_data_mode != "g4DD":
+    raise ValueError("--raytracing-data-mode requires --raytracing-time.")
+if not enable_raytracing_data_output and args.raytracing_static_christoffels:
+    raise ValueError("--raytracing-static-christoffels requires --raytracing-time.")
+if args.raytracing_static_christoffels and raytracing_data_mode not in (
+    "GammaUDD",
+    "all",
+):
+    raise ValueError(
+        "--raytracing-static-christoffels requires "
+        "--raytracing-data-mode GammaUDD or all."
+    )
 if args.raytracing_coord_system is not None and not enable_raytracing_data_output:
     raise ValueError("--raytracing-coord-system requires --raytracing-time.")
 if args.raytracing_domain is not None and not enable_raytracing_data_output:
@@ -408,6 +432,8 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_psi4_diagnostics=False,
     enable_bhahaha=enable_bhahaha,
     enable_raytracing_data_output=enable_raytracing_data_output,
+    raytracing_data_mode=raytracing_data_mode,
+    enable_static_christoffels=args.raytracing_static_christoffels,
 )
 BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     CoordSystem=CoordSystem,
@@ -636,10 +662,19 @@ if enable_raytracing_data_output:
             f"rho-slope_{rho_slope_name}_z-slope_{z_slope_name}_"
         )
 
-    raytracing_combined_bin_name = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}.bin"
-    combined_output_path = os.path.join(
-        "..", "raytracing_data", raytracing_combined_bin_name
+    raytracing_combined_bin_stem = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}"
+    raytracing_modes = (
+        ("g4DD", "g4DD_d0", "GammaUDD")
+        if raytracing_data_mode == "all"
+        else (raytracing_data_mode,)
     )
+    raytracing_combined_bin_names = {
+        mode: f"{raytracing_combined_bin_stem}_{mode}.bin" for mode in raytracing_modes
+    }
+    combined_output_paths = {
+        mode: os.path.join("..", "raytracing_data", filename)
+        for mode, filename in raytracing_combined_bin_names.items()
+    }
     raytracing_run_metadata_name = "raytracing_run_metadata.json"
     raytracing_run_metadata_path = os.path.join(
         project_dir, raytracing_run_metadata_name
@@ -651,7 +686,9 @@ if enable_raytracing_data_output:
             "BH2_mass": default_BH2_mass,
             "BH2_posn_z": default_BH2_z_posn,
         },
-        "combined_output_filename": raytracing_combined_bin_name,
+        "raytracing_data_mode": raytracing_data_mode,
+        "datasets": raytracing_combined_bin_names,
+        "raytracing_static_christoffels": args.raytracing_static_christoffels,
         "generator_script": "two_blackholes_collide.py",
         "grid_physical_size": grid_physical_size,
         "project_name": project_name,
@@ -664,6 +701,12 @@ if enable_raytracing_data_output:
         },
         "slice_filename_pattern": "raytracing_data_t????????.bin",
     }
+    if raytracing_data_mode == "all":
+        raytracing_run_metadata["generated_datasets"] = list(raytracing_modes)
+    else:
+        raytracing_run_metadata["combined_output_filename"] = (
+            raytracing_combined_bin_names[raytracing_data_mode]
+        )
     with open(raytracing_run_metadata_path, "w", encoding="utf-8") as metadata_file:
         json.dump(
             raytracing_run_metadata,
@@ -676,6 +719,16 @@ if enable_raytracing_data_output:
     # Step 3.d.ii: Generate a helper script that builds, runs, and combines
     # time slices.
     script_path = os.path.join(project_dir, "run_raytracing_data_pipeline.sh")
+    combine_commands = "\n".join(f"""echo "Combining {mode} raytracing time slices..."
+python3 combine_raytracing_time_slices.py \\
+  --input-dir "raytracing_slices/{mode}" \\
+  --pattern "raytracing_data_t????????.bin" \\
+  --run-metadata "{raytracing_run_metadata_name}" \\
+  --output "{combined_output_paths[mode]}" \\
+  --force""" for mode in raytracing_modes)
+    combined_output_messages = "\n".join(
+        f'echo "{combined_output_paths[mode]}"' for mode in raytracing_modes
+    )
     script_text = rf"""#!/usr/bin/env bash
 set -euo pipefail
 
@@ -685,16 +738,10 @@ make
 echo "Running ./{project_name}..."
 ./{project_name}
 
-echo "Combining raytracing time slices..."
-python3 combine_raytracing_time_slices.py \
-  --input-dir . \
-  --pattern "raytracing_data_t????????.bin" \
-  --run-metadata "{raytracing_run_metadata_name}" \
-  --output "{combined_output_path}" \
-  --force
+{combine_commands}
 
 echo "Combined raytracing data written to:"
-echo "{combined_output_path}"
+{combined_output_messages}
 """
     with open(script_path, "w", encoding="utf-8") as script_file:
         script_file.write(script_text)
@@ -704,12 +751,15 @@ echo "{combined_output_path}"
     print(
         f"""Finished! Now go into project/{project_name} and run `./run_raytracing_data_pipeline.sh`."""
     )
-    print(
-        f"""    Single-time-slice raytracing_data_t########.bin files will remain in project/{project_name}/."""
-    )
-    print(
-        f"""    Combined raytracing .bin output will be written to project/raytracing_data/{raytracing_combined_bin_name}"""
-    )
+    for mode in raytracing_modes:
+        print(
+            f"    Single-time-slice {mode} files will remain in "
+            f"project/{project_name}/raytracing_slices/{mode}/."
+        )
+        print(
+            f"    Combined {mode} output will be written to "
+            f"project/raytracing_data/{raytracing_combined_bin_names[mode]}"
+        )
 else:
     print(
         f"""Finished! Now go into project/{project_name} and type `make` to build, then ./{project_name} to run."""

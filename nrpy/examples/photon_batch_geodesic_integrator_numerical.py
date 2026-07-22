@@ -6,10 +6,10 @@ through a numerical spacetime sourced from the combined raytracing ``.bin``
 generated from ``two_blackholes_collide.py --raytracing-time ...``.
 
 The generated code keeps the existing Structure-of-Arrays photon pipeline and
-adaptive RKF45 stepping, while metric and first metric-derivative evaluations
-use the numerical interpolation helpers fed by the combined numerical-
-spacetime dataset. The numerical spacetime is frozen to its final stored slice
-after `t_numerical_end`.
+adaptive RKF45 stepping, while metric and selected geometry evaluations use the
+numerical interpolation helpers fed by the combined numerical-spacetime
+dataset. The numerical spacetime is frozen to its final stored slice after
+`t_numerical_end`.
 
 This example currently generates a CPU/OpenMP project.
 
@@ -40,6 +40,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     numerical_interpolation,
     temporal_lagrange_interpolation,
     temporal_lagrange_interpolation_c1,
+    time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     batch_integrator_numerical,
@@ -72,6 +73,7 @@ def _require(condition: bool, message: str) -> None:
 
 
 SUPPORTED_NUMERICAL_COORDINATE_SYSTEMS = ("SinhCylindricalv2n2",)
+SUPPORTED_INTERPOLATION_METHODS = ("g4DD", "g4DD_d0", "GammaUDD")
 
 
 if __name__ == "__main__":
@@ -142,11 +144,18 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         default="geodesic",
         help="""Photon equations of motion: direct affine-parameter geodesics or normalized coordinate-time evolution.""",
     )
+    parser.add_argument(
+        "--interpolation-method",
+        choices=SUPPORTED_INTERPOLATION_METHODS,
+        default="g4DD",
+        help="""Numerical spacetime payload and interpolation method.""",
+    )
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
     args = parser.parse_args()
     normalized_eom = args.eom == "normalized"
+    interpolation_method = args.interpolation_method
 
     _require(
         os.path.basename(args.bin_name) == args.bin_name,
@@ -202,8 +211,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     _require(grid_physical_size > 0.0, "GRID_PHYSICAL_SIZE must be positive.")
 
     # Step 2: Define strict project constants and simulation targets
-    project_name = "photon_batch_geodesic_integrator_numerical"
-    exec_name = "photon_batch_geodesic_integrator_numerical"
+    project_name = f"photon_batch_geodesic_integrator_numerical_{interpolation_method}"
+    exec_name = project_name
     project_dir = os.path.abspath(os.path.join(args.outdir, project_name))
 
     # Step 2.a: Define the target spacetime and particle type.
@@ -232,11 +241,18 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # placeholder-based expressions and do not require spacetime-specific state.
     generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
     coordinate_symbols = list(sp.symbols("t x y z", real=True))
-    geodesic_rhs = (
-        generic_geodesic_equations.geodesic_eom_rhs_photon_normalized()
-        if normalized_eom
-        else generic_geodesic_equations.geodesic_eom_rhs_photon()
-    )
+    if interpolation_method == "GammaUDD":
+        geodesic_rhs = (
+            generic_geodesic_equations.geodesic_eom_rhs_photon_normalized_christoffel()
+            if normalized_eom
+            else generic_geodesic_equations.geodesic_eom_rhs_photon_christoffel()
+        )
+    else:
+        geodesic_rhs = (
+            generic_geodesic_equations.geodesic_eom_rhs_photon_normalized()
+            if normalized_eom
+            else generic_geodesic_equations.geodesic_eom_rhs_photon()
+        )
     p0_photon = generic_geodesic_equations.hamiltonian_constraint_photon()
     normalization_constraint_expr = (
         generic_geodesic_equations.normalization_constraint_photon_normalized()
@@ -276,16 +292,23 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         azimuthal_symmetry_spatial_lagrange_interpolation.register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation
     )
     register_azimuthal_interp(
-        coord_system_numerical, enable_simd=enable_simd, project_dir=project_dir
+        coord_system_numerical,
+        interpolation_method=interpolation_method,
+        enable_simd=enable_simd,
+        project_dir=project_dir,
     )
     temporal_lagrange_interpolation.register_CFunction_temporal_lagrange_interpolation(
-        enable_simd=enable_simd, project_dir=project_dir
+        interpolation_method=interpolation_method,
+        enable_simd=enable_simd,
+        project_dir=project_dir,
     )
     temporal_lagrange_interpolation_c1.register_CFunction_temporal_lagrange_interpolation_c1(
         enable_simd=enable_simd, project_dir=project_dir
     )
+    time_window_manager_numerical.time_window_manager_numerical(interpolation_method)
     numerical_interpolation.register_CFunction_numerical_interpolation(
         coord_system_numerical,
+        interpolation_method=interpolation_method,
         enable_simd=enable_simd,
         project_dir=project_dir,
         normalized_eom=normalized_eom,
@@ -295,8 +318,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_rhs,
         coordinate_symbols,
-        use_metric_derivative_rhs=True,
         normalized_eom=normalized_eom,
+        interpolation_method=interpolation_method,
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
@@ -320,7 +343,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # already pull in the shared slot/time-window helpers on demand. Calling
     # them again here would append duplicate definitions into BHaH_defines.h.
     batch_integrator_numerical.batch_integrator_numerical(
-        SPACETIME, coord_system_numerical, normalized_eom=normalized_eom
+        SPACETIME,
+        coord_system_numerical,
+        interpolation_method=interpolation_method,
+        normalized_eom=normalized_eom,
     )
     main_batch.main(SPACETIME, integrator_mode, normalized_eom=normalized_eom)
 
@@ -461,6 +487,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
     print(f" -> Numerical coordinate system: {coord_system_numerical}")
+    print(f" -> Interpolation method: {interpolation_method}")
     print(f" -> Photon equations of motion: {args.eom}")
     print(f" -> Numerical domain: {domain}")
     print(f" -> Numerical SINHWRHO: {sinhw_numerical_rho}")

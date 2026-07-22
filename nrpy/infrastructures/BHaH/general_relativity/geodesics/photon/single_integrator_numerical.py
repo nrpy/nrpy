@@ -41,6 +41,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
 def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     spacetime_name: str,
     dataset_coord_system: str,
+    interpolation_method: str = "g4DD",
     normalized_eom: bool = False,
 ) -> None:
     """
@@ -48,24 +49,23 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     :param spacetime_name: Spacetime identifier used to select photon equations.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
+    :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time equations.
-    :raises ValueError: If the dataset coordinate system is unsupported.
+    :raises ValueError: If the interpolation method or dataset coordinate system
+        is unsupported.
     """
-    if dataset_coord_system in ("Spherical", "SinhSpherical"):
-        phi_dim = 2
-    elif dataset_coord_system in (
-        "Cylindrical",
-        "SinhCylindrical",
-        "SinhCylindricalv2n2",
-    ):
-        phi_dim = 2
-    else:
+    if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
         raise ValueError(
-            "single_integrator_numerical supports only dataset_coord_system in "
-            "('Spherical', 'SinhSpherical', 'Cylindrical', "
-            f"'SinhCylindrical', 'SinhCylindricalv2n2'); found "
-            f"'{dataset_coord_system}'."
+            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
+            f"found '{interpolation_method}'."
         )
+    if dataset_coord_system != "SinhCylindricalv2n2":
+        raise ValueError(
+            "single_integrator_numerical supports only "
+            "dataset_coord_system='SinhCylindricalv2n2'; "
+            f"found '{dataset_coord_system}'."
+        )
+    phi_dim = 1
 
     single_photon_definitions = r"""
     #ifndef BUNDLE_CAPACITY
@@ -257,7 +257,7 @@ the integration parameter and time is f[0].
   double *f_start = NULL;
   double *f_temp = NULL;
   double *metric = NULL;
-  double *metric_derivative = NULL;
+  double *rhs_geometry = NULL;
   double *k_bundle = NULL;
   double *integration_param = NULL;
   double *h = NULL;
@@ -271,7 +271,7 @@ the integration parameter and time is f[0].
   BHAH_MALLOC(f_start, sizeof(double) * 9);
   BHAH_MALLOC(f_temp, sizeof(double) * 9);
   BHAH_MALLOC(metric, sizeof(double) * 10);
-  BHAH_MALLOC(metric_derivative, sizeof(double) * 40);
+  BHAH_MALLOC(rhs_geometry, sizeof(double) * 40);
   BHAH_MALLOC(k_bundle, sizeof(double) * 6 * 9);
   BHAH_MALLOC(integration_param, sizeof(double));
   BHAH_MALLOC(h, sizeof(double));
@@ -279,7 +279,7 @@ the integration parameter and time is f[0].
   BHAH_MALLOC(status, sizeof(termination_type_t));
 
   if (f == NULL || f_start == NULL || f_temp == NULL || metric == NULL ||
-      metric_derivative == NULL || k_bundle == NULL || integration_param == NULL ||
+      rhs_geometry == NULL || k_bundle == NULL || integration_param == NULL ||
       h == NULL || rejection_retries == NULL || status == NULL) {{
     fprintf(stderr, "ERROR: failed to allocate single-photon CPU buffers.\n");
     exit_status = EXIT_FAILURE;
@@ -595,7 +595,7 @@ the integration parameter and time is f[0].
           f_temp,
           {interpolation_stage_arguments}
           metric,
-          metric_derivative,
+          rhs_geometry,
           chunk_size,
           stream_idx);
 
@@ -613,23 +613,23 @@ the integration parameter and time is f[0].
       }} // END LOOP: for component over stage metric components
 
       for (int component = 0; component < 40; ++component) {{
-        if (!isfinite(metric_derivative[component])) {{
+        if (!isfinite(rhs_geometry[component])) {{
           fprintf(
               stderr,
-              "ERROR: stage %d metric-derivative component %d was not finite "
+              "ERROR: stage %d geometry component %d was not finite "
               "at t=%e.\n",
               stage,
               component,
               coordinate_time);
           exit_status = EXIT_FAILURE;
           goto cleanup;
-        }} // END IF: one stage metric-derivative component was not finite
-      }} // END LOOP: for component over stage metric derivatives
+        }} // END IF: one stage geometry component was not finite
+      }} // END LOOP: for component over stage geometry
 
       calculate_ode_rhs_kernel(
           f_temp,
           metric,
-          metric_derivative,
+          rhs_geometry,
           {rhs_integration_arguments}
           k_bundle,
           stage,
@@ -811,7 +811,7 @@ the integration parameter and time is f[0].
   BHAH_FREE(f_start);
   BHAH_FREE(f_temp);
   BHAH_FREE(metric);
-  BHAH_FREE(metric_derivative);
+  BHAH_FREE(rhs_geometry);
   BHAH_FREE(k_bundle);
   BHAH_FREE(integration_param);
   BHAH_FREE(h);
@@ -843,7 +843,8 @@ if __name__ == "__main__":
 
     SPACETIME = "KerrSchild_Cartesian"
     PARTICLE = "photon"
-    DATASET_COORD_SYSTEM = "Spherical"
+    DATASET_COORD_SYSTEM = "SinhCylindricalv2n2"
+    INTERPOLATION_METHOD = "g4DD"
     NORMALIZED_EOM = False
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
 
@@ -866,6 +867,7 @@ if __name__ == "__main__":
     )
     numerical_interpolation.register_CFunction_numerical_interpolation(
         DATASET_COORD_SYSTEM,
+        interpolation_method=INTERPOLATION_METHOD,
         enable_simd=False,
         project_dir=project_dir,
         normalized_eom=NORMALIZED_EOM,
@@ -873,8 +875,8 @@ if __name__ == "__main__":
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_data.geodesic_rhs,
         geodesic_data.xx,
-        use_metric_derivative_rhs=True,
         normalized_eom=NORMALIZED_EOM,
+        interpolation_method=INTERPOLATION_METHOD,
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
@@ -883,6 +885,7 @@ if __name__ == "__main__":
     single_integrator_numerical(
         SPACETIME,
         DATASET_COORD_SYSTEM,
+        interpolation_method=INTERPOLATION_METHOD,
         normalized_eom=NORMALIZED_EOM,
     )
     main_single.main_single("single_integrator_numerical")

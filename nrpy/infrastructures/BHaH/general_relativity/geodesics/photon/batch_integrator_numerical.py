@@ -6,8 +6,8 @@ This module registers the C orchestrator for batched photon geodesics in a
 numerical spacetime. The generated integrator consumes a validated combined
 numerical raytracing ``.bin`` path stored on ``commondata``, initializes a
 ``NumericalTimeWindowManager``, maps numerical time windows per time slot, and
-calls ``numerical_interpolation()`` for metric and first metric-derivative
-data.
+calls ``numerical_interpolation()`` for the metric and selected forty-component
+geometry bundle.
 
 The numerical time-window logic assumes the generator also registers
 ``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
@@ -15,8 +15,7 @@ so accepted RKF45 steps remain inside the mapped numerical window.
 
 The script keeps the broad photon orchestration, RKF45 stepping, and
 ``TimeSlotManager`` structure used by the analytic photon batch integrator, but
-all metric and first metric-derivative evaluations go through the numerical
-``.bin`` data path.
+all geometry evaluations go through the numerical ``.bin`` data path.
 It does not compute analytic conserved quantities.
 
 Author: Dalton J. Moone
@@ -33,6 +32,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 def batch_integrator_numerical(
     spacetime_name: str,
     dataset_coord_system: str,
+    interpolation_method: str = "g4DD",
     normalized_eom: bool = False,
 ) -> None:
     r"""
@@ -40,15 +40,19 @@ def batch_integrator_numerical(
 
     :param spacetime_name: Spacetime identifier used by photon-specific initial-condition helpers.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
+    :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
-    :raises ValueError: If the configured parallelization mode is not OpenMP.
+    :raises ValueError: If the parallelization mode, interpolation method, or
+        dataset coordinate system is unsupported.
 
     Doctests:
     >>> import os
     >>> import nrpy.c_function as cfc
     >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
     >>> cfc.CFunction_dict.clear()
-    >>> batch_integrator_numerical("Schwarzschild", "Spherical")
+    >>> batch_integrator_numerical(
+    ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD"
+    ... )
     >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
     >>> "@param[in] commondata" in generated
     True
@@ -64,20 +68,18 @@ def batch_integrator_numerical(
             "batch_integrator_numerical currently supports only "
             "parallelization='openmp'."
         )
-    if dataset_coord_system in ("Spherical", "SinhSpherical"):
-        phi_dim = 2
-    elif dataset_coord_system in (
-        "Cylindrical",
-        "SinhCylindrical",
-        "SinhCylindricalv2n2",
-    ):
-        phi_dim = 1
-    else:
+    if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
+        raise ValueError(
+            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
+            f"found '{interpolation_method}'."
+        )
+    if dataset_coord_system != "SinhCylindricalv2n2":
         raise ValueError(
             "batch_integrator_numerical currently supports only "
-            "dataset_coord_system in ('Spherical', 'SinhSpherical', "
-            f"'Cylindrical', 'SinhCylindrical'); found '{dataset_coord_system}'."
+            "dataset_coord_system='SinhCylindricalv2n2'; "
+            f"found '{dataset_coord_system}'."
         )
+    phi_dim = 1
 
     # Supplied-name mapping: the checklist aliases numerical_time_window_manager_set_inert,
     # numerical_time_window_manager_init, numerical_time_window_manager_mmap_for_slot,
@@ -131,8 +133,8 @@ def batch_integrator_numerical(
 
     This function bins active rays by coordinate time using TimeSlotManager,
     maps combined numerical-spacetime .bin time windows through
-    NumericalTimeWindowManager, interpolates metric and first metric derivatives through
-    numerical_interpolation(), advances photons with the existing RKF45 kernels,
+    NumericalTimeWindowManager, interpolates the metric and selected geometry
+    bundle through numerical_interpolation(), advances photons with the existing RKF45 kernels,
     and writes final blueprint results.
 
     @param[in] commondata Struct containing global numerical-spacetime, camera,
@@ -373,8 +375,8 @@ def batch_integrator_numerical(
     double *d_f_pre_prev_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
-    // Scratchpad persisting first metric derivatives $g_{{\mu\nu,\sigma}}$.
-    double *d_metric_derivative_bundle[2];
+    // Scratchpad persisting the selected forty-component geometry bundle.
+    double *d_rhs_geometry_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
     double *d_k_bundle[2];
     // Array regulating active integration step sizing $h$.
@@ -425,7 +427,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
         {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
-        {malloc_device}(d_metric_derivative_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu,\sigma}}$ scratchpad.
+        {malloc_device}(d_rhs_geometry_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate the geometry scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
         {malloc_device}(d_integration_param_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate integration-parameter scratchpad.
@@ -804,8 +806,8 @@ def batch_integrator_numerical(
             }} // END LOOP: for c_k over 9 to setup CPU buffer baseline
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
-                // Interpolation step: evaluate metric and first metric derivatives
-                // on the active buffer.
+                // Interpolation step: evaluate the metric and selected geometry
+                // bundle on the active buffer.
                 numerical_interpolation(
                     commondata,
                     &numerical_params,
@@ -814,7 +816,7 @@ def batch_integrator_numerical(
                     d_f_temp_bundle[current],
                     {interpolation_integration_param_args}
                     d_metric_bundle[current],
-                    d_metric_derivative_bundle[current],
+                    d_rhs_geometry_bundle[current],
                     active_chunks[current],
                     current);
                 long int bad_interp_current = 0;
@@ -829,13 +831,13 @@ def batch_integrator_numerical(
                     }} // END LOOP: for interp_c over metric components
                     if (!bad_interp) {{
                         for (int interp_c = 0; interp_c < 40; ++interp_c) {{
-                            const double val = d_metric_derivative_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
+                            const double val = d_rhs_geometry_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
                             if (!isfinite(val)) {{
                                 bad_interp = true;
                                 break;
-                            }} // END IF: one metric-derivative component was not finite
-                        }} // END LOOP: for interp_c over metric-derivative components
-                    }} // END IF: metric components were finite before checking derivatives
+                            }} // END IF: one geometry component was not finite
+                        }} // END LOOP: for interp_c over geometry components
+                    }} // END IF: metric components were finite before checking geometry
                     if (bad_interp)
                         bad_interp_current++;
                 }} // END LOOP: for interp_i over active chunks on the active buffer
@@ -854,7 +856,7 @@ def batch_integrator_numerical(
                 }} // END IF: bad_interp_current > 0 to abort before RHS on invalid interpolation
                 // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
                 // on the active buffer.
-                calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_metric_derivative_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
+                calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_rhs_geometry_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
                 // Stage update: accumulate the intermediate RKF45 state updates on the
                 // active buffer.
                 rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
@@ -972,7 +974,7 @@ def batch_integrator_numerical(
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
                     // Interpolation step: evaluate the metric tensor
-                    // $g_{{ \mu\nu}}$ and first metric derivatives
+                    // $g_{{ \mu\nu}}$ and the selected geometry bundle
                     // on the alternate buffer.
                     numerical_interpolation(
                         commondata,
@@ -982,7 +984,7 @@ def batch_integrator_numerical(
                         d_f_temp_bundle[next],
                         {interpolation_integration_param_args_next}
                         d_metric_bundle[next],
-                        d_metric_derivative_bundle[next],
+                        d_rhs_geometry_bundle[next],
                         active_chunks[next],
                         next);
                     long int bad_interp_next = 0;
@@ -997,13 +999,13 @@ def batch_integrator_numerical(
                         }} // END LOOP: for interp_c over metric components
                         if (!bad_interp) {{
                             for (int interp_c = 0; interp_c < 40; ++interp_c) {{
-                                const double val = d_metric_derivative_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
+                                const double val = d_rhs_geometry_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
                                 if (!isfinite(val)) {{
                                     bad_interp = true;
                                     break;
-                                }} // END IF: one metric-derivative component was not finite
-                            }} // END LOOP: for interp_c over metric-derivative components
-                        }} // END IF: metric components were finite before checking derivatives
+                                }} // END IF: one geometry component was not finite
+                            }} // END LOOP: for interp_c over geometry components
+                        }} // END IF: metric components were finite before checking geometry
                         if (bad_interp)
                             bad_interp_next++;
                     }} // END LOOP: for interp_i over active chunks on the alternate buffer
@@ -1022,7 +1024,7 @@ def batch_integrator_numerical(
                     }} // END IF: bad_interp_next > 0 to abort before RHS on invalid interpolation
                     // RHS step: compute the geodesic equation derivatives
                     // $\dot{{ f}}^\mu$ on the alternate buffer.
-                    calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_metric_derivative_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
+                    calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_rhs_geometry_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
                     // Stage update: accumulate the intermediate RKF45 state updates on
                     // the alternate buffer.
                     rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
@@ -1396,7 +1398,7 @@ def batch_integrator_numerical(
             {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
             {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
-            {free_device}(d_metric_derivative_bundle[s]); // Purges the first metric-derivative scratchpad.
+            {free_device}(d_rhs_geometry_bundle[s]); // Purges the geometry scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
             {free_device}(d_integration_param_bundle[s]); // Purges the integration-parameter scratchpad.

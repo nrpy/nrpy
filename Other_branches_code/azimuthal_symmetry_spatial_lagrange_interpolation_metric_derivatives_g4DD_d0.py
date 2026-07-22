@@ -4,16 +4,16 @@ Register azimuthal-symmetry spatial Lagrange interpolation.
 This module emits the spatial stage of the numerical-spacetime interpolation
 pipeline used by the geodesic integrators. The generated C API evaluates one
 spatial position ``(x, y, z)`` against caller-supplied mapped time-slice
-payloads. The selected interpolation method is fixed when the C code is
-generated: metric methods write ``g4DD_dD`` and ``GammaUDD`` writes
-``Gamma4UDD``.
+payloads. It writes the normally interpolated Cartesian-basis ``g4DD`` values
+and temporarily repurposes the existing 40-component ``Gamma4UDD`` output
+buffer to store first Cartesian derivatives of the metric.
 
-The metric derivative bundle is serialized in symmetric metric-component order,
+The derivative bundle is serialized in symmetric metric-component order,
 with derivative direction fastest. For metric pairs
 ``(00, 01, 02, 03, 11, 12, 13, 22, 23, 33)``, each four-value group is
-``(d/dt, d/dx, d/dy, d/dz)``. This spatial helper sets every time derivative
-to zero for ``g4DD``; ``g4DD_d0`` supplies its ten stored time derivatives.
-Both metric methods fill the three Cartesian spatial derivatives.
+``(d/dt, d/dx, d/dy, d/dz)``. This spatial helper fills every time derivative
+from the stored metric time-derivative payload and fills the three Cartesian
+spatial derivatives.
 
 The target spatial position is converted from Cartesian to the dataset's
 native coordinates with the generated BHaH inverse map. Metric values and the
@@ -29,10 +29,10 @@ inverse coordinate Jacobian generated directly from
 such as ``SinhCylindricalv2n2`` inherit their stretching factors from the
 reference-metric definition rather than from duplicated handwritten formulas.
 
-The selected payload record contains three Cartesian coordinates, ten metric
-values, and either ten stored metric time derivatives or forty stored
-Christoffel components. The spatial helper skips the coordinate prefix and
-uses the full ghost-zone-inclusive payload directly.
+Each payload record contains 23 doubles per point: three Cartesian coordinates,
+ten metric values, and ten metric time derivatives. The spatial helper skips
+the coordinate prefix and reconstructs the metric and its derivatives directly
+from the stored payload values.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -60,9 +60,16 @@ AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES = r"""
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_PI 3.14159265358979323846264338327950288
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT 10
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT 10
-#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT 40
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT 40
-#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT {record_component_count}
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT \
+  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_TENSOR_COMPONENT_COUNT \
+  (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT)
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT 3
+#define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT \
+  (AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_COORDINATE_COMPONENT_COUNT + \
+   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + \
+   AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT)
 #define AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_MAX_HALF_WIDTH 32
 // Status codes returned by the azimuthal-symmetry spatial Lagrange helper.
 typedef enum {
@@ -92,39 +99,31 @@ _METRIC_COMPONENT_ORDER: Tuple[Tuple[int, int], ...] = (
 _METRIC_COMPONENT_INDEX: Dict[Tuple[int, int], int] = {
     component: idx for idx, component in enumerate(_METRIC_COMPONENT_ORDER)
 }
-_GAMMA_COMPONENT_ORDER: Tuple[Tuple[int, int, int], ...] = tuple(
-    (alpha, mu, nu) for alpha in range(4) for mu in range(4) for nu in range(mu, 4)
-)
-_GAMMA_COMPONENT_INDEX: Dict[Tuple[int, int, int], int] = {
-    component: idx for idx, component in enumerate(_GAMMA_COMPONENT_ORDER)
-}
 
 
 def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     CoordSystem: str,
-    interpolation_method: str = "g4DD",
-    enable_simd: bool = False,
-    project_dir: str = ".",
+    enable_simd: bool,
+    project_dir: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the azimuthal-symmetry spatial Lagrange interpolation helper.
 
     This is the first stage of the numerical-spacetime interpolation pipeline.
     For one requested photon position and one set of already-mapped numerical
-    time slices, it computes the selected Cartesian-basis geometry quantities
-    on each supplied slice. ``g4DD`` reconstructs spatial metric derivatives,
-    ``g4DD_d0`` reads the ten stored metric time derivatives and reconstructs
-    the spatial derivatives, and ``GammaUDD`` interpolates and rotates the
-    stored four-dimensional connection.
+    time slices, it computes the interpolated Cartesian-basis metric and its
+    Cartesian spatial derivatives on each supplied slice. The existing
+    40-component connection output is used as a temporary metric-derivative
+    bundle with the stored time derivatives and spatially interpolated Cartesian
+    spatial derivatives.
 
     :param CoordSystem: Coordinate system used by the source dataset; must be
-        `"SinhCylindricalv2n2"`.
-    :param interpolation_method: Geometry payload method to generate.
+        `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
+        `"SinhCylindrical"`, or `"SinhCylindricalv2n2"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If the coordinate system or interpolation method is not
-        supported.
+    :raises ValueError: If `CoordSystem` is not supported.
 
     Doctests:
     >>> import contextlib
@@ -156,30 +155,9 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     ...     else:
     ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
     """
-    # Step 1: Validate the fixed coordinate-system and payload contracts.
-    if CoordSystem != "SinhCylindricalv2n2":
-        raise ValueError(
-            "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
-            "implemented only for CoordSystem='SinhCylindricalv2n2'; found "
-            f"'{CoordSystem}'."
-        )
-    if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
-        raise ValueError(
-            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
-            f"found '{interpolation_method}'."
-        )
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-
-    phi_dim, interp_dim0, interp_dim1 = 1, 0, 2
-    is_gamma_method = interpolation_method == "GammaUDD"
-    is_metric_time_derivative_method = interpolation_method == "g4DD_d0"
-    record_component_count = {
-        "g4DD": 13,
-        "g4DD_d0": 23,
-        "GammaUDD": 53,
-    }[interpolation_method]
 
     _ = par.register_CodeParameter(
         "int",
@@ -195,10 +173,27 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     )
     Bdefines_h.register_BHaH_defines(
         "azimuthal_symmetry_spatial_lagrange_interpolation",
-        AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES.replace(
-            "{record_component_count}", str(record_component_count)
-        ),
+        AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_DEFINES,
     )
+
+    # Step 1: Validate high-level code-generation assumptions and determine
+    # which native coordinates define the 2D interpolation grid.
+    if CoordSystem in ("Spherical", "SinhSpherical"):
+        phi_dim, interp_dim0, interp_dim1 = 2, 0, 1
+    elif CoordSystem in (
+        "Cylindrical",
+        "SinhCylindrical",
+        "SinhCylindricalv2n2",
+    ):
+        phi_dim, interp_dim0, interp_dim1 = 1, 0, 2
+    else:
+        raise ValueError(
+            "azimuthal_symmetry_spatial_lagrange_interpolation is currently "
+            "implemented only for CoordSystem in ('Spherical', "
+            "'SinhSpherical', 'Cylindrical', 'SinhCylindrical', "
+            "'SinhCylindricalv2n2'); found "
+            f"'{CoordSystem}'."
+        )
 
     # Step 2: Ensure required helper headers are copied into the project.
     if not enable_simd:
@@ -233,9 +228,40 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         "differentiate_interpolation_lagrange_uniform.h",
         "interpolation_lagrange_uniform.h",
     ]
-    # Step 3: Emit the shared payload-index helper, then build only the
-    # selected method's remaining generated helpers.
-    point_index_prefunc = r"""
+    # Step 3: Generate the inverse reference-metric Jacobian and pre-expand
+    # metric rotations so the emitted C helper stays linear and reviewable.
+    inverse_jacobian_assignments = _build_inverse_jacobian_c_code(CoordSystem)
+    direct_metric_assignments = "\n".join(
+        _emit_wrapped_assignment(
+            f"g4dd_rot[{idx}]",
+            _build_metric_rotation_terms(mu, nu, "g4dd_ref"),
+        )
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+    direct_interp_0_derivative_assignments = "\n".join(
+        _emit_wrapped_assignment(
+            f"g4dd_native_derivatives_rot[{interp_dim0}][{idx}]",
+            _build_metric_rotation_terms(mu, nu, "g4dd_interp_0_ref"),
+        )
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+    direct_phi_derivative_assignments = "\n".join(
+        _emit_wrapped_assignment(
+            f"g4dd_native_derivatives_rot[{phi_dim}][{idx}]",
+            _build_metric_rotation_derivative_terms(mu, nu, "g4dd_ref"),
+        )
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+    direct_interp_1_derivative_assignments = "\n".join(
+        _emit_wrapped_assignment(
+            f"g4dd_native_derivatives_rot[{interp_dim1}][{idx}]",
+            _build_metric_rotation_terms(mu, nu, "g4dd_interp_1_ref"),
+        )
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+    )
+
+    prefunc = (
+        r"""
 /**
  * Map one full-payload storage-grid index triplet to the serialized point order.
  *
@@ -268,126 +294,7 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
            (uint64_t)payload_i1_count * (uint64_t)i2_storage);
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_indices
-"""
 
-    if is_gamma_method:
-        direct_gamma_metric_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_rot[{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_gamma_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"gamma_rot[{idx}]",
-                _build_gamma_rotation_terms(alpha, mu, nu),
-            )
-            for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER)
-        )
-        prefunc = (
-            point_index_prefunc
-            + r"""
-/**
- * Accumulate metric and Christoffel components from one payload record.
- *
- * @param weight Two-dimensional Lagrange value weight.
- * @param[in] tensor_record Serialized payload record beginning at metric fields.
- * @param[in,out] g4dd_ref Interpolated metric on the selected stored phi plane.
- * @param[in,out] gamma_ref Interpolated Christoffel components on that plane.
- */
-static void azimuthal_symmetry_spatial_lagrange_accumulate_gamma_record_direct(
-    const REAL weight,
-    const double *restrict tensor_record,
-    REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
-    REAL gamma_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT]) {
-  for (int comp = 0;
-       comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-       comp++)
-    g4dd_ref[comp] += weight * (REAL)tensor_record[comp];
-  for (int comp = 0;
-       comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
-       comp++)
-    gamma_ref[comp] +=
-        weight * (REAL)tensor_record[
-            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
-} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_gamma_record_direct
-
-/**
- * Rotate metric and four-dimensional Christoffel components about the z axis.
- *
- * The rotation is constant and Cartesian, so no inhomogeneous connection
- * term is present in the Christoffel transformation.
- *
- * @param delta_phi Active rotation angle from stored plane to target azimuth.
- * @param[in] g4dd_ref Metric components on the selected stored phi plane.
- * @param[in] gamma_ref Christoffel components on the selected stored phi plane.
- * @param[out] g4dd_rot Metric components at the target azimuth.
- * @param[out] gamma_rot Christoffel components at the target azimuth.
- */
-static void azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
-    const REAL delta_phi,
-    const REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
-    const REAL gamma_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT],
-    REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
-    REAL gamma_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT]) {
-  const REAL cos_delta = cos(delta_phi);
-  const REAL sin_delta = sin(delta_phi);
-
-{direct_gamma_metric_assignments}
-{direct_gamma_assignments}
-} // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z
-        """.replace(
-                "{direct_gamma_metric_assignments}", direct_gamma_metric_assignments
-            ).replace("{direct_gamma_assignments}", direct_gamma_assignments)
-        )
-    else:
-        inverse_jacobian_assignments = _build_inverse_jacobian_c_code(CoordSystem)
-        direct_metric_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_rot[{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_interp_0_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{interp_dim0}][{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_interp_0_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_phi_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{phi_dim}][{idx}]",
-                _build_metric_rotation_derivative_terms(mu, nu, "g4dd_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        direct_interp_1_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{interp_dim1}][{idx}]",
-                _build_metric_rotation_terms(mu, nu, "g4dd_interp_1_ref"),
-            )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
-        )
-        metric_time_derivative_argument = (
-            """    REAL g4dd_dt_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT],"""
-            if is_metric_time_derivative_method
-            else ""
-        )
-        metric_time_derivative_code = (
-            """    const REAL metric_time_derivative =
-        (REAL)tensor_record[
-            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
-    g4dd_dt_ref[comp] += value_weight * metric_time_derivative;
-"""
-            if is_metric_time_derivative_method
-            else ""
-        )
-        prefunc = (
-            point_index_prefunc
-            + r"""
 /**
  * Evaluate the inverse reference-metric coordinate Jacobian at one native point.
  *
@@ -410,16 +317,18 @@ static void azimuthal_symmetry_spatial_lagrange_inverse_jacobian(
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_inverse_jacobian
 
 /**
- * Accumulate metric values and two native derivatives from one payload record.
+ * Accumulate metric values, time derivatives, and two native derivatives from one payload record.
  *
  * The record begins with the ten Cartesian-basis metric components after its
- * three Cartesian coordinate values have been skipped by the caller.
+ * three Cartesian coordinate values have been skipped by the caller. The ten
+ * metric time derivatives follow the metric components.
  *
  * @param value_weight Two-dimensional Lagrange value weight.
  * @param interp_0_derivative_weight Derivative weight in the first native interpolation direction.
  * @param interp_1_derivative_weight Derivative weight in the second native interpolation direction.
  * @param[in] tensor_record Serialized payload record beginning at the metric fields.
  * @param[in,out] g4dd_ref Interpolated metric on the selected stored phi plane.
+ * @param[in,out] g4dd_dt_ref Interpolated metric time derivative on the selected stored phi plane.
  * @param[in,out] g4dd_interp_0_ref First native interpolation-direction derivative.
  * @param[in,out] g4dd_interp_1_ref Second native interpolation-direction derivative.
  */
@@ -429,15 +338,18 @@ static void azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
     const REAL interp_1_derivative_weight,
     const double *restrict tensor_record,
     REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
-{metric_time_derivative_argument}
+    REAL g4dd_dt_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT],
     REAL g4dd_interp_0_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT],
     REAL g4dd_interp_1_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT]) {
   for (int comp = 0;
        comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
        comp++) {
     const REAL metric_value = (REAL)tensor_record[comp];
+    const REAL metric_time_derivative =
+        (REAL)tensor_record[
+            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT + comp];
     g4dd_ref[comp] += value_weight * metric_value;
-{metric_time_derivative_code}
+    g4dd_dt_ref[comp] += value_weight * metric_time_derivative;
     g4dd_interp_0_ref[comp] += interp_0_derivative_weight * metric_value;
     g4dd_interp_1_ref[comp] += interp_1_derivative_weight * metric_value;
   } // END LOOP: for comp over serialized metric components
@@ -480,23 +392,19 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
 {direct_interp_1_derivative_assignments}
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z
 """.replace("{inverse_jacobian_assignments}", inverse_jacobian_assignments)
-            .replace("{direct_metric_assignments}", direct_metric_assignments)
-            .replace(
-                "{direct_interp_0_derivative_assignments}",
-                direct_interp_0_derivative_assignments,
-            )
-            .replace(
-                "{direct_phi_derivative_assignments}", direct_phi_derivative_assignments
-            )
-            .replace(
-                "{direct_interp_1_derivative_assignments}",
-                direct_interp_1_derivative_assignments,
-            )
-            .replace(
-                "{metric_time_derivative_argument}", metric_time_derivative_argument
-            )
-            .replace("{metric_time_derivative_code}", metric_time_derivative_code)
+        .replace("{direct_metric_assignments}", direct_metric_assignments)
+        .replace(
+            "{direct_interp_0_derivative_assignments}",
+            direct_interp_0_derivative_assignments,
         )
+        .replace(
+            "{direct_phi_derivative_assignments}", direct_phi_derivative_assignments
+        )
+        .replace(
+            "{direct_interp_1_derivative_assignments}",
+            direct_interp_1_derivative_assignments,
+        )
+    )
 
     cfunc_type = "int"
     name = "azimuthal_symmetry_spatial_lagrange_interpolation"
@@ -507,190 +415,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
                 const int num_target_slices,
                 const double *const *restrict slice_payloads,
                 REAL *restrict g4dd_out,
-                REAL *restrict rhs_geometry_out"""
-
-    if is_gamma_method:
-        derivative_coefficient_declarations = ""
-        derivative_coefficient_calculation = ""
-        inverse_jacobian_setup = ""
-        metric_time_declarations = ""
-        metric_accumulation_call = """        azimuthal_symmetry_spatial_lagrange_accumulate_gamma_record_direct(
-            value_weight, tensor_record, g4dd_ref, gamma_ref);"""
-        metric_slice_processing = """
-  // Step 5: Interpolate and rotate each requested time slice.
-  for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
-    const double *restrict slice_payload = slice_payloads[which_slice];
-    REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
-    REAL gamma_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT] = {0};
-    REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL gamma_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
-
-    if (slice_payload == NULL)
-      return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-
-    for (int v = 0; v < interp_order; v++) {
-      for (int u = 0; u < interp_order; u++) {
-        const double *restrict tensor_record =
-            slice_payload +
-            mapped_point_index[v][u] *
-                (uint64_t)
-                    AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
-            3ULL;
-        const REAL value_weight =
-            normalization_2d * coeff_interp_1[v] * coeff_interp_0[u];
-
-        azimuthal_symmetry_spatial_lagrange_accumulate_gamma_record_direct(
-            value_weight, tensor_record, g4dd_ref, gamma_ref);
-      } // END LOOP: for u over first interpolation-dimension values
-    } // END LOOP: for v over second interpolation-dimension values
-
-    azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
-        target_phi - phi_ref, g4dd_ref, gamma_ref, g4dd_rot, gamma_rot);
-
-    REAL *restrict g4dd_slice_out =
-        &g4dd_out[which_slice *
-                  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL *restrict gamma_slice_out =
-        &rhs_geometry_out[
-            which_slice *
-            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT];
-    for (int comp = 0;
-         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-         comp++)
-      g4dd_slice_out[comp] = g4dd_rot[comp];
-    for (int comp = 0;
-         comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
-         comp++)
-      gamma_slice_out[comp] = gamma_rot[comp];
-  } // END LOOP: for which_slice over requested slice indices
-"""
-    else:
-        derivative_coefficient_declarations = """  REAL derivative_coeff_interp_0[interp_order];
-  REAL derivative_coeff_interp_1[interp_order];"""
-        derivative_coefficient_calculation = """  compute_lagrange_basis_derivative_coeffs_xi(
-      interp_order, inv_denom, diffs_interp_0, derivative_coeff_interp_0);
-  compute_lagrange_basis_derivative_coeffs_xi(
-      interp_order, inv_denom, diffs_interp_1, derivative_coeff_interp_1);"""
-        inverse_jacobian_setup = """
-  // Step 4: Evaluate the native-with-respect-to-Cartesian Jacobian once for
-  // this target position. It is common to every requested time slice.
-  REAL inverse_jacobian[3][3];
-  azimuthal_symmetry_spatial_lagrange_inverse_jacobian(
-      params, xx_target, inverse_jacobian);
-  for (int native_direction = 0; native_direction < 3; native_direction++)
-    for (int cartesian_direction = 0; cartesian_direction < 3;
-         cartesian_direction++)
-      if (!isfinite((double)inverse_jacobian[native_direction][cartesian_direction]))
-        return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
-"""
-        metric_time_declarations = (
-            """    REAL g4dd_dt_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT] = {0};
-    REAL g4dd_dt_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT];
-    const REAL g4dd_dt_zero[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
-    REAL g4dd_dt_native_derivatives_rot[3][AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-"""
-            if is_metric_time_derivative_method
-            else ""
-        )
-        metric_accumulation_call = (
-            """        azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
-            value_weight, interp_0_derivative_weight,
-            interp_1_derivative_weight, tensor_record, g4dd_ref,
-            g4dd_dt_ref, g4dd_interp_0_ref, g4dd_interp_1_ref);"""
-            if is_metric_time_derivative_method
-            else """        azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
-            value_weight, interp_0_derivative_weight,
-            interp_1_derivative_weight, tensor_record, g4dd_ref,
-            g4dd_interp_0_ref, g4dd_interp_1_ref);"""
-        )
-        metric_time_rotation = (
-            """    azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(
-        target_phi - phi_ref, g4dd_dt_ref, g4dd_dt_zero, g4dd_dt_zero,
-        g4dd_dt_rot, g4dd_dt_native_derivatives_rot);
-"""
-            if is_metric_time_derivative_method
-            else ""
-        )
-        metric_time_output = (
-            """      metric_derivative_slice_out[4 * metric_component] =
-          g4dd_dt_rot[metric_component];"""
-            if is_metric_time_derivative_method
-            else """      metric_derivative_slice_out[4 * metric_component] = 0.0;"""
-        )
-        metric_slice_processing = (
-            """
-  // Step 5: Interpolate and differentiate each requested time slice.
-  for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
-    const double *restrict slice_payload = slice_payloads[which_slice];
-    REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
-    REAL g4dd_interp_0_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
-    REAL g4dd_interp_1_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
-{metric_time_declarations}    REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL g4dd_native_derivatives_rot[3][AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-
-    if (slice_payload == NULL)
-      return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
-
-    for (int v = 0; v < interp_order; v++) {
-      for (int u = 0; u < interp_order; u++) {
-        const double *restrict tensor_record =
-            slice_payload +
-            mapped_point_index[v][u] *
-                (uint64_t)
-                    AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
-            3ULL;
-        const REAL value_weight =
-            normalization_2d * coeff_interp_1[v] * coeff_interp_0[u];
-        const REAL interp_0_derivative_weight =
-            normalization_2d * coeff_interp_1[v] *
-            derivative_coeff_interp_0[u];
-        const REAL interp_1_derivative_weight =
-            normalization_2d * derivative_coeff_interp_1[v] *
-            coeff_interp_0[u];
-
-{metric_accumulation_call}
-      } // END LOOP: for u over first interpolation-dimension values
-    } // END LOOP: for v over second interpolation-dimension values
-
-    azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(
-        target_phi - phi_ref, g4dd_ref, g4dd_interp_0_ref,
-        g4dd_interp_1_ref, g4dd_rot, g4dd_native_derivatives_rot);
-{metric_time_rotation}
-    REAL *restrict g4dd_slice_out =
-        &g4dd_out[which_slice *
-                  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
-    REAL *restrict metric_derivative_slice_out =
-        &rhs_geometry_out[
-            which_slice *
-            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT];
-
-    // Step 5.a: Transform only the derivative index from native coordinates
-    // to Cartesian coordinates, with direction order (dt, dx, dy, dz).
-    for (int metric_component = 0;
-         metric_component < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
-         metric_component++) {
-      g4dd_slice_out[metric_component] = g4dd_rot[metric_component];
-{metric_time_output}
-      for (int cartesian_direction = 0; cartesian_direction < 3;
-           cartesian_direction++) {
-        REAL cartesian_derivative = 0.0;
-        for (int native_direction = 0; native_direction < 3;
-             native_direction++)
-          cartesian_derivative +=
-              inverse_jacobian[native_direction][cartesian_direction] *
-              g4dd_native_derivatives_rot[native_direction][metric_component];
-        metric_derivative_slice_out[
-            4 * metric_component + cartesian_direction + 1] =
-            cartesian_derivative;
-      } // END LOOP: for cartesian_direction over x, y, z
-    } // END LOOP: for metric_component over symmetric g4DD components
-  } // END LOOP: for which_slice over requested slice indices
-""".replace("{metric_time_declarations}", metric_time_declarations)
-            .replace("{metric_accumulation_call}", metric_accumulation_call)
-            .replace("{metric_time_rotation}", metric_time_rotation)
-            .replace("{metric_time_output}", metric_time_output)
-        )
-
+                REAL *restrict gamma4udd_out"""
     # Step 4: Use placeholder replacement for generated symbols so the raw C
     # body can keep ordinary braces instead of escaped f-string braces.
     body = (
@@ -698,7 +423,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   // Step 1: Validate pointers, then convert the target Cartesian point to
   // native coordinates.
   if (context == NULL || commondata == NULL || params == NULL ||
-      slice_payloads == NULL || g4dd_out == NULL || rhs_geometry_out == NULL ||
+      slice_payloads == NULL || g4dd_out == NULL || gamma4udd_out == NULL ||
       num_target_slices <= 0)
     return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
 
@@ -763,7 +488,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   REAL diffs_interp_1[interp_order];
   REAL coeff_interp_0[interp_order];
   REAL coeff_interp_1[interp_order];
-{derivative_coefficient_declarations}
+  REAL derivative_coeff_interp_0[interp_order];
+  REAL derivative_coeff_interp_1[interp_order];
   uint64_t mapped_point_index[interp_order][interp_order];
   int interp_0_storage_stencil[interp_order];
   int interp_1_storage_stencil[interp_order];
@@ -795,7 +521,10 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
       interp_order, inv_denom, diffs_interp_0, coeff_interp_0);
   compute_lagrange_basis_coeffs_xi(
       interp_order, inv_denom, diffs_interp_1, coeff_interp_1);
-{derivative_coefficient_calculation}
+  compute_lagrange_basis_derivative_coeffs_xi(
+      interp_order, inv_denom, diffs_interp_0, derivative_coeff_interp_0);
+  compute_lagrange_basis_derivative_coeffs_xi(
+      interp_order, inv_denom, diffs_interp_1, derivative_coeff_interp_1);
 
   // Step 3: Convert each raw storage-grid stencil node to one payload index.
   for (int v = 0; v < interp_order; v++) {
@@ -812,9 +541,96 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
     } // END LOOP: for u over first interpolation-dimension payload indices
   } // END LOOP: for v over second interpolation-dimension payload indices
 
-{inverse_jacobian_setup}
+  // Step 4: Evaluate the native-with-respect-to-Cartesian Jacobian once for
+  // this target position. It is common to every requested time slice.
+  REAL inverse_jacobian[3][3];
+  azimuthal_symmetry_spatial_lagrange_inverse_jacobian(
+      params, xx_target, inverse_jacobian);
+  for (int native_direction = 0; native_direction < 3; native_direction++)
+    for (int cartesian_direction = 0; cartesian_direction < 3;
+         cartesian_direction++)
+      if (!isfinite((double)inverse_jacobian[native_direction][cartesian_direction]))
+        return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
 
-{metric_slice_processing}
+  // Step 5: Interpolate and differentiate each requested time slice.
+  for (int which_slice = 0; which_slice < num_target_slices; which_slice++) {
+    const double *restrict slice_payload = slice_payloads[which_slice];
+    REAL g4dd_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
+    REAL g4dd_dt_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT] = {0};
+    REAL g4dd_interp_0_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
+    REAL g4dd_interp_1_ref[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
+    REAL g4dd_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+    REAL g4dd_dt_rot[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_DT_COMPONENT_COUNT];
+    const REAL g4dd_dt_zero[AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT] = {0};
+    REAL g4dd_native_derivatives_rot[3][AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+    REAL g4dd_dt_native_derivatives_rot[3][AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+
+    if (slice_payload == NULL)
+      return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_UNSUPPORTED_STENCIL;
+
+    for (int v = 0; v < interp_order; v++) {
+      for (int u = 0; u < interp_order; u++) {
+        const double *restrict tensor_record =
+            slice_payload +
+            mapped_point_index[v][u] *
+                (uint64_t)
+                    AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_RECORD_COMPONENT_COUNT +
+            3ULL;
+        const REAL value_weight =
+            normalization_2d * coeff_interp_1[v] * coeff_interp_0[u];
+        const REAL interp_0_derivative_weight =
+            normalization_2d * coeff_interp_1[v] *
+            derivative_coeff_interp_0[u];
+        const REAL interp_1_derivative_weight =
+            normalization_2d * derivative_coeff_interp_1[v] *
+            coeff_interp_0[u];
+
+        azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
+            value_weight, interp_0_derivative_weight,
+            interp_1_derivative_weight, tensor_record, g4dd_ref, g4dd_dt_ref,
+            g4dd_interp_0_ref, g4dd_interp_1_ref);
+      } // END LOOP: for u over first interpolation-dimension stencil values
+    } // END LOOP: for v over second interpolation-dimension stencil values
+
+    // Step 5.a: Rotate the metric and differentiated native reconstruction to
+    // the target phi. The native phi derivative comes from d(rotation)/dphi.
+    azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(
+        target_phi - phi_ref, g4dd_ref, g4dd_interp_0_ref,
+        g4dd_interp_1_ref, g4dd_rot, g4dd_native_derivatives_rot);
+    azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(
+        target_phi - phi_ref, g4dd_dt_ref, g4dd_dt_zero,
+        g4dd_dt_zero, g4dd_dt_rot, g4dd_dt_native_derivatives_rot);
+
+    REAL *restrict g4dd_slice_out =
+        &g4dd_out[which_slice *
+                  AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT];
+    REAL *restrict metric_derivative_slice_out =
+        &gamma4udd_out[
+            which_slice *
+            AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_METRIC_DERIVATIVE_COMPONENT_COUNT];
+
+    // Step 5.b: Transform the spatial derivative index to Cartesian coordinates.
+    // Pack four derivatives per symmetric metric pair as (dt, dx, dy, dz).
+    for (int metric_component = 0;
+         metric_component < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_G4_COMPONENT_COUNT;
+         metric_component++) {
+      g4dd_slice_out[metric_component] = g4dd_rot[metric_component];
+      metric_derivative_slice_out[4 * metric_component] =
+          g4dd_dt_rot[metric_component];
+      for (int cartesian_direction = 0; cartesian_direction < 3;
+           cartesian_direction++) {
+        REAL cartesian_derivative = 0.0;
+        for (int native_direction = 0; native_direction < 3;
+             native_direction++)
+          cartesian_derivative +=
+              inverse_jacobian[native_direction][cartesian_direction] *
+              g4dd_native_derivatives_rot[native_direction][metric_component];
+        metric_derivative_slice_out[
+            4 * metric_component + cartesian_direction + 1] =
+            cartesian_derivative;
+      } // END LOOP: for cartesian_direction over x, y, z
+    } // END LOOP: for metric_component over symmetric g4DD components
+  } // END LOOP: for which_slice over requested slice indices
 
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
 """.replace("{cart_to_xx_name}", cart_to_xx_name)
@@ -824,37 +640,26 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
         .replace("{i0_storage_expr}", storage_exprs[0])
         .replace("{i1_storage_expr}", storage_exprs[1])
         .replace("{i2_storage_expr}", storage_exprs[2])
-        .replace(
-            "{derivative_coefficient_declarations}",
-            derivative_coefficient_declarations,
-        )
-        .replace(
-            "{derivative_coefficient_calculation}",
-            derivative_coefficient_calculation,
-        )
-        .replace("{inverse_jacobian_setup}", inverse_jacobian_setup)
-        .replace("{metric_slice_processing}", metric_slice_processing)
     )
 
-    desc = r"""Interpolate the selected Cartesian geometry bundle.
+    desc = r"""Interpolate the Cartesian metric and its first derivatives.
 
-The helper reads the ten metric values and the selected secondary payload from
-the full ghost-zone-inclusive records. ``g4DD`` reconstructs all spatial metric
-derivatives and sets the ten temporal slots to zero. ``g4DD_d0`` reads and
-rotates the ten stored temporal metric derivatives while reconstructing the
-spatial derivatives. ``GammaUDD`` interpolates and rotates the forty stored
-Christoffel components.
+The helper reads the ten metric values and ten metric time derivatives from
+each 23-double point record after the three Cartesian coordinate values. It
+interpolates both metric bundles in the two non-phi directions and analytically
+derives the Cartesian spatial metric derivatives from the metric reconstruction.
 
-Axisymmetry is handled without phi interpolation. The interpolated Cartesian
-quantities are rotated from one stored reference-phi plane to the target
-azimuth. The metric derivative index is transformed to Cartesian with the
-inverse Jacobian generated from
-`reference_metric[CoordSystem].Jac_dUrfm_dDCartUD` for the two metric methods.
-The Christoffel rotation uses the constant Cartesian z-axis transformation.
+Axisymmetry is handled without phi interpolation. Metric values and the two
+interpolated native derivatives are rotated from one stored reference-phi plane
+to the target azimuth. The native phi derivative of the fixed Cartesian metric
+components is obtained by analytically differentiating that rotation. The
+native derivative index is then transformed to Cartesian with the inverse
+Jacobian generated from `reference_metric[CoordSystem].Jac_dUrfm_dDCartUD`.
 
-The neutral `rhs_geometry_out` buffer contains forty values per slice. Its
-meaning is fixed by the selected code-generation method: metric derivatives
-for the two metric methods or Christoffel components for ``GammaUDD``.
+`gamma4udd_out` is temporarily repurposed as a 40-component metric derivative
+bundle. For symmetric metric pairs `(00, 01, 02, 03, 11, 12, 13, 22, 23, 33)`,
+each four-value group is `(d/dt, d/dx, d/dy, d/dz)`. The temporal slots contain
+the spatially interpolated and rotated stored metric time derivatives.
 
 @param[in] context Trusted spatial context.
 @param[in] commondata Common interpolation parameters.
@@ -865,7 +670,7 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
 @param num_target_slices Number of mapped slice payload pointers.
 @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
 @param[out] g4dd_out Flat metric output, ten values per slice.
-@param[out] g4dd_dD_out Metric-derivative output, forty values per slice.
+@param[out] gamma4udd_out Temporary metric derivative output, forty values per slice.
 @return Interpolation status code.
 """
 
@@ -892,9 +697,9 @@ def _indent_c_code(code: str, spaces: int) -> str:
     """
     Indent generated C code by a fixed number of spaces.
 
-    :param code: Generated C code to indent.
-    :param spaces: Number of leading spaces for each nonempty line.
-    :return: Indented generated C code.
+    :param code: Generated C code.
+    :param spaces: Number of leading spaces.
+    :return: Indented C code.
     """
     prefix = " " * spaces
     return "\n".join(prefix + line if line else line for line in code.splitlines())
@@ -909,7 +714,7 @@ def _build_inverse_jacobian_c_code(CoordSystem: str) -> str:
     are emitted as members of `params`.
 
     :param CoordSystem: Reference-metric coordinate system.
-    :return: C assignments for the inverse coordinate Jacobian.
+    :return: Generated C assignments.
     """
     rfm = reference_metric[CoordSystem]
     expressions: List[sp.Expr] = []
@@ -946,9 +751,9 @@ def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]
     """
     Return sparse source-index terms for one active z-axis rotation row.
 
-    :param output_index: Cartesian tensor index after rotation.
+    :param output_index: Rotated tensor index.
     :return: Source index, sign, cosine power, and sine power tuples.
-    :raises ValueError: If ``output_index`` is unsupported.
+    :raises ValueError: If the rotated tensor index is unsupported.
     """
     if output_index == 0:
         return [(0, 1, 0, 0)]
@@ -970,11 +775,11 @@ def _format_scaled_source_term(
     """
     Format one signed trigonometric monomial times a source component.
 
-    :param source_expr: Source-array expression for the monomial.
-    :param coefficient: Signed integer coefficient.
-    :param cos_power: Power of ``cos_delta``.
-    :param sin_power: Power of ``sin_delta``.
-    :return: Formatted C expression for the monomial.
+    :param source_expr: Source component expression.
+    :param coefficient: Signed numerical coefficient.
+    :param cos_power: Cosine exponent.
+    :param sin_power: Sine exponent.
+    :return: Formatted C expression.
     """
     factors: List[str] = []
     coefficient_abs = abs(coefficient)
@@ -991,10 +796,10 @@ def _emit_wrapped_assignment(lhs: str, terms: List[str]) -> str:
     """
     Emit one wrapped C assignment from signed monomial terms.
 
-    :param lhs: Left-hand-side C expression.
-    :param terms: Signed monomial expressions to add.
-    :return: Wrapped C assignment.
-    :raises ValueError: If ``terms`` is empty.
+    :param lhs: Assignment left-hand side.
+    :param terms: Signed C expression terms.
+    :return: Formatted C assignment.
+    :raises ValueError: If no terms are supplied.
     """
     if not terms:
         raise ValueError("Cannot emit an assignment from an empty term list.")
@@ -1012,9 +817,9 @@ def _metric_rotation_term_map(mu: int, nu: int) -> Dict[Tuple[int, int, int], in
     """
     Collect polynomial rotation coefficients for one metric component.
 
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :return: Source-index and trigonometric-power coefficient map.
+    :param mu: First covariant metric index.
+    :param nu: Second covariant metric index.
+    :return: Source-indexed trigonometric coefficient map.
     """
     term_map: Dict[Tuple[int, int, int], int] = {}
     for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
@@ -1034,9 +839,9 @@ def _format_metric_term_map(
     """
     Format a collected metric rotation term map for emitted C code.
 
-    :param term_map: Source-index and trigonometric-power coefficient map.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for nonzero rotation terms.
+    :param term_map: Source-indexed trigonometric coefficient map.
+    :param source_array: C array containing source tensor components.
+    :return: Formatted C expression terms.
     """
     terms: List[str] = []
     for source_idx, cos_power, sin_power in sorted(term_map):
@@ -1056,58 +861,12 @@ def _build_metric_rotation_terms(mu: int, nu: int, source_array: str) -> List[st
     """
     Build terms for one rotated serialized metric component.
 
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for the rotated metric component.
+    :param mu: First covariant metric index.
+    :param nu: Second covariant metric index.
+    :param source_array: C array containing source metric components.
+    :return: Formatted C expression terms.
     """
     return _format_metric_term_map(_metric_rotation_term_map(mu, nu), source_array)
-
-
-def _build_gamma_rotation_terms(alpha: int, mu: int, nu: int) -> List[str]:
-    """
-    Build terms for one rotated serialized Christoffel component.
-
-    The lower Christoffel indices are stored symmetrically. The generated
-    rotation is a constant Cartesian transformation, so the connection
-    transforms with one upper and two lower tensor indices.
-
-    :param alpha: Contravariant Christoffel index.
-    :param mu: First covariant Christoffel index.
-    :param nu: Second covariant Christoffel index.
-    :return: Formatted C expressions for the rotated component.
-    """
-    term_map: Dict[Tuple[int, int, int], int] = {}
-    for source_alpha, sign_alpha, cos_alpha, sin_alpha in _rotation_source_terms(alpha):
-        for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-            for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
-                source_lower_mu, source_lower_nu = source_mu, source_nu
-                if source_lower_mu > source_lower_nu:
-                    source_lower_mu, source_lower_nu = source_lower_nu, source_lower_mu
-                source_idx = _GAMMA_COMPONENT_INDEX[
-                    (source_alpha, source_lower_mu, source_lower_nu)
-                ]
-                term_key = (
-                    source_idx,
-                    cos_alpha + cos_mu + cos_nu,
-                    sin_alpha + sin_mu + sin_nu,
-                )
-                term_map[term_key] = term_map.get(term_key, 0) + (
-                    sign_alpha * sign_mu * sign_nu
-                )
-    terms: List[str] = []
-    for source_idx, cos_power, sin_power in sorted(term_map):
-        coefficient = term_map[(source_idx, cos_power, sin_power)]
-        if coefficient:
-            terms.append(
-                _format_scaled_source_term(
-                    f"gamma_ref[{source_idx}]",
-                    coefficient,
-                    cos_power,
-                    sin_power,
-                )
-            )
-    return terms or ["0.0"]
 
 
 def _build_metric_rotation_derivative_terms(
@@ -1116,10 +875,10 @@ def _build_metric_rotation_derivative_terms(
     """
     Differentiate one rotated metric component with respect to azimuth.
 
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for the azimuthal derivative.
+    :param mu: First covariant metric index.
+    :param nu: Second covariant metric index.
+    :param source_array: C array containing source metric components.
+    :return: Formatted C expression terms.
     """
     derivative_map: Dict[Tuple[int, int, int], int] = {}
     for (source_idx, cos_power, sin_power), coefficient in _metric_rotation_term_map(

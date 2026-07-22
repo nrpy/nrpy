@@ -25,9 +25,13 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
 
-def time_window_manager_numerical() -> None:
+def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
     """
     Register NumericalTimeWindowManager helpers in BHaH_defines.h.
+
+    The selected interpolation method is fixed in the generated C code. It
+    determines the expected combined-file magic and point-record width; the
+    manager does not inspect or support multiple data formats at runtime.
 
     This registration owns the `rkf45_max_delta_t` CodeParameter consumed by
     the generated time-window C helpers. It also ensures the shared
@@ -46,6 +50,10 @@ def time_window_manager_numerical() -> None:
     stored slice without changing the combined container. The matching RKF45
     step-size cap is enforced in the companion finalization kernel.
 
+    :param interpolation_method: Geometry payload method to generate.
+    :raises ValueError: If `interpolation_method` is unsupported or conflicts
+        with an already registered manager.
+
     Doctests:
     >>> time_window_manager_numerical()
     >>> generated = par.glb_extras_dict["BHaH_defines"]["time_window_manager_numerical"]
@@ -55,15 +63,44 @@ def time_window_manager_numerical() -> None:
     True
     >>> "time_window_manager_numerical_nearest_selected_slice_for_time" in generated
     True
+    >>> "NRPYRTSTACKMET1" in generated
+    True
     >>> par.glb_code_params_dict["numerical_spacetime_time_slice_stride"].defaultvalue
     1
     """
+    if interpolation_method == "g4DD":
+        combined_magic = "NRPYRTSTACKMET1"
+        point_record_real_count = 13
+    elif interpolation_method == "g4DD_d0":
+        combined_magic = "NRPYRTSTACKMET2"
+        point_record_real_count = 23
+    elif interpolation_method == "GammaUDD":
+        combined_magic = "NRPYRTSTACK4D"
+        point_record_real_count = 53
+    else:
+        raise ValueError(
+            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
+            f"found '{interpolation_method}'."
+        )
+
     from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_manager_helpers import (  # pylint: disable=import-outside-toplevel
         time_slot_manager_helpers,
     )
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
+
+    existing_defines = par.glb_extras_dict.get("BHaH_defines", {}).get(
+        "time_window_manager_numerical"
+    )
+    if existing_defines is not None:
+        expected_magic_marker = f'expected_magic[16] = "{combined_magic}"'
+        if expected_magic_marker not in existing_defines:
+            raise ValueError(
+                "time_window_manager_numerical was already registered for a "
+                "different interpolation method."
+            )
+        return
 
     # Step 1: Register the runtime grid metadata fields this helper copies from
     # the combined numerical-spacetime container into params_struct.
@@ -184,9 +221,7 @@ def time_window_manager_numerical() -> None:
 #define TIME_WINDOW_MANAGER_NUMERICAL_SLICE_TABLE_ENTRY_BYTES 96ULL
 #define TIME_WINDOW_MANAGER_NUMERICAL_RT_COORDINATE_COMPONENT_COUNT 3ULL
 #define TIME_WINDOW_MANAGER_NUMERICAL_RT_G4_COMPONENT_COUNT 10ULL
-#define TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT \
-  (TIME_WINDOW_MANAGER_NUMERICAL_RT_COORDINATE_COMPONENT_COUNT + \
-   TIME_WINDOW_MANAGER_NUMERICAL_RT_G4_COMPONENT_COUNT)
+#define TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT {point_record_real_count}
 
 #define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES 16U
 #define TIME_WINDOW_MANAGER_NUMERICAL_HEADER_ALIGNMENT_BYTES 24U
@@ -897,7 +932,7 @@ def time_window_manager_numerical() -> None:
         const int temporal_interp_half_width,
         params_struct *restrict params) {
       unsigned char header_bytes[TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES];
-      static const unsigned char expected_magic[16] = "NRPYRTSTACKMET1";
+      static const unsigned char expected_magic[16] = "{combined_magic}";
       const uint64_t expected_point_record_bytes =
           TIME_WINDOW_MANAGER_NUMERICAL_RT_POINT_RECORD_REAL_COUNT *
           (uint64_t)sizeof(double);
@@ -1443,7 +1478,9 @@ def time_window_manager_numerical() -> None:
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_stencil_for_time
 
-    """
+    """.replace("{combined_magic}", combined_magic).replace(
+        "{point_record_real_count}", str(point_record_real_count)
+    )
     Bdefines_h.register_BHaH_defines(
         "time_window_manager_numerical",
         time_window_manager_numerical_c_code,

@@ -1,11 +1,11 @@
 """
-Register chunk-based numerical-spacetime metric interpolation.
+Register chunk-based numerical-spacetime interpolation.
 
 This module emits the host-side numerical interpolation wrapper used by
 geodesic integrators. The generated C function mirrors the analytic
 interpolation-kernel bundle contract: it consumes one chunk of photon states,
 parallelizes over rays on the CPU, writes the 10-component metric bundle, and
-writes one selected 40-component geometry bundle only when requested.
+writes the 40-component Christoffel bundle only when requested.
 
 Operationally, this wrapper is the bridge between the data-management layer
 and the numerical interpolation helpers. For each photon, it either spatially
@@ -31,10 +31,10 @@ from typing import Union, cast
 import nrpy.c_function as cfc
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation import (
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.azimuthal_symmetry_spatial_lagrange_interpolation_metric_derivatives import (
     register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation,
 )
-from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation import (
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.temporal_lagrange_interpolation_metric_derivatives import (
     register_CFunction_temporal_lagrange_interpolation,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation.time_window_manager_numerical import (
@@ -47,10 +47,9 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 
 def register_CFunction_numerical_interpolation(
     CoordSystem: str,
-    interpolation_method: str = "g4DD",
-    enable_simd: bool = False,
-    project_dir: str = ".",
-    normalized_eom: bool = False,
+    enable_simd: bool,
+    project_dir: str,
+    analytical_metric_0: str,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the CPU numerical-spacetime interpolation wrapper.
@@ -59,7 +58,7 @@ def register_CFunction_numerical_interpolation(
     interpolation pipeline. It does not select or map the active numerical
     window itself; instead, it assumes a caller already mapped a conservative
     slot-based window and then evaluates every ray in one chunk against that
-    shared mapped data. Rays at or below `t_numerical_initial` spatially interpolate
+    shared mapped data. Rays at or below `t_metric_0` spatially interpolate
     the first selected numerical slice directly, treating that slice as static.
     Rays at or above the final selected numerical slice time use that final
     numerical slice directly, treating the numerical spacetime as frozen in
@@ -72,15 +71,15 @@ def register_CFunction_numerical_interpolation(
     ordinary temporal interpolation on the reconstructed full stencil.
 
     :param CoordSystem: Coordinate system used by the mapped numerical dataset;
-        must be `"SinhCylindricalv2n2"`.
-    :param interpolation_method: Geometry payload method to generate.
+        must be `"Spherical"`, `"SinhSpherical"`, `"Cylindrical"`,
+        `"SinhCylindrical"`, or `"SinhCylindricalv2n2"`.
     :param enable_simd: Whether SIMD helper headers are already available.
     :param project_dir: Destination project directory for copied headers.
-    :param normalized_eom: Whether coordinate time is the RKF45 integration
-        parameter instead of state component zero.
+    :param analytical_metric_0: Retained generator API argument. The current
+        first-slice extension does not call this analytic metric.
     :return: None if in registration phase, else the updated NRPy environment.
-    :raises ValueError: If `CoordSystem` or `interpolation_method` is not
-        supported.
+    :raises ValueError: If `CoordSystem` is not supported or if the retained
+        analytic metric name is empty.
 
     Doctests:
     >>> import contextlib
@@ -88,36 +87,31 @@ def register_CFunction_numerical_interpolation(
     >>> import os
     >>> import tempfile
     >>> import nrpy.c_function as cfc
+    >>> from nrpy.equations.general_relativity.geodesics import geodesics as geo
     >>> from nrpy.helpers.generic import clang_format, validate_strings
+    >>> from nrpy.infrastructures.BHaH.general_relativity.geodesics import connections, g4DD_metric
     >>> cfc.CFunction_dict.clear()
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as project_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
     ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", project_dir)
     ...     with contextlib.redirect_stdout(io.StringIO()):
+    ...         metric_data = geo.Geodesic_Equations["KerrSchild_Cartesian_photon"]
+    ...         g4DD_metric.g4DD_metric(
+    ...             metric_data.g4DD, "KerrSchild_Cartesian", "photon"
+    ...         )
+    ...         connections.connections(
+    ...             metric_data.Gamma4UDD, "KerrSchild_Cartesian", "photon"
+    ...         )
     ...         _ = register_CFunction_numerical_interpolation(
-    ...             "SinhCylindricalv2n2",
+    ...             "Spherical",
     ...             enable_simd=True,
     ...             project_dir=project_dir,
+    ...             analytical_metric_0="KerrSchild_Cartesian",
     ...         )
     ...         generated = clang_format(
     ...             cfc.CFunction_dict["numerical_interpolation"].full_function
     ...         )
     ...         _ = validate_strings(generated, "numerical_interpolation", file_ext="c")
-    ...         del cfc.CFunction_dict["numerical_interpolation"]
-    ...         _ = register_CFunction_numerical_interpolation(
-    ...             "SinhCylindricalv2n2",
-    ...             enable_simd=True,
-    ...             project_dir=project_dir,
-    ...             normalized_eom=True,
-    ...         )
-    ...         normalized_generated = clang_format(
-    ...             cfc.CFunction_dict["numerical_interpolation"].full_function
-    ...         )
-    ...         _ = validate_strings(
-    ...             normalized_generated,
-    ...             "numerical_interpolation_normalized",
-    ...             file_ext="c",
-    ...         )
     ...     if old_cache_home is None:
     ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
     ...     else:
@@ -127,55 +121,32 @@ def register_CFunction_numerical_interpolation(
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
-    if CoordSystem != "SinhCylindricalv2n2":
+    if CoordSystem not in (
+        "Spherical",
+        "SinhSpherical",
+        "Cylindrical",
+        "SinhCylindrical",
+        "SinhCylindricalv2n2",
+    ):
         raise ValueError(
-            "numerical_interpolation currently supports only "
-            "CoordSystem='SinhCylindricalv2n2'; "
+            "numerical_interpolation currently supports only CoordSystem in "
+            "('Spherical', 'SinhSpherical', 'Cylindrical', "
+            "'SinhCylindrical', 'SinhCylindricalv2n2'); "
             f"found '{CoordSystem}'."
         )
-    if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
-        raise ValueError(
-            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
-            f"found '{interpolation_method}'."
-        )
-    static_geometry_update = (
-        """        // Static endpoints must not reuse stored dynamic time derivatives.
-        for (int metric_component = 0;
-             metric_component < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT;
-             metric_component++)
-          geometry_local[4 * metric_component] = 0.0;
-"""
-        if interpolation_method == "g4DD_d0"
-        else ""
-    )
-    if normalized_eom:
-        integration_parameter_params = """const double *restrict d_integration_param_bundle,
-                const double *restrict d_h,
-                const int stage,"""
-        integration_parameter_desc = """@param[in] d_integration_param_bundle Coordinate-time integration-parameter bundle.
-@param[in] d_h RKF45 step-size bundle.
-@param[in] stage Current RKF45 stage index.
-"""
-        coordinate_time_c_code = r"""
-    const REAL integration_param = (REAL)d_integration_param_bundle[i];
-    const REAL h = (REAL)d_h[i];
-    const REAL rkf45_stage_time_fraction =
-        (stage >= 1 && stage <= 6)
-            ? (REAL[]){0.0, 1.0 / 4.0, 3.0 / 8.0, 12.0 / 13.0, 1.0, 1.0 / 2.0}[stage - 1]
-            : NAN;
-    const REAL t = integration_param + rkf45_stage_time_fraction * h;"""
-    else:
-        integration_parameter_params = ""
-        integration_parameter_desc = ""
-        coordinate_time_c_code = "const REAL t = (REAL)f_local[0];"
+    if not analytical_metric_0:
+        raise ValueError("The lower-time analytic metric name must be non-empty.")
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
-    time_window_manager_numerical(interpolation_method)
+    if "time_window_manager_numerical" not in par.glb_extras_dict.get(
+        "BHaH_defines", {}
+    ):
+        time_window_manager_numerical()
     _ = par.register_CodeParameter(
         "REAL",
         __name__,
-        "t_numerical_initial",
+        "t_metric_0",
         0.0,
         commondata=True,
         add_to_parfile=True,
@@ -204,18 +175,25 @@ def register_CFunction_numerical_interpolation(
     )
     if spatial_name not in cfc.CFunction_dict:
         register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
-            CoordSystem,
-            interpolation_method=interpolation_method,
-            enable_simd=enable_simd,
-            project_dir=project_dir,
+            CoordSystem, enable_simd=enable_simd, project_dir=project_dir
         )
     if "temporal_lagrange_interpolation" not in cfc.CFunction_dict:
         register_CFunction_temporal_lagrange_interpolation(
-            interpolation_method=interpolation_method,
-            enable_simd=enable_simd,
-            project_dir=project_dir,
+            enable_simd=enable_simd, project_dir=project_dir
         )
-    prefunc = ""
+    metric_worker_0 = f"g4DD_metric_{analytical_metric_0}"
+    conn_worker_0 = f"connections_{analytical_metric_0}"
+    prefunc_lines = []
+    for worker_name in [metric_worker_0, conn_worker_0]:
+        if worker_name not in cfc.CFunction_dict:
+            raise ValueError(
+                f"Analytic worker '{worker_name}' must be registered before "
+                "register_CFunction_numerical_interpolation() is called."
+            )
+        worker_code = cfc.CFunction_dict[worker_name].full_function
+        if worker_code not in prefunc_lines:
+            prefunc_lines.append(worker_code)
+    prefunc = "\n\n".join(prefunc_lines)
 
     includes = [
         "BHaH_defines.h",
@@ -232,7 +210,7 @@ The caller supplies an active numerical time window, a spatial interpolation
 context, and one chunk of photon states in the same Structure-of-Arrays bundle
 layout used by the analytic geodesic interpolation kernel. This CPU wrapper
 parallelizes over rays, spatially interpolates the first selected numerical slice
-for times at or below `t_numerical_initial`, freezes the numerical spacetime to the
+for times at or below `t_metric_0`, freezes the numerical spacetime to the
 final selected slice for times at or above that final slice time, and otherwise
 reconstructs one mixed temporal stencil. Lower missing stencil nodes use a
 fresh spatial interpolation of the first selected numerical slice, whereas upper
@@ -248,8 +226,8 @@ independently ray-by-ray.
 @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
 @param[in] numerical_window Active mapped numerical time-window manager.
 @param[in] d_f_bundle Photon state bundle.
-{integration_parameter_desc}@param[out] d_metric_bundle Destination metric bundle.
-@param[out] d_rhs_geometry_bundle Destination 40-component geometry bundle, or NULL.
+@param[out] d_metric_bundle Destination metric bundle.
+@param[out] d_connection_bundle Destination Christoffel bundle, or NULL.
 @param chunk_size Number of active rays in the chunk.
 @param stream_idx Analytic-kernel compatibility argument; ignored on CPU.
 
@@ -262,28 +240,25 @@ independently ray-by-ray.
                 const azimuthal_symmetry_spatial_lagrange_context_struct *restrict spatial_context,
                 const NumericalTimeWindowManager *restrict numerical_window,
                 const double *restrict d_f_bundle,
-                {integration_parameter_params}
                 double *restrict d_metric_bundle,
-                double *restrict d_rhs_geometry_bundle,
+                double *restrict d_connection_bundle,
                 const long int chunk_size,
-                const int stream_idx""".replace(
-        "{integration_parameter_params}", integration_parameter_params
-    )
+                const int stream_idx"""
     body = (
         r"""
   (void)stream_idx;
 
   #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
   #define IDX_METRIC(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
-  #define IDX_RHS_GEOMETRY(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
+  #define IDX_CONN(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
   #define G4_SLICE(base_ptr, slice_idx, comp_idx) \
     ((base_ptr)[(slice_idx) * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + (comp_idx)])
-  #define GEOMETRY_SLICE(base_ptr, slice_idx, comp_idx) \
-    ((base_ptr)[(slice_idx) * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT + (comp_idx)])
+  #define GAMMA_SLICE(base_ptr, slice_idx, comp_idx) \
+    ((base_ptr)[(slice_idx) * TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT + (comp_idx)])
 
   const int temporal_half_width =
       commondata->numerical_spacetime_temporal_interp_order;
-  const REAL t_numerical_initial = (REAL)commondata->t_numerical_initial;
+  const REAL t_metric_0 = (REAL)commondata->t_metric_0;
   const REAL t_numerical_end = (REAL)commondata->t_numerical_end;
   const REAL dt_numerical_spacetime_data =
       (REAL)commondata->dt_numerical_spacetime_data;
@@ -296,9 +271,9 @@ independently ray-by-ray.
     for (long int i = 0; i < chunk_size; i++) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
     } // END LOOP: for i over rays after invalid mapped numerical window metadata
     return;
   } // END IF: mapped numerical window metadata was unavailable
@@ -320,21 +295,21 @@ independently ray-by-ray.
   if (temporal_half_width < 0 ||
       temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH ||
       temporal_half_width != numerical_window->temporal_interp_half_width ||
-      !isfinite((double)t_numerical_initial) ||
+      !isfinite((double)t_metric_0) ||
       !isfinite((double)t_numerical_end) ||
       !isfinite((double)dt_numerical_spacetime_data) ||
       dt_numerical_spacetime_data <= 0.0 ||
       !isfinite((double)selected_slice_dt) ||
       selected_slice_dt <= 0.0 ||
       !isfinite((double)t_final_numerical_slice) ||
-      t_numerical_initial >= t_numerical_end) {
+      t_metric_0 >= t_numerical_end) {
     #pragma omp parallel for
     for (long int i = 0; i < chunk_size; i++) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
     } // END LOOP: for i over rays after invalid temporal bounds or stencil metadata
     return;
   } // END IF: temporal bounds or mapped stencil metadata were invalid
@@ -353,9 +328,9 @@ independently ray-by-ray.
     for (long int i = 0; i < chunk_size; i++) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
     } // END LOOP: for i over rays after inconsistent temporal stencil size
     return;
   } // END IF: runtime temporal stencil size did not match the mapped numerical window
@@ -365,7 +340,7 @@ independently ray-by-ray.
     double f_local[9];
     for (int comp = 0; comp < 9; comp++)
       f_local[comp] = d_f_bundle[IDX_F(comp, i)];
-    {coordinate_time_c_code}
+    const REAL t = (REAL)f_local[0];
     const REAL x = (REAL)f_local[1];
     const REAL y = (REAL)f_local[2];
     const REAL z = (REAL)f_local[3];
@@ -377,21 +352,21 @@ independently ray-by-ray.
     REAL missing_slice_times[temporal_num_points];
     int num_missing_slices = 0;
     REAL g4dd_available[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
-    REAL geometry_available[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT];
+    REAL gamma4udd_available[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
     REAL full_slice_times[temporal_num_points];
     REAL g4dd_slices[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
-    REAL geometry_slices[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT];
+    REAL gamma4udd_slices[temporal_num_points * TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
     REAL g4dd_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT];
-    REAL geometry_local[TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT];
+    REAL gamma4udd_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT];
     REAL g4dd_missing_local[TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT] = {0};
-    REAL geometry_missing_local[TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT] = {0};
+    REAL gamma4udd_missing_local[TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT] = {0};
 
     // Step 1: Dispatch directly to a static numerical endpoint when this ray
     // is outside the mixed temporal-interpolation region. At and below
-    // t_numerical_initial, interpolate the first stored slice in space only, so its
+    // t_metric_0, interpolate the first stored slice in space only, so its
     // metric time derivatives remain zero. At or above the final selected
     // slice time, likewise use the final slice in space only.
-    if (t <= t_numerical_initial) {
+    if (t <= t_metric_0) {
       const double *first_slice_payloads[1];
       first_slice_payloads[0] =
           time_window_manager_numerical_grid_ptr(numerical_window, first_slice_index);
@@ -401,10 +376,9 @@ independently ray-by-ray.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
-                1, first_slice_payloads, g4dd_local, geometry_local);
+                1, first_slice_payloads, g4dd_local, gamma4udd_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
-{static_geometry_update}
       } // END ELSE: first selected numerical slice was available for direct spatial interpolation
     } else if (t >= t_final_numerical_slice) {
       const double *final_slice_payloads[1];
@@ -416,10 +390,9 @@ independently ray-by-ray.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
-                1, final_slice_payloads, g4dd_local, geometry_local);
+                1, final_slice_payloads, g4dd_local, gamma4udd_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
-{static_geometry_update}
       } // END ELSE: final selected numerical slice was available for direct spatial interpolation
     } else {
       // Step 2: Recover one adaptive numerical stencil from the slot-level
@@ -440,7 +413,7 @@ independently ray-by-ray.
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
                 num_available_slices, available_slice_payloads, g4dd_available,
-                geometry_available);
+                gamma4udd_available);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
         else {
@@ -472,10 +445,10 @@ independently ray-by-ray.
                         G4_SLICE(g4dd_available, last_available_slot, comp);
                   } // END LOOP: for comp over upper frozen metric components
                   for (int comp = 0;
-                       comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                    geometry_missing_local[comp] =
-                        GEOMETRY_SLICE(geometry_available, last_available_slot, comp);
-                  } // END LOOP: for comp over upper frozen metric-derivative components
+                       comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+                    gamma4udd_missing_local[comp] =
+                        GAMMA_SLICE(gamma4udd_available, last_available_slot, comp);
+                  } // END LOOP: for comp over upper frozen metric derivatives
                 } // END ELSE: upper missing stencil edge reached the final selected numerical slice
               } else {
                 const double *first_slice_payloads[1];
@@ -489,7 +462,7 @@ independently ray-by-ray.
                       {spatial_name}(
                           spatial_context, commondata, params, x, y, z,
                           1, first_slice_payloads, g4dd_missing_local,
-                          geometry_missing_local);
+                          gamma4udd_missing_local);
                   if (first_slice_spatial_status !=
                       AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
                     ray_failed = 1;
@@ -509,9 +482,9 @@ independently ray-by-ray.
                   G4_SLICE(g4dd_slices, s, comp) = g4dd_missing_local[comp];
                 } // END LOOP: for comp over missing first-slice metric components
                 for (int comp = 0;
-                     comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                  GEOMETRY_SLICE(geometry_slices, s, comp) =
-                      geometry_missing_local[comp];
+                     comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+                  GAMMA_SLICE(gamma4udd_slices, s, comp) =
+                      gamma4udd_missing_local[comp];
                 } // END LOOP: for comp over missing first-slice metric derivatives
               } // END LOOP: for s over lower missing static first-slice nodes
               for (int s = 0; s < num_available_slices; s++) {
@@ -523,9 +496,9 @@ independently ray-by-ray.
                       G4_SLICE(g4dd_available, s, comp);
                 } // END LOOP: for comp over mapped numerical metric components after lower first-slice padding
                 for (int comp = 0;
-                     comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                  GEOMETRY_SLICE(geometry_slices, full_slot, comp) =
-                      GEOMETRY_SLICE(geometry_available, s, comp);
+                     comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+                  GAMMA_SLICE(gamma4udd_slices, full_slot, comp) =
+                      GAMMA_SLICE(gamma4udd_available, s, comp);
                 } // END LOOP: for comp over mapped numerical metric derivatives after lower first-slice padding
               } // END LOOP: for s over available numerical stencil nodes after lower first-slice padding
             } else {
@@ -537,10 +510,10 @@ independently ray-by-ray.
                       G4_SLICE(g4dd_available, s, comp);
                 } // END LOOP: for comp over mapped numerical metric components
                 for (int comp = 0;
-                     comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                  GEOMETRY_SLICE(geometry_slices, s, comp) =
-                      GEOMETRY_SLICE(geometry_available, s, comp);
-                } // END LOOP: for comp over mapped numerical metric-derivative components
+                     comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+                  GAMMA_SLICE(gamma4udd_slices, s, comp) =
+                      GAMMA_SLICE(gamma4udd_available, s, comp);
+                } // END LOOP: for comp over mapped numerical metric derivatives
               } // END LOOP: for s over available numerical stencil nodes
               for (int s = 0; s < num_missing_slices; s++) {
                 const int full_slot = num_available_slices + s;
@@ -550,10 +523,10 @@ independently ray-by-ray.
                   G4_SLICE(g4dd_slices, full_slot, comp) = g4dd_missing_local[comp];
                 } // END LOOP: for comp over upper missing frozen metric components
                 for (int comp = 0;
-                     comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++) {
-                  GEOMETRY_SLICE(geometry_slices, full_slot, comp) =
-                      geometry_missing_local[comp];
-                } // END LOOP: for comp over upper missing frozen metric-derivative components
+                     comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++) {
+                  GAMMA_SLICE(gamma4udd_slices, full_slot, comp) =
+                      gamma4udd_missing_local[comp];
+                } // END LOOP: for comp over upper missing frozen metric derivatives
               } // END LOOP: for s over upper missing stencil nodes
             } // END ELSE: upper missing edge or fully numerical centered stencil
           } // END IF: full ordered stencil reconstruction remained valid
@@ -561,8 +534,8 @@ independently ray-by-ray.
           if (!ray_failed) {
             // Step 6: Interpolate the reconstructed stencil in physical time.
             const int temporal_status = temporal_lagrange_interpolation(
-                commondata, full_slice_times, g4dd_slices, geometry_slices, t,
-                g4dd_local, geometry_local);
+                commondata, full_slice_times, g4dd_slices, gamma4udd_slices, t,
+                g4dd_local, gamma4udd_local);
             if (temporal_status != TEMPORAL_LAGRANGE_INTERP_SUCCESS)
               ray_failed = 1;
           } // END IF: reconstructed stencil was ready for temporal interpolation
@@ -573,30 +546,28 @@ independently ray-by-ray.
     if (ray_failed) {
       for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
         d_metric_bundle[IDX_METRIC(comp, i)] = NAN;
-      if (d_rhs_geometry_bundle != NULL)
-        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-          d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
+      if (d_connection_bundle != NULL)
+        for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
+          d_connection_bundle[IDX_CONN(comp, i)] = NAN;
       continue;
     } // END IF: at least one interpolation stage failed for this ray
 
     for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT; comp++)
       d_metric_bundle[IDX_METRIC(comp, i)] = (double)g4dd_local[comp];
-    if (d_rhs_geometry_bundle != NULL)
-      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT; comp++)
-        d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = (double)geometry_local[comp];
+    if (d_connection_bundle != NULL)
+      for (int comp = 0; comp < TEMPORAL_LAGRANGE_INTERP_GAMMA_COMPONENT_COUNT; comp++)
+        d_connection_bundle[IDX_CONN(comp, i)] = (double)gamma4udd_local[comp];
   } // END LOOP: for i over rays in chunk
 
   #undef IDX_F
   #undef IDX_METRIC
-  #undef IDX_RHS_GEOMETRY
+  #undef IDX_CONN
   #undef G4_SLICE
-  #undef GEOMETRY_SLICE
+  #undef GAMMA_SLICE
 """.replace("{spatial_name}", spatial_name)
-        .replace("{integration_parameter_params}", integration_parameter_params)
-        .replace("{coordinate_time_c_code}", coordinate_time_c_code)
-        .replace("{static_geometry_update}", static_geometry_update)
+        .replace("{metric_worker_0}", metric_worker_0)
+        .replace("{conn_worker_0}", conn_worker_0)
     )
-    desc = desc.replace("{integration_parameter_desc}", integration_parameter_desc)
 
     cfc.register_CFunction(
         subdirectory="interpolation",

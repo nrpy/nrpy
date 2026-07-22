@@ -52,6 +52,8 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
     enable_raytracing_data_output: bool = False,
+    raytracing_data_mode: str = "g4DD",
+    enable_static_christoffels: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Construct and register a C function that drives all scheduled diagnostics.
@@ -105,9 +107,30 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         output_raytracing_data(...) on output steps. This export writes the
         physical time together with final Cartesian metric data. The raytracer
         derives metric derivatives and Christoffel symbols after loading it.
+    :param raytracing_data_mode: Raytracing storage mode passed to the exporter.
+    :param enable_static_christoffels: If True, compile static GammaUDD output
+        and select it only for the output nearest to ``commondata->t_final``.
+    :raises ValueError: If the raytracing mode and static-Christoffel option are
+        incompatible.
     :return: None if in registration phase (after recording the requested registration),
         else the updated NRPy environment.
     """
+    if (
+        raytracing_data_mode
+        not in output_raytracing_data.SUPPORTED_RAYTRACING_DATA_MODES
+    ):
+        raise ValueError(
+            f"raytracing_data_mode must be one of "
+            f"{output_raytracing_data.SUPPORTED_RAYTRACING_DATA_MODES}, "
+            f"got '{raytracing_data_mode}'."
+        )
+    if enable_static_christoffels and raytracing_data_mode not in (
+        "GammaUDD",
+        "all",
+    ):
+        raise ValueError(
+            "enable_static_christoffels is valid only for GammaUDD or all output."
+        )
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
@@ -171,6 +194,26 @@ fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
     if parallelization == "cuda":
         params = "commondata_struct *restrict commondata, griddata_struct *restrict griddata_device, griddata_struct *restrict griddata"
     newline = "\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
+    raytracing_output_code = ""
+    if enable_raytracing_data_output:
+        raytracing_static_selection = ""
+        raytracing_static_argument = ""
+        if enable_static_christoffels:
+            raytracing_static_selection = (
+                "    const int final_output_index = "
+                "(int)round(commondata->t_final / outevery);\n"
+                "    const int use_static_christoffels = "
+                "raytracing_output_index == final_output_index;\n"
+            )
+            raytracing_static_argument = ", use_static_christoffels"
+        raytracing_output_code = (
+            "    const int raytracing_output_index = "
+            "(int)round(currtime / outevery);\n"
+            f"{raytracing_static_selection}"
+            "    // Export Cartesian raytracing data from the current BSSN state.\n"
+            "    output_raytracing_data(commondata, griddata, "
+            f"raytracing_output_index{raytracing_static_argument});\n"
+        )
     body = f"""
   const REAL currtime = commondata->time, currdt = commondata->dt, outevery = commondata->diagnostics_output_every;
   // Explanation of the if() below:
@@ -214,9 +257,7 @@ fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
 #endif // __CUDACC__
     }} // END LOOP: for grid over runtime grids
 
-    {"const int raytracing_output_index = (int)round(currtime / outevery);" + newline if enable_raytracing_data_output else ""}
-    {"// Export final Cartesian metric data from the current BSSN state." if enable_raytracing_data_output else ""}
-    {"output_raytracing_data(commondata, griddata, raytracing_output_index);" + newline if enable_raytracing_data_output else ""}
+{raytracing_output_code}
 
     // Set diagnostic_gfs; see generated diagnostics/diagnostic_gfs.h for the interface.
     diagnostic_gfs_set(commondata, griddata, diagnostic_gfs);
@@ -266,6 +307,8 @@ def register_all_diagnostics(
     enable_psi4_diagnostics: bool = False,
     enable_bhahaha: bool = False,
     enable_raytracing_data_output: bool = False,
+    raytracing_data_mode: str = "g4DD",
+    enable_static_christoffels: bool = False,
 ) -> None:
     """
     Register and stage diagnostics-related C code and helper headers.
@@ -305,10 +348,15 @@ def register_all_diagnostics(
     :param enable_raytracing_data_output: If True, register and call the
         raytracing slice-data exporter that writes final Cartesian metric data
         during the evolution.
+    :param raytracing_data_mode: Raytracing storage mode to generate.
+    :param enable_static_christoffels: If True, use static Christoffels for the
+        output nearest to the final evolution time.
     :raises ValueError: If raytracing-data export is enabled for CUDA code generation.
     :raises ValueError: If raytracing-data export is enabled for more than one
         coordinate system. Note: these exporters also currently support only
         one runtime grid; generated C aborts unless commondata->NUMGRIDS == 1.
+    :raises ValueError: If the raytracing mode and static-Christoffel option are
+        incompatible.
     """
     filenames_list_to_copy = []
     if enable_nearest_diagnostics:
@@ -345,12 +393,17 @@ def register_all_diagnostics(
         enable_psi4_diagnostics=enable_psi4_diagnostics,
         enable_bhahaha=enable_bhahaha,
         enable_raytracing_data_output=enable_raytracing_data_output,
+        raytracing_data_mode=raytracing_data_mode,
+        enable_static_christoffels=enable_static_christoffels,
     )
     if enable_raytracing_data_output:
         raytracing_coord_system = next(iter(set_of_CoordSystems))
         output_raytracing_data.register_CFunction_output_raytracing_data(
             CoordSystem=raytracing_coord_system,
             enable_rfm_precompute=enable_rfm_precompute,
+            raytracing_data_mode=raytracing_data_mode,
+            enable_RbarDD_gridfunctions=True,
+            enable_static_christoffels=enable_static_christoffels,
         )
     if enable_nearest_diagnostics:
         for CoordSystem in set_of_CoordSystems:

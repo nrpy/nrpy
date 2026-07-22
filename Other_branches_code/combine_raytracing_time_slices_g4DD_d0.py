@@ -25,54 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Sequence, Tuple, cast
 
-
-@dataclass(frozen=True)
-class RaytracingFormat:
-    """Describe one of the established raytracing binary formats."""
-
-    mode: str
-    slice_magic: str
-    combined_magic: str
-    record_component_count: int
-    metric_component_count: int
-    secondary_component_count: int
-
-
-RAYTRACING_FORMATS: Tuple[RaytracingFormat, ...] = (
-    RaytracingFormat(
-        mode="g4DD",
-        slice_magic="NRPYRTMETRIC1",
-        combined_magic="NRPYRTSTACKMET1",
-        record_component_count=13,
-        metric_component_count=10,
-        secondary_component_count=0,
-    ),
-    RaytracingFormat(
-        mode="g4DD_d0",
-        slice_magic="NRPYRTMETRIC2",
-        combined_magic="NRPYRTSTACKMET2",
-        record_component_count=23,
-        metric_component_count=10,
-        secondary_component_count=10,
-    ),
-    RaytracingFormat(
-        mode="GammaUDD",
-        slice_magic="NRPYRTDATA4D",
-        combined_magic="NRPYRTSTACK4D",
-        record_component_count=53,
-        metric_component_count=10,
-        secondary_component_count=40,
-    ),
-)
-
-FORMAT_BY_SLICE_MAGIC = {
-    raytracing_format.slice_magic: raytracing_format
-    for raytracing_format in RAYTRACING_FORMATS
-}
-FORMAT_BY_COMBINED_MAGIC = {
-    raytracing_format.combined_magic: raytracing_format
-    for raytracing_format in RAYTRACING_FORMATS
-}
+INPUT_SLICE_MAGIC = "NRPYRTMETRIC2"
+COMBINED_MAGIC = "NRPYRTSTACKMET2"
 
 FIXED_HEADER_BYTES = 4096
 DEFAULT_ALIGNMENT = 4096
@@ -114,15 +68,6 @@ class InputSliceInfo:
     magic: str
     header_size: int
     output_index: int
-    num_grids: int
-    serialized_real_bytes: int
-    record_component_count: int
-    metric_component_count: int
-    secondary_component_count: int
-    point_record_real_count: int
-    payload_includes_ghost_zones: int
-    file_is_little_endian: int
-    time_variable_is_f64: int
     point_record_count: int
     point_record_bytes: int
     simulation_time_offset: int
@@ -404,9 +349,6 @@ def parse_input_slice_file(path: Path) -> InputSliceInfo:
     actual_file_size = path.stat().st_size
     with path.open("rb") as fp:
         magic = _read_exact(fp, 16, "input magic").split(b"\0", 1)[0].decode("ascii")
-        raytracing_format = FORMAT_BY_SLICE_MAGIC.get(magic)
-        if raytracing_format is None:
-            raise RuntimeError(f"{path}: unsupported input-slice magic '{magic}'.")
         header_size = _read_u32(fp, "header_size")
         if header_size <= 0:
             raise RuntimeError(f"{path}: header_size must be positive.")
@@ -415,23 +357,16 @@ def parse_input_slice_file(path: Path) -> InputSliceInfo:
                 f"{path}: header_size={header_size} exceeded the actual file size."
             )
         output_index = _read_u32(fp, "output_index")
-        num_grids = _read_u32(fp, "num_grids")
+        _ = _read_u32(fp, "num_grids")
 
-        serialized_real_bytes = _read_u32(fp, "serialized_real_bytes")
-        record_component_count = _read_u32(fp, "record_component_count")
-        metric_component_count = _read_u32(fp, "metric_component_count")
-        secondary_component_count = (
-            raytracing_format.secondary_component_count
-            if raytracing_format.mode == "g4DD_d0"
-            else 0
-        )
-        if raytracing_format.mode == "GammaUDD":
-            secondary_component_count = _read_u32(fp, "christoffel_component_count")
-        point_record_real_count = _read_u32(fp, "point_record_real_count")
+        _ = _read_u32(fp, "serialized_real_bytes")
+        _read_u32(fp, "record_component_count")
+        _read_u32(fp, "metric_component_count")
+        _ = _read_u32(fp, "point_record_real_count")
         point_record_bytes = _read_u32(fp, "point_record_bytes")
-        payload_includes_ghost_zones = _read_u32(fp, "payload_includes_ghost_zones")
-        file_is_little_endian = _read_u32(fp, "file_is_little_endian")
-        time_variable_is_f64 = _read_u32(fp, "time_variable_is_f64")
+        _ = _read_u32(fp, "payload_includes_ghost_zones")
+        _ = _read_u32(fp, "file_is_little_endian")
+        _ = _read_u32(fp, "time_variable_is_f64")
         _ = _read_u32(fp, "reserved_u32")
 
         Nxx = (
@@ -508,15 +443,6 @@ def parse_input_slice_file(path: Path) -> InputSliceInfo:
         magic=magic,
         header_size=header_size,
         output_index=output_index,
-        num_grids=num_grids,
-        serialized_real_bytes=serialized_real_bytes,
-        record_component_count=record_component_count,
-        metric_component_count=metric_component_count,
-        secondary_component_count=secondary_component_count,
-        point_record_real_count=point_record_real_count,
-        payload_includes_ghost_zones=payload_includes_ghost_zones,
-        file_is_little_endian=file_is_little_endian,
-        time_variable_is_f64=time_variable_is_f64,
         point_record_count=point_record_count,
         point_record_bytes=point_record_bytes,
         simulation_time_offset=simulation_time_offset,
@@ -536,49 +462,8 @@ def validate_input_slice_binary_integrity(info: InputSliceInfo) -> None:
     :param info: Parsed source-slice metadata.
     :raises RuntimeError: If the file fails binary-integrity checks.
     """
-    raytracing_format = FORMAT_BY_SLICE_MAGIC.get(info.magic)
-    if raytracing_format is None:
+    if info.magic != INPUT_SLICE_MAGIC:
         raise RuntimeError(f"{info.path}: unexpected magic '{info.magic}'.")
-    if info.num_grids != 1:
-        raise RuntimeError(f"{info.path}: num_grids must be 1.")
-    if info.serialized_real_bytes != 8:
-        raise RuntimeError(
-            f"{info.path}: serialized_real_bytes must be 8, got "
-            f"{info.serialized_real_bytes}."
-        )
-    if info.record_component_count != raytracing_format.record_component_count:
-        raise RuntimeError(
-            f"{info.path}: record_component_count={info.record_component_count} "
-            f"did not match {raytracing_format.record_component_count} for "
-            f"{raytracing_format.mode}."
-        )
-    if info.metric_component_count != raytracing_format.metric_component_count:
-        raise RuntimeError(
-            f"{info.path}: metric_component_count={info.metric_component_count} "
-            f"did not match {raytracing_format.metric_component_count}."
-        )
-    if info.secondary_component_count != raytracing_format.secondary_component_count:
-        raise RuntimeError(
-            f"{info.path}: secondary component count="
-            f"{info.secondary_component_count} did not match "
-            f"{raytracing_format.secondary_component_count}."
-        )
-    if info.point_record_real_count != raytracing_format.record_component_count:
-        raise RuntimeError(
-            f"{info.path}: point_record_real_count="
-            f"{info.point_record_real_count} did not match "
-            f"{raytracing_format.record_component_count}."
-        )
-    if info.point_record_bytes != 8 * info.point_record_real_count:
-        raise RuntimeError(
-            f"{info.path}: point_record_bytes did not match the float64 record width."
-        )
-    if info.payload_includes_ghost_zones != 1:
-        raise RuntimeError(f"{info.path}: payload must include ghost zones.")
-    if info.file_is_little_endian != 1:
-        raise RuntimeError(f"{info.path}: input must be little-endian.")
-    if info.time_variable_is_f64 != 1:
-        raise RuntimeError(f"{info.path}: simulation time must be float64.")
     if info.header_size <= 0:
         raise RuntimeError(f"{info.path}: header_size must be positive.")
     if info.header_size > info.actual_file_size:
@@ -618,63 +503,6 @@ def validate_input_slice_binary_integrity(info: InputSliceInfo) -> None:
         )
     if not math.isfinite(info.simulation_time):
         raise RuntimeError(f"{info.path}: simulation_time must be finite.")
-
-
-def validate_slice_directory_format(
-    infos: Sequence[InputSliceInfo],
-) -> RaytracingFormat:
-    """
-    Require one supported, internally consistent slice format.
-
-    :param infos: Parsed slice metadata from one input directory.
-    :return: Format selected by the first slice magic.
-    :raises RuntimeError: If slices use mixed or inconsistent formats.
-    """
-    if not infos:
-        raise RuntimeError("No input slices were supplied.")
-    raytracing_format = FORMAT_BY_SLICE_MAGIC.get(infos[0].magic)
-    if raytracing_format is None:
-        raise RuntimeError(
-            f"{infos[0].path}: unsupported input-slice magic '{infos[0].magic}'."
-        )
-    first_signature = (
-        infos[0].header_size,
-        infos[0].num_grids,
-        infos[0].serialized_real_bytes,
-        infos[0].record_component_count,
-        infos[0].metric_component_count,
-        infos[0].secondary_component_count,
-        infos[0].point_record_real_count,
-        infos[0].point_record_bytes,
-        infos[0].point_record_count,
-        infos[0].grid_metadata,
-    )
-    for info in infos[1:]:
-        if info.magic != raytracing_format.slice_magic:
-            other_format = FORMAT_BY_SLICE_MAGIC.get(info.magic)
-            other_mode = other_format.mode if other_format is not None else info.magic
-            raise RuntimeError(
-                f"{info.path}: mixed raytracing formats; expected "
-                f"{raytracing_format.mode}, found {other_mode}."
-            )
-        signature = (
-            info.header_size,
-            info.num_grids,
-            info.serialized_real_bytes,
-            info.record_component_count,
-            info.metric_component_count,
-            info.secondary_component_count,
-            info.point_record_real_count,
-            info.point_record_bytes,
-            info.point_record_count,
-            info.grid_metadata,
-        )
-        if signature != first_signature:
-            raise RuntimeError(
-                f"{info.path}: slice header/grid layout did not match the first "
-                "slice in the directory."
-            )
-    return raytracing_format
 
 
 def compute_layout(
@@ -758,7 +586,6 @@ def build_metadata_json(
     slice_entries: Sequence[SliceEntry],
     layout: Layout,
     run_metadata: Dict[str, object],
-    raytracing_format: RaytracingFormat,
 ) -> bytes:
     """
     Build deterministic JSON metadata for the combined container.
@@ -767,16 +594,12 @@ def build_metadata_json(
     :param slice_entries: Slice-table entries matching ``infos``.
     :param layout: Final combined container layout.
     :param run_metadata: Embedded run-metadata object.
-    :param raytracing_format: Format selected from the input slice magic.
     :return: UTF-8 encoded deterministic JSON metadata.
     """
     # Step 1: Emit only storage, first-slice grid, and provenance metadata.
     grid_metadata = infos[0].grid_metadata
     metadata = {
         "container_role": "storage_combiner",
-        "raytracing_data_mode": raytracing_format.mode,
-        "slice_magic": raytracing_format.slice_magic,
-        "combined_magic": raytracing_format.combined_magic,
         "payload_policy": "copied_verbatim_from_input_slices",
         "sort_key": "simulation_time",
         "first_slice_grid_metadata": {
@@ -868,20 +691,17 @@ def pack_slice_entry(entry: SliceEntry) -> bytes:
     return packed
 
 
-def pack_fixed_header(
-    layout: Layout, num_time_slices: int, combined_magic: str
-) -> bytes:
+def pack_fixed_header(layout: Layout, num_time_slices: int) -> bytes:
     """
     Pack the fixed combined-container header.
 
     :param layout: Final combined layout.
     :param num_time_slices: Number of sorted slices in the container.
-    :param combined_magic: Existing combined-file magic for the selected format.
     :return: ``FIXED_HEADER_BYTES`` header bytes.
     :raises RuntimeError: If the packed header exceeds its fixed allocation.
     """
     # Step 1: Pack only the navigation fields needed to find later blocks.
-    magic_bytes = combined_magic.encode("ascii")
+    magic_bytes = COMBINED_MAGIC.encode("ascii")
     if len(magic_bytes) >= 16:
         raise RuntimeError("Combined magic did not fit in the fixed header.")
     header = struct.pack(
@@ -976,7 +796,6 @@ def write_combined_file_atomically(
     layout: Layout,
     metadata_bytes: bytes,
     slice_entries: Sequence[SliceEntry],
-    combined_magic: str,
     force: bool,
     check_finite_payload: bool,
 ) -> None:
@@ -988,7 +807,6 @@ def write_combined_file_atomically(
     :param layout: Final layout.
     :param metadata_bytes: Metadata JSON bytes.
     :param slice_entries: Slice-table entries.
-    :param combined_magic: Existing combined-file magic for the selected format.
     :param force: Whether overwriting an existing file is allowed.
     :param check_finite_payload: Whether to validate payload finiteness while copying.
     :raises RuntimeError: If overwrite rules fail during the final install step.
@@ -1007,7 +825,7 @@ def write_combined_file_atomically(
             # Step 2: Pre-size the file so aligned gaps are already zero-filled.
             out.truncate(layout.total_file_bytes)
             out.seek(0)
-            out.write(pack_fixed_header(layout, len(infos), combined_magic))
+            out.write(pack_fixed_header(layout, len(infos)))
             out.seek(layout.metadata_offset)
             out.write(metadata_bytes)
             out.seek(layout.slice_table_offset)
@@ -1113,8 +931,7 @@ def inspect_combined_file(path: Path) -> None:
     with path.open("rb") as fp:
         header_bytes = _read_exact(fp, FIXED_HEADER_BYTES, "fixed header")
         header = _unpack_fixed_header(header_bytes)
-        raytracing_format = FORMAT_BY_COMBINED_MAGIC.get(header.magic)
-        if raytracing_format is None:
+        if header.magic != COMBINED_MAGIC:
             raise RuntimeError(f"{path}: combined magic was invalid.")
         if header.fixed_header_bytes != FIXED_HEADER_BYTES:
             raise RuntimeError(f"{path}: fixed_header_bytes was invalid.")
@@ -1199,7 +1016,6 @@ def inspect_combined_file(path: Path) -> None:
     first_slice_grid_metadata = metadata.get("first_slice_grid_metadata", {})
 
     print(f"magic: {header.magic}")
-    print(f"raytracing_data_mode: {raytracing_format.mode}")
     print(f"total_file_bytes: {header.total_file_bytes}")
     print(f"num_time_slices: {header.num_time_slices}")
     print(f"metadata_bytes: {header.metadata_bytes}")
@@ -1296,7 +1112,6 @@ def main() -> None:
     infos = [parse_input_slice_file(path) for path in input_paths]
     for info in infos:
         validate_input_slice_binary_integrity(info)
-    raytracing_format = validate_slice_directory_format(infos)
     infos.sort(key=lambda info: info.simulation_time)
     previous_time: Optional[float] = None
     for info in infos:
@@ -1317,7 +1132,6 @@ def main() -> None:
             slice_entries=slice_entries,
             layout=layout,
             run_metadata=run_metadata,
-            raytracing_format=raytracing_format,
         )
         next_layout = compute_layout(
             infos,
@@ -1337,7 +1151,6 @@ def main() -> None:
         slice_entries=slice_entries,
         layout=final_layout,
         run_metadata=run_metadata,
-        raytracing_format=raytracing_format,
     )
     if final_layout.metadata_bytes != len(metadata_bytes):
         raise RuntimeError(
@@ -1351,7 +1164,6 @@ def main() -> None:
         layout=final_layout,
         metadata_bytes=metadata_bytes,
         slice_entries=slice_entries,
-        combined_magic=raytracing_format.combined_magic,
         force=args.force,
         check_finite_payload=args.check_finite_payload,
     )
