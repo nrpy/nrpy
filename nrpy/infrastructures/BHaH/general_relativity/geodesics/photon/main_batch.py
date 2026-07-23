@@ -260,9 +260,9 @@ def main(
     double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
 
     // Fallback logic for near-nadir camera angles (looking straight up or down)
-    if (mag_n_x < 1e-10) {{
+    if (mag_n_x < 1e-9) {{
         double alt_up[3] = {{0.0, 1.0, 0.0}};
-        if (fabs(n_z[1]) > 0.9) {{ alt_up[1] = 0.0; alt_up[2] = 1.0; }}
+        if (fabs(n_z[1]) > 0.999) {{ alt_up[1] = 0.0; alt_up[2] = 1.0; }}
         n_x[0] = alt_up[1]*n_z[2] - alt_up[2]*n_z[1];
         n_x[1] = alt_up[2]*n_z[0] - alt_up[0]*n_z[2];
         n_x[2] = alt_up[0]*n_z[1] - alt_up[1]*n_z[0];

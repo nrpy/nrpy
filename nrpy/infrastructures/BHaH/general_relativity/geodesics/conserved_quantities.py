@@ -51,11 +51,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         list_of_syms.append(diagnostics.E_expr)
         list_of_c_vars.append("d_cq_bundle[c].E")
 
-    if diagnostics.L_exprs:
-        list_of_syms.extend(diagnostics.L_exprs)
-        list_of_c_vars.extend(
-            ["d_cq_bundle[c].Lx", "d_cq_bundle[c].Ly", "d_cq_bundle[c].Lz"]
-        )
+    if diagnostics.Lz_expr is not None:
+        list_of_syms.append(diagnostics.Lz_expr)
+        list_of_c_vars.append("d_cq_bundle[c].Lz")
 
     if diagnostics.Q_expr is not None:
         list_of_syms.append(diagnostics.Q_expr)
@@ -69,8 +67,6 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     // Defines the physical conserved quantities evaluated along a particle trajectory.
     typedef struct {
     double E;   // Energy $E$ extracted from the temporal Killing vector.
-    double Lx;  // Angular momentum projection $L_x$.
-    double Ly;  // Angular momentum projection $L_y$.
     double Lz;  // Angular momentum projection $L_z$ extracted from the azimuthal Killing vector.
     double Q;   // Carter constant $Q$ separating the Hamilton-Jacobi equations.
     } conserved_quantities_t; // END STRUCT: conserved_quantities_t

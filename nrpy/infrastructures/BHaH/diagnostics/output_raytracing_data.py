@@ -560,7 +560,7 @@ def register_CFunction_output_raytracing_data(
   MAYBE_UNUSED const REAL xx0 = xx[0][i0];
   MAYBE_UNUSED const REAL xx1 = xx[1][i1];
   MAYBE_UNUSED const REAL xx2 = xx[2][i2];
-  const int idx3 = IDX3(i0, i1, i2);
+  MAYBE_UNUSED const int idx3 = IDX3(i0, i1, i2);
   const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
       i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
       payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,
@@ -618,7 +618,7 @@ def register_CFunction_output_raytracing_data(
   MAYBE_UNUSED const REAL xx0 = xx[0][i0];
   MAYBE_UNUSED const REAL xx1 = xx[1][i1];
   MAYBE_UNUSED const REAL xx2 = xx[2][i2];
-  const int idx3 = IDX3(i0, i1, i2);
+  MAYBE_UNUSED const int idx3 = IDX3(i0, i1, i2);
   const uint64_t point_index = raytracing_data_point_index_from_logical_indices(
       i0 - NGHOSTS, i1 - NGHOSTS, i2 - NGHOSTS, payload_i0_start,
       payload_i1_start, payload_i2_start, (uint64_t)Nxx_plus_2NGHOSTS0_u32,

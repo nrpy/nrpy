@@ -93,10 +93,8 @@ def handle_window_plane_intersection() -> None:
     }; // Global line-of-sight vector pointing from the camera position to the original window center.
 
     double mag_w_z = SqrtCUDA(w_z[0]*w_z[0] + w_z[1]*w_z[1] + w_z[2]*w_z[2]); // Magnitude of the $w_z$ vector.
-    if (mag_w_z > 1e-12) {
-        double inv_mag = 1.0 / mag_w_z; // Inverse multiplication optimizes floating-point arithmetic speed.
-        w_z[0] *= inv_mag; w_z[1] *= inv_mag; w_z[2] *= inv_mag;
-    } // END IF: mag_w_z > 1e-12
+    double inv_mag = 1.0 / mag_w_z; // Inverse multiplication optimizes floating-point arithmetic speed.
+    w_z[0] *= inv_mag; w_z[1] *= inv_mag; w_z[2] *= inv_mag;
 
     const double window_up[3] = {d_commondata.window_up_vec_x, d_commondata.window_up_vec_y, d_commondata.window_up_vec_z}; // Camera up-vector defining vertical orientation.
 
@@ -108,8 +106,8 @@ def handle_window_plane_intersection() -> None:
     double mag_w_x = SqrtCUDA(w_x[0]*w_x[0] + w_x[1]*w_x[1] + w_x[2]*w_x[2]); // Magnitude of the horizontal basis vector $w_x$.
 
     if (mag_w_x < 1e-9) {
-        double alt_up[3] = {1.0, 0.0, 0.0}; // Alternative up-vector mitigates cross product singularities.
-        if (AbsCUDA(w_z[0]) > 0.999) { alt_up[0] = 0.0; alt_up[1] = 1.0; }
+        double alt_up[3] = {0.0, 1.0, 0.0}; // Alternative up-vector mitigates cross product singularities.
+        if (AbsCUDA(w_z[1]) > 0.999) { alt_up[1] = 0.0; alt_up[2] = 1.0; }
         w_x[0] = alt_up[1]*w_z[2] - alt_up[2]*w_z[1];
         w_x[1] = alt_up[2]*w_z[0] - alt_up[0]*w_z[2];
         w_x[2] = alt_up[0]*w_z[1] - alt_up[1]*w_z[0];

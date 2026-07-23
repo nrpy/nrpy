@@ -52,6 +52,7 @@ import nrpy.params as par
 def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
     normalized_eom: bool = False,
+    register_numerical_initial_h: bool = True,
 ) -> None:
     r"""
     Global kernel for RKF45 finalization and error control.
@@ -66,6 +67,9 @@ def rkf45_finalize_and_control_kernel(
         time-window manager separately before enabling this option.
     :param normalized_eom: Whether the nine-component state uses normalized
         photon variables with coordinate time as its integration parameter.
+    :param register_numerical_initial_h: Whether to register the legacy numerical
+        initial-step parameter. Standalone numerical single-photon integrations
+        use the shared ``initial_h`` parameter instead.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -119,9 +123,10 @@ def rkf45_finalize_and_control_kernel(
     if normalized_eom:
         real_param_names.append("rkf45_log_energy_tolerance")
         real_param_defaults.append(1e-8)
-    # The finalizer owns shared RKF45 setup consumed by all photon orchestrators.
-    real_param_names.append("numerical_initial_h")
-    real_param_defaults.append(0.1)
+    if register_numerical_initial_h:
+        # Retain this parameter for batch integrations that still consume it.
+        real_param_names.append("numerical_initial_h")
+        real_param_defaults.append(0.1)
     par.register_CodeParameters(
         "REAL",
         __name__,

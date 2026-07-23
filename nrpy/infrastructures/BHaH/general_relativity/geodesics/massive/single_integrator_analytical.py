@@ -172,8 +172,10 @@ conserved-quantity diagnostics.
     all_particles.f = y;
     all_particles.proper_time = &proper_time;
 
+    // The metric is needed for initial u^0 normalization, not for RHS evaluation.
     double g4dd_local[10];
 
+    // Evaluate the metric for the initial normalization solve.
     g4DD_metric_{spacetime}(&commondata, y, g4dd_local);
 
     double u0_val = 0.0;
@@ -272,6 +274,7 @@ conserved-quantity diagnostics.
     conserved_quantities_t cq_final;
     calculate_conserved_quantities_universal_{spacetime}_{particle}(&commondata, &all_particles, num_rays, &cq_final);
 
+    // Recompute the metric only for the final normalization diagnostic.
     g4DD_metric_{spacetime}(&commondata, y, g4dd_local);
 
     normalization_constraint_t norm_final;

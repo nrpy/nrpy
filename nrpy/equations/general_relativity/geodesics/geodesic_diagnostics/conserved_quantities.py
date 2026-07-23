@@ -75,8 +75,8 @@ class GeodesicDiagnostics:
     Generate and store symbolic expressions for conserved quantities.
 
     This class is instantiated with a specific spacetime and particle type.
-    It computes the symbolic expressions for Energy (E), Angular Momentum (L),
-    and the Carter Constant (Q) using separate, modular methods.
+    It computes the symbolic expressions for Energy (E), axial angular momentum
+    (Lz), and the Carter Constant (Q) using separate, modular methods.
     """
 
     # mypy --strict requires class attributes to be declared.
@@ -85,7 +85,7 @@ class GeodesicDiagnostics:
     g4DD: List[List[sp.Expr]]
     xx: List[sp.Symbol]
     E_expr: Optional[sp.Expr]
-    L_exprs: List[sp.Expr]
+    Lz_expr: Optional[sp.Expr]
     Q_expr: Optional[sp.Expr]
 
     def __init__(
@@ -105,7 +105,7 @@ class GeodesicDiagnostics:
 
         # Initialize optional attributes
         self.E_expr = None
-        self.L_exprs = []
+        self.Lz_expr = None
         self.Q_expr = None
 
         if self.particle_type not in ["massive", "photon"]:
@@ -141,13 +141,13 @@ class GeodesicDiagnostics:
 
         # Angular Momentum is computed based on coordinate basis.
         if self.spacetime.endswith("Cartesian"):
-            self.L_exprs = self.compute_angular_momentum_cartesian(pU)
+            self.Lz_expr = self.compute_angular_momentum_z_cartesian(pU)
 
         # Step 3: Compute Spacetime-Specific Quantities (Carter Constant)
         # This formula is specific to Kerr geometry in Cartesian coordinates.
         if spacetime == "KerrSchild_Cartesian":
             self.Q_expr = self.compute_carter_constant_KerrSchild_Cartesian(
-                self.E_expr, self.L_exprs, pU
+                self.E_expr, pU
             )
         else:
             # For spacetimes where Q is not defined or not yet implemented
@@ -173,9 +173,9 @@ class GeodesicDiagnostics:
             p_0 += self.g4DD[0][mu] * pU[mu]
         return cast(sp.Expr, -p_0)
 
-    def compute_angular_momentum_cartesian(self, pU: List[sp.Symbol]) -> List[sp.Expr]:
+    def compute_angular_momentum_z_cartesian(self, pU: List[sp.Symbol]) -> sp.Expr:
         """
-        Compute the angular momentum vector components L_i.
+        Compute the axial angular momentum component L_z.
 
         Note: In non-spherically symmetric spacetimes like Kerr, only the
         component aligned with the symmetry axis (usually L_z) is conserved.
@@ -191,7 +191,7 @@ class GeodesicDiagnostics:
 
 
         :param pU: The symbolic 4-momentum vector.
-        :return: A list of symbolic expressions [L_x, L_y, L_z].
+        :return: The symbolic expression for L_z.
         """
         # First, compute covariant spatial momentum p_k = g_{k,mu} p^mu.
         pD = ixp.zerorank1(dimension=4)
@@ -208,16 +208,13 @@ class GeodesicDiagnostics:
         p_x, p_y, p_z = pD[1], pD[2], pD[3]
 
         # L = x × p  (Cartesian cross product)
-        L_x = y * p_z - z * p_y
-        L_y = z * p_x - x * p_z
         L_z = x * p_y - y * p_x
 
-        return [L_x, L_y, L_z]
+        return cast(sp.Expr, L_z)
 
     def compute_carter_constant_KerrSchild_Cartesian(
         self,
         E: sp.Expr,
-        L_exprs: List[sp.Expr],
         pU: List[sp.Symbol],
     ) -> sp.Expr:
         """
@@ -232,11 +229,9 @@ class GeodesicDiagnostics:
         (See fourth equation in Section: Trajectory Equations)
 
         :param E: Symbolic Energy expression.
-        :param L_exprs: List of Angular Momentum components [Lx, Ly, Lz].
         :param pU: Symbolic 4-momentum vector.
         :return: Symbolic expression for Q.
         """
-        L_z = L_exprs[2]
         # Define a_spin locally (G=c=1)
         a_spin = sp.Symbol("a_spin", real=True)
 
@@ -336,12 +331,35 @@ if __name__ == "__main__":
     # We verify that Q_kerr(a=0) + L_z^2 == L^2.
     kerr_diag = Geodesic_Diagnostics["KerrSchild_Cartesian_massive"]
 
-    L_sq_kerr = (
-        kerr_diag.L_exprs[0] ** 2
-        + kerr_diag.L_exprs[1] ** 2
-        + kerr_diag.L_exprs[2] ** 2
+    # Reconstruct full Cartesian L^2 locally for this identity check. The
+    # public diagnostic contract exposes only the axial component Lz.
+    validation_pU = [sp.Symbol(f"p{i}", real=True) for i in range(4)]
+    validation_pD = ixp.zerorank1(dimension=4)
+    for validation_k in range(1, 4):
+        for validation_mu in range(4):
+            if validation_k <= validation_mu:
+                validation_pD[validation_k] += (
+                    kerr_diag.g4DD[validation_k][validation_mu]
+                    * validation_pU[validation_mu]
+                )
+            else:
+                validation_pD[validation_k] += (
+                    kerr_diag.g4DD[validation_mu][validation_k]
+                    * validation_pU[validation_mu]
+                )
+    validation_x, validation_y, validation_z = kerr_diag.xx[1:4]
+    validation_Lx = (
+        validation_y * validation_pD[3] - validation_z * validation_pD[2]
     )
-    L_z_sq_kerr = kerr_diag.L_exprs[2] ** 2
+    validation_Ly = (
+        validation_z * validation_pD[1] - validation_x * validation_pD[3]
+    )
+    validation_Lz = (
+        validation_x * validation_pD[2] - validation_y * validation_pD[1]
+    )
+    L_sq_kerr = validation_Lx**2 + validation_Ly**2 + validation_Lz**2
+    assert kerr_diag.Lz_expr is not None
+    L_z_sq_kerr = kerr_diag.Lz_expr**2
 
     # Extract the main formula from the diagnostic expression.
     assert kerr_diag.Q_expr is not None

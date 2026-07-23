@@ -22,8 +22,10 @@ Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
+import argparse
 import os
 import shutil
+from typing import List, Optional
 
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.infrastructures.BHaH.BHaH_defines_h as Bdefines_h
@@ -63,7 +65,64 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.normalization_constr
     normalization_constraint,
 )
 
+
+def _build_parser() -> argparse.ArgumentParser:
+    """
+    Build the massive single-geodesic generator argument parser.
+
+    :return: Configured command-line argument parser.
+    """
+    parser = argparse.ArgumentParser(
+        description="Generate a standalone analytical massive geodesic project."
+    )
+    parser.add_argument(
+        "--initial-time",
+        dest="initial_t",
+        type=float,
+        default=0.0,
+        help="Initial coordinate time.",
+    )
+    parser.add_argument(
+        "--initial-position",
+        dest="initial_position",
+        nargs=3,
+        type=float,
+        default=[4.0123, 0.0, 0.0],
+        metavar=("X", "Y", "Z"),
+        help="Initial Cartesian position.",
+    )
+    parser.add_argument(
+        "--initial-momentum",
+        dest="initial_momentum",
+        nargs=3,
+        type=float,
+        default=[-0.5641, 0.0, 0.0],
+        metavar=("PX", "PY", "PZ"),
+        help="Initial spatial momentum components.",
+    )
+    parser.add_argument(
+        "--r-escape",
+        dest="r_escape",
+        type=float,
+        default=150.0,
+        help="Escape radius used to terminate the trajectory.",
+    )
+    return parser
+
+
+def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """
+    Parse massive single-geodesic generator arguments.
+
+    :param argv: Optional argument list; defaults to ``sys.argv`` when omitted.
+    :return: Parsed command-line arguments.
+    """
+    return _build_parser().parse_args(argv)
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+
     # Step P1: Set code-generation parameters and register the geodesic kernels.
     enable_parallel_codegen = True
     if enable_parallel_codegen:
@@ -102,6 +161,18 @@ if __name__ == "__main__":
 
     single_integrator_analytical(SPACETIME, PARTICLE)
     main_single("single_integrator_analytical")
+
+    # Step P2: Apply command-line initial-state and escape-radius overrides.
+    for name, value in zip(
+        ["initial_x", "initial_y", "initial_z"], args.initial_position
+    ):
+        par.adjust_CodeParam_default(name, value)
+    for name, value in zip(
+        ["initial_p_x", "initial_p_y", "initial_p_z"], args.initial_momentum
+    ):
+        par.adjust_CodeParam_default(name, value)
+    par.adjust_CodeParam_default("initial_t", args.initial_t)
+    par.adjust_CodeParam_default("r_escape", args.r_escape)
 
     print("Generating header files and Makefile...")
 

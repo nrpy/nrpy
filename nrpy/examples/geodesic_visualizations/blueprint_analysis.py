@@ -9,7 +9,7 @@ Author: Dalton J. Moone
 """
 
 import os
-from typing import BinaryIO, Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -22,6 +22,98 @@ except ImportError:
     from nrpy.examples.geodesic_visualizations import blueprint_io
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
+
+TERMINATION_TYPE_INFO: Dict[int, Tuple[str, str]] = {
+    cfg.TERM_COORD_RADIUS_EXCEEDED: (
+        "TERM_COORD_RADIUS_EXCEEDED",
+        "Ray exceeded the coordinate-radius escape limit",
+    ),
+    cfg.TERM_SOURCE_PLANE: (
+        "TERM_SOURCE_PLANE",
+        "Ray hit the accretion disk / source plane",
+    ),
+    cfg.TERM_EVOLUTION_MEASURE_EXCEEDED: (
+        "TERM_EVOLUTION_MEASURE_EXCEEDED",
+        "Evolution measure exceeded its configured limit",
+    ),
+    cfg.TERM_RKF45_REJECTION_LIMIT: (
+        "TERM_RKF45_REJECTION_LIMIT",
+        "RKF45 rejected too many consecutive steps",
+    ),
+    cfg.TERM_T_MAX_EXCEEDED: (
+        "TERM_T_MAX_EXCEEDED",
+        "Ray exceeded the maximum allowed coordinate time",
+    ),
+    cfg.TERM_SLOT_MANAGER_ERROR: (
+        "TERM_SLOT_MANAGER_ERROR",
+        "Slot manager failed to handle the ray",
+    ),
+    cfg.TERM_FAILURE: ("TERM_FAILURE", "Unspecified integration failure"),
+    cfg.TERM_ACTIVE: (
+        "TERM_ACTIVE",
+        "Ray is still being processed (should not appear in final blueprints)",
+    ),
+    cfg.TERM_REJECTED: (
+        "TERM_REJECTED",
+        "Ray is in a rejected RKF45 stage (not a final status)",
+    ),
+}
+
+
+def _termination_type_info(enum_value: int) -> Tuple[str, str]:
+    """
+    Return the name and description for a termination enum.
+
+    :param enum_value: Integer termination enum from a blueprint record.
+    :return: Symbolic name and description, including an unknown-enum fallback.
+    """
+    return TERMINATION_TYPE_INFO.get(
+        enum_value,
+        (f"UNKNOWN_ENUM_{enum_value}", "Unknown termination status"),
+    )
+
+
+def _termination_type_label(enum_value: int) -> str:
+    """
+    Format a termination enum for plot legends.
+
+    :param enum_value: Integer termination enum from a blueprint record.
+    :return: Human-readable enum number and symbolic name.
+    """
+    name, _ = _termination_type_info(enum_value)
+    return f"Type {enum_value}: {name}"
+
+
+def _print_termination_diagnostics(
+    enum_counts: Dict[int, int], total_rays: int
+) -> None:
+    """
+    Print observed termination counts and every configured enum definition.
+
+    :param enum_counts: Number of records observed for each termination enum.
+    :param total_rays: Total number of records used for percentages.
+    """
+    print("--- Raw Termination Enums in Binary ---")
+    for enum_value in sorted(enum_counts):
+        count = enum_counts[enum_value]
+        name, _ = _termination_type_info(enum_value)
+        percentage = count / total_rays * 100.0 if total_rays else 0.0
+        print(
+            f"  Raw Enum {enum_value:2d} ({name}): "
+            f"{count:12,} rays ({percentage:6.2f}%)"
+        )
+
+    print("\n--- Termination Enum Definitions ---")
+    for enum_value in sorted(TERMINATION_TYPE_INFO):
+        name, description = TERMINATION_TYPE_INFO[enum_value]
+        print(f"  Enum {enum_value:2d} ({name}): {description}")
+
+    configured_status = cfg.TERM_EVOLUTION_MEASURE_EXCEEDED
+    configured_name, _ = _termination_type_info(configured_status)
+    print(
+        f"\n  Configured evolution-measure status = {configured_status} "
+        f"({configured_name})"
+    )
 
 
 def _calculate_subsample_rate(total_expected_records: int, max_viz_points: int) -> int:
@@ -98,19 +190,23 @@ def plot_norm_abs_log_histogram(
     import matplotlib.pyplot as plt
 
     plt.figure(figsize=(10, 6))
+    termination_colors = plt.get_cmap("tab10")
     for enum_value in np.unique(termination_types):
         values = norm_abs_values[termination_types == enum_value]
         positive_values = values[values > 0.0]
         if len(positive_values) > 0:
+            enum_int = int(enum_value)
             plt.hist(
                 np.log10(positive_values),
                 bins=100,
                 alpha=0.5,
-                label=f"Type {enum_value}",
+                color=termination_colors(enum_int % 10),
+                label=_termination_type_label(enum_int),
             )
     plt.title("Log-Scale Normalization Magnitude by Termination Type")
     plt.xlabel("$\\log_{10}(|g_{{\\mu\\nu}}p^\\mu p^\\nu|)$")
-    plt.ylabel("Ray Count")
+    plt.yscale("log", base=10)
+    plt.ylabel("$\\log_{10}(N_{\\mathrm{photons}})$")
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
@@ -249,23 +345,17 @@ def diagnose_blueprint(
             if sidecar_file is not None:
                 sidecar_file.close()
 
-    print("--- Raw Termination Enums in Binary ---")
-    for enum_value in sorted(enum_counts):
-        count = enum_counts[enum_value]
-        print(
-            f"  Raw Enum {enum_value:2d}: {count:12,} rays ({count/total_rays*100:6.2f}%)"
-        )
-    print(
-        f"\n  Configured evolution-measure status = {cfg.TERM_EVOLUTION_MEASURE_EXCEEDED}"
-    )
+    _print_termination_diagnostics(enum_counts, total_rays)
     print("\n--- Window Coordinate Bounds (y_w, z_w) ---")
     print(f"  Rays inside diagnostic FOV: {in_view:,} ({in_view/total_rays*100:.2f}%)")
     print("\n--- First 5 Raw Records ---")
-    print(f"{'Ray#':<6} | {'Term Type':<9} | {'y_w':>8} | {'z_w':>8}")
-    print("-" * 42)
+    print(f"{'Ray#':<6} | {'Term Type':<38} | {'y_w':>8} | {'z_w':>8}")
+    print("-" * 71)
     for index, record in enumerate(first_records[:5]):
+        enum_value = int(record["termination_type"])
+        enum_name, _ = _termination_type_info(enum_value)
         print(
-            f"{index:<6} | {int(record['termination_type']):<9} | "
+            f"{index:<6} | {enum_value} ({enum_name}) | "
             f"{record['y_w']:>8.5f} | {record['z_w']:>8.5f}"
         )
 

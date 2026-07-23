@@ -676,8 +676,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                 interpolation_kernel_{ spacetime_name}(commondata, d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current]{stream_arg_current});
                 // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the active stream.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
-                // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the active stream.
-                rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
+                // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                if (stage < 6) {{
+                    // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the active stream.
+                    rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
+                }} // END IF: skip stage-6 intermediate state update
             }} // END LOOP: for stage over 6 to execute RKF45 stages
 
             // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
@@ -794,8 +797,11 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
                     interpolation_kernel_{spacetime_name}(commondata, d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next],active_chunks[next]{stream_arg_next});
                     // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the alternate stream.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
-                    // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the alternate stream.
-                    rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
+                    // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                    if (stage < 6) {{
+                        // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the alternate stream.
+                        rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
+                    }} // END IF: skip stage-6 intermediate state update
                 }} // END LOOP: for stage over 6 to execute RKF45 stages
 
                 // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the upcoming integration baseline.

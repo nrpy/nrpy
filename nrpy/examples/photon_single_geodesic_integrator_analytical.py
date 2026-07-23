@@ -11,8 +11,10 @@ Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
+import argparse
 import os
 import shutil
+from typing import List, Optional
 
 import nrpy.c_function as cfc
 import nrpy.params as par
@@ -44,7 +46,64 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     single_integrator_analytical,
 )
 
+
+def _build_parser() -> argparse.ArgumentParser:
+    """
+    Build the analytical photon single-geodesic generator argument parser.
+
+    :return: Configured command-line argument parser.
+    """
+    parser = argparse.ArgumentParser(
+        description="Generate a standalone analytical photon geodesic project."
+    )
+    parser.add_argument(
+        "--initial-time",
+        dest="initial_t",
+        type=float,
+        default=0.0,
+        help="Initial coordinate time.",
+    )
+    parser.add_argument(
+        "--initial-position",
+        dest="initial_position",
+        nargs=3,
+        type=float,
+        default=[4.0123, 0.0, 0.0],
+        metavar=("X", "Y", "Z"),
+        help="Initial Cartesian position.",
+    )
+    parser.add_argument(
+        "--initial-momentum",
+        dest="initial_momentum",
+        nargs=3,
+        type=float,
+        default=[-0.5641, 0.0, 0.0],
+        metavar=("PX", "PY", "PZ"),
+        help="Initial spatial momentum components.",
+    )
+    parser.add_argument(
+        "--r-escape",
+        dest="r_escape",
+        type=float,
+        default=150.0,
+        help="Escape radius used to terminate the trajectory.",
+    )
+    return parser
+
+
+def _parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    """
+    Parse analytical photon single-geodesic generator arguments.
+
+    :param argv: Optional argument list; defaults to ``sys.argv`` when omitted.
+    :return: Parsed command-line arguments.
+    """
+    return _build_parser().parse_args(argv)
+
+
 if __name__ == "__main__":
+    args = _parse_args()
+
     # Step 1: Select the BHaH OpenMP backend for this example.
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("parallelization", "openmp")
@@ -110,17 +169,19 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("rkf45_h_max", 10.0)
     par.adjust_CodeParam_default("rkf45_h_min", 1e-20)
     par.adjust_CodeParam_default("rkf45_max_retries", 15)
-    par.adjust_CodeParam_default("initial_t", 0.0)
-    par.adjust_CodeParam_default("initial_x", 4.0123)
-    par.adjust_CodeParam_default("initial_y", 0.0)
-    par.adjust_CodeParam_default("initial_z", 0.0)
-    par.adjust_CodeParam_default("initial_p_x", -0.5641)
-    par.adjust_CodeParam_default("initial_p_y", 0.0)
-    par.adjust_CodeParam_default("initial_p_z", 0.0)
+    for name, value in zip(
+        ["initial_x", "initial_y", "initial_z"], args.initial_position
+    ):
+        par.adjust_CodeParam_default(name, value)
+    for name, value in zip(
+        ["initial_p_x", "initial_p_y", "initial_p_z"], args.initial_momentum
+    ):
+        par.adjust_CodeParam_default(name, value)
+    par.adjust_CodeParam_default("initial_t", args.initial_t)
     par.adjust_CodeParam_default("initial_integration_param", 0.0)
     par.adjust_CodeParam_default("initial_eulerian_distance", 0.0)
     par.adjust_CodeParam_default("initial_h", 0.1)
-    par.adjust_CodeParam_default("r_escape", 150.0)
+    par.adjust_CodeParam_default("r_escape", args.r_escape)
     par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
     par.adjust_CodeParam_default("max_steps", 200000)
 

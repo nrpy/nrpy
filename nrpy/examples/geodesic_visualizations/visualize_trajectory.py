@@ -156,12 +156,19 @@ def visualize_trajectory(
     # Step 1: Load and Validate Data.
     try:
         # Parse the trajectory metrics into a 2D NumPy array, ignoring comments.
-        data = np.loadtxt(traj_path, comments="#")
+        data = np.atleast_2d(np.loadtxt(traj_path, comments="#"))
 
         if data.size == 0:
             print(f"[!] ERROR: '{traj_path}' is empty.")
             print(
                 "    Integration may have failed immediately. Check initial conditions."
+            )
+            return
+
+        if data.shape[1] < 5:
+            print(
+                f"[!] ERROR: '{traj_path}' has {data.shape[1]} columns; "
+                "at least 5 are required for trajectory visualization."
             )
             return
 

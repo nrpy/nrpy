@@ -88,41 +88,23 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         "single_photon_numerical_definitions", single_photon_definitions
     )
 
-    # Step 1: Register the batch-authoritative single-ray input parameters.
-    par.register_CodeParameter(
-        "int",
-        __name__,
-        "scan_density",
-        500,
-        commondata=True,
-        add_to_parfile=True,
-    )
-    par.register_CodeParameters(
-        "REAL",
-        __name__,
-        ["window_center_x", "window_center_y", "window_center_z"],
-        [50.0, 0.0, 0.0],
-        commondata=True,
-        add_to_parfile=False,
-    )
+    # Step 1: Register direct single-photon initial-state parameters.
     par.register_CodeParameters(
         "REAL",
         __name__,
         [
-            "original_window_center_x",
-            "original_window_center_y",
-            "original_window_center_z",
-            "camera_pos_x",
-            "camera_pos_y",
-            "camera_pos_z",
-            "window_up_vec_x",
-            "window_up_vec_y",
-            "window_up_vec_z",
-            "window_width",
-            "window_height",
-            "t_start",
+            "initial_t",
+            "initial_x",
+            "initial_y",
+            "initial_z",
+            "initial_p_x",
+            "initial_p_y",
+            "initial_p_z",
+            "initial_integration_param",
+            "initial_eulerian_distance",
+            "initial_h",
         ],
-        [50.0, 0.0, 0.0, 51.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 100.0],
+        [28.0, 10.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.05],
         commondata=True,
         add_to_parfile=True,
     )
@@ -157,8 +139,8 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     # Step 2: Select emitted C expressions for the two state conventions.
     if normalized_eom:
-        initial_state_time = "0.0"
-        initial_integration_param = "commondata.t_start"
+        initial_state_time = "commondata.initial_integration_param"
+        initial_integration_param = "commondata.initial_t"
         coordinate_time_expression = "*integration_param"
         trajectory_lambda_expression = "f[0]"
         trajectory_time_expression = "*integration_param"
@@ -172,8 +154,8 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         normalization_kernel_name = "normalization_constraint_photon_normalized"
         normalization_error_expression = "fabs(normalization.C - 1.0)"
     else:
-        initial_state_time = "commondata.t_start"
-        initial_integration_param = "0.0"
+        initial_state_time = "commondata.initial_t"
+        initial_integration_param = "commondata.initial_integration_param"
         coordinate_time_expression = "f[0]"
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
@@ -196,10 +178,10 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 
     desc = rf"""Integrate one photon through a numerical spacetime on the CPU.
 
-The executable initializes ray zero with the same camera-window geometry used by
-the numerical batch integrator, solves the initial null constraint, maps numerical
-time windows by coordinate-time slot, and advances the state with the shared
-six-stage RKF45 pipeline. A trajectory row is written only after an accepted step.
+The executable initializes one photon from direct position and momentum parameters,
+solves the initial null constraint, maps numerical time windows by coordinate-time
+slot, and advances the state with the shared six-stage RKF45 pipeline. A trajectory
+row is written only after an accepted step.
 
 For normalized equations, the output lambda column is f[0] and the output time
 column is the RKF45 integration parameter. For non-normalized equations, lambda is
@@ -224,11 +206,6 @@ the integration parameter and time is f[0].
   commondata_struct commondata;
   commondata_struct_set_to_default(&commondata);
   cmdline_input_and_parfile_parser(&commondata, argc, argv);
-
-  // The batch driver seeds each active tile from the configured master window.
-  commondata.window_center_x = commondata.original_window_center_x;
-  commondata.window_center_y = commondata.original_window_center_y;
-  commondata.window_center_z = commondata.original_window_center_z;
 
   const long int num_rays = 1;
   const long int chunk_size = 1;
@@ -290,7 +267,7 @@ the integration parameter and time is f[0].
   // 3. TIME-SLOT AND NUMERICAL-WINDOW SETUP
   //==========================================
   TimeSlotManager tsm;
-  const double slot_manager_t_max = commondata.t_start + 1.0e-5;
+  const double slot_manager_t_max = commondata.initial_t + 1.0e-5;
   slot_manager_init(
       &tsm,
       commondata.slot_manager_t_min,
@@ -355,122 +332,50 @@ the integration parameter and time is f[0].
       numerical_params.xxmin{phi_dim} + 1.5 * numerical_params.dxx{phi_dim};
 
   //==========================================
-  // 4. BATCH-AUTHORITATIVE INITIAL CONDITIONS
+  // 4. DIRECT INITIAL CONDITIONS
   //==========================================
-  const double camera_x = commondata.camera_pos_x;
-  const double camera_y = commondata.camera_pos_y;
-  const double camera_z = commondata.camera_pos_z;
-
-  double n_z[3] = {{
-    commondata.original_window_center_x - camera_x,
-    commondata.original_window_center_y - camera_y,
-    commondata.original_window_center_z - camera_z
-  }};
-  const double magnitude_n_z =
-      sqrt(n_z[0] * n_z[0] + n_z[1] * n_z[1] + n_z[2] * n_z[2]);
-  if (!isfinite(magnitude_n_z) || magnitude_n_z <= 0.0) {{
-    fprintf(stderr, "ERROR: camera and original window center must differ.\n");
-    exit_status = EXIT_FAILURE;
-    goto cleanup;
-  }} // END IF: camera line-of-sight vector was invalid
-  for (int component = 0; component < 3; ++component)
-    n_z[component] /= magnitude_n_z;
-
-  const double guide_up[3] = {{
-    commondata.window_up_vec_x,
-    commondata.window_up_vec_y,
-    commondata.window_up_vec_z
-  }};
-  double n_x[3] = {{
-    guide_up[1] * n_z[2] - guide_up[2] * n_z[1],
-    guide_up[2] * n_z[0] - guide_up[0] * n_z[2],
-    guide_up[0] * n_z[1] - guide_up[1] * n_z[0]
-  }};
-  double magnitude_n_x =
-      sqrt(n_x[0] * n_x[0] + n_x[1] * n_x[1] + n_x[2] * n_x[2]);
-
-  if (magnitude_n_x < 1.0e-9) {{
-    double alternative_up[3] = {{0.0, 1.0, 0.0}};
-    if (fabs(n_z[1]) > 0.999) {{
-      alternative_up[1] = 0.0;
-      alternative_up[2] = 1.0;
-    }} // END IF: line of sight was parallel to the first fallback axis
-    n_x[0] = alternative_up[1] * n_z[2] - alternative_up[2] * n_z[1];
-    n_x[1] = alternative_up[2] * n_z[0] - alternative_up[0] * n_z[2];
-    n_x[2] = alternative_up[0] * n_z[1] - alternative_up[1] * n_z[0];
-    magnitude_n_x =
-        sqrt(n_x[0] * n_x[0] + n_x[1] * n_x[1] + n_x[2] * n_x[2]);
-  }} // END IF: camera up vector required the batch fallback basis
-
-  if (!isfinite(magnitude_n_x) || magnitude_n_x <= 0.0) {{
-    fprintf(stderr, "ERROR: failed to construct the camera horizontal basis.\n");
-    exit_status = EXIT_FAILURE;
-    goto cleanup;
-  }} // END IF: camera horizontal basis remained singular
-  for (int component = 0; component < 3; ++component)
-    n_x[component] /= magnitude_n_x;
-
-  const double n_y[3] = {{
-    n_z[1] * n_x[2] - n_z[2] * n_x[1],
-    n_z[2] * n_x[0] - n_z[0] * n_x[2],
-    n_z[0] * n_x[1] - n_z[1] * n_x[0]
-  }};
-
-  if (commondata.scan_density <= 0) {{
-    fprintf(stderr, "ERROR: scan_density must be positive.\n");
-    exit_status = EXIT_FAILURE;
-    goto cleanup;
-  }} // END IF: scan_density was not positive
-
-  const long int ray_index = 0;
-  const int row = (int)(ray_index / commondata.scan_density);
-  const int column = (int)(ray_index % commondata.scan_density);
-  const double pixel_x =
-      -0.5 * commondata.window_width +
-      (column + 0.5) * (commondata.window_width / commondata.scan_density);
-  const double pixel_y =
-      -0.5 * commondata.window_height +
-      (row + 0.5) * (commondata.window_height / commondata.scan_density);
-
-  const double target_position[3] = {{
-    commondata.window_center_x + pixel_x * n_x[0] + pixel_y * n_y[0],
-    commondata.window_center_y + pixel_x * n_x[1] + pixel_y * n_y[1],
-    commondata.window_center_z + pixel_x * n_x[2] + pixel_y * n_y[2]
-  }};
-  const double direction_x = target_position[0] - camera_x;
-  const double direction_y = target_position[1] - camera_y;
-  const double direction_z = target_position[2] - camera_z;
-  const double direction_magnitude = sqrt(
-      direction_x * direction_x + direction_y * direction_y +
-      direction_z * direction_z);
-  if (!isfinite(direction_magnitude) || direction_magnitude <= 0.0) {{
-    fprintf(stderr, "ERROR: initial photon direction was invalid.\n");
-    exit_status = EXIT_FAILURE;
-    goto cleanup;
-  }} // END IF: initial photon direction was invalid
-
   f[0] = {initial_state_time};
-  f[1] = camera_x;
-  f[2] = camera_y;
-  f[3] = camera_z;
+  f[1] = commondata.initial_x;
+  f[2] = commondata.initial_y;
+  f[3] = commondata.initial_z;
   f[4] = 0.0;
-  f[5] = direction_x / direction_magnitude;
-  f[6] = direction_y / direction_magnitude;
-  f[7] = direction_z / direction_magnitude;
-  f[8] = 0.0;
+  f[5] = commondata.initial_p_x;
+  f[6] = commondata.initial_p_y;
+  f[7] = commondata.initial_p_z;
+  f[8] = commondata.initial_eulerian_distance;
 
   *integration_param = {initial_integration_param};
-  *h = commondata.numerical_initial_h;
+  *h = commondata.initial_h;
   *rejection_retries = 0;
   *status = ACTIVE;
 
+  for (int component = 0; component < 9; ++component) {{
+    if (!isfinite(f[component])) {{
+      fprintf(stderr, "ERROR: initial photon state was not finite.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    }} // END IF: one initial photon state component was not finite
+  }} // END LOOP: for component over initial photon state components
+  const double spatial_momentum_squared =
+      f[5] * f[5] + f[6] * f[6] + f[7] * f[7];
+  if (!isfinite(spatial_momentum_squared) || spatial_momentum_squared <= 0.0) {{
+    fprintf(stderr, "ERROR: initial spatial photon momentum must be finite and nonzero.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial spatial photon momentum was invalid
+  if (!isfinite(*h) || *h == 0.0) {{
+    fprintf(stderr, "ERROR: initial_h must be finite and nonzero.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial integration step was invalid
+
   int mapped_slot_index = -1;
-  const int initial_slot_index = slot_get_index(&tsm, commondata.t_start);
+  const int initial_slot_index = slot_get_index(&tsm, commondata.initial_t);
   if (initial_slot_index < 0) {{
     fprintf(
         stderr,
-        "ERROR: t_start=%e is outside the configured TimeSlotManager range.\n",
-        (double)commondata.t_start);
+        "ERROR: initial_t=%e is outside the configured TimeSlotManager range.\n",
+        (double)commondata.initial_t);
     exit_status = EXIT_FAILURE;
     goto cleanup;
   }} // END IF: initial coordinate time was outside the slot lattice
@@ -635,14 +540,16 @@ the integration parameter and time is f[0].
           stage,
           chunk_size,
           stream_idx);
-      rkf45_stage_update(
-          f_start,
-          k_bundle,
-          h,
-          stage,
-          chunk_size,
-          f_temp,
-          stream_idx);
+      if (stage < 6) {{
+        rkf45_stage_update(
+            f_start,
+            k_bundle,
+            h,
+            stage,
+            chunk_size,
+            f_temp,
+            stream_idx);
+      }} // END IF: skip stage-6 intermediate state update
     }} // END LOOP: for stage over all six Cash-Karp stages
 
     rkf45_finalize_and_control(
@@ -880,7 +787,8 @@ if __name__ == "__main__":
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
-        enable_numerical_time_window_step_cap=True
+        enable_numerical_time_window_step_cap=True,
+        register_numerical_initial_h=False,
     )
     single_integrator_numerical(
         SPACETIME,

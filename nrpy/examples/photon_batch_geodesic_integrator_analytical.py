@@ -166,7 +166,8 @@ if __name__ == "__main__":
     # Step 6: Override CodeParameter defaults before parfile generation.
     print(" -> Overriding desired CodeParameters before .par generation...")
 
-    # Step 6.a: Set analytic spacetime defaults.
+    # Step 6.a: Set analytic spacetime defaults in units M_scale=1.
+    # a_spin is dimensional Kerr a=J/M, so a_spin=0.9 means a/M=0.9 here.
     par.adjust_CodeParam_default("M_scale", 1.0)
     par.adjust_CodeParam_default("a_spin", 0.9)
 

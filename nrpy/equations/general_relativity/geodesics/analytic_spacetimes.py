@@ -5,6 +5,10 @@ This module provides a class-based structure for generating the symbolic
 metric tensor for supported analytic or analytic-like spacetime recipes.
 It is designed to integrate with nrpy's CodeParameter system.
 
+For Kerr, ``a_spin`` is the dimensional Kerr parameter ``a = J/M`` in
+geometric units, with the same length units as ``M_scale``. The dimensionless
+spin is ``a_spin / M_scale``. Analytic geodesic examples use ``M_scale = 1``.
+
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 
@@ -81,7 +85,9 @@ class AnalyticSpacetimes:
         t, x, y, z = sp.symbols("t x y z", real=True)
         xx = [t, x, y, z]
 
-        # Step 1.b: Register physical parameters (G=c=1; M_scale = ADM mass)
+        # Step 1.b: Register physical parameters in geometric units (G=c=1).
+        # M_scale is ADM mass; a_spin is dimensional Kerr a=J/M. The
+        # dimensionless spin is a_spin / M_scale.
         M_scale = par.register_CodeParameter(
             "REAL", __name__, "M_scale", 1.0, commondata=True
         )

@@ -288,6 +288,12 @@ def batch_integrator_numerical(
     stream_arg_next = ", next"
 
     body = rf"""
+    // Initialize caller-owned output records before any event handler writes fields.
+    for (long int i = 0; i < num_rays; ++i) {{
+        results_buffer[i] = (blueprint_data_t){{0}};
+        results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
+    }} // END LOOP: initialize deterministic numerical-batch result records
+
     //==========================================
     // 1. HOST ALLOCATION
     //==========================================
@@ -853,9 +859,12 @@ def batch_integrator_numerical(
                 // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
                 // on the active buffer.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_rhs_geometry_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
-                // Stage update: accumulate the intermediate RKF45 state updates on the
-                // active buffer.
-                rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
+                // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                if (stage < 6) {{
+                    // Stage update: accumulate the intermediate RKF45 state updates on the
+                    // active buffer.
+                    rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
+                }} // END IF: skip stage-6 intermediate state update
             }} // END LOOP: for stage over 6 to execute RKF45 stages
 
 {finalize_current}
@@ -1021,9 +1030,12 @@ def batch_integrator_numerical(
                     // RHS step: compute the geodesic equation derivatives
                     // $\dot{{ f}}^\mu$ on the alternate buffer.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_rhs_geometry_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
-                    // Stage update: accumulate the intermediate RKF45 state updates on
-                    // the alternate buffer.
-                    rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
+                    // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                    if (stage < 6) {{
+                        // Stage update: accumulate the intermediate RKF45 state updates on
+                        // the alternate buffer.
+                        rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
+                    }} // END IF: skip stage-6 intermediate state update
                 }} // END LOOP: for stage over 6 to execute RKF45 stages
 
 {finalize_next}

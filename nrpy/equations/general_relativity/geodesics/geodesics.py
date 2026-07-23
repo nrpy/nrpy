@@ -1289,24 +1289,6 @@ class GeodesicEquations:
         return Gamma4UDD_recipe
 
     @staticmethod
-    def symbolic_christoffel_recipe_from_grid_basis() -> List[List[List[sp.Expr]]]:
-        r"""
-        Generate a generic transformed-Christoffel recipe.
-
-        :return: A 4x4x4 tensor containing the transformed recipe.
-        """
-        grid_Gamma4UDD = ixp.declarerank3(
-            "grid_Gamma4UDD", dimension=4, symmetry="sym12"
-        )
-        J4UD = ixp.declarerank2("J4UD", dimension=4, symmetry="nosym")
-        J4UD_dD = ixp.declarerank3("J4UD_dD", dimension=4, symmetry="sym12")
-        return GeodesicEquations._transform_christoffel_recipe_from_grid_basis_data(
-            grid_Gamma4UDD=grid_Gamma4UDD,
-            J4UD=J4UD,
-            J4UD_dD=J4UD_dD,
-        )
-
-    @staticmethod
     def symbolic_christoffel_recipe_from_bssn_grid_basis(
         bssn_coord_system: str,
         target_basis: Literal["Cartesian", "Spherical"] = "Cartesian",
@@ -1428,9 +1410,6 @@ symbolic_g4DD_recipe_from_bssn_grid_basis = (
 )
 symbolic_g4DD_dt_recipe_from_bssn_grid_basis = (
     GeodesicEquations.symbolic_g4DD_dt_recipe_from_bssn_grid_basis
-)
-symbolic_christoffel_recipe_from_grid_basis = (
-    GeodesicEquations.symbolic_christoffel_recipe_from_grid_basis
 )
 symbolic_christoffel_recipe_from_bssn_grid_basis = (
     GeodesicEquations.symbolic_christoffel_recipe_from_bssn_grid_basis

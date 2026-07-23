@@ -27,6 +27,12 @@ import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH
 
+SUPPORTED_RAYTRACING_COORD_SYSTEMS = ("SinhCylindricalv2n2",)
+DEFAULT_RAYTRACING_NXX = [162, 2, 256]
+DEFAULT_RAYTRACING_DOMAIN = [30.0, 0.075, 0.05, 1.0, 4.0]
+DEFAULT_RAYTRACING_T_FINAL = 30.0
+DEFAULT_RAYTRACING_DIAGNOSTICS_OUTPUT_EVERY = 0.4
+
 parser = argparse.ArgumentParser(
     description="""Generate a BHaH two-black-hole collision example with optional raytracing spacetime outputs."""
 )
@@ -43,11 +49,11 @@ parser.add_argument(
 )
 parser.add_argument(
     "--raytracing-time",
-    nargs=2,
+    nargs="*",
     default=None,
     type=float,
-    metavar=("T_FINAL", "DIAGNOSTICS_OUTPUT_EVERY"),
-    help="""Enable metric raytracing spacetime outputs and set the final time and diagnostics output cadence. Currently supported only for OpenMP builds with double precision.""",
+    metavar="VALUE",
+    help="""Enable metric raytracing spacetime outputs. Provide T_FINAL and DIAGNOSTICS_OUTPUT_EVERY, or omit both to use the tuned 30.0/0.4 defaults. Currently supported only for OpenMP builds with double precision.""",
 )
 parser.add_argument(
     "--raytracing-data-mode",
@@ -65,13 +71,14 @@ parser.add_argument(
     nargs="+",
     default=None,
     type=float,
-    help="""Coordinate-system-specific raytracing domain parameters. Spherical/Cylindrical: GRID_PHYSICAL_SIZE. SinhSpherical: GRID_PHYSICAL_SIZE SINHW. SinhCylindrical: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ. SinhCylindricalv2n2: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE.""",
+    help="""Override the SinhCylindricalv2n2 domain parameters GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE. Omit to use 30.0 0.075 0.05 1.0 4.0.""",
 )
 parser.add_argument(
     "--raytracing-coord-system",
     type=str,
+    choices=SUPPORTED_RAYTRACING_COORD_SYSTEMS,
     default=None,
-    help="""Override the generated project's coordinate system when --raytracing-time is enabled, e.g. Spherical, SinhSpherical, Cylindrical, SinhCylindrical, or SinhCylindricalv2n2.""",
+    help="""Override the generated project's raytracing coordinate system when --raytracing-time is enabled.""",
 )
 parser.add_argument(
     "--raytracing-Nxx",
@@ -80,7 +87,7 @@ parser.add_argument(
     type=int,
     default=None,
     metavar=("NXX0", "NXX1", "NXX2"),
-    help="""Set the required base Nxx for the selected generated-project coordinate system, e.g. --raytracing-Nxx 124 412 2. Required with --raytracing-time. For spherical-like axisymmetric grids, the reduced angular direction is usually NXX2 == 2. For cylindrical-like axisymmetric grids, the reduced angular direction is NXX1 == 2.""",
+    help="""Override the tuned SinhCylindricalv2n2 base Nxx, e.g. --raytracing-Nxx 162 2 256. The reduced angular direction is NXX1 == 2.""",
 )
 parser.add_argument(
     "--raytracing-bhs",
@@ -142,7 +149,7 @@ project_name = "two_blackholes_collide"
 CoordSystem = (
     args.raytracing_coord_system
     if args.raytracing_coord_system is not None
-    else "Spherical"
+    else ("SinhCylindricalv2n2" if enable_raytracing_data_output else "Spherical")
 )
 IDtype = "BrillLindquist"
 IDCoordSystem = "Cartesian"
@@ -160,55 +167,42 @@ sinh_width_z = None
 rho_slope = None
 z_slope = None
 if enable_raytracing_data_output:
-    if args.raytracing_domain is None:
-        raise ValueError("--raytracing-domain is required with --raytracing-time.")
-
-    t_final = args.raytracing_time[0]
-    diagnostics_output_every = args.raytracing_time[1]
-    domain = list(args.raytracing_domain)
+    if len(args.raytracing_time) == 0:
+        t_final = DEFAULT_RAYTRACING_T_FINAL
+        diagnostics_output_every = DEFAULT_RAYTRACING_DIAGNOSTICS_OUTPUT_EVERY
+    elif len(args.raytracing_time) == 2:
+        t_final = args.raytracing_time[0]
+        diagnostics_output_every = args.raytracing_time[1]
+    else:
+        raise ValueError(
+            "--raytracing-time accepts either no values or "
+            "T_FINAL DIAGNOSTICS_OUTPUT_EVERY."
+        )
+    domain = (
+        list(args.raytracing_domain)
+        if args.raytracing_domain is not None
+        else list(DEFAULT_RAYTRACING_DOMAIN)
+    )
 
     if t_final <= 0.0:
         raise ValueError("--raytracing-time T_FINAL must be positive.")
     if diagnostics_output_every <= 0.0:
         raise ValueError("--raytracing-time DIAGNOSTICS_OUTPUT_EVERY must be positive.")
 
-    if CoordSystem in ("Spherical", "Cylindrical"):
-        if len(domain) != 1:
-            raise ValueError(
-                f"{CoordSystem} expects --raytracing-domain GRID_PHYSICAL_SIZE."
-            )
-        grid_physical_size = domain[0]
-    elif CoordSystem == "SinhSpherical":
-        if len(domain) != 2:
-            raise ValueError(
-                """SinhSpherical expects --raytracing-domain GRID_PHYSICAL_SIZE SINHW."""
-            )
-        grid_physical_size, sinh_width = domain
-    elif CoordSystem == "SinhCylindrical":
-        if len(domain) != 3:
-            raise ValueError(
-                """SinhCylindrical expects --raytracing-domain GRID_PHYSICAL_SIZE SINHWRHO SINHWZ."""
-            )
-        grid_physical_size, sinh_width_rho, sinh_width_z = domain
-    elif CoordSystem == "SinhCylindricalv2n2":
-        if len(domain) != 5:
-            raise ValueError(
-                """SinhCylindricalv2n2 expects --raytracing-domain GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE."""
-            )
-        (
-            grid_physical_size,
-            sinh_width_rho,
-            sinh_width_z,
-            rho_slope,
-            z_slope,
-        ) = domain
-    else:
-        raise ValueError(f"Unsupported raytracing coordinate system: {CoordSystem}")
+    if len(domain) != 5:
+        raise ValueError(
+            """SinhCylindricalv2n2 expects --raytracing-domain GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE."""
+        )
+    (
+        grid_physical_size,
+        sinh_width_rho,
+        sinh_width_z,
+        rho_slope,
+        z_slope,
+    ) = domain
 
     if grid_physical_size <= 0.0:
         raise ValueError("--raytracing-domain GRID_PHYSICAL_SIZE must be positive.")
-    if sinh_width is not None and sinh_width <= 0.0:
-        raise ValueError("--raytracing-domain SINHW must be positive.")
     if sinh_width_rho is not None and sinh_width_rho <= 0.0:
         raise ValueError("--raytracing-domain SINHWRHO must be positive.")
     if sinh_width_z is not None and sinh_width_z <= 0.0:
@@ -225,9 +219,7 @@ else:
 Nxx_dict = {
     "Spherical": [72, 12, 2],
     "SinhSpherical": [72, 12, 2],
-    "Cylindrical": [72, 2, 12],
-    "SinhCylindrical": [72, 2, 12],
-    "SinhCylindricalv2n2": [72, 2, 12],
+    "SinhCylindricalv2n2": list(DEFAULT_RAYTRACING_NXX),
     "Cartesian": [64, 64, 64],
     "GeneralRFM_fisheyeN1": [128, 128, 128],
     "GeneralRFM_fisheyeN2": [128, 128, 128],
@@ -238,13 +230,11 @@ if CoordSystem not in Nxx_dict:
         f"Choose one of {sorted(Nxx_dict)}."
     )
 if enable_raytracing_data_output:
-    if args.raytracing_nxx is None:
-        raise ValueError(
-            "--raytracing-Nxx NXX0 NXX1 NXX2 is required when "
-            "--raytracing-time is used."
-        )
-
-    nxx_override = list(args.raytracing_nxx)
+    nxx_override = (
+        list(args.raytracing_nxx)
+        if args.raytracing_nxx is not None
+        else list(DEFAULT_RAYTRACING_NXX)
+    )
     if any(nxx_value <= 0 for nxx_value in nxx_override):
         raise ValueError("--raytracing-Nxx values must all be positive.")
     Nxx_dict[CoordSystem] = nxx_override
@@ -642,30 +632,18 @@ if enable_raytracing_data_output:
     bh2_mass_name = _format_output_name_value(default_BH2_mass)
     nxx0, nxx1, nxx2 = Nxx_dict[CoordSystem]
 
-    domain_suffix = ""
-    if CoordSystem == "SinhSpherical":
-        assert sinh_width is not None
-        sinh_width_name = _format_output_name_value(sinh_width)
-        domain_suffix = f"sinhw_{sinh_width_name}_"
-    elif CoordSystem == "SinhCylindrical":
-        assert sinh_width_rho is not None
-        assert sinh_width_z is not None
-        sinh_width_rho_name = _format_output_name_value(sinh_width_rho)
-        sinh_width_z_name = _format_output_name_value(sinh_width_z)
-        domain_suffix = f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
-    elif CoordSystem == "SinhCylindricalv2n2":
-        assert sinh_width_rho is not None
-        assert sinh_width_z is not None
-        assert rho_slope is not None
-        assert z_slope is not None
-        sinh_width_rho_name = _format_output_name_value(sinh_width_rho)
-        sinh_width_z_name = _format_output_name_value(sinh_width_z)
-        rho_slope_name = _format_output_name_value(rho_slope)
-        z_slope_name = _format_output_name_value(z_slope)
-        domain_suffix = (
-            f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
-            f"rho-slope_{rho_slope_name}_z-slope_{z_slope_name}_"
-        )
+    assert sinh_width_rho is not None
+    assert sinh_width_z is not None
+    assert rho_slope is not None
+    assert z_slope is not None
+    sinh_width_rho_name = _format_output_name_value(sinh_width_rho)
+    sinh_width_z_name = _format_output_name_value(sinh_width_z)
+    rho_slope_name = _format_output_name_value(rho_slope)
+    z_slope_name = _format_output_name_value(z_slope)
+    domain_suffix = (
+        f"sinhwrho_{sinh_width_rho_name}_sinhwz_{sinh_width_z_name}_"
+        f"rho-slope_{rho_slope_name}_z-slope_{z_slope_name}_"
+    )
 
     raytracing_combined_bin_stem = f"{project_name}_{t_final_name}_{grid_physical_size_name}_{diagnostics_output_every_name}_z1_{bh1_z_name}_z2_{bh2_z_name}_M1_{bh1_mass_name}_M2_{bh2_mass_name}_{CoordSystem}_{domain_suffix}{nxx0}_{nxx1}_{nxx2}"
     raytracing_modes = (
