@@ -1410,6 +1410,38 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             if raytracing_data_mode == "GammaUDD"
             else ""
         )
+        rhs_gfs_initialization = (
+            r"""  const uint64_t Nxx_plus_2NGHOSTS_tot = raytracing_data_mul_u64_or_abort(
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)params->Nxx_plus_2NGHOSTS0,
+          (uint64_t)params->Nxx_plus_2NGHOSTS1,
+          "Nxx_plus_2NGHOSTS_tot"),
+      (uint64_t)params->Nxx_plus_2NGHOSTS2,
+      "Nxx_plus_2NGHOSTS_tot");
+  const uint64_t rhs_gfs_bytes_u64 = raytracing_data_mul_u64_or_abort(
+      raytracing_data_mul_u64_or_abort(
+          (uint64_t)NUM_EVOL_GFS, Nxx_plus_2NGHOSTS_tot, "rhs_gfs value count"),
+      (uint64_t)sizeof(REAL), "rhs_gfs byte count");
+  const size_t rhs_gfs_bytes = raytracing_data_size_t_from_u64_or_abort(
+      rhs_gfs_bytes_u64, "rhs_gfs byte count");
+  REAL *restrict rhs_gfs;
+  BHAH_MALLOC(rhs_gfs, rhs_gfs_bytes);
+  if (rhs_gfs == NULL)
+    raytracing_data_abort_with_message(
+        "Error: output_raytracing_data could not allocate rhs_gfs.");
+  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);
+  rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);
+"""
+            if raytracing_data_mode in ("g4DD_d0", "GammaUDD")
+            else ""
+        )
+        christoffel_count_write = (
+            r"""  raytracing_data_write_u32_or_abort(
+      fp, christoffel_component_count, "christoffel_component_count");
+"""
+            if raytracing_data_mode == "GammaUDD"
+            else ""
+        )
         body = rf"""
   if (commondata->NUMGRIDS != 1)
     raytracing_data_abort_with_message(
@@ -1597,7 +1629,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     exit(1);
   }} // END IF: fdopen failed
 
-{"  const uint64_t Nxx_plus_2NGHOSTS_tot = raytracing_data_mul_u64_or_abort(\n      raytracing_data_mul_u64_or_abort(\n          (uint64_t)params->Nxx_plus_2NGHOSTS0,\n          (uint64_t)params->Nxx_plus_2NGHOSTS1,\n          \"Nxx_plus_2NGHOSTS_tot\"),\n      (uint64_t)params->Nxx_plus_2NGHOSTS2,\n      \"Nxx_plus_2NGHOSTS_tot\");\n  const uint64_t rhs_gfs_bytes_u64 = raytracing_data_mul_u64_or_abort(\n      raytracing_data_mul_u64_or_abort(\n          (uint64_t)NUM_EVOL_GFS, Nxx_plus_2NGHOSTS_tot, \"rhs_gfs value count\"),\n      (uint64_t)sizeof(REAL), \"rhs_gfs byte count\");\n  const size_t rhs_gfs_bytes = raytracing_data_size_t_from_u64_or_abort(\n      rhs_gfs_bytes_u64, \"rhs_gfs byte count\");\n  REAL *restrict rhs_gfs;\n  BHAH_MALLOC(rhs_gfs, rhs_gfs_bytes);\n  if (rhs_gfs == NULL)\n    raytracing_data_abort_with_message(\n        \"Error: output_raytracing_data could not allocate rhs_gfs.\");\n  Ricci_eval(params, rfmstruct, y_n_gfs, auxevol_gfs);\n  rhs_eval(commondata, params, rfmstruct, auxevol_gfs, y_n_gfs, rhs_gfs);\n" if raytracing_data_mode in ("g4DD_d0", "GammaUDD") else ""}
+{rhs_gfs_initialization}
   double *restrict payload_buffer;
   BHAH_MALLOC(payload_buffer, point_records_bytes_size_t);
   if (payload_buffer == NULL) {{
@@ -1615,7 +1647,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   raytracing_data_write_u32_or_abort(fp, serialized_real_bytes, "serialized_real_bytes");
   raytracing_data_write_u32_or_abort(fp, record_component_count, "record_component_count");
   raytracing_data_write_u32_or_abort(fp, metric_component_count, "metric_component_count");
-{"  raytracing_data_write_u32_or_abort(\n      fp, christoffel_component_count, \"christoffel_component_count\");" if raytracing_data_mode == "GammaUDD" else ""}
+{christoffel_count_write}
   raytracing_data_write_u32_or_abort(fp, point_record_real_count, "point_record_real_count");
   raytracing_data_write_u32_or_abort(fp, point_record_bytes, "point_record_bytes");
   raytracing_data_write_u32_or_abort(
