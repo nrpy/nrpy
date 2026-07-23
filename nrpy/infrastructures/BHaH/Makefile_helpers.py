@@ -303,6 +303,9 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert 'CC ?= gcc' in content
         ...     assert 'OBJ_FILES = main.o' in content
         ...     assert 'all: project_name' in content
+        ...     makefile_lines = content.splitlines()
+        ...     clean_recipe = makefile_lines[makefile_lines.index('clean:') + 1]
+        ...     assert '*.out' in clean_recipe.split()
         ... finally:
         ...     # Clean up any created files
         ...     if Path('/tmp/nrpy_BHaH_Makefile_doctest1').exists():
@@ -378,7 +381,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
     # Clean target rule
     clean_rule = f"""# Use $(RM) to be cross-platform compatible.
 clean:
-\t$(RM) *.o */*.o */*/*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.avi *.png {final_exec_or_library_name}"""
+\t$(RM) *.o */*.o */*/*.o *~ */*~ */lib*.a ./#* *.txt *.gp *.dat *.out *.avi *.png {final_exec_or_library_name}"""
 
     # Step 5: Assemble and write the Makefile
     makefile_content = _construct_makefile_content(
