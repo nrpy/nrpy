@@ -5,7 +5,7 @@ Provides the C orchestrator for geometric event detection.
 This module provides the high-level logic for detecting crossings of the observer
 window and the source emission plane. It generates a C kernel that reads the current
 and historical integration state bundles from global device memory into local arrays
-to evaluate temporal explosion limits and celestial escape bounds before verifying
+to evaluate evolution-measure limits and coordinate-radius bounds before verifying
 physical plane intersections. The geometric boundaries remain mathematically immutable
 across all rendered tiles, ensuring consistent hit detection depth. The kernel calls
 downstream interpolation routines to resolve precise boundary crossing coordinates
@@ -21,17 +21,13 @@ import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
 
-def event_detection_manager_kernel() -> None:
-    """Define the configuration and parameters for the event_detection_manager global kernel."""
-    par.register_CodeParameters(
-        "REAL",
-        __name__,
-        ["p_t_max"],
-        [1e5],
-        commondata=True,
-        add_to_parfile=True,
-    )
+def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
+    """
+    Define the configuration and parameters for the event-detection kernel.
 
+    :param normalized_eom: Whether the state stores affine parameter in ``f[0]``
+        and coordinate time in the integration-parameter tracker.
+    """
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
 
@@ -43,9 +39,9 @@ def event_detection_manager_kernel() -> None:
         "d_f_bundle": "const double *restrict",
         "d_f_prev_bundle": "double *restrict",
         "d_f_pre_prev_bundle": "double *restrict",
-        "d_affine": "const double *restrict",
-        "d_affine_prev": "double *restrict",
-        "d_affine_pre_prev": "double *restrict",
+        "d_integration_param": "const double *restrict",
+        "d_integration_param_prev": "double *restrict",
+        "d_integration_param_pre_prev": "double *restrict",
         "d_results_buffer": "blueprint_data_t *restrict",
         "d_status_bundle": "termination_type_t *restrict",
         "d_on_pos_window_prev": "bool *restrict",
@@ -60,9 +56,9 @@ def event_detection_manager_kernel() -> None:
         "d_f_bundle": "const double *restrict",
         "d_f_prev_bundle": "double *restrict",
         "d_f_pre_prev_bundle": "double *restrict",
-        "d_affine": "const double *restrict",
-        "d_affine_prev": "double *restrict",
-        "d_affine_pre_prev": "double *restrict",
+        "d_integration_param": "const double *restrict",
+        "d_integration_param_prev": "double *restrict",
+        "d_integration_param_pre_prev": "double *restrict",
         "d_results_buffer": "blueprint_data_t *restrict",
         "d_status_bundle": "termination_type_t *restrict",
         "d_on_pos_window_prev": "bool *restrict",
@@ -83,6 +79,19 @@ def event_detection_manager_kernel() -> None:
     # Variables to handle architecture differences dynamically
     commondata_arg = "" if parallelization == "cuda" else ", commondata"
     pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
+    intersection_state_setup = (
+        """
+            double f_intersection[9];
+            for (int component = 0; component < 9; ++component) {
+                f_intersection[component] = f_int[component];
+            } // END LOOP: for component over event-state components
+            f_intersection[0] = event_integration_param;
+            const double physical_lambda = f_int[0];
+        """
+        if normalized_eom
+        else "const double physical_lambda = event_integration_param;"
+    )
+    intersection_state_name = "f_intersection" if normalized_eom else "f_int"
 
     if parallelization == "cuda":
         loop_preamble = """
@@ -117,15 +126,15 @@ def event_detection_manager_kernel() -> None:
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
-    // TEMPORAL EXPLOSION CHECK
+    // MODE-SPECIFIC EVOLUTION-MEASURE LIMIT CHECK
     //==========================================
-    // Reads $p_t$ directly from global memory to terminate doomed rays before register hydration.
-    const double p_t = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
+    // Direct evolution stores $p^0$ in f[4]; normalized evolution stores its log-energy measure.
+    const double energy_measure = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
 
-    if (AbsCUDA(p_t) > {cd_access}p_t_max) {{
-        d_status_bundle[i] = FAILURE_PT_TOO_BIG; // Flags the ray as a failure to halt integration.
+    if (AbsCUDA(energy_measure) > {cd_access}evolution_measure_max) {{
+        d_status_bundle[i] = FAILURE_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
         {escape_statement}
-    }} // END IF: temporal explosion limit exceeded
+    }} // END IF: mode-specific evolution-measure limit exceeded
 
     // Terminated photons cleanly bypass the geometric evaluation logic.
     if (d_status_bundle[i] != ACTIVE) {escape_statement}
@@ -142,10 +151,12 @@ def event_detection_manager_kernel() -> None:
         f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]); // Hydrates the pre-previous step state $f^\mu_{{n-2}}$.
     }} // END LOOP: for c over 9 tensor components
 
-    // Hydrates the affine parameter $\lambda$ dependencies directly from the discrete memory trackers.
-    const double lam_local = ReadCUDA(&d_affine[i]); // Hydrates the current affine parameter $\lambda_n$.
-    const double lam_p_local = ReadCUDA(&d_affine_prev[i]); // Hydrates the previous affine parameter $\lambda_{{n-1}}$.
-    const double lam_p_p_local = ReadCUDA(&d_affine_pre_prev[i]); // Hydrates the pre-previous affine parameter $\lambda_{{n-2}}$.
+    // Hydrate the event-interpolation parameter history.
+    const double integration_param_local = ReadCUDA(&d_integration_param[i]);
+    const double integration_param_prev_local =
+        ReadCUDA(&d_integration_param_prev[i]);
+    const double integration_param_pre_prev_local =
+        ReadCUDA(&d_integration_param_pre_prev[i]);
 
     const double x = f_local[1]; // Extracts the local Cartesian coordinate $x$.
     const double y = f_local[2]; // Extracts the local Cartesian coordinate $y$.
@@ -157,9 +168,9 @@ def event_detection_manager_kernel() -> None:
     // Evaluates if the photon has exceeded the coordinate escape radius $r_{{escape}}$.
     const double r_sq = x*x + y*y + z*z; // Computes the squared radial distance $r^2$ from the origin.
     if (r_sq > ({cd_access}r_escape * {cd_access}r_escape)) {{
-        d_status_bundle[i] = TERMINATION_TYPE_CELESTIAL_SPHERE; // Marks the ray as escaped.
+        d_status_bundle[i] = TERMINATION_TYPE_COORD_RADIUS_EXCEEDED; // Marks the coordinate-radius limit termination.
         {escape_statement}
-    }} // END IF: celestial escape radius exceeded
+    }} // END IF: coordinate-radius escape limit exceeded
 
     //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
@@ -193,14 +204,15 @@ def event_detection_manager_kernel() -> None:
 
         if (on_pos_win_curr != on_pos_win_prev) {{ // Triggers intersection event if the physical plane was crossed.
             double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
-            double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
-            find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, w_normal, w_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
+            double event_integration_param;
+            find_event_time_and_state(f_local, f_p_local, f_p_p_local, integration_param_local, integration_param_prev_local, integration_param_pre_prev_local, w_normal, w_dist, &event_integration_param, f_int);
+{intersection_state_setup}
 
             // Writes the physical intersection to the persistent master index array slot via global mapping.
             // The downstream function handle_window_plane_intersection safely handles mapping the global
             // spatial coordinates to the local tile offsets.
             // Window plane function call to pass commondata conditionally.
-            if (handle_window_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
+            if (handle_window_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
                 d_window_event_found[i] = true;
             }} // END IF: handle_window_plane_intersection succeeded
         }} // END IF: physical window plane was crossed
@@ -218,10 +230,11 @@ def event_detection_manager_kernel() -> None:
 
         if (on_pos_src_curr != on_pos_src_prev) {{ // Triggers intersection event if the plane was crossed.
             double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
-            double lam_event; // Interpolated affine parameter $\lambda$ of the exact boundary crossing.
-            find_event_time_and_state(f_local, f_p_local, f_p_p_local, lam_local, lam_p_local, lam_p_p_local, s_normal, s_dist, &lam_event, f_int); // Calculates the exact mathematical boundary crossing state.
+            double event_integration_param;
+            find_event_time_and_state(f_local, f_p_local, f_p_p_local, integration_param_local, integration_param_prev_local, integration_param_pre_prev_local, s_normal, s_dist, &event_integration_param, f_int);
+{intersection_state_setup}
             // Writes the physical intersection to the persistent master index array slot via global mapping.
-            if (handle_source_plane_intersection(f_int, lam_event, &d_results_buffer[master_idx]{commondata_arg})) {{
+            if (handle_source_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
                 d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE; // Marks the ray as terminated upon striking the source plane.
                 d_source_event_found[i] = true; // Locks the source intersection to prevent future overwrites.
             }} // END IF: handle_source_plane_intersection succeeded
@@ -234,8 +247,9 @@ def event_detection_manager_kernel() -> None:
     //==========================================
     // Memory bundles are updated only for active trajectories to stage the next RKF45 step.
     if (d_status_bundle[i] == ACTIVE) {{
-        WriteCUDA(&d_affine_pre_prev[i], lam_p_local); // Shifts the previous affine parameter $\lambda_{{n-1}}$ to the pre-previous slot $\lambda_{{n-2}}$.
-        WriteCUDA(&d_affine_prev[i], lam_local); // Shifts the current affine parameter $\lambda_n$ to the previous slot $\lambda_{{n-1}}$.
+        WriteCUDA(
+            &d_integration_param_pre_prev[i], integration_param_prev_local);
+        WriteCUDA(&d_integration_param_prev[i], integration_param_local);
         {pragma_unroll}
         for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components to shift the history.
             WriteCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)], f_p_local[c]); // Shifts the previous state $f^\mu_{{n-1}}$ to the pre-previous slot $f^\mu_{{n-2}}$.
@@ -279,9 +293,9 @@ def event_detection_manager_kernel() -> None:
     @param d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
     @param d_f_prev_bundle SoA pointer to the state array for step $f^\mu_{n-1}$.
     @param d_f_pre_prev_bundle SoA pointer to the state array for step $f^\mu_{n-2}$.
-    @param d_affine Pointer to the current affine parameter $\lambda_n$.
-    @param d_affine_prev Pointer to the history affine parameter $\lambda_{n-1}$.
-    @param d_affine_pre_prev Pointer to the history affine parameter $\lambda_{n-2}$.
+    @param d_integration_param Pointer to the current integration parameter.
+    @param d_integration_param_prev Pointer to the preceding integration parameter.
+    @param d_integration_param_pre_prev Pointer to the integration parameter two steps earlier.
     @param d_results_buffer Pointer to the flat array of blueprint data structures $b_i$.
     @param d_status_bundle Pointer to the array of termination statuses.
     @param d_on_pos_window_prev Array tracking the window plane side.
@@ -298,9 +312,9 @@ def event_detection_manager_kernel() -> None:
         "const double *restrict d_f_bundle, "
         "double *restrict d_f_prev_bundle, "
         "double *restrict d_f_pre_prev_bundle, "
-        "const double *restrict d_affine, "
-        "double *restrict d_affine_prev, "
-        "double *restrict d_affine_pre_prev, "
+        "const double *restrict d_integration_param, "
+        "double *restrict d_integration_param_prev, "
+        "double *restrict d_integration_param_pre_prev, "
         "blueprint_data_t *restrict d_results_buffer, "
         "termination_type_t *restrict d_status_bundle, "
         "bool *restrict d_on_pos_window_prev, "

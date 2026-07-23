@@ -1,5 +1,5 @@
 from . import (
-    batch_integrator_numerical,
+    batch_integrator_analytical,
     calculate_and_fill_blueprint_data_universal,
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
@@ -7,10 +7,15 @@ from . import (
     handle_source_plane_intersection,
     handle_window_plane_intersection,
     interpolation_kernel,
-    main,
+    main_batch,
+    main_single,
+    normalization_constraint_photon_normalized,
     p0_reverse_kernel,
+    photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
+    single_integrator_analytical,
+    single_integrator_numerical,
     time_slot_manager_helpers,
 )

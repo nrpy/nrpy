@@ -25,13 +25,21 @@ import nrpy.params as par
 from nrpy.helpers.loop import loop
 
 
-def calculate_and_fill_blueprint_data_universal() -> None:
-    """Compute the universal blueprint data for escaped photon trajectories."""
+def calculate_and_fill_blueprint_data_universal(
+    normalized_eom: bool = False,
+) -> None:
+    """
+    Compute universal blueprint data for photon trajectories.
+
+    :param normalized_eom: Whether coordinate time is stored in the
+        integration-parameter tracker instead of state slot ``f[0]``.
+    """
     kernel_name = "calculate_and_fill_blueprint_data_universal_kernel"
     parallelization = par.parval_from_str("parallelization")
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
+        "d_integration_param_bundle": "const double *restrict",
         "d_status_bundle": "const termination_type_t *restrict",
         "d_result_bundle": "blueprint_data_t *restrict",
         "current_chunk_size": "const long int",
@@ -39,6 +47,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
 
     arg_dict_host = {
         "d_f_bundle": "const double *restrict",
+        "d_integration_param_bundle": "const double *restrict",
         "d_status_bundle": "const termination_type_t *restrict",
         "d_result_bundle": "blueprint_data_t *restrict",
         "current_chunk_size": "const long int",
@@ -67,6 +76,18 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     """
         loop_postamble = "    } // END LOOP: for c over current_chunk_size"
 
+    terminal_state_assignment = (
+        r"""
+        d_result_bundle[c].t_f = d_integration_param_bundle[c];
+        d_result_bundle[c].L_f = d_f_bundle[IDX_LOCAL(0, c, BUNDLE_CAPACITY)];
+"""
+        if normalized_eom
+        else r"""
+        d_result_bundle[c].t_f = d_f_bundle[IDX_LOCAL(0, c, BUNDLE_CAPACITY)];
+        d_result_bundle[c].L_f = d_integration_param_bundle[c];
+"""
+    )
+
     core_math = r"""
     //==========================================
     // MACRO DEFINITIONS
@@ -84,10 +105,19 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     d_result_bundle[c].termination_type = d_status_bundle[c]; // Stores final termination state.
 
     //==========================================
+    // TERMINATION STATE RECORD
+    //==========================================
+    // Preserve the exact interpolated source-plane termination event already stored in
+    // the blueprint. All other termination modes record the final evolved state.
+    if (d_status_bundle[c] != TERMINATION_TYPE_SOURCE_PLANE) {
+{terminal_state_assignment}
+    } // END IF: termination did not already store an exact source-plane event
+
+    //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
     //==========================================
     // === Termination Dispatch: Celestial Sphere (Escape) ===
-    if (d_status_bundle[c] == TERMINATION_TYPE_CELESTIAL_SPHERE) {
+    if (d_status_bundle[c] == TERMINATION_TYPE_COORD_RADIUS_EXCEEDED) {
         // Unpack final coordinates from the bundled state vector $f^mu$ in memory.
         const double x_final = d_f_bundle[IDX_LOCAL(1, c, BUNDLE_CAPACITY)]; // Photon $x$-coordinate.
         const double y_final = d_f_bundle[IDX_LOCAL(2, c, BUNDLE_CAPACITY)]; // Photon $y$-coordinate.
@@ -102,8 +132,8 @@ def calculate_and_fill_blueprint_data_universal() -> None:
         // Map the Cartesian escape coordinates to the celestial sphere.
         d_result_bundle[c].final_theta = acos(z_final / r_final); // Polar angle $\theta$ relative to the $z$-axis.
         d_result_bundle[c].final_phi = atan2(y_final, x_final);   // Azimuthal angle $\phi$ in the $x$-$y$ plane.
-    } // END IF: d_status_bundle[c] == TERMINATION_TYPE_CELESTIAL_SPHERE
-    """
+    } // END IF: d_status_bundle[c] == TERMINATION_TYPE_COORD_RADIUS_EXCEEDED
+    """.replace("{terminal_state_assignment}", terminal_state_assignment)
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
@@ -136,6 +166,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     if parallelization == "cuda":
         memcpy_status = "cudaMemcpy(d_status_bundle, all_photons->status + start_idx, sizeof(termination_type_t) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_f = "cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);"
+        memcpy_integration_param = "cudaMemcpy(d_integration_param_bundle, all_photons->integration_param + start_idx, sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_result_in = "cudaMemcpy(d_result_bundle, result + start_idx, sizeof(blueprint_data_t) * current_chunk_size, cudaMemcpyHostToDevice);"
         memcpy_result_out = "cudaMemcpy(result + start_idx, d_result_bundle, sizeof(blueprint_data_t) * current_chunk_size, cudaMemcpyDeviceToHost);"
         transfer_comment_in = "//==========================================\n        // ASYNC MEMORY TRANSFER (HOST TO DEVICE)\n        //=========================================="
@@ -143,6 +174,7 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     else:
         memcpy_status = "memcpy(d_status_bundle, all_photons->status + start_idx, sizeof(termination_type_t) * current_chunk_size);"
         memcpy_f = "memcpy(d_f_bundle + (m * BUNDLE_CAPACITY), all_photons->f + (m * num_rays) + start_idx, sizeof(double) * current_chunk_size);"
+        memcpy_integration_param = "memcpy(d_integration_param_bundle, all_photons->integration_param + start_idx, sizeof(double) * current_chunk_size);"
         memcpy_result_in = "memcpy(d_result_bundle, result + start_idx, sizeof(blueprint_data_t) * current_chunk_size);"
         memcpy_result_out = "memcpy(result + start_idx, d_result_bundle, sizeof(blueprint_data_t) * current_chunk_size);"
         transfer_comment_in = "//==========================================\n        // MEMORY TRANSFER (HOST TO STAGING BUFFER)\n        //=========================================="
@@ -160,6 +192,9 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     for(int m=0; m<9; m++) {{ // Iterate over the 9 components of the $f^mu$ state vector.
         {memcpy_f} // Transfer of $f^mu$.
     }} // END LOOP: for m over 9 components of f^mu state vector
+
+    // Transfer the final integration parameters for the current bundle.
+    {memcpy_integration_param}
 
     // Pre-load existing results to prevent overwriting valid memory with garbage during the subsequent transfer.
     {memcpy_result_in} // Transfer of previous results.
@@ -198,10 +233,18 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     1. Allocates staging buffers for state vectors, status, and results.
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
     3. Transfers data, computes projections, and transfers results back.
-    4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays."""
+    4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays.
+    5. Optionally writes one raw double per photon to the normalization sidecar."""
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
-    params = "const PhotonStateSoA *restrict all_photons, const long int num_rays, blueprint_data_t *restrict result, const int stream_idx"
+    params = (
+        "const PhotonStateSoA *restrict all_photons, "
+        "const long int num_rays, "
+        "blueprint_data_t *restrict result, "
+        "const double *restrict normalization_abs_by_ray, "
+        "const char *restrict norm_abs_bin_path, "
+        "const int stream_idx"
+    )
     include_CodeParameters_h = False
     body = f"""
     //==========================================
@@ -209,10 +252,12 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     //==========================================
     // Pointers for the bundled data processing.
     double *d_f_bundle; // Buffer for state vector $f^mu$.
+    double *d_integration_param_bundle; // Buffer for integration parameter.
     termination_type_t *d_status_bundle; // Buffer for photon termination status.
     blueprint_data_t *d_result_bundle; // Buffer for calculated blueprint data.
 
     BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^mu$ buffer.
+    BHAH_MALLOC_DEVICE(d_integration_param_bundle, sizeof(double) * BUNDLE_CAPACITY); // Allocate integration-parameter buffer.
     BHAH_MALLOC_DEVICE(d_status_bundle, sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status buffer.
     BHAH_MALLOC_DEVICE(d_result_bundle, sizeof(blueprint_data_t) * BUNDLE_CAPACITY); // Allocate results buffer.
 
@@ -225,14 +270,47 @@ def calculate_and_fill_blueprint_data_universal() -> None:
     // BUFFER CLEANUP
     //==========================================
     BHAH_FREE_DEVICE(d_f_bundle); // Free $f^mu$ buffer.
+    BHAH_FREE_DEVICE(d_integration_param_bundle); // Free integration-parameter buffer.
     BHAH_FREE_DEVICE(d_status_bundle); // Free status buffer.
     BHAH_FREE_DEVICE(d_result_bundle); // Free results buffer.
+    
+    if (normalization_abs_by_ray == NULL || norm_abs_bin_path == NULL ||
+        norm_abs_bin_path[0] == '\\0') {{
+        return;
+    }} // END IF: normalization sidecar inputs are absent
+
+    FILE *restrict norm_abs_file = fopen(norm_abs_bin_path, "wb");
+    if (norm_abs_file == NULL) {{
+        fprintf(stderr,
+                "ERROR: Could not open normalization sidecar '%s' for writing.\\n",
+                norm_abs_bin_path);
+        exit(1);
+    }} // END IF: failed to open normalization sidecar path
+
+    const size_t num_written = fwrite(
+        normalization_abs_by_ray, sizeof(double), (size_t)num_rays, norm_abs_file);
+    if (num_written != (size_t)num_rays) {{
+        fprintf(stderr,
+                "ERROR: Failed to write normalization sidecar '%s'; wrote %zu of %ld records.\\n",
+                norm_abs_bin_path,
+                num_written,
+                num_rays);
+        fclose(norm_abs_file);
+        exit(1);
+    }} // END IF: normalization sidecar write count mismatched
+
+    if (fclose(norm_abs_file) != 0) {{
+        fprintf(stderr,
+                "ERROR: Could not close normalization sidecar '%s' after writing.\\n",
+                norm_abs_bin_path);
+        exit(1);
+    }} // END IF: normalization sidecar close failed
     """
 
     # Step 8: Function Registration
     cfc.register_CFunction(
         prefunc=prefunc,
-        includes=includes,
+        includes=includes + ["<stdio.h>", "<stdlib.h>"],
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

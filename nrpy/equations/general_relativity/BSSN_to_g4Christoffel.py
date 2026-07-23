@@ -207,6 +207,18 @@ class BSSN_to_g4Christoffel:
             self.g4DD_dD[0][i + 1][0] = self.betaDd0[i]
             self.g4DD_dD[i + 1][0][0] = self.betaDd0[i]
 
+        # Step 6.g: Construct the static-spacetime metric derivatives by
+        #           retaining all spatial derivatives and removing only the
+        #           coordinate-time derivatives.
+        self.g4DD_dD_static = ixp.zerorank3(dimension=4)
+        for mu in range(4):
+            for nu in range(4):
+                for derivative_direction in range(4):
+                    self.g4DD_dD_static[mu][nu][derivative_direction] = self.g4DD_dD[
+                        mu
+                    ][nu][derivative_direction]
+                self.g4DD_dD_static[mu][nu][0] = sp.sympify(0)
+
         # Step 7.a: Construct ADM-reduced helper contractions for the
         #           four-Christoffel symbols.
         self.KUD = ixp.zerorank2()
@@ -270,6 +282,27 @@ class BSSN_to_g4Christoffel:
                         + self.betaU[i] * self.KDD[j][k] / self.alpha
                     )
 
+        # Step 7.c: Construct static-spacetime Christoffel symbols directly
+        #           from the static metric derivatives. The dynamic symbols
+        #           above intentionally retain their compact ADM expressions.
+        self.Gamma4UDD_static = ixp.zerorank3(dimension=4)
+        for alpha in range(4):
+            for mu in range(4):
+                for nu in range(mu, 4):
+                    term = sp.sympify(0)
+                    for beta in range(4):
+                        term += (
+                            sp.Rational(1, 2)
+                            * self.g4UU[alpha][beta]
+                            * (
+                                self.g4DD_dD_static[beta][nu][mu]
+                                + self.g4DD_dD_static[beta][mu][nu]
+                                - self.g4DD_dD_static[mu][nu][beta]
+                            )
+                        )
+                    self.Gamma4UDD_static[alpha][mu][nu] = term
+                    self.Gamma4UDD_static[alpha][nu][mu] = term
+
 
 if __name__ == "__main__":
     import doctest
@@ -304,8 +337,10 @@ if __name__ == "__main__":
             "g4DD": bssn_to_g4christoffel.g4DD,
             "g4UU": bssn_to_g4christoffel.g4UU,
             "g4DD_dD": bssn_to_g4christoffel.g4DD_dD,
+            "g4DD_dD_static": bssn_to_g4christoffel.g4DD_dD_static,
             "gammaDDd0": bssn_to_g4christoffel.gammaDDd0,
             "Gamma4UDD": bssn_to_g4christoffel.Gamma4UDD,
+            "Gamma4UDD_static": bssn_to_g4christoffel.Gamma4UDD_static,
         }
         results_dict = ve.process_dictionary_of_expressions(
             results_dict, fixed_mpfs_for_free_symbols=True

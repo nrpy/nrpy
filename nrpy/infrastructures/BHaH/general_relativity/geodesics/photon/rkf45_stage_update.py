@@ -8,9 +8,11 @@ numerical spacetimes. The step size is loaded into local variables, minimizing r
 memory accesses during the 9-component tensor loop. The implementation explicitly
 branches based on the RKF45 stage index, bypassing stage 6 to ensure OpenMP compliance.
 It utilizes fused multiply-add intrinsics to calculate the intermediate Runge-Kutta
-stages, ensuring exact IEEE 754 rounding behavior. Finally, writing the calculated
-update directly to memory enforces the split-pipeline communication constraint required
-for the architecture.
+stages, ensuring exact IEEE 754 rounding behavior. The update operates on the
+mode-independent nine-component photon state: direct geodesic and normalized
+evolution choose their state interpretation when generating the RHS. Finally,
+writing the calculated update directly to memory enforces the split-pipeline
+communication constraint required for the architecture.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -25,9 +27,9 @@ def rkf45_stage_update() -> None:
     r"""
     Orchestrates the global memory kernel for RKF45 intermediate stage updates.
 
-    The kernel reads the base state $f_{start}$ and the computed derivative vectors $k^{\mu}$
-    from memory bundles, applies the Butcher Tableau coefficients, and writes the
-    resulting temporary state $f_{temp}$ back to memory for the next interpolation step.
+    The kernel reads the base nine-component state and its computed derivative
+    vectors from memory bundles, applies the Butcher Tableau coefficients, and
+    writes the resulting temporary state for the next interpolation step.
     """
     parallelization = par.parval_from_str("parallelization")
 
@@ -76,10 +78,10 @@ def rkf45_stage_update() -> None:
     //==========================================
     // MACRO DEFINITIONS FOR BUNDLE ACCESS
     //==========================================
-    // Mapping function for the state bundle layout $f^{\mu}$.
+    // Mapping function for the mode-independent nine-component state bundle.
     #define IDX_F(c, ray_id) ((c) * BUNDLE_CAPACITY + (ray_id))
 
-    // Mapping function for the derivative bundle layout $k^{\mu}$.
+    // Mapping function for the RKF45 derivative bundle.
     #define IDX_K(s, c, ray_id) ((s) * 9 * BUNDLE_CAPACITY + (c) * BUNDLE_CAPACITY + (ray_id))
 
     //==========================================
@@ -101,8 +103,8 @@ def rkf45_stage_update() -> None:
             // Load the base state component $f_{start}$ from memory.
             const double f_n = ReadCUDA(&d_f_start[IDX_F(comp, i)]); // Component of the base state $f_{start}$.
 
-            // Accumulator for the intermediate update step $f_{temp}$.
-            double update_val = 0.0; // Accumulates the stage update $k^{\mu}$ contributions.
+            // Accumulator for the intermediate state update.
+            double update_val = 0.0; // Accumulates weighted stage derivatives.
 
             // Apply coefficients based on the current RKF45 stage.
             switch (stage) {
@@ -181,12 +183,12 @@ def rkf45_stage_update() -> None:
 
     desc = r""" Orchestrates the memory kernel for RKF45 intermediate stage updates.
 
-    @param d_f_start Pointer to the base state bundle ($f_{start}$) in memory.
-    @param d_k_bundle Pointer to the flattened derivative array $k^{\mu}$ in memory.
+    @param d_f_start Pointer to the base nine-component state bundle in memory.
+    @param d_k_bundle Pointer to the flattened RKF45 derivative bundle.
     @param d_h Pointer to the step size array $h$ in memory.
     @param stage The current RKF45 stage index ($1-6$).
     @param chunk_size The number of active rays in the current bundle.
-    @param d_f_temp Pointer to the destination bundle for the intermediate state ($f_{temp}$).
+    @param d_f_temp Pointer to the destination bundle for the intermediate state.
     @param stream_idx The active execution stream identifier.
     """
 

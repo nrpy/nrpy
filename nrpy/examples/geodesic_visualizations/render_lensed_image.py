@@ -12,7 +12,6 @@ Author: Dalton J. Moone
 """
 
 import os
-import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Callable, List, Optional, Tuple, TypeVar, Union
 
@@ -43,11 +42,29 @@ except ImportError:
 import numpy as np
 import numpy.typing as npt
 
-import nrpy.examples.geodesic_visualizations.blueprint_config_and_schema as cfg
+try:
+    import blueprint_config_and_schema as cfg  # type: ignore
+    import blueprint_io  # type: ignore
+except ImportError:
+    from nrpy.examples.geodesic_visualizations import blueprint_config_and_schema as cfg
+    from nrpy.examples.geodesic_visualizations import blueprint_io
 
 # Global variables for zero-copy memory sharing across process workers
 _WORKER_SOURCE_TEX: Optional[npt.NDArray[np.float64]] = None
 _WORKER_SPHERE_TEX: Optional[npt.NDArray[np.float64]] = None
+
+# Fixed high-contrast colors for opt-in termination diagnostics.
+DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
+    (
+        cfg.TERM_EVOLUTION_MEASURE_EXCEEDED,
+        "TERM_EVOLUTION_MEASURE_EXCEEDED",
+        (255, 0, 0),
+    ),
+    (cfg.TERM_RKF45_REJECTION_LIMIT, "TERM_RKF45_REJECTION_LIMIT", (255, 0, 168)),
+    (cfg.TERM_T_MAX_EXCEEDED, "TERM_T_MAX_EXCEEDED", (255, 122, 0)),
+    (cfg.TERM_SLOT_MANAGER_ERROR, "TERM_SLOT_MANAGER_ERROR", (182, 255, 0)),
+    (cfg.TERM_FAILURE, "TERM_FAILURE", (0, 229, 255)),
+)
 
 
 def _init_worker(
@@ -63,6 +80,9 @@ def _init_worker(
 
 def _load_texture(
     image_input: Union[str, npt.NDArray[np.float64]],
+    warn_if_not_png: bool = False,
+    center_crop_to_square: bool = False,
+    warn_if_non_equirectangular: bool = False,
 ) -> npt.NDArray[np.float64]:
     """
     Load and normalize textures into float64 arrays.
@@ -80,6 +100,10 @@ def _load_texture(
     TypeError: Image input must be a file path (str) or a NumPy array.
 
     :param image_input: A file path (str) or a NumPy array to be loaded.
+    :param warn_if_not_png: Whether to print a warning if the provided path is not a PNG.
+    :param center_crop_to_square: Whether to center-crop a loaded file image to a square.
+    :param warn_if_non_equirectangular: Whether to warn when a loaded file image is not
+        approximately 2:1 in aspect ratio.
     :return: A float64 NumPy array normalized to the [0.0, 1.0] range.
     :raises FileNotFoundError: Raised if the provided file path does not exist.
     :raises TypeError: Raised if the input is not a string or NumPy array.
@@ -87,17 +111,75 @@ def _load_texture(
     if isinstance(image_input, str):
         if not os.path.exists(image_input):
             raise FileNotFoundError(f"Texture file not found: {image_input}")
+        if warn_if_not_png and not image_input.lower().endswith(".png"):
+            print(
+                f"WARNING: Custom texture path '{image_input}' does not end in '.png'. Attempting to load it anyway."
+            )
         # pylint: disable=import-outside-toplevel, import-error
         from PIL import Image
 
         with Image.open(image_input) as img:
-            return np.array(img.convert("RGB")).astype(np.float64) / 255.0
+            texture_array = np.array(img.convert("RGB")).astype(np.float64)
+
+        if center_crop_to_square:
+            texture_array = _center_crop_texture_to_square(texture_array, image_input)
+        if warn_if_non_equirectangular:
+            _warn_if_texture_not_equirectangular(texture_array, image_input)
+        return texture_array / 255.0
     if isinstance(image_input, np.ndarray):
         texture_array = image_input.astype(np.float64)
         if np.max(texture_array) > 1.0:
             texture_array /= 255.0  # Normalize if input is 0-255
         return texture_array
     raise TypeError("Image input must be a file path (str) or a NumPy array.")
+
+
+def _center_crop_texture_to_square(
+    texture_array: npt.NDArray[np.float64], texture_path: str
+) -> npt.NDArray[np.float64]:
+    """
+    Center-crop a texture to a square using the smaller image dimension.
+
+    :param texture_array: The RGB image data to crop.
+    :param texture_path: Path used only for warning context.
+    :return: The original array if already square, otherwise a centered square crop.
+    """
+    texture_height = texture_array.shape[0]
+    texture_width = texture_array.shape[1]
+    if texture_height == texture_width:
+        return texture_array
+
+    print(
+        f"WARNING: Custom source image '{texture_path}' is {texture_width}x{texture_height}; center-cropping to a square."
+    )
+    cropped_size = min(texture_height, texture_width)
+
+    if texture_width > texture_height:
+        left = (texture_width - cropped_size) // 2
+        right = left + cropped_size
+        return texture_array[:, left:right, :]
+
+    top = (texture_height - cropped_size) // 2
+    bottom = top + cropped_size
+    return texture_array[top:bottom, :, :]
+
+
+def _warn_if_texture_not_equirectangular(
+    texture_array: npt.NDArray[np.float64], texture_path: str
+) -> None:
+    """
+    Warn if a texture does not appear approximately equirectangular.
+
+    :param texture_array: The RGB image data to inspect.
+    :param texture_path: Path used only for warning context.
+    """
+    texture_height = texture_array.shape[0]
+    texture_width = texture_array.shape[1]
+    aspect_ratio = texture_width / texture_height
+    if not np.isclose(aspect_ratio, 2.0, rtol=0.05, atol=0.05):
+        print(
+            f"WARNING: Custom celestial sphere image '{texture_path}' is {texture_width}x{texture_height}; expected an approximately 2:1 texture."
+        )
 
 
 def generate_source_disk_array(
@@ -159,21 +241,58 @@ def generate_source_disk_array(
     return final_colors
 
 
+@nb.njit(inline="always", nogil=True, fastmath=True)  # type: ignore
+def pixel_indices_from_ordinal(
+    ordinal: int,
+    tile_x: int,
+    tile_y: int,
+    scan_density: int,
+    tiles_width: int,
+    tiles_height: int,
+    output_pixel_width: int,
+    output_pixel_height: int,
+) -> Tuple[int, int]:
+    """
+    Map one dense launch-ray ordinal to a center-preserving output pixel.
+
+    :param ordinal: Tile-local row-major ray ordinal.
+    :param tile_x: Horizontal tile index.
+    :param tile_y: Vertical tile index.
+    :param scan_density: Rays per tile side.
+    :param tiles_width: Number of tiles across the complete window.
+    :param tiles_height: Number of tiles down the complete window.
+    :param output_pixel_width: Width of the output image.
+    :param output_pixel_height: Height of the output image.
+    :return: ``(pixel_x, pixel_y)`` in output-image coordinates.
+    """
+    local_row = ordinal // scan_density
+    local_col = ordinal % scan_density
+    global_x = tile_x * scan_density + local_col
+    global_y = tile_y * scan_density + local_row
+    total_width = tiles_width * scan_density
+    total_height = tiles_height * scan_density
+    pixel_x = ((2 * global_x + 1) * output_pixel_width) // (2 * total_width)
+    pixel_y = (
+        output_pixel_height
+        - 1
+        - (((2 * global_y + 1) * output_pixel_height) // (2 * total_height))
+    )
+    return pixel_x, pixel_y
+
+
 @nb.njit(nogil=True, fastmath=True)  # type: ignore
 def _accumulate_ray_hits_jit(
-    rays_y_w: npt.NDArray[np.float64],
-    rays_z_w: npt.NDArray[np.float64],
     rays_term_type: npt.NDArray[np.int32],
     rays_y_s: npt.NDArray[np.float64],
     rays_z_s: npt.NDArray[np.float64],
     rays_phi: npt.NDArray[np.float64],
     rays_theta: npt.NDArray[np.float64],
-    y_w_min: float,
-    y_w_max: float,
-    z_w_min: float,
-    z_w_max: float,
-    window_y_range: float,
-    window_z_range: float,
+    record_start: int,
+    tile_x: int,
+    tile_y: int,
+    scan_density: int,
+    tiles_width: int,
+    tiles_height: int,
     output_pixel_width: int,
     output_pixel_height: int,
     source_image_width: float,
@@ -181,8 +300,12 @@ def _accumulate_ray_hits_jit(
     sphere_tex: npt.NDArray[np.float64],
     local_pixel_acc: npt.NDArray[np.float64],
     local_count_acc: npt.NDArray[np.int32],
+    local_debug_term_types: npt.NDArray[np.int8],
     term_source: int,
     term_sphere: int,
+    term_evolution_measure: int,
+    term_fail_generic: int,
+    enable_debug: bool,
 ) -> None:
     # JIT-compiled core math loop for mapping rays to pixels.
     # Bypasses the GIL and executes in optimized machine code.
@@ -192,18 +315,17 @@ def _accumulate_ray_hits_jit(
     sphere_h = sphere_tex.shape[0]
     sphere_w = sphere_tex.shape[1]
 
-    for i, y_w in enumerate(rays_y_w):
-        z_w = rays_z_w[i]
-
-        # Filter out rays that don't hit the camera window bounds
-        if not (y_w_min <= y_w < y_w_max and z_w_min <= z_w < z_w_max):
-            continue
-
-        # Convert local window coordinates to discrete pixel indices
-        px = int((y_w - y_w_min) / window_y_range * (output_pixel_width - 1))
-        py = int((z_w_max - z_w) / window_z_range * (output_pixel_height - 1))
-
-        term = rays_term_type[i]
+    for i, term in enumerate(rays_term_type):
+        px, py = pixel_indices_from_ordinal(
+            record_start + i,
+            tile_x,
+            tile_y,
+            scan_density,
+            tiles_width,
+            tiles_height,
+            output_pixel_width,
+            output_pixel_height,
+        )
 
         # --- CASE 1: Source Plane Hits (Accretion Disk) ---
         if term == term_source:
@@ -242,26 +364,32 @@ def _accumulate_ray_hits_jit(
             local_pixel_acc[py, px, 2] += sphere_tex[py_sph, px_sph, 2]
             local_count_acc[py, px] += 1
 
+        # Preserve requested integration failures for the opt-in debug overlay.
+        if (
+            enable_debug
+            and term_evolution_measure <= term <= term_fail_generic
+            and term < local_debug_term_types[py, px]
+        ):
+            local_debug_term_types[py, px] = term
+
 
 def _process_blueprint_tile(
-    zip_filename: str,
-    chunk_bytes: int,
-    y_w_min: float,
-    y_w_max: float,
-    z_w_min: float,
-    z_w_max: float,
-    window_y_range: float,
-    window_z_range: float,
+    blueprint_filename: str,
+    chunk_records: int,
     output_pixel_width: int,
     output_pixel_height: int,
     source_image_width: float,
+    enable_debug: bool,
 ) -> Tuple[
     npt.NDArray[np.int64],
     npt.NDArray[np.int64],
     npt.NDArray[np.float32],
     npt.NDArray[np.int32],
+    npt.NDArray[np.int64],
+    npt.NDArray[np.int64],
+    npt.NDArray[np.int8],
 ]:
-    # Worker function to process a blueprint tile archive and return sparse arrays.
+    # Worker function to process one native blueprint tile and return sparse arrays.
     # Reads binary chunks, passes arrays to the JIT-compiled math function,
     # and compresses the result to avoid IPC memory overhead.
     if _WORKER_SOURCE_TEX is None or _WORKER_SPHERE_TEX is None:
@@ -276,45 +404,44 @@ def _process_blueprint_tile(
     local_count_acc = np.zeros(
         (output_pixel_height, output_pixel_width), dtype=np.int32
     )
+    if enable_debug:
+        local_debug_term_types = np.full(
+            (output_pixel_height, output_pixel_width),
+            cfg.TERM_ACTIVE,
+            dtype=np.int8,
+        )
+    else:
+        local_debug_term_types = np.empty((0, 0), dtype=np.int8)
 
-    with zipfile.ZipFile(zip_filename, "r") as zf:
-        bin_files = [name for name in zf.namelist() if name.endswith(".bin")]
-        if not bin_files:
-            return np.array([]), np.array([]), np.array([]), np.array([])
-
-        with zf.open(bin_files[0], "r") as f:
-            while True:
-                raw_bytes = f.read(chunk_bytes)
-                if not raw_bytes:
-                    break
-
-                chunk_data = np.frombuffer(raw_bytes, dtype=cfg.BLUEPRINT_DTYPE)
-
-                # Pass 1D slices of the structured array to the JIT compiler
-                _accumulate_ray_hits_jit(
-                    chunk_data["y_w"],
-                    chunk_data["z_w"],
-                    chunk_data["termination_type"],
-                    chunk_data["y_s"],
-                    chunk_data["z_s"],
-                    chunk_data["final_phi"],
-                    chunk_data["final_theta"],
-                    y_w_min,
-                    y_w_max,
-                    z_w_min,
-                    z_w_max,
-                    window_y_range,
-                    window_z_range,
-                    output_pixel_width,
-                    output_pixel_height,
-                    source_image_width,
-                    _WORKER_SOURCE_TEX,
-                    _WORKER_SPHERE_TEX,
-                    local_pixel_acc,
-                    local_count_acc,
-                    cfg.TERM_SOURCE_PLANE,
-                    cfg.TERM_SPHERE,
-                )
+    for header, record_start, chunk_data in blueprint_io.iter_blueprint_chunks(
+        blueprint_filename, chunk_records
+    ):
+        _accumulate_ray_hits_jit(
+            chunk_data["termination_type"],
+            chunk_data["y_s"],
+            chunk_data["z_s"],
+            chunk_data["final_phi"],
+            chunk_data["final_theta"],
+            record_start,
+            header.tile_x,
+            header.tile_y,
+            header.scan_density,
+            header.tiles_width,
+            header.tiles_height,
+            output_pixel_width,
+            output_pixel_height,
+            source_image_width,
+            _WORKER_SOURCE_TEX,
+            _WORKER_SPHERE_TEX,
+            local_pixel_acc,
+            local_count_acc,
+            local_debug_term_types,
+            cfg.TERM_SOURCE_PLANE,
+            cfg.TERM_COORD_RADIUS_EXCEEDED,
+            cfg.TERM_EVOLUTION_MEASURE_EXCEEDED,
+            cfg.TERM_FAILURE,
+            enable_debug,
+        )
 
     # --- SPARSE MAP-REDUCE COMPRESSION ---
     # Downcast the output payload to float32 only AFTER the float64 math is done
@@ -323,7 +450,66 @@ def _process_blueprint_tile(
     flat_colors = local_pixel_acc[hit_mask].astype(np.float32)
     flat_counts = local_count_acc[hit_mask]
 
-    return flat_y, flat_x, flat_colors, flat_counts
+    if enable_debug:
+        debug_mask = local_debug_term_types < cfg.TERM_ACTIVE
+        debug_flat_y, debug_flat_x = np.nonzero(debug_mask)
+        debug_flat_term_types = local_debug_term_types[debug_mask]
+    else:
+        debug_flat_y = np.array([], dtype=np.int64)
+        debug_flat_x = np.array([], dtype=np.int64)
+        debug_flat_term_types = np.array([], dtype=np.int8)
+
+    return (
+        flat_y,
+        flat_x,
+        flat_colors,
+        flat_counts,
+        debug_flat_y,
+        debug_flat_x,
+        debug_flat_term_types,
+    )
+
+
+def _add_debug_legend(img: "Image.Image") -> None:  # type: ignore[name-defined]
+    """
+    Add the fixed failure-color key in the image's bottom-right corner.
+
+    :param img: Image receiving the failure-color legend.
+    """
+    # pylint: disable=import-outside-toplevel, import-error
+    from PIL import ImageDraw, ImageFont
+
+    draw = ImageDraw.Draw(img)
+    font = ImageFont.load_default()
+    padding = 4
+    swatch_size = 8
+    line_height = 11
+    labels = [failure_info[1] for failure_info in DEBUG_FAILURE_INFO]
+    text_width = max(int(draw.textlength(label, font=font)) for label in labels)
+    legend_width = 3 * padding + swatch_size + text_width
+    legend_height = 2 * padding + line_height * len(DEBUG_FAILURE_INFO)
+    left = max(0, img.width - legend_width - padding)
+    top = max(0, img.height - legend_height - padding)
+
+    # Draw last so the key is visually distinct from ray-traced pixels.
+    draw.rectangle((left, top, img.width - 1, img.height - 1), fill=(0, 0, 0))
+    for index, (_, label, color) in enumerate(DEBUG_FAILURE_INFO):
+        y_coord = top + padding + index * line_height
+        draw.rectangle(
+            (
+                left + padding,
+                y_coord,
+                left + padding + swatch_size,
+                y_coord + swatch_size,
+            ),
+            fill=color,
+        )
+        draw.text(
+            (left + 2 * padding + swatch_size, y_coord - 2),
+            label,
+            fill=(255, 255, 255),
+            font=font,
+        )
 
 
 def _save_image_to_file(img: "Image.Image", output_filename: str) -> None:  # type: ignore[name-defined]
@@ -362,18 +548,19 @@ def generate_static_lensed_image(
     sphere_image: Union[str, npt.NDArray[np.float64]],
     source_image: Union[str, npt.NDArray[np.float64]],
     blueprint_filenames: List[str],
-    window_width: float,
-    window_height: float,
     chunk_size: int = cfg.CHUNK_SIZE,
     display_image: bool = True,
+    custom_sphere_image: bool = False,
+    custom_source_image: bool = False,
+    enable_debug: bool = False,
+    include_debug_key: bool = False,
 ) -> None:
     """
     Generate a static lensed image from geodesic blueprint data.
 
-    Reads binary blueprints streaming from compressed archives, identifies where each
-    ray terminated, and maps that endpoint to a pixel on the final image. Uses a
-    process pool executor to process individual blueprint tiles in parallel to improve
-    loading speeds.
+    Reads native blueprint records in chunks, identifies where each ray terminated,
+    and maps each dense launch ordinal to a pixel on the final image. Uses a process
+    pool executor to process individual blueprint tiles in parallel.
 
     :param output_filename: Path where the final rendered image will be saved.
     :param output_pixel_width: Desired width of the output image in pixels.
@@ -381,29 +568,31 @@ def generate_static_lensed_image(
     :param source_image_width: The physical width of the accretion disk source plane.
     :param sphere_image: The background celestial sphere texture (path or array).
     :param source_image: The accretion disk texture (path or array).
-    :param blueprint_filenames: List of paths to the zipped blueprint files containing ray data.
-    :param window_height: The physical height of the camera's local window.
-    :param window_width: The physical width of the camera's local window.
+    :param blueprint_filenames: List of paths to native blueprint files.
     :param chunk_size: Number of records to read from the binary stream at once.
     :param display_image: If True, opens the resulting image using the default viewer.
+    :param custom_sphere_image: Whether the sphere texture came from a custom CLI override.
+    :param custom_source_image: Whether the source texture came from a custom CLI override.
+    :param enable_debug: Whether to overlay requested integration failures with fixed colors.
+    :param include_debug_key: Whether to add the debug failure-color key to the image.
+    :raises ValueError: If the blueprint set is incomplete or has inconsistent metadata.
     """
     # pylint: disable=import-outside-toplevel, import-error
     from PIL import Image
 
     print(f"--- Generating Static Lensed Image: '{output_filename}' ---")
 
-    # Establish the FOV (Field of View) bounds for the camera window
-    half_w = window_width / 2.0
-    half_h = window_height / 2.0
-    y_w_min, y_w_max = -half_w, half_w
-    z_w_min, z_w_max = -half_h, half_h
-
-    window_y_range = y_w_max - y_w_min
-    window_z_range = z_w_max - z_w_min
-
     # Load textures for mapping
-    source_texture = _load_texture(source_image)
-    sphere_texture = _load_texture(sphere_image)
+    source_texture = _load_texture(
+        source_image,
+        warn_if_not_png=custom_source_image,
+        center_crop_to_square=custom_source_image,
+    )
+    sphere_texture = _load_texture(
+        sphere_image,
+        warn_if_not_png=custom_sphere_image,
+        warn_if_non_equirectangular=custom_sphere_image,
+    )
 
     # Accumulators allow for averaging colors if multiple rays map to one pixel
     pixel_accumulator = np.zeros(
@@ -412,9 +601,35 @@ def generate_static_lensed_image(
     count_accumulator = np.zeros(
         (output_pixel_height, output_pixel_width), dtype=np.int32
     )
+    if enable_debug:
+        debug_term_types = np.full(
+            (output_pixel_height, output_pixel_width), cfg.TERM_ACTIVE, dtype=np.int8
+        )
+    else:
+        debug_term_types = np.empty((0, 0), dtype=np.int8)
 
-    record_size_bytes = cfg.BLUEPRINT_DTYPE.itemsize
-    chunk_bytes = chunk_size * record_size_bytes
+    if not blueprint_filenames:
+        raise ValueError("At least one blueprint artifact is required")
+    headers = [
+        blueprint_io.read_blueprint_header(filename) for filename in blueprint_filenames
+    ]
+    tiles_width = headers[0].tiles_width
+    tiles_height = headers[0].tiles_height
+    expected_tiles = {
+        (tile_x, tile_y)
+        for tile_x in range(tiles_width)
+        for tile_y in range(tiles_height)
+    }
+    actual_tiles = {(header.tile_x, header.tile_y) for header in headers}
+    if len(headers) != len(expected_tiles) or actual_tiles != expected_tiles:
+        raise ValueError("Blueprint artifacts do not form the complete tile set")
+    if any(
+        header.tiles_width != tiles_width or header.tiles_height != tiles_height
+        for header in headers
+    ):
+        raise ValueError("Blueprint headers disagree about the tile grid")
+
+    chunk_records = chunk_size
 
     # I/O Throttling
     # Cap workers to prevent disk thrashing.
@@ -430,31 +645,40 @@ def generate_static_lensed_image(
         initargs=(source_texture, sphere_texture),
     ) as executor:
         futures = []
-        for zip_filename in blueprint_filenames:
+        for blueprint_filename in blueprint_filenames:
             futures.append(
                 executor.submit(
                     _process_blueprint_tile,
-                    zip_filename,
-                    chunk_bytes,
-                    y_w_min,
-                    y_w_max,
-                    z_w_min,
-                    z_w_max,
-                    window_y_range,
-                    window_z_range,
+                    blueprint_filename,
+                    chunk_records,
                     output_pixel_width,
                     output_pixel_height,
                     source_image_width,
+                    enable_debug,
                 )
             )
 
         # Merge the sparse 1D local accumulators back into the main global accumulator
         for i, future in enumerate(as_completed(futures)):
-            flat_y, flat_x, flat_colors, flat_counts = future.result()
+            (
+                flat_y,
+                flat_x,
+                flat_colors,
+                flat_counts,
+                debug_flat_y,
+                debug_flat_x,
+                debug_flat_term_types,
+            ) = future.result()
 
             if len(flat_counts) > 0:
                 np.add.at(pixel_accumulator, (flat_y, flat_x), flat_colors)
                 np.add.at(count_accumulator, (flat_y, flat_x), flat_counts)
+            if enable_debug and len(debug_flat_term_types) > 0:
+                np.minimum.at(
+                    debug_term_types,
+                    (debug_flat_y, debug_flat_x),
+                    debug_flat_term_types,
+                )
 
             print(f"  -> Completed tile {i + 1}/{len(blueprint_filenames)}.")
 
@@ -464,11 +688,16 @@ def generate_static_lensed_image(
     final_image_float[hit_mask] = (
         pixel_accumulator[hit_mask] / count_accumulator[hit_mask, np.newaxis]
     )
+    if enable_debug:
+        for term_type, _, color in DEBUG_FAILURE_INFO:
+            final_image_float[debug_term_types == term_type] = np.array(color) / 255.0
 
     # Convert float64 to uint8 (0-255) and save
     img = Image.fromarray(
         (np.clip(final_image_float, 0, 1) * 255).astype(np.uint8), "RGB"
     )
+    if enable_debug and include_debug_key:
+        _add_debug_legend(img)
     _save_image_to_file(img, output_filename)
 
     if display_image:

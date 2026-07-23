@@ -15,8 +15,10 @@ import math
 import os
 import sys
 import urllib.request
+from typing import Union
 
 import numpy as np
+import numpy.typing as npt
 
 try:
     import blueprint_config_and_schema as cfg  # type: ignore
@@ -27,7 +29,11 @@ except ImportError:
 
 
 def main() -> None:
-    """Parse parameters and orchestrate lensed image creation."""
+    """
+    Parse parameters and orchestrate lensed image creation.
+
+    :raises FileNotFoundError: If a tile is missing from an otherwise present set.
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
     # The default output path is strictly local.
@@ -65,7 +71,7 @@ def main() -> None:
         "--source_r_min",
         type=float,
         default=6.0,
-        help="Inner physical radius r_min of the source disk.",
+        help="Inner physical radius r_min of the generated source disk.",
     )
     parser.add_argument(
         "--source_r_max",
@@ -91,47 +97,79 @@ def main() -> None:
         default=750,
         help="Pixel width of the final static output image.",
     )
+    parser.add_argument(
+        "--sphere_image",
+        type=str,
+        default=None,
+        help="Optional path to a custom celestial sphere texture image.",
+    )
+    parser.add_argument(
+        "--source_image",
+        type=str,
+        default=None,
+        help="Optional path to a custom source-plane texture image.",
+    )
+    parser.add_argument(
+        "--debug",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="key",
+        help=(
+            "Color evolution-measure, RKF45, maximum-time, slot, and generic failures. "
+            "Pass 'key' to also add the color key to the image."
+        ),
+    )
 
     # The parsed arguments struct contains all runtime configurations.
     args = parser.parse_args()
+    if args.debug not in (None, "", "key"):
+        parser.error("--debug accepts no argument or the optional argument 'key'.")
 
     # Absolute script directory ensures paths resolve independently of execution context.
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # Deterministically build the expected file paths based on tile dimensions.
-    blueprint_zips = []
-    for i in range(args.window_tiles_width):
-        for j in range(args.window_tiles_height):
-            zip_filename = f"light_blueprint_{i:02d}_{j:02d}.zip"
-            zip_filepath = os.path.join(script_dir, zip_filename)
-
-            # Existence check prevents reading missing or uncompiled blueprints.
-            if not os.path.exists(zip_filepath):
-                print(f"WARNING: Expected tile missing at '{zip_filepath}'.")
-            else:
-                blueprint_zips.append(zip_filepath)
-
-    if not blueprint_zips:
-        print("ERROR: No blueprint zip files found to process.")
+    first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
+    if not os.path.exists(first_tile):
+        print(
+            f"No native blueprint artifacts found in {script_dir}; nothing to render."
+        )
         return
 
-    print(f"Loading {len(blueprint_zips)} blueprint tiles...")
+    # Deterministically build the expected file paths based on tile dimensions.
+    blueprint_files = []
+    for i in range(args.window_tiles_width):
+        for j in range(args.window_tiles_height):
+            blueprint_filename = f"light_blueprint_{i:02d}_{j:02d}.bin"
+            blueprint_filepath = os.path.join(script_dir, blueprint_filename)
 
-    # The texture path locates the high-resolution background celestial sphere image.
-    starmap_path = os.path.join(script_dir, cfg.SPHERE_TEXTURE_FILE)
+            if not os.path.exists(blueprint_filepath):
+                raise FileNotFoundError(
+                    f"Expected tile missing at '{blueprint_filepath}'."
+                )
+            blueprint_files.append(blueprint_filepath)
 
-    # Download the celestial sphere texture if it doesn't already exist locally.
-    if not os.path.exists(starmap_path):
-        print(f"Downloading {cfg.SPHERE_TEXTURE_FILE}...")
-        starmap_url = "https://raw.githubusercontent.com/Moone02/nrpy-visual-assets/96a39ba8510e401ea8ec836154fca5db3b13f4d3/noirlab2430b.tif"
-        try:
-            urllib.request.urlretrieve(starmap_url, starmap_path)
-            print("Download complete.")
-        except Exception as e:  # pylint: disable=broad-exception-caught
-            print(
-                f"FATAL: Failed to download {cfg.SPHERE_TEXTURE_FILE} from {starmap_url}: {e}"
-            )
-            sys.exit(1)
+    print(f"Loading {len(blueprint_files)} blueprint tiles...")
+
+    # The custom sphere image overrides the default downloaded texture when provided.
+    if args.sphere_image is None:
+        sphere_image: str = os.path.join(script_dir, cfg.SPHERE_TEXTURE_FILE)
+
+        # Download the celestial sphere texture if it doesn't already exist locally.
+        if not os.path.exists(sphere_image):
+            print(f"Downloading {cfg.SPHERE_TEXTURE_FILE}...")
+            starmap_url = "https://raw.githubusercontent.com/Moone02/nrpy-visual-assets/96a39ba8510e401ea8ec836154fca5db3b13f4d3/noirlab2430b.tif"
+            try:
+                urllib.request.urlretrieve(starmap_url, sphere_image)
+                print("Download complete.")
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                print(
+                    f"FATAL: Failed to download {cfg.SPHERE_TEXTURE_FILE} from {starmap_url}: {e}"
+                )
+                sys.exit(1)
+    else:
+        sphere_image = args.sphere_image
+        print(f"Using custom celestial sphere texture: {sphere_image}")
 
     # Physical span encompasses full mathematical diameter of accretion disk geometry.
     source_physical_width = 2.0 * args.source_r_max
@@ -141,20 +179,30 @@ def main() -> None:
         (args.window_height / args.window_width) * args.pixel_width
     )
 
-    print("Creating source disk array...")
+    source_image: Union[str, npt.NDArray[np.float64]]
+    if args.source_image is None:
+        print("Creating source disk array...")
 
-    # Texture array represents the equatorial source disk using defined radii.
-    disk_texture = rli.generate_source_disk_array(
-        disk_physical_width=source_physical_width,
-        disk_inner_radius=args.source_r_min,
-        disk_outer_radius=args.source_r_max,
-        colormap=cfg.COLORMAP,
-    )
+        # Texture array represents the equatorial source disk using defined radii.
+        disk_texture = rli.generate_source_disk_array(
+            disk_physical_width=source_physical_width,
+            disk_inner_radius=args.source_r_min,
+            disk_outer_radius=args.source_r_max,
+            colormap=cfg.COLORMAP,
+        )
 
-    # Cast the uint8 array to float64 to satisfy mypy type constraints.
-    disk_texture_float = disk_texture.astype(np.float64)
+        # Cast the uint8 array to float64 to satisfy mypy type constraints.
+        source_image = disk_texture.astype(np.float64)
+    else:
+        source_image = args.source_image
+        print(f"Using custom source texture: {source_image}")
 
     print(f"Rendering image to: {args.output}...")
+    if args.debug is not None:
+        print("Debug failure-color key:")
+        for term_type, label, color in rli.DEBUG_FAILURE_INFO:
+            color_hex = f"#{color[0]:02X}{color[1]:02X}{color[2]:02X}"
+            print(f"  {term_type}: {label} = {color_hex}")
 
     # Static image generator merges geodesic blueprint with texture maps for final image.
     rli.generate_static_lensed_image(
@@ -162,11 +210,13 @@ def main() -> None:
         output_pixel_width=args.pixel_width,
         output_pixel_height=pixel_height,
         source_image_width=source_physical_width,
-        sphere_image=starmap_path,
-        source_image=disk_texture_float,
-        blueprint_filenames=blueprint_zips,
-        window_width=args.window_width,
-        window_height=args.window_height,
+        sphere_image=sphere_image,
+        source_image=source_image,
+        blueprint_filenames=blueprint_files,
+        custom_sphere_image=args.sphere_image is not None,
+        custom_source_image=args.source_image is not None,
+        enable_debug=args.debug is not None,
+        include_debug_key=args.debug == "key",
     )
 
     print("Visualization complete!")

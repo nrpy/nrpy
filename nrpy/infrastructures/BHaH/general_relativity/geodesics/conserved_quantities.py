@@ -41,6 +41,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
 
     config_key = f"{spacetime_name}_{particle_type}"
     diagnostics = Geodesic_Diagnostics[config_key]
+    state_component_count = 8 if particle_type == "massive" else 9
 
     # Set up SymPy expressions and target C variables for the struct assignment.
     list_of_syms: List[sp.Expr] = []
@@ -50,11 +51,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         list_of_syms.append(diagnostics.E_expr)
         list_of_c_vars.append("d_cq_bundle[c].E")
 
-    if diagnostics.L_exprs:
-        list_of_syms.extend(diagnostics.L_exprs)
-        list_of_c_vars.extend(
-            ["d_cq_bundle[c].Lx", "d_cq_bundle[c].Ly", "d_cq_bundle[c].Lz"]
-        )
+    if diagnostics.Lz_expr is not None:
+        list_of_syms.append(diagnostics.Lz_expr)
+        list_of_c_vars.append("d_cq_bundle[c].Lz")
 
     if diagnostics.Q_expr is not None:
         list_of_syms.append(diagnostics.Q_expr)
@@ -65,11 +64,9 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // CONSERVED QUANTITIES STRUCTURE
     //==========================================
-    // Defines the physical conserved quantities evaluated along a photon trajectory.
+    // Defines the physical conserved quantities evaluated along a particle trajectory.
     typedef struct {
     double E;   // Energy $E$ extracted from the temporal Killing vector.
-    double Lx;  // Angular momentum projection $L_x$.
-    double Ly;  // Angular momentum projection $L_y$.
     double Lz;  // Angular momentum projection $L_z$ extracted from the azimuthal Killing vector.
     double Q;   // Carter constant $Q$ separating the Hamilton-Jacobi equations.
     } conserved_quantities_t; // END STRUCT: conserved_quantities_t
@@ -120,7 +117,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
             f"    (void){var_name}; // Suppress unused variable warning for ${var_name}$."
         )
 
-    # Map the temporal and spatial momenta ($p_t, p_x, p_y, p_z$).
+    # Map the temporal and spatial momenta ($p^0, p^1, p^2, p^3$).
     for i in range(4):
         preamble_lines.append(
             f"    const double p{i} = d_f_bundle[IDX_LOCAL({i+4}, c, BUNDLE_CAPACITY)]; // Momentum component $p_{i}$ evaluated from memory."
@@ -232,16 +229,16 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     # CONDITIONAL HOST ORCHESTRATION
     # ==========================================
     if parallelization == "cuda":
-        host_to_device_transfer = r"""
+        host_to_device_transfer = rf"""
     //==========================================
     // ASYNC MEMORY TRANSFER (HOST TO DEVICE)
     //==========================================
     // Transfer the state vector $f^\mu$ for the current bundle to VRAM.
-    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+    for(int m=0; m<{state_component_count}; m++) {{ // Transfer each state component.
         cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                    all_photons->f + (m * num_rays) + start_idx,
                    sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);
-    } // END LOOP: for m over state vector elements
+    }} // END LOOP: for m over state vector components
     """
         device_to_host_transfer = r"""
     //==========================================
@@ -252,16 +249,16 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
                sizeof(conserved_quantities_t) * current_chunk_size, cudaMemcpyDeviceToHost);
     """
     else:
-        host_to_device_transfer = r"""
+        host_to_device_transfer = f"""
     //==========================================
     // SYNCHRONOUS MEMORY TRANSFER (HOST TO HOST CHUNK)
     //==========================================
     // Populating the bundle array for localized CPU chunk processing.
-    for(int m=0; m<9; m++) { // Loop over all 9 elements of the state vector $f^\mu$.
+    for(int m=0; m<{state_component_count}; m++) {{ // Transfer each state component.
         memcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                all_photons->f + (m * num_rays) + start_idx,
                sizeof(double) * current_chunk_size);
-    } // END LOOP: for m over state vector elements
+    }} // END LOOP: for m over state vector components
     """
         device_to_host_transfer = r"""
     //==========================================
@@ -325,10 +322,10 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // MEMORY STAGING ALLOCATION
     //==========================================
-    double *d_f_bundle; // Pointer for the bundled state vector $f^\mu$.
+    double *d_f_bundle; // Pointer for the bundled particle state.
     conserved_quantities_t *d_cq_bundle; // Pointer for the bundled diagnostic outputs.
 
-    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocates device/host target array.
+    BHAH_MALLOC_DEVICE(d_f_bundle, sizeof(double) * {state_component_count} * BUNDLE_CAPACITY); // Allocates device/host target array.
     BHAH_MALLOC_DEVICE(d_cq_bundle, sizeof(conserved_quantities_t) * BUNDLE_CAPACITY); // Allocates device/host return array.
 
     //==========================================
@@ -339,7 +336,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
     //==========================================
     // MEMORY CLEANUP
     //==========================================
-    BHAH_FREE_DEVICE(d_f_bundle); // Releases memory for state vector $f^\mu$.
+    BHAH_FREE_DEVICE(d_f_bundle); // Releases memory for the particle state.
     BHAH_FREE_DEVICE(d_cq_bundle); // Releases memory for diagnostic outputs.
     """
 

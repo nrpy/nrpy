@@ -1,4 +1,4 @@
-# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main.py
+# nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py
 """
 Defines the main() C function for the geodesic integration pipeline.
 
@@ -28,14 +28,100 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def main(spacetime_name: str) -> None:
+def main(
+    spacetime_name: str,
+    integrator_mode: str = "Analytical",
+    normalized_eom: bool = False,
+) -> None:
     """
     Register the master orchestrator C function for the geodesic integrator.
 
     This version implements Spatial Domain Decomposition (Tiling).
 
     :param spacetime_name: Metric name for numerical integration.
+    :param integrator_mode: Batch-integrator implementation to emit.
+    :param normalized_eom: Whether numerical evolution uses coordinate time as
+        its integration parameter.
+    :raises ValueError: If `integrator_mode` is not supported.
+    :raises ValueError: If normalized evolution is requested for analytical mode.
     """
+    if integrator_mode not in ("Analytical", "Numerical"):
+        raise ValueError(
+            "integrator_mode must be either 'Analytical' or 'Numerical'; "
+            f"found '{integrator_mode}'."
+        )
+    if normalized_eom and integrator_mode != "Numerical":
+        raise ValueError("normalized_eom is supported only for numerical mode.")
+
+    diagnostic_flag_name = (
+        "perform_normalization_check"
+        if integrator_mode == "Numerical"
+        else "perform_conservation_check"
+    )
+    diagnostic_flag_label = (
+        "Normalization Check"
+        if integrator_mode == "Numerical"
+        else "Conservation Check"
+    )
+    batch_integrator_call = (
+        "batch_integrator_numerical(&commondata, num_rays, results_buffer, norm_abs_bin_name);"
+        if integrator_mode == "Numerical"
+        else "batch_integrator_analytical(&commondata, num_rays, results_buffer);"
+    )
+    serialization_desc = (
+        " When normalization checks are enabled in numerical mode, each tile also "
+        "writes a matching raw 'light_blueprint_norm_abs_XX_YY.bin' sidecar file."
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    numerical_sidecar_path_setup = (
+        """
+            char norm_abs_bin_name[256];
+            if (commondata.perform_normalization_check) {
+                snprintf(
+                    norm_abs_bin_name,
+                    sizeof(norm_abs_bin_name),
+                    "light_blueprint_norm_abs_%02d_%02d.bin",
+                    tx,
+                    ty);
+            } else {
+                norm_abs_bin_name[0] = '\\0';
+            } // END ELSE: disable normalization sidecar filename for this tile
+"""
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    analytic_spacetime_telemetry = (
+        """
+    printf("--- Analytic Spacetime Physics ---\\n");
+    printf("Mass Scale (M): %.2f\\n", commondata.M_scale);
+    printf("Spin Parameter (a): %.2f\\n", commondata.a_spin);
+"""
+        if integrator_mode == "Analytical"
+        else ""
+    )
+    numerical_spacetime_telemetry = (
+        """
+    printf("--- Numerical Spacetime ---\\n");
+    printf("Data File: %s\\n", commondata.numerical_spacetime_bin_path);
+    printf("Metric Time Range: %.2f to %.2f\\n", commondata.t_numerical_initial, commondata.t_numerical_end);
+    printf("Slice Spacing / Stride: %.6f / %d\\n", commondata.dt_numerical_spacetime_data, commondata.numerical_spacetime_time_slice_stride);
+    printf("RKF45 Time-Window Cap: %.2f\\n", commondata.rkf45_max_delta_t);
+"""
+        if integrator_mode == "Numerical"
+        else ""
+    )
+    eom_telemetry = (
+        """
+    printf("Equations of Motion: Normalized coordinate-time evolution\\n");
+    printf("Log-Energy Tolerance: %e\\n", commondata.rkf45_log_energy_tolerance);
+"""
+        if normalized_eom
+        else """
+    printf("Equations of Motion: Affine-parameter geodesic evolution\\n");
+"""
+    )
+
     # Step 1: Register Tiling Parameters
     par.register_CodeParameter(
         "int", __name__, "window_tiles_width", 1, commondata=True, add_to_parfile=True
@@ -59,8 +145,8 @@ def main(spacetime_name: str) -> None:
     2. Parses command-line arguments and parameter files to override defaults.
     3. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
     4. Loops through a grid of tiles (tx, ty), shifting the window center.
-    5. Dispatches the batched numerical integrator for the {spacetime_name} metric per tile.
-    6. Serializes and zips each tile's data to 'light_blueprint_XX_YY.zip'."""
+    5. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
+    6. Serializes each tile to a versioned native 'light_blueprint_XX_YY.bin'.{serialization_desc}"""
 
     cfunc_type = "int"
     name = "main"
@@ -81,6 +167,16 @@ def main(spacetime_name: str) -> None:
     commondata_struct_set_to_default(&commondata);
     cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
+    // Source-plane normals are a valid nonzero input precondition. Normalize once
+    // so crossing and source-coordinate projection use the same geometric plane.
+    const double source_normal_mag = sqrt(
+        commondata.source_plane_normal_x * commondata.source_plane_normal_x +
+        commondata.source_plane_normal_y * commondata.source_plane_normal_y +
+        commondata.source_plane_normal_z * commondata.source_plane_normal_z);
+    commondata.source_plane_normal_x /= source_normal_mag;
+    commondata.source_plane_normal_y /= source_normal_mag;
+    commondata.source_plane_normal_z /= source_normal_mag;
+
     //==========================================
     // INITIALIZE DYNAMIC WINDOW CENTER
     //==========================================
@@ -98,10 +194,8 @@ def main(spacetime_name: str) -> None:
     printf("  Geodesic Engine  \\n");
     printf("=============================================\\n");
     printf("Spacetime Metric: {spacetime_name}\\n");
-
-    printf("--- Analytic Spacetime Physics ---\\n");
-    printf("Mass Scale (M): %.2f\\n", commondata.M_scale);
-    printf("Spin Parameter (a): %.2f\\n", commondata.a_spin);
+{analytic_spacetime_telemetry}
+{numerical_spacetime_telemetry}
 
     printf("--- Camera & Window Plane ---\\n");
     printf("Camera Pos (x, y, z): %.2f, %.2f, %.2f\\n", commondata.camera_pos_x, commondata.camera_pos_y, commondata.camera_pos_z);
@@ -121,17 +215,17 @@ def main(spacetime_name: str) -> None:
 
     printf("--- Temporal & Boundary Conditions ---\\n");
     printf("Start Time (t_start): %.2f\\n", commondata.t_start);
-    printf("Integration Max t: %.2f\\n", commondata.t_integration_max);
     printf("Escape Radius (r_escape): %.2f\\n", commondata.r_escape);
-    printf("Max Momentum (p_t,max): %.2f\\n", commondata.p_t_max);
+    printf("Evolution Measure Limit (evolution_measure_max): %.2f\\n", commondata.evolution_measure_max);
 
     printf("--- Batch Integrator & RKF45 Settings ---\\n");
     printf("Initial Step Size (h_initial): %.2f\\n", commondata.numerical_initial_h);
     printf("Min / Max Step (h_min / h_max): %e / %.2f\\n", commondata.rkf45_h_min, commondata.rkf45_h_max);
     printf("Abs / Rel Tolerance: %e / %e\\n", commondata.rkf45_absolute_error_tolerance, commondata.rkf45_error_tolerance);
-    printf("Safety Factor: %.2f\\n", commondata.rkf45_safety_factor);
+{eom_telemetry}
+    printf("Adaptive Step Damping: 0.90\\n");
     printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
-    printf("Conservation Check: %d\\n", commondata.perform_conservation_check);
+    printf("{diagnostic_flag_label}: %d\\n", commondata.{diagnostic_flag_name});
     printf("Slot Manager (Delta t / Min t): %.2f / %.2f\\n", commondata.slot_manager_delta_t, commondata.slot_manager_t_min);
 
     //==========================================
@@ -166,9 +260,9 @@ def main(spacetime_name: str) -> None:
     double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
 
     // Fallback logic for near-nadir camera angles (looking straight up or down)
-    if (mag_n_x < 1e-10) {{
+    if (mag_n_x < 1e-9) {{
         double alt_up[3] = {{0.0, 1.0, 0.0}};
-        if (fabs(n_z[1]) > 0.9) {{ alt_up[1] = 0.0; alt_up[2] = 1.0; }}
+        if (fabs(n_z[1]) > 0.999) {{ alt_up[1] = 0.0; alt_up[2] = 1.0; }}
         n_x[0] = alt_up[1]*n_z[2] - alt_up[2]*n_z[1];
         n_x[1] = alt_up[2]*n_z[0] - alt_up[0]*n_z[2];
         n_x[2] = alt_up[0]*n_z[1] - alt_up[1]*n_z[0];
@@ -187,7 +281,18 @@ def main(spacetime_name: str) -> None:
     //==========================================
     // RESOURCE ALLOCATION
     //==========================================
-    const long int num_rays = (long int)commondata.scan_density * commondata.scan_density;
+    if (commondata.scan_density <= 0 || commondata.window_tiles_width <= 0 ||
+        commondata.window_tiles_height <= 0) {{
+        fprintf(stderr, "FATAL: Tile dimensions and scan_density must be positive.\\n");
+        return 1;
+    }}
+    const uint64_t record_count =
+        (uint64_t)commondata.scan_density * (uint64_t)commondata.scan_density;
+    const long int num_rays = (long int)record_count;
+    if ((uint64_t)num_rays != record_count) {{
+        fprintf(stderr, "FATAL: Ray count does not fit in a host long int.\\n");
+        return 1;
+    }}
     blueprint_data_t *restrict results_buffer = (blueprint_data_t *)malloc(sizeof(blueprint_data_t) * num_rays);
 
     if (results_buffer == NULL) {{
@@ -215,38 +320,57 @@ def main(spacetime_name: str) -> None:
             printf("[Tile %02d,%02d] Processing at Center (%.3f, %.3f, %.3f)...\\n",
                     tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
 
+{numerical_sidecar_path_setup}
+            // 2.5. Clear the reused results buffer before each tile integration.
+            for (long int i = 0; i < num_rays; i++) {{
+                results_buffer[i] = (blueprint_data_t){{0}};
+                results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
+            }} // END LOOP: for i over rays to clear the reused results buffer
+
             // 3. Execute Numerical Integration Pipeline
-            batch_integrator_numerical(&commondata, num_rays, results_buffer);
+            {batch_integrator_call}
 
             // 3.5. Coordinate Global Shift
             // Maps local tile-space hits to the global window coordinate system.
             // y_w (horizontal) corresponds to offset_x along n_x.
             // z_w (vertical) corresponds to offset_y along n_y.
             for (long int i = 0; i < num_rays; i++) {{
-                results_buffer[i].y_w += offset_x;
-                results_buffer[i].z_w += offset_y;
+                if (results_buffer[i].L_w > 0.0) {{
+                    results_buffer[i].y_w += offset_x;
+                    results_buffer[i].z_w += offset_y;
+                }} // END IF: shift only a valid observer-window intersection
             }} // END LOOP: for i over rays in tile
 
             // 4. Data Serialization
-            char bin_name[256], zip_cmd[512];
-            sprintf(bin_name, "light_blueprint_%02d_%02d.bin", tx, ty);
-
-            FILE *fp = fopen(bin_name, "wb");
-            if (fp) {{
-                fwrite(results_buffer, sizeof(blueprint_data_t), num_rays, fp);
-                fclose(fp);
-
-                // 5. Linux-Native Compression with move flag (-m) and Success Check
-                sprintf(zip_cmd, "zip -mq light_blueprint_%02d_%02d.zip %s", tx, ty, bin_name);
-                int status = system(zip_cmd);
-                if (status != 0) {{
-                    fprintf(stderr, "ERROR: Compression failed for %s. Keeping raw binary.\\n", bin_name);
-                }} // END IF: check zip status
-            }} else {{
-                fprintf(stderr, "ERROR: Could not write to %s\\n", bin_name);
+            char bin_name[256];
+            const int name_status = snprintf(
+                bin_name,
+                sizeof(bin_name),
+                "light_blueprint_%02d_%02d.bin",
+                tx,
+                ty);
+            if (name_status < 0 || (size_t)name_status >= sizeof(bin_name)) {{
+                fprintf(stderr, "ERROR: Blueprint filename is too long.\\n");
                 free(results_buffer);
-                exit(1);
-            }} // END ELSE: check fp
+                return 1;
+            }} // END IF: blueprint filename bounds check
+
+            blueprint_header_t header = {{0}};
+            memcpy(header.magic, BLUEPRINT_MAGIC, sizeof(header.magic));
+            header.native_schema_version = BLUEPRINT_SCHEMA_VERSION;
+            header.header_size = (uint32_t)sizeof(blueprint_header_t);
+            header.record_size = (uint32_t)sizeof(blueprint_data_t);
+            header.tx = (uint32_t)tx;
+            header.ty = (uint32_t)ty;
+            header.tiles_w = (uint32_t)commondata.window_tiles_width;
+            header.tiles_h = (uint32_t)commondata.window_tiles_height;
+            header.scan_density = (uint32_t)commondata.scan_density;
+            header.record_count = record_count;
+
+            if (write_blueprint_file(bin_name, &header, results_buffer, record_count) != 0) {{
+                free(results_buffer);
+                return 1;
+            }} // END IF: checked blueprint write
         }} // END LOOP: for tx over window tile columns
     }} // END LOOP: for ty over window tile rows
 
@@ -254,13 +378,44 @@ def main(spacetime_name: str) -> None:
     // FINAL CLEANUP & SHUTDOWN
     //==========================================
     free(results_buffer);
-    printf("Simulation successful. Data stored in zipped tiles.\\n");
+    printf("Simulation successful. Data stored in native blueprint tiles.\\n");
     return 0;
     """
+
+    prefunc = r"""
+static int write_blueprint_file(
+    const char *filename,
+    const blueprint_header_t *header,
+    const blueprint_data_t *records,
+    uint64_t record_count) {
+    FILE *blueprint_file = fopen(filename, "wb");
+    if (blueprint_file == NULL) {
+        fprintf(stderr, "ERROR: Could not open '%s' for writing.\\n", filename);
+        return 1;
+    }
+    if (fwrite(header, sizeof(*header), 1, blueprint_file) != 1) {
+        fprintf(stderr, "ERROR: Could not write header to '%s'.\\n", filename);
+        fclose(blueprint_file);
+        return 1;
+    }
+    if (fwrite(records, sizeof(*records), (size_t)record_count, blueprint_file) !=
+        (size_t)record_count) {
+        fprintf(stderr, "ERROR: Could not write payload to '%s'.\\n", filename);
+        fclose(blueprint_file);
+        return 1;
+    }
+    if (fclose(blueprint_file) != 0) {
+        fprintf(stderr, "ERROR: Could not close '%s'.\\n", filename);
+        return 1;
+    }
+    return 0;
+} // END FUNCTION: write_blueprint_file
+"""
 
     # Step 3: Register the function with the NRPy environment
     cfc.register_CFunction(
         includes=includes,
+        prefunc=prefunc,
         desc=desc,
         cfunc_type=cfunc_type,
         name=name,

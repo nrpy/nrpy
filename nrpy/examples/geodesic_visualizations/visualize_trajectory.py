@@ -3,8 +3,8 @@
 Defines the single-ray trajectory visualization suite.
 
 This script parses the trajectory text file to ensure numerical stability and validates
-the structural integrity of the output. It creates a 3D plot of the particle's path
-interacting with the event horizon to visually confirm gravitational lensing effects.
+the structural integrity of the output. It creates a 3D plot of the integrated
+geodesic relative to a schematic black-hole reference surface.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -31,13 +31,13 @@ def plot_trajectory(
     particle_type: str = "Test Particle",
 ) -> None:
     """
-    Create a 3D visualization of the particle trajectory and the black hole horizon.
+    Create a 3D visualization of the particle trajectory and reference sphere.
 
     This function plots the spatial coordinates extracted from the integration state
-    vector and superimposes a spherical representation of the event horizon.
+    vector and superimposes a spherical reference surface at the requested radius.
 
     :param data: The parsed 2D NumPy array containing the trajectory metrics.
-    :param r_horizon: The radial coordinate representing the event horizon.
+    :param r_horizon: The radial coordinate used for the reference sphere.
     :param particle_type: String descriptor of the particle for plot labels.
     """
     # pylint: disable=import-outside-toplevel, import-error, no-name-in-module
@@ -68,7 +68,7 @@ def plot_trajectory(
 
     # Step 3: Mark Integration Boundaries.
     # Drop markers for the simulation start and endpoints to easily verify
-    # initial conditions and termination locations (e.g., horizon intercepts).
+    # initial conditions and termination locations.
     ax.scatter(
         x_pts[0], y_pts[0], z_pts[0], color="green", marker="o", s=50, label="Start"
     )
@@ -76,8 +76,8 @@ def plot_trajectory(
         x_pts[-1], y_pts[-1], z_pts[-1], color="red", marker="x", s=50, label="End"
     )
 
-    # Step 4: Construct the Event Horizon Surface.
-    # Parameterize angles for creating the spherical horizon surface.
+    # Step 4: Construct the reference sphere surface.
+    # Parameterize angles for creating the spherical reference surface.
     # u is the azimuthal angle [0, 2pi], v is the polar angle [0, pi].
     u_val = np.linspace(0, 2 * np.pi, 20)
     v_val = np.linspace(0, np.pi, 10)
@@ -85,11 +85,13 @@ def plot_trajectory(
     # Create 2D meshes mapping the spherical coordinates.
     u, v = np.meshgrid(u_val, v_val, indexing="ij")
 
-    # Convert to Cartesian coordinates to plot the black hole.
+    # Convert to Cartesian coordinates to plot the reference sphere.
     xh = r_horizon * np.cos(u) * np.sin(v)
     yh = r_horizon * np.sin(u) * np.sin(v)
     zh = r_horizon * np.cos(v)
-    ax.plot_surface(xh, yh, zh, color="black", alpha=0.3, label="Horizon (r=2M)")
+    ax.plot_surface(
+        xh, yh, zh, color="black", alpha=0.3, label="Reference sphere (r=2M)"
+    )
 
     # Step 5: Format and Display.
     ax.set_xlabel("x (M)")
@@ -101,11 +103,11 @@ def plot_trajectory(
     )
     ax.legend()
 
-    # Visual disclaimer about the horizon approximation.
+    # Visual disclaimer about the reference surface approximation.
     fig.text(
         0.5,
         0.02,
-        "* Horizon rendered as a sphere at r=2M. Visually approximate for a_spin = 0.",
+        "* Reference sphere rendered at r=2M; not the exact Kerr horizon for nonzero spin.",
         ha="center",
         fontsize=9,
         color="gray",
@@ -148,18 +150,25 @@ def visualize_trajectory(
         )
         print("\n    Did you compile and run the C executable first?")
         print("    1. Type `make` in this directory.")
-        print("    2. Run the executable (e.g., `./photon_geodesic_integrator`).")
+        print("    2. Run the executable generated for this project.")
         return
 
     # Step 1: Load and Validate Data.
     try:
         # Parse the trajectory metrics into a 2D NumPy array, ignoring comments.
-        data = np.loadtxt(traj_path, comments="#")
+        data = np.atleast_2d(np.loadtxt(traj_path, comments="#"))
 
         if data.size == 0:
             print(f"[!] ERROR: '{traj_path}' is empty.")
             print(
                 "    Integration may have failed immediately. Check initial conditions."
+            )
+            return
+
+        if data.shape[1] < 5:
+            print(
+                f"[!] ERROR: '{traj_path}' has {data.shape[1]} columns; "
+                "at least 5 are required for trajectory visualization."
             )
             return
 
@@ -172,7 +181,7 @@ def visualize_trajectory(
 
     # Step 2: Check Trajectory Bounds (Diagnostics).
     # Direct sanity check of the initial and final states.
-    print("Step 1: Boundary State Diagnostics.")
+    print("Boundary State Diagnostics.")
     print(
         f"  Initial Pos (x, y, z): ({data[0, 2]:>8.4f}, {data[0, 3]:>8.4f}, "
         f"{data[0, 4]:>8.4f})"
@@ -181,7 +190,7 @@ def visualize_trajectory(
         f"  Final Pos   (x, y, z): ({data[-1, 2]:>8.4f}, {data[-1, 3]:>8.4f}, "
         f"{data[-1, 4]:>8.4f})"
     )
-    print(f"  Total Affine/Proper Parameter: {data[-1, 0]:>8.4f}")
+    print(f"  Total Path Parameter: {data[-1, 0]:>8.4f}")
 
     # Step 3: Launch Visualization.
     print("\n[i] Creating 3D representation...")

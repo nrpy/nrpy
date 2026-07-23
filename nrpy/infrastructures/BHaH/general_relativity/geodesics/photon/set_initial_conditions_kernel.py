@@ -32,6 +32,8 @@ from nrpy.helpers.loop import loop
 # These are registered here to ensure they appear in BHaH_defines.h before
 # the initialization kernel is compiled.
 batch_structs_c_code = r"""
+    #include <stddef.h>
+
     // Maximum number of photons processed per batch to fit within L1/L2 cache.
     #define BUNDLE_CAPACITY 524288
 
@@ -43,20 +45,36 @@ batch_structs_c_code = r"""
 
     // Defines the specific exit condition for a photon's integration loop.
     typedef enum {
-        TERMINATION_TYPE_CELESTIAL_SPHERE, // 0: Photon escaped to infinity.
-        TERMINATION_TYPE_SOURCE_PLANE,     // 1: Photon successfully hit the source emission plane.
-        FAILURE_PT_TOO_BIG,                // 2: Integration failed due to unbounded momentum $p_t$.
-        FAILURE_RKF45_REJECTION_LIMIT,     // 3: Adaptive step-size rejected too many consecutive times.
-        FAILURE_T_MAX_EXCEEDED,            // 4: Integration exceeded maximum allowable physical coordinate time $t$.
-        FAILURE_SLOT_MANAGER_ERROR,        // 5: TimeSlotManager failed to allocate or retrieve the photon.
-        TERMINATION_TYPE_FAILURE,          // 6: Generic unclassified numerical failure.
-        ACTIVE,                            // 7: Photon is currently undergoing integration.
-        REJECTED,                          // 8: Photon RKF45 step was rejected.
+        TERMINATION_TYPE_COORD_RADIUS_EXCEEDED, // 0: Coordinate-radius escape limit exceeded.
+        TERMINATION_TYPE_SOURCE_PLANE, // 1: Photon hit the source emission plane.
+        FAILURE_EVOLUTION_MEASURE_EXCEEDED, // 2: Evolution measure exceeded its configured limit.
+        FAILURE_RKF45_REJECTION_LIMIT, // 3: Adaptive step size was rejected too many times.
+        FAILURE_T_MAX_EXCEEDED, // 4: Maximum physical coordinate time was exceeded.
+        FAILURE_SLOT_MANAGER_ERROR, // 5: TimeSlotManager failed to handle the photon.
+        TERMINATION_TYPE_FAILURE, // 6: Generic unclassified numerical failure.
+        ACTIVE, // 7: Photon is currently undergoing integration.
+        REJECTED, // 8: Photon RKF45 step was rejected.
     } termination_type_t; // END ENUM: termination_type_t
+
+    // Native same-build metadata for one serialized blueprint tile.
+    #define BLUEPRINT_MAGIC "NRPYBP01"
+    #define BLUEPRINT_SCHEMA_VERSION 1U
+    typedef struct {
+        char magic[8];
+        uint32_t native_schema_version;
+        uint32_t header_size;
+        uint32_t record_size;
+        uint32_t tx;
+        uint32_t ty;
+        uint32_t tiles_w;
+        uint32_t tiles_h;
+        uint32_t scan_density;
+        uint64_t record_count;
+    } __attribute__((packed)) blueprint_header_t; // END STRUCT: blueprint_header_t
 
     // Stores the final physical properties of a photon upon integration termination.
     typedef struct {
-        termination_type_t termination_type; // The exit condition of the photon.
+        int32_t termination_type; // Fixed-width serialized exit condition.
         double y_w; // Local $y$-coordinate intersection on the observer window.
         double z_w; // Local $z$-coordinate intersection on the observer window.
         double y_s; // Local $y$-coordinate intersection on the source plane.
@@ -65,20 +83,44 @@ batch_structs_c_code = r"""
         double final_phi;   // Final azimuthal angle $\phi$ at termination.
         double L_w; // Affine parameter $\lambda$ at the window intersection.
         double t_w; // Physical coordinate time $t$ at the window intersection.
-        double L_s; // Affine parameter $\lambda$ at the source intersection.
-        double t_s; // Physical coordinate time $t$ at the source intersection.
+        double L_f; // Affine parameter $\lambda$ when the photon terminated.
+        double t_f; // Physical coordinate time $t$ when the photon terminated.
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
+
+    _Static_assert(sizeof(blueprint_header_t) == 48, "blueprint_header_t size changed");
+    _Static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
+    _Static_assert(offsetof(blueprint_header_t, native_schema_version) == 8, "blueprint header version offset changed");
+    _Static_assert(offsetof(blueprint_header_t, header_size) == 12, "blueprint header size offset changed");
+    _Static_assert(offsetof(blueprint_header_t, record_size) == 16, "blueprint header record size offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tx) == 20, "blueprint header tx offset changed");
+    _Static_assert(offsetof(blueprint_header_t, ty) == 24, "blueprint header ty offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tiles_w) == 28, "blueprint header tiles_w offset changed");
+    _Static_assert(offsetof(blueprint_header_t, tiles_h) == 32, "blueprint header tiles_h offset changed");
+    _Static_assert(offsetof(blueprint_header_t, scan_density) == 36, "blueprint header scan offset changed");
+    _Static_assert(offsetof(blueprint_header_t, record_count) == 40, "blueprint header count offset changed");
+    _Static_assert(sizeof(blueprint_data_t) == 84, "blueprint_data_t size changed");
+    _Static_assert(offsetof(blueprint_data_t, termination_type) == 0, "blueprint termination offset changed");
+    _Static_assert(offsetof(blueprint_data_t, y_w) == 4, "blueprint y_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, z_w) == 12, "blueprint z_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, y_s) == 20, "blueprint y_s offset changed");
+    _Static_assert(offsetof(blueprint_data_t, z_s) == 28, "blueprint z_s offset changed");
+    _Static_assert(offsetof(blueprint_data_t, final_theta) == 36, "blueprint final_theta offset changed");
+    _Static_assert(offsetof(blueprint_data_t, final_phi) == 44, "blueprint final_phi offset changed");
+    _Static_assert(offsetof(blueprint_data_t, L_w) == 52, "blueprint L_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, t_w) == 60, "blueprint t_w offset changed");
+    _Static_assert(offsetof(blueprint_data_t, L_f) == 68, "blueprint L_f offset changed");
+    _Static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
 
     // ==========================================
     // Flattened SoA Struct (Master Storage)
     // ==========================================
     typedef struct {
-        double *f; // Flattened state vector mapping 9 components $t, x, y, z, p_t, p_x, p_y, p_z, \text{aux}$.
+        double *f; // Flattened state vector: t, x, y, z, mode-specific energy, p^x, p^y, p^z, aux.
         double *f_p; // State vector at the previous integration step.
         double *f_p_p; // State vector at two integration steps prior.
-        double *affine_param; // Current affine parameter $\lambda$ for the trajectory.
-        double *affine_param_p; // Affine parameter $\lambda$ at the previous step.
-        double *affine_param_p_p; // Affine parameter $\lambda$ at two steps prior.
+        double *integration_param; // Current mode-dependent integration parameter.
+        double *integration_param_p; // Integration parameter at the previous step.
+        double *integration_param_p_p; // Integration parameter at two steps prior.
         double *h; // Current adaptive step size $h$ for the RKF45 integrator.
         termination_type_t *status; // Current physical/numerical status of the photon.
         int *rejection_retries; // Counter for consecutive RKF45 error tolerance rejections.
@@ -98,11 +140,15 @@ batch_structs_c_code = r"""
 """
 
 
-def set_initial_conditions_kernel(spacetime_name: str) -> None:
+def set_initial_conditions_kernel(
+    spacetime_name: str,
+    normalized_eom: bool = False,
+) -> None:
     """
     Register the C function and device kernel for Cartesian photon initialization.
 
     :param spacetime_name: The specific metric or spacetime identifier (e.g., 'KerrSchild').
+    :param normalized_eom: Whether to initialize the normalized photon state layout.
     """
     if "photon_batch_structs" not in par.glb_extras_dict.get("BHaH_defines", {}):
         Bdefines_h.register_BHaH_defines("photon_batch_structs", batch_structs_c_code)
@@ -148,6 +194,18 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     # Dynamic architecture detection.
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
+    initial_state_parameter = "0.0" if normalized_eom else f"{cd_access}t_start"
+    normalized_tracker_initialization = (
+        """
+    for (long int ray = 0; ray < num_rays; ++ray) {
+        all_photons->integration_param[ray] = commondata->t_start;
+        all_photons->integration_param_p[ray] = commondata->t_start;
+        all_photons->integration_param_p_p[ray] = commondata->t_start;
+    } // END LOOP: for ray over normalized coordinate-time trackers
+"""
+        if normalized_eom
+        else ""
+    )
 
     # Dictionary mapping for GPU/CPU kernel arguments.
     arg_dict = {
@@ -230,7 +288,7 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     // INITIAL STATE POPULATION
     //==========================================
     // Write the starting position and spatial momentum explicitly to the VRAM bundle.
-    d_f_bundle[IDX_F(0, c)] = {cd_access}t_start; // Coordinate time $t$
+    d_f_bundle[IDX_F(0, c)] = {initial_state_parameter}; // Initial state parameter.
     d_f_bundle[IDX_F(1, c)] = {cd_access}camera_pos_x; // Spatial position $x$
     d_f_bundle[IDX_F(2, c)] = {cd_access}camera_pos_y; // Spatial position $y$
     d_f_bundle[IDX_F(3, c)] = {cd_access}camera_pos_z; // Spatial position $z$
@@ -263,7 +321,9 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     #undef IDX_F
     #undef IDX_H
-    """.replace("{cd_access}", cd_access)
+    """.replace("{cd_access}", cd_access).replace(
+        "{initial_state_parameter}", initial_state_parameter
+    )
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
 
@@ -485,7 +545,10 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
     //==========================================
     BHAH_FREE_DEVICE(d_f_bundle);
     BHAH_FREE_DEVICE(d_h_bundle);
-    """.replace("{host_loop_code}", str(host_loop_code))
+{normalized_tracker_initialization}
+    """.replace("{host_loop_code}", str(host_loop_code)).replace(
+        "{normalized_tracker_initialization}", normalized_tracker_initialization
+    )
 
     # Establish the final strings to satisfy the Translation Unit Inlining Mandate.
     prefunc = f"{kernel_prefunc}"
@@ -498,7 +561,8 @@ def set_initial_conditions_kernel(spacetime_name: str) -> None:
 
     Detailed algorithm: Maps global thread IDs to pixel coordinates to calculate initial
     spatial coordinates $x, y, z$ and unnormalized momenta $p^x, p^y, p^z$. Explicitly enforces
-    temporal momentum $p^t = 0$ and affine parameter $\lambda = 0$ for downstream constraint solvers.
+    temporal momentum $p^t = 0$ and initializes direct or normalized state
+    parameters for downstream constraint solvers.
 
     @param commondata Master configuration struct containing global parameters.
     @param num_rays Total number of photon trajectories in the simulation.
