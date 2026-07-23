@@ -5,11 +5,11 @@
 
 ## Summary
 
-NRPy has three checked-in geodesic example generators. `mass_geodesic_integrator`
+NRPy has three checked-in geodesic example generators. `massive_single_geodesic_integrator_analytical`
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
-RKF45 ODE path. `photon_geodesic_integrator` builds a single photon trajectory
+RKF45 ODE path. `photon_single_geodesic_integrator_analytical` builds a single photon trajectory
 with the same analytic spacetime target but uses the split-pipeline photon RKF45
-kernels directly. `photon_geodesic_batch_integrator` builds a tiled photon
+kernels directly. `photon_batch_geodesic_integrator_analytical` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
 honors `--outdir`, and writes per-tile light-blueprint ZIP artifacts for the
 lensed-image renderer and diagnostic scripts.
@@ -32,10 +32,10 @@ export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."
 For a massive single-ray run:
 
 ```bash
-python -m nrpy.examples.mass_geodesic_integrator
-cd project/mass_geodesic_integrator
+python -m nrpy.examples.massive_single_geodesic_integrator_analytical
+cd project/massive_single_geodesic_integrator_analytical
 make
-./mass_geodesic_integrator
+./massive_single_geodesic_integrator_analytical
 python3 visualize_trajectory.py --particle_type Massive
 ```
 
@@ -53,10 +53,10 @@ NRPy generator behavior.
 For a photon single-ray run:
 
 ```bash
-python -m nrpy.examples.photon_geodesic_integrator
-cd project/photon_geodesic_integrator
+python -m nrpy.examples.photon_single_geodesic_integrator_analytical
+cd project/photon_single_geodesic_integrator_analytical
 make
-./photon_geodesic_integrator
+./photon_single_geodesic_integrator_analytical
 python3 visualize_trajectory.py --particle_type Photon
 ```
 
@@ -81,10 +81,10 @@ saves `trajectory_plot.png` and displays a Matplotlib 3D path with an approximat
 For a batch lensed-image run with default OpenMP output under `project/`:
 
 ```bash
-python -m nrpy.examples.photon_geodesic_batch_integrator
-cd project/photon_geodesic_batch_integrator
+python -m nrpy.examples.photon_batch_geodesic_integrator_analytical
+cd project/photon_batch_geodesic_integrator_analytical
 make
-./photon_geodesic_batch_integrator
+./photon_batch_geodesic_integrator_analytical
 python3 visualize_lensed_image.py --source_r_min 6.0 --source_r_max 20.0 --window_width 1.0 --window_height 1.0 --window_tiles_width 2 --window_tiles_height 2 --pixel_width 600
 python3 blueprint_analysis.py --window_tiles_width 2 --window_tiles_height 2 --window_width 1.0 --window_height 1.0
 ```
@@ -92,14 +92,14 @@ python3 blueprint_analysis.py --window_tiles_width 2 --window_tiles_height 2 --w
 For a CUDA batch project or a different parent output directory:
 
 ```bash
-python -m nrpy.examples.photon_geodesic_batch_integrator --cuda --outdir /tmp/nrpy-geodesics
-cd /tmp/nrpy-geodesics/photon_geodesic_batch_integrator
+python -m nrpy.examples.photon_batch_geodesic_integrator_analytical --cuda --outdir /tmp/nrpy-geodesics
+cd /tmp/nrpy-geodesics/photon_batch_geodesic_integrator_analytical
 make
-./photon_geodesic_batch_integrator
+./photon_batch_geodesic_integrator_analytical
 ```
 
 The batch generator derives `project_dir` from `--outdir` plus
-`photon_geodesic_batch_integrator`. It sets `parallelization` to `openmp` unless
+`photon_batch_geodesic_integrator_analytical`. It sets `parallelization` to `openmp` unless
 `--cuda` is present. OpenMP uses `gcc`, `-fopenmp`, C sources, and a default
 `2x2` tile grid with `scan_density = 500`; CUDA uses `nvcc`, `-lcudart`,
 `-DUSE_GPU`, `.cu` sources, copied `cuda_intrinsics.h`, a default `1x1` tile
@@ -149,9 +149,9 @@ for that context.
 
 ## Sources
 
-- [mass_geodesic_integrator.py](../../nrpy/examples/mass_geodesic_integrator.py) - `project_name`, `main_c`, `ode_gsl_wrapper_massive`, `gsl_odeiv2_step_rkf45`, `trajectory.txt`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
-- [photon_geodesic_integrator.py](../../nrpy/examples/photon_geodesic_integrator.py) - `project_name`, `main_c`, `p0_reverse_kernel`, `rkf45_stage_update`, `trajectory.txt`
-- [photon_geodesic_batch_integrator.py](../../nrpy/examples/photon_geodesic_batch_integrator.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
+- [massive_single_geodesic_integrator_analytical.py](../../nrpy/examples/massive_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, `single_integrator_analytical`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
+- [photon_single_geodesic_integrator_analytical.py](../../nrpy/examples/photon_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, `p0_reverse_kernel`, `rkf45_stage_update`, `trajectory.txt`
+- [photon_batch_geodesic_integrator_analytical.py](../../nrpy/examples/photon_batch_geodesic_integrator_analytical.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `TERM_SPHERE`, `TERM_SOURCE_PLANE`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`, `_process_blueprint_tile`, `_load_texture`
