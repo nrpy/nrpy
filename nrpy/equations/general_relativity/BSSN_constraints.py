@@ -173,11 +173,13 @@ class BSSNconstraints:
             for i in range(3):
                 self.MU[i] += sourceterm_MU[i]
 
-        # Then compute M^2 = M^i M_i
+        # Then compute M^2 = gamma_{ij} M^i M^j, where
+        # gamma_{ij} = gammabar_{ij} / exp(-4 phi).
         self.Msquared = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.Msquared += Bq.gammabarDD[i][j] * self.MU[i] * self.MU[j]
+        self.Msquared /= Bq.exp_m4phi
 
         # Finally construct the rescaled MU:
         self.mU = ixp.zerorank1()
@@ -203,6 +205,8 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         Doctests:
         >>> import contextlib
         >>> import io
+        >>> import nrpy.validate_expressions.validate_expressions as ve
+        >>> from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
         >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
         >>> original_register_MU = par.parval_from_str("register_MU_gridfunctions")
         >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
@@ -221,11 +225,25 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         ...         _ = gri.glb_gridfcs_dict.pop(name, None)
         ...     par.set_parval_from_str("register_MU_gridfunctions", False)
         ...     with contextlib.redirect_stdout(io.StringIO()):
-        ...         for cf_choice in ("W", "phi"):
+        ...         for cf_choice in ("W", "chi", "phi"):
         ...             par.set_parval_from_str(
         ...                 "EvolvedConformalFactor_cf", cf_choice
         ...             )
-        ...             objects.append(cache["Cartesian"])
+        ...             constraint = cache["Cartesian"]
+        ...             objects.append(constraint)
+        ...             adm = BSSN_to_ADM("Cartesian")
+        ...             physical_norm = sum(
+        ...                 adm.gammaDD[i][j]
+        ...                 * constraint.MU[i]
+        ...                 * constraint.MU[j]
+        ...                 for i in range(3)
+        ...                 for j in range(3)
+        ...             )
+        ...             ve.assert_equal(
+        ...                 constraint.Msquared,
+        ...                 physical_norm,
+        ...                 suppress_message=True,
+        ...             )
         ...         par.set_parval_from_str("register_MU_gridfunctions", True)
         ...         registered_object = cache["Cartesian"]
         ...         same_parameters_reused = cache["Cartesian"] is registered_object
