@@ -234,7 +234,7 @@ PIC_NVCCFLAGS := {pic_nvccflags}"""
 OPENMP_FLAG := -fopenmp
 
 ifeq ($(OPENMP),1)
-OPENMP_SUPPORTED := $(shell printf '%s\\n' '#include <omp.h>' 'int main(void) {{ return omp_get_max_threads() < 1; }}' | $(CC) $(ALL_CPPFLAGS) $(OPENMP_FLAG) -x c - -o /dev/null >/dev/null 2>&1 && echo YES || echo NO)
+OPENMP_SUPPORTED := $(shell printf '%s\\n' '\\#include <omp.h>' 'int main(void) {{ return omp_get_max_threads() < 1; }}' | $(CC) $(ALL_CPPFLAGS) $(OPENMP_FLAG) -x c - -o /dev/null >/dev/null 2>&1 && echo YES || echo NO)
 endif
 
 ifeq ($(OPENMP_SUPPORTED),YES)
@@ -258,7 +258,7 @@ PIC_CFLAGS := {pic_cflags}"""
     add_source_calls = []
     for source, direct_headers in source_records:
         headers_arg = f",{' '.join(direct_headers)}" if direct_headers else ""
-        add_source_calls.append(f"$(call ADD_SOURCE,{source}{headers_arg})")
+        add_source_calls.append(f"SOURCES += $(call ADD_SOURCE,{source}{headers_arg})")
     add_source_lines = "\n".join(add_source_calls)
     supported_suffixes = (
         ".cc, .cpp, .cu, .cxx" if cc == "nvcc" else ".c, .cc, .cpp, .cxx"
@@ -269,8 +269,7 @@ PIC_CFLAGS := {pic_cflags}"""
 # Supported source suffixes: {supported_suffixes}
 # ADD_SOURCE(source, direct project headers...)
 define ADD_SOURCE
-$(eval SOURCES += $(strip $(1)))
-$(eval $(basename $(strip $(1))).o: $(strip $(1)) $(strip $(2)))
+$(eval $(basename $(strip $(1))).o: $(strip $(1)) $(strip $(2)))$(strip $(1))
 endef
 
 {add_source_lines}"""
@@ -469,13 +468,14 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert content.count('main.c') == 1
         ...     assert 'main.o:' not in content
         ...     assert content.count('project.h') == 1
-        ...     assert '$(call ADD_SOURCE,main.c,project.h)' in content
+        ...     assert 'SOURCES += $(call ADD_SOURCE,main.c,project.h)' in content
         ...     assert '$(eval $(call ADD_SOURCE' not in content
-        ...     assert 'SOURCES += $(strip $(1))' in content
+        ...     assert '$(eval SOURCES +=' not in content
         ...     assert 'DEPFLAGS = -MMD -MP -MF $(DEPDIR)/$(@:.o=.d) -MT $@' in content
         ...     assert '\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))' in content
         ...     assert 'PROJECT_CPPFLAGS := -I.' in content
         ...     assert 'ALL_CPPFLAGS = $(CPPFLAGS) $(PROJECT_CPPFLAGS)' in content
+        ...     assert f"{chr(92)}#include <omp.h>" in content
         ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(DEPFLAGS) -c $< -o $@' in content
         ...     assert '$(LINKER) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in content
         ...     assert '-include $(DEPFILES)' in content
@@ -500,7 +500,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     )
         ...     cuda_content = cuda_path.joinpath('Makefile').read_text(encoding='utf-8')
         ...     assert 'CC := nvcc' in cuda_content
-        ...     assert '$(call ADD_SOURCE,main.cu)' in cuda_content
+        ...     assert 'SOURCES += $(call ADD_SOURCE,main.cu)' in cuda_content
         ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_NVCCFLAGS) $(DEPFLAGS) -c $< -o $@' in cuda_content
         ...     assert '$(LINKER) $(NVCCFLAGS) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in cuda_content
         ...     assert 'CUDA_SANITIZER_DIR ?= /usr/lib/nvidia-cuda-toolkit/compute-sanitizer' in cuda_content
