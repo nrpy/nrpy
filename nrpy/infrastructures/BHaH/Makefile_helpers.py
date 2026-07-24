@@ -171,8 +171,7 @@ def _construct_makefile_content(
     valgrind_cflags: str,
     cppflags: str,
     ldlibs: str,
-    sources: List[str],
-    direct_header_rules: List[str],
+    source_records: List[Tuple[str, List[str]]],
     exec_or_library_name: str,
     addl_dirs_to_make: List[str],
     create_lib: bool,
@@ -188,8 +187,7 @@ def _construct_makefile_content(
     :param valgrind_cflags: The string of compiler flags for Valgrind builds.
     :param cppflags: Project preprocessor flags.
     :param ldlibs: Libraries and opaque caller-provided link flags.
-    :param sources: Registered generated source paths.
-    :param direct_header_rules: Registry-derived direct-header dependency rules.
+    :param source_records: Generated sources paired with direct project headers.
     :param exec_or_library_name: The name of the final target executable or library.
     :param addl_dirs_to_make: Additional generated projects to build.
     :param create_lib: Whether the target is a library.
@@ -228,6 +226,7 @@ ALL_LDFLAGS = $(LDFLAGS) $(OMP_LDFLAGS)"""
         flags_block = f"""NVCCFLAGS = {cflags}
 CXXFLAGS = {cxxflags}
 VALGRIND_CFLAGS = {valgrind_cflags}
+CUDA_SANITIZER_DIR ?= /usr/lib/nvidia-cuda-toolkit/compute-sanitizer
 PIC_CFLAGS := {pic_cflags}
 PIC_NVCCFLAGS := {pic_nvccflags}"""
     else:
@@ -256,15 +255,30 @@ CXXFLAGS = {cxxflags}
 VALGRIND_CFLAGS = {valgrind_cflags}
 PIC_CFLAGS := {pic_cflags}"""
 
-    if sources:
-        sources_block = "SOURCES := \\\n" + " \\\n".join(
-            f"    {source}" for source in sources
-        )
-    else:
-        sources_block = "SOURCES :="
+    add_source_calls = []
+    for source, direct_headers in source_records:
+        headers_arg = f",{' '.join(direct_headers)}" if direct_headers else ""
+        add_source_calls.append(f"$(call ADD_SOURCE,{source}{headers_arg})")
+    add_source_lines = "\n".join(add_source_calls)
+    supported_suffixes = (
+        ".cc, .cpp, .cu, .cxx" if cc == "nvcc" else ".c, .cc, .cpp, .cxx"
+    )
+    source_records_block = f"""SOURCES :=
+
+# Add or remove sources only in the records below.
+# Supported source suffixes: {supported_suffixes}
+# ADD_SOURCE(source, direct project headers...)
+define ADD_SOURCE
+$(eval SOURCES += $(strip $(1)))
+$(eval $(basename $(strip $(1))).o: $(strip $(1)) $(strip $(2)))
+endef
+
+{add_source_lines}"""
 
     compile_rules_list: List[str] = []
-    source_extensions = sorted({Path(source).suffix.lstrip(".") for source in sources})
+    source_extensions = (
+        ["cc", "cpp", "cu", "cxx"] if cc == "nvcc" else ["c", "cc", "cpp", "cxx"]
+    )
     for source_extension in source_extensions:
         compiler_command = (
             "$(CXX) $(ALL_CPPFLAGS) $(ALL_CXXFLAGS)"
@@ -276,6 +290,7 @@ PIC_CFLAGS := {pic_cflags}"""
             )
         )
         compile_rules_list.append(f"""%.o: %.{source_extension}
+\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))
 \t{compiler_command} $(DEPFLAGS) -c $< -o $@""")
     compile_rules = "\n\n".join(compile_rules_list)
 
@@ -304,17 +319,22 @@ PIC_CFLAGS := {pic_cflags}"""
     else:
         shared_flag = " -shared" if create_lib else ""
         nvcc_link_flags = " $(NVCCFLAGS)" if cc == "nvcc" else ""
-        has_cxx_sources = bool({"cc", "cpp", "cxx"}.intersection(source_extensions))
-        linker = "$(CC)" if cc == "nvcc" or not has_cxx_sources else "$(CXX)"
         target_recipe = (
-            f"\t{linker}{nvcc_link_flags} $(ALL_LDFLAGS){shared_flag} "
+            f"\t$(LINKER){nvcc_link_flags} $(ALL_LDFLAGS){shared_flag} "
             "-o $@ $(OBJECTS) $(ALL_LDLIBS)"
         )
 
     if cc == "nvcc":
-        valgrind_rule = """valgrind:
-\t@echo "Valgrind target is unavailable for CUDA builds."
+        if create_lib:
+            valgrind_rule = """valgrind:
+\t@echo "Compute Sanitizer requires an executable test harness."
 \t@false"""
+        else:
+            valgrind_rule = f"""valgrind:
+\t@test -f "$(CUDA_SANITIZER_DIR)/libsanitizer-collection.so" || {{ printf '%s\\n' "ERROR: Compute Sanitizer injection library not found at $(CUDA_SANITIZER_DIR)/libsanitizer-collection.so." "Find it with: find /usr/local/cuda* /usr/lib/nvidia-cuda-toolkit -name 'libsanitizer-collection.so' -print 2>/dev/null" "Retry with the directory containing that file: make valgrind CUDA_SANITIZER_DIR=/path/to/compute-sanitizer" >&2; exit 1; }}
+\t+$(MAKE) clean
+\t+$(MAKE) NVCCFLAGS="$(NVCCFLAGS) -lineinfo" all
+\tcompute-sanitizer --injection-path "$(CUDA_SANITIZER_DIR)" --tool memcheck --leak-check full --error-exitcode 1 ./{exec_or_library_name}"""
     else:
         run_valgrind = ""
         if not create_lib:
@@ -327,9 +347,15 @@ PIC_CFLAGS := {pic_cflags}"""
 \t+$(MAKE) clean
 \t+$(MAKE) CFLAGS="$(VALGRIND_CFLAGS)" OPENMP=0 all{run_valgrind}"""
 
-    header_rules = "\n".join(direct_header_rules)
-    if header_rules:
-        header_rules += "\n"
+    if cc == "nvcc":
+        linker_block = "LINKER := $(CC)"
+    else:
+        linker_block = """CXX_SOURCES := $(filter %.cc %.cpp %.cxx,$(SOURCES))
+ifeq ($(strip $(CXX_SOURCES)),)
+LINKER := $(CC)
+else
+LINKER := $(CXX)
+endif"""
 
     return f""".DEFAULT_GOAL := all
 .DELETE_ON_ERROR:
@@ -342,19 +368,22 @@ ALL_CPPFLAGS = $(CPPFLAGS) $(PROJECT_CPPFLAGS)
 LDFLAGS ?=
 PROJECT_LDLIBS := {ldlibs}
 ALL_LDLIBS = $(LDLIBS) $(PROJECT_LDLIBS)
-DEPFLAGS = -MMD -MP -MF $(@:.o=.d) -MT $@
+DEPDIR := .deps
+DEPFLAGS = -MMD -MP -MF $(DEPDIR)/$(@:.o=.d) -MT $@
 
 {openmp_block}
 
-{sources_block}
+{source_records_block}
 OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))
-DEPFILES := $(OBJECTS:.o=.d)
+DEPFILES := $(addprefix $(DEPDIR)/,$(OBJECTS:.o=.d))
+
+{linker_block}
 
 .PHONY: {" ".join(phony_targets)}
 
 all: {exec_or_library_name}
 
-{header_rules}{compile_rules}
+{compile_rules}
 
 $(OBJECTS): Makefile
 {additional_projects_rule}{object_order_only_rule}{exec_or_library_name}: {target_prerequisites}
@@ -364,7 +393,8 @@ $(OBJECTS): Makefile
 
 # Remove only files owned by this generated build.
 clean:
-\t$(RM) $(OBJECTS) $(DEPFILES) {exec_or_library_name}{recursive_clean}
+\t$(RM) $(OBJECTS) {exec_or_library_name}
+\t$(RM) -r $(DEPDIR){recursive_clean}
 
 -include $(DEPFILES)
 """
@@ -432,17 +462,22 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...         content = f.read()
         ...     assert 'ifeq ($(origin CC),default)' in content
         ...     assert 'CC := gcc' in content
-        ...     assert 'SOURCES := \\\n    main.c' in content
+        ...     assert 'SOURCES := \\\n    main.c' not in content
         ...     assert 'OBJECTS := $(addsuffix .o,$(basename $(SOURCES)))' in content
-        ...     assert 'DEPFILES := $(OBJECTS:.o=.d)' in content
-        ...     assert 'main.o: project.h' in content
-        ...     assert 'main.o: main.c' not in content
-        ...     assert 'main.o: project.h <stdio.h>' not in content
-        ...     assert 'DEPFLAGS = -MMD -MP -MF $(@:.o=.d) -MT $@' in content
+        ...     assert 'DEPDIR := .deps' in content
+        ...     assert 'DEPFILES := $(addprefix $(DEPDIR)/,$(OBJECTS:.o=.d))' in content
+        ...     assert content.count('main.c') == 1
+        ...     assert 'main.o:' not in content
+        ...     assert content.count('project.h') == 1
+        ...     assert '$(call ADD_SOURCE,main.c,project.h)' in content
+        ...     assert '$(eval $(call ADD_SOURCE' not in content
+        ...     assert 'SOURCES += $(strip $(1))' in content
+        ...     assert 'DEPFLAGS = -MMD -MP -MF $(DEPDIR)/$(@:.o=.d) -MT $@' in content
+        ...     assert '\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))' in content
         ...     assert 'PROJECT_CPPFLAGS := -I.' in content
         ...     assert 'ALL_CPPFLAGS = $(CPPFLAGS) $(PROJECT_CPPFLAGS)' in content
         ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(DEPFLAGS) -c $< -o $@' in content
-        ...     assert '$(CC) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in content
+        ...     assert '$(LINKER) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in content
         ...     assert '-include $(DEPFILES)' in content
         ...     assert 'all: project_name' in content
         ...     assert '$(OBJECTS): Makefile' in content
@@ -451,7 +486,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert '\t+$(MAKE) -C support' in content
         ...     makefile_lines = content.splitlines()
         ...     clean_recipe = makefile_lines[makefile_lines.index('clean:') + 1]
-        ...     assert clean_recipe == '\t$(RM) $(OBJECTS) $(DEPFILES) project_name'
+        ...     assert clean_recipe == '\t$(RM) $(OBJECTS) project_name'
+        ...     assert '\t$(RM) -r $(DEPDIR)' in content
         ...     assert '\t+$(MAKE) -C support clean' in content
         ...     assert '*.out' not in content
         ...     cuda_path = test_path / 'cuda'
@@ -464,10 +500,18 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     )
         ...     cuda_content = cuda_path.joinpath('Makefile').read_text(encoding='utf-8')
         ...     assert 'CC := nvcc' in cuda_content
-        ...     assert '    main.cu' in cuda_content
+        ...     assert '$(call ADD_SOURCE,main.cu)' in cuda_content
         ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_NVCCFLAGS) $(DEPFLAGS) -c $< -o $@' in cuda_content
-        ...     assert '$(CC) $(NVCCFLAGS) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in cuda_content
-        ...     assert 'Valgrind target is unavailable for CUDA builds.' in cuda_content
+        ...     assert '$(LINKER) $(NVCCFLAGS) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in cuda_content
+        ...     assert 'CUDA_SANITIZER_DIR ?= /usr/lib/nvidia-cuda-toolkit/compute-sanitizer' in cuda_content
+        ...     assert 'test -f "$(CUDA_SANITIZER_DIR)/libsanitizer-collection.so"' in cuda_content
+        ...     assert "Find it with: find /usr/local/cuda* /usr/lib/nvidia-cuda-toolkit -name 'libsanitizer-collection.so' -print 2>/dev/null" in cuda_content
+        ...     assert 'Retry with the directory containing that file: make valgrind CUDA_SANITIZER_DIR=/path/to/compute-sanitizer' in cuda_content
+        ...     assert 'valgrind:\n\t@test -f "$(CUDA_SANITIZER_DIR)/libsanitizer-collection.so"' in cuda_content
+        ...     assert '\t+$(MAKE) clean\n\t+$(MAKE) NVCCFLAGS="$(NVCCFLAGS) -lineinfo" all' in cuda_content
+        ...     assert 'compute-sanitizer --injection-path "$(CUDA_SANITIZER_DIR)" --tool memcheck --leak-check full --error-exitcode 1 ./cuda_project' in cuda_content
+        ...     assert 'OPENMP=0' not in cuda_content
+        ...     assert 'Valgrind target is unavailable for CUDA builds.' not in cuda_content
         ... finally:
         ...     # Clean up any created files
         ...     if Path('/tmp/nrpy_BHaH_Makefile_doctest1').exists():
@@ -525,13 +569,12 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
             continue
         project_include_dirs.append(resolved_include_dir)
 
-    direct_header_rules = []
+    source_records = []
     sorted_c_files_and_includes = sorted(
         c_files_and_includes, key=lambda item: item[0].lower()
     )
     for c_file, registered_includes in sorted_c_files_and_includes:
         c_file_path = Path(c_file)
-        object_file = str(c_file_path.with_suffix(".o"))
 
         local_headers = []
         for registered_include in registered_includes:
@@ -563,8 +606,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
                         local_headers.append(relative_header)
                     break
 
-        if local_headers:
-            direct_header_rules.append(f"{object_file}: {' '.join(local_headers)}")
+        source_records.append((c_file, local_headers))
 
     # Step 5: Assemble and write the Makefile
     makefile_content = _construct_makefile_content(
@@ -574,8 +616,7 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         valgrind_cflags=cflags_dict["debug"],
         cppflags=cppflags,
         ldlibs=ldlibs,
-        sources=[source for source, _ in sorted_c_files_and_includes],
-        direct_header_rules=direct_header_rules,
+        source_records=source_records,
         exec_or_library_name=final_exec_or_library_name,
         addl_dirs_to_make=local_addl_dirs_to_make,
         create_lib=create_lib,
