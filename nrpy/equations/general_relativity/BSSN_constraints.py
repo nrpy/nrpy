@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1: Initialize needed Python/NRPy modules
-from typing import Dict
+from typing import Dict, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -188,8 +188,94 @@ class BSSNconstraints:
 class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
     """Custom dictionary for storing BSSNconstraints objects."""
 
+    def __init__(self) -> None:
+        """Initialize an empty cache and its construction-parameter metadata."""
+        super().__init__()
+        self._construction_parameters: Dict[str, Tuple[str, bool, bool]] = {}
+
     def __getitem__(self, CoordSystem_in: str) -> BSSNconstraints:
-        if CoordSystem_in not in self:
+        """
+        Return constraints built for the current construction parameters.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :return: Cached or newly built BSSN constraints.
+
+        Doctests:
+        >>> import contextlib
+        >>> import io
+        >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        >>> original_register_MU = par.parval_from_str("register_MU_gridfunctions")
+        >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+        >>> original_parameters = par.glb_params_dict.copy()
+        >>> original_code_parameters = par.glb_code_params_dict.copy()
+        >>> original_reference_metrics = refmetric.reference_metric.copy()
+        >>> original_quantities = dict(BSSN_quantities)
+        >>> original_quantity_parameters = (
+        ...     BSSN_quantities._construction_parameters.copy()
+        ... )
+        >>> cache = BSSNconstraints_dict()
+        >>> objects = []
+        >>> invalid_cf_raised = False
+        >>> try:
+        ...     for name in ("MU0", "MU1", "MU2"):
+        ...         _ = gri.glb_gridfcs_dict.pop(name, None)
+        ...     par.set_parval_from_str("register_MU_gridfunctions", False)
+        ...     with contextlib.redirect_stdout(io.StringIO()):
+        ...         for cf_choice in ("W", "phi"):
+        ...             par.set_parval_from_str(
+        ...                 "EvolvedConformalFactor_cf", cf_choice
+        ...             )
+        ...             objects.append(cache["Cartesian"])
+        ...         par.set_parval_from_str("register_MU_gridfunctions", True)
+        ...         registered_object = cache["Cartesian"]
+        ...         same_parameters_reused = cache["Cartesian"] is registered_object
+        ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
+        ...         try:
+        ...             _ = cache["Cartesian"]
+        ...         except ValueError:
+        ...             invalid_cf_raised = True
+        ...     mu_registered = all(
+        ...         f"MU{i}" in gri.glb_gridfcs_dict for i in range(3)
+        ...     )
+        ... finally:
+        ...     par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        ...     par.set_parval_from_str(
+        ...         "register_MU_gridfunctions", original_register_MU
+        ...     )
+        ...     dict.clear(BSSN_quantities)
+        ...     dict.update(BSSN_quantities, original_quantities)
+        ...     BSSN_quantities._construction_parameters.clear()
+        ...     BSSN_quantities._construction_parameters.update(
+        ...         original_quantity_parameters
+        ...     )
+        ...     gri.glb_gridfcs_dict.clear()
+        ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+        ...     par.glb_params_dict.clear()
+        ...     par.glb_params_dict.update(original_parameters)
+        ...     par.glb_code_params_dict.clear()
+        ...     par.glb_code_params_dict.update(original_code_parameters)
+        ...     refmetric.reference_metric.clear()
+        ...     refmetric.reference_metric.update(original_reference_metrics)
+        >>> (
+        ...     objects[0].H != objects[1].H,
+        ...     objects[0] is not objects[1],
+        ...     registered_object is not objects[-1],
+        ...     mu_registered,
+        ...     same_parameters_reused,
+        ...     invalid_cf_raised,
+        ... )
+        (True, True, True, True, True, True)
+        """
+        construction_parameters = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+            par.parval_from_str("register_MU_gridfunctions"),
+        )
+        if (
+            CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        ):
             # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
             CoordSystem = (
                 CoordSystem_in.replace("_rfm_precompute", "")
@@ -217,9 +303,20 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
 
     def __setitem__(self, CoordSystem: str, value: BSSNconstraints) -> None:
         dict.__setitem__(self, CoordSystem, value)
+        self._construction_parameters[CoordSystem] = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+            par.parval_from_str("register_MU_gridfunctions"),
+        )
 
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
+        self._construction_parameters.pop(CoordSystem, None)
+
+    def clear(self) -> None:
+        """Remove all cached constraints and construction metadata."""
+        dict.clear(self)
+        self._construction_parameters.clear()
 
 
 BSSN_constraints = BSSNconstraints_dict()

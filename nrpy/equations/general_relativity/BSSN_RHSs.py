@@ -11,7 +11,7 @@ Author: Zachariah B. Etienne
 from collections import OrderedDict
 
 # Step 1.a: import all needed modules from NRPy:
-from typing import Dict
+from typing import Dict, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -377,8 +377,91 @@ class BSSNRHSs:
 class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
     """Custom dictionary for storing BSSNRHSs objects."""
 
+    def __init__(self) -> None:
+        """Initialize an empty cache and its construction-parameter metadata."""
+        super().__init__()
+        self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
+
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
-        if CoordSystem_in not in self:
+        """
+        Return RHSs built for the current expression-affecting parameters.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :return: Cached or newly built BSSN right-hand sides.
+
+        Doctests:
+        >>> import contextlib
+        >>> import io
+        >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+        >>> original_parameters = par.glb_params_dict.copy()
+        >>> original_code_parameters = par.glb_code_params_dict.copy()
+        >>> original_reference_metrics = refmetric.reference_metric.copy()
+        >>> original_quantities = dict(BSSN_quantities)
+        >>> original_quantity_parameters = (
+        ...     BSSN_quantities._construction_parameters.copy()
+        ... )
+        >>> cache = BSSNRHSs_dict()
+        >>> objects = []
+        >>> invalid_cf_raised = False
+        >>> try:
+        ...     with contextlib.redirect_stdout(io.StringIO()):
+        ...         for cf_choice in ("W", "phi"):
+        ...             par.set_parval_from_str(
+        ...                 "EvolvedConformalFactor_cf", cf_choice
+        ...             )
+        ...             objects.append(cache["Cartesian"])
+        ...         same_parameters_reused = cache["Cartesian"] is objects[-1]
+        ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
+        ...         try:
+        ...             _ = cache["Cartesian"]
+        ...         except ValueError:
+        ...             invalid_cf_raised = True
+        ... finally:
+        ...     par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        ...     dict.clear(BSSN_quantities)
+        ...     dict.update(BSSN_quantities, original_quantities)
+        ...     BSSN_quantities._construction_parameters.clear()
+        ...     BSSN_quantities._construction_parameters.update(
+        ...         original_quantity_parameters
+        ...     )
+        ...     gri.glb_gridfcs_dict.clear()
+        ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+        ...     par.glb_params_dict.clear()
+        ...     par.glb_params_dict.update(original_parameters)
+        ...     par.glb_code_params_dict.clear()
+        ...     par.glb_code_params_dict.update(original_code_parameters)
+        ...     refmetric.reference_metric.clear()
+        ...     refmetric.reference_metric.update(original_reference_metrics)
+        >>> symbols = [
+        ...     {symbol.name: symbol for symbol in obj.cf_rhs.free_symbols}
+        ...     for obj in objects
+        ... ]
+        >>> coefficients_match = [
+        ...     symbols[0]["alpha"] * symbols[0]["cf"] / 3,
+        ...     -symbols[1]["alpha"] / 6,
+        ... ] == [
+        ...     sp.diff(obj.cf_rhs, obj_symbols["trK"])
+        ...     for obj, obj_symbols in zip(objects, symbols)
+        ... ]
+        >>> objects_rebuilt = objects[0] is not objects[1]
+        >>> (
+        ...     coefficients_match,
+        ...     objects_rebuilt,
+        ...     same_parameters_reused,
+        ...     invalid_cf_raised,
+        ... )
+        (True, True, True, True)
+        """
+        construction_parameters = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
+        if (
+            CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        ):
             # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
             CoordSystem = (
                 CoordSystem_in.replace("_rfm_precompute", "")
@@ -403,9 +486,19 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
 
     def __setitem__(self, CoordSystem: str, value: BSSNRHSs) -> None:
         dict.__setitem__(self, CoordSystem, value)
+        self._construction_parameters[CoordSystem] = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
 
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
+        self._construction_parameters.pop(CoordSystem, None)
+
+    def clear(self) -> None:
+        """Remove all cached right-hand sides and construction metadata."""
+        dict.clear(self)
+        self._construction_parameters.clear()
 
 
 BSSN_RHSs = BSSNRHSs_dict()
