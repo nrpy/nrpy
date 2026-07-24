@@ -1,6 +1,8 @@
 #ifndef BHAHAHA_HEADER_H
 #define BHAHAHA_HEADER_H
 
+#include <stddef.h>
+
 // Definition of REAL data type, using double by default.
 #ifndef REAL
 #define REAL double
@@ -143,6 +145,8 @@ typedef struct {
   int verbosity_level;                                     // 0 = essential only; 1 = physical summary of found horizons;
                                                            // 2 = full algorithmic details.
   int enable_eta_varying_alg_for_precision_common_horizon; // 0 = no; 1 = yes. Janky, unless trying to find R_crit for a common horizon.
+  int enable_spectre_spin_diagnostic;                      // 0 = no; 1 = yes. Computes spin vector chi^i based on SpECTRE method.
+                                                           // Uses a noticeable amount of compute.
 
   //==========================
   // Persistent previous horizon data, used for setting up external input grid & horizon initial guess.
@@ -152,6 +156,13 @@ typedef struct {
   //    m1 = "minus 1" = most recent found; m2 = next-to-most-recent found; etc.
   // EXTERNAL NR CODE MUST ALLOCATE: max(Ntheta) x max(Nphi) doubles for each of these, but does not set them!
   REAL *prev_horizon_m1, *prev_horizon_m2, *prev_horizon_m3;
+
+  // Persistent SpECTRE AKV eigensolve seed data.
+  // Internal BHaHAHA state only; not a physical diagnostic.
+  int spectre_spin_akv_seed_valid;
+  int spectre_spin_akv_seed_Ntheta;
+  int spectre_spin_akv_seed_Nphi;
+  REAL *spectre_spin_akv_modes_m1;
 
   // DO NOT TOUCH: Persistent quantities set by BHaHAHA.
   // External NR code times at which previous horizons were found.
@@ -164,10 +175,21 @@ typedef struct {
   REAL z_center_m1, z_center_m2, z_center_m3;
 } bhahaha_params_and_data_struct;
 
+// Initialize internal persistent BHaHAHA state before any public setup helper
+// poisons or fills bhahaha_params_and_data_struct inputs.
+static inline void bah_initialize_params_and_data_internal_state(bhahaha_params_and_data_struct *restrict params) {
+  params->spectre_spin_akv_seed_valid = 0;
+  params->spectre_spin_akv_seed_Ntheta = -1;
+  params->spectre_spin_akv_seed_Nphi = -1;
+  params->spectre_spin_akv_modes_m1 = NULL;
+} // END FUNCTION: bah_initialize_params_and_data_internal_state
+
 //===============================================
 // C struct: bhahaha_diagnostics_struct
 // Contains diagnostic quantities computed by BHaHAHA.
 //===============================================
+#define BHAHAHA_DIAGNOSTIC_UNAVAILABLE (-10.0)
+
 typedef struct {
   //==========================
   // Convergence-related quantities
@@ -218,13 +240,31 @@ typedef struct {
   // Benchmarking: Counts number of points where Theta is evaluated.
   long Theta_eval_points_counter;
   //==========================
+  // Dimensionless spin vector chi, based on a spin function Omega calculated based on a rotational one-form according to the same method as SpECTRE
+  REAL spin_chi_x_spectre;
+  REAL spin_chi_y_spectre;
+  REAL spin_chi_z_spectre;
+
 } bhahaha_diagnostics_struct;
+
+static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct *restrict diags) {
+  diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+} // END FUNCTION: bah_initialize_diagnostics_struct
 
 //==================
 // PUBLIC FUNCTIONS
 //==================
+// (required once per freshly allocated bhahaha_params_and_data_struct): Initialize
+// internal persistent state before calling bah_poisoning_set_inputs() or bah_find_horizon().
+// If standalone code allocates spectre_spin_akv_modes_m1 for persistent SpECTRE
+// AKV seeding, allocate it after this initializer. Do not call this on every solve,
+// because valid SpECTRE AKV seed data are intentionally persistent.
+//
 // bah_poisoning_*(): Poison inputs into BHaHAHA and check whether the values have been set properly:
-// (highly recommended) Call bah_poisoning_set_inputs() before external NR code sets BHaHAHA inputs.
+// (highly recommended) After bah_initialize_params_and_data_internal_state(), call
+// bah_poisoning_set_inputs() before external NR code sets BHaHAHA inputs.
 void bah_poisoning_set_inputs(bhahaha_params_and_data_struct *restrict params);
 // (highly recommended) Call bah_poisoning_check_inputs() right before bah_find_horizon(), to check whether external NR code has set inputs properly.
 void bah_poisoning_check_inputs(const bhahaha_params_and_data_struct *restrict params);

@@ -227,6 +227,9 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   p | bp.num_horizons;
   p | bp.verbosity_level;
   p | bp.enable_eta_varying_alg_for_precision_common_horizon;
+  p | bp.enable_spectre_spin_diagnostic;
+  p | bp.spectre_spin_akv_seed_Ntheta;
+  p | bp.spectre_spin_akv_seed_Nphi;
   p | bp.t_m1;
   p | bp.t_m2;
   p | bp.t_m3;
@@ -249,6 +252,24 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   pup_optional_REAL_array(p, &bp.prev_horizon_m1, pup_bhahaha_shape_points(commondata), "prev_horizon_m1");
   pup_optional_REAL_array(p, &bp.prev_horizon_m2, pup_bhahaha_shape_points(commondata), "prev_horizon_m2");
   pup_optional_REAL_array(p, &bp.prev_horizon_m3, pup_bhahaha_shape_points(commondata), "prev_horizon_m3");
+
+  const int seed_length = 3 * pup_bhahaha_shape_points(commondata);
+  int has_valid_seed = 0;
+  if (!p.isUnpacking()) {
+    has_valid_seed = bp.spectre_spin_akv_seed_valid && bp.spectre_spin_akv_modes_m1 != nullptr;
+  } // END IF: computing valid SpECTRE AKV seed presence while packing
+  p | has_valid_seed;
+  if (p.isUnpacking()) {
+    bp.spectre_spin_akv_modes_m1 = (REAL *)calloc((size_t)seed_length, sizeof(REAL));
+    if (bp.spectre_spin_akv_modes_m1 == nullptr && seed_length > 0) {
+      fprintf(stderr, "PUP error: calloc failed for spectre_spin_akv_modes_m1.\n");
+      exit(EXIT_FAILURE);
+    } // END IF: SpECTRE AKV seed allocation failed
+  } // END IF: unpacking SpECTRE AKV seed storage
+  if (has_valid_seed != 0) {
+    PUParray(p, bp.spectre_spin_akv_modes_m1, seed_length);
+  } // END IF: serializing valid SpECTRE AKV seed
+  bp.spectre_spin_akv_seed_valid = has_valid_seed;
   pup_bhahaha_input_metric_workspace(p, bp, commondata);
 } // END FUNCTION: pup_bhahaha_params_and_data_struct
 

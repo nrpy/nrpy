@@ -119,6 +119,7 @@ BHaH.BHaHAHA.diagnostics_integration_weights.register_CFunction_diagnostics_inte
 BHaH.BHaHAHA.diagnostics_min_max_mean_radii_wrt_centroid.register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid()
 BHaH.BHaHAHA.diagnostics_proper_circumferences.register_CFunction_diagnostics_proper_circumferences()
 BHaH.BHaHAHA.diagnostics_proper_circumferences_general.register_CFunction_diagnostics_proper_circumferences_general()
+BHaH.BHaHAHA.spectre_spin_integrator.register_CFunction_diagnostics_spectre_spin()
 
 if enable_rfm_precompute:
     BHaH.rfm_precompute.register_CFunctions_rfm_precompute(
@@ -205,6 +206,46 @@ if enable_simd:
         subdirectory="intrinsics",
     )
 
+akv_primme_c_sources = [
+    "akv_primme_eigensolver/akv_internal_blaslapack.c",
+    "akv_primme_eigensolver/auxiliary_eigs.c",
+    "akv_primme_eigensolver/auxiliary_eigs_normal.c",
+    "akv_primme_eigensolver/convergence.c",
+    "akv_primme_eigensolver/correction.c",
+    "akv_primme_eigensolver/factorize.c",
+    "akv_primme_eigensolver/init.c",
+    "akv_primme_eigensolver/inner_solve.c",
+    "akv_primme_eigensolver/main_iter.c",
+    "akv_primme_eigensolver/ortho.c",
+    "akv_primme_eigensolver/primme_c.c",
+    "akv_primme_eigensolver/primme_interface.c",
+    "akv_primme_eigensolver/restart.c",
+    "akv_primme_eigensolver/solve_projection.c",
+    "akv_primme_eigensolver/update_W.c",
+    "akv_primme_eigensolver/update_projection.c",
+    "akv_primme_eigensolver/auxiliary.c",
+    "akv_primme_eigensolver/blaslapack.c",
+    "akv_primme_eigensolver/memman.c",
+    "akv_primme_eigensolver/wtime.c",
+]
+akv_primme_object_files = [
+    source.replace(".c", ".o") for source in akv_primme_c_sources
+]
+akv_primme_makefile_rule = "\n".join(
+    [
+        "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
+        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -DBHAHAHA_AKV_PRIMME_NAMESPACE -c $< -o $@",
+    ]
+)
+akv_linkcheck_makefile_rule = "\n".join(
+    [
+        ".PHONY: linkcheck",
+        "linkcheck: $(OBJ_FILES)",
+        "\tprintf 'int main(void) { return 0; }\\n' > .akv_linkcheck_main.c",
+        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) .akv_linkcheck_main.c $(OBJ_FILES) $(LDFLAGS) -o .akv_linkcheck",
+    ]
+)
+
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,
     project_name=project_name,
@@ -212,8 +253,52 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     lib_function_prefix="bah_",
     create_lib=True,
     static_lib=True,
+    addl_CFLAGS=[
+        "-DBHAHAHA_AKV_PRIMME_DOUBLE_ONLY",
+        "-DBHAHAHA_AKV_PRIMME_INTERNAL_BLASLAPACK",
+        "-DBHAHAHA_AKV_PRIMME_NAMESPACE",
+        "-DPRIMME_WITHOUT_FLOAT",
+    ],
+    include_dirs=["akv_primme_eigensolver"],
     use_openmp=use_openmp,
 )
+
+akv_primme_src = Path(BHaH.BHaHAHA.__file__).resolve().parent / "akv_primme_eigensolver"
+akv_primme_dst = Path(project_dir) / "akv_primme_eigensolver"
+
+if not akv_primme_src.is_dir():
+    raise FileNotFoundError(
+        f"Missing internal PRIMME source directory: {akv_primme_src}"
+    )
+if not Path(akv_primme_src, "primme.h").is_file():
+    raise FileNotFoundError(
+        f"Could not find primme.h in internal PRIMME source directory: {akv_primme_src}"
+    )
+
+shutil.copytree(akv_primme_src, akv_primme_dst)
+
+makefile_path = Path(project_dir) / "Makefile"
+lines = makefile_path.read_text(encoding="utf-8").splitlines()
+for line_number, line in enumerate(lines):
+    if line.startswith("OBJ_FILES = "):
+        lines[line_number] = line + " " + " ".join(akv_primme_object_files)
+        break
+else:
+    raise ValueError(f"Could not find OBJ_FILES in generated Makefile: {makefile_path}")
+
+for line_number, line in enumerate(lines):
+    if line.startswith("\t$(RM) "):
+        lines[line_number] = line + " .akv_linkcheck .akv_linkcheck_main.c"
+        break
+else:
+    raise ValueError(
+        f"Could not find clean rule in generated Makefile: {makefile_path}"
+    )
+
+makefile_text = "\n".join(lines) + "\n"
+makefile_text += "\n" + akv_primme_makefile_rule + "\n\n"
+makefile_text += akv_linkcheck_makefile_rule + "\n"
+makefile_path.write_text(makefile_text, encoding="utf-8")
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
 # Load the header file using pkgutil
@@ -249,6 +334,15 @@ BHaHAHA_h += """
 const char *bah_error_message(const bhahaha_error_codes error_code);
 //===============================================
 
+//===============================================
+// Internal dependency for SpECTRE spin diagnostics
+//===============================================
+// This generated static library embeds BHaHAHA's frozen, symbol-prefixed
+// internal PRIMME eigensolver fork for the SpECTRE spin-potential generalized
+// eigenproblem. Downstream applications do not need to link an external PRIMME,
+// BLAS, or LAPACK library for this diagnostic.
+//===============================================
+
 #endif // BHAHAHA_HEADER_H
 """
 
@@ -260,7 +354,10 @@ if use_cpp:
         "#endif\n\n"
         "#define restrict __restrict__\n\n"
     )
-    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
+    cpp_compatibility_epilogue = """
+    #ifdef __cplusplus
+    }
+    #endif"""
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
     # Convert fixed-size parameter to pointer

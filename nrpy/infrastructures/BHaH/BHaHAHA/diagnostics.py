@@ -43,7 +43,7 @@ def register_CFunction_diagnostics() -> Union[None, pcg.NRPyEnv_type]:
         is_commondata=True,
     )
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "sys/time.h"]
     prefunc = r"""
 /**
  * Displays spin values based on provided circumference ratio comparisons.
@@ -69,6 +69,28 @@ static void display_spin(const char *spin_label, const double spin_from_ratio1, 
            spin_from_ratio2_label);
   } // END IF: Spin derivable from ratios
 } // END FUNCTION: display_spin
+
+/**
+ * Displays the SpECTRE dimensionless spin vector.
+ *
+ * This helper function prints the dimensionless spin chi components computed by
+ * the SpECTRE spin diagnostic. If the diagnostic did not produce valid spin
+ * values, it displays "N/A".
+ *
+ * @param spin_chi_x_spectre The x component of the SpECTRE dimensionless spin chi.
+ * @param spin_chi_y_spectre The y component of the SpECTRE dimensionless spin chi.
+ * @param spin_chi_z_spectre The z component of the SpECTRE dimensionless spin chi.
+ */
+static void display_spectre_spin(const double spin_chi_x_spectre, const double spin_chi_y_spectre, const double spin_chi_z_spectre) {
+  // Spin values of BHAHAHA_DIAGNOSTIC_UNAVAILABLE indicate that the diagnostic failed.
+  if (spin_chi_x_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
+      spin_chi_z_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
+    printf("#spin_chi_spectre = (    N/A    ,     N/A    ,     N/A    ) based on SpECTRE spin diagnostic.\n");
+  } else {
+    printf("#spin_chi_spectre = (%.4g, %.4g, %.4g) based on SpECTRE spin diagnostic.\n", spin_chi_x_spectre, spin_chi_y_spectre,
+           spin_chi_z_spectre);
+  } // END IF: SpECTRE spin diagnostic produced valid values
+} // END FUNCTION: display_spectre_spin
 """
     desc = """Performs apparent horizon diagnostics for BHaHAHA.
 
@@ -158,6 +180,29 @@ calculations, norm evaluations, and detailed final iteration analyses.
       if (commondata->error_flag != BHAHAHA_SUCCESS)
         return;
 
+      if (commondata->bhahaha_params_and_data->enable_spectre_spin_diagnostic) {
+        struct timeval spectre_spin_start_time, spectre_spin_end_time;
+        gettimeofday(&spectre_spin_start_time, NULL);
+        const int spin_rc = bah_diagnostics_spectre_spin(commondata, griddata);
+        gettimeofday(&spectre_spin_end_time, NULL);
+        bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+        const REAL spectre_spin_elapsed_seconds =
+            (spectre_spin_end_time.tv_sec + spectre_spin_end_time.tv_usec / 1.0e6) -
+            (spectre_spin_start_time.tv_sec + spectre_spin_start_time.tv_usec / 1.0e6);
+        if (commondata->bhahaha_params_and_data->verbosity_level > 0)
+          printf("NRPy_BHaHAHA SpECTRE spin diagnostic elapsed time (Iter %d, H%d): %.6f s\n",
+                 commondata->bhahaha_params_and_data->iteration_external_input, commondata->bhahaha_params_and_data->which_horizon,
+                 spectre_spin_elapsed_seconds);
+        if (spin_rc != BHAHAHA_SUCCESS) {
+          bhahaha_diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          bhahaha_diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+          if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
+            fprintf(stderr, "WARNING: SpECTRE spin diagnostic failed with code %d; continuing without spin output.\n", spin_rc);
+          }
+        }
+      } // END IF: compute and store spins if SpECTRE spin diagnostic enabled
+
       // Display detailed final iteration diagnostics if verbosity is enabled.
       {
         bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
@@ -218,6 +263,9 @@ calculations, norm evaluations, and detailed final iteration analyses.
           // Display spin_z based on (xz/xy, yz/xy) ratios
           display_spin("spin_z", bhahaha_diags->spin_a_z_from_xz_over_xy_prop_circumfs, bhahaha_diags->spin_a_z_from_yz_over_xy_prop_circumfs, //
                        "xz/xy", "yz/xy");
+
+          // Display SpECTRE spin values
+          display_spectre_spin(bhahaha_diags->spin_chi_x_spectre, bhahaha_diags->spin_chi_y_spectre, bhahaha_diags->spin_chi_z_spectre);
         } // END IF: verbosity level > 0
       } // END BLOCK: compute final diagnostics and update stored horizon history
     } // END IF: final iteration

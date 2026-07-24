@@ -60,6 +60,8 @@ static void sanitize_checkpoint_commondata_pointers(commondata_struct *restrict 
     commondata->bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
     commondata->bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
     commondata->bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+    commondata->bhahaha_params_and_data[i].spectre_spin_akv_modes_m1 = NULL;
+    commondata->bhahaha_params_and_data[i].spectre_spin_akv_seed_valid = 0;
   } // END LOOP over horizons
 } // END FUNCTION: sanitize_checkpoint_commondata_pointers
 
@@ -129,9 +131,13 @@ loading the full checkpoint payload."""
       BHAH_MALLOC(horizon_params->prev_horizon_m1, sizeof(REAL) * npts);
       BHAH_MALLOC(horizon_params->prev_horizon_m2, sizeof(REAL) * npts);
       BHAH_MALLOC(horizon_params->prev_horizon_m3, sizeof(REAL) * npts);
+      BHAH_MALLOC(horizon_params->spectre_spin_akv_modes_m1, sizeof(REAL) * (size_t)3 * npts);
       FREAD(horizon_params->prev_horizon_m1, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m1");
       FREAD(horizon_params->prev_horizon_m2, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m2");
       FREAD(horizon_params->prev_horizon_m3, sizeof(REAL), npts, cp_file, filename, "prev_horizon_m3");
+      horizon_params->spectre_spin_akv_seed_valid = 0;
+      horizon_params->spectre_spin_akv_seed_Ntheta = -1;
+      horizon_params->spectre_spin_akv_seed_Nphi = -1;
     } // END IF has_prev_horizon_shapes
   } // END LOOP over horizons
 """
@@ -332,6 +338,8 @@ static inline void BHAH_safe_write_impl(const void *ptr, size_t size, size_t nme
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m1 = NULL;
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m2 = NULL;
       checkpoint_commondata.bhahaha_params_and_data[i].prev_horizon_m3 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].spectre_spin_akv_modes_m1 = NULL;
+      checkpoint_commondata.bhahaha_params_and_data[i].spectre_spin_akv_seed_valid = 0;
     } // END LOOP over all apparent horizons in sanitized commondata copy
 """
     body += r"""
