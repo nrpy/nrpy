@@ -40,7 +40,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
 
   // local to this chare
   const int ntotchare = Nxx_plus_2NGHOSTS0chare * Nxx_plus_2NGHOSTS1chare * Nxx_plus_2NGHOSTS2chare;
-  charecommstruct->localidx3pt_to_globalidx3pt = (int *restrict)malloc(sizeof(int) * ntotchare);
+  charecommstruct->localidx3pt_to_globalidx3pt = (int64_t *restrict)malloc(sizeof(int64_t) * ntotchare);
   const int startlocali = 0;
   const int startlocalj = 0;
   const int startlocalk = 0;
@@ -54,7 +54,7 @@ def register_CFunction_charecommstruct_set_up(CoordSystem: str) -> None:
         int globali = MAP_LOCAL_TO_GLOBAL_IDX0(thischareindex[0], locali, Nxx0chare);
         int globalj = MAP_LOCAL_TO_GLOBAL_IDX1(thischareindex[1], localj, Nxx1chare);
         int globalk = MAP_LOCAL_TO_GLOBAL_IDX2(thischareindex[2], localk, Nxx2chare);
-        int globalidx3 = IDX3GENERAL(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
+        int64_t globalidx3 = IDX3GENERAL_64(globali, globalj, globalk, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
         charecommstruct->localidx3pt_to_globalidx3pt[localidx3] = globalidx3;
       }
     }

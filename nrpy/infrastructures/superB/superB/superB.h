@@ -11,6 +11,7 @@
 #define __SUPERB_H__
 
 #include <stddef.h>
+#include <stdint.h>
 #include "ckio.h"
 #include "pup.h"
 #ifndef REAL
@@ -34,12 +35,22 @@
     i = (index) % (Ni);                      \
 }
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
+#define IDX3GENERAL_64(i, j, k, Ni, Nj) ((int64_t)(i) + (int64_t)(Ni) * ((int64_t)(j) + (int64_t)(Nj) * (int64_t)(k)))
 #define REVERSE_IDX3GENERAL(index, Ni, Nj, i, j, k) \
 { \
     k = (index) / ((Ni) * (Nj)); \
     int temp = (index) % ((Ni) * (Nj)); \
     j = temp / (Ni); \
     i = temp % (Ni); \
+}
+#define REVERSE_IDX3GENERAL_64(index, Ni, Nj, i, j, k) \
+{ \
+    const int64_t idx64 = (index); \
+    const int64_t plane64 = (int64_t)(Ni) * (int64_t)(Nj); \
+    k = (int)(idx64 / plane64); \
+    const int64_t temp64 = idx64 % plane64; \
+    j = (int)(temp64 / (Ni)); \
+    i = (int)(temp64 % (Ni)); \
 }
 #define IDX4GENERAL(g, i, j, k, Ni, Nj, Nk) ((i) + Ni * ((j) + Nj * ((k) + Nk * (g))))
 #define MAP_LOCAL_TO_GLOBAL_IDX0(chareidx0, local_idx0, Nxx0chare) ((chareidx0 * Nxx0chare) + local_idx0)
@@ -61,11 +72,11 @@ static inline int global_idx_1d_to_chare_idx_1d(const int global_idx, const int 
 }
 
 // On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_chareidx3 map.
-static inline int globalidx3pt_to_chareidx3(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+static inline int globalidx3pt_to_chareidx3(const int64_t globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
                                             const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare, const int Nchare0,
                                             const int Nchare1, const int Nchare2) {
   int globali, globalj, globalk;
-  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  REVERSE_IDX3GENERAL_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
   const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
   const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
   const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
@@ -74,12 +85,12 @@ static inline int globalidx3pt_to_chareidx3(const int globalidx3, const int Nxx_
 }
 
 // On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_localidx3pt map.
-static inline int globalidx3pt_to_localidx3pt(const int globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
+static inline int globalidx3pt_to_localidx3pt(const int64_t globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
                                               const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare,
                                               const int Nxx_plus_2NGHOSTS0_chare, const int Nxx_plus_2NGHOSTS1_chare,
                                               const int Nchare0, const int Nchare1, const int Nchare2) {
   int globali, globalj, globalk;
-  REVERSE_IDX3GENERAL(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  REVERSE_IDX3GENERAL_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
   const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
   const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
   const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
@@ -159,7 +170,7 @@ void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commond
 int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]);
 
 typedef struct __charecomm_struct__ {
-  int *localidx3pt_to_globalidx3pt;  // local to this chare
+  int64_t *localidx3pt_to_globalidx3pt;  // local to this chare
 } charecomm_struct;
 
 typedef struct __diagnostic_struct__ {
@@ -220,13 +231,13 @@ typedef struct __nonlocalinnerbc_struct__ {
   int *idx3chare_to_src_chare_id;
   int *num_srcpts_each_chare;
   int **map_srcchare_and_srcpt_id_to_linear_id;
-  int **globalidx3_srcpts; // of shape [tot_num_src_chares][num_srcpts_each_chare]
+  int64_t **globalidx3_srcpts; // of shape [tot_num_src_chares][num_srcpts_each_chare]
   // variables for this chare having the src pt but not the dst pt
   int tot_num_dst_chares;
   int *idx3_of_dst_chares;
   int *idx3chare_to_dst_chare_id;
   int *num_srcpts_tosend_each_chare;
-  int **globalidx3_srcpts_tosend; // of shape [tot_num_dst_chares][num_srcpts_tosend_each_chare]
+  int64_t **globalidx3_srcpts_tosend; // of shape [tot_num_dst_chares][num_srcpts_tosend_each_chare]
 } nonlocalinnerbc_struct;
 
 #endif // #ifndef __SUPERB_H__

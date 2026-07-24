@@ -365,8 +365,11 @@ void bcstruct_set_up__rfm__SinhCylindricalv2n2(const commondata_struct *restrict
         if (i0 == i0i1i2_inbounds[0] && i1 == i0i1i2_inbounds[1] && i2 == i0i1i2_inbounds[2]) {
           // this is a pure outer boundary point.
         } else {
-          bcstruct->inner_bc_array[which_inner].dstpt = IDX3(i0, i1, i2);
-          bcstruct->inner_bc_array[which_inner].srcpt = IDX3(i0i1i2_inbounds[0], i0i1i2_inbounds[1], i0i1i2_inbounds[2]);
+          bcstruct->inner_bc_array[which_inner].dstpt =
+              (int64_t)i0 + (int64_t)Nxx_plus_2NGHOSTS0 * ((int64_t)i1 + (int64_t)Nxx_plus_2NGHOSTS1 * (int64_t)i2);
+          bcstruct->inner_bc_array[which_inner].srcpt =
+              (int64_t)i0i1i2_inbounds[0] +
+              (int64_t)Nxx_plus_2NGHOSTS0 * ((int64_t)i0i1i2_inbounds[1] + (int64_t)Nxx_plus_2NGHOSTS1 * (int64_t)i0i1i2_inbounds[2]);
           // printf("%d / %d\n",which_inner, bc_info->num_inner_boundary_points);
           set_parity_for_inner_boundary_single_pt(commondata, params, xx[0][i0], xx[1][i1], xx[2][i2], x0x1x2_inbounds, which_inner,
                                                   bcstruct->inner_bc_array);
