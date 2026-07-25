@@ -104,7 +104,7 @@ static void azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
 
     g4dd_interp_0_ref[comp] += interp_0_derivative_weight * metric_value;
     g4dd_interp_1_ref[comp] += interp_1_derivative_weight * metric_value;
-  } // END LOOP: for comp over serialized metric components
+  } // END LOOP: for comp over serialized metric
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct
 
 /**
@@ -242,7 +242,7 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   const REAL rho_sq = x * x + y * y;
   const REAL origin_epsilon = 1.0e-14;
   const REAL axis_rho_epsilon = 1.0e-14;
-  const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_order;
+  const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_half_width;
   const long int interp_order_long = 2L * (long int)n_interp_ghosts + 1L;
   const REAL phi0 = (REAL)context->stored_phi_samples[0];
   const REAL phi1 = (REAL)context->stored_phi_samples[1];
@@ -297,12 +297,12 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
     const int interp_0_raw = center_idx[0] + (u - n_interp_ghosts);
     interp_0_storage_stencil[u] = interp_0_raw;
     src_interp_0_stencil[u] = (REAL)(params->xxmin0 + (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx0));
-  } // END LOOP: for u over first interpolation-dimension stencil nodes
+  } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
     const int interp_1_raw = center_idx[2] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
     src_interp_1_stencil[v] = (REAL)(params->xxmin2 + (((interp_1_raw - NGHOSTS) + 0.5) * params->dxx2));
-  } // END LOOP: for v over second interpolation-dimension stencil nodes
+  } // END LOOP: for v over second interpolation-dimension
 
   compute_inv_denom(interp_order, inv_denom);
   compute_diffs_xi(interp_order, target_interp_0, src_interp_0_stencil, diffs_interp_0);
@@ -322,8 +322,8 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
                                                                                                          &mapped_point_index[v][u]);
       if (index_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
         return index_status;
-    } // END LOOP: for u over first interpolation-dimension payload indices
-  } // END LOOP: for v over second interpolation-dimension payload indices
+    } // END LOOP: for u over first interpolation-dimension
+  } // END LOOP: for v over second interpolation-dimension
 
   // Step 4: Evaluate the native-with-respect-to-Cartesian Jacobian once for
   // this target position. It is common to every requested time slice.
@@ -356,8 +356,8 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
 
         azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(value_weight, interp_0_derivative_weight, interp_1_derivative_weight,
                                                                             tensor_record, g4dd_ref, g4dd_interp_0_ref, g4dd_interp_1_ref);
-      } // END LOOP: for u over first interpolation-dimension values
-    } // END LOOP: for v over second interpolation-dimension values
+      } // END LOOP: for u over first interpolation-dimension
+    } // END LOOP: for v over second interpolation-dimension
 
     azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(target_phi - phi_ref, g4dd_ref, g4dd_interp_0_ref, g4dd_interp_1_ref,
                                                                               g4dd_rot, g4dd_native_derivatives_rot);
@@ -377,9 +377,9 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
           cartesian_derivative +=
               inverse_jacobian[native_direction][cartesian_direction] * g4dd_native_derivatives_rot[native_direction][metric_component];
         metric_derivative_slice_out[4 * metric_component + cartesian_direction + 1] = cartesian_derivative;
-      } // END LOOP: for cartesian_direction over x, y, z
-    } // END LOOP: for metric_component over symmetric g4DD components
-  } // END LOOP: for which_slice over requested slice indices
+      } // END LOOP: for cartesian_direction over x, y,
+    } // END LOOP: for metric_component over symmetric g4DD
+  } // END LOOP: for which_slice over requested slice
 
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2

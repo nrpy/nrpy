@@ -54,7 +54,7 @@ def batch_integrator_numerical(
     ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD"
     ... )
     >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
-    >>> "@param[in] commondata" in generated
+    >>> "@param[in,out] commondata" in generated
     True
     >>> "time_window_manager_numerical_mmap_for_slot" in generated
     True
@@ -133,8 +133,10 @@ def batch_integrator_numerical(
     bundle through numerical_interpolation(), advances photons with the existing RKF45 kernels,
     and writes final blueprint results.
 
-    @param[in] commondata Struct containing global numerical-spacetime, camera,
-                          and integration parameters.
+    @param[in,out] commondata Struct containing global numerical-spacetime,
+                              camera, and integration parameters. The numerical
+                              time-window manager fills its authoritative first
+                              stored slice time during initialization.
     @param num_rays Total number of photon trajectories to simulate.
     @param[out] results_buffer Host array storing the final physical
                                intersections.
@@ -146,7 +148,7 @@ def batch_integrator_numerical(
     name = "batch_integrator_numerical"
 
     params = (
-        "const commondata_struct *restrict commondata, "
+        "commondata_struct *restrict commondata, "
         "long int num_rays, "
         "blueprint_data_t *restrict results_buffer, "
         "const char *restrict norm_abs_bin_path"
@@ -232,7 +234,7 @@ def batch_integrator_numerical(
         for (long int init_i = 0; init_i < chunk_size; ++init_i) {
             d_integration_param_bundle[0][init_i] = commondata->t_start;
             d_h[0][init_i] = commondata->numerical_initial_h;
-        } // END LOOP: for init_i over initial numerical interpolation parameters
+        } // END LOOP: for init_i over initial numerical
         """
         if normalized_eom
         else ""
@@ -243,7 +245,7 @@ def batch_integrator_numerical(
                         const long int master_idx = chunk_buffer[0][norm_i];
                         integration_param_bridge[0][norm_i] =
                             all_photons_host.integration_param[master_idx];
-                    } // END LOOP: for norm_i over terminal integration parameters
+                    } // END LOOP: for norm_i over terminal integration
                     memcpy(
                         d_integration_param_bundle[0],
                         integration_param_bridge[0],
@@ -269,11 +271,11 @@ def batch_integrator_numerical(
         else "fabs(d_norm_bundle[norm_i].C)"
     )
     finalize_current = """
-            // Finalize step: apply Cash-Karp error control and update the
+            // Finalize step: apply RKF45 error control and update the
             // integration-parameter baseline and step size $h$.
             rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_integration_param_bundle[current], d_retries[current], active_chunks[current], current);"""
     finalize_next = """
-                // Finalize step: apply Cash-Karp error control and update the
+                // Finalize step: apply RKF45 error control and update the
                 // integration-parameter baseline and step size $h$.
                 rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_integration_param_bundle[next], d_retries[next], active_chunks[next], next);"""
 
@@ -442,7 +444,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
         {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
-    }} // END LOOP: for s over 2 to instantiate the double-buffered operational arrays
+    }} // END LOOP: for s over 2
 
     // Scratchpad array holding the terminal normalization diagnostic outputs.
     normalization_constraint_t *d_norm_bundle = NULL;
@@ -454,7 +456,7 @@ def batch_integrator_numerical(
         {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon normalization sidecar buffer.
         for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
             normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
-        }} // END LOOP: for norm_init_i over num_rays to initialize normalization sidecar buffer
+        }} // END LOOP: for norm_init_i over num_rays
     }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
 
     // Event-detection kernels write final physical plane intersections directly to results_buffer.
@@ -496,7 +498,7 @@ def batch_integrator_numerical(
             &numerical_window,
             commondata->numerical_spacetime_bin_path,
             commondata,
-            commondata->numerical_spacetime_temporal_interp_order,
+            commondata->numerical_spacetime_temporal_interp_half_width,
             &numerical_params) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
         fprintf(stderr,
                 "ERROR: failed to initialize numerical time-window manager from '%s'.\n",
@@ -504,6 +506,8 @@ def batch_integrator_numerical(
         slot_manager_free(&tsm);
         exit(1);
     }} // END IF: numerical time-window manager initialization failed
+    printf("Numerical spacetime first stored slice time: %.15e\n",
+           (double)commondata->t_numerical_initial);
 
     if (numerical_params.Nxx{phi_dim} != 2) {{
         fprintf(stderr,
@@ -512,7 +516,7 @@ def batch_integrator_numerical(
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }} // END IF: stored phi-plane count was incompatible with azimuthal symmetry
+    }} // END IF: stored phi-plane count was incompatible
 
     azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
     spatial_context.stored_phi_samples[0] =
@@ -541,7 +545,7 @@ def batch_integrator_numerical(
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }} // END IF: initial photon time was outside the configured slot range
+    }} // END IF: initial photon time outside bounds
 
     if (time_window_manager_numerical_mmap_for_slot(
             &numerical_window, &tsm, initial_slot_idx) !=
@@ -553,7 +557,7 @@ def batch_integrator_numerical(
         time_window_manager_numerical_free(&numerical_window);
         slot_manager_free(&tsm);
         exit(1);
-    }} // END IF: initial slot time window mapping failed
+    }} // END IF: initial slot time window mapping
 
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
 
@@ -565,12 +569,12 @@ def batch_integrator_numerical(
             long int master_idx = start_idx + init_i; // Computes the absolute master index $m_{{idx}}$ tracking the photon within the global array.
             for (int init_k = 0; init_k < 9; ++init_k) {{ // Loop index $init_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
                 f_bridge[0][init_k * BUNDLE_CAPACITY + init_i] = all_photons_host.f[init_k * num_rays + master_idx]; // Assigns the active tensor state component to the primary bridge.
-            }} // END LOOP: for init_k over 9 to iterate over tensor components
-        }} // END LOOP: for init_i over chunk_size to pack the bridge
+            }} // END LOOP: for init_k over 9
+        }} // END LOOP: for init_i over chunk_size
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating the memory transfer of the 9 state vector $f^\mu$ components.
             {memcpy_cpu("d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "f_bridge[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
-        }} // END LOOP: for c_k over 9 to orchestrate memory transfer of state vector
+        }} // END LOOP: for c_k over 9
 {initial_integration_param_setup}
 
         // Calculates symmetric metric tensor $g_{{\mu\nu}}$ strictly on the primary CPU buffer for the Hamiltonian constraint.
@@ -598,7 +602,7 @@ def batch_integrator_numerical(
         for (int m_k = 0; m_k < 10; ++m_k) {{
             // Loop index $m_k$ orchestrating memory transfer of the 10 metric tensor $g_{{\mu\nu}}$ components.
             {memcpy_cpu("metric_diag_bridge + m_k * BUNDLE_CAPACITY", "d_metric_bundle[0] + m_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
-        }} // END LOOP: for m_k over 10 to orchestrate memory transfer of metric tensor
+        }} // END LOOP: for m_k over 10
         {no_sync()}
 
         long int metric_nan_count = 0; // Accumulator tracking the total number of metric tensor evaluations containing non-finite values.
@@ -609,10 +613,10 @@ def batch_integrator_numerical(
                     isinf(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i])) {{
                     m_has_nan = true; // Flags the trajectory metric state as invalid due to a non-finite value.
                     break; // Terminates the tensor component loop early to avoid unnecessary work upon detecting a failure.
-                }} // END IF: check for NaN or Inf in metric
-            }} // END LOOP: for m_diag_k over 10 to check metric tensor components
+                }} // END IF: check for NaN or Inf
+            }} // END LOOP: for m_diag_k over 10
             if (m_has_nan) metric_nan_count++; // Increments the total accumulation of corrupted metric tensor evaluations.
-        }} // END LOOP: for m_diag_i over chunk_size to scan for metric integrity
+        }} // END LOOP: for m_diag_i over chunk_size
 
         if (metric_nan_count > 0) {{
             fprintf(stderr,
@@ -624,7 +628,7 @@ def batch_integrator_numerical(
             time_window_manager_numerical_free(&numerical_window);
             slot_manager_free(&tsm);
             exit(1);
-        }} // END IF: metric_nan_count > 0 to fail loudly on invalid numerical metric
+        }} // END IF: metric_nan_count > 0 to fail
         // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         {free_pinned}(metric_diag_bridge);
 
@@ -634,7 +638,7 @@ def batch_integrator_numerical(
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating memory transfer of the 9 constrained state vector $f^\mu$ components.
             {memcpy_cpu("f_bridge[0] + c_k * BUNDLE_CAPACITY", "d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
-        }} // END LOOP: for c_k over 9 to orchestrate memory transfer of constrained state vector
+        }} // END LOOP: for c_k over 9
         {no_sync()}
 
         long int nonfinite_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing non-finite values post-constraint solving.
@@ -645,9 +649,9 @@ def batch_integrator_numerical(
                 double val = f_bridge[0][gather_k * BUNDLE_CAPACITY + gather_i]; // Evaluates the updated numerical value of the specific tensor component.
                 all_photons_host.f[gather_k * num_rays + master_idx] = val; // Maps the valid constrained tensor scalar back to the global Host SoA.
                 if (!isfinite(val)) has_nonfinite = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
-            }} // END LOOP: for gather_k over 9 to iterate over tensor components
+            }} // END LOOP: for gather_k over 9
             if (has_nonfinite) nonfinite_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
-        }} // END LOOP: for gather_i over chunk_size to retrieve updated constrained state vectors
+        }} // END LOOP: for gather_i over chunk_size
 
         if (nonfinite_count > 0) {{
             fprintf(stderr,
@@ -658,8 +662,8 @@ def batch_integrator_numerical(
             time_window_manager_numerical_free(&numerical_window);
             slot_manager_free(&tsm);
             exit(1);
-        }} // END IF: nonfinite_count > 0 to abort on invalid post-p^0 states
-    }} // END LOOP: for init_batch over num_batches to evaluate initialization constraints
+        }} // END IF: nonfinite_count > 0 to abort
+    }} // END LOOP: for init_batch over num_batches
 
 
     long int sync_i; // Loop iterator index $sync_i$ spanning the entire global ray count to synchronize starting properties across history states.
@@ -668,7 +672,7 @@ def batch_integrator_numerical(
         for (sync_k = 0; sync_k < 9; ++sync_k) {{
             all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the first history derivative matrix.
             all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
-        }} // END LOOP: for sync_k over 9 to propagate historical derivatives
+        }} // END LOOP: for sync_k over 9
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
         all_photons_host.integration_param[sync_i] = {initial_integration_param}; // Sets the initial integration parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
@@ -681,8 +685,8 @@ def batch_integrator_numerical(
         int s_idx = slot_get_index(&tsm, {initial_coordinate_time}); // Maps coordinate time to a TimeSlotManager bin.
         if (s_idx != -1) {{
             slot_add_photon(&tsm, s_idx, sync_i); // Registers the active photon index to its corresponding temporal bin mapped by the orchestrator.
-        }} // END IF: s_idx != -1 to add photon to slot
-    }} // END LOOP: for sync_i over num_rays to synchronize starting properties
+        }} // END IF: s_idx != -1 to add
+    }} // END LOOP: for sync_i over num_rays
 
     // Hardware clock state marking the beginning of the active integration chunk.
     struct timespec batch_start_time;
@@ -751,8 +755,8 @@ def batch_integrator_numerical(
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                     f_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
                     f_p_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
-                }} // END LOOP: for bridge_i over active_chunks[current] to pack payloads
-            }} // END LOOP: for c_k over 9 to pack tensor components
+                }} // END LOOP: for bridge_i over active_chunks[current]
+            }} // END LOOP: for c_k over 9
 
             // 2. Pack the 1D arrays in a separate sequential loop
             for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{
@@ -767,7 +771,7 @@ def batch_integrator_numerical(
                 integration_param_p_p_bridge[current][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
                 window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
                 source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
-            }} // END LOOP: for bridge_i over active_chunks[current] to pack 1D arrays
+            }} // END LOOP: for bridge_i over active_chunks[current]
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
                 // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
@@ -776,7 +780,7 @@ def batch_integrator_numerical(
                 {memcpy_cpu("d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
                 // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
                 {memcpy_cpu("d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-            }} // END LOOP: for c_k over 9 to orchestrate CPU buffer copy
+            }} // END LOOP: for c_k over 9
             // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_h[current]", "h_bridge[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes status enums to CPU scratch strictly on buffer [current] to minimize latency.
@@ -805,7 +809,7 @@ def batch_integrator_numerical(
                 {memcpy_cpu("d_f_start_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
                 // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
                 {memcpy_cpu("d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-            }} // END LOOP: for c_k over 9 to setup CPU buffer baseline
+            }} // END LOOP: for c_k over 9
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
                 // Interpolation step: evaluate the metric and selected geometry
@@ -829,7 +833,7 @@ def batch_integrator_numerical(
                         if (!isfinite(val)) {{
                             bad_interp = true;
                             break;
-                        }} // END IF: one metric component was not finite
+                        }} // END IF: metric component invalid
                     }} // END LOOP: for interp_c over metric components
                     if (!bad_interp) {{
                         for (int interp_c = 0; interp_c < 40; ++interp_c) {{
@@ -837,12 +841,12 @@ def batch_integrator_numerical(
                             if (!isfinite(val)) {{
                                 bad_interp = true;
                                 break;
-                            }} // END IF: one geometry component was not finite
+                            }} // END IF: geometry component invalid
                         }} // END LOOP: for interp_c over geometry components
-                    }} // END IF: metric components were finite before checking geometry
+                    }} // END IF: metric components finite
                     if (bad_interp)
                         bad_interp_current++;
-                }} // END LOOP: for interp_i over active chunks on the active buffer
+                }} // END LOOP: for interp_i over active chunks
                 if (bad_interp_current > 0) {{
                     fprintf(stderr,
                             "ERROR: Slot %d stage %d buffer %d: %ld rays had "
@@ -855,7 +859,7 @@ def batch_integrator_numerical(
                     time_window_manager_numerical_free(&numerical_window);
                     slot_manager_free(&tsm);
                     exit(1);
-                }} // END IF: bad_interp_current > 0 to abort before RHS on invalid interpolation
+                }} // END IF: bad_interp_current > 0 to abort
                 // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
                 // on the active buffer.
                 calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_rhs_geometry_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
@@ -865,7 +869,7 @@ def batch_integrator_numerical(
                     // active buffer.
                     rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
                 }} // END IF: skip stage-6 intermediate state update
-            }} // END LOOP: for stage over 6 to execute RKF45 stages
+            }} // END LOOP: for stage over 6
 
 {finalize_current}
             attempted_rkf45_steps_since_print += active_chunks[current];
@@ -880,7 +884,7 @@ def batch_integrator_numerical(
                 {memcpy_cpu("f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
                 // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the active buffer.
                 {memcpy_cpu("f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
-            }} // END LOOP: for c_k over 9 to orchestrate CPU buffer copy
+            }} // END LOOP: for c_k over 9
             // CPU buffer copy: Retrieves active step sizes $h$ back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("h_bridge[current]", "d_h[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Retrieves updated status enums back to CPU RAM synchronously on the active buffer.
@@ -901,7 +905,7 @@ def batch_integrator_numerical(
             {memcpy_cpu("window_event_found_bridge[current]", "d_window_event_found[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Retrieves active source locks back to CPU RAM synchronously on the active buffer.
             {memcpy_cpu("source_event_found_bridge[current]", "d_source_event_found[current]", "sizeof(bool) * active_chunks[current]")}
-        }} // END IF: active_chunks[current] > 0 to prime the pump on Buffer 0
+        }} // END IF: active chunks available
 
         //==========================================
         // PHASE B: THE OVERLAP LOOP
@@ -921,8 +925,8 @@ def batch_integrator_numerical(
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                         f_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
                         f_p_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
-                    }} // END LOOP: for bridge_i over active_chunks[next] to pack payloads
-                }} // END LOOP: for c_k over 9 to pack tensor components
+                    }} // END LOOP: for bridge_i over active_chunks[next]
+                }} // END LOOP: for c_k over 9
 
                 // 2. Pack the 1D arrays in a separate sequential loop
                 for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{
@@ -937,7 +941,7 @@ def batch_integrator_numerical(
                     integration_param_p_p_bridge[next][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
                     window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
                     source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
-                }} // END LOOP: for bridge_i over active_chunks[next] to pack 1D arrays
+                }} // END LOOP: for bridge_i over active_chunks[next]
 
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
                     // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
@@ -946,7 +950,7 @@ def batch_integrator_numerical(
                     {memcpy_cpu("d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                     // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
                     {memcpy_cpu("d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                }} // END LOOP: for c_k over 9 to orchestrate CPU buffer copy
+                }} // END LOOP: for c_k over 9
                 // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_h[next]", "h_bridge[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes status enums to CPU scratch strictly on buffer [next] to overlap execution.
@@ -975,7 +979,7 @@ def batch_integrator_numerical(
                     {memcpy_cpu("d_f_start_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                     // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
                     {memcpy_cpu("d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                }} // END LOOP: for c_k over 9 to setup CPU buffer baseline
+                }} // END LOOP: for c_k over 9
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
                     // Interpolation step: evaluate the metric tensor
@@ -1000,7 +1004,7 @@ def batch_integrator_numerical(
                             if (!isfinite(val)) {{
                                 bad_interp = true;
                                 break;
-                            }} // END IF: one metric component was not finite
+                            }} // END IF: metric component invalid
                         }} // END LOOP: for interp_c over metric components
                         if (!bad_interp) {{
                             for (int interp_c = 0; interp_c < 40; ++interp_c) {{
@@ -1008,12 +1012,12 @@ def batch_integrator_numerical(
                                 if (!isfinite(val)) {{
                                     bad_interp = true;
                                     break;
-                                }} // END IF: one geometry component was not finite
+                                }} // END IF: geometry component invalid
                             }} // END LOOP: for interp_c over geometry components
-                        }} // END IF: metric components were finite before checking geometry
+                        }} // END IF: metric components finite
                         if (bad_interp)
                             bad_interp_next++;
-                    }} // END LOOP: for interp_i over active chunks on the alternate buffer
+                    }} // END LOOP: for interp_i over active chunks
                     if (bad_interp_next > 0) {{
                         fprintf(stderr,
                                 "ERROR: Slot %d stage %d buffer %d: %ld rays had "
@@ -1026,7 +1030,7 @@ def batch_integrator_numerical(
                         time_window_manager_numerical_free(&numerical_window);
                         slot_manager_free(&tsm);
                         exit(1);
-                    }} // END IF: bad_interp_next > 0 to abort before RHS on invalid interpolation
+                    }} // END IF: bad_interp_next > 0 to abort
                     // RHS step: compute the geodesic equation derivatives
                     // $\dot{{ f}}^\mu$ on the alternate buffer.
                     calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_rhs_geometry_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
@@ -1036,7 +1040,7 @@ def batch_integrator_numerical(
                         // the alternate buffer.
                         rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
                     }} // END IF: skip stage-6 intermediate state update
-                }} // END LOOP: for stage over 6 to execute RKF45 stages
+                }} // END LOOP: for stage over 6
 
 {finalize_next}
                 attempted_rkf45_steps_since_print += active_chunks[next];
@@ -1050,7 +1054,7 @@ def batch_integrator_numerical(
                     {memcpy_cpu("f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                     // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the alternate buffer.
                     {memcpy_cpu("f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
-                }} // END LOOP: for c_k over 9 to orchestrate CPU buffer copy
+                }} // END LOOP: for c_k over 9
                 // CPU buffer copy: Retrieves upcoming active step sizes $h$ back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("h_bridge[next]", "d_h[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming updated status enums back to CPU RAM synchronously on the alternate buffer.
@@ -1071,7 +1075,7 @@ def batch_integrator_numerical(
                 {memcpy_cpu("window_event_found_bridge[next]", "d_window_event_found[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves upcoming active source locks back to CPU RAM synchronously on the alternate buffer.
                 {memcpy_cpu("source_event_found_bridge[next]", "d_source_event_found[next]", "sizeof(bool) * active_chunks[next]")}
-            }} // END IF: active_chunks[next] > 0 to process upcoming payload
+            }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
                 // CPU memory operations are complete before payload unpacking.
@@ -1084,8 +1088,8 @@ def batch_integrator_numerical(
                         all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
                         all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized first derivative $\dot{{ f}}^\mu$ into the global Host matrix.
                         all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized second derivative $\ddot{{ f}}^\mu$ into the global Host matrix.
-                    }} // END LOOP: for fin_i over active_chunks[current] to unpack finalized data
-                }} // END LOOP: for fin_k over 9 to retrieve tensor components
+                    }} // END LOOP: for fin_i over active_chunks[current]
+                }} // END LOOP: for fin_k over 9
 
                 // 2. Unpack 1D arrays sequentially
                 for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{
@@ -1100,7 +1104,7 @@ def batch_integrator_numerical(
                     all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized second preceding integration parameter into the global Host matrix.
                     all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i]; // Unpacks the synchronized window lock into the global Host matrix.
                     all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i]; // Unpacks the synchronized source lock into the global Host matrix.
-                }} // END LOOP: for fin_i over active_chunks[current] to unpack 1D arrays
+                }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
                 for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{
@@ -1112,15 +1116,15 @@ def batch_integrator_numerical(
                         }} else {{
                             all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; // Flags the physical state as permanently failed due to excessive propagation time.
                             total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
-                        }} // END ELSE: flag state as failed and decrement total active photons
+                        }} // END ELSE: state flagged failed
                     }} // END IF: trajectory remains active
                     else if (status_bridge[current][fin_i] == REJECTED) {{   // Evaluates the retry logic if the numerical step exceeded the requested tolerances.
                         slot_add_photon(&tsm, slot_idx, m_idx); // Re-adds to the current bin to attempt integration with an adapted step-size scalar $h$.
                     }} else {{
                         total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                     }} // END ELSE: trajectory reached terminal state
-                }} // END LOOP: for fin_i over active_chunks[current] to update TimeSlotManager state
-            }} // END IF: active_chunks[current] > 0 to complete buffer and unpack
+                }} // END LOOP: for fin_i over active_chunks[current]
+            }} // END IF: active chunks completed
 
             //==========================================
             // PROGRESS DASHBOARD
@@ -1147,8 +1151,8 @@ def batch_integrator_numerical(
                 }} else {{
                     rkf45_attempts_per_sec_avg =
                         (1.0 - alpha) * rkf45_attempts_per_sec_avg + alpha * rkf45_attempts_per_sec;
-                }} // END ELSE: update the existing RKF45 throughput moving average
-            }} // END IF: elapsed interval produced at least one completed RKF45 attempt
+                }} // END ELSE: update the existing RKF45 throughput
+            }} // END IF: elapsed interval produced at least
 
             // Evaluates the global completion ratio bounded between $0.0$ and $1.0$.
             double percent_done = 100.0 * (1.0 - ((double)total_active_photons / (double)num_rays));
@@ -1168,7 +1172,7 @@ def batch_integrator_numerical(
                 if (bar_i < pos) bar[bar_i] = '='; // Appends the completed progression character.
                 else if (bar_i == pos) bar[bar_i] = '>'; // Appends the active vanguard character.
                 else bar[bar_i] = ' '; // Appends the uncompleted progression character.
-            }} // END LOOP: for bar_i over bar_width to construct loading bar
+            }} // END LOOP: for bar_i over bar_width
             bar[bar_width] = '\0'; // Terminates the loading bar character array to prevent buffer overruns.
 
             // Accumulator tracking how many rays in the just-processed chunk finished this RKF45 attempt in the recoverable REJECTED state.
@@ -1182,8 +1186,8 @@ def batch_integrator_numerical(
             for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
                 if (status_bridge[current][sum_i] == REJECTED) {{
                     batch_rejections++; // Counts one rejected integration attempt for this chunk entry.
-                }} // END IF: finalized status for this attempted ray was REJECTED
-            }} // END LOOP: for sum_i over active_chunks[current] to calculate rejection count
+                }} // END IF: finalized status for this attempted
+            }} // END LOOP: for sum_i over active_chunks[current]
 
             // Evaluates the fraction of attempted rays in this processed chunk whose current RKF45 attempt was rejected and re-queued.
             double reject_percent = (active_chunks[current] > 0) ? (100.0 * (double)batch_rejections / (double)active_chunks[current]) : 0.0;
@@ -1208,14 +1212,14 @@ def batch_integrator_numerical(
             int temp = current; // Temporary integer scalar storing the primary buffer index for logical pointer swapping.
             current = next; // Shifts the primary execution tracker to the alternate buffer index.
             next = temp; // Assigns the cleared buffer index back to the upcoming payload queue.
-        }} // END WHILE: alternating buffers to process temporal bin
+        }} // END WHILE: alternating buffers to process temporal
 
         //==========================================
         // PHASE C: THE TIME BARRIER
         //==========================================
         // CPU execution is synchronous here; no additional extra barrier is needed.
 
-     }} // END LOOP: for slot_idx down to 0 to process all temporal bins
+     }} // END LOOP: for slot_idx down to 0
 
     //==========================================
     // 4. RESULT WRITING, CLEANUP, AND FINALIZATION
@@ -1250,16 +1254,16 @@ def batch_integrator_numerical(
                     &norm_tsm, {terminal_coordinate_time});
                 if (norm_slot_idx < 0) {{
                     continue;
-                }} // END IF: norm_slot_idx < 0 to skip terminal states outside the numerical time domain
+                }} // END IF: norm_slot_idx < 0 to skip
                 slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
-            }} // END LOOP: for norm_ray over num_rays to populate the terminal slot manager
+            }} // END LOOP: for norm_ray over num_rays
 
             for (int norm_slot_idx = norm_tsm.num_slots - 1;
                  norm_slot_idx >= 0 && normalization_failure_mode == 0;
                  --norm_slot_idx) {{
                 if (norm_tsm.slot_counts[norm_slot_idx] <= 0) {{
                     continue;
-                }} // END IF: norm_tsm.slot_counts[norm_slot_idx] <= 0 to skip an empty terminal slot
+                }} // END IF: normalization slot empty
 
                 if (time_window_manager_numerical_mmap_for_slot(
                         &numerical_window, &norm_tsm, norm_slot_idx) !=
@@ -1281,12 +1285,12 @@ def batch_integrator_numerical(
                             const long int master_idx = chunk_buffer[0][norm_i];
                             f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
                                 all_photons_host.f[norm_k * num_rays + master_idx];
-                        }} // END LOOP: for norm_i over chunk_size to pack the terminal state bundle
-                    }} // END LOOP: for norm_k over 9 to pack the terminal state components
+                        }} // END LOOP: for norm_i over chunk_size
+                    }} // END LOOP: for norm_k over 9
 
                     for (int norm_k = 0; norm_k < 9; ++norm_k) {{
                         {memcpy_cpu("d_f_bundle[0] + norm_k * BUNDLE_CAPACITY", "f_bridge[0] + norm_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
-                    }} // END LOOP: for norm_k over 9 to copy the terminal state bundle to the CPU scratchpad
+                    }} // END LOOP: for norm_k over 9
 {terminal_integration_param_setup}
 
                     numerical_interpolation(
@@ -1326,10 +1330,10 @@ def batch_integrator_numerical(
                             current_norm_err > max_err_norm_excluding_failures) {{
                             max_err_norm_excluding_failures = current_norm_err;
                             worst_ray_norm_excluding_failures = master_idx;
-                        }} // END IF: current_norm_err updates the maximum excluding designated failures
-                    }} // END LOOP: for norm_i over chunk_size to scan constraint values
-                }} // END WHILE: norm_tsm.slot_counts[norm_slot_idx] > 0 to process the terminal slot
-            }} // END LOOP: for norm_slot_idx down to 0 to process all terminal slots
+                        }} // END IF: current_norm_err updates maximum
+                    }} // END LOOP: for norm_i over chunk_size
+                }} // END WHILE: normalization slot has photons
+            }} // END LOOP: for norm_slot_idx down to 0
 
             slot_manager_free(&norm_tsm);
 
@@ -1346,11 +1350,11 @@ def batch_integrator_numerical(
                     fprintf(stderr,
                             "ERROR: terminal normalization diagnostic produced a non-finite constraint for photon %ld.\n",
                             normalization_failure_ray);
-                }} // END ELSE IF: normalization_failure_mode == 3 to report a non-finite terminal constraint
+                }} // END ELSE IF: normalization_failure_mode == 3 to report
                 time_window_manager_numerical_free(&numerical_window);
                 slot_manager_free(&tsm);
                 exit(1);
-            }} // END IF: normalization_failure_mode != 0 to abort terminal normalization diagnostics
+            }} // END IF: normalization_failure_mode != 0 to abort
 
             printf("\n=================================================\n");
             printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
@@ -1363,7 +1367,7 @@ def batch_integrator_numerical(
                 "  Max Absolute Error, excluding FAILURE_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
                 max_err_norm_excluding_failures,
                 worst_ray_norm_excluding_failures);
-        }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization constraint
+        }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
 
         // Final output step: process escaped photons intersecting the celestial
         // sphere $r > r_{{escape}}$ and optionally write the normalization sidecar.
@@ -1419,7 +1423,7 @@ def batch_integrator_numerical(
             {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
             {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
-        }} // END LOOP: for s over 2 to purge double-buffered arrays
+        }} // END LOOP: for s over 2
 
 
         // Host Memory Free: Purges the primary Host state and integration-parameter arrays.

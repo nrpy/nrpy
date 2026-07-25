@@ -15,6 +15,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
+import matplotlib.pyplot as plt
 import numpy as np
 import sympy as sp
 
@@ -117,11 +118,6 @@ class GeodesicFixTests(unittest.TestCase):
         self,
     ) -> None:
         """Require normalization histograms to use named groups and log counts."""
-        import matplotlib
-
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-
         termination_types = np.array([0, 0, 2, 2, 2], dtype=np.int32)
         norm_abs_values = np.array([1.0, 2.0, 3.0, 4.0, 5.0], dtype=np.float64)
         with patch.object(plt, "show"):
@@ -134,7 +130,10 @@ class GeodesicFixTests(unittest.TestCase):
             axis = figure.axes[0]
             self.assertEqual(axis.get_yscale(), "log")
             self.assertIn(r"\log_{10}", axis.get_ylabel())
-            legend_labels = [text.get_text() for text in axis.get_legend().get_texts()]
+            legend = axis.get_legend()
+            self.assertIsNotNone(legend)
+            assert legend is not None
+            legend_labels = [text.get_text() for text in legend.get_texts()]
             self.assertEqual(
                 legend_labels,
                 [

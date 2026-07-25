@@ -118,9 +118,9 @@ def find_event_time_and_state() -> None:
                 if (integration_param_quad >= integration_param_min &&
                     integration_param_quad <= integration_param_max) {
                     interpolated_event_integration_param = integration_param_quad;
-                } // END IF: quadratic root lies inside the interpolation interval
+                } // END IF: quadratic root inside interval
             } // END IF: stable denominator for quadratic root
-        } // END IF: discriminant >= 0 and a > 1e-16
+        } // END IF: discriminant >= 0 and a
     } // END IF: intervals are not degenerate
 
     //==========================================
@@ -159,7 +159,7 @@ def find_event_time_and_state() -> None:
         event_f_intersect[i] = f_p_p_local[i] * L0 +
                                f_p_local[i]   * L1 +
                                f_local[i]     * L2;
-    } // END LOOP: for i over 9 state vector components
+    } // END LOOP: for i over 9 state
     """
 
     cfc.register_CFunction(

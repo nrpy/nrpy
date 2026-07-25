@@ -125,7 +125,7 @@ if __name__ == "__main__":
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_data.geodesic_eom_rhs_photon_christoffel(),
         geodesic_data.xx,
-        use_metric_derivative_rhs=False,
+        rhs_uses_metric_derivatives=False,
         normalized_eom=False,
     )
     rkf45_stage_update.rkf45_stage_update()

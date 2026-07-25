@@ -5,14 +5,17 @@
 
 ## Summary
 
-NRPy has three checked-in geodesic example generators. `massive_single_geodesic_integrator_analytical`
+NRPy has five checked-in geodesic example generators. `massive_single_geodesic_integrator_analytical`
 builds a single massive-particle Kerr-Schild Cartesian trajectory and uses GSL's
 RKF45 ODE path. `photon_single_geodesic_integrator_analytical` builds a single photon trajectory
 with the same analytic spacetime target but uses the split-pipeline photon RKF45
 kernels directly. `photon_batch_geodesic_integrator_analytical` builds a tiled photon
 raytracing project, defaults to OpenMP, can generate CUDA code with `--cuda`,
 honors `--outdir`, and writes per-tile light-blueprint ZIP artifacts for the
-lensed-image renderer and diagnostic scripts.
+lensed-image renderer and diagnostic scripts. The numerical single- and batch-
+photon generators use the same photon runtime with a combined numerical-
+spacetime `.bin` dataset and currently support CPU/OpenMP
+`SinhCylindricalv2n2` interpolation.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
@@ -140,24 +143,62 @@ schema file when raw enum values do not match current Python constants.
 
 This standalone batch raytracer is related to, but distinct from, the
 evolution-time raytracing export enabled by
-`python -m nrpy.examples.two_blackholes_collide --raytracing-outputs`. The
+`python -m nrpy.examples.two_blackholes_collide --raytracing-time`. The
 black-hole evolution option writes Cartesian metric and Christoffel data on
 diagnostic output steps and is currently rejected for CUDA builds. See
 [Black Hole Evolution](black-hole-evolution.md) and
 [Geodesics And Raytracing Runtime](../infrastructures/bhah/geodesics-and-raytracing-runtime.md)
 for that context.
 
+For a numerical-spacetime dataset, first generate the evolution project and
+its slice-combining workflow:
+
+```bash
+python -m nrpy.examples.two_blackholes_collide \
+  --raytracing-time 30.0 0.4 \
+  --raytracing-data-mode g4DD \
+  --raytracing-coord-system SinhCylindricalv2n2
+cd project/two_blackholes_collide
+./run_raytracing_data_pipeline.sh
+```
+
+The generated pipeline copies `combine_raytracing_time_slices.py`, writes
+`raytracing_run_metadata.json`, runs the evolution, and combines the full
+logical-grid slice payload into `project/raytracing_data/*.bin`. The numerical
+single and batch generators then accept that combined filename, the
+`SinhCylindricalv2n2` domain tuple, the final stored-time bound, and the nominal
+`--dt-spacetime-data` used for synthetic temporal-stencil edge times. The first
+stored slice time is read from the `.bin` and printed at runtime; it is not a
+CLI or `.par` input. Stored slice-table times remain authoritative and may be
+near, rather than exactly equal to, nominal evolution intervals.
+
+```bash
+python -m nrpy.examples.photon_single_geodesic_integrator_numerical \
+  --bin-name DATASET.bin \
+  --coord-system-numerical SinhCylindricalv2n2 \
+  --domain 30.0 0.075 0.05 1.0 4.0 \
+  --t-numerical-end 30.0 \
+  --dt-spacetime-data 0.4 --time-start 10.0
+```
+
+The numerical batch generator has the same numerical-data arguments and adds
+the batch visualization/blueprint workflow. Both generators currently require
+the numerical `.bin` file to be available under `project/raytracing_data/`.
+
 ## Sources
 
 - [massive_single_geodesic_integrator_analytical.py](../../nrpy/examples/massive_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, `single_integrator_analytical`, `gsl-config`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 - [photon_single_geodesic_integrator_analytical.py](../../nrpy/examples/photon_single_geodesic_integrator_analytical.py) - `project_name`, `main_single`, `p0_reverse_kernel`, `rkf45_stage_update`, `trajectory.txt`
 - [photon_batch_geodesic_integrator_analytical.py](../../nrpy/examples/photon_batch_geodesic_integrator_analytical.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
+- [photon_single_geodesic_integrator_numerical.py](../../nrpy/examples/photon_single_geodesic_integrator_numerical.py) - numerical dataset CLI, `register_CFunction_numerical_interpolation`, `--time-start`
+- [photon_batch_geodesic_integrator_numerical.py](../../nrpy/examples/photon_batch_geodesic_integrator_numerical.py) - numerical dataset CLI, `combine_raytracing_time_slices.py`, batch visualization workflow
+- [combine_raytracing_time_slices.py](../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `parse_args`, `--run-metadata`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `TERM_SPHERE`, `TERM_SOURCE_PLANE`
 - [render_lensed_image.py](../../nrpy/examples/geodesic_visualizations/render_lensed_image.py) - `generate_static_lensed_image`, `_process_blueprint_tile`, `_load_texture`
 - [visualize_lensed_image.py](../../nrpy/examples/geodesic_visualizations/visualize_lensed_image.py) - `main`, `light_blueprint_{i:02d}_{j:02d}.zip`, `urlretrieve`
 - [blueprint_analysis.py](../../nrpy/examples/geodesic_visualizations/blueprint_analysis.py) - `diagnose_blueprint`, `plot_heatmaps`
-- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `--raytracing-outputs`
+- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `--raytracing-time`, `--raytracing-data-mode`, `--raytracing-static-christoffels`
 
 ## See Also
 

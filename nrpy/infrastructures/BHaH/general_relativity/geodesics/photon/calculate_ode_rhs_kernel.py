@@ -15,7 +15,7 @@ Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
 """
 
-from typing import List, Optional
+from typing import List
 
 import sympy as sp
 
@@ -24,61 +24,44 @@ import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
-SUPPORTED_INTERPOLATION_METHODS = ("g4DD", "g4DD_d0", "GammaUDD")
-
 
 def calculate_ode_rhs_kernel(
     geodesic_rhs_expressions: List[sp.Expr],
     coordinate_symbols: List[sp.Symbol],
-    use_metric_derivative_rhs: Optional[bool] = None,
+    rhs_uses_metric_derivatives: bool,
     normalized_eom: bool = False,
-    interpolation_method: Optional[str] = None,
 ) -> None:
     r"""
     Provide the global kernel registration for computing the ODE right-hand side.
 
     The generated kernel maps memory tensor data into thread-local registers matching
     the symbols expected by the generated geodesic equations. Direct geodesic
-    evolution receives Christoffel symbols, while numerical-spacetime evolution
-    receives first metric derivatives. Normalized evolution uses coordinate time from
-    the integration-parameter bundle at each Cash-Karp stage. The kernel computes the
-    nine derivative components and writes them to the stage offset in the RKF45
+    evolution receives either Christoffel symbols or first metric derivatives according
+    to ``rhs_uses_metric_derivatives``. Normalized evolution uses coordinate time from
+    the integration-parameter bundle at each Fehlberg RKF45 stage. The kernel computes
+    the nine derivative components and writes them to the stage offset in the RKF45
     derivative bundle.
 
     :param geodesic_rhs_expressions: The mathematical right-hand side evaluations
         representing the geodesic equations.
     :param coordinate_symbols: The spatial and temporal coordinate variables in order.
-    :param use_metric_derivative_rhs: Legacy selection for whether the RHS
-        consumes first metric derivatives instead of Christoffel symbols. If
-        `interpolation_method` is supplied, it determines the selection.
+    :param rhs_uses_metric_derivatives: Whether the RHS consumes first metric
+        derivatives instead of Christoffel symbols. Numerical callers set this
+        to true for ``g4DD`` and ``g4DD_d0`` and false for ``GammaUDD``.
     :param normalized_eom: Whether the state stores normalized photon variables
         ``u`` and ``PiD_i`` instead of direct four-momentum ``pU_i``.
-    :param interpolation_method: Numerical data method selected at Python code
-        generation time. ``GammaUDD`` selects the Christoffel RHS; the other
-        methods select the metric-derivative RHS.
-    :raises ValueError: If the provided geodesic expression list is empty or if
-        `interpolation_method` is unsupported.
+    :raises ValueError: If the provided geodesic expression list is empty.
     """
     if not geodesic_rhs_expressions:
         raise ValueError(
             "geodesic_rhs_expressions must contain at least one mathematical expression."
         )
-    if interpolation_method is not None:
-        if interpolation_method not in SUPPORTED_INTERPOLATION_METHODS:
-            raise ValueError(
-                "interpolation_method must be one of "
-                f"{SUPPORTED_INTERPOLATION_METHODS}; found '{interpolation_method}'."
-            )
-        selected_use_metric_derivative_rhs = interpolation_method != "GammaUDD"
-    else:
-        selected_use_metric_derivative_rhs = bool(use_metric_derivative_rhs)
-
     parallelization = par.parval_from_str("parallelization")
 
     # Select the generated RHS input contract once for this registration.
     geometry_bundle_arg_name = "d_rhs_geometry_bundle"
     geometry_index_macro = "IDX_RHS_GEOMETRY"
-    if selected_use_metric_derivative_rhs:
+    if rhs_uses_metric_derivatives:
         geometry_bundle_description = "first metric-derivative bundle"
         geometry_symbol_prefix = "metric_g4DD_dD"
         geometry_components = [
@@ -134,7 +117,7 @@ def calculate_ode_rhs_kernel(
         break;
       default:
         break;
-    } // END SWITCH: select Cash-Karp stage time fraction
+    } // END SWITCH: select RKF45 stage fraction
     const double t = d_integration_param_bundle[i] +
                      rkf45_stage_time_fraction * d_h[i];
     """

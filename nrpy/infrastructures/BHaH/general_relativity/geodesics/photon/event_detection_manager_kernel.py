@@ -149,7 +149,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         f_local[c] = ReadCUDA(&d_f_bundle[IDX_F(c, i)]); // Hydrates the current step state $f^\mu_n$.
         f_p_local[c] = ReadCUDA(&d_f_prev_bundle[IDX_F(c, i)]); // Hydrates the previous step state $f^\mu_{{n-1}}$.
         f_p_p_local[c] = ReadCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)]); // Hydrates the pre-previous step state $f^\mu_{{n-2}}$.
-    }} // END LOOP: for c over 9 tensor components
+    }} // END LOOP: for c over 9 tensor
 
     // Hydrate the event-interpolation parameter history.
     const double integration_param_local = ReadCUDA(&d_integration_param[i]);
@@ -254,7 +254,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         for (int c = 0; c < 9; c++) {{ // Loops over the $9$ tensor components to shift the history.
             WriteCUDA(&d_f_pre_prev_bundle[IDX_F(c, i)], f_p_local[c]); // Shifts the previous state $f^\mu_{{n-1}}$ to the pre-previous slot $f^\mu_{{n-2}}$.
             WriteCUDA(&d_f_prev_bundle[IDX_F(c, i)], f_local[c]); // Shifts the current state $f^\mu_{{n}}$ to the previous slot $f^\mu_{{n-1}}$.
-        }} // END LOOP: for c over 9 tensor components to shift the history
+        }} // END LOOP: for c over 9 tensor
     }} // END IF: trajectory is active
 
     #undef IDX_F

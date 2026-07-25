@@ -218,7 +218,7 @@ conserved-quantity diagnostics.
       fprintf(stderr, "Error: could not open trajectory.txt for writing.\n");
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END IF: trajectory output file could not be opened
+    }} // END IF: trajectory output unavailable
     fprintf(fp, "# lambda t x y z energy_measure p_x p_y p_z aux\n");
 
     // ==========================================
@@ -230,7 +230,7 @@ conserved-quantity diagnostics.
       for (int i = 0; i < 9; i++) {{
         f_base[i] = f[i];
         f_temp[i] = f[i];
-      }} // END LOOP: copy the current state into RKF45 work buffers
+      }} // END LOOP: copy the current state into
 
       for (int stage = 1; stage <= 6; stage++) {{
         interpolation_kernel_{spacetime}(
@@ -244,7 +244,7 @@ conserved-quantity diagnostics.
           rkf45_stage_update(
             f, k_bundle, h, stage, chunk_size, f_temp, stream_idx
           );
-      }} // END LOOP: execute RKF45 stages 1 through 6
+      }} // END LOOP: execute RKF45 stages 1 through
 
       rkf45_finalize_and_control(
         &commondata,
@@ -275,7 +275,7 @@ conserved-quantity diagnostics.
           f[8]
         );
         steps++;
-      }} // END IF: accepted step written to the trajectory file
+      }} // END IF: accepted step written
 
       const double r2 = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
       if (r2 > commondata.r_escape * commondata.r_escape) {{
@@ -286,7 +286,7 @@ conserved-quantity diagnostics.
       if (fabs(f[4]) > commondata.evolution_measure_max) {{
         printf("Evolution measure exceeded numerical limit.\n");
         break;
-      }} // END IF: evolution measure exceeded the configured bound
+      }} // END IF: evolution measure exceeded the configured
 
       if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
         printf(

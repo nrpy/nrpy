@@ -78,7 +78,7 @@ def register_CFunction_temporal_lagrange_interpolation(
     metric and secondary geometry bundle per mapped numerical time slice. It
     assumes the supplied `slice_times` are trusted, finite, strictly
     increasing, and contain exactly `2*n+1` entries, where `n` is
-    `commondata->numerical_spacetime_temporal_interp_order`. The flat bundles
+    `commondata->numerical_spacetime_temporal_interp_half_width`. The flat bundles
     must contain one entry per supplied time node.
 
     The generated helper builds barycentric Lagrange coefficients directly
@@ -136,7 +136,7 @@ def register_CFunction_temporal_lagrange_interpolation(
     _ = par.register_CodeParameter(
         "int",
         __name__,
-        "numerical_spacetime_temporal_interp_order",
+        "numerical_spacetime_temporal_interp_half_width",
         2,
         commondata=True,
         add_to_parfile=True,
@@ -176,7 +176,7 @@ The caller supplies flat per-slice spatial-interpolation outputs for the
 configured temporal stencil, plus the corresponding physical `slice_times`.
 This helper assumes those times are trusted, finite, and strictly increasing,
 derives the actual number of time nodes from
-`commondata->numerical_spacetime_temporal_interp_order`, and builds one shared
+`commondata->numerical_spacetime_temporal_interp_half_width`, and builds one shared
 nonuniform barycentric Lagrange basis from the exact physical slice times.
 
 The 10 serialized `g4DD` components are interpolated independently to
@@ -235,8 +235,8 @@ half-width is outside the supported range.
     if (target_diff == 0.0) {
       exact_node = i;
       break;
-    } // END IF: target time exactly matched one supplied slice time
-  } // END LOOP: for i over temporal nodes while checking for an exact target match
+    } // END IF: target time matched node
+  } // END LOOP: for i over temporal nodes
 
   if (exact_node >= 0) {
     // At an exact node the value basis is one-hot, but its derivative is not
@@ -254,7 +254,7 @@ half-width is outside the supported range.
              (normalized_slice_times[exact_node] - normalized_slice_times[i]));
         exact_diagonal_derivative -= coeff_dt_normalized[i];
       } // END ELSE: one off-diagonal exact-node derivative coefficient
-    } // END LOOP: for i over exact-node value and derivative coefficients
+    } // END LOOP: for i over exact-node value
     coeff_dt_normalized[exact_node] = exact_diagonal_derivative;
   } else {
     REAL barycentric_sum = 0.0;
@@ -266,7 +266,7 @@ half-width is outside the supported range.
       coeff_t[i] = weighted_term;
       barycentric_sum += weighted_term;
       barycentric_inverse_square_sum += weighted_term / target_diff;
-    } // END LOOP: for i over temporal nodes while summing barycentric terms
+    } // END LOOP: for i over temporal nodes
 
     for (int i = 0; i < interp_order; i++) {
       const REAL target_diff = normalized_t_target - normalized_slice_times[i];
@@ -274,8 +274,8 @@ half-width is outside the supported range.
       coeff_dt_normalized[i] =
           coeff_t[i] *
           (barycentric_inverse_square_sum / barycentric_sum - 1.0 / target_diff);
-    } // END LOOP: for i over normalized value and derivative coefficients
-  } // END ELSE: target time required a full barycentric basis evaluation
+    } // END LOOP: for i over normalized value
+  } // END ELSE: target time required a full
 """
         method_body = r"""
   // Step 2: Interpolate each metric component and differentiate the same
@@ -286,7 +286,7 @@ half-width is outside the supported range.
     for (int s = 0; s < interp_order; s++) {
       component_series[s] =
           g4dd_slices[s * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + comp];
-    } // END LOOP: for s over trusted metric slices for one component
+    } // END LOOP: for s over trusted metric
     g4dd_out[comp] = sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
 
     const int temporal_derivative_slot =
@@ -296,7 +296,7 @@ half-width is outside the supported range.
         sum_lagrange_x0_simd(
             interp_order, component_series, coeff_dt_normalized) /
         time_scale;
-  } // END LOOP: for comp over serialized metric components
+  } // END LOOP: for comp over serialized metric
 
   // Step 3: Interpolate only the 30 Cartesian spatial metric derivatives.
   // The derivative direction is the fastest-changing bundle index, so each
@@ -318,11 +318,11 @@ half-width is outside the supported range.
             geometry_slices[
                 s * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT +
                 derivative_slot];
-      } // END LOOP: for s over trusted spatial-derivative slices for one component
+      } // END LOOP: for s over trusted spatial-derivative
       rhs_geometry_out[derivative_slot] =
           sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
-    } // END LOOP: for derivative_direction over Cartesian spatial directions
-  } // END LOOP: for metric_comp over serialized metric components
+    } // END LOOP: for derivative_direction over Cartesian spatial
+  } // END LOOP: for metric_comp over serialized metric
 """
     else:
         basis_evaluation = r"""
@@ -332,8 +332,8 @@ half-width is outside the supported range.
     if (normalized_t_target - normalized_slice_times[i] == 0.0) {
       exact_node = i;
       break;
-    } // END IF: target time exactly matched one supplied slice time
-  } // END LOOP: for i over temporal nodes while checking for an exact target match
+    } // END IF: target time matched node
+  } // END LOOP: for i over temporal nodes
 
   if (exact_node >= 0) {
     for (int i = 0; i < interp_order; i++)
@@ -344,10 +344,10 @@ half-width is outside the supported range.
       const REAL target_diff = normalized_t_target - normalized_slice_times[i];
       coeff_t[i] = barycentric_weights[i] / target_diff;
       barycentric_sum += coeff_t[i];
-    } // END LOOP: for i over temporal nodes while summing barycentric terms
+    } // END LOOP: for i over temporal nodes
     for (int i = 0; i < interp_order; i++)
       coeff_t[i] /= barycentric_sum;
-  } // END ELSE: target time required a full barycentric basis evaluation
+  } // END ELSE: target time required a full
 """
         method_body = r"""
   // Step 2: Interpolate the ten metric components.
@@ -357,7 +357,7 @@ half-width is outside the supported range.
       component_series[s] =
           g4dd_slices[s * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + comp];
     g4dd_out[comp] = sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
-  } // END LOOP: for comp over serialized metric components
+  } // END LOOP: for comp over serialized metric
 
   // Step 3: Interpolate every stored secondary geometry component. The
   // selected method determines whether these values are metric derivatives or
@@ -372,13 +372,13 @@ half-width is outside the supported range.
               s * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT + comp];
     rhs_geometry_out[comp] =
         sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
-  } // END LOOP: for comp over stored secondary geometry components
+  } // END LOOP: for comp over stored secondary
 """
 
     common_basis_body = r"""
   // Step 1: Build the shared nonuniform barycentric Lagrange basis{basis_description}
   const int temporal_half_width =
-      commondata->numerical_spacetime_temporal_interp_order;
+      commondata->numerical_spacetime_temporal_interp_half_width;
   if (temporal_half_width < 0 ||
       temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH)
     return TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER;
@@ -404,10 +404,10 @@ half-width is outside the supported range.
         const REAL time_diff =
             normalized_slice_times[i] - normalized_slice_times[j];
         weight_denom *= time_diff;
-      } // END IF: multiplying one nontrivial barycentric denominator factor
-    } // END LOOP: for j over temporal nodes while building one barycentric weight
+      } // END IF: multiplying one nontrivial barycentric denominator
+    } // END LOOP: for j over temporal nodes
     barycentric_weights[i] = 1.0 / weight_denom;
-  } // END LOOP: for i over temporal nodes while building barycentric weights
+  } // END LOOP: for i over temporal nodes
 """.replace(
         "{basis_description}",
         (

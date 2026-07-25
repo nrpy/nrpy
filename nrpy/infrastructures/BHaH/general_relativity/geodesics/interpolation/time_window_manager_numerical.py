@@ -25,7 +25,10 @@ import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h as Bdefines_h
 
 
-def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
+def time_window_manager_numerical(
+    interpolation_method: str = "g4DD",
+    include_batch_startup_validation: bool = False,
+) -> None:
     """
     Register NumericalTimeWindowManager helpers in BHaH_defines.h.
 
@@ -47,10 +50,14 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
     combined-file slice table and queried through binary search, so the
     mapped slot window remains correct even when stored output times are not
     uniformly spaced. The debugging-only time-slice stride selects every nth
-    stored slice without changing the combined container. The matching RKF45
-    step-size cap is enforced in the companion finalization kernel.
+    stored slice without changing the combined container. The nominal
+    `dt_numerical_spacetime_data` is used only for synthesized edge-node times;
+    stored slice-table times remain authoritative. The matching RKF45 step-size
+    cap is enforced in the companion finalization kernel.
 
     :param interpolation_method: Geometry payload method to generate.
+    :param include_batch_startup_validation: Whether to emit the batch-only
+        one-time startup validator. Single-photon projects do not need it.
     :raises ValueError: If `interpolation_method` is unsupported or conflicts
         with an already registered manager.
 
@@ -189,9 +196,22 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         commondata=True,
         add_to_parfile=True,
         description=(
-            "Uniform physical coordinate-time spacing between adjacent stored "
-            "slices. The debugging-only time-slice stride multiplies this "
-            "spacing when synthetic temporal-stencil edge times are supplied."
+            "Nominal physical coordinate-time spacing used when synthetic "
+            "temporal-stencil edge times are needed. Exported slice times are "
+            "authoritative and may be nonuniform; the debugging-only stride "
+            "multiplies this nominal spacing for synthesized edge times."
+        ),
+    )
+    _ = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "t_numerical_initial",
+        0.0,
+        commondata=True,
+        add_to_parfile=False,
+        description=(
+            "Authoritative coordinate time of the first stored numerical "
+            "slice, loaded from the combined .bin file during initialization."
         ),
     )
 
@@ -244,6 +264,13 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
 #define TIME_WINDOW_MANAGER_NUMERICAL_ERROR 1
 #define TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH 32
 
+// Numerical startup checks use the existing coordinate converter directly.
+void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
+    const params_struct *restrict params,
+    const REAL xCart[3],
+    REAL xx[3],
+    int Cart_to_i0i1i2[3]);
+
     // Owns the currently mapped group of adjacent 3D-grid payloads.
     typedef struct {
       int fd; // Open read-only file descriptor for the combined numerical .bin file.
@@ -275,7 +302,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
       int temporal_interp_half_width; // Centered temporal interpolation half-width n.
       int temporal_interp_num_points; // Number of temporal interpolation points, 2n + 1.
       double max_backward_dt_lookahead; // Maximum backward coordinate-time RKF45 lookahead from commondata.
-      double dt_numerical_spacetime_data; // Uniform physical spacing between adjacent stored slices.
+      double dt_numerical_spacetime_data; // Nominal spacing for synthetic edge times.
 
       uint64_t mapped_first_slice; // First mapped slice, inclusive.
       uint64_t mapped_last_slice_exclusive; // One past the final mapped slice.
@@ -364,10 +391,10 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           if (brace_depth == 0) {
             *section_end = cursor;
             return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
-          } // END IF: matching closing brace for the requested JSON section was found
-        } // END ELSE IF: JSON brace nesting depth decreased while scanning the section
+          } // END IF: matching closing brace found
+        } // END ELSE IF: JSON brace nesting depth decreased
         cursor++;
-      } // END WHILE: scanning the trusted metadata block for the section terminator
+      } // END WHILE: scanning the trusted metadata block
       return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
     } // END FUNCTION: time_window_manager_numerical_find_json_section
 
@@ -431,7 +458,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         if (*cursor != expected_delimiter)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         cursor++;
-      } // END LOOP: for dirn over one trusted uint64_t JSON array
+      } // END LOOP: for dirn over one trusted
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_parse_json_u64_array3
 
@@ -462,14 +489,14 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         if (errno != 0 || parse_end == cursor || parse_end > section_end ||
             !isfinite(parsed_value)) {
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one trusted double JSON array entry could not be parsed
+        } // END IF: one trusted double JSON array
         values[dirn] = parsed_value;
         cursor = time_window_manager_numerical_skip_json_ws(parse_end);
         const char expected_delimiter = (dirn < 2) ? ',' : ']';
         if (*cursor != expected_delimiter)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         cursor++;
-      } // END LOOP: for dirn over one trusted double JSON array
+      } // END LOOP: for dirn over one trusted
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_parse_json_f64_array3
 
@@ -485,7 +512,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           ntwm->metadata_bytes == 0ULL ||
           ntwm->metadata_bytes > (uint64_t)(SIZE_MAX - 1U)) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: metadata block dimensions were not usable
+      } // END IF: metadata block dimensions invalid
 
       const size_t buffer_bytes = (size_t)ntwm->metadata_bytes + 1U;
       char *metadata_buffer = (char *)malloc(buffer_bytes);
@@ -497,7 +524,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
               ntwm->metadata_offset) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         free(metadata_buffer);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: JSON metadata block could not be read
+      } // END IF: JSON metadata block unavailable
       metadata_buffer[ntwm->metadata_bytes] = '\0';
 
       const char *section_begin = NULL;
@@ -509,7 +536,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         free(metadata_buffer);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: first-slice grid metadata was missing from the trusted JSON block
+      } // END IF: first-slice grid metadata was missing
 
       uint64_t nghosts = 0ULL;
       if (time_window_manager_numerical_parse_json_u64(
@@ -545,7 +572,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         free(metadata_buffer);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: one or more trusted first-slice grid arrays could not be parsed
+      } // END IF: one or more trusted first-slice
 
       free(metadata_buffer);
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
@@ -575,7 +602,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(double)) ||
           ntwm->num_time_slices > (uint64_t)(SIZE_MAX / sizeof(uint64_t))) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice-table cache prerequisites were not satisfied
+      } // END IF: slice-table cache prerequisites invalid
 
       slice_times = (double *)malloc((size_t)ntwm->num_time_slices * sizeof(double));
       slice_payload_offsets =
@@ -588,7 +615,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         free(slice_payload_offsets);
         free(slice_payload_bytes);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice-table caches could not be allocated
+      } // END IF: slice-table caches could not be
 
       for (uint64_t slice_index = 0ULL; slice_index < ntwm->num_time_slices; slice_index++) {
         const uint64_t entry_offset =
@@ -601,7 +628,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice-table entry could not be read
+        } // END IF: slice-table entry unavailable
 
         const double this_time = time_window_manager_numerical_load_f64(
             entry_bytes + TIME_WINDOW_MANAGER_NUMERICAL_SLICE_ENTRY_TIME);
@@ -625,27 +652,27 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice-table entry contained invalid interpolation metadata
+        } // END IF: one slice-table entry contained invalid
         if (point_record_count > UINT64_MAX / point_record_bytes ||
             payload_bytes != point_record_count * point_record_bytes) {
           free(slice_times);
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice payload size disagreed with point-record metadata
+        } // END IF: one slice payload size disagreed
         if (payload_offset > ntwm->total_file_bytes - payload_bytes) {
           free(slice_times);
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice payload exceeded the combined container bounds
+        } // END IF: slice payload exceeded limit
         if (slice_index == 0ULL) {
           if (payload_offset != ntwm->first_payload_offset) {
             free(slice_times);
             free(slice_payload_offsets);
             free(slice_payload_bytes);
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-          } // END IF: first slice-table entry disagreed with fixed-header navigation
+          } // END IF: first slice-table entry mismatched
         } else {
           const double slice_dt = this_time - previous_time;
           if (!isfinite(slice_dt) || slice_dt <= 0.0 ||
@@ -654,7 +681,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
             free(slice_payload_offsets);
             free(slice_payload_bytes);
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-          } // END IF: slice times or payload offsets were not strictly increasing
+          } // END IF: slice times or payload offsets
         } // END ELSE: additional slices allow monotonicity checks
 
         slice_times[slice_index] = this_time;
@@ -662,7 +689,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         slice_payload_bytes[slice_index] = payload_bytes;
         previous_time = this_time;
         previous_payload_end = payload_offset + payload_bytes;
-      } // END LOOP: for slice_index over the trusted slice table
+      } // END LOOP: for slice_index over the trusted
 
       if (!isfinite(slice_times[0]) ||
           !isfinite(slice_times[ntwm->num_time_slices - 1ULL]) ||
@@ -672,7 +699,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         free(slice_payload_offsets);
         free(slice_payload_bytes);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: cached slice-table summary values were not numerically usable
+      } // END IF: cached slice-table summary invalid
 
       ntwm->slice_times = slice_times;
       ntwm->slice_payload_offsets = slice_payload_offsets;
@@ -699,8 +726,8 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           first = mid + 1ULL;
         } else {
           last = mid;
-        } // END ELSE: lower-bound search moved its upper half-open endpoint
-      } // END WHILE: binary searching the lower-bound cached slice time
+        } // END ELSE: lower-bound search moved its upper
+      } // END WHILE: binary searching the lower-bound cached
       return first;
     } // END FUNCTION: time_window_manager_numerical_lower_bound_slice_time
 
@@ -723,8 +750,8 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           first = mid + 1ULL;
         } else {
           last = mid;
-        } // END ELSE: upper-bound search moved its upper half-open endpoint
-      } // END WHILE: binary searching the upper-bound cached slice time
+        } // END ELSE: upper-bound search moved its upper
+      } // END WHILE: binary searching the upper-bound cached
       return first;
     } // END FUNCTION: time_window_manager_numerical_upper_bound_slice_time
 
@@ -766,7 +793,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         if (right_selected_slice >= final_selected_slice)
           return final_selected_slice;
         right_selected_slice += ntwm->time_slice_stride;
-      } // END IF: first selected slice at or above the raw lower bound needed alignment
+      } // END IF: first selected slice at or
 
       if (right_selected_slice == 0ULL)
         return 0ULL;
@@ -811,7 +838,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         ntwm->xxmin[dirn] = 0.0;
         ntwm->xxmax[dirn] = 0.0;
         ntwm->cart_origin[dirn] = 0.0;
-      } // END LOOP: for dirn over stored grid metadata arrays during inert reset
+      } // END LOOP: for dirn over stored grid
       ntwm->slice_times = NULL;
       ntwm->slice_payload_offsets = NULL;
       ntwm->slice_payload_bytes = NULL;
@@ -882,7 +909,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         if (ntwm->Nxx[dirn] > (uint64_t)INT_MAX ||
             ntwm->Nxx_plus_2NGHOSTS[dirn] > (uint64_t)INT_MAX)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END LOOP: for dirn over integer-valued grid metadata before params assignment
+      } // END LOOP: for dirn over integer-valued grid
 
       params->Nxx0 = (int)ntwm->Nxx[0];
       params->Nxx1 = (int)ntwm->Nxx[1];
@@ -909,6 +936,102 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
     } // END FUNCTION: time_window_manager_numerical_apply_metadata_to_params
 
     /**
+     * Validate startup probe stencils against the mapped grid metadata.
+     *
+     * @param[in] ntwm Initialized numerical time-window manager.
+     * @param[in] commondata Common runtime parameters.
+     * @param[in] params Metadata-fed coordinate parameters.
+     * @param[in] camera_position Cartesian camera/initial-photon position.
+     * @param[in] camera_parameter_names Parameter names for that position.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_validate_startup_domain(
+        const NumericalTimeWindowManager *ntwm,
+        const commondata_struct *restrict commondata,
+        const params_struct *restrict params,
+        const REAL camera_position[3],
+        const char *camera_parameter_names) {
+      if (ntwm == NULL || commondata == NULL || params == NULL ||
+          camera_position == NULL || camera_parameter_names == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      const int spatial_half_width =
+          commondata->numerical_spacetime_spatial_interp_half_width;
+
+      if (!isfinite(commondata->r_escape) || commondata->r_escape <= 0.0) {
+        fprintf(stderr,
+                "ERROR: r_escape must be finite and positive for numerical "
+                "startup validation. Set r_escape in the generated .par file.\n");
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: r_escape was invalid
+
+      const REAL probe_points[4][3] = {
+          {camera_position[0], camera_position[1], camera_position[2]},
+          {(REAL)commondata->r_escape, (REAL)0.0, (REAL)0.0},
+          {(REAL)0.0, (REAL)commondata->r_escape, (REAL)0.0},
+          {(REAL)0.0, (REAL)0.0, (REAL)commondata->r_escape}};
+      const char *probe_names[4] = {
+          "camera", "r_escape x-axis", "r_escape y-axis", "r_escape z-axis"};
+
+      // The reduced-phi interpolator uses stored phi planes; only rho and z
+      // require a spatial Lagrange stencil check.
+      const int interpolated_native_dims[2] = {0, 2};
+      for (int probe_idx = 0; probe_idx < 4; probe_idx++) {
+        for (int dirn = 0; dirn < 3; dirn++) {
+          if (!isfinite((double)probe_points[probe_idx][dirn])) {
+            fprintf(stderr,
+                    "ERROR: numerical startup %s probe contains a nonfinite "
+                    "Cartesian coordinate. Set %s in the generated .par file.\n",
+                    probe_names[probe_idx],
+                    probe_idx == 0 ? camera_parameter_names : "r_escape");
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: probe coordinate was nonfinite
+        } // END LOOP: for dirn over Cartesian probe coordinates
+
+        REAL xx[3];
+        int center_idx[3];
+        Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
+            params, probe_points[probe_idx], xx, center_idx);
+        for (int dirn = 0; dirn < 3; dirn++) {
+          if (!isfinite((double)xx[dirn])) {
+            fprintf(stderr,
+                    "ERROR: numerical startup %s probe produced a nonfinite "
+                    "native coordinate.\n       Parameter: %s.\n",
+                    probe_names[probe_idx],
+                    probe_idx == 0 ? camera_parameter_names : "r_escape");
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: native coordinate was nonfinite
+        } // END LOOP: for dirn over native probe coordinates
+
+        for (int interp_dim_idx = 0; interp_dim_idx < 2; interp_dim_idx++) {
+          const int dirn = interpolated_native_dims[interp_dim_idx];
+          const long long center = (long long)center_idx[dirn];
+          const long long stencil_low = center - (long long)spatial_half_width;
+          const long long stencil_high = center + (long long)spatial_half_width;
+          if (stencil_low < 0LL ||
+              stencil_high >= (long long)ntwm->Nxx_plus_2NGHOSTS[dirn]) {
+            const char *parameter_names =
+                probe_idx == 0 ? camera_parameter_names : "r_escape";
+            fprintf(stderr,
+                    "ERROR: numerical startup %s probe requires native stencil "
+                    "[%lld, %lld] on dimension %d, outside the full logical "
+                    "grid [0, %llu). Set %s in the generated .par file, or "
+                    "regenerate the numerical .bin with a larger domain.\n",
+                    probe_names[probe_idx],
+                    stencil_low,
+                    stencil_high,
+                    dirn,
+                    (unsigned long long)ntwm->Nxx_plus_2NGHOSTS[dirn],
+                    parameter_names);
+            return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+          } // END IF: startup probe stencil was outside logical grid
+        } // END LOOP: for interp_dim_idx over interpolated dimensions
+      } // END LOOP: for probe_idx over startup probes
+
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: startup domain validation
+
+    /**
      * Initialize a trusted-input numerical time-window manager.
      *
      * The caller must call time_window_manager_numerical_set_inert() before
@@ -917,7 +1040,8 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
      *
      * @param[in,out] ntwm Numerical time-window manager.
      * @param[in] combined_path Path to the combined numerical .bin container.
-     * @param[in] commondata Common runtime parameters.
+     * @param[in,out] commondata Common runtime parameters; its
+     * t_numerical_initial field is set from the first stored slice time.
      * @param temporal_interp_half_width Centered temporal interpolation half-width n.
      * @param[out] params Optional params_struct updated from the combined-file grid metadata.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
@@ -928,7 +1052,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
     static inline int time_window_manager_numerical_init(
         NumericalTimeWindowManager *ntwm,
         const char *combined_path,
-        const commondata_struct *restrict commondata,
+        commondata_struct *restrict commondata,
         const int temporal_interp_half_width,
         params_struct *restrict params) {
       unsigned char header_bytes[TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES];
@@ -960,7 +1084,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
       if (!isfinite(dt_numerical_spacetime_data) ||
           dt_numerical_spacetime_data <= 0.0) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: synthetic temporal edge spacing was not usable
+      } // END IF: synthetic edge spacing invalid
 
       const long int page_size = sysconf(_SC_PAGESIZE);
       if (page_size <= 0)
@@ -984,7 +1108,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: fixed header could not be read
+      } // END IF: fixed header could not be
 
       const uint64_t fixed_header_bytes = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES);
@@ -1019,7 +1143,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           memcmp(header_bytes, expected_magic, sizeof(expected_magic)) != 0) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted fixed-header navigation fields were not usable
+      } // END IF: fixed-header navigation fields invalid
       const uint64_t final_selected_slice =
           time_window_manager_numerical_final_selected_slice(ntwm);
       const uint64_t num_selected_slices =
@@ -1027,38 +1151,38 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
       if (num_selected_slices < (uint64_t)ntwm->temporal_interp_num_points) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: debugging-selected numerical slices could not support the temporal stencil
+      } // END IF: debugging slice selection failed
 
       const off_t file_size = lseek(ntwm->fd, 0, SEEK_END);
       if (file_size < (off_t)TIME_WINDOW_MANAGER_NUMERICAL_FIXED_HEADER_BYTES) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: combined numerical container size was not usable
+      } // END IF: combined container size invalid
       const uint64_t file_size_bytes = (uint64_t)file_size;
       if (file_size_bytes != ntwm->total_file_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: on-disk file size disagreed with the combined-header size
+      } // END IF: on-disk file size mismatched
 
       if (ntwm->metadata_offset < fixed_header_bytes ||
           ntwm->metadata_offset % ntwm->alignment_bytes != 0ULL ||
           ntwm->metadata_offset > ntwm->total_file_bytes - ntwm->metadata_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: metadata block bounds were outside the combined container
+      } // END IF: metadata block bounds invalid
 
       if (ntwm->num_time_slices >
           UINT64_MAX / ntwm->slice_table_entry_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table byte count would overflow
+      } // END IF: trusted slice-table byte count would
       const uint64_t slice_table_bytes =
           ntwm->num_time_slices * ntwm->slice_table_entry_bytes;
       const uint64_t metadata_end = ntwm->metadata_offset + ntwm->metadata_bytes;
       if (ntwm->slice_table_offset > UINT64_MAX - slice_table_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table end offset would overflow
+      } // END IF: trusted slice-table end offset would
       const uint64_t slice_table_end =
           ntwm->slice_table_offset + slice_table_bytes;
       if (ntwm->slice_table_offset < metadata_end ||
@@ -1067,7 +1191,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           slice_table_end > file_size_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice table was outside the usable file layout
+      } // END IF: trusted slice table out-of-bounds
 
       if (ntwm->first_payload_offset < slice_table_end ||
           ntwm->first_payload_offset % ntwm->alignment_bytes != 0ULL ||
@@ -1075,13 +1199,13 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           ntwm->payload_bytes_total != ntwm->total_file_bytes - ntwm->first_payload_offset) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted payload-region navigation was not self-consistent
+      } // END IF: trusted payload navigation invalid
 
       if (time_window_manager_numerical_load_grid_metadata(ntwm) !=
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: JSON grid metadata could not be loaded for interpolation
+      } // END IF: JSON grid metadata unavailable
 
       for (int dirn = 0; dirn < 3; dirn++) {
         if (ntwm->Nxx[dirn] == 0ULL ||
@@ -1096,27 +1220,71 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
             !isfinite(ntwm->cart_origin[dirn])) {
           time_window_manager_numerical_free(ntwm);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: JSON grid metadata was not numerically usable
+        } // END IF: JSON grid metadata invalid
         expected_point_record_count *= ntwm->Nxx_plus_2NGHOSTS[dirn];
-      } // END LOOP: for dirn over JSON grid metadata during validation
+      } // END LOOP: for dirn over JSON grid
       if (ntwm->nghosts != (uint32_t)NGHOSTS ||
           expected_point_record_count > UINT64_MAX / expected_point_record_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: runtime ghost-zone or record-size metadata was not usable
+      } // END IF: runtime ghost-zone or record-size metadata
+
+      const int spatial_half_width =
+          commondata->numerical_spacetime_spatial_interp_half_width;
+      if (spatial_half_width < 0) {
+        fprintf(stderr,
+                "ERROR: numerical_spacetime_spatial_interp_half_width=%d is "
+                "negative. Set it to a nonnegative spatial half-width in "
+                "the generated .par file.\n",
+                spatial_half_width);
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: spatial half-width was negative
+      if ((long long)spatial_half_width > (long long)ntwm->nghosts) {
+        fprintf(stderr,
+                "ERROR: numerical_spacetime_spatial_interp_half_width=%d exceeds "
+                "NGHOSTS=%u in the numerical .bin. Set "
+                "numerical_spacetime_spatial_interp_half_width <= %u in the "
+                "generated .par file, or regenerate the .bin with more "
+                "ghost zones.\n",
+                spatial_half_width,
+                (unsigned int)ntwm->nghosts,
+                (unsigned int)ntwm->nghosts);
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: spatial half-width exceeded ghost zones
 
       if (time_window_manager_numerical_load_and_validate_slice_table(
               ntwm, expected_point_record_count, expected_point_record_bytes) !=
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice table could not be cached and validated for interpolation
+      } // END IF: slice table could not be
+      if (!isfinite(ntwm->slice_times[0])) {
+        fprintf(stderr,
+                "ERROR: first stored numerical slice time is not finite; "
+                "the combined .bin file is invalid.\n");
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      }
+      commondata->t_numerical_initial = (REAL)ntwm->slice_times[0];
+      if (!isfinite((double)commondata->t_numerical_end) ||
+          commondata->t_numerical_initial >= commondata->t_numerical_end) {
+        fprintf(stderr,
+                "ERROR: authoritative first stored slice time=%e must be "
+                "less than t_numerical_end=%e. Set t_numerical_end in the "
+                "generated .par file.\n",
+                (double)commondata->t_numerical_initial,
+                (double)commondata->t_numerical_end);
+        time_window_manager_numerical_free(ntwm);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: stored initial time was not below configured final time
       if (params != NULL &&
           time_window_manager_numerical_apply_metadata_to_params(ntwm, params) !=
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: caller requested params_struct population from combined metadata
+      } // END IF: params_struct population requested
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_init
 
@@ -1156,7 +1324,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         if (last_slice_exclusive != NULL)
           *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slot-range query was missing the cached exact-time window state
+      } // END IF: slot-range query incomplete
 
       const double t_lower = slot_lower_time(tsm, slot_idx);
       const double t_upper = slot_upper_time(tsm, slot_idx);
@@ -1168,7 +1336,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slot query bounds or cached exact slice times were not usable
+      } // END IF: slot query bounds or cached
 
       const uint64_t left =
           time_window_manager_numerical_lower_bound_slice_time(ntwm, query_min);
@@ -1183,7 +1351,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         center_first = ntwm->num_time_slices - 1ULL;
       } else {
         center_first = left - 1ULL;
-      } // END ELSE: cached lower-bound time had one slice below it
+      } // END ELSE: lower-bound time available
 
       if (right == 0ULL) {
         center_last = 0ULL;
@@ -1191,7 +1359,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         center_last = ntwm->num_time_slices - 1ULL;
       } else {
         center_last = right;
-      } // END ELSE: cached upper-bound time had one slice above it
+      } // END ELSE: upper-bound time available
 
       const uint64_t final_selected_slice =
           time_window_manager_numerical_final_selected_slice(ntwm);
@@ -1204,8 +1372,8 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           selected_center_last = final_selected_slice;
         } else {
           selected_center_last += ntwm->time_slice_stride;
-        } // END ELSE: one higher selected slice remained inside the stored range
-      } // END IF: upper slot endpoint required alignment to a selected slice
+        } // END ELSE: higher selected slice retained
+      } // END IF: upper slot endpoint required alignment
 
       // Conceptually, for temporal half-width n, centered interpolation uses
       // 2n + 1 slices. A photon anywhere in the slot may therefore need
@@ -1225,14 +1393,14 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
              selected_center_last > final_selected_slice - halo)
                 ? final_selected_slice
                 : selected_center_last + halo;
-      } // END IF: upper conservative halo endpoint remained inside the selected slice range
+      } // END IF: upper halo endpoint retained
 
       if (required_last >= ntwm->num_time_slices ||
           required_last < required_first || required_last == UINT64_MAX) {
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: clipped conservative slot mapping window was outside the trusted file
+      } // END IF: clipped conservative slot mapping window
 
       *first_slice = required_first;
       *last_slice_exclusive = required_last + 1ULL;
@@ -1291,7 +1459,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           last_payload_bytes == 0ULL ||
           last_payload_offset > ntwm->total_file_bytes - last_payload_bytes) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: requested slot payload window was outside the trusted file
+      } // END IF: requested slot payload invalid
 
       const uint64_t requested_end =
           last_payload_offset + last_payload_bytes;
@@ -1337,7 +1505,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           slice_index < ntwm->mapped_first_slice ||
           slice_index >= ntwm->mapped_last_slice_exclusive) {
         return NULL;
-      } // END IF: one requested slice was outside the active mapped payload window
+      } // END IF: requested slice out-of-bounds
 
       const uint64_t payload_offset = ntwm->slice_payload_offsets[slice_index];
       const uint64_t payload_bytes = ntwm->slice_payload_bytes[slice_index];
@@ -1345,12 +1513,12 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           payload_bytes == 0ULL ||
           payload_offset > UINT64_MAX - payload_bytes) {
         return NULL;
-      } // END IF: cached payload metadata could not describe the mapped slice range
+      } // END IF: cached payload metadata invalid
       const uint64_t payload_relative = payload_offset - ntwm->mapped_file_offset;
       if (payload_relative > (uint64_t)ntwm->mapped_length_bytes ||
           payload_bytes > (uint64_t)ntwm->mapped_length_bytes - payload_relative) {
         return NULL;
-      } // END IF: one cached payload fell outside the current mmap region
+      } // END IF: cached payload out-of-bounds
       return (const double *)(ntwm->mapped_base + payload_relative);
     } // END FUNCTION: time_window_manager_numerical_grid_ptr
 
@@ -1394,7 +1562,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           temporal_interp_half_width >
               TIME_WINDOW_MANAGER_NUMERICAL_MAX_TEMPORAL_INTERP_HALF_WIDTH) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: requested temporal interpolation half-width was outside the supported range
+      } // END IF: temporal interpolation half-width invalid
       if (ntwm == NULL || slice_indices == NULL || slice_times == NULL ||
           slice_payloads == NULL || num_available_slices == NULL ||
           missing_slice_times == NULL || num_missing_slices == NULL ||
@@ -1404,12 +1572,12 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           !isfinite(ntwm->dt_numerical_spacetime_data) ||
           ntwm->dt_numerical_spacetime_data <= 0.0) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: active exact-time window or caller-owned output buffers were not usable
+      } // END IF: active exact-time window or caller-owned
       const int temporal_num_points = 2 * temporal_interp_half_width + 1;
       if (temporal_interp_half_width != ntwm->temporal_interp_half_width ||
           temporal_num_points != ntwm->temporal_interp_num_points) {
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: requested temporal interpolation stencil disagreed with the active mapped window
+      } // END IF: requested temporal interpolation stencil disagreed
 
       *num_available_slices = 0;
       *num_missing_slices = 0;
@@ -1442,7 +1610,7 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           } else {
             desired_slice =
                 center_slice - lower_offset * ntwm->time_slice_stride;
-          } // END ELSE: conceptual stencil node stayed inside the lower selected-slice range
+          } // END ELSE: conceptual stencil node inside window
         } else {
           const uint64_t upper_offset = (uint64_t)offset;
           if (upper_offset >
@@ -1451,8 +1619,8 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
           } else {
             desired_slice =
                 center_slice + upper_offset * ntwm->time_slice_stride;
-          } // END ELSE: conceptual stencil node stayed inside the upper selected-slice range
-        } // END ELSE: conceptual stencil node was on or above the selected center slice
+          } // END ELSE: conceptual stencil node inside window
+        } // END ELSE: conceptual stencil node was on
 
         if (desired_slice_valid &&
             desired_slice < ntwm->num_time_slices) {
@@ -1465,13 +1633,13 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
             slice_payloads[j] = payload_ptr;
             (*num_available_slices)++;
             continue;
-          } // END IF: conceptual stencil node was available in the active mmap
-        } // END IF: conceptual stencil node referenced one stored slice index
+          } // END IF: conceptual stencil node available
+        } // END IF: conceptual stencil node mapped
 
         const int k = *num_missing_slices;
         missing_slice_times[k] = (REAL)desired_time;
         (*num_missing_slices)++;
-      } // END LOOP: for s over conceptual centered temporal interpolation stencil slots
+      } // END LOOP: for s over conceptual centered
 
       if (*num_available_slices <= 0)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
@@ -1485,6 +1653,79 @@ def time_window_manager_numerical(interpolation_method: str = "g4DD") -> None:
         "time_window_manager_numerical",
         time_window_manager_numerical_c_code,
     )
+    if include_batch_startup_validation:
+        batch_startup_validation_c_code = r"""
+    void params_struct_set_to_default(
+        commondata_struct *restrict commondata,
+        griddata_struct *restrict griddata);
+
+    /**
+     * Validate batch startup probes once before tile integration.
+     *
+     * @param[in,out] commondata Batch runtime parameters.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_validate_batch_startup_from_bin(
+        commondata_struct *restrict commondata) {
+      if (commondata == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      NumericalTimeWindowManager startup_window;
+      time_window_manager_numerical_set_inert(&startup_window);
+      commondata_struct commondata_for_params_defaults = *commondata;
+      griddata_struct dummy_griddata[MAXNUMGRIDS];
+      params_struct_set_to_default(
+          &commondata_for_params_defaults, dummy_griddata);
+      params_struct startup_params = dummy_griddata[0].params;
+
+      if (time_window_manager_numerical_init(
+              &startup_window,
+              commondata->numerical_spacetime_bin_path,
+              commondata,
+              commondata->numerical_spacetime_temporal_interp_half_width,
+              &startup_params) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        fprintf(stderr,
+                "ERROR: failed to initialize numerical startup validation "
+                "from '%s'.\n",
+                commondata->numerical_spacetime_bin_path);
+        time_window_manager_numerical_free(&startup_window);
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END IF: startup manager initialization failed
+
+      fprintf(stderr,
+              "INFO: checking numerical camera and r_escape probes against "
+              "the full logical .bin grid, including ghost zones.\n"
+              "      If the next converter message reports Newton-Raphson "
+              "failure, adjust camera_pos_x/y/z or lower r_escape in the "
+              "generated .par file.\n"
+              "      The first probe is the camera; the next three are the "
+              "positive x-, y-, and z-axis r_escape probes.\n");
+      fflush(stderr);
+
+      const int validation_status =
+          time_window_manager_numerical_validate_startup_domain(
+              &startup_window,
+              commondata,
+              &startup_params,
+              (const REAL[3]){(REAL)commondata->camera_pos_x,
+                              (REAL)commondata->camera_pos_y,
+                              (REAL)commondata->camera_pos_z},
+              "camera_pos_x, camera_pos_y, and camera_pos_z");
+      if (validation_status == TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        fprintf(stderr,
+                "INFO: numerical camera and r_escape startup stencil "
+                "check passed.\n");
+        fflush(stderr);
+      } // END IF: batch startup validation passed
+
+      time_window_manager_numerical_free(&startup_window);
+      return validation_status;
+    } // END FUNCTION: batch startup validation
+"""
+        Bdefines_h.register_BHaH_defines(
+            "time_window_manager_numerical_batch_startup",
+            batch_startup_validation_c_code,
+        )
 
 
 if __name__ == "__main__":

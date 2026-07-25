@@ -184,7 +184,7 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
     _ = par.register_CodeParameter(
         "int",
         __name__,
-        "numerical_spacetime_spatial_interp_order",
+        "numerical_spacetime_spatial_interp_half_width",
         2,
         commondata=True,
         add_to_parfile=True,
@@ -278,13 +278,52 @@ static int azimuthal_symmetry_spatial_lagrange_point_index_from_full_payload_ind
             )
             for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
         )
-        direct_gamma_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"gamma_rot[{idx}]",
-                _build_gamma_rotation_terms(alpha, mu, nu),
+        direct_gamma_assignment_lines: List[str] = []
+        for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER):
+            term_map: Dict[Tuple[int, int, int], int] = {}
+            for (
+                source_alpha,
+                sign_alpha,
+                cos_alpha,
+                sin_alpha,
+            ) in _rotation_source_terms(alpha):
+                for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
+                    for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(
+                        nu
+                    ):
+                        source_lower_mu, source_lower_nu = source_mu, source_nu
+                        if source_lower_mu > source_lower_nu:
+                            source_lower_mu, source_lower_nu = (
+                                source_lower_nu,
+                                source_lower_mu,
+                            )
+                        source_idx = _GAMMA_COMPONENT_INDEX[
+                            (source_alpha, source_lower_mu, source_lower_nu)
+                        ]
+                        term_key = (
+                            source_idx,
+                            cos_alpha + cos_mu + cos_nu,
+                            sin_alpha + sin_mu + sin_nu,
+                        )
+                        term_map[term_key] = term_map.get(term_key, 0) + (
+                            sign_alpha * sign_mu * sign_nu
+                        )
+            terms: List[str] = []
+            for source_idx, cos_power, sin_power in sorted(term_map):
+                coefficient = term_map[(source_idx, cos_power, sin_power)]
+                if coefficient:
+                    terms.append(
+                        _format_scaled_source_term(
+                            f"gamma_ref[{source_idx}]",
+                            coefficient,
+                            cos_power,
+                            sin_power,
+                        )
+                    )
+            direct_gamma_assignment_lines.append(
+                _emit_wrapped_assignment(f"gamma_rot[{idx}]", terms or ["0.0"])
             )
-            for idx, (alpha, mu, nu) in enumerate(_GAMMA_COMPONENT_ORDER)
-        )
+        direct_gamma_assignments = "\n".join(direct_gamma_assignment_lines)
         prefunc = (
             point_index_prefunc
             + r"""
@@ -342,7 +381,33 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
             ).replace("{direct_gamma_assignments}", direct_gamma_assignments)
         )
     else:
-        inverse_jacobian_assignments = _build_inverse_jacobian_c_code(CoordSystem)
+        rfm = reference_metric[CoordSystem]
+        expressions: List[sp.Expr] = []
+        output_names: List[str] = []
+        for native_direction in range(3):
+            for cartesian_direction in range(3):
+                expressions.append(
+                    sp.sympify(
+                        rfm.Jac_dUrfm_dDCartUD[native_direction][cartesian_direction]
+                    )
+                )
+                output_names.append(
+                    f"inverse_jacobian[{native_direction}][{cartesian_direction}]"
+                )
+
+        substitutions: Dict[sp.Basic, sp.Basic] = {}
+        for expression in expressions:
+            for symbol in expression.free_symbols:
+                symbol_name = str(symbol)
+                if symbol_name not in ("xx0", "xx1", "xx2"):
+                    substitutions[symbol] = sp.Symbol(f"params->{symbol_name}")
+        expressions = [expression.xreplace(substitutions) for expression in expressions]
+        inverse_jacobian_assignments = c_codegen(
+            expressions,
+            output_names,
+            include_braces=False,
+            verbose=False,
+        ).rstrip()
         direct_metric_assignments = "\n".join(
             _emit_wrapped_assignment(
                 f"g4dd_rot[{idx}]",
@@ -357,12 +422,37 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
             )
             for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
         )
-        direct_phi_derivative_assignments = "\n".join(
-            _emit_wrapped_assignment(
-                f"g4dd_native_derivatives_rot[{phi_dim}][{idx}]",
-                _build_metric_rotation_derivative_terms(mu, nu, "g4dd_ref"),
+        direct_phi_derivative_assignment_lines: List[str] = []
+        for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER):
+            derivative_map: Dict[Tuple[int, int, int], int] = {}
+            for (
+                source_idx,
+                cos_power,
+                sin_power,
+            ), coefficient in _metric_rotation_term_map(mu, nu).items():
+                if cos_power > 0:
+                    key = (source_idx, cos_power - 1, sin_power + 1)
+                    derivative_map[key] = (
+                        derivative_map.get(key, 0) - coefficient * cos_power
+                    )
+                if sin_power > 0:
+                    key = (source_idx, cos_power + 1, sin_power - 1)
+                    derivative_map[key] = (
+                        derivative_map.get(key, 0) + coefficient * sin_power
+                    )
+            derivative_map = {
+                key: coefficient
+                for key, coefficient in derivative_map.items()
+                if coefficient
+            }
+            direct_phi_derivative_assignment_lines.append(
+                _emit_wrapped_assignment(
+                    f"g4dd_native_derivatives_rot[{phi_dim}][{idx}]",
+                    _format_metric_term_map(derivative_map, "g4dd_ref"),
+                )
             )
-            for idx, (mu, nu) in enumerate(_METRIC_COMPONENT_ORDER)
+        direct_phi_derivative_assignments = "\n".join(
+            direct_phi_derivative_assignment_lines
         )
         direct_interp_1_derivative_assignments = "\n".join(
             _emit_wrapped_assignment(
@@ -440,7 +530,7 @@ static void azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct(
 {metric_time_derivative_code}
     g4dd_interp_0_ref[comp] += interp_0_derivative_weight * metric_value;
     g4dd_interp_1_ref[comp] += interp_1_derivative_weight * metric_value;
-  } // END LOOP: for comp over serialized metric components
+  } // END LOOP: for comp over serialized metric
 } // END FUNCTION: azimuthal_symmetry_spatial_lagrange_accumulate_metric_record_direct
 
 /**
@@ -541,8 +631,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
 
         azimuthal_symmetry_spatial_lagrange_accumulate_gamma_record_direct(
             value_weight, tensor_record, g4dd_ref, gamma_ref);
-      } // END LOOP: for u over first interpolation-dimension values
-    } // END LOOP: for v over second interpolation-dimension values
+      } // END LOOP: for u over first interpolation-dimension
+    } // END LOOP: for v over second interpolation-dimension
 
     azimuthal_symmetry_spatial_lagrange_rotate_gamma_about_z(
         target_phi - phi_ref, g4dd_ref, gamma_ref, g4dd_rot, gamma_rot);
@@ -562,7 +652,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
          comp < AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_RT_GAMMA_COMPONENT_COUNT;
          comp++)
       gamma_slice_out[comp] = gamma_rot[comp];
-  } // END LOOP: for which_slice over requested slice indices
+  } // END LOOP: for which_slice over requested slice
 """
     else:
         derivative_coefficient_declarations = """  REAL derivative_coeff_interp_0[interp_order];
@@ -649,8 +739,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
             coeff_interp_0[u];
 
 {metric_accumulation_call}
-      } // END LOOP: for u over first interpolation-dimension values
-    } // END LOOP: for v over second interpolation-dimension values
+      } // END LOOP: for u over first interpolation-dimension
+    } // END LOOP: for v over second interpolation-dimension
 
     azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_about_z(
         target_phi - phi_ref, g4dd_ref, g4dd_interp_0_ref,
@@ -682,9 +772,9 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
         metric_derivative_slice_out[
             4 * metric_component + cartesian_direction + 1] =
             cartesian_derivative;
-      } // END LOOP: for cartesian_direction over x, y, z
-    } // END LOOP: for metric_component over symmetric g4DD components
-  } // END LOOP: for which_slice over requested slice indices
+      } // END LOOP: for cartesian_direction over x, y,
+    } // END LOOP: for metric_component over symmetric g4DD
+  } // END LOOP: for which_slice over requested slice
 """.replace("{metric_time_declarations}", metric_time_declarations)
             .replace("{metric_accumulation_call}", metric_accumulation_call)
             .replace("{metric_time_rotation}", metric_time_rotation)
@@ -713,7 +803,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
   const REAL rho_sq = x * x + y * y;
   const REAL origin_epsilon = 1.0e-14;
   const REAL axis_rho_epsilon = 1.0e-14;
-  const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_order;
+  const int n_interp_ghosts = commondata->numerical_spacetime_spatial_interp_half_width;
   const long int interp_order_long = 2L * (long int)n_interp_ghosts + 1L;
   const REAL phi0 = (REAL)context->stored_phi_samples[0];
   const REAL phi1 = (REAL)context->stored_phi_samples[1];
@@ -777,14 +867,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
     src_interp_0_stencil[u] =
         (REAL)(params->xxmin{interp_dim0} +
                (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx{interp_dim0}));
-  } // END LOOP: for u over first interpolation-dimension stencil nodes
+  } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
     const int interp_1_raw = center_idx[{interp_dim1}] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
     src_interp_1_stencil[v] =
         (REAL)(params->xxmin{interp_dim1} +
                (((interp_1_raw - NGHOSTS) + 0.5) * params->dxx{interp_dim1}));
-  } // END LOOP: for v over second interpolation-dimension stencil nodes
+  } // END LOOP: for v over second interpolation-dimension
 
   compute_inv_denom(interp_order, inv_denom);
   compute_diffs_xi(
@@ -809,8 +899,8 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
               &mapped_point_index[v][u]);
       if (index_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
         return index_status;
-    } // END LOOP: for u over first interpolation-dimension payload indices
-  } // END LOOP: for v over second interpolation-dimension payload indices
+    } // END LOOP: for u over first interpolation-dimension
+  } // END LOOP: for v over second interpolation-dimension
 
 {inverse_jacobian_setup}
 
@@ -886,60 +976,6 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
 
 # These Python-side helpers generate the inverse reference-metric Jacobian and
 # pre-expand metric rotations so the emitted C stays reviewable.
-
-
-def _indent_c_code(code: str, spaces: int) -> str:
-    """
-    Indent generated C code by a fixed number of spaces.
-
-    :param code: Generated C code to indent.
-    :param spaces: Number of leading spaces for each nonempty line.
-    :return: Indented generated C code.
-    """
-    prefix = " " * spaces
-    return "\n".join(prefix + line if line else line for line in code.splitlines())
-
-
-def _build_inverse_jacobian_c_code(CoordSystem: str) -> str:
-    """
-    Generate C assignments for `d xx^A / d xCart^i` from the reference metric.
-
-    Native coordinate symbols remain local aliases `xx0`, `xx1`, and `xx2`.
-    All other free symbols are registered reference-metric CodeParameters and
-    are emitted as members of `params`.
-
-    :param CoordSystem: Reference-metric coordinate system.
-    :return: C assignments for the inverse coordinate Jacobian.
-    """
-    rfm = reference_metric[CoordSystem]
-    expressions: List[sp.Expr] = []
-    output_names: List[str] = []
-    for native_direction in range(3):
-        for cartesian_direction in range(3):
-            expressions.append(
-                sp.sympify(
-                    rfm.Jac_dUrfm_dDCartUD[native_direction][cartesian_direction]
-                )
-            )
-            output_names.append(
-                f"inverse_jacobian[{native_direction}][{cartesian_direction}]"
-            )
-
-    substitutions: Dict[sp.Basic, sp.Basic] = {}
-    for expression in expressions:
-        for symbol in expression.free_symbols:
-            symbol_name = str(symbol)
-            if symbol_name not in ("xx0", "xx1", "xx2"):
-                substitutions[symbol] = sp.Symbol(f"params->{symbol_name}")
-    expressions = [expression.xreplace(substitutions) for expression in expressions]
-
-    generated = c_codegen(
-        expressions,
-        output_names,
-        include_braces=False,
-        verbose=False,
-    ).rstrip()
-    return _indent_c_code(generated, 2)
 
 
 def _rotation_source_terms(output_index: int) -> List[Tuple[int, int, int, int]]:
@@ -1062,79 +1098,6 @@ def _build_metric_rotation_terms(mu: int, nu: int, source_array: str) -> List[st
     :return: Formatted C expressions for the rotated metric component.
     """
     return _format_metric_term_map(_metric_rotation_term_map(mu, nu), source_array)
-
-
-def _build_gamma_rotation_terms(alpha: int, mu: int, nu: int) -> List[str]:
-    """
-    Build terms for one rotated serialized Christoffel component.
-
-    The lower Christoffel indices are stored symmetrically. The generated
-    rotation is a constant Cartesian transformation, so the connection
-    transforms with one upper and two lower tensor indices.
-
-    :param alpha: Contravariant Christoffel index.
-    :param mu: First covariant Christoffel index.
-    :param nu: Second covariant Christoffel index.
-    :return: Formatted C expressions for the rotated component.
-    """
-    term_map: Dict[Tuple[int, int, int], int] = {}
-    for source_alpha, sign_alpha, cos_alpha, sin_alpha in _rotation_source_terms(alpha):
-        for source_mu, sign_mu, cos_mu, sin_mu in _rotation_source_terms(mu):
-            for source_nu, sign_nu, cos_nu, sin_nu in _rotation_source_terms(nu):
-                source_lower_mu, source_lower_nu = source_mu, source_nu
-                if source_lower_mu > source_lower_nu:
-                    source_lower_mu, source_lower_nu = source_lower_nu, source_lower_mu
-                source_idx = _GAMMA_COMPONENT_INDEX[
-                    (source_alpha, source_lower_mu, source_lower_nu)
-                ]
-                term_key = (
-                    source_idx,
-                    cos_alpha + cos_mu + cos_nu,
-                    sin_alpha + sin_mu + sin_nu,
-                )
-                term_map[term_key] = term_map.get(term_key, 0) + (
-                    sign_alpha * sign_mu * sign_nu
-                )
-    terms: List[str] = []
-    for source_idx, cos_power, sin_power in sorted(term_map):
-        coefficient = term_map[(source_idx, cos_power, sin_power)]
-        if coefficient:
-            terms.append(
-                _format_scaled_source_term(
-                    f"gamma_ref[{source_idx}]",
-                    coefficient,
-                    cos_power,
-                    sin_power,
-                )
-            )
-    return terms or ["0.0"]
-
-
-def _build_metric_rotation_derivative_terms(
-    mu: int, nu: int, source_array: str
-) -> List[str]:
-    """
-    Differentiate one rotated metric component with respect to azimuth.
-
-    :param mu: First Cartesian metric index.
-    :param nu: Second Cartesian metric index.
-    :param source_array: C array holding unrotated metric components.
-    :return: Formatted C expressions for the azimuthal derivative.
-    """
-    derivative_map: Dict[Tuple[int, int, int], int] = {}
-    for (source_idx, cos_power, sin_power), coefficient in _metric_rotation_term_map(
-        mu, nu
-    ).items():
-        if cos_power > 0:
-            key = (source_idx, cos_power - 1, sin_power + 1)
-            derivative_map[key] = derivative_map.get(key, 0) - coefficient * cos_power
-        if sin_power > 0:
-            key = (source_idx, cos_power + 1, sin_power - 1)
-            derivative_map[key] = derivative_map.get(key, 0) + coefficient * sin_power
-    derivative_map = {
-        key: coefficient for key, coefficient in derivative_map.items() if coefficient
-    }
-    return _format_metric_term_map(derivative_map, source_array)
 
 
 if __name__ == "__main__":

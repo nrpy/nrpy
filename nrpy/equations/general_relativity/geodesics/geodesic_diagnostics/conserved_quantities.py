@@ -348,15 +348,9 @@ if __name__ == "__main__":
                     * validation_pU[validation_mu]
                 )
     validation_x, validation_y, validation_z = kerr_diag.xx[1:4]
-    validation_Lx = (
-        validation_y * validation_pD[3] - validation_z * validation_pD[2]
-    )
-    validation_Ly = (
-        validation_z * validation_pD[1] - validation_x * validation_pD[3]
-    )
-    validation_Lz = (
-        validation_x * validation_pD[2] - validation_y * validation_pD[1]
-    )
+    validation_Lx = validation_y * validation_pD[3] - validation_z * validation_pD[2]
+    validation_Ly = validation_z * validation_pD[1] - validation_x * validation_pD[3]
+    validation_Lz = validation_x * validation_pD[2] - validation_y * validation_pD[1]
     L_sq_kerr = validation_Lx**2 + validation_Ly**2 + validation_Lz**2
     assert kerr_diag.Lz_expr is not None
     L_z_sq_kerr = kerr_diag.Lz_expr**2

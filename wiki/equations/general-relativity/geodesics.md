@@ -27,15 +27,23 @@ sides from position and four-velocity evolution, plus `u0_massive` from the
 timelike normalization condition. The photon path returns nine ODE right-hand
 sides from position and four-momentum evolution; the ninth component is the
 Eulerian path-length diagnostic, and `p0_photon` comes from the null constraint.
+For photon evolution, the module provides four explicit RHS forms: ordinary
+`geodesic_eom_rhs_photon` and
+`geodesic_eom_rhs_photon_christoffel`, plus normalized
+`geodesic_eom_rhs_photon_normalized` and
+`geodesic_eom_rhs_photon_normalized_christoffel`. The first member of each pair
+consumes metric derivatives; the second consumes Christoffels. EOM-family
+selection and geometry-payload selection are separate generation choices.
 Unsupported particle types raise `ValueError`.
 
 The same module also exposes reusable recipes for numerical spacetime data:
 `symbolic_numerical_christoffel_recipe`,
 `symbolic_g4DD_recipe_from_bssn_grid_basis`,
-`symbolic_christoffel_recipe_from_grid_basis`, and
-`symbolic_christoffel_recipe_from_bssn_grid_basis`. The BSSN-grid helpers accept
-target bases `Cartesian` and `Spherical`, use reference-metric Jacobians, and
-assume a time-independent spatial map lifted into four dimensions.
+`symbolic_g4DD_dt_recipe_from_bssn_grid_basis`, and
+`symbolic_christoffel_recipe_from_bssn_grid_basis`. The BSSN-grid helpers use
+reference-metric Jacobians and assume a time-independent spatial map lifted
+into four dimensions; the Christoffel recipe can optionally use static time
+derivatives for an explicitly requested approximate endpoint payload.
 
 `GeodesicDiagnostics` can use analytic metrics or a generic `"Numerical"`
 metric placeholder. It always constructs `E_expr = -p_0`, builds `L_exprs` only
@@ -53,7 +61,7 @@ cases before emitting trusted expressions.
 ## Sources
 
 - [analytic_spacetimes.py](../../../nrpy/equations/general_relativity/geodesics/analytic_spacetimes.py) - `AnalyticSpacetimes`, `Analytic_Spacetimes`
-- [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py) - `GeodesicEquations`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, `symbolic_christoffel_recipe_from_bssn_grid_basis`
+- [geodesics.py](../../../nrpy/equations/general_relativity/geodesics/geodesics.py) - `GeodesicEquations`, `geodesic_eom_rhs_massive`, `geodesic_eom_rhs_photon`, `geodesic_eom_rhs_photon_christoffel`, `geodesic_eom_rhs_photon_normalized`, `geodesic_eom_rhs_photon_normalized_christoffel`, `symbolic_g4DD_dt_recipe_from_bssn_grid_basis`, `symbolic_christoffel_recipe_from_bssn_grid_basis`
 - [conserved_quantities.py](../../../nrpy/equations/general_relativity/geodesics/geodesic_diagnostics/conserved_quantities.py) - `GeodesicDiagnostics`, `compute_energy`, `compute_angular_momentum_cartesian`, `compute_carter_constant_KerrSchild_Cartesian`
 - [analytic_spacetimes_KerrSchild_Cartesian.py](../../../nrpy/equations/general_relativity/geodesics/tests/analytic_spacetimes_KerrSchild_Cartesian.py) - `trusted_dict`
 - [geodesics_KerrSchild_Cartesian_massive.py](../../../nrpy/equations/general_relativity/geodesics/tests/geodesics_KerrSchild_Cartesian_massive.py) - `trusted_dict`

@@ -24,12 +24,6 @@ import sympy as sp
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.validate_expressions.validate_expressions as ve
-from nrpy.equations.general_relativity.g4munu_conversions import ADM_to_g4DD
-
-# Step 0.c: Import NRPy core modules
-from nrpy.equations.general_relativity.InitialData_Cartesian import (
-    InitialData_Cartesian,
-)
 
 
 class AnalyticSpacetimes:
@@ -51,15 +45,13 @@ class AnalyticSpacetimes:
         Initialize and generate the symbolic metric for a given spacetime.
 
         :param spacetime_name: The name of the spacetime to generate
-                               (e.g., "KerrSchild_Cartesian" or "BrillLindquist_Cartesian").
+                               (e.g., "KerrSchild_Cartesian").
         :raises ValueError: If the requested spacetime is not supported.
         """
         self.spacetime_name = spacetime_name
 
         if self.spacetime_name == "KerrSchild_Cartesian":
             self.g4DD, self.xx = self._define_kerr_metric_Cartesian_Kerr_Schild()
-        elif self.spacetime_name == "BrillLindquist_Cartesian":
-            self.g4DD, self.xx = self._define_Brill_Lindquist_metric_Cartesian()
         else:
             raise ValueError(f"Spacetime '{self.spacetime_name}' is not supported.")
 
@@ -130,44 +122,6 @@ class AnalyticSpacetimes:
 
         return g4DD, xx
 
-    @staticmethod
-    def _define_Brill_Lindquist_metric_Cartesian() -> (
-        Tuple[List[List[sp.Expr]], List[sp.Symbol]]
-    ):
-        """
-        Define a static Brill-Lindquist metric in Cartesian coordinates.
-
-        This metric is assembled from the Brill-Lindquist ADM initial data.
-        The black-hole masses and z positions are registered only when this
-        spacetime recipe is selected.
-
-        :return: A tuple (g4DD, xx), where g4DD is the symbolic 4x4 metric tensor
-                 and xx is the list of symbolic coordinate variables (t, x, y, z).
-
-        Doctests:
-        >>> bl_spacetime = AnalyticSpacetimes("BrillLindquist_Cartesian")  # doctest: +ELLIPSIS
-        Setting up reference_metric[Cartesian]...
-        >>> bl_spacetime.g4DD[0][1]
-        0
-        >>> bl_spacetime.g4DD[1][1] == bl_spacetime.g4DD[2][2] == bl_spacetime.g4DD[3][3]
-        True
-        """
-        # Step 1.a: Construct the Brill-Lindquist ADM quantities in Cartesian coordinates.
-        initial_data = InitialData_Cartesian("BrillLindquist")
-
-        # Step 1.b: Define the spacetime coordinate list using the ADM Cartesian symbols.
-        t = sp.Symbol("t", real=True)
-        xx = [t, initial_data.x, initial_data.y, initial_data.z]
-
-        # Step 2: Construct the spacetime metric g_munu from the ADM data.
-        g4DD = ADM_to_g4DD(
-            initial_data.gammaDD,
-            initial_data.betaU,
-            initial_data.alpha,
-        )
-
-        return g4DD, xx
-
 
 class AnalyticSpacetimes_dict(Dict[str, "AnalyticSpacetimes"]):
     """A caching dictionary for AnalyticSpacetimes instances."""
@@ -209,7 +163,6 @@ if __name__ == "__main__":
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
     for spacetime_name_str in [
         "KerrSchild_Cartesian",
-        "BrillLindquist_Cartesian",
     ]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(

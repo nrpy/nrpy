@@ -77,164 +77,6 @@ def _validate_fixed_width_string(text: str, field_bytes: int, label: str) -> Non
         )
 
 
-def _build_file_writer_block(
-    mode_name: str,
-    magic: str,
-    header_label: str,
-    format_name: str,
-    CoordSystem: str,
-    cf_convention: str,
-    record_names: Sequence[str],
-    metric_names: Sequence[str],
-    secondary_names: Sequence[str],
-    include_christoffel_count: bool,
-) -> str:
-    """
-    Generate one robust all-mode file-writing block.
-
-    The block uses the same fixed header and atomic-install helpers as the
-    single-mode writer. It is a code-generation helper, not a runtime output
-    channel abstraction.
-
-    :param mode_name: Method directory and generated C variable suffix.
-    :param magic: Existing slice-file magic.
-    :param header_label: Fixed header label.
-    :param format_name: Fixed format description.
-    :param CoordSystem: Source coordinate-system name.
-    :param cf_convention: Evolved conformal-factor convention.
-    :param record_names: Names stored in the record-component table.
-    :param metric_names: Names stored in the metric-component table.
-    :param secondary_names: Names stored in the secondary-component table.
-    :param include_christoffel_count: Whether the header has a Gamma count.
-    :return: Generated C source for one all-mode writer block.
-    """
-    block = rf"""
-  {{
-    const char magic_{mode_name}[16] = "{magic}";
-    char final_filename_{mode_name}[256];
-    char temporary_filename_{mode_name}[256];
-    if (mkdir("raytracing_slices", (mode_t)0777) != 0 && errno != EEXIST)
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data could not create raytracing_slices.");
-    if (mkdir("raytracing_slices/{mode_name}", (mode_t)0777) != 0 && errno != EEXIST)
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data could not create an all-mode method directory.");
-    snprintf(final_filename_{mode_name}, sizeof(final_filename_{mode_name}),
-             "./raytracing_slices/{mode_name}/raytracing_data_t%08d.bin",
-             time_output_index);
-    snprintf(temporary_filename_{mode_name}, sizeof(temporary_filename_{mode_name}),
-             "./raytracing_slices/{mode_name}/raytracing_data_t%08d.bin.tmp.XXXXXX",
-             time_output_index);
-    const int temporary_fd_{mode_name} = mkstemp(temporary_filename_{mode_name});
-    if (temporary_fd_{mode_name} == -1)
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data could not create an all-mode temporary file.");
-    FILE *restrict fp_{mode_name} = fdopen(temporary_fd_{mode_name}, "wb");
-    if (fp_{mode_name} == NULL) {{
-      close(temporary_fd_{mode_name});
-      remove(temporary_filename_{mode_name});
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data could not open an all-mode temporary file.");
-    }} // END IF: all-mode temporary file could not be opened
-    raytracing_data_write_or_abort(fp_{mode_name}, magic_{mode_name}, sizeof(char), 16, "magic");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, header_size_{mode_name}, "header_size");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, output_index, "output_index");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, num_grids, "num_grids");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, serialized_real_bytes, "serialized_real_bytes");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, record_component_count_{mode_name}, "record_component_count");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, metric_component_count_{mode_name}, "metric_component_count");
-"""
-    if include_christoffel_count:
-        block += rf"""    raytracing_data_write_u32_or_abort(
-        fp_{mode_name}, christoffel_component_count_{mode_name}, "christoffel_component_count");
-"""
-    block += rf"""    raytracing_data_write_u32_or_abort(fp_{mode_name}, point_record_real_count_{mode_name}, "point_record_real_count");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, point_record_bytes_{mode_name}, "point_record_bytes");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, payload_includes_ghost_zones, "payload_includes_ghost_zones");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, file_is_little_endian, "file_is_little_endian");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, time_variable_is_f64, "time_variable_is_f64");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, reserved_u32, "reserved_u32");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx0, "Nxx0");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx1, "Nxx1");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx2, "Nxx2");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS0_u32, "Nxx_plus_2NGHOSTS0");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS1_u32, "Nxx_plus_2NGHOSTS1");
-    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS2_u32, "Nxx_plus_2NGHOSTS2");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, point_record_count, "point_record_count");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name}, "simulation_time_offset");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name} + 8ULL, "point_records_offset");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, point_records_bytes_{mode_name}, "point_records_bytes");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name} + 8ULL + point_records_bytes_{mode_name}, "total_file_bytes");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)NGHOSTS, "NGHOSTS");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS0_u32, "payload_i0_count");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS1_u32, "payload_i1_count");
-    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS2_u32, "payload_i2_count");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i0_start, "payload_i0_start");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i1_start, "payload_i1_start");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i2_start, "payload_i2_start");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i0_end, "payload_i0_end");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i1_end, "payload_i1_end");
-    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i2_end, "payload_i2_end");
-    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, dxx[i], "dxx");
-    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, invdxx[i], "invdxx");
-    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, xxmin[i], "xxmin");
-    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, xxmax[i], "xxmax");
-    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, cart_origin[i], "cart_origin");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{header_label}", 32, "header_label");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{format_name}", 32, "format_name");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "Cartesian", 16, "target_basis");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{CoordSystem}", 32, "source_coord_system");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "i2maj_i0fast", 16, "loop_order");
-    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{cf_convention}", 32, "cf_convention");
-"""
-    for component_name in record_names:
-        block += (
-            "    raytracing_data_write_fixed_length_string_or_abort("
-            f'fp_{mode_name}, "{component_name}", 24, "record_component_names");\n'
-        )
-    for component_name in metric_names:
-        block += (
-            "    raytracing_data_write_fixed_length_string_or_abort("
-            f'fp_{mode_name}, "{component_name}", 16, "metric_component_names");\n'
-        )
-    if include_christoffel_count:
-        for component_name in secondary_names:
-            block += (
-                "    raytracing_data_write_fixed_length_string_or_abort("
-                f'fp_{mode_name}, "{component_name}", 16, "christoffel_component_names");\n'
-            )
-    block += rf"""    raytracing_data_write_f64_or_abort(fp_{mode_name}, (double)commondata->time, "simulation_time");
-    raytracing_data_write_f64_array_or_abort(
-        fp_{mode_name}, payload_{mode_name}, payload_value_count_{mode_name}, "point-record payload");
-    if (fflush(fp_{mode_name}) != 0) {{
-      fclose(fp_{mode_name});
-      remove(temporary_filename_{mode_name});
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data failed while flushing an all-mode file.");
-    }} // END IF: all-mode file flush failed
-    if (fclose(fp_{mode_name}) != 0) {{
-      remove(temporary_filename_{mode_name});
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data failed while closing an all-mode file.");
-    }} // END IF: all-mode file close failed
-    BHAH_FREE(payload_{mode_name});
-    if (link(temporary_filename_{mode_name}, final_filename_{mode_name}) != 0) {{
-      const int saved_errno = errno;
-      if (remove(temporary_filename_{mode_name}) != 0 && saved_errno != EEXIST)
-        raytracing_data_abort_with_message(
-            "Error: output_raytracing_data could not clean up an all-mode file.");
-      if (saved_errno != EEXIST)
-        raytracing_data_abort_with_message(
-            "Error: output_raytracing_data could not install an all-mode file.");
-    }} else if (remove(temporary_filename_{mode_name}) != 0) {{
-      raytracing_data_abort_with_message(
-          "Error: output_raytracing_data could not remove an all-mode temporary file.");
-    }} // END IF: all-mode file installation failed or succeeded
-  }} // END BLOCK: write {mode_name} all-mode slice
-"""
-    return block
-
-
 def register_CFunction_output_raytracing_data(
     CoordSystem: str,
     enable_rfm_precompute: bool,
@@ -771,14 +613,14 @@ static uint32_t raytracing_data_u32_from_nonnegative_int_or_abort(
             label,
             value);
     exit(1);
-  } // END IF: negative integers cannot be serialized as uint32_t
+  } // END IF: negative integers cannot be serialized
   if ((uint64_t)value > (uint64_t)UINT32_MAX) {
     fprintf(stderr,
             "Error: output_raytracing_data %s=%d does not fit in uint32_t.\n",
             label,
             value);
     exit(1);
-  } // END IF: value exceeds the documented header format
+  } // END IF: value exceeds the documented header
   return (uint32_t)value;
 } // END FUNCTION: raytracing_data_u32_from_nonnegative_int_or_abort
 
@@ -843,7 +685,7 @@ static size_t raytracing_data_size_t_from_u64_or_abort(
             label,
             value);
     exit(1);
-  } // END IF: value exceeds the local size_t range
+  } // END IF: value exceeds the local size_t
   return (size_t)value;
 } // END FUNCTION: raytracing_data_size_t_from_u64_or_abort
 
@@ -973,11 +815,11 @@ static void raytracing_data_write_f64_array_or_abort(
   if (((const uint8_t *restrict)&endianness_probe)[0] == 1U) {
     raytracing_data_write_or_abort(fp, values, sizeof(double), count, label);
     return;
-  } // END IF: host memory already matches the documented little-endian payload format
+  } // END IF: host memory matches little-endian layout
 
   for (size_t i = 0; i < count; i++) {
     raytracing_data_write_f64_or_abort(fp, values[i], label);
-  } // END LOOP: for i over payload binary64 values on non-little-endian hosts
+  } // END LOOP: for i over payload binary64
 } // END FUNCTION: raytracing_data_write_f64_array_or_abort
 
 /**
@@ -1058,7 +900,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   if (j0_signed < 0 || j1_signed < 0 || j2_signed < 0) {
     raytracing_data_abort_with_message(
         "Error: output_raytracing_data logical indices fell below the payload window.");
-  } // END IF: logical indices must not fall below the documented payload window
+  } // END IF: logical indices must not fall
   const uint64_t j0 = (uint64_t)j0_signed;
   const uint64_t j1 = (uint64_t)j1_signed;
   const uint64_t j2 = (uint64_t)j2_signed;
@@ -1066,7 +908,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
       j2 >= payload_i2_count) {
     raytracing_data_abort_with_message(
         "Error: output_raytracing_data logical indices exceeded payload bounds.");
-  } // END IF: logical indices must stay within the documented payload
+  } // END IF: logical indices must stay within
   return j0 + payload_i0_count * (j1 + payload_i1_count * j2);
 } // END FUNCTION: raytracing_data_point_index_from_logical_indices
 
@@ -1120,7 +962,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
                 True,
             ),
         )
-        all_body = rf"""
+        all_body = r"""
   if (commondata->NUMGRIDS != 1)
     raytracing_data_abort_with_message(
         "Error: output_raytracing_data currently requires commondata->NUMGRIDS == 1.");
@@ -1135,11 +977,11 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const rfm_struct *restrict rfmstruct = griddata[0].rfmstruct;
   const REAL *restrict y_n_gfs = griddata[0].gridfuncs.y_n_gfs;
   REAL *restrict auxevol_gfs = griddata[0].gridfuncs.auxevol_gfs;
-  REAL *restrict xx[3] = {{
+  REAL *restrict xx[3] = {
       griddata[0].xx[0],
       griddata[0].xx[1],
       griddata[0].xx[2],
-  }};
+  };
   const uint32_t output_index =
       raytracing_data_u32_from_nonnegative_int_or_abort(
           time_output_index, "time_output_index");
@@ -1178,23 +1020,23 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
   const int64_t payload_i1_end = (int64_t)Nxx1 + (int64_t)NGHOSTS;
   const int64_t payload_i2_end = (int64_t)Nxx2 + (int64_t)NGHOSTS;
   SET_NXX_PLUS_2NGHOSTS_VARS(0);
-  const double dxx[3] = {{
+  const double dxx[3] = {
       (double)params->dxx0, (double)params->dxx1, (double)params->dxx2
-  }};
-  const double invdxx[3] = {{
+  };
+  const double invdxx[3] = {
       (double)params->invdxx0, (double)params->invdxx1, (double)params->invdxx2
-  }};
-  const double xxmin[3] = {{
+  };
+  const double xxmin[3] = {
       (double)params->xxmin0, (double)params->xxmin1, (double)params->xxmin2
-  }};
-  const double xxmax[3] = {{
+  };
+  const double xxmax[3] = {
       (double)params->xxmax0, (double)params->xxmax1, (double)params->xxmax2
-  }};
-  const double cart_origin[3] = {{
+  };
+  const double cart_origin[3] = {
       (double)params->Cart_originx,
       (double)params->Cart_originy,
       (double)params->Cart_originz
-  }};
+  };
 """
         for (
             mode_name,
@@ -1292,9 +1134,9 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
         payload_{mode_name}[base_index_{mode_name} + 2] = (double)xCart[2];
 """
         all_body += r"""
-      } // END LOOP: for i0 over all-mode coordinate points
-    } // END LOOP: for i1 over all-mode coordinate points
-  } // END LOOP: for i2 over all-mode coordinate points
+      } // END LOOP: for i0 over all-mode coordinate
+    } // END LOOP: for i1 over all-mode coordinate
+  } // END LOOP: for i2 over all-mode coordinate
 
 """
         all_body += all_loop
@@ -1337,12 +1179,12 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
               3.0 * payload_{mode_name}[base_offset1_{mode_name} + comp]
               - 3.0 * payload_{mode_name}[base_offset2_{mode_name} + comp]
               + payload_{mode_name}[base_offset3_{mode_name} + comp];
-        }} // END LOOP: for comp over {mode_name} tensor payload components
+        }} // END LOOP: for comp over {mode_name} tensor
 """
         all_body += r"""
-      } // END LOOP: for idx2d over all-mode outer boundary points
-    } // END LOOP: for dirn over all-mode outer boundary directions
-  } // END LOOP: for which_gz over all-mode ghost layers
+      } // END LOOP: for idx2d over all-mode outer
+    } // END LOOP: for dirn over all-mode outer
+  } // END LOOP: for which_gz over all-mode ghost
 
 #pragma omp parallel for schedule(static)
   for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
@@ -1357,10 +1199,10 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
     for (size_t comp = 3; comp < (size_t)point_record_real_count_{mode_name}; comp++) {{
       payload_{mode_name}[dst_base_offset_{mode_name} + comp] =
           payload_{mode_name}[src_base_offset_{mode_name} + comp];
-    }} // END LOOP: for comp over {mode_name} inner-boundary payload components
+    }} // END LOOP: for comp over {mode_name} inner-boundary
 """
         all_body += r"""
-  } // END LOOP: for pt over all-mode inner boundary points
+  } // END LOOP: for pt over all-mode inner
 
 """
         for (
@@ -1379,18 +1221,133 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
                 + [name for _, name in metric_names]
                 + [name for _, name in secondary_names]
             )
-            all_body += _build_file_writer_block(
-                mode_name=mode_name,
-                magic=magic,
-                header_label=channel_label,
-                format_name=channel_format,
-                CoordSystem=CoordSystem,
-                cf_convention=cf_convention,
-                record_names=record_names,
-                metric_names=[name for _, name in metric_names],
-                secondary_names=[name for _, name in secondary_names],
-                include_christoffel_count=has_gamma_count,
-            )
+            metric_component_names = [name for _, name in metric_names]
+            secondary_component_names = [name for _, name in secondary_names]
+            block = rf"""
+  {{
+    const char magic_{mode_name}[16] = "{magic}";
+    char final_filename_{mode_name}[256];
+    char temporary_filename_{mode_name}[256];
+    if (mkdir("raytracing_slices", (mode_t)0777) != 0 && errno != EEXIST)
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data could not create raytracing_slices.");
+    if (mkdir("raytracing_slices/{mode_name}", (mode_t)0777) != 0 && errno != EEXIST)
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data could not create an all-mode method directory.");
+    snprintf(final_filename_{mode_name}, sizeof(final_filename_{mode_name}),
+             "./raytracing_slices/{mode_name}/raytracing_data_t%08d.bin",
+             time_output_index);
+    snprintf(temporary_filename_{mode_name}, sizeof(temporary_filename_{mode_name}),
+             "./raytracing_slices/{mode_name}/raytracing_data_t%08d.bin.tmp.XXXXXX",
+             time_output_index);
+    const int temporary_fd_{mode_name} = mkstemp(temporary_filename_{mode_name});
+    if (temporary_fd_{mode_name} == -1)
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data could not create an all-mode temporary file.");
+    FILE *restrict fp_{mode_name} = fdopen(temporary_fd_{mode_name}, "wb");
+    if (fp_{mode_name} == NULL) {{
+      close(temporary_fd_{mode_name});
+      remove(temporary_filename_{mode_name});
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data could not open an all-mode temporary file.");
+    }} // END IF: all-mode temporary file unavailable
+    raytracing_data_write_or_abort(fp_{mode_name}, magic_{mode_name}, sizeof(char), 16, "magic");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, header_size_{mode_name}, "header_size");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, output_index, "output_index");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, num_grids, "num_grids");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, serialized_real_bytes, "serialized_real_bytes");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, record_component_count_{mode_name}, "record_component_count");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, metric_component_count_{mode_name}, "metric_component_count");
+"""
+            if has_gamma_count:
+                block += rf"""    raytracing_data_write_u32_or_abort(
+        fp_{mode_name}, christoffel_component_count_{mode_name}, "christoffel_component_count");
+"""
+            block += rf"""    raytracing_data_write_u32_or_abort(fp_{mode_name}, point_record_real_count_{mode_name}, "point_record_real_count");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, point_record_bytes_{mode_name}, "point_record_bytes");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, payload_includes_ghost_zones, "payload_includes_ghost_zones");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, file_is_little_endian, "file_is_little_endian");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, time_variable_is_f64, "time_variable_is_f64");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, reserved_u32, "reserved_u32");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx0, "Nxx0");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx1, "Nxx1");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx2, "Nxx2");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS0_u32, "Nxx_plus_2NGHOSTS0");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS1_u32, "Nxx_plus_2NGHOSTS1");
+    raytracing_data_write_u32_or_abort(fp_{mode_name}, Nxx_plus_2NGHOSTS2_u32, "Nxx_plus_2NGHOSTS2");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, point_record_count, "point_record_count");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name}, "simulation_time_offset");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name} + 8ULL, "point_records_offset");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, point_records_bytes_{mode_name}, "point_records_bytes");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)header_size_{mode_name} + 8ULL + point_records_bytes_{mode_name}, "total_file_bytes");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)NGHOSTS, "NGHOSTS");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS0_u32, "payload_i0_count");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS1_u32, "payload_i1_count");
+    raytracing_data_write_u64_or_abort(fp_{mode_name}, (uint64_t)Nxx_plus_2NGHOSTS2_u32, "payload_i2_count");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i0_start, "payload_i0_start");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i1_start, "payload_i1_start");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i2_start, "payload_i2_start");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i0_end, "payload_i0_end");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i1_end, "payload_i1_end");
+    raytracing_data_write_i64_or_abort(fp_{mode_name}, payload_i2_end, "payload_i2_end");
+    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, dxx[i], "dxx");
+    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, invdxx[i], "invdxx");
+    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, xxmin[i], "xxmin");
+    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, xxmax[i], "xxmax");
+    for (int i = 0; i < 3; i++) raytracing_data_write_f64_or_abort(fp_{mode_name}, cart_origin[i], "cart_origin");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{channel_label}", 32, "header_label");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{channel_format}", 32, "format_name");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "Cartesian", 16, "target_basis");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{CoordSystem}", 32, "source_coord_system");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "i2maj_i0fast", 16, "loop_order");
+    raytracing_data_write_fixed_length_string_or_abort(fp_{mode_name}, "{cf_convention}", 32, "cf_convention");
+"""
+            for component_name in record_names:
+                block += (
+                    "    raytracing_data_write_fixed_length_string_or_abort("
+                    f'fp_{mode_name}, "{component_name}", 24, "record_component_names");\n'
+                )
+            for component_name in metric_component_names:
+                block += (
+                    "    raytracing_data_write_fixed_length_string_or_abort("
+                    f'fp_{mode_name}, "{component_name}", 16, "metric_component_names");\n'
+                )
+            if has_gamma_count:
+                for component_name in secondary_component_names:
+                    block += (
+                        "    raytracing_data_write_fixed_length_string_or_abort("
+                        f'fp_{mode_name}, "{component_name}", 16, "christoffel_component_names");\n'
+                    )
+            block += rf"""    raytracing_data_write_f64_or_abort(fp_{mode_name}, (double)commondata->time, "simulation_time");
+    raytracing_data_write_f64_array_or_abort(
+        fp_{mode_name}, payload_{mode_name}, payload_value_count_{mode_name}, "point-record payload");
+    if (fflush(fp_{mode_name}) != 0) {{
+      fclose(fp_{mode_name});
+      remove(temporary_filename_{mode_name});
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data failed while flushing an all-mode file.");
+    }} // END IF: all-mode file flush failed
+    if (fclose(fp_{mode_name}) != 0) {{
+      remove(temporary_filename_{mode_name});
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data failed while closing an all-mode file.");
+    }} // END IF: all-mode file close failed
+    BHAH_FREE(payload_{mode_name});
+    if (link(temporary_filename_{mode_name}, final_filename_{mode_name}) != 0) {{
+      const int saved_errno = errno;
+      if (remove(temporary_filename_{mode_name}) != 0 && saved_errno != EEXIST)
+        raytracing_data_abort_with_message(
+            "Error: output_raytracing_data could not clean up an all-mode file.");
+      if (saved_errno != EEXIST)
+        raytracing_data_abort_with_message(
+            "Error: output_raytracing_data could not install an all-mode file.");
+    }} else if (remove(temporary_filename_{mode_name}) != 0) {{
+      raytracing_data_abort_with_message(
+          "Error: output_raytracing_data could not remove an all-mode temporary file.");
+    }} // END ELSE IF: all-mode file installation
+  }} // END BLOCK: write {mode_name} all-mode slice
+"""
+            all_body += block
         all_body += "  BHAH_FREE(rhs_gfs);\n"
         body = all_body
     else:
@@ -1576,7 +1533,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             temporary_filename,
             errno);
     exit(1);
-  }} // END IF: temporary output file could not be created
+  }} // END IF: temporary output file unavailable
 
   const mode_t current_umask = umask((mode_t)0);
   umask(current_umask);
@@ -1602,7 +1559,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             temporary_filename,
             saved_errno);
     exit(1);
-  }} // END IF: temporary output file permissions could not be adjusted
+  }} // END IF: temporary output permissions failed
 
   FILE *restrict fp = fdopen(temporary_fd, "wb");
   if (fp == NULL) {{
@@ -1759,9 +1716,9 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
             payload_buffer[base_index + 0] = (double)xCart[0];
             payload_buffer[base_index + 1] = (double)xCart[1];
             payload_buffer[base_index + 2] = (double)xCart[2];
-          } // END LOOP: for i0 over full logical-grid x0 indices
-        } // END LOOP: for i1 over full logical-grid x1 indices
-      } // END LOOP: for i2 over full logical-grid x2 indices
+          } // END LOOP: for i0 over full logical-grid
+        } // END LOOP: for i1 over full logical-grid
+      } // END LOOP: for i2 over full logical-grid
 
       // Step 4: Evaluate the Cartesian metric into interior tensor payload records.
     """
@@ -1812,10 +1769,10 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
                   +3.0 * payload_buffer[base_offset1 + comp]
                   - 3.0 * payload_buffer[base_offset2 + comp]
                   + 1.0 * payload_buffer[base_offset3 + comp];
-            } // END LOOP: for comp over serialized tensor payload components
-          } // END LOOP: for idx2d over pure outer boundary points on this face/layer
-        } // END LOOP: for dirn over pure outer boundary directions
-      } // END LOOP: for which_gz over pure outer ghost-zone layers
+            } // END LOOP: for comp over serialized tensor
+          } // END LOOP: for idx2d over pure outer
+        } // END LOOP: for dirn over pure outer
+      } // END LOOP: for which_gz over pure outer
 
     #pragma omp parallel for schedule(static)
       for (int pt = 0; pt < bc_info->num_inner_boundary_points; pt++) {
@@ -1828,8 +1785,8 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
         for (size_t comp = 3; comp < (size_t)point_record_real_count; comp++) {
           payload_buffer[dst_base_offset + comp] =
               payload_buffer[src_base_offset + comp];
-        } // END LOOP: for comp over serialized tensor payload components
-      } // END LOOP: for pt over inner boundary ghost-zone points
+        } // END LOOP: for comp over serialized tensor
+      } // END LOOP: for pt over inner boundary
 
       // Step 6: Serialize the payload buffer using the documented little-endian binary64 layout.
       raytracing_data_write_f64_array_or_abort(
@@ -1880,7 +1837,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
                 final_filename,
                 saved_errno);
         exit(1);
-      } // END IF: final output file could not be installed without overwrite
+      } // END IF: final output file unavailable
       if (remove(temporary_filename) != 0) {
         fprintf(stderr,
                 "Error: output_raytracing_data installed %s but could not remove %s. errno=%d\n",
@@ -1888,7 +1845,7 @@ static uint64_t raytracing_data_point_index_from_logical_indices(
                 temporary_filename,
                 errno);
         exit(1);
-      } // END IF: temporary output file could not be removed after installation
+      } // END IF: temporary output file unavailable
     """
 
     cfc.register_CFunction(

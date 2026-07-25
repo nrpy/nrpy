@@ -144,7 +144,7 @@ def handle_window_plane_intersection() -> None:
         final_blueprint_data->t_w = t_intersect; // Persistent coordinate time of crossing.
         final_blueprint_data->L_w = physical_lambda; // Explicit $\lambda$ mapped to persistent blueprint.
         return true;
-    } // END IF: intersection is within active window bounds
+    } // END IF: intersection is within active window
 
     return false;
     """

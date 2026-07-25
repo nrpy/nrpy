@@ -111,7 +111,7 @@ def calculate_and_fill_blueprint_data_universal(
     // the blueprint. All other termination modes record the final evolved state.
     if (d_status_bundle[c] != TERMINATION_TYPE_SOURCE_PLANE) {
 {terminal_state_assignment}
-    } // END IF: termination did not already store an exact source-plane event
+    } // END IF: termination did not already store
 
     //==========================================
     // EVENT DETECTION & TERMINATION CHECKS
@@ -191,7 +191,7 @@ def calculate_and_fill_blueprint_data_universal(
     // Transfer the 9-component state vector $f^mu$ for the current bundle for coordinate unpacking.
     for(int m=0; m<9; m++) {{ // Iterate over the 9 components of the $f^mu$ state vector.
         {memcpy_f} // Transfer of $f^mu$.
-    }} // END LOOP: for m over 9 components of f^mu state vector
+    }} // END LOOP: for m over 9 components
 
     // Transfer the final integration parameters for the current bundle.
     {memcpy_integration_param}
@@ -285,7 +285,7 @@ def calculate_and_fill_blueprint_data_universal(
                 "ERROR: Could not open normalization sidecar '%s' for writing.\\n",
                 norm_abs_bin_path);
         exit(1);
-    }} // END IF: failed to open normalization sidecar path
+    }} // END IF: failed to open normalization sidecar
 
     const size_t num_written = fwrite(
         normalization_abs_by_ray, sizeof(double), (size_t)num_rays, norm_abs_file);

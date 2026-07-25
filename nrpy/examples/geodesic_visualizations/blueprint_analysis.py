@@ -9,6 +9,7 @@ Author: Dalton J. Moone
 """
 
 import os
+from contextlib import ExitStack
 from typing import BinaryIO, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -296,10 +297,10 @@ def diagnose_blueprint(
                 tile_x=header.tile_x, tile_y=header.tile_y
             ),
         )
-        sidecar_file: Optional[BinaryIO] = (
-            open(sidecar_path, "rb") if have_sidecars else None
-        )
-        try:
+        with ExitStack() as sidecar_stack:
+            sidecar_file: Optional[BinaryIO] = None
+            if have_sidecars:
+                sidecar_file = sidecar_stack.enter_context(open(sidecar_path, "rb"))
             for _, _, chunk_data in blueprint_io.iter_blueprint_chunks(
                 filepath, cfg.CHUNK_SIZE
             ):
@@ -341,9 +342,6 @@ def diagnose_blueprint(
                 raise ValueError(
                     f"Normalization sidecar for '{filepath}' has extra data"
                 )
-        finally:
-            if sidecar_file is not None:
-                sidecar_file.close()
 
     _print_termination_diagnostics(enum_counts, total_rays)
     print("\n--- Window Coordinate Bounds (y_w, z_w) ---")

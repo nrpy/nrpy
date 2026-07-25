@@ -201,7 +201,7 @@ def set_initial_conditions_kernel(
         all_photons->integration_param[ray] = commondata->t_start;
         all_photons->integration_param_p[ray] = commondata->t_start;
         all_photons->integration_param_p_p[ray] = commondata->t_start;
-    } // END LOOP: for ray over normalized coordinate-time trackers
+    } // END LOOP: for ray over normalized coordinate-time
 """
         if normalized_eom
         else ""
@@ -378,7 +378,7 @@ def set_initial_conditions_kernel(
                     d_f_bundle + (m * BUNDLE_CAPACITY),
                     sizeof(double) * chunk_size,
                     cudaMemcpyDeviceToHost);
-        } // END LOOP: for m over 9-strided tensor transfer
+        } // END LOOP: for m over 9-strided tensor
 
         //==========================================
         // 1-STRIDED BRIDGE TRANSFER (DEVICE-TO-HOST)
@@ -399,7 +399,7 @@ def set_initial_conditions_kernel(
             memcpy(all_photons->f + (m * num_rays) + start_idx,
                    d_f_bundle + (m * BUNDLE_CAPACITY),
                    sizeof(double) * chunk_size);
-        } // END LOOP: for m over 9-strided tensor transfer
+        } // END LOOP: for m over 9-strided tensor
 
         //==========================================
         // 1-STRIDED BRIDGE TRANSFER (HOST-TO-HOST)
@@ -488,7 +488,7 @@ def set_initial_conditions_kernel(
     for(int j=0; j<3; j++) {
         // Output the normalized global basis vectors $n_x^i, n_y^i, n_z^i$.
         n_x_out[j] = n_x[j]; n_y_out[j] = n_y[j]; n_z_out[j] = n_z[j];
-    } // END LOOP: for j over basis vector components
+    } // END LOOP: for j over basis vector
 
     // Extracted basis components.
     const double nx_0 = n_x[0];
@@ -522,7 +522,7 @@ def set_initial_conditions_kernel(
     for (long int plane_i = 0; plane_i < num_rays; ++plane_i) {
         all_photons->on_positive_side_of_window_prev[plane_i] = init_window_side;
         all_photons->on_positive_side_of_source_prev[plane_i] = init_source_side;
-    } // END LOOP: for plane_i over initial plane boundaries
+    } // END LOOP: for plane_i over initial plane
 
     //==========================================
     // VRAM STAGING ALLOCATION

@@ -9,7 +9,7 @@
  * configured temporal stencil, plus the corresponding physical `slice_times`.
  * This helper assumes those times are trusted, finite, and strictly increasing,
  * derives the actual number of time nodes from
- * `commondata->numerical_spacetime_temporal_interp_order`, and builds one shared
+ * `commondata->numerical_spacetime_temporal_interp_half_width`, and builds one shared
  * nonuniform barycentric Lagrange basis from the exact physical slice times.
  *
  * The 10 serialized `g4DD` components are interpolated independently to
@@ -52,7 +52,7 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
                                     REAL *restrict rhs_geometry_out) {
   // Step 1: Build the shared nonuniform barycentric Lagrange basis and its
   // analytic derivative in normalized physical time.
-  const int temporal_half_width = commondata->numerical_spacetime_temporal_interp_order;
+  const int temporal_half_width = commondata->numerical_spacetime_temporal_interp_half_width;
   if (temporal_half_width < 0 || temporal_half_width > TEMPORAL_LAGRANGE_INTERP_MAX_HALF_WIDTH)
     return TEMPORAL_LAGRANGE_INTERP_INVALID_ORDER;
   const int interp_order = 2 * temporal_half_width + 1;
@@ -76,10 +76,10 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
       if (j != i) {
         const REAL time_diff = normalized_slice_times[i] - normalized_slice_times[j];
         weight_denom *= time_diff;
-      } // END IF: multiplying one nontrivial barycentric denominator factor
-    } // END LOOP: for j over temporal nodes while building one barycentric weight
+      } // END IF: multiplying one nontrivial barycentric denominator
+    } // END LOOP: for j over temporal nodes
     barycentric_weights[i] = 1.0 / weight_denom;
-  } // END LOOP: for i over temporal nodes while building barycentric weights
+  } // END LOOP: for i over temporal nodes
 
   // Step 1.c: Check whether the target time exactly matches one supplied node.
   int exact_node = -1;
@@ -88,8 +88,8 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
     if (target_diff == 0.0) {
       exact_node = i;
       break;
-    } // END IF: target time exactly matched one supplied slice time
-  } // END LOOP: for i over temporal nodes while checking for an exact target match
+    } // END IF: target time matched node
+  } // END LOOP: for i over temporal nodes
 
   if (exact_node >= 0) {
     // At an exact node the value basis is one-hot, but its derivative is not
@@ -105,7 +105,7 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
             barycentric_weights[i] / (barycentric_weights[exact_node] * (normalized_slice_times[exact_node] - normalized_slice_times[i]));
         exact_diagonal_derivative -= coeff_dt_normalized[i];
       } // END ELSE: one off-diagonal exact-node derivative coefficient
-    } // END LOOP: for i over exact-node value and derivative coefficients
+    } // END LOOP: for i over exact-node value
     coeff_dt_normalized[exact_node] = exact_diagonal_derivative;
   } else {
     REAL barycentric_sum = 0.0;
@@ -117,14 +117,14 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
       coeff_t[i] = weighted_term;
       barycentric_sum += weighted_term;
       barycentric_inverse_square_sum += weighted_term / target_diff;
-    } // END LOOP: for i over temporal nodes while summing barycentric terms
+    } // END LOOP: for i over temporal nodes
 
     for (int i = 0; i < interp_order; i++) {
       const REAL target_diff = normalized_t_target - normalized_slice_times[i];
       coeff_t[i] /= barycentric_sum;
       coeff_dt_normalized[i] = coeff_t[i] * (barycentric_inverse_square_sum / barycentric_sum - 1.0 / target_diff);
-    } // END LOOP: for i over normalized value and derivative coefficients
-  } // END ELSE: target time required a full barycentric basis evaluation
+    } // END LOOP: for i over normalized value
+  } // END ELSE: target time required a full
 
   // Step 2: Interpolate each metric component and differentiate the same
   // temporal reconstruction with respect to physical coordinate time.
@@ -133,13 +133,13 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
 
     for (int s = 0; s < interp_order; s++) {
       component_series[s] = g4dd_slices[s * TEMPORAL_LAGRANGE_INTERP_G4_COMPONENT_COUNT + comp];
-    } // END LOOP: for s over trusted metric slices for one component
+    } // END LOOP: for s over trusted metric
     g4dd_out[comp] = sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
 
     const int temporal_derivative_slot =
         TEMPORAL_LAGRANGE_INTERP_METRIC_DERIVATIVE_DIRECTION_COUNT * comp + TEMPORAL_LAGRANGE_INTERP_TEMPORAL_DERIVATIVE_INDEX;
     rhs_geometry_out[temporal_derivative_slot] = sum_lagrange_x0_simd(interp_order, component_series, coeff_dt_normalized) / time_scale;
-  } // END LOOP: for comp over serialized metric components
+  } // END LOOP: for comp over serialized metric
 
   // Step 3: Interpolate only the 30 Cartesian spatial metric derivatives.
   // The derivative direction is the fastest-changing bundle index, so each
@@ -151,10 +151,10 @@ int temporal_lagrange_interpolation(const commondata_struct *restrict commondata
 
       for (int s = 0; s < interp_order; s++) {
         component_series[s] = geometry_slices[s * TEMPORAL_LAGRANGE_INTERP_GEOMETRY_COMPONENT_COUNT + derivative_slot];
-      } // END LOOP: for s over trusted spatial-derivative slices for one component
+      } // END LOOP: for s over trusted spatial-derivative
       rhs_geometry_out[derivative_slot] = sum_lagrange_x0_simd(interp_order, component_series, coeff_t);
-    } // END LOOP: for derivative_direction over Cartesian spatial directions
-  } // END LOOP: for metric_comp over serialized metric components
+    } // END LOOP: for derivative_direction over Cartesian spatial
+  } // END LOOP: for metric_comp over serialized metric
 
   return TEMPORAL_LAGRANGE_INTERP_SUCCESS;
 } // END FUNCTION: temporal_lagrange_interpolation

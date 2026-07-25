@@ -435,6 +435,7 @@ class GeodesicEquations:
         betaU = ixp.zerorank1(dimension=3)
         for i in range(3):
             betaD[i] = g4DD[0][i + 1]
+        for i in range(3):
             for j in range(3):
                 betaU[i] += gammaUU[i][j] * betaD[j]
 
@@ -1459,7 +1460,9 @@ if __name__ == "__main__":
     import os
 
     import nrpy.validate_expressions.validate_expressions as ve
-    from nrpy.equations.general_relativity.g4munu_conversions import BSSN_to_g4DD
+    from nrpy.equations.general_relativity.g4munu_conversions import (
+        BSSN_to_g4DD as BSSN_to_g4DD_main,
+    )
 
     # Configure logging to output to the console for direct script execution.
     logging.basicConfig(level=logging.INFO)
@@ -1508,7 +1511,7 @@ if __name__ == "__main__":
     bssn_identity_g4_recipe = symbolic_g4DD_recipe_from_bssn_grid_basis(
         bssn_coord_system="Cartesian", target_basis="Cartesian"
     )
-    bssn_identity_grid_g4DD = BSSN_to_g4DD(CoordSystem="Cartesian")
+    bssn_identity_grid_g4DD = BSSN_to_g4DD_main(CoordSystem="Cartesian")
     for check_mu in range(4):
         for check_nu in range(check_mu, 4):
             identity_g4_diff = (

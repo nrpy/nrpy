@@ -238,7 +238,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         cudaMemcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                    all_photons->f + (m * num_rays) + start_idx,
                    sizeof(double) * current_chunk_size, cudaMemcpyHostToDevice);
-    }} // END LOOP: for m over state vector components
+    }} // END LOOP: for m over state vector
     """
         device_to_host_transfer = r"""
     //==========================================
@@ -258,7 +258,7 @@ def conserved_quantities(spacetime_name: str, particle_type: str = "photon") -> 
         memcpy(d_f_bundle + (m * BUNDLE_CAPACITY),
                all_photons->f + (m * num_rays) + start_idx,
                sizeof(double) * current_chunk_size);
-    }} // END LOOP: for m over state vector components
+    }} // END LOOP: for m over state vector
     """
         device_to_host_transfer = r"""
     //==========================================

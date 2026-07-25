@@ -183,9 +183,11 @@ solves the initial null constraint, maps numerical time windows by coordinate-ti
 slot, and advances the state with the shared six-stage RKF45 pipeline. A trajectory
 row is written only after an accepted step.
 
-For normalized equations, the output lambda column is f[0] and the output time
-column is the RKF45 integration parameter. For non-normalized equations, lambda is
-the integration parameter and time is f[0].
+For normalized equations, the state layout is
+``(lambda, x, y, z, u, Pi_0, Pi_1, Pi_2, L_Euler)``: ``f[0]`` is lambda and
+the RKF45 integration parameter is coordinate time. For non-normalized
+equations, the state layout is ``(t, x, y, z, p_0, p_1, p_2, p_3, L_Euler)``:
+the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
 @param argc Number of command-line arguments.
 @param[in] argv Command-line argument array.
@@ -261,7 +263,7 @@ the integration parameter and time is f[0].
     fprintf(stderr, "ERROR: failed to allocate single-photon CPU buffers.\n");
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: one or more single-photon CPU allocations failed
+  }} // END IF: single-photon CPU allocation failed
 
   //==========================================
   // 3. TIME-SLOT AND NUMERICAL-WINDOW SETUP
@@ -304,7 +306,7 @@ the integration parameter and time is f[0].
           &numerical_window,
           commondata.numerical_spacetime_bin_path,
           &commondata,
-          commondata.numerical_spacetime_temporal_interp_order,
+          commondata.numerical_spacetime_temporal_interp_half_width,
           &numerical_params) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
     fprintf(
         stderr,
@@ -314,6 +316,25 @@ the integration parameter and time is f[0].
     goto cleanup;
   }} // END IF: numerical time-window manager initialization failed
   numerical_window_initialized = true;
+  printf("Numerical spacetime first stored slice time: %.15e\n",
+         (double)commondata.t_numerical_initial);
+
+  const REAL camera_position[3] = {{
+      (REAL)commondata.initial_x,
+      (REAL)commondata.initial_y,
+      (REAL)commondata.initial_z}};
+  if (time_window_manager_numerical_validate_startup_domain(
+          &numerical_window,
+          &commondata,
+          &numerical_params,
+          camera_position,
+          "initial_x, initial_y, and initial_z") !=
+      TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+    fprintf(stderr,
+            "ERROR: numerical camera/r_escape startup stencil validation failed.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: startup domain validation failed
 
   if (numerical_params.Nxx{phi_dim} != 2) {{
     fprintf(
@@ -323,7 +344,7 @@ the integration parameter and time is f[0].
         numerical_params.Nxx{phi_dim});
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: numerical dataset did not contain two azimuthal planes
+  }} // END IF: numerical dataset did not contain
 
   azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
   spatial_context.stored_phi_samples[0] =
@@ -354,15 +375,15 @@ the integration parameter and time is f[0].
       fprintf(stderr, "ERROR: initial photon state was not finite.\n");
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END IF: one initial photon state component was not finite
-  }} // END LOOP: for component over initial photon state components
+    }} // END IF: one initial photon state component
+  }} // END LOOP: for component over initial photon
   const double spatial_momentum_squared =
       f[5] * f[5] + f[6] * f[6] + f[7] * f[7];
   if (!isfinite(spatial_momentum_squared) || spatial_momentum_squared <= 0.0) {{
     fprintf(stderr, "ERROR: initial spatial photon momentum must be finite and nonzero.\n");
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: initial spatial photon momentum was invalid
+  }} // END IF: initial spatial momentum invalid
   if (!isfinite(*h) || *h == 0.0) {{
     fprintf(stderr, "ERROR: initial_h must be finite and nonzero.\n");
     exit_status = EXIT_FAILURE;
@@ -378,7 +399,7 @@ the integration parameter and time is f[0].
         (double)commondata.initial_t);
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: initial coordinate time was outside the slot lattice
+  }} // END IF: initial coordinate time outside bounds
 
   if (time_window_manager_numerical_mmap_for_slot(
           &numerical_window, &tsm, initial_slot_index) !=
@@ -412,8 +433,8 @@ the integration parameter and time is f[0].
           component);
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END IF: one initial metric component was not finite
-  }} // END LOOP: for component over initial metric components
+    }} // END IF: initial metric component invalid
+  }} // END LOOP: for component over initial metric
 
   p0_reverse_kernel(f, metric, chunk_size, stream_idx);
   {momentum_conversion_call}
@@ -426,8 +447,8 @@ the integration parameter and time is f[0].
           component);
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END IF: one initial constrained state component was not finite
-  }} // END LOOP: for component over the initial constrained state
+    }} // END IF: one initial constrained state component
+  }} // END LOOP: for component over the initial
 
   printf("Initial State:\n");
   printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
@@ -446,7 +467,7 @@ the integration parameter and time is f[0].
     fprintf(stderr, "ERROR: could not open trajectory.txt for writing.\n");
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: trajectory output file could not be opened
+  }} // END IF: trajectory output unavailable
   fprintf(trajectory_file, "# lambda t x y z energy_measure p_x p_y p_z aux\n");
 
   printf("Starting CPU numerical single-photon integration.\n");
@@ -471,7 +492,7 @@ the integration parameter and time is f[0].
           "Coordinate time %.15e left the configured numerical slot range.\n",
           coordinate_time);
       break;
-    }} // END IF: current coordinate time left the slot lattice
+    }} // END IF: current time left data window
 
     if (slot_index != mapped_slot_index) {{
       if (time_window_manager_numerical_mmap_for_slot(
@@ -484,9 +505,9 @@ the integration parameter and time is f[0].
             coordinate_time);
         exit_status = EXIT_FAILURE;
         goto cleanup;
-      }} // END IF: numerical time-window mapping failed during integration
+      }} // END IF: numerical time-window mapping failed
       mapped_slot_index = slot_index;
-    }} // END IF: photon moved to a different coordinate-time slot
+    }} // END IF: photon moved to a different
 
     memcpy(f_start, f, sizeof(double) * 9);
     memcpy(f_temp, f, sizeof(double) * 9);
@@ -514,8 +535,8 @@ the integration parameter and time is f[0].
               coordinate_time);
           exit_status = EXIT_FAILURE;
           goto cleanup;
-        }} // END IF: one stage metric component was not finite
-      }} // END LOOP: for component over stage metric components
+        }} // END IF: stage metric component invalid
+      }} // END LOOP: for component over stage metric
 
       for (int component = 0; component < 40; ++component) {{
         if (!isfinite(rhs_geometry[component])) {{
@@ -528,7 +549,7 @@ the integration parameter and time is f[0].
               coordinate_time);
           exit_status = EXIT_FAILURE;
           goto cleanup;
-        }} // END IF: one stage geometry component was not finite
+        }} // END IF: stage geometry component invalid
       }} // END LOOP: for component over stage geometry
 
       calculate_ode_rhs_kernel(
@@ -550,7 +571,7 @@ the integration parameter and time is f[0].
             f_temp,
             stream_idx);
       }} // END IF: skip stage-6 intermediate state update
-    }} // END LOOP: for stage over all six Cash-Karp stages
+    }} // END LOOP: for stage over RKF45 stages
 
     rkf45_finalize_and_control(
         &commondata,
@@ -575,8 +596,8 @@ the integration parameter and time is f[0].
               rkf45_attempts);
           exit_status = EXIT_FAILURE;
           goto cleanup;
-        }} // END IF: one accepted state component was not finite
-      }} // END LOOP: for component over the accepted photon state
+        }} // END IF: accepted state component invalid
+      }} // END LOOP: for component over the accepted
 
       fprintf(
           trajectory_file,
@@ -599,14 +620,14 @@ the integration parameter and time is f[0].
         *status = TERMINATION_TYPE_COORD_RADIUS_EXCEEDED;
         printf("Photon escaped to r > %.15e.\n", (double)commondata.r_escape);
         break;
-      }} // END IF: accepted photon state crossed the escape sphere
+      }} // END IF: photon state crossed boundary
 
       // f[4] is p^0 for direct evolution and the normalized log-energy measure otherwise.
       if (fabs(f[4]) > commondata.evolution_measure_max) {{
         *status = FAILURE_EVOLUTION_MEASURE_EXCEEDED;
         printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
         break;
-      }} // END IF: accepted evolution measure exceeded the configured limit
+      }} // END IF: evolution measure exceeded limit
     }} else if (*status == REJECTED)
       continue;
     else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
@@ -616,8 +637,8 @@ the integration parameter and time is f[0].
       fprintf(stderr, "ERROR: unexpected integration status %d.\n", (int)*status);
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END ELSE: RKF45 finalization returned an unexpected terminal status
-  }} // END WHILE: evolve one photon through accepted and rejected RKF45 attempts
+    }} // END ELSE: RKF45 finalization returned an unexpected
+  }} // END WHILE: evolve one photon through accepted
 
   if ((*status == ACTIVE || *status == REJECTED) &&
       accepted_steps >= max_accepted_steps) {{
@@ -627,7 +648,7 @@ the integration parameter and time is f[0].
              rkf45_attempts >= max_rkf45_attempts) {{
     *status = TERMINATION_TYPE_FAILURE;
     printf("Integration stopped at the RKF45-attempt safety limit.\n");
-  }} // END ELSE IF: integration reached the RKF45-attempt safety limit
+  }} // END ELSE IF: integration reached the RKF45-attempt safety
 
   const int final_status_index = (int)*status;
   const char *final_status_name =
@@ -668,7 +689,7 @@ the integration parameter and time is f[0].
           goto cleanup;
         }} // END IF: terminal normalization time-window mapping failed
         mapped_slot_index = terminal_slot_index;
-      }} // END IF: terminal state occupied a different coordinate-time slot
+      }} // END IF: terminal state occupied a different
 
       numerical_interpolation(
           &commondata,
@@ -690,8 +711,8 @@ the integration parameter and time is f[0].
               component);
           exit_status = EXIT_FAILURE;
           goto cleanup;
-        }} // END IF: one terminal metric component was not finite
-      }} // END LOOP: for component over terminal metric components
+        }} // END IF: terminal metric component invalid
+      }} // END LOOP: for component over terminal metric
 
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
@@ -701,9 +722,9 @@ the integration parameter and time is f[0].
         fprintf(stderr, "ERROR: terminal normalization error was not finite.\n");
         exit_status = EXIT_FAILURE;
         goto cleanup;
-      }} // END IF: terminal normalization error was not finite
+      }} // END IF: terminal normalization error absent
       printf("Final normalization absolute error: %.15e\n", normalization_error);
-    }} // END ELSE: terminal state was inside the numerical time domain
+    }} // END ELSE: terminal state inside window
   }} // END IF: terminal normalization diagnostics were requested
 
   cleanup:
@@ -753,6 +774,7 @@ if __name__ == "__main__":
     DATASET_COORD_SYSTEM = "SinhCylindricalv2n2"
     INTERPOLATION_METHOD = "g4DD"
     NORMALIZED_EOM = False
+    rhs_uses_metric_derivatives = INTERPOLATION_METHOD != "GammaUDD"
     GEO_KEY = f"{SPACETIME}_{PARTICLE}"
 
     # Step 3: Recreate the generated project directory.
@@ -767,6 +789,18 @@ if __name__ == "__main__":
     print("Registering numerical single-photon kernels...")
     if geodesic_data.p0_photon is None:
         raise ValueError(f"p0_photon is None for {GEO_KEY}")
+    if rhs_uses_metric_derivatives:
+        geodesic_rhs = (
+            geodesic_data.geodesic_eom_rhs_photon_normalized()
+            if NORMALIZED_EOM
+            else geodesic_data.geodesic_eom_rhs_photon()
+        )
+    else:
+        geodesic_rhs = (
+            geodesic_data.geodesic_eom_rhs_photon_normalized_christoffel()
+            if NORMALIZED_EOM
+            else geodesic_data.geodesic_eom_rhs_photon_christoffel()
+        )
 
     p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
     normalization_constraint.normalization_constraint(
@@ -780,10 +814,10 @@ if __name__ == "__main__":
         normalized_eom=NORMALIZED_EOM,
     )
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
-        geodesic_data.geodesic_rhs,
+        geodesic_rhs,
         geodesic_data.xx,
+        rhs_uses_metric_derivatives=rhs_uses_metric_derivatives,
         normalized_eom=NORMALIZED_EOM,
-        interpolation_method=INTERPOLATION_METHOD,
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(

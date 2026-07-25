@@ -39,7 +39,6 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
     azimuthal_symmetry_spatial_lagrange_interpolation,
     numerical_interpolation,
     temporal_lagrange_interpolation,
-    temporal_lagrange_interpolation_c1,
     time_window_manager_numerical,
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
@@ -84,7 +83,7 @@ if __name__ == "__main__":
 python3 two_blackholes_collide.py --raytracing-time T_FINAL DIAGNOSTICS_OUTPUT_EVERY --raytracing-coord-system CoordSystem --raytracing-Nxx NXX0 NXX1 NXX2 --raytracing-domain ...
 
 Then rerun this photon script using the .bin filename printed to the terminal by two_blackholes_collide.py, e.g.:
-python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_rho-slope_0p0625_z-slope_0p0625_72_2_12.bin --coord-system-numerical SinhCylindricalv2n2 --domain 7.5 0.25 0.4 0.0625 0.0625 --t-numerical-initial 5.0 --t-numerical-end 100.0 --dt-spacetime-data 0.5""",
+python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_collide_7p5_7p5_0p25_z1_0p5_z2_neg0p5_M1_0p5_M2_0p5_SinhCylindricalv2n2_sinhwrho_0p25_sinhwz_0p4_rho-slope_0p0625_z-slope_0p0625_72_2_12.bin --coord-system-numerical SinhCylindricalv2n2 --domain 7.5 0.25 0.4 0.0625 0.0625 --t-numerical-end 100.0 --dt-spacetime-data 0.5""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -112,12 +111,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         type=float,
         required=True,
         help="""SinhCylindricalv2n2 domain: GRID_PHYSICAL_SIZE SINHWRHO SINHWZ RHO_SLOPE Z_SLOPE.""",
-    )
-    parser.add_argument(
-        "--t-numerical-initial",
-        type=float,
-        required=True,
-        help="""Coordinate time of the first numerical spacetime slice.""",
     )
     parser.add_argument(
         "--t-numerical-end",
@@ -156,6 +149,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     args = parser.parse_args()
     normalized_eom = args.eom == "normalized"
     interpolation_method = args.interpolation_method
+    rhs_uses_metric_derivatives = interpolation_method != "GammaUDD"
 
     _require(
         os.path.basename(args.bin_name) == args.bin_name,
@@ -177,10 +171,27 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         args.time_start >= 0.0,
         "--time-start must be nonnegative.",
     )
-    _require(
-        args.t_numerical_initial < args.t_numerical_end,
-        "--t-numerical-initial must be strictly less than --t-numerical-end.",
-    )
+    temporal_margin = 4.0 * args.dt_spacetime_data
+    if args.time_start + temporal_margin < args.t_numerical_end:
+        print(
+            "WARNING: time-start is most likely too close to the numerical "
+            "spacetime t_final for centered temporal interpolation using only "
+            "the provided spacetime data. The last temporal slice of the .bin "
+            "file will fill missing data. If the numerical evolution is not "
+            "approximately static by its last slice, integration and photon "
+            "trajectories may be inaccurate."
+        )
+        print(
+            "         Set --time-start >= "
+            f"{args.t_numerical_end - temporal_margin:.3f} "
+            "(generated .par: t_start)."
+        )
+        if interpolation_method == "GammaUDD":
+            print(
+                "WARNING: GammaUDD users who do not lower --time-start should "
+                "generate the numerical spacetime with "
+                "'--raytracing-static-christoffels'."
+            )
     domain = list(args.domain)
     grid_physical_size = None
     sinhw_numerical_rho = None
@@ -241,17 +252,17 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     # placeholder-based expressions and do not require spacetime-specific state.
     generic_geodesic_equations = geo.GeodesicEquations.__new__(geo.GeodesicEquations)
     coordinate_symbols = list(sp.symbols("t x y z", real=True))
-    if interpolation_method == "GammaUDD":
-        geodesic_rhs = (
-            generic_geodesic_equations.geodesic_eom_rhs_photon_normalized_christoffel()
-            if normalized_eom
-            else generic_geodesic_equations.geodesic_eom_rhs_photon_christoffel()
-        )
-    else:
+    if rhs_uses_metric_derivatives:
         geodesic_rhs = (
             generic_geodesic_equations.geodesic_eom_rhs_photon_normalized()
             if normalized_eom
             else generic_geodesic_equations.geodesic_eom_rhs_photon()
+        )
+    else:
+        geodesic_rhs = (
+            generic_geodesic_equations.geodesic_eom_rhs_photon_normalized_christoffel()
+            if normalized_eom
+            else generic_geodesic_equations.geodesic_eom_rhs_photon_christoffel()
         )
     p0_photon = generic_geodesic_equations.hamiltonian_constraint_photon()
     normalization_constraint_expr = (
@@ -302,10 +313,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         enable_simd=enable_simd,
         project_dir=project_dir,
     )
-    temporal_lagrange_interpolation_c1.register_CFunction_temporal_lagrange_interpolation_c1(
-        enable_simd=enable_simd, project_dir=project_dir
+    time_window_manager_numerical.time_window_manager_numerical(
+        interpolation_method,
+        include_batch_startup_validation=True,
     )
-    time_window_manager_numerical.time_window_manager_numerical(interpolation_method)
     numerical_interpolation.register_CFunction_numerical_interpolation(
         coord_system_numerical,
         interpolation_method=interpolation_method,
@@ -318,8 +329,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     calculate_ode_rhs_kernel.calculate_ode_rhs_kernel(
         geodesic_rhs,
         coordinate_symbols,
+        rhs_uses_metric_derivatives=rhs_uses_metric_derivatives,
         normalized_eom=normalized_eom,
-        interpolation_method=interpolation_method,
     )
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
@@ -401,12 +412,12 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.adjust_CodeParam_default("rho_slope", rho_slope)
     par.adjust_CodeParam_default("z_slope", z_slope)
 
-    # Step 6.c: Set interpolation-order defaults.
-    par.adjust_CodeParam_default("numerical_spacetime_spatial_interp_order", 3)
-    par.adjust_CodeParam_default("numerical_spacetime_temporal_interp_order", 3)
+    # Step 6.c: Set interpolation half-width defaults.
+    par.adjust_CodeParam_default("numerical_spacetime_spatial_interp_half_width", 3)
+    par.adjust_CodeParam_default("numerical_spacetime_temporal_interp_half_width", 3)
 
     # Step 6.d: Set initial-condition defaults.
-    par.adjust_CodeParam_default("t_start", 28.0)  # args.time_start
+    par.adjust_CodeParam_default("t_start", args.time_start)
     par.adjust_CodeParam_default("scan_density", 100)
 
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
@@ -414,10 +425,9 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         "evolution_measure_max", 3.0 if normalized_eom else 1000.0
     )
     par.adjust_CodeParam_default("perform_normalization_check", True)
-    par.adjust_CodeParam_default("r_escape", 25.0)
+    par.adjust_CodeParam_default("r_escape", 60.0)
 
     # Step 6.f: Set numerical-spacetime time-range defaults.
-    par.adjust_CodeParam_default("t_numerical_initial", args.t_numerical_initial)
     par.adjust_CodeParam_default("t_numerical_end", args.t_numerical_end)
     par.adjust_CodeParam_default("dt_numerical_spacetime_data", args.dt_spacetime_data)
     # Keep sparse retained-slice debugging disabled for normal runs.
@@ -487,7 +497,6 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     print(f" -> Numerical rho_slope: {rho_slope}")
     print(f" -> Numerical z_slope: {z_slope}")
     print(f" -> time_start: {args.time_start}")
-    print(f" -> t_numerical_initial: {args.t_numerical_initial}")
     print(f" -> t_numerical_end: {args.t_numerical_end}")
     print(f" -> dt_spacetime_data: {args.dt_spacetime_data}")
 
@@ -595,6 +604,15 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     ):
         shutil.copy(script_src, project_dir)
 
+    combiner_src = os.path.join(
+        "nrpy",
+        "infrastructures",
+        "BHaH",
+        "diagnostics",
+        "combine_raytracing_time_slices.py",
+    )
+    shutil.copy(combiner_src, project_dir)
+
     # Step 8.a: Build helper commands from CodeParameter defaults.
     c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
     c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
@@ -603,8 +621,13 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     c_tiles_width = int(par.glb_code_params_dict["window_tiles_width"].defaultvalue)
     c_tiles_height = int(par.glb_code_params_dict["window_tiles_height"].defaultvalue)
     c_pixel_width = 450
-    data_request_file = "numerical_spacetime_data_request.json"
-    data_prep_command = f"python3 combined_raytracing_bin_helper.py {data_request_file}"
+    data_prep_command = (
+        "python3 combine_raytracing_time_slices.py "
+        f'--input-dir "../two_blackholes_collide/raytracing_slices/{interpolation_method}" '
+        '--pattern "raytracing_data_t????????.bin" '
+        '--run-metadata "../two_blackholes_collide/raytracing_run_metadata.json" '
+        f'--output "../raytracing_data/{args.bin_name}" --force'
+    )
     parfile_path = os.path.join(project_dir, f"{project_name}.par")
 
     vis_command = " ".join(
@@ -623,6 +646,10 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     print(f"Finished! Now go into {project_dir}.")
     print(f"    Parameter file can be found at {parfile_path}\n")
     print("    To prepare the required numerical spacetime data, run:")
+    print(
+        "    First generate the source evolution with "
+        "two_blackholes_collide.py --raytracing-outputs."
+    )
     print(f"    {data_prep_command}\n")
     print("    Then build and run the photon executable:")
     print("    make")

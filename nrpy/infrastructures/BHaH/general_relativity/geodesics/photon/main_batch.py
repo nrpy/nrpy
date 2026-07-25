@@ -68,6 +68,16 @@ def main(
         if integrator_mode == "Numerical"
         else "batch_integrator_analytical(&commondata, num_rays, results_buffer);"
     )
+    numerical_startup_validation = (
+        """
+    if (time_window_manager_numerical_validate_batch_startup_from_bin(&commondata) !=
+        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+        return 1;
+    } // END IF: numerical startup validation failed
+"""
+        if integrator_mode == "Numerical"
+        else ""
+    )
     serialization_desc = (
         " When normalization checks are enabled in numerical mode, each tile also "
         "writes a matching raw 'light_blueprint_norm_abs_XX_YY.bin' sidecar file."
@@ -86,7 +96,7 @@ def main(
                     ty);
             } else {
                 norm_abs_bin_name[0] = '\\0';
-            } // END ELSE: disable normalization sidecar filename for this tile
+            } // END ELSE: disable normalization sidecar
 """
         if integrator_mode == "Numerical"
         else ""
@@ -104,7 +114,7 @@ def main(
         """
     printf("--- Numerical Spacetime ---\\n");
     printf("Data File: %s\\n", commondata.numerical_spacetime_bin_path);
-    printf("Metric Time Range: %.2f to %.2f\\n", commondata.t_numerical_initial, commondata.t_numerical_end);
+    printf("Configured final numerical time: %.2f\\n", commondata.t_numerical_end);
     printf("Slice Spacing / Stride: %.6f / %d\\n", commondata.dt_numerical_spacetime_data, commondata.numerical_spacetime_time_slice_stride);
     printf("RKF45 Time-Window Cap: %.2f\\n", commondata.rkf45_max_delta_t);
 """
@@ -143,10 +153,11 @@ def main(
     Algorithm:
     1. Initializes core data structures and sets default physical constants.
     2. Parses command-line arguments and parameter files to override defaults.
-    3. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
-    4. Loops through a grid of tiles (tx, ty), shifting the window center.
-    5. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
-    6. Serializes each tile to a versioned native 'light_blueprint_XX_YY.bin'.{serialization_desc}"""
+    3. Performs numerical startup validation once when numerical mode is selected.
+    4. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
+    5. Loops through a grid of tiles (tx, ty), shifting the window center.
+    6. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
+    7. Serializes each tile to a versioned native 'light_blueprint_XX_YY.bin'.{serialization_desc}"""
 
     cfunc_type = "int"
     name = "main"
@@ -166,6 +177,8 @@ def main(
     // Sets default metric properties and overrides them based on host system input.
     commondata_struct_set_to_default(&commondata);
     cmdline_input_and_parfile_parser(&commondata, argc, argv);
+
+{numerical_startup_validation}
 
     // Source-plane normals are a valid nonzero input precondition. Normalize once
     // so crossing and source-coordinate projection use the same geometric plane.
@@ -325,7 +338,7 @@ def main(
             for (long int i = 0; i < num_rays; i++) {{
                 results_buffer[i] = (blueprint_data_t){{0}};
                 results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
-            }} // END LOOP: for i over rays to clear the reused results buffer
+            }} // END LOOP: for i over rays
 
             // 3. Execute Numerical Integration Pipeline
             {batch_integrator_call}
@@ -338,8 +351,8 @@ def main(
                 if (results_buffer[i].L_w > 0.0) {{
                     results_buffer[i].y_w += offset_x;
                     results_buffer[i].z_w += offset_y;
-                }} // END IF: shift only a valid observer-window intersection
-            }} // END LOOP: for i over rays in tile
+                }} // END IF: shift only a valid observer-window
+            }} // END LOOP: for i over rays
 
             // 4. Data Serialization
             char bin_name[256];
@@ -371,8 +384,8 @@ def main(
                 free(results_buffer);
                 return 1;
             }} // END IF: checked blueprint write
-        }} // END LOOP: for tx over window tile columns
-    }} // END LOOP: for ty over window tile rows
+        }} // END LOOP: for tx over window tile
+    }} // END LOOP: for ty over window tile
 
     //==========================================
     // FINAL CLEANUP & SHUTDOWN

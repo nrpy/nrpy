@@ -229,7 +229,7 @@ conserved-quantity diagnostics.
       gsl_odeiv2_step_free(step);
       fprintf(stderr, "Error opening trajectory.txt\n");
       return EXIT_FAILURE;
-    }} // END IF: trajectory output file could not be opened
+    }} // END IF: trajectory output unavailable
     fprintf(fp, "# proper_time t x y z u^t u^x u^y u^z\n");
 
     // ==========================================
@@ -254,7 +254,7 @@ conserved-quantity diagnostics.
       if (fabs(y[4]) > commondata.evolution_measure_max) {{
         printf("Temporal four-velocity component |u^t| exceeded numerical limit.\n");
         break;
-      }} // END IF: temporal four-velocity exceeded the configured bound
+      }} // END IF: temporal four-velocity exceeded the configured
 
       // Squared Cartesian radius from the origin.
       const double r_squared = y[1] * y[1] + y[2] * y[2] + y[3] * y[3];

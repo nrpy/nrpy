@@ -199,7 +199,7 @@ static inline int rkf45_checked_floor_to_long(
   if (out == NULL || !isfinite(value) ||
       value < (double)LONG_MIN || value > (double)LONG_MAX) {
     return 1;
-  } // END IF: floor() source value was not representable as long int
+  } // END IF: floor() source invalid
   *out = (long int)floor(value);
   return 0;
 } // END FUNCTION: rkf45_checked_floor_to_long
@@ -242,8 +242,8 @@ static inline int rkf45_checked_floor_to_long(
                 if (allowed_delta_t > 0.0 && h_new_abs > allowed_delta_t) {{
                     h_new_abs = allowed_delta_t;
                     h_new = h_sign * h_new_abs;
-                }} // END IF: next coordinate-time step exceeded mapped-window lookahead
-            }} // END ELSE: slot position was representable as long int
+                }} // END IF: next coordinate-time step exceeded mapped-window
+            }} // END ELSE: slot position representable
         }} // END BLOCK: normalized accepted-step time-window cap
 """
     elif enable_numerical_time_window_step_cap:
@@ -306,9 +306,9 @@ static inline int rkf45_checked_floor_to_long(
                     }} else {{
                         h_new = fmin(h_new, time_window_h_cap);
                         h_new = fmax(h_new, {cd_access}rkf45_h_min);
-                    }} // END ELSE: time-window cap remained compatible with h_min
-                }} // END IF: accepted temporal derivative supports a finite cap
-            }} // END ELSE: slot position was representable as long int
+                    }} // END ELSE: time-window cap compatible
+                }} // END IF: accepted temporal derivative supports a
+            }} // END ELSE: slot position representable
         }} // END BLOCK: numerical time-window accepted-step cap
 """
 
@@ -337,7 +337,7 @@ static inline int rkf45_checked_floor_to_long(
             } else {
                 err_norm = fmax(err_norm, current_err);
             } // END ELSE: normalized-error accumulation
-        } // END IF: exclude integration parameter and Eulerian length from error norm
+        } // END IF: exclude integration parameter and Eulerian
 """
         adaptive_step_control = rf"""
     const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
@@ -374,7 +374,7 @@ static inline int rkf45_checked_floor_to_long(
             } else {
                 err_norm = fmax(err_norm, current_err);
             } // END ELSE: direct-geodesic error accumulation
-        } // END IF: exclude Eulerian length from error norm
+        } // END IF: exclude Eulerian length from error
 """
         adaptive_step_control = rf"""
     double h_new = MulCUDA(safety, MulCUDA(h_local, factor));
@@ -473,7 +473,7 @@ static inline int rkf45_checked_floor_to_long(
         // ERROR NORMALIZATION & L-INFINITY NORM
         //==========================================
 {error_normalization}
-    }} // END LOOP: for comp over 9 tensor components
+    }} // END LOOP: for comp over 9 tensor
 
     //==========================================
     // UNIFIED ADAPTIVE CONTROL LOGIC
@@ -493,7 +493,7 @@ static inline int rkf45_checked_floor_to_long(
         {pragma_unroll}
         for (int comp = 0; comp < 9; ++comp) {{
             WriteCUDA(&d_f_persistent[IDX_F(comp, i)], f_5th_cache[comp]); // Commits the cached state component to persistent memory.
-        }} // END LOOP: for comp over 9 tensor components to commit state
+        }} // END LOOP: for comp over 9 tensor
 
         // Advance the affine-parameter or coordinate-time tracker.
 {integration_parameter_update}

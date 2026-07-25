@@ -65,21 +65,49 @@ pointer to `commondata_struct`, evaluates metric and connection locally, calls
 Numerical-spacetime interpolation is separate from analytic metric evaluation.
 `register_CFunction_numerical_interpolation` emits a CPU wrapper that assumes a
 mapped `NumericalTimeWindowManager`; for every ray in a chunk it asks the time
-window for the temporal stencil, performs spherical azimuthal-symmetry spatial
-Lagrange interpolation on every mapped slice, then calls temporal Lagrange
-interpolation at the photon's coordinate time. The time-window manager owns the
-read-only mmap window over a combined numerical-spacetime container and widens
-each slot by temporal interpolation halo plus backward RKF45 lookahead.
+window for the temporal stencil, performs `SinhCylindricalv2n2` azimuthal-
+symmetry spatial Lagrange interpolation on every mapped slice, then calls
+temporal Lagrange interpolation at the photon's coordinate time. The time-window
+manager owns the read-only mmap window over a combined numerical-spacetime
+container and widens each slot by temporal interpolation halo plus backward
+RKF45 lookahead. The exporter and combiner preserve the full logical grid,
+including ghost-zone points; `InputSliceInfo` describes source slices in the
+combiner. Stored slice-table times are authoritative: the first stored time is
+loaded into runtime `t_numerical_initial` and printed at startup, while the
+user supplies only `t_numerical_end`. The nominal `dt_numerical_spacetime_data`
+describes approximate evolution spacing and is used only when synthetic
+stencil edge times are required; stored output times may be nearby, nonuniform
+values.
+
+Numerical endpoint dispatch is piecewise constant. At or below the first stored
+time, the first slice is spatially interpolated; at or above the selected final
+slice, that final slice is reused. `g4DD` obtains temporal metric derivatives
+from temporal interpolation, `g4DD_d0` uses stored metric derivatives and
+zeroes their temporal slots at static endpoints, and `GammaUDD` reuses stored
+Christoffels at endpoints. `--raytracing-static-christoffels` changes the
+exported final Christoffel payload only; interpolation does not infer or impose
+that upstream choice.
+
+Startup reads `.bin` `NGHOSTS` metadata and terminates if the configured spatial
+half-width requires more ghost zones than available. It also terminates when
+camera or positive Cartesian `r_escape` probes cannot support the requested
+native stencil; the relevant `.par` controls are
+`camera_pos_x/y/z`, `r_escape`, and
+`numerical_spacetime_spatial_interp_half_width`.
 
 Evolution-time raytracing export lives under BHaH diagnostics. When enabled by
 `register_all_diagnostics`, the diagnostics function calls
 `output_raytracing_data` on scheduled output steps. The exporter requires a
 host/OpenMP build, `enable_rfm_precompute=True`,
-`enable_RbarDD_gridfunctions=True`, one active grid, and source coordinate
-system `Cartesian` or `Spherical`. It refreshes same-slice Ricci/RHS scratch
-data, evaluates Cartesian-basis `g4DD` and `Gamma4UDD` symbolic recipes on
-interior points, writes fixed-width metadata and binary64 point records, and
-records that ghost-zone points are excluded. `combine_raytracing_time_slices.py`
+`enable_RbarDD_gridfunctions=True`, one active grid, and the raytracing
+example's `SinhCylindricalv2n2` source coordinate system. It refreshes
+same-slice Ricci/RHS scratch data, evaluates Cartesian-basis `g4DD` and
+`Gamma4UDD` symbolic recipes on interior points, fills the full logical-grid
+payload including ghost zones, writes fixed-width metadata and binary64 point
+records, and preserves the serialized logical-grid bounds. Optional
+`--raytracing-static-christoffels` changes only the selected GammaUDD values in
+the qualifying final output slice; interpolation consumes whichever values were
+stored and applies its own endpoint policy. `combine_raytracing_time_slices.py`
 then parses those stage-1 files, validates headers, sorts by simulation time,
 and writes a read-only stacked container for downstream interpolation.
 
@@ -104,7 +132,7 @@ and writes a read-only stacked container for downstream interpolation.
 - [time_window_manager_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py) - `time_window_manager_numerical`, `NumericalTimeWindowManager`
 - [azimuthal_symmetry_spatial_lagrange_interpolation.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/azimuthal_symmetry_spatial_lagrange_interpolation.py) - `register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation`
 - [output_raytracing_data.py](../../../nrpy/infrastructures/BHaH/diagnostics/output_raytracing_data.py) - `register_CFunction_output_raytracing_data`, `raytracing_data_point_index_from_logical_indices`
-- [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `Stage1Info`, `Layout`
+- [combine_raytracing_time_slices.py](../../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `Layout`
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `enable_raytracing_data_output`
 
 ## See Also
