@@ -210,7 +210,7 @@ class GeodesicDiagnostics:
         # L = x × p  (Cartesian cross product)
         L_z = x * p_y - y * p_x
 
-        return cast(sp.Expr, L_z)
+        return L_z
 
     def compute_carter_constant_KerrSchild_Cartesian(
         self,
