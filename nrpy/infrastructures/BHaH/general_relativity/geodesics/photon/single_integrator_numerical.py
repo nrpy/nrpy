@@ -191,9 +191,30 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         coordinate_time_expression = "*integration_param"
         trajectory_lambda_expression = "f[0]"
         trajectory_time_expression = "*integration_param"
-        interpolation_stage_arguments = "integration_param, h, stage,"
-        interpolation_initial_arguments = "integration_param, h, 1,"
+        interpolation_stage_arguments = (
+            "&trial_spatial_center.i0, &trial_spatial_center.i2, "
+            "integration_param, h, stage,"
+        )
+        interpolation_initial_arguments = "NULL, NULL, integration_param, h, 1,"
         rhs_integration_arguments = "integration_param, h,"
+        trial_spatial_center_setup = r"""
+    NumericalSpatialStencilCenter trial_spatial_center;
+    const REAL trial_cartesian[3] = {
+        (REAL)f_start[1], (REAL)f_start[2], (REAL)f_start[3]};
+    REAL trial_native[3];
+    int trial_automatic_center_idx[3];
+    int trial_selected_center_idx[3];
+    if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+            &numerical_params, trial_cartesian, NULL, trial_native,
+            trial_automatic_center_idx, trial_selected_center_idx) !=
+        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+      fprintf(stderr, "ERROR: could not resolve the RKF45 trial spatial center.\n");
+      exit_status = EXIT_FAILURE;
+      goto cleanup;
+    } // END IF: RKF45 trial spatial center was invalid
+    trial_spatial_center.i0 = trial_selected_center_idx[0];
+    trial_spatial_center.i2 = trial_selected_center_idx[2];
+"""
         momentum_conversion_call = (
             "photon_momentum_to_normalized_kernel("
             "f, metric, chunk_size, stream_idx);"
@@ -209,6 +230,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         interpolation_stage_arguments = ""
         interpolation_initial_arguments = ""
         rhs_integration_arguments = ""
+        trial_spatial_center_setup = ""
         momentum_conversion_call = ""
         normalization_kernel_name = "normalization_constraint_photon"
         normalization_diagnostic_expression = "normalization.C"
@@ -814,6 +836,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     memcpy(f_start, f, sizeof(double) * 9);
     memcpy(f_temp, f, sizeof(double) * 9);
 {trial_debug_trial_metadata}
+{trial_spatial_center_setup}
 
     for (int stage = 1; stage <= 6; ++stage) {{
       numerical_interpolation(

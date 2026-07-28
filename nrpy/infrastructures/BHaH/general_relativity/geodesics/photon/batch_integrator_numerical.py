@@ -216,18 +216,28 @@ def batch_integrator_numerical(
         else "all_photons_host.f[0 * num_rays + norm_ray]"
     )
     interpolation_integration_param_args = (
+        "d_spatial_stencil_center_i0[current], "
+        "d_spatial_stencil_center_i2[current], "
         "d_integration_param_bundle[current], d_h[current], stage,"
         if normalized_eom
         else ""
     )
     interpolation_integration_param_args_next = (
-        "d_integration_param_bundle[next], d_h[next], stage," if normalized_eom else ""
+        "d_spatial_stencil_center_i0[next], "
+        "d_spatial_stencil_center_i2[next], "
+        "d_integration_param_bundle[next], d_h[next], stage,"
+        if normalized_eom
+        else ""
     )
     interpolation_initial_integration_param_args = (
-        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
+        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
+        if normalized_eom
+        else ""
     )
     interpolation_terminal_integration_param_args = (
-        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
+        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
+        if normalized_eom
+        else ""
     )
     initial_integration_param_setup = (
         """
@@ -259,6 +269,91 @@ def batch_integrator_numerical(
     )
     rhs_integration_param_args_next = (
         "d_integration_param_bundle[next], d_h[next]," if normalized_eom else ""
+    )
+    spatial_center_declarations = (
+        """
+    // Trial-locked spatial stencil centers, one pair per double-buffered ray.
+    int *d_spatial_stencil_center_i0[2];
+    int *d_spatial_stencil_center_i2[2];
+"""
+        if normalized_eom
+        else ""
+    )
+    spatial_center_allocations = (
+        f"""
+        {malloc_device}(d_spatial_stencil_center_i0[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-0 trial centers.
+        {malloc_device}(d_spatial_stencil_center_i2[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-2 trial centers.
+"""
+        if normalized_eom
+        else ""
+    )
+    spatial_center_frees = (
+        f"""
+            {free_device}(d_spatial_stencil_center_i0[s]); // Purges native dimension-0 trial centers.
+            {free_device}(d_spatial_stencil_center_i2[s]); // Purges native dimension-2 trial centers.
+"""
+        if normalized_eom
+        else ""
+    )
+    trial_spatial_center_setup_current = (
+        r"""
+            for (long int stencil_i = 0; stencil_i < active_chunks[current]; ++stencil_i) {
+                const REAL trial_cartesian[3] = {
+                    (REAL)d_f_start_bundle[current][1 * BUNDLE_CAPACITY + stencil_i],
+                    (REAL)d_f_start_bundle[current][2 * BUNDLE_CAPACITY + stencil_i],
+                    (REAL)d_f_start_bundle[current][3 * BUNDLE_CAPACITY + stencil_i]};
+                REAL trial_native[3];
+                int automatic_center_idx[3];
+                int selected_center_idx[3];
+                if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+                        &numerical_params, trial_cartesian, NULL, trial_native,
+                        automatic_center_idx, selected_center_idx) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                    fprintf(stderr,
+                            "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
+                            current, stencil_i);
+                    time_window_manager_numerical_free(&numerical_window);
+                    slot_manager_free(&tsm);
+                    exit(1);
+                } // END IF: current trial spatial center was invalid
+                d_spatial_stencil_center_i0[current][stencil_i] =
+                    selected_center_idx[0];
+                d_spatial_stencil_center_i2[current][stencil_i] =
+                    selected_center_idx[2];
+            } // END LOOP: for stencil_i over current trial rays
+"""
+        if normalized_eom
+        else ""
+    )
+    trial_spatial_center_setup_next = (
+        r"""
+                for (long int stencil_i = 0; stencil_i < active_chunks[next]; ++stencil_i) {
+                    const REAL trial_cartesian[3] = {
+                        (REAL)d_f_start_bundle[next][1 * BUNDLE_CAPACITY + stencil_i],
+                        (REAL)d_f_start_bundle[next][2 * BUNDLE_CAPACITY + stencil_i],
+                        (REAL)d_f_start_bundle[next][3 * BUNDLE_CAPACITY + stencil_i]};
+                    REAL trial_native[3];
+                    int automatic_center_idx[3];
+                    int selected_center_idx[3];
+                    if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+                            &numerical_params, trial_cartesian, NULL, trial_native,
+                            automatic_center_idx, selected_center_idx) !=
+                        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                        fprintf(stderr,
+                                "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
+                                next, stencil_i);
+                        time_window_manager_numerical_free(&numerical_window);
+                        slot_manager_free(&tsm);
+                        exit(1);
+                    } // END IF: next trial spatial center was invalid
+                    d_spatial_stencil_center_i0[next][stencil_i] =
+                        selected_center_idx[0];
+                    d_spatial_stencil_center_i2[next][stencil_i] =
+                        selected_center_idx[2];
+                } // END LOOP: for stencil_i over next trial rays
+"""
+        if normalized_eom
+        else ""
     )
     normalization_kernel_name = (
         "normalization_constraint_photon_normalized"
@@ -405,6 +500,7 @@ def batch_integrator_numerical(
     bool *d_source_event_found[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
+{spatial_center_declarations}
 
     // Loop iterator for instantiating the double-buffered operational arrays.
     for (int s = 0; s < 2; ++s) {{
@@ -444,6 +540,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
         {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
+{spatial_center_allocations}
     }} // END LOOP: for s over 2
 
     // Scratchpad array holding the terminal normalization diagnostic outputs.
@@ -810,6 +907,7 @@ def batch_integrator_numerical(
                 // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
                 {memcpy_cpu("d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
             }} // END LOOP: for c_k over 9
+{trial_spatial_center_setup_current}
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
                 // Interpolation step: evaluate the metric and selected geometry
@@ -980,6 +1078,7 @@ def batch_integrator_numerical(
                     // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
                     {memcpy_cpu("d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
                 }} // END LOOP: for c_k over 9
+{trial_spatial_center_setup_next}
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
                     // Interpolation step: evaluate the metric tensor
@@ -1423,6 +1522,7 @@ def batch_integrator_numerical(
             {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
             {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
+{spatial_center_frees}
         }} // END LOOP: for s over 2
 
 

@@ -29,6 +29,8 @@
  * @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
  * @param[in] numerical_window Active mapped numerical time-window manager.
  * @param[in] d_f_bundle Photon state bundle.
+ * @param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
+ * @param[in] d_spatial_stencil_center_i2 Trial-locked native dimension-2 centers, or NULL.
  * @param[in] d_integration_param_bundle Coordinate-time integration-parameter bundle.
  * @param[in] d_h RKF45 step-size bundle.
  * @param[in] stage Current RKF45 stage index.
@@ -42,6 +44,7 @@
 void numerical_interpolation(const commondata_struct *restrict commondata, const params_struct *restrict params,
                              const azimuthal_symmetry_spatial_lagrange_context_struct *restrict spatial_context,
                              const NumericalTimeWindowManager *restrict numerical_window, const double *restrict d_f_bundle,
+                             const int *restrict d_spatial_stencil_center_i0, const int *restrict d_spatial_stencil_center_i2,
                              const double *restrict d_integration_param_bundle, const double *restrict d_h, const int stage,
                              double *restrict d_metric_bundle, double *restrict d_rhs_geometry_bundle, const long int chunk_size,
                              const int stream_idx) {
@@ -131,6 +134,15 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
     const REAL x = (REAL)f_local[1];
     const REAL y = (REAL)f_local[2];
     const REAL z = (REAL)f_local[3];
+
+    NumericalSpatialStencilCenter fixed_center;
+    const NumericalSpatialStencilCenter *fixed_spatial_center = NULL;
+    if (d_spatial_stencil_center_i0 != NULL && d_spatial_stencil_center_i2 != NULL) {
+      fixed_center.i0 = d_spatial_stencil_center_i0[i];
+      fixed_center.i2 = d_spatial_stencil_center_i2[i];
+      fixed_spatial_center = &fixed_center;
+    } // END IF: trial-locked centers supplied
+
     int ray_failed = 0;
     uint64_t available_slice_indices[temporal_num_points];
     REAL available_slice_times[temporal_num_points];
@@ -161,7 +173,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         ray_failed = 1;
       } else {
         const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, 1, first_slice_payloads, g4dd_local, geometry_local);
+            spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, first_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
 
@@ -173,7 +185,7 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         ray_failed = 1;
       } else {
         const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, 1, final_slice_payloads, g4dd_local, geometry_local);
+            spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, final_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
 
@@ -191,7 +203,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
         // Step 3: Interpolate only the available mapped numerical slices in
         // space at the photon position.
         const int spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-            spatial_context, commondata, params, x, y, z, num_available_slices, available_slice_payloads, g4dd_available, geometry_available);
+            spatial_context, commondata, params, x, y, z, fixed_spatial_center, num_available_slices, available_slice_payloads, g4dd_available,
+            geometry_available);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
         else {
@@ -227,7 +240,8 @@ void numerical_interpolation(const commondata_struct *restrict commondata, const
                   ray_failed = 1;
                 } else {
                   const int first_slice_spatial_status = azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
-                      spatial_context, commondata, params, x, y, z, 1, first_slice_payloads, g4dd_missing_local, geometry_missing_local);
+                      spatial_context, commondata, params, x, y, z, fixed_spatial_center, 1, first_slice_payloads, g4dd_missing_local,
+                      geometry_missing_local);
                   if (first_slice_spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
                     ray_failed = 1;
                 } // END ELSE: first numerical slice selected

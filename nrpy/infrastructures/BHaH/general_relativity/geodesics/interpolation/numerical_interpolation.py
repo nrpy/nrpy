@@ -153,6 +153,21 @@ def register_CFunction_numerical_interpolation(
         else ""
     )
     if normalized_eom:
+        spatial_center_params = """const int *restrict d_spatial_stencil_center_i0,
+                const int *restrict d_spatial_stencil_center_i2,"""
+        spatial_center_desc = """@param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
+@param[in] d_spatial_stencil_center_i2 Trial-locked native dimension-2 centers, or NULL.
+"""
+        spatial_center_setup = r"""
+    NumericalSpatialStencilCenter fixed_center;
+    const NumericalSpatialStencilCenter *fixed_spatial_center = NULL;
+    if (d_spatial_stencil_center_i0 != NULL &&
+        d_spatial_stencil_center_i2 != NULL) {
+      fixed_center.i0 = d_spatial_stencil_center_i0[i];
+      fixed_center.i2 = d_spatial_stencil_center_i2[i];
+      fixed_spatial_center = &fixed_center;
+    } // END IF: trial-locked centers supplied
+"""
         integration_parameter_params = """const double *restrict d_integration_param_bundle,
                 const double *restrict d_h,
                 const int stage,"""
@@ -169,9 +184,16 @@ def register_CFunction_numerical_interpolation(
             : NAN;
     const REAL t = integration_param + rkf45_stage_time_fraction * h;"""
     else:
+        spatial_center_params = ""
+        spatial_center_desc = ""
+        spatial_center_setup = """
+    const NumericalSpatialStencilCenter *fixed_spatial_center = NULL;
+"""
         integration_parameter_params = ""
         integration_parameter_desc = ""
         coordinate_time_c_code = "const REAL t = (REAL)f_local[0];"
+
+    fixed_spatial_center_argument = "fixed_spatial_center,"
 
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
@@ -241,7 +263,7 @@ independently ray-by-ray.
 @param[in] spatial_context Trusted azimuthal-symmetry spatial interpolation context.
 @param[in] numerical_window Active mapped numerical time-window manager.
 @param[in] d_f_bundle Photon state bundle.
-{integration_parameter_desc}@param[out] d_metric_bundle Destination metric bundle.
+{spatial_center_desc}{integration_parameter_desc}@param[out] d_metric_bundle Destination metric bundle.
 @param[out] d_rhs_geometry_bundle Destination 40-component geometry bundle, or NULL.
 @param chunk_size Number of active rays in the chunk.
 @param stream_idx Analytic-kernel compatibility argument; ignored on CPU.
@@ -255,13 +277,14 @@ independently ray-by-ray.
                 const azimuthal_symmetry_spatial_lagrange_context_struct *restrict spatial_context,
                 const NumericalTimeWindowManager *restrict numerical_window,
                 const double *restrict d_f_bundle,
+                {spatial_center_params}
                 {integration_parameter_params}
                 double *restrict d_metric_bundle,
                 double *restrict d_rhs_geometry_bundle,
                 const long int chunk_size,
                 const int stream_idx""".replace(
-        "{integration_parameter_params}", integration_parameter_params
-    )
+        "{spatial_center_params}", spatial_center_params
+    ).replace("{integration_parameter_params}", integration_parameter_params)
     body = (
         r"""
   (void)stream_idx;
@@ -363,6 +386,7 @@ independently ray-by-ray.
     const REAL x = (REAL)f_local[1];
     const REAL y = (REAL)f_local[2];
     const REAL z = (REAL)f_local[3];
+{spatial_center_setup}
     int ray_failed = 0;
     uint64_t available_slice_indices[temporal_num_points];
     REAL available_slice_times[temporal_num_points];
@@ -396,6 +420,7 @@ independently ray-by-ray.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
+                {fixed_spatial_center_argument}
                 1, first_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
@@ -411,6 +436,7 @@ independently ray-by-ray.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
+                {fixed_spatial_center_argument}
                 1, final_slice_payloads, g4dd_local, geometry_local);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
           ray_failed = 1;
@@ -434,6 +460,7 @@ independently ray-by-ray.
         const int spatial_status =
             {spatial_name}(
                 spatial_context, commondata, params, x, y, z,
+                {fixed_spatial_center_argument}
                 num_available_slices, available_slice_payloads, g4dd_available,
                 geometry_available);
         if (spatial_status != AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
@@ -483,6 +510,7 @@ independently ray-by-ray.
                   const int first_slice_spatial_status =
                       {spatial_name}(
                           spatial_context, commondata, params, x, y, z,
+                          {fixed_spatial_center_argument}
                           1, first_slice_payloads, g4dd_missing_local,
                           geometry_missing_local);
                   if (first_slice_spatial_status !=
@@ -587,11 +615,16 @@ independently ray-by-ray.
   #undef G4_SLICE
   #undef GEOMETRY_SLICE
 """.replace("{spatial_name}", spatial_name)
+        .replace("{spatial_center_params}", spatial_center_params)
+        .replace("{spatial_center_setup}", spatial_center_setup)
+        .replace("{fixed_spatial_center_argument}", fixed_spatial_center_argument)
         .replace("{integration_parameter_params}", integration_parameter_params)
         .replace("{coordinate_time_c_code}", coordinate_time_c_code)
         .replace("{static_geometry_update}", static_geometry_update)
     )
-    desc = desc.replace("{integration_parameter_desc}", integration_parameter_desc)
+    desc = desc.replace("{spatial_center_desc}", spatial_center_desc).replace(
+        "{integration_parameter_desc}", integration_parameter_desc
+    )
 
     cfc.register_CFunction(
         subdirectory="interpolation",

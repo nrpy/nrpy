@@ -271,6 +271,55 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
     REAL xx[3],
     int Cart_to_i0i1i2[3]);
 
+    // Native dimensions 0 and 2 define one trial-locked spatial stencil.
+    typedef struct {
+      int i0;
+      int i2;
+    } NumericalSpatialStencilCenter; // END STRUCT: NumericalSpatialStencilCenter
+
+    /**
+     * Resolve one Cartesian target and its spatial interpolation centers.
+     *
+     * @param[in] params Runtime coordinate-map and grid parameters.
+     * @param[in] xCart Cartesian target coordinates.
+     * @param[in] fixed_center Optional trial-locked native centers.
+     * @param[out] xx_target Native target coordinates.
+     * @param[out] automatic_center_idx Automatic nearest native indices.
+     * @param[out] selected_center_idx Centers selected for interpolation.
+     * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
+     */
+    static inline int time_window_manager_numerical_resolve_spatial_target_and_stencil(
+        const params_struct *restrict params,
+        const REAL xCart[3],
+        const NumericalSpatialStencilCenter *restrict fixed_center,
+        REAL xx_target[3],
+        int automatic_center_idx[3],
+        int selected_center_idx[3]) {
+      if (params == NULL || xCart == NULL || xx_target == NULL ||
+          automatic_center_idx == NULL || selected_center_idx == NULL)
+        return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+
+      for (int dirn = 0; dirn < 3; dirn++) {
+        if (!isfinite((double)xCart[dirn]))
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+      } // END LOOP: for dirn over Cartesian target
+
+      Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
+          params, xCart, xx_target, automatic_center_idx);
+      for (int dirn = 0; dirn < 3; dirn++) {
+        if (!isfinite((double)xx_target[dirn]))
+          return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
+        selected_center_idx[dirn] = automatic_center_idx[dirn];
+      } // END LOOP: for dirn over native target
+
+      if (fixed_center != NULL) {
+        selected_center_idx[0] = fixed_center->i0;
+        selected_center_idx[2] = fixed_center->i2;
+      } // END IF: trial-locked center supplied
+
+      return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
+    } // END FUNCTION: resolve spatial target and stencil
+
     // Owns the currently mapped group of adjacent 3D-grid payloads.
     typedef struct {
       int fd; // Open read-only file descriptor for the combined numerical .bin file.

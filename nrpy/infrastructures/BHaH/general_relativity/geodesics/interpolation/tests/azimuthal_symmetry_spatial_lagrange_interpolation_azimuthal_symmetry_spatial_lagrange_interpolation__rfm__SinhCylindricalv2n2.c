@@ -215,6 +215,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
  * @param x Cartesian x coordinate.
  * @param y Cartesian y coordinate.
  * @param z Cartesian z coordinate.
+ * @param[in] fixed_spatial_center Optional trial-locked native centers.
  * @param num_target_slices Number of mapped slice payload pointers.
  * @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
  * @param[out] g4dd_out Flat metric output, ten values per slice.
@@ -223,8 +224,9 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
  */
 int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
     const azimuthal_symmetry_spatial_lagrange_context_struct *restrict context, const commondata_struct *restrict commondata,
-    const params_struct *restrict params, const REAL x, const REAL y, const REAL z, const int num_target_slices,
-    const double *const *restrict slice_payloads, REAL *restrict g4dd_out, REAL *restrict rhs_geometry_out) {
+    const params_struct *restrict params, const REAL x, const REAL y, const REAL z,
+    const NumericalSpatialStencilCenter *restrict fixed_spatial_center, const int num_target_slices, const double *const *restrict slice_payloads,
+    REAL *restrict g4dd_out, REAL *restrict rhs_geometry_out) {
   // Step 1: Validate pointers, then convert the target Cartesian point to
   // native coordinates.
   if (context == NULL || commondata == NULL || params == NULL || slice_payloads == NULL || g4dd_out == NULL || rhs_geometry_out == NULL ||
@@ -233,8 +235,11 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
 
   const REAL xCart[3] = {x, y, z};
   REAL xx_target[3];
-  int center_idx[3];
-  Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(params, xCart, xx_target, center_idx);
+  int automatic_center_idx[3];
+  int selected_center_idx[3];
+  if (time_window_manager_numerical_resolve_spatial_target_and_stencil(params, xCart, fixed_spatial_center, xx_target, automatic_center_idx,
+                                                                       selected_center_idx) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+    return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
 
   const REAL target_interp_0 = xx_target[0];
   const REAL target_interp_1 = xx_target[2];
@@ -294,12 +299,12 @@ int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(
   const REAL normalization_2d = pow((REAL)(params->dxx0 * params->dxx2), -(interp_order - 1));
 
   for (int u = 0; u < interp_order; u++) {
-    const int interp_0_raw = center_idx[0] + (u - n_interp_ghosts);
+    const int interp_0_raw = selected_center_idx[0] + (u - n_interp_ghosts);
     interp_0_storage_stencil[u] = interp_0_raw;
     src_interp_0_stencil[u] = (REAL)(params->xxmin0 + (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx0));
   } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
-    const int interp_1_raw = center_idx[2] + (v - n_interp_ghosts);
+    const int interp_1_raw = selected_center_idx[2] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
     src_interp_1_stencil[v] = (REAL)(params->xxmin2 + (((interp_1_raw - NGHOSTS) + 0.5) * params->dxx2));
   } // END LOOP: for v over second interpolation-dimension

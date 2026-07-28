@@ -218,7 +218,6 @@ def register_CFunction_azimuthal_symmetry_spatial_lagrange_interpolation(
         subdirectory="interpolation",
     )
     register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
-    cart_to_xx_name = f"Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__{CoordSystem}"
     storage_exprs = {
         interp_dim0: "interp_0_storage_stencil[u]",
         interp_dim1: "interp_1_storage_stencil[v]",
@@ -594,6 +593,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
                 const commondata_struct *restrict commondata,
                 const params_struct *restrict params,
                 const REAL x, const REAL y, const REAL z,
+                const NumericalSpatialStencilCenter *restrict fixed_spatial_center,
                 const int num_target_slices,
                 const double *const *restrict slice_payloads,
                 REAL *restrict g4dd_out,
@@ -794,8 +794,13 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
 
   const REAL xCart[3] = {x, y, z};
   REAL xx_target[3];
-  int center_idx[3];
-  {cart_to_xx_name}(params, xCart, xx_target, center_idx);
+  int automatic_center_idx[3];
+  int selected_center_idx[3];
+  if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+          params, xCart, fixed_spatial_center, xx_target,
+          automatic_center_idx, selected_center_idx) !=
+      TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS)
+    return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_INVALID_TARGET;
 
   const REAL target_interp_0 = xx_target[{interp_dim0}];
   const REAL target_interp_1 = xx_target[{interp_dim1}];
@@ -862,14 +867,14 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
           -(interp_order - 1));
 
   for (int u = 0; u < interp_order; u++) {
-    const int interp_0_raw = center_idx[{interp_dim0}] + (u - n_interp_ghosts);
+    const int interp_0_raw = selected_center_idx[{interp_dim0}] + (u - n_interp_ghosts);
     interp_0_storage_stencil[u] = interp_0_raw;
     src_interp_0_stencil[u] =
         (REAL)(params->xxmin{interp_dim0} +
                (((interp_0_raw - NGHOSTS) + 0.5) * params->dxx{interp_dim0}));
   } // END LOOP: for u over first interpolation-dimension
   for (int v = 0; v < interp_order; v++) {
-    const int interp_1_raw = center_idx[{interp_dim1}] + (v - n_interp_ghosts);
+    const int interp_1_raw = selected_center_idx[{interp_dim1}] + (v - n_interp_ghosts);
     interp_1_storage_stencil[v] = interp_1_raw;
     src_interp_1_stencil[v] =
         (REAL)(params->xxmin{interp_dim1} +
@@ -907,8 +912,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
 {metric_slice_processing}
 
   return AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS;
-""".replace("{cart_to_xx_name}", cart_to_xx_name)
-        .replace("{phi_dim}", str(phi_dim))
+""".replace("{phi_dim}", str(phi_dim))
         .replace("{interp_dim0}", str(interp_dim0))
         .replace("{interp_dim1}", str(interp_dim1))
         .replace("{i0_storage_expr}", storage_exprs[0])
@@ -952,6 +956,7 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
 @param x Cartesian x coordinate.
 @param y Cartesian y coordinate.
 @param z Cartesian z coordinate.
+@param[in] fixed_spatial_center Optional trial-locked native centers.
 @param num_target_slices Number of mapped slice payload pointers.
 @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
 @param[out] g4dd_out Flat metric output, ten values per slice.
