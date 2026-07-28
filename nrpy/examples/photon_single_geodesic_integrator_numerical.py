@@ -6,7 +6,9 @@ a numerical spacetime sourced from the combined raytracing ``.bin`` generated
 from ``two_blackholes_collide.py --raytracing-time ...``. It retains the batch
 example's command-line inputs, numerical interpolation setup, parameter
 defaults, and RKF45 registrations, but selects the single-photon integrator and
-writes accepted trajectory states to ``trajectory.txt``.
+writes accepted trajectory states to ``trajectory.txt``. RKF45 trial and
+stage diagnostics are enabled by default and written to ``rkf45_trials.txt``
+and ``rkf45_stages.txt``; diagnostic code can be disabled from the command line.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -157,6 +159,20 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         default="g4DD",
         help="""Numerical spacetime payload and interpolation method.""",
     )
+    trial_debug_group = arg_parser.add_mutually_exclusive_group()
+    trial_debug_group.add_argument(
+        "--enable-rkf45-trial-debug",
+        dest="enable_rkf45_trial_debug",
+        action="store_true",
+        help="Enable per-trial and per-stage RKF45 diagnostics (default).",
+    )
+    trial_debug_group.add_argument(
+        "--disable-rkf45-trial-debug",
+        dest="enable_rkf45_trial_debug",
+        action="store_false",
+        help="Disable per-trial and per-stage RKF45 diagnostics.",
+    )
+    arg_parser.set_defaults(enable_rkf45_trial_debug=True)
     if len(sys.argv) == 1:
         arg_parser.print_help()
         sys.exit(0)
@@ -348,6 +364,7 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
         normalized_eom=normalized_eom,
+        enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
         register_numerical_initial_h=False,
     )
 
@@ -359,6 +376,7 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         coord_system_numerical,
         interpolation_method=interpolation_method,
         normalized_eom=normalized_eom,
+        enable_rkf45_trial_debug=args.enable_rkf45_trial_debug,
     )
     main_single.main_single("single_integrator_numerical")
 
@@ -446,12 +464,16 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
     par.adjust_CodeParam_default("rkf45_h_max", 10.0)
     par.adjust_CodeParam_default("rkf45_h_min", 1.0e-4)
     if normalized_eom:
-        par.adjust_CodeParam_default("rkf45_log_energy_tolerance", 1.0e0)
+        par.adjust_CodeParam_default("rkf45_log_energy_tolerance", 1.0e00)
 
     print(f" -> Numerical spacetime .bin path: {numerical_spacetime_bin_path}")
     print(f" -> Numerical coordinate system: {coord_system_numerical}")
     print(f" -> Interpolation method: {interpolation_method}")
     print(f" -> Photon equations of motion: {args.eom}")
+    print(
+        " -> RKF45 trial/stage debugging: "
+        f"{'enabled' if args.enable_rkf45_trial_debug else 'disabled'}"
+    )
     print(f" -> Numerical domain: {domain}")
     print(f" -> Numerical SINHWRHO: {sinhw_numerical_rho}")
     print(f" -> Numerical SINHWZ: {sinhw_numerical_z}")

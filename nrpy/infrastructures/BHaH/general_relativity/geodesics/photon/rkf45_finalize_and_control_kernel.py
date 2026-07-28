@@ -47,12 +47,14 @@ from typing import List, Union
 import nrpy.c_function as cfc
 import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
+from nrpy.infrastructures.BHaH import BHaH_defines_h
 
 
 def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
     normalized_eom: bool = False,
     register_numerical_initial_h: bool = True,
+    enable_rkf45_trial_debug: bool = False,
 ) -> None:
     r"""
     Global kernel for RKF45 finalization and error control.
@@ -70,6 +72,9 @@ def rkf45_finalize_and_control_kernel(
     :param register_numerical_initial_h: Whether to register the legacy numerical
         initial-step parameter. Standalone numerical single-photon integrations
         use the shared ``initial_h`` parameter instead.
+    :param enable_rkf45_trial_debug: Whether to emit per-trial RKF45 diagnostics
+        through an additional output pointer. Disabled by default so existing
+        callers keep the current generated interface.
 
     Doctests:
     >>> import nrpy.c_function as cfc
@@ -105,6 +110,20 @@ def rkf45_finalize_and_control_kernel(
     True
     >>> "rkf45_constraint_tolerance" not in generated
     True
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel(enable_rkf45_trial_debug=True)
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_trial_diagnostic_t *restrict d_trial_debug" in generated
+    True
+    >>> "d_trial_debug[i].err_norm" in generated
+    True
     """
     real_param_names: List[str] = [
         "rkf45_error_tolerance",
@@ -120,6 +139,102 @@ def rkf45_finalize_and_control_kernel(
         10.0,
         1.0e3,
     ]
+    if enable_rkf45_trial_debug:
+        trial_debug_initialization = r"""
+    int limiting_component = -1;
+    double limiting_delta_5_minus_4 = 0.0;
+    double limiting_error_absolute = 0.0;
+    double limiting_scale = 0.0;
+    double limiting_error_normalized = 0.0;
+"""
+        trial_debug_candidate_check = r"""
+        const bool candidate_nonfinite =
+            isnan(f_5th_val) || isinf(f_5th_val);
+        if (candidate_nonfinite) {
+            err_norm = 1e30;
+        } // END IF: nonfinite fifth-order candidate
+"""
+        trial_debug_error_update = r"""
+            if (candidate_nonfinite) {
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = 1e30;
+            } // END IF: nonfinite candidate controls error
+
+            if (isnan(current_err) || isinf(current_err)) {
+                err_norm = 1e30;
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = current_err;
+            } else if (current_err > err_norm) {
+                err_norm = current_err;
+                limiting_component = comp;
+                limiting_delta_5_minus_4 = delta_5_minus_4;
+                limiting_error_absolute = err_abs;
+                limiting_scale = scale;
+                limiting_error_normalized = current_err;
+            } // END ELSE: finite component error comparison
+"""
+        trial_debug_error_delta = r"""
+        const double delta_5_minus_4 =
+            MulCUDA(h_local, err_val);
+        const double err_abs = AbsCUDA(delta_5_minus_4);
+"""
+        excluded_nonfinite_condition = (
+            "comp == 0 || comp == 8" if normalized_eom else "comp == 8"
+        )
+        trial_debug_excluded_nonfinite_update = rf"""
+        if (candidate_nonfinite && ({excluded_nonfinite_condition})) {{
+            limiting_component = comp;
+            limiting_delta_5_minus_4 = delta_5_minus_4;
+            limiting_error_absolute = err_abs;
+            limiting_scale = 0.0;
+            limiting_error_normalized = 1e30;
+        }} // END IF: excluded nonfinite component controls error
+"""
+        trial_debug_h_capture = "    const double h_error_controller = h_new;\n"
+        trial_debug_output = r"""
+    WriteCUDA(&d_trial_debug[i].err_norm, err_norm);
+    WriteCUDA(
+        &d_trial_debug[i].h_error_controller, h_error_controller);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_component, limiting_component);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_delta_5_minus_4,
+        limiting_delta_5_minus_4);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_error_absolute,
+        limiting_error_absolute);
+    WriteCUDA(&d_trial_debug[i].limiting_scale, limiting_scale);
+    WriteCUDA(
+        &d_trial_debug[i].limiting_error_normalized,
+        limiting_error_normalized);
+"""
+    else:
+        trial_debug_initialization = ""
+        trial_debug_candidate_check = r"""
+        if (isnan(f_5th_val) || isinf(f_5th_val)) {
+            err_norm = 1e30;
+        } // END IF: numerical singularities check
+"""
+        trial_debug_error_delta = r"""
+        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val));
+"""
+        trial_debug_excluded_nonfinite_update = ""
+        trial_debug_error_update = r"""
+            if (isnan(current_err) || isinf(current_err)) {
+                err_norm = 1e30;
+            } else {
+                err_norm = fmax(err_norm, current_err);
+            } // END ELSE: normalized-error accumulation
+"""
+        trial_debug_h_capture = ""
+        trial_debug_output = ""
+
     if normalized_eom:
         real_param_names.append("rkf45_log_energy_tolerance")
         real_param_defaults.append(1e-8)
@@ -143,6 +258,23 @@ def rkf45_finalize_and_control_kernel(
     cd_access = parallel_utils.get_commondata_access(parallelization)
     pragma_unroll = "#pragma unroll" if parallelization == "cuda" else ""
 
+    if enable_rkf45_trial_debug:
+        trial_debug_struct = r"""
+    typedef struct {
+      double err_norm;
+      double h_error_controller;
+      int limiting_component;
+      double limiting_delta_5_minus_4;
+      double limiting_error_absolute;
+      double limiting_scale;
+      double limiting_error_normalized;
+    } rkf45_trial_diagnostic_t; // END STRUCT: RKF45 trial diagnostics
+    """
+        if "rkf45_trial_debug" not in par.glb_extras_dict.get("BHaH_defines", {}):
+            BHaH_defines_h.register_BHaH_defines(
+                "rkf45_trial_debug", trial_debug_struct
+            )
+
     arg_dict_cuda = {
         "d_f_persistent": "double *restrict",
         "d_f_start": "const double *restrict",
@@ -151,7 +283,6 @@ def rkf45_finalize_and_control_kernel(
         "d_status": "termination_type_t *restrict",
         "d_integration_param": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int",
     }
 
     arg_dict_host = {
@@ -162,8 +293,12 @@ def rkf45_finalize_and_control_kernel(
         "d_status": "termination_type_t *restrict",
         "d_integration_param": "double *restrict",
         "d_retries": "int *restrict",
-        "chunk_size": "const long int",
     }
+    if enable_rkf45_trial_debug:
+        arg_dict_cuda["d_trial_debug"] = "rkf45_trial_diagnostic_t *restrict"
+        arg_dict_host["d_trial_debug"] = "rkf45_trial_diagnostic_t *restrict"
+    arg_dict_cuda["chunk_size"] = "const long int"
+    arg_dict_host["chunk_size"] = "const long int"
     # Pass commondata explicitly when not using CUDA's global memory
     if parallelization != "cuda":
         arg_dict_cuda["commondata"] = "const commondata_struct *restrict"
@@ -332,11 +467,7 @@ static inline int rkf45_checked_floor_to_long(
             } // END ELSE: normalized-state tolerance selection
 
             const double current_err = DivCUDA(err_abs, scale);
-            if (isnan(current_err) || isinf(current_err)) {
-                err_norm = 1e30;
-            } else {
-                err_norm = fmax(err_norm, current_err);
-            } // END ELSE: normalized-error accumulation
+{trial_debug_error_update}
         } // END IF: exclude integration parameter and Eulerian
 """
         adaptive_step_control = rf"""
@@ -369,11 +500,7 @@ static inline int rkf45_checked_floor_to_long(
             } // END ELSE: direct-geodesic tolerance selection
 
             const double current_err = DivCUDA(err_abs, scale);
-            if (isnan(current_err) || isinf(current_err)) {
-                err_norm = 1e30;
-            } else {
-                err_norm = fmax(err_norm, current_err);
-            } // END ELSE: direct-geodesic error accumulation
+{trial_debug_error_update}
         } // END IF: exclude Eulerian length from error
 """
         adaptive_step_control = rf"""
@@ -387,6 +514,10 @@ static inline int rkf45_checked_floor_to_long(
         WriteCUDA(
             &d_integration_param[i], AddCUDA(old_integration_param, h_local));
 """
+
+    error_normalization = error_normalization.replace(
+        "{trial_debug_error_update}", trial_debug_error_update
+    )
 
     core_math = rf"""
     //==========================================
@@ -413,6 +544,7 @@ static inline int rkf45_checked_floor_to_long(
     // We compute the 5th order candidate and error component-by-component to bound register usage.
     double f_5th_cache[9]; // Thread-local register cache for the evaluated 5th-order state $f^{{\mu}}$.
     double err_norm = 0.0; // Accumulator for the maximum normalized truncation error norm $L_\infty$.
+{trial_debug_initialization}
 
     //==========================================
     // L1 MOMENTUM FLOOR
@@ -453,9 +585,7 @@ static inline int rkf45_checked_floor_to_long(
         f_5th_cache[comp] = f_5th_val; // Caches the evaluated component to thread-local registers.
 
         // Evaluates the physical state for numerical singularities to guarantee the rejection of corrupted trajectory steps.
-        if (isnan(f_5th_val) || isinf(f_5th_val)) {{
-            err_norm = 1e30; // Forces an artificially massive error norm $L_\infty$ to guarantee step rejection.
-        }} // END IF: numerical singularities check
+{trial_debug_candidate_check}
 
         //==========================================
         // TRUNCATION ERROR EVALUATION
@@ -467,7 +597,8 @@ static inline int rkf45_checked_floor_to_long(
         err_val = FusedMulAddCUDA(1.0 / 50.0, k4, err_val); // Accumulates the stage 4 error coefficient delta.
         err_val = FusedMulAddCUDA(2.0 / 55.0, k5, err_val); // Accumulates the stage 5 error coefficient delta.
 
-        const double err_abs = AbsCUDA(MulCUDA(h_local, err_val)); // The absolute magnitude of the local truncation error.
+{trial_debug_error_delta}
+{trial_debug_excluded_nonfinite_update}
 
         //==========================================
         // ERROR NORMALIZATION & L-INFINITY NORM
@@ -483,6 +614,7 @@ static inline int rkf45_checked_floor_to_long(
     double factor = (err_norm > 1e-15) ? pow(DivCUDA(1.0, err_norm), 0.2) : 2.0; // Growth or shrink factor for the adaptive step $h$.
 
 {adaptive_step_control}
+{trial_debug_h_capture}
 {proposed_time_window_step_cap}
 
     if (err_norm <= 1.0) {{
@@ -524,6 +656,7 @@ static inline int rkf45_checked_floor_to_long(
         // Commit the scaled retry step size $h$ to memory without overwriting persistent state vectors.
         WriteCUDA(&d_h[i], h_new); // Commits the scaled retry step size $h$ to memory.
     }} // END ELSE: rejected step handling
+{trial_debug_output}
 
     //==========================================
     // MACRO CLEANUP
@@ -556,7 +689,12 @@ static inline int rkf45_checked_floor_to_long(
     if parallelization == "cuda":
         includes.append("cuda_intrinsics.h")
 
-    desc = r""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
+    trial_debug_desc = (
+        "    @param d_trial_debug Optional per-ray trial diagnostic output.\n"
+        if enable_rkf45_trial_debug
+        else ""
+    )
+    desc = rf""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
 
     @param d_f_persistent Pointer to the persistent nine-component state (updated on acceptance).
     @param d_f_start Pointer to the base nine-component state (read-only).
@@ -565,6 +703,7 @@ static inline int rkf45_checked_floor_to_long(
     @param d_status Pointer to the ray status flag.
     @param d_integration_param Pointer to the affine-parameter or coordinate-time tracker.
     @param d_retries Pointer to the retry counter.
+{trial_debug_desc}
     @param chunk_size The number of rays in the current bundle.
 
     @note When numerical-spacetime support requests the optional accepted-step
@@ -576,6 +715,11 @@ static inline int rkf45_checked_floor_to_long(
 
     name = "rkf45_finalize_and_control"
 
+    trial_debug_param = (
+        "rkf45_trial_diagnostic_t *restrict d_trial_debug, "
+        if enable_rkf45_trial_debug
+        else ""
+    )
     params = (
         "const commondata_struct *restrict commondata, "
         "double *restrict d_f_persistent, "
@@ -585,8 +729,9 @@ static inline int rkf45_checked_floor_to_long(
         "termination_type_t *restrict d_status, "
         "double *restrict d_integration_param, "
         "int *restrict d_retries, "
-        "const long int chunk_size, "
-        "const int stream_idx"
+        + trial_debug_param
+        + "const long int chunk_size, "
+        + "const int stream_idx"
     )
 
     include_CodeParameters_h = False

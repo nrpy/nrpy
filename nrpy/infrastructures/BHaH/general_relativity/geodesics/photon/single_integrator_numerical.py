@@ -5,7 +5,8 @@ The generated C executable follows the numerical batch integrator's numerical
 interpolation, time-window management, initial-condition geometry, and RKF45
 control logic, but removes batching, double buffering, device memory, streams,
 and blueprint output. It writes one trajectory row after every accepted RKF45
-step.
+step, including a signed normalization diagnostic. Optional RKF45 debugging
+writes trial-level and stage-level records from this single-photon host loop.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -43,6 +44,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     dataset_coord_system: str,
     interpolation_method: str = "g4DD",
     normalized_eom: bool = False,
+    enable_rkf45_trial_debug: bool = False,
 ) -> None:
     """
     Register the standalone numerical-spacetime single-photon C integrator.
@@ -51,8 +53,53 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time equations.
+    :param enable_rkf45_trial_debug: Whether to write one diagnostic row for every
+        RKF45 trial to ``rkf45_trials.txt`` and one row for each of its six
+        stages to ``rkf45_stages.txt``.
     :raises ValueError: If the interpolation method or dataset coordinate system
         is unsupported.
+
+    Doctests:
+    >>> import os
+    >>> import nrpy.c_function as cfc
+    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
+    >>> cfc.CFunction_dict.clear()
+    >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2")
+    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> "# lambda t x y z energy_measure p_x p_y p_z aux norm" in generated
+    True
+    >>> "const double trajectory_norm = normalization.C;" in generated
+    True
+    >>> "fabs(normalization.C)" not in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> single_integrator_numerical("Numerical", "SinhCylindricalv2n2", normalized_eom=True)
+    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> "const double trajectory_norm = normalization.C - 1.0;" in generated
+    True
+    >>> "fabs(normalization.C - 1.0)" not in generated
+    True
+    >>> "trial_debug_file" not in generated
+    True
+    >>> "stage_debug_file" not in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> single_integrator_numerical(
+    ...     "Numerical", "SinhCylindricalv2n2", enable_rkf45_trial_debug=True
+    ... )
+    >>> generated = cfc.CFunction_dict["single_integrator_numerical"].full_function
+    >>> "rkf45_trials.txt" in generated
+    True
+    >>> "trial_debug_file" in generated
+    True
+    >>> "rkf45_stages.txt" in generated
+    True
+    >>> "stage_debug_file" in generated
+    True
+    >>> "Cart_to_xx_and_nearest_i0i1i2_assume_valid" in generated
+    True
+    >>> "k_bundle[(stage - 1) * 9 + 5]" in generated
+    True
     """
     if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
         raise ValueError(
@@ -152,7 +199,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
             "f, metric, chunk_size, stream_idx);"
         )
         normalization_kernel_name = "normalization_constraint_photon_normalized"
-        normalization_error_expression = "fabs(normalization.C - 1.0)"
+        normalization_diagnostic_expression = "normalization.C - 1.0"
     else:
         initial_state_time = "commondata.initial_t"
         initial_integration_param = "commondata.initial_integration_param"
@@ -164,7 +211,253 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         rhs_integration_arguments = ""
         momentum_conversion_call = ""
         normalization_kernel_name = "normalization_constraint_photon"
-        normalization_error_expression = "fabs(normalization.C)"
+        normalization_diagnostic_expression = "normalization.C"
+
+    stage_normalization_diagnostic_expression = (
+        normalization_diagnostic_expression.replace(
+            "normalization.", "stage_normalization."
+        )
+    )
+    if normalized_eom:
+        stage_time_expression = """*integration_param +
+          rkf45_stage_time_fractions[stage - 1] * *h"""
+    else:
+        stage_time_expression = "f_temp[0]"
+
+    if enable_rkf45_trial_debug:
+        trial_component_names = (
+            r"""
+    "lambda",
+    "x",
+    "y",
+    "z",
+    "u",
+    "Pi_1",
+    "Pi_2",
+    "Pi_3",
+    "L_Euler"
+"""
+            if normalized_eom
+            else r"""
+    "t",
+    "x",
+    "y",
+    "z",
+    "p^0",
+    "p^1",
+    "p^2",
+    "p^3",
+    "L_Euler"
+"""
+        )
+        trial_debug_declarations = r"""
+  FILE *trial_debug_file = NULL;
+  rkf45_trial_diagnostic_t trial_debug;
+  const char *trial_component_names[] = {
+{trial_component_names}
+  };
+"""
+        trial_debug_declarations = trial_debug_declarations.replace(
+            "{trial_component_names}", trial_component_names
+        )
+        if normalized_eom:
+            stage_debug_header = """# accepted_step trial_number retry_number stage h_trial t_start stage_time lambda x y z r_stage xx0 xx1 xx2 i0 i1 i2 stencil_i0_low stencil_i0_high stencil_i2_low stencil_i2_high stage_norm_error u Pi_1 Pi_1_derivative
+"""
+        else:
+            stage_debug_header = """# accepted_step trial_number retry_number stage h_trial t_start stage_time t x y z r_stage xx0 xx1 xx2 i0 i1 i2 stencil_i0_low stencil_i0_high stencil_i2_low stencil_i2_high stage_norm_error p^0 p^1 p^1_derivative
+"""
+        stage_debug_header_c = (
+            stage_debug_header.rstrip("\n").replace("\\", "\\\\").replace('"', '\\"')
+            + "\\n"
+        )
+        stage_debug_declarations = (
+            r"""
+  // Host-side stage logging preserves the sequential order of every trial.
+  FILE *stage_debug_file = NULL;
+  const double rkf45_stage_time_fractions[] = {
+      0.0, 1.0 / 4.0, 3.0 / 8.0, 12.0 / 13.0, 1.0, 1.0 / 2.0};
+"""
+            if normalized_eom
+            else r"""
+  // Host-side stage logging preserves the sequential order of every trial.
+  FILE *stage_debug_file = NULL;
+"""
+        )
+        stage_debug_open = rf"""
+  stage_debug_file = fopen("rkf45_stages.txt", "w");
+  if (stage_debug_file == NULL) {{
+    fprintf(stderr, "ERROR: could not open rkf45_stages.txt for writing.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: RKF45 stage diagnostics unavailable
+  fprintf(stage_debug_file, "{stage_debug_header_c}");
+"""
+        stage_debug_record = rf"""
+      // Record the interpolated stage before the next RKF45 stage update.
+      normalization_constraint_t stage_normalization;
+      {normalization_kernel_name}(
+          f_temp,
+          metric,
+          &stage_normalization,
+          chunk_size,
+          stream_idx);
+      const double stage_norm_error =
+          {stage_normalization_diagnostic_expression};
+      if (!isfinite(stage_norm_error)) {{
+        fprintf(
+            stderr,
+            "ERROR: stage %d normalization error was not finite.\n",
+            stage);
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
+      }} // END IF: stage normalization error invalid
+
+      const REAL stage_cartesian[3] = {{
+          (REAL)f_temp[1], (REAL)f_temp[2], (REAL)f_temp[3]}};
+      REAL stage_xx[3];
+      int stage_indices[3];
+      Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
+          &numerical_params,
+          stage_cartesian,
+          stage_xx,
+          stage_indices);
+      const double stage_radius = sqrt(
+          f_temp[1] * f_temp[1] +
+          f_temp[2] * f_temp[2] +
+          f_temp[3] * f_temp[3]);
+      const double stage_time = {stage_time_expression};
+      const double stage_pi1_derivative =
+          k_bundle[(stage - 1) * 9 + 5];
+      fprintf(
+          stage_debug_file,
+          "%ld %ld %d %d "
+          "%.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g %.17g "
+          "%d %d %d %d %d %d %d "
+          "%.17g %.17g %.17g %.17g\n",
+          accepted_step_before_trial,
+          trial_number,
+          retry_number_before,
+          stage,
+          h_trial,
+          t_start,
+          stage_time,
+          f_temp[0],
+          f_temp[1],
+          f_temp[2],
+          f_temp[3],
+          stage_radius,
+          (double)stage_xx[0],
+          (double)stage_xx[1],
+          (double)stage_xx[2],
+          stage_indices[0],
+          stage_indices[1],
+          stage_indices[2],
+          stage_indices[0] - commondata.numerical_spacetime_spatial_interp_half_width,
+          stage_indices[0] + commondata.numerical_spacetime_spatial_interp_half_width,
+          stage_indices[2] - commondata.numerical_spacetime_spatial_interp_half_width,
+          stage_indices[2] + commondata.numerical_spacetime_spatial_interp_half_width,
+          stage_norm_error,
+          f_temp[4],
+          f_temp[5],
+          stage_pi1_derivative);
+      fflush(stage_debug_file);
+"""
+        trial_debug_open = r"""
+  trial_debug_file = fopen("rkf45_trials.txt", "w");
+  if (trial_debug_file == NULL) {
+    fprintf(stderr, "ERROR: could not open rkf45_trials.txt for writing.\n");
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  } // END IF: RKF45 trial diagnostics unavailable
+  fprintf(
+      trial_debug_file,
+      "# accepted_step trial_number retry_number_before retry_number_after "
+      "status_name status_value t_start h_trial h_error_controller h_proposed "
+      "err_norm limiting_component limiting_component_name "
+      "limiting_delta_5_minus_4 limiting_error_absolute limiting_scale "
+      "limiting_error_normalized trial_result x_start y_start z_start r_start\n");
+"""
+        trial_debug_trial_metadata = r"""
+    const long int accepted_step_before_trial = accepted_steps;
+    const long int trial_number = rkf45_attempts + 1;
+    const int retry_number_before = *rejection_retries;
+    const double t_start = coordinate_time;
+    const double h_trial = *h;
+    const double x_start = f_start[1];
+    const double y_start = f_start[2];
+    const double z_start = f_start[3];
+    const double r_start = sqrt(
+        x_start * x_start + y_start * y_start + z_start * z_start);
+"""
+        trial_debug_call_argument = "&trial_debug,\n        "
+        trial_debug_record = r"""
+    const int trial_status_value = (int)*status;
+    const char *trial_status_name =
+        (trial_status_value >= 0 && trial_status_value < 9)
+            ? status_names[trial_status_value]
+            : "UNKNOWN_STATUS";
+    const int trial_component_value = trial_debug.limiting_component;
+    const char *trial_component_name =
+        (trial_component_value >= 0 && trial_component_value < 9)
+            ? trial_component_names[trial_component_value]
+            : "UNKNOWN_COMPONENT";
+    const int retry_number_after = *rejection_retries;
+    const char *trial_result = "FAILED_OTHER";
+    if (*status == ACTIVE) {
+      trial_result = "ACCEPTED";
+    } else if (*status == REJECTED) {
+      trial_result = "REJECTED";
+    } else if (*status == FAILURE_RKF45_REJECTION_LIMIT) {
+      trial_result = "FAILED_REJECTION_LIMIT";
+    } // END ELSE IF: classify RKF45 trial result
+    fprintf(
+        trial_debug_file,
+        "%ld %ld %d %d %s %d %.17g %.17g %.17g %.17g %.17g %d %s "
+        "%.17g %.17g %.17g %.17g %s %.17g %.17g %.17g %.17g\n",
+        accepted_step_before_trial,
+        trial_number,
+        retry_number_before,
+        retry_number_after,
+        trial_status_name,
+        trial_status_value,
+        t_start,
+        h_trial,
+        trial_debug.h_error_controller,
+        *h,
+        trial_debug.err_norm,
+        trial_component_value,
+        trial_component_name,
+        trial_debug.limiting_delta_5_minus_4,
+        trial_debug.limiting_error_absolute,
+        trial_debug.limiting_scale,
+        trial_debug.limiting_error_normalized,
+        trial_result,
+        x_start,
+        y_start,
+        z_start,
+        r_start);
+    fflush(trial_debug_file);
+"""
+        trial_debug_cleanup = r"""
+  if (trial_debug_file != NULL)
+    fclose(trial_debug_file);
+"""
+        stage_debug_cleanup = r"""
+  if (stage_debug_file != NULL)
+    fclose(stage_debug_file);
+"""
+    else:
+        trial_debug_declarations = ""
+        stage_debug_header = ""
+        stage_debug_declarations = ""
+        stage_debug_open = ""
+        stage_debug_record = ""
+        stage_debug_cleanup = ""
+        trial_debug_open = ""
+        trial_debug_trial_metadata = ""
+        trial_debug_call_argument = ""
+        trial_debug_record = ""
+        trial_debug_cleanup = ""
 
     includes = [
         "BHaH_defines.h",
@@ -181,10 +474,13 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
 The executable initializes one photon from direct position and momentum parameters,
 solves the initial null constraint, maps numerical time windows by coordinate-time
 slot, and advances the state with the shared six-stage RKF45 pipeline. A trajectory
-row is written only after an accepted step.
+row, including signed normalization deviation, is written only after an accepted
+step. When RKF45 trial debugging is enabled, ``rkf45_trials.txt`` records every
+trial and ``rkf45_stages.txt`` records all six interpolation/RHS stages of every
+trial in execution order.
 
 For normalized equations, the state layout is
-``(lambda, x, y, z, u, Pi_0, Pi_1, Pi_2, L_Euler)``: ``f[0]`` is lambda and
+``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_Euler)``: ``f[0]`` is lambda and
 the RKF45 integration parameter is coordinate time. For non-normalized
 equations, the state layout is ``(t, x, y, z, p_0, p_1, p_2, p_3, L_Euler)``:
 the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
@@ -229,6 +525,8 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
   int exit_status = EXIT_SUCCESS;
   FILE *trajectory_file = NULL;
+{trial_debug_declarations}
+{stage_debug_declarations}
   bool slot_manager_initialized = false;
   bool numerical_window_initialized = false;
 
@@ -468,7 +766,11 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     exit_status = EXIT_FAILURE;
     goto cleanup;
   }} // END IF: trajectory output unavailable
-  fprintf(trajectory_file, "# lambda t x y z energy_measure p_x p_y p_z aux\n");
+  fprintf(
+      trajectory_file,
+      "# lambda t x y z energy_measure p_x p_y p_z aux norm\n");
+{trial_debug_open}
+{stage_debug_open}
 
   printf("Starting CPU numerical single-photon integration.\n");
   printf("  spacetime equations: {spacetime_name}\n");
@@ -511,6 +813,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
     memcpy(f_start, f, sizeof(double) * 9);
     memcpy(f_temp, f, sizeof(double) * 9);
+{trial_debug_trial_metadata}
 
     for (int stage = 1; stage <= 6; ++stage) {{
       numerical_interpolation(
@@ -561,6 +864,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           stage,
           chunk_size,
           stream_idx);
+{stage_debug_record}
       if (stage < 6) {{
         rkf45_stage_update(
             f_start,
@@ -582,9 +886,10 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         status,
         integration_param,
         rejection_retries,
-        chunk_size,
+        {trial_debug_call_argument}chunk_size,
         stream_idx);
     rkf45_attempts++;
+{trial_debug_record}
 
     if (*status == ACTIVE) {{
       for (int component = 0; component < 9; ++component) {{
@@ -599,9 +904,42 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         }} // END IF: accepted state component invalid
       }} // END LOOP: for component over the accepted
 
+      numerical_interpolation(
+          &commondata,
+          &numerical_params,
+          &spatial_context,
+          &numerical_window,
+          f,
+          {interpolation_initial_arguments}
+          metric,
+          NULL,
+          chunk_size,
+          stream_idx);
+
+      for (int component = 0; component < 10; ++component) {{
+        if (!isfinite(metric[component])) {{
+          fprintf(
+              stderr,
+              "ERROR: accepted-state metric component %d was not finite.\n",
+              component);
+          exit_status = EXIT_FAILURE;
+          goto cleanup;
+        }} // END IF: accepted-state metric component invalid
+      }} // END LOOP: for component over accepted-state metric
+
+      normalization_constraint_t normalization;
+      {normalization_kernel_name}(
+          f, metric, &normalization, chunk_size, stream_idx);
+      const double trajectory_norm = {normalization_diagnostic_expression};
+      if (!isfinite(trajectory_norm)) {{
+        fprintf(stderr, "ERROR: accepted-state norm was not finite.\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
+      }} // END IF: accepted-state norm invalid
+
       fprintf(
           trajectory_file,
-          "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
+          "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
           {trajectory_lambda_expression},
           {trajectory_time_expression},
           f[1],
@@ -611,7 +949,8 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           f[5],
           f[6],
           f[7],
-          f[8]);
+          f[8],
+          trajectory_norm);
       fflush(trajectory_file);
       accepted_steps++;
 
@@ -717,17 +1056,21 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
           f, metric, &normalization, chunk_size, stream_idx);
-      const double normalization_error = {normalization_error_expression};
-      if (!isfinite(normalization_error)) {{
-        fprintf(stderr, "ERROR: terminal normalization error was not finite.\n");
+      const double normalization_deviation = {normalization_diagnostic_expression};
+      if (!isfinite(normalization_deviation)) {{
+        fprintf(stderr, "ERROR: terminal normalization deviation was not finite.\n");
         exit_status = EXIT_FAILURE;
         goto cleanup;
-      }} // END IF: terminal normalization error absent
-      printf("Final normalization absolute error: %.15e\n", normalization_error);
+      }} // END IF: terminal normalization deviation invalid
+      printf(
+          "Final signed normalization deviation: %.15e\n",
+          normalization_deviation);
     }} // END ELSE: terminal state inside window
   }} // END IF: terminal normalization diagnostics were requested
 
   cleanup:
+{trial_debug_cleanup}
+{stage_debug_cleanup}
   if (trajectory_file != NULL)
     fclose(trajectory_file);
   if (numerical_window_initialized)

@@ -13,6 +13,7 @@ Author: Dalton J. Moone
 import argparse
 import logging
 import os
+import sys
 from typing import Optional, cast
 
 import numpy as np
@@ -29,6 +30,7 @@ def plot_trajectory(
     data: "npt.NDArray[np.float64]",
     r_horizon: float = 2.0,
     particle_type: str = "Test Particle",
+    plot_norm_error: bool = False,
 ) -> None:
     """
     Create a 3D visualization of the particle trajectory and reference sphere.
@@ -39,9 +41,17 @@ def plot_trajectory(
     :param data: The parsed 2D NumPy array containing the trajectory metrics.
     :param r_horizon: The radial coordinate used for the reference sphere.
     :param particle_type: String descriptor of the particle for plot labels.
+    :param plot_norm_error: Whether to color the path by logarithmic norm error.
+    :raises ValueError: If norm-error plotting receives missing or non-finite values.
     """
     # pylint: disable=import-outside-toplevel, import-error, no-name-in-module
     import matplotlib.pyplot as plt  # type: ignore[import-not-found, import-untyped, unused-ignore]
+    from matplotlib.colors import (
+        Normalize,  # type: ignore[import-not-found, import-untyped, unused-ignore]
+    )
+    from mpl_toolkits.mplot3d.art3d import (  # type: ignore[import-not-found, import-untyped, unused-ignore]
+        Line3DCollection,
+    )
     from mpl_toolkits.mplot3d.axes3d import (  # type: ignore[import-not-found, import-untyped, unused-ignore]
         Axes3D,
     )
@@ -53,18 +63,79 @@ def plot_trajectory(
     y_pts = data[:, 3]
     z_pts = data[:, 4]
 
+    if plot_norm_error:
+        if data.shape[1] < 11:
+            raise ValueError(
+                "norm-error plotting requires trajectory data with at least "
+                "11 columns."
+            )
+        norm_error = data[:, 10]
+        if not np.all(np.isfinite(norm_error)):
+            raise ValueError("norm-error column must contain only finite values.")
+
+        norm_error_magnitude = np.abs(norm_error)
+        positive_magnitudes = norm_error_magnitude[norm_error_magnitude > 0.0]
+        error_floor = (
+            np.min(positive_magnitudes)
+            if positive_magnitudes.size > 0
+            else sys.float_info.epsilon
+        )
+        log_norm_error = np.log10(np.maximum(norm_error_magnitude, error_floor))
+        color_min = float(np.min(log_norm_error))
+        color_max = float(np.max(log_norm_error))
+        if color_min == color_max:
+            color_min -= 0.5
+            color_max += 0.5
+        color_norm = Normalize(vmin=color_min, vmax=color_max)
+        points = np.column_stack((x_pts, y_pts, z_pts))
+
     fig = plt.figure(figsize=(8, 8))
     ax = cast(Axes3D, fig.add_subplot(111, projection="3d"))
 
     # Step 2: Plot the geodesic path.
-    ax.plot(
-        x_pts,
-        y_pts,
-        z_pts,
-        label=f"{particle_type.capitalize()} Trajectory",
-        color="blue",
-        linewidth=1.5,
-    )
+    if plot_norm_error:
+        if len(points) > 1:
+            segments = np.stack((points[:-1], points[1:]), axis=1)
+            path_collection = Line3DCollection(
+                segments,
+                cmap="viridis",
+                norm=color_norm,
+                linewidths=1.5,
+            )
+            # Segment i-1 to i represents norm error measured at accepted step i.
+            path_collection.set_array(log_norm_error[1:])
+            path_collection.set_label(f"{particle_type.capitalize()} Trajectory")
+            ax.add_collection3d(path_collection)
+            color_mapper = path_collection
+        else:
+            color_mapper = plt.cm.ScalarMappable(
+                norm=color_norm,
+                cmap="viridis",
+            )
+            color_mapper.set_array(log_norm_error)
+            ax.scatter(
+                x_pts,
+                y_pts,
+                z_pts,
+                c=log_norm_error,
+                cmap="viridis",
+                norm=color_norm,
+                s=20,
+                depthshade=False,
+                label=f"{particle_type.capitalize()} Trajectory",
+            )
+        ax.auto_scale_xyz(x_pts, y_pts, z_pts)
+        colorbar = fig.colorbar(color_mapper, ax=ax, pad=0.1)
+        colorbar.set_label(r"$\log_{10}(|\mathrm{norm\ error}|)$")
+    else:
+        ax.plot(
+            x_pts,
+            y_pts,
+            z_pts,
+            label=f"{particle_type.capitalize()} Trajectory",
+            color="blue",
+            linewidth=1.5,
+        )
 
     # Step 3: Mark Integration Boundaries.
     # Drop markers for the simulation start and endpoints to easily verify
@@ -98,9 +169,10 @@ def plot_trajectory(
     ax.set_ylabel("y (M)")
     ax.set_zlabel("z (M)")
     ax.set_aspect("equal")
-    ax.set_title(
-        f"{particle_type.capitalize()} Geodesic in Kerr-Schild Cartesian Spacetime"
-    )
+    title = f"{particle_type.capitalize()} Geodesic in Kerr-Schild Cartesian Spacetime"
+    if plot_norm_error:
+        title += " (colored by norm error)"
+    ax.set_title(title)
     ax.legend()
 
     # Visual disclaimer about the reference surface approximation.
@@ -114,7 +186,10 @@ def plot_trajectory(
     )
 
     # Location to save the rendered matplotlib figure.
-    plot_path = os.path.abspath("trajectory_plot.png")
+    plot_filename = (
+        "trajectory_norm_plot.png" if plot_norm_error else "trajectory_plot.png"
+    )
+    plot_path = os.path.abspath(plot_filename)
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     print(f"\n[i] Visualization successfully saved to:\n    {plot_path}")
 
@@ -123,7 +198,9 @@ def plot_trajectory(
 
 
 def visualize_trajectory(
-    traj_path: Optional[str] = None, particle_type: str = "Test Particle"
+    traj_path: Optional[str] = None,
+    particle_type: str = "Test Particle",
+    plot_norm_error: bool = False,
 ) -> None:
     """
     Read the trajectory data file and orchestrate the diagnostic visualization.
@@ -133,6 +210,7 @@ def visualize_trajectory(
 
     :param traj_path: Path to the .txt trajectory file. Defaults to 'trajectory.txt'.
     :param particle_type: String representing the particle type for dynamic labeling.
+    :param plot_norm_error: Whether to color the path by logarithmic norm error.
     """
     if traj_path is None:
         # Default expectation: the script is executed in the output directory.
@@ -172,6 +250,17 @@ def visualize_trajectory(
             )
             return
 
+        if plot_norm_error and data.shape[1] < 11:
+            print(
+                f"[!] ERROR: '{traj_path}' has {data.shape[1]} columns; "
+                "norm-error plotting requires at least 11 columns."
+            )
+            return
+
+        if plot_norm_error and not np.all(np.isfinite(data[:, 10])):
+            print(f"[!] ERROR: '{traj_path}' has non-finite norm-error values.")
+            return
+
         total_steps = len(data)
         print(f"Total integration steps loaded: {total_steps:,}\n")
 
@@ -194,7 +283,12 @@ def visualize_trajectory(
 
     # Step 3: Launch Visualization.
     print("\n[i] Creating 3D representation...")
-    plot_trajectory(data, r_horizon=2.0, particle_type=particle_type)
+    plot_trajectory(
+        data,
+        r_horizon=2.0,
+        particle_type=particle_type,
+        plot_norm_error=plot_norm_error,
+    )
     print("=================================================================")
 
 
@@ -214,7 +308,16 @@ if __name__ == "__main__":
         default="Test Particle",
         help="Type of particle integrated. Affects plot labels.",
     )
+    parser.add_argument(
+        "--plot_norm_error",
+        action="store_true",
+        help="Color the 3D trajectory by log10 absolute norm error.",
+    )
 
     args = parser.parse_args()
 
-    visualize_trajectory(traj_path=args.traj_path, particle_type=args.particle_type)
+    visualize_trajectory(
+        traj_path=args.traj_path,
+        particle_type=args.particle_type,
+        plot_norm_error=args.plot_norm_error,
+    )

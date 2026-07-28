@@ -253,6 +253,76 @@ class GeodesicFixTests(unittest.TestCase):
 
         plotter.assert_not_called()
 
+    def test_visualizer_requires_norm_column_when_norm_plot_enabled(self) -> None:
+        """Require norm-colored plots to reject legacy trajectory files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            trajectory_path = Path(temp_dir) / "trajectory.txt"
+            trajectory_path.write_text("0.0 1.0 2.0 3.0 4.0\n", encoding="utf-8")
+
+            with patch.object(trajectory_visualizer, "plot_trajectory") as plotter:
+                trajectory_visualizer.visualize_trajectory(
+                    str(trajectory_path), plot_norm_error=True
+                )
+
+        plotter.assert_not_called()
+
+    def test_visualizer_passes_norm_plot_flag(self) -> None:
+        """Require norm plotting option to reach the 3D renderer."""
+        captured_flags = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            trajectory_path = Path(temp_dir) / "trajectory.txt"
+            trajectory_path.write_text(
+                "0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 1.0\n",
+                encoding="utf-8",
+            )
+
+            with patch.object(
+                trajectory_visualizer,
+                "plot_trajectory",
+                side_effect=lambda data, **kwargs: captured_flags.append(
+                    kwargs["plot_norm_error"]
+                ),
+            ):
+                trajectory_visualizer.visualize_trajectory(
+                    str(trajectory_path), plot_norm_error=True
+                )
+
+        self.assertEqual(captured_flags, [True])
+
+    def test_norm_plot_adds_colored_3d_path_and_colorbar(self) -> None:
+        """Require norm plotting to add a colored 3D path and colorbar."""
+        data = np.array(
+            [
+                [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0e-6],
+                [1.0, 1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0e-4],
+                [2.0, 2.0, 3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0e-2],
+            ],
+            dtype=np.float64,
+        )
+        with patch("matplotlib.pyplot.savefig"), patch("matplotlib.pyplot.show"):
+            trajectory_visualizer.plot_trajectory(data, plot_norm_error=True)
+            figure = plt.gcf()
+            try:
+                from mpl_toolkits.mplot3d.art3d import (  # type: ignore[import-untyped]
+                    Line3DCollection,
+                )
+
+                axis = figure.axes[0]
+                colored_collections = [
+                    collection
+                    for collection in axis.collections
+                    if isinstance(collection, Line3DCollection)
+                ]
+                self.assertEqual(len(colored_collections), 1)
+                np.testing.assert_allclose(
+                    colored_collections[0].get_array(),
+                    np.array([-4.0, -2.0]),
+                )
+                self.assertGreaterEqual(len(figure.axes), 2)
+                self.assertIn("log", figure.axes[-1].get_ylabel().lower())
+            finally:
+                plt.close(figure)
+
     def test_photon_stage_six_computes_rhs_without_stage_update(self) -> None:
         """Require every photon integrator to keep stage 6 RHS and skip its update."""
         stage_sources = {
