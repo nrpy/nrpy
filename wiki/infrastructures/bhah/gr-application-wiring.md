@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 07-12-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 07-27-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -43,14 +43,17 @@ CUDA generation is rejected for `GeneralRFM`; `host_only_version=True`
 temporarily forces OpenMP generation so CUDA applications can still compute
 host-side diagnostic Ricci data as `Ricci_eval_host`.
 
-`register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian
-and momentum-constraint evaluator. It temporarily forces OpenMP, reads
+`register_CFunction_constraints_eval` emits the diagnostics-side Hamiltonian,
+momentum, and conformal connection-constraint evaluator. It temporarily forces
+OpenMP, reads
 `BSSN_constraints[CoordSystem + "_rfm_precompute_RbarDD_gridfunctions" +
-optional "_T4munu"]`, writes `DIAG_HAMILTONIANGF` and `DIAG_MSQUAREDGF`, and
-places the function in the `diagnostics/` subdirectory. When the original
-parallelization is CUDA, generated references to `RBARDD` and optional `T4UU`
-auxiliary gridfunctions are rewritten to diagnostic channels so host-side
-constraint evaluation consumes the diagnostic buffer filled for output.
+optional "_T4munu"]`, writes `DIAG_HAMILTONIANGF`, `DIAG_MSQUAREDGF`, and the
+covariant conformal connection-constraint magnitude to
+`DIAG_LAMBDA_CONSTRAINTGF`, and places the function in the `diagnostics/`
+subdirectory. When the original parallelization is CUDA, generated references
+to `RBARDD` and optional `T4UU` auxiliary gridfunctions are rewritten to
+diagnostic channels so host-side constraint evaluation consumes the diagnostic
+buffer filled for output.
 
 `register_CFunction_enforce_detgammabar_equals_detgammahat` emits the
 determinant-enforcement CFunction used after RHS/MoL updates. It reconstructs

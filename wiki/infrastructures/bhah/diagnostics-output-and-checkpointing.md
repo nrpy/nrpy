@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-20-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-28-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -51,11 +51,14 @@ initializer handling through `DIAG_INIT`.
 
 `diagnostic_gfs_set` is the normal GR producer for diagnostic channels. It
 registers `DIAG_HAMILTONIAN`, `DIAG_MSQUARED`, `DIAG_LAPSE`, `DIAG_W`,
-`DIAG_GRIDINDEX`, `DIAG_RBARDD`, optional `DIAG_T4UU`, and optional
-`DIAG_PSI4_RE/IM`. At runtime it loops over grids, calls `Ricci_eval` or
-`Ricci_eval_host`, calls `constraints_eval`, optionally calls `psi4`, applies
-inner boundary conditions to interpolation-sensitive diagnostic channels, and
-copies lapse, conformal factor, and grid index into `diagnostic_gfs`.
+`DIAG_GRIDINDEX`, `DIAG_RBARDD`, `DIAG_LAMBDA_CONSTRAINT`, optional
+`DIAG_T4UU`, and optional `DIAG_PSI4_RE/IM`. At runtime it loops over grids,
+calls `Ricci_eval` or `Ricci_eval_host`, calls `constraints_eval`, optionally
+calls `psi4`, applies inner boundary conditions to interpolation-sensitive
+diagnostic channels, and copies lapse, conformal factor, and grid index into
+`diagnostic_gfs`. The Lambda-constraint channel is added to the default volume
+recipes; it is not added to the default nearest selections or the interpolation
+inner-boundary list.
 
 Nearest diagnostics are a dispatcher plus three helper samplers. Users select
 `which_gfs_0d`, `which_gfs_1d`, and `which_gfs_2d` in the generated
@@ -81,13 +84,21 @@ Volume diagnostics use `diagnostics_volume_integration()` and the copied
 `diagnostics_volume_integration_helpers.h`. The generated routine builds a
 small recipe array with user-editable spherical include/exclude rules and
 integrand specs. It then calls `diags_integration_execute_recipes` with
-`gridfuncs_diags`; the default examples integrate squared Hamiltonian and
-momentum constraints over the whole domain and outside a radius. The
+`gridfuncs_diags`; the default examples integrate `H^2`, the legacy momentum
+fourth moment `(M_i M^i)^2`, and the conformal connection-constraint contraction
+`\bar{\gamma}_{ij} C^i C^j` over the whole domain and outside a radius.
+`DIAG_MSQUAREDGF` already stores `M_i M^i`, so its `is_squared=1` recipe is not
+directly comparable to the second moments in the other two columns. By
+contrast, `DIAG_LAMBDA_CONSTRAINTGF` stores the magnitude; squaring it once
+yields the connection constraint's conformal-metric contraction for the RMS
+numerator. Supplying `LambdaConstraintSquared` with `is_squared=1` would instead
+produce a fourth moment. The
 coordinate-specialized `sqrt_detgammahat_d3xx_volume_element` helper evaluates
 `sqrt(detgammahat) * abs(dxx0 * dxx1 * dxx2)` by reference for ordinary
-reference metrics. For `GeneralRFM` it is intentionally inert because the
-active integration path reads the `DETGAMMAHATGF`-backed volume element from
-the helper header.
+reference metrics, so this is conformal/reference volume rather than physical
+proper volume. For `GeneralRFM` it is intentionally inert because the active
+integration path reads the `DETGAMMAHATGF`-backed volume element from the
+helper header.
 
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a

@@ -1,7 +1,14 @@
-from mpmath import mpf  # type: ignore
+from mpmath import mpc, mpf  # type: ignore
 
 trusted_dict = {
     "H": mpf("-368822.540011978537383088914954605"),
+    "LambdaConstraintMagnitude": mpc(
+        real="0.0", imag="874.68051982272335914367781713354"
+    ),
+    "LambdaConstraintSquared": mpf("-765066.011757349551215304742998882"),
+    "LambdaConstraintU_0": mpf("11521.7499515657138679707012820557"),
+    "LambdaConstraintU_1": mpf("-8360.01850383517748559392250756996"),
+    "LambdaConstraintU_2": mpf("5492.85933579403558414414465289803"),
     "MU_0": mpf("213856.649109858543767090425703706"),
     "MU_1": mpf("-159534.319350471031452607550488845"),
     "MU_2": mpf("102835.324417479111050676042162404"),

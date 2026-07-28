@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-13-2026
+> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-28-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -29,9 +29,29 @@ lapse options such as `OnePlusLog`, `HarmonicSlicing`, `Frozen`, and
 `OnePlusLogAlt`, and validates supported shift options such as frozen and
 Gamma-driver variants.
 
-`BSSNconstraints` constructs Hamiltonian and momentum constraint expressions.
-It registers diagnostic gridfunctions for `H` and `MSQUARED`, optionally
-registers `MU`, and stores `H`, `MU`, `Msquared`, and rescaled `mU` outputs.
+`BSSNconstraints` constructs Hamiltonian, momentum, and covariant conformal
+connection constraint expressions. It registers diagnostic gridfunctions for
+`H` and `MSQUARED`, optionally registers `MU`, and stores `H`, `MU`,
+`Msquared`, and rescaled `mU` outputs. Its covariant conformal connection
+constraint vector is `LambdaConstraintU = LambdabarU - DGammaU`.
+
+Claim evidence:
+- Claim: `BSSNconstraints.LambdaConstraintU` represents the covariant conformal connection constraint vector: evolved `LambdabarU` minus `DGammaU`, where `DGammaU` contracts the conformal/reference connection difference with the inverse conformal metric.
+- Role: public/scientific contract
+- Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), and (15)
+- Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` doctest
+
+For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
+contraction `LambdaConstraintSquared` and its plain square root
+`LambdaConstraintMagnitude`.
+
+Claim evidence:
+- Claim: `BSSNconstraints` computes `LambdaConstraintSquared` by contracting `LambdaConstraintU` twice with `gammabarDD`, then defines `LambdaConstraintMagnitude` as its plain square root; no physical-metric conformal-factor conversion is applied.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
+- Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants; date=07-28-2026`
 
 Representative trusted files pin the core RHS, quantity, and constraint
 dictionaries. Gauge validation is driven by the supported lapse and shift option
@@ -69,6 +89,7 @@ corresponding trusted files.
 
 ## Sources
 
+- [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs_varname_to_expr_dict`
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`

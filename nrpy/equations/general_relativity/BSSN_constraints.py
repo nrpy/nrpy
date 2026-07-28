@@ -1,6 +1,6 @@
 # nrpy/equations/general_relativity/BSSN_constraints.py
 """
-Construct expressions for the BSSN Hamiltonian and momentum constraint equations.
+Construct expressions for the BSSN Hamiltonian, momentum, and conformal connection constraint equations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -24,7 +24,7 @@ par.register_param(bool, __name__, "register_MU_gridfunctions", False)
 
 
 class BSSNconstraints:
-    """Set up and store expressions for BSSN constraints."""
+    """Set up and store Hamiltonian, momentum, and Lambda constraints."""
 
     def __init__(
         self,
@@ -186,6 +186,22 @@ class BSSNconstraints:
         for i in range(3):
             self.mU[i] = self.MU[i] / rfm.ReU[i]
 
+        # Step 4: Covariant conformal connection constraint.
+        self.LambdaConstraintU = ixp.zerorank1()
+        for i in range(3):
+            self.LambdaConstraintU[i] = Bq.LambdabarU[i] - Bq.DGammaU[i]
+
+        # Contract with the conformal metric.
+        self.LambdaConstraintSquared = sp.sympify(0)
+        for i in range(3):
+            for j in range(3):
+                self.LambdaConstraintSquared += (
+                    Bq.gammabarDD[i][j]
+                    * self.LambdaConstraintU[i]
+                    * self.LambdaConstraintU[j]
+                )
+        self.LambdaConstraintMagnitude = sp.sqrt(self.LambdaConstraintSquared)
+
 
 class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
     """Custom dictionary for storing BSSNconstraints objects."""
@@ -247,6 +263,123 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         ...         par.set_parval_from_str("register_MU_gridfunctions", True)
         ...         registered_object = cache["Cartesian"]
         ...         same_parameters_reused = cache["Cartesian"] is registered_object
+        ...         cartesian_quantities = BSSN_quantities["Cartesian"]
+        ...         spherical_object = cache["Spherical"]
+        ...         spherical_quantities = BSSN_quantities["Spherical"]
+        ...         coordinate_contraction = sum(
+        ...             spherical_quantities.gammabarDD[i][j]
+        ...             * spherical_object.LambdaConstraintU[i]
+        ...             * spherical_object.LambdaConstraintU[j]
+        ...             for i in range(3)
+        ...             for j in range(3)
+        ...         )
+        ...         lambda_magnitude_matches = (
+        ...             registered_object.LambdaConstraintMagnitude
+        ...             == sp.sqrt(registered_object.LambdaConstraintSquared)
+        ...         )
+        ...         controlled_values = {
+        ...             "hDD00": sp.Integer(1),
+        ...             "hDD01": sp.Integer(0),
+        ...             "hDD02": sp.Integer(0),
+        ...             "hDD11": -sp.Rational(1, 2),
+        ...             "hDD12": sp.Integer(0),
+        ...             "hDD22": sp.Integer(0),
+        ...             "lambdaU0": sp.Integer(5),
+        ...             "lambdaU1": sp.Integer(6),
+        ...             "lambdaU2": sp.Integer(7),
+        ...         }
+        ...         for i in range(3):
+        ...             for j in range(i, 3):
+        ...                 for k in range(3):
+        ...                     controlled_values[f"hDD_dD{i}{j}{k}"] = sp.Integer(0)
+        ...         controlled_values["hDD_dD000"] = sp.Integer(3)
+        ...         controlled_values["hDD_dD110"] = -sp.Rational(3, 4)
+        ...         controlled_symbols = set().union(
+        ...             *(
+        ...                 expression.free_symbols
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             )
+        ...         )
+        ...         controlled_mapping = {
+        ...             symbol: controlled_values[str(symbol)]
+        ...             for symbol in controlled_symbols
+        ...         }
+        ...         cartesian_divergence = ixp.zerorank1()
+        ...         for i in range(3):
+        ...             for j in range(3):
+        ...                 for k in range(3):
+        ...                     for l in range(3):
+        ...                         cartesian_divergence[i] += (
+        ...                             -cartesian_quantities.gammabarUU[i][k]
+        ...                             * cartesian_quantities.gammabarUU[j][l]
+        ...                             * cartesian_quantities.gammabarDD_dD[k][l][j]
+        ...                         )
+        ...         actual_dict = {
+        ...             "LambdaConstraintU": registered_object.LambdaConstraintU,
+        ...             "LambdaConstraintSquared": (
+        ...                 spherical_object.LambdaConstraintSquared
+        ...             ),
+        ...             "ReferenceDataCartesian": [
+        ...                 expression.xreplace(
+        ...                     {
+        ...                         symbol: sp.sympify(0)
+        ...                         for symbol in expression.free_symbols
+        ...                         if str(symbol).startswith(("hDD", "lambdaU"))
+        ...                     }
+        ...                 )
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             ],
+        ...             "ReferenceDataSpherical": [
+        ...                 expression.xreplace(
+        ...                     {
+        ...                         symbol: sp.sympify(0)
+        ...                         for symbol in expression.free_symbols
+        ...                         if str(symbol).startswith(("hDD", "lambdaU"))
+        ...                     }
+        ...                 )
+        ...                 for expression in spherical_object.LambdaConstraintU
+        ...             ],
+        ...             "CartesianGammaReduction": [
+        ...                 expression.xreplace(controlled_mapping)
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             ],
+        ...         }
+        ...         expected_dict = {
+        ...             "LambdaConstraintU": [
+        ...                 cartesian_quantities.LambdabarU[i]
+        ...                 - cartesian_quantities.DGammaU[i]
+        ...                 for i in range(3)
+        ...             ],
+        ...             "LambdaConstraintSquared": coordinate_contraction,
+        ...             "ReferenceDataCartesian": ixp.zerorank1(),
+        ...             "ReferenceDataSpherical": ixp.zerorank1(),
+        ...             "CartesianGammaReduction": [
+        ...                 (
+        ...                     cartesian_quantities.LambdabarU[i]
+        ...                     + cartesian_divergence[i]
+        ...                 ).xreplace(controlled_mapping)
+        ...                 for i in range(3)
+        ...             ],
+        ...         }
+        ...         ve.assert_equal(
+        ...             actual_dict,
+        ...             expected_dict,
+        ...             suppress_message=True,
+        ...         )
+        ...         controlled_squared = (
+        ...             registered_object.LambdaConstraintSquared.xreplace(
+        ...                 controlled_mapping
+        ...             )
+        ...         )
+        ...         controlled_magnitude = (
+        ...             registered_object.LambdaConstraintMagnitude.xreplace(
+        ...                 controlled_mapping
+        ...             )
+        ...         )
+        ...         positive_magnitude_matches = (
+        ...             controlled_squared.is_positive is True
+        ...             and controlled_magnitude == sp.sqrt(controlled_squared)
+        ...         )
         ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
         ...         try:
         ...             _ = cache["Cartesian"]
@@ -281,8 +414,10 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
         ...     mu_registered,
         ...     same_parameters_reused,
         ...     invalid_cf_raised,
+        ...     lambda_magnitude_matches,
+        ...     positive_magnitude_matches,
         ... )
-        (True, True, True, True, True, True)
+        (True, True, True, True, True, True, True, True)
         """
         construction_parameters = (
             par.parval_from_str("EvolvedConformalFactor_cf"),
