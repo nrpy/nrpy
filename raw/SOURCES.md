@@ -281,8 +281,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/T4munu.py` | living |
 | `nrpy/equations/general_relativity/tests/g4munu_conversions.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_leave_symbolic_Spherical.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_SinhSpherical_rfm_precompute.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_Spherical.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_SinhSpherical_rfm_precompute.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_Spherical.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_tetrads_Spherical.py` | living |
 | `nrpy/equations/generalrfm/fisheye.py` | living |
 | `nrpy/equations/generalrfm/tests/fisheye_N1.py` | living |
@@ -345,6 +345,7 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Accessed | Ingest | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`, pinned to revision `ac46de1ad27f92b28ac95459c782c07f6b8c964a`. | frozen | 06-30-2026 | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
+| `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | 07-27-2026 | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
 | `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit mapping is not yet audited. |
 | `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit/ancillary mapping is not yet audited. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-claim mapping is not yet audited. |
