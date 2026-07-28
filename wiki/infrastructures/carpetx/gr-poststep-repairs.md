@@ -1,6 +1,6 @@
 # CarpetX GR Poststep Repairs
 
-> CarpetX lapse flooring and conformal-metric determinant repair in `ODESolvers_PostStep`. · Status: confirmed · Last reconciled: 06-30-2026
+> CarpetX lapse flooring and conformal-metric determinant repair in `ODESolvers_PostStep`. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -31,10 +31,9 @@ duplicating the symbolic BSSN derivation here.
 
 The determinant repair loops over all points, reads
 `hDD00GF`, `hDD01GF`, `hDD02GF`, `hDD11GF`, `hDD12GF`, and `hDD22GF`, and
-writes the same six gridfunctions everywhere. SIMD is disabled both in the
-`c_codegen()` call and the CarpetX `simple_loop()` call. The source comments
-explain that choice with cube-root support and all-points memory-safety
-concerns.
+writes the same six gridfunctions everywhere. SIMD is disabled in both
+`c_codegen()` and the CarpetX `simple_loop()` because source comments cite
+cube-root support and all-points memory-safety concerns.
 
 Within `ODESolvers_PostStep`, this repair pair is the local source-backed
 precondition for the later BSSN-to-ADM export path: the lapse is floored first,
@@ -51,5 +50,5 @@ the downstream export details.
 - [CarpetX](index.md)
 - [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
 - [GR BSSN RHS, Ricci, Constraints, And Validation](gr-bssn-rhs-ricci-constraints-and-validation.md)
-- [ETLegacy GR Poststep Repairs](../etlegacy/gr-poststep-repairs.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Contrasts with: [ETLegacy GR Poststep Repairs](../etlegacy/gr-poststep-repairs.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)

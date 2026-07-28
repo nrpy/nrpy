@@ -1,6 +1,6 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-13-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -34,7 +34,7 @@ Claim evidence:
 - Claim: Existing tracked handwritten Python files are grandfathered at their pre-change Pylint score without regression, including scores at or below `9.5`; newly added handwritten Python files must score `10.00/10.00`.
 - Role: normative rule
 - Deciding authority: [coding_style.md](../../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
-- Corroboration: [Code Test Policy](code-test-policy.md#static-summary), `### Static Summary`, applies the same prospective rule
+- Corroboration: none available; `coding_style.md` is the sole current normative authority
 
 The single-file script expects exactly one Python file argument and must be run
 from repository root because it resolves `.pylintrc` there. It verifies the file

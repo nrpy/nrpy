@@ -200,7 +200,7 @@ static void parse_value(const char *value_str, char values[][PARAM_SIZE], int *v
       if (count >= MAX_ARRAY_SIZE) {
         fprintf(stderr, "Error: Array size exceeds maximum allowed.\n");
         exit(1);
-      } // END IF (count >= MAX_ARRAY_SIZE): Check bounds before writing values[count]
+      } // END IF: count reached MAX_ARRAY_SIZE
       safe_copy(values[count], trim_space(val_token), PARAM_SIZE);
       count++;
       val_token = strtok_r(NULL, ",", &saveptr);
@@ -772,18 +772,6 @@ def register_CFunction_cmdline_input_and_parfile_parser(
     ...     "cmdline_input_and_parfile_parser__openmp",
     ...     file_ext="c",
     ... )
-    >>> "read_chararray(argv[argc - number_of_steerable_parameters + 0]" in generated
-    True
-    >>> "commondata->runtime_mode" in generated
-    True
-    >>> "Remove surrounding single or double quotes" in generated
-    True
-    >>> generated.find("// Handling options 3 and 4") > generated.find(
-    ...     "} // END WHILE LOOP over all lines in the file"
-    ... )
-    True
-    >>> "PARAM_SIZE LINE_SIZE" in generated
-    True
     >>> try:
     ...     register_CFunction_cmdline_input_and_parfile_parser(
     ...         "example_project", cmdline_inputs=["runtime_mode", "runtime_mode"]

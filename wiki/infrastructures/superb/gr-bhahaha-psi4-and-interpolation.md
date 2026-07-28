@@ -1,6 +1,6 @@
 # GR, BHaHAHA, Psi4, And Interpolation
 
-> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain superB GR service wiring for BHaHAHA horizons, Psi4 shell extraction, and distributed interpolation. · Status: confirmed · Last reconciled: 07-19-2026
 > Up: [superB](index.md)
 
 ## Summary

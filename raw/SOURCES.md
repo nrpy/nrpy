@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-12-2026.
+> trigger re-ingest. Last audited: 07-20-2026.
 
 ## Aggregate Sources
 
@@ -14,7 +14,7 @@
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
 | `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 365 files. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 367 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |
@@ -89,6 +89,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py` | living |
+| `nrpy/infrastructures/BHaH/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/main_c.py` | living |
 | `nrpy/infrastructures/BHaH/bhah_lib.py` | living |
 | `nrpy/infrastructures/BHaH/Makefile_helpers.py` | living |
@@ -96,6 +97,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living |
+| `nrpy/infrastructures/BHaH/checkpointing.py` | living |
+| `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |
@@ -276,8 +281,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/T4munu.py` | living |
 | `nrpy/equations/general_relativity/tests/g4munu_conversions.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_leave_symbolic_Spherical.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_SinhSpherical_rfm_precompute.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_Spherical.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_SinhSpherical_rfm_precompute.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_Spherical.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_tetrads_Spherical.py` | living |
 | `nrpy/equations/generalrfm/fisheye.py` | living |
 | `nrpy/equations/generalrfm/tests/fisheye_N1.py` | living |
@@ -340,6 +345,8 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Accessed | Ingest | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`, pinned to revision `ac46de1ad27f92b28ac95459c782c07f6b8c964a`. | frozen | 06-30-2026 | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
+| `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | 07-27-2026 | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
+| `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | 07-28-2026 | ingested | Deciding source for the covariant conformal connection constraint in Eqs. (12a), (12b), and (15); it does not prescribe the local conformal-metric norm diagnostic. |
 | `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit mapping is not yet audited. |
 | `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit/ancillary mapping is not yet audited. |
 | `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-claim mapping is not yet audited. |

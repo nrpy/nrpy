@@ -55,7 +55,7 @@ import nrpy.helpers.parallel_codegen as pcg
 def register_CFunction_diagnostics_volume_integration() -> (
     Union[None, pcg.NRPyEnv_type]
 ):
-    """
+    r"""
     Generate and register the C `diagnostics_volume_integration()` routine that builds and executes integration recipes.
 
     This routine:
@@ -79,7 +79,32 @@ def register_CFunction_diagnostics_volume_integration() -> (
 
     :returns: The updated NRPy environment after registration.
 
-    Doctests: TBD
+    Doctests:
+    >>> import re
+    >>> original_cfunctions = cfc.CFunction_dict.copy()
+    >>> try:
+    ...     cfc.CFunction_dict.clear()
+    ...     _ = register_CFunction_diagnostics_volume_integration()
+    ...     generated_body = cfc.CFunction_dict[
+    ...         "diagnostics_volume_integration"
+    ...     ].body
+    ...     recipe_blocks = re.findall(
+    ...         r'recipes\[NUM_RECIPES\]\.name = .*?NUM_RECIPES\+\+;',
+    ...         generated_body,
+    ...         flags=re.DOTALL,
+    ...     )
+    ... finally:
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(original_cfunctions)
+    >>> lambda_integrand = (
+    ...     ".gf_index = DIAG_LAMBDA_CONSTRAINTGF, .is_squared = 1"
+    ... )
+    >>> len(recipe_blocks), all(
+    ...     lambda_integrand in recipe
+    ...     and "recipes[NUM_RECIPES].num_integrands = 3;" in recipe
+    ...     for recipe in recipe_blocks
+    ... )
+    (2, True)
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -158,7 +183,8 @@ def register_CFunction_diagnostics_volume_integration() -> (
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
       recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
       recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 2;
+      recipes[NUM_RECIPES].integrands[2] = (diags_integration_integrand_spec_t){.gf_index = DIAG_LAMBDA_CONSTRAINTGF, .is_squared = 1};
+      recipes[NUM_RECIPES].num_integrands = 3;
 
       NUM_RECIPES++;
     } // END IF define Recipe 0
@@ -175,7 +201,8 @@ def register_CFunction_diagnostics_volume_integration() -> (
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
       recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
       recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
-      recipes[NUM_RECIPES].num_integrands = 2;
+      recipes[NUM_RECIPES].integrands[2] = (diags_integration_integrand_spec_t){.gf_index = DIAG_LAMBDA_CONSTRAINTGF, .is_squared = 1};
+      recipes[NUM_RECIPES].num_integrands = 3;
 
       NUM_RECIPES++;
     } // END IF define Recipe 1

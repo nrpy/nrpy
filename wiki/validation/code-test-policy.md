@@ -1,6 +1,6 @@
 # Code Test Policy
 
-> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 07-13-2026
+> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -56,6 +56,10 @@ doctest. A runner is useful only when the module contains prompts or performs
 meaningful subsequent owner validation, such as an established trusted-
 expression comparison. A new runner with neither is prohibited. Zero attempted
 doctests is not coverage.
+
+`# FIXME` doctest placeholders are legacy scaffolding, not coverage. Never add
+new placeholders; complete or remove existing ones only when that cleanup is in
+scope.
 
 ### Meaningful Contract Gate
 
@@ -206,33 +210,11 @@ Claim evidence:
 
 ### Static Summary
 
-Run exact governing command `black .` from repository root in an isolated,
-user-owned worktree or copy containing only intended task changes and no
-unrelated modifications, then inspect its diff. Run
-`./.github/single_file_static_analysis.sh <path.py>` for each modified
-handwritten file. Inspect the wrapper's command construction, the target's
-direct-execution effects, and every invoked tool's cache and filesystem output
-effects. The current wrapper dispatches interpolated command strings through
-`eval`. Before invocation, require a repository-relative argument whose resolved
-target stays in the repository, is a regular non-symlink file, contains no `..`
-component, does not begin with `-`, and matches `^[A-Za-z0-9_./-]+$`. A failing
-path blocks invocation until separately authorized wrapper hardening. Run an
-accepted path only in the isolated intended-change tree or copy; disable or
-redirect every writable tool cache and filesystem output to an owned disposable
-location, then inspect repository status. A newly added handwritten file must
-report Pylint **10.00/10.00**. An existing tracked handwritten file is
-grandfathered at its pre-change score, including a legacy score at or below
-`9.5`, but must not regress when base and proposed versions are measured with
-the same Pylint version and configuration. Generated trusted `*/tests/*.py`
-data is exempt from per-file analysis; its owning handwritten module is not.
-Current automation must not be assumed to guarantee this policy. See [Static
-Analysis](static-analysis.md) for command mechanics and enforcement details.
-
-Claim evidence:
-- Claim: New handwritten Python files require Pylint `10.00/10.00`; existing tracked handwritten files retain their pre-change rating without regression, including grandfathered scores at or below `9.5`.
-- Role: normative rule
-- Deciding authority: [coding_style.md](../../coding_style.md), `## Static Analysis Configuration`, as updated by the commissioned policy decision
-- Corroboration: [Static Analysis](static-analysis.md) owns classification, baseline-comparison mechanics, and current enforcement gaps
+Every modified handwritten Python file follows [Static
+Analysis](static-analysis.md), which owns formatter, target-safety, cache,
+classification, threshold, and enforcement-gap details. Generated trusted
+`*/tests/*.py` data is exempt from per-file analysis, but its handwritten owner
+is not.
 
 ### Decision Tree And Legacy Shapes
 
@@ -248,9 +230,7 @@ Claim evidence:
    exception only when all twelve gates apply; status-only cases also need all
    six status conditions.
 7. No meaningful contract: add no behavioral test.
-8. Handwritten Python changed: use the isolated exact formatter and per-file
-   static checks; require Pylint 10.00 for a new file or no regression from the
-   pre-change rating for an existing tracked file.
+8. Handwritten Python changed: follow [Static Analysis](static-analysis.md).
 
 Three checked-in shapes are retained facts, not templates. This policy treats
 the NRPyLaTeX BSSN file as a unique retained direct-execution sampled cross-
@@ -290,9 +270,8 @@ for test count.
 - [ ] Apply all twelve examples-product gates, including same-change CI,
       concrete result, subprocess bounds, access authority, and exact claim.
 - [ ] State only what configuration or a named successful run establishes.
-- [ ] For every handwritten Python change, use isolated `black .`, inspect its
-      diff, pass the per-file checks, and require Pylint 10.00 for a new file or
-      no regression from the base rating for an existing tracked file.
+- [ ] For every handwritten Python change, follow [Static
+      Analysis](static-analysis.md).
 - [ ] Follow the separate [oracle checklist](test-oracles-and-safe-updates.md#contributor-checklist)
       for stored evidence, variants, updates, and mutable state.
 

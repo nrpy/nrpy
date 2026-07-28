@@ -1,13 +1,13 @@
 # nrpy/equations/general_relativity/BSSN_constraints.py
 """
-Construct expressions for the BSSN Hamiltonian and momentum constraint equations.
+Construct expressions for the BSSN Hamiltonian, momentum, and conformal connection constraint equations.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
 # Step 1: Initialize needed Python/NRPy modules
-from typing import Dict
+from typing import Dict, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -24,7 +24,7 @@ par.register_param(bool, __name__, "register_MU_gridfunctions", False)
 
 
 class BSSNconstraints:
-    """Set up and store expressions for BSSN constraints."""
+    """Set up and store Hamiltonian, momentum, and Lambda constraints."""
 
     def __init__(
         self,
@@ -173,23 +173,262 @@ class BSSNconstraints:
             for i in range(3):
                 self.MU[i] += sourceterm_MU[i]
 
-        # Then compute M^2 = M^i M_i
+        # Then compute M^2 = gamma_{ij} M^i M^j, where
+        # gamma_{ij} = gammabar_{ij} / exp(-4 phi).
         self.Msquared = sp.sympify(0)
         for i in range(3):
             for j in range(3):
                 self.Msquared += Bq.gammabarDD[i][j] * self.MU[i] * self.MU[j]
+        self.Msquared /= Bq.exp_m4phi
 
         # Finally construct the rescaled MU:
         self.mU = ixp.zerorank1()
         for i in range(3):
             self.mU[i] = self.MU[i] / rfm.ReU[i]
 
+        # Step 4: Covariant conformal connection constraint.
+        self.LambdaConstraintU = ixp.zerorank1()
+        for i in range(3):
+            self.LambdaConstraintU[i] = Bq.LambdabarU[i] - Bq.DGammaU[i]
+
+        # Contract with the conformal metric.
+        self.LambdaConstraintSquared = sp.sympify(0)
+        for i in range(3):
+            for j in range(3):
+                self.LambdaConstraintSquared += (
+                    Bq.gammabarDD[i][j]
+                    * self.LambdaConstraintU[i]
+                    * self.LambdaConstraintU[j]
+                )
+        self.LambdaConstraintMagnitude = sp.sqrt(self.LambdaConstraintSquared)
+
 
 class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
     """Custom dictionary for storing BSSNconstraints objects."""
 
+    def __init__(self) -> None:
+        """Initialize an empty cache and its construction-parameter metadata."""
+        super().__init__()
+        self._construction_parameters: Dict[str, Tuple[str, bool, bool]] = {}
+
     def __getitem__(self, CoordSystem_in: str) -> BSSNconstraints:
-        if CoordSystem_in not in self:
+        """
+        Return constraints built for the current construction parameters.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :return: Cached or newly built BSSN constraints.
+
+        Doctests:
+        >>> import contextlib
+        >>> import io
+        >>> import nrpy.validate_expressions.validate_expressions as ve
+        >>> from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
+        >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        >>> original_register_MU = par.parval_from_str("register_MU_gridfunctions")
+        >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+        >>> original_parameters = par.glb_params_dict.copy()
+        >>> original_code_parameters = par.glb_code_params_dict.copy()
+        >>> original_reference_metrics = refmetric.reference_metric.copy()
+        >>> original_quantities = dict(BSSN_quantities)
+        >>> original_quantity_parameters = (
+        ...     BSSN_quantities._construction_parameters.copy()
+        ... )
+        >>> cache = BSSNconstraints_dict()
+        >>> objects = []
+        >>> invalid_cf_raised = False
+        >>> try:
+        ...     for name in ("MU0", "MU1", "MU2"):
+        ...         _ = gri.glb_gridfcs_dict.pop(name, None)
+        ...     par.set_parval_from_str("register_MU_gridfunctions", False)
+        ...     with contextlib.redirect_stdout(io.StringIO()):
+        ...         for cf_choice in ("W", "chi", "phi"):
+        ...             par.set_parval_from_str(
+        ...                 "EvolvedConformalFactor_cf", cf_choice
+        ...             )
+        ...             constraint = cache["Cartesian"]
+        ...             objects.append(constraint)
+        ...             adm = BSSN_to_ADM("Cartesian")
+        ...             physical_norm = sum(
+        ...                 adm.gammaDD[i][j]
+        ...                 * constraint.MU[i]
+        ...                 * constraint.MU[j]
+        ...                 for i in range(3)
+        ...                 for j in range(3)
+        ...             )
+        ...             ve.assert_equal(
+        ...                 constraint.Msquared,
+        ...                 physical_norm,
+        ...                 suppress_message=True,
+        ...             )
+        ...         par.set_parval_from_str("register_MU_gridfunctions", True)
+        ...         registered_object = cache["Cartesian"]
+        ...         same_parameters_reused = cache["Cartesian"] is registered_object
+        ...         cartesian_quantities = BSSN_quantities["Cartesian"]
+        ...         spherical_object = cache["Spherical"]
+        ...         spherical_quantities = BSSN_quantities["Spherical"]
+        ...         coordinate_contraction = sum(
+        ...             spherical_quantities.gammabarDD[i][j]
+        ...             * spherical_object.LambdaConstraintU[i]
+        ...             * spherical_object.LambdaConstraintU[j]
+        ...             for i in range(3)
+        ...             for j in range(3)
+        ...         )
+        ...         lambda_magnitude_matches = (
+        ...             registered_object.LambdaConstraintMagnitude
+        ...             == sp.sqrt(registered_object.LambdaConstraintSquared)
+        ...         )
+        ...         controlled_values = {
+        ...             "hDD00": sp.Integer(1),
+        ...             "hDD01": sp.Integer(0),
+        ...             "hDD02": sp.Integer(0),
+        ...             "hDD11": -sp.Rational(1, 2),
+        ...             "hDD12": sp.Integer(0),
+        ...             "hDD22": sp.Integer(0),
+        ...             "lambdaU0": sp.Integer(5),
+        ...             "lambdaU1": sp.Integer(6),
+        ...             "lambdaU2": sp.Integer(7),
+        ...         }
+        ...         for i in range(3):
+        ...             for j in range(i, 3):
+        ...                 for k in range(3):
+        ...                     controlled_values[f"hDD_dD{i}{j}{k}"] = sp.Integer(0)
+        ...         controlled_values["hDD_dD000"] = sp.Integer(3)
+        ...         controlled_values["hDD_dD110"] = -sp.Rational(3, 4)
+        ...         controlled_symbols = set().union(
+        ...             *(
+        ...                 expression.free_symbols
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             )
+        ...         )
+        ...         controlled_mapping = {
+        ...             symbol: controlled_values[str(symbol)]
+        ...             for symbol in controlled_symbols
+        ...         }
+        ...         cartesian_divergence = ixp.zerorank1()
+        ...         for i in range(3):
+        ...             for j in range(3):
+        ...                 for k in range(3):
+        ...                     for l in range(3):
+        ...                         cartesian_divergence[i] += (
+        ...                             -cartesian_quantities.gammabarUU[i][k]
+        ...                             * cartesian_quantities.gammabarUU[j][l]
+        ...                             * cartesian_quantities.gammabarDD_dD[k][l][j]
+        ...                         )
+        ...         actual_dict = {
+        ...             "LambdaConstraintU": registered_object.LambdaConstraintU,
+        ...             "LambdaConstraintSquared": (
+        ...                 spherical_object.LambdaConstraintSquared
+        ...             ),
+        ...             "ReferenceDataCartesian": [
+        ...                 expression.xreplace(
+        ...                     {
+        ...                         symbol: sp.sympify(0)
+        ...                         for symbol in expression.free_symbols
+        ...                         if str(symbol).startswith(("hDD", "lambdaU"))
+        ...                     }
+        ...                 )
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             ],
+        ...             "ReferenceDataSpherical": [
+        ...                 expression.xreplace(
+        ...                     {
+        ...                         symbol: sp.sympify(0)
+        ...                         for symbol in expression.free_symbols
+        ...                         if str(symbol).startswith(("hDD", "lambdaU"))
+        ...                     }
+        ...                 )
+        ...                 for expression in spherical_object.LambdaConstraintU
+        ...             ],
+        ...             "CartesianGammaReduction": [
+        ...                 expression.xreplace(controlled_mapping)
+        ...                 for expression in registered_object.LambdaConstraintU
+        ...             ],
+        ...         }
+        ...         expected_dict = {
+        ...             "LambdaConstraintU": [
+        ...                 cartesian_quantities.LambdabarU[i]
+        ...                 - cartesian_quantities.DGammaU[i]
+        ...                 for i in range(3)
+        ...             ],
+        ...             "LambdaConstraintSquared": coordinate_contraction,
+        ...             "ReferenceDataCartesian": ixp.zerorank1(),
+        ...             "ReferenceDataSpherical": ixp.zerorank1(),
+        ...             "CartesianGammaReduction": [
+        ...                 (
+        ...                     cartesian_quantities.LambdabarU[i]
+        ...                     + cartesian_divergence[i]
+        ...                 ).xreplace(controlled_mapping)
+        ...                 for i in range(3)
+        ...             ],
+        ...         }
+        ...         ve.assert_equal(
+        ...             actual_dict,
+        ...             expected_dict,
+        ...             suppress_message=True,
+        ...         )
+        ...         controlled_squared = (
+        ...             registered_object.LambdaConstraintSquared.xreplace(
+        ...                 controlled_mapping
+        ...             )
+        ...         )
+        ...         controlled_magnitude = (
+        ...             registered_object.LambdaConstraintMagnitude.xreplace(
+        ...                 controlled_mapping
+        ...             )
+        ...         )
+        ...         positive_magnitude_matches = (
+        ...             controlled_squared.is_positive is True
+        ...             and controlled_magnitude == sp.sqrt(controlled_squared)
+        ...         )
+        ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
+        ...         try:
+        ...             _ = cache["Cartesian"]
+        ...         except ValueError:
+        ...             invalid_cf_raised = True
+        ...     mu_registered = all(
+        ...         f"MU{i}" in gri.glb_gridfcs_dict for i in range(3)
+        ...     )
+        ... finally:
+        ...     par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        ...     par.set_parval_from_str(
+        ...         "register_MU_gridfunctions", original_register_MU
+        ...     )
+        ...     dict.clear(BSSN_quantities)
+        ...     dict.update(BSSN_quantities, original_quantities)
+        ...     BSSN_quantities._construction_parameters.clear()
+        ...     BSSN_quantities._construction_parameters.update(
+        ...         original_quantity_parameters
+        ...     )
+        ...     gri.glb_gridfcs_dict.clear()
+        ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+        ...     par.glb_params_dict.clear()
+        ...     par.glb_params_dict.update(original_parameters)
+        ...     par.glb_code_params_dict.clear()
+        ...     par.glb_code_params_dict.update(original_code_parameters)
+        ...     refmetric.reference_metric.clear()
+        ...     refmetric.reference_metric.update(original_reference_metrics)
+        >>> (
+        ...     objects[0].H != objects[1].H,
+        ...     objects[0] is not objects[1],
+        ...     registered_object is not objects[-1],
+        ...     mu_registered,
+        ...     same_parameters_reused,
+        ...     invalid_cf_raised,
+        ...     lambda_magnitude_matches,
+        ...     positive_magnitude_matches,
+        ... )
+        (True, True, True, True, True, True, True, True)
+        """
+        construction_parameters = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+            par.parval_from_str("register_MU_gridfunctions"),
+        )
+        if (
+            CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        ):
             # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
             CoordSystem = (
                 CoordSystem_in.replace("_rfm_precompute", "")
@@ -217,9 +456,20 @@ class BSSNconstraints_dict(Dict[str, BSSNconstraints]):
 
     def __setitem__(self, CoordSystem: str, value: BSSNconstraints) -> None:
         dict.__setitem__(self, CoordSystem, value)
+        self._construction_parameters[CoordSystem] = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+            par.parval_from_str("register_MU_gridfunctions"),
+        )
 
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
+        self._construction_parameters.pop(CoordSystem, None)
+
+    def clear(self) -> None:
+        """Remove all cached constraints and construction metadata."""
+        dict.clear(self)
+        self._construction_parameters.clear()
 
 
 BSSN_constraints = BSSNconstraints_dict()

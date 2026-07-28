@@ -1,6 +1,6 @@
 # Expression Validation Helpers
 
-> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-13-2026
+> Numerical SymPy-expression validation helpers for equality, zero checks, and trusted dictionaries. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -17,7 +17,7 @@ dictionary comparison under the limits below.
 Prefer an exact analytic, symbolic, or semantic invariant when practical. When
 sampled regression fits the contract, follow the caller safeguards in [Test
 Oracles And Safe Updates](test-oracles-and-safe-updates.md); this page retains
-the current helper mechanics and their limits.
+the current helper mechanics, behavioral claims, and limits.
 
 The module uses `precision = 30` as the standard decimal precision. Relative
 comparison tolerance is `10 ** (-4.0 / 5.0 * precision)` where the helper uses

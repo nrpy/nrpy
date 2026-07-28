@@ -1,6 +1,6 @@
 # Test Oracles And Safe Updates
 
-> Prospective rules for selecting, storing, reviewing, and safely updating NRPy test oracles. · Status: provisional · Last reconciled: 07-13-2026
+> Prospective rules for selecting, storing, reviewing, and safely updating NRPy test oracles. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -34,20 +34,12 @@ An oracle is stored data or an expected artifact. It becomes evidence only when
 an executable owner path generates or observes a candidate and performs a
 meaningful comparison or assertion. Oracle presence alone is not a test.
 
-Current `validate_strings()` and
-`compare_or_generate_trusted_results()` create a candidate file when the
-expected file is absent and compare when it is present.
-
-Claim evidence:
-- Claim: Current `validate_strings()` and `compare_or_generate_trusted_results()` create a candidate file when the expected file is absent and compare when it is present.
-- Role: descriptive behavior
-- Deciding authority: [generic.py](../../nrpy/helpers/generic.py), `validate_strings`; [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_or_generate_trusted_results`
-- Corroboration: [coding_style.md](../../coding_style.md), `### Expression Validation via Trusted Dictionaries` and `#### validate_strings pattern`, corroborates create-if-missing mechanics
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-applicable; precision=not-run; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-13-2026`
-
-The creation branch is not a passing comparison and cannot establish that the
-candidate is true.
+Missing-expected-file creation is candidate generation, not a passing
+comparison, and cannot establish that the candidate is true. [Expression
+Validation Helpers](expression-validation-helpers.md) owns trusted-expression
+helper behavior; [Maintenance And Validation
+Helpers](../core/helpers/maintenance-and-validation-helpers.md) owns emitted-
+source helper behavior.
 
 ### Ordinary `tests/` Store Contract
 
@@ -103,34 +95,9 @@ sampled trusted-result regression is appropriate, the owner path must:
 3. compare through `compare_or_generate_trusted_results()` in the established
    owner path.
 
-Direct dictionary `assert_equal()` calls must use stable keys. The helper itself
-rejects non-identical raw key sets and different list nesting. It rejects
-flattened-name collisions among numerically processed entries; `funcform` keys
-are omitted from numerical processing and collision checks. It has no
-positional dictionary mode.
-
-Claim evidence:
-- Claim: Direct dictionary `assert_equal()` calls reject non-identical raw key sets, different list nesting, and flattened-name collisions among numerically processed entries; `funcform` keys are omitted from numerical processing and collision checks, and positional dictionary comparison is unsupported.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`
-- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises direct dictionary comparison across scalar, vector, and matrix expression values; error-path tests remain colocated with the deciding helper
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests plus explicit dictionary-structure and funcform-collision probes; date=07-13-2026`
-
-Current `assert_equal()` applies fixed substitutions when free symbols exist
-and enforces raw dictionary keys, list nesting, and collision-free flattened
-names among numerically processed entries. `funcform` keys are omitted from
-numerical processing and collision checks. Matching NaN components and
-same-signed infinities are explicit sentinels; non-finite mismatches fail.
-Current `check_zero()` defaults to non-fixed substitutions.
-
-Claim evidence:
-- Claim: Current `assert_equal()` applies fixed substitutions, enforces raw dictionary keys and list structure, rejects flattened-name collisions among numerically processed entries while omitting `funcform` keys from numerical processing and collision checks, and compares non-finite components explicitly; current `check_zero()` defaults to non-fixed substitutions.
-- Role: descriptive behavior
-- Deciding authority: [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `assert_equal`, `_nonfinite_values_match`, and `check_zero`
-- Corroboration: [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`, exercises fixed substitutions and direct dictionary comparison; collision, filter, and non-finite error-path tests remain colocated with the deciding helper
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=68 validator doctests, explicit funcform collision and leaf-type probes, fixed substitutions, and trusted comparison; date=07-13-2026`
+Direct dictionary `assert_equal()` calls must use stable keys. [Expression
+Validation Helpers](expression-validation-helpers.md) owns helper mechanics,
+structure checks, comparison behavior, and limitations.
 
 Regression uses of `check_zero()` with free symbols must pass
 `fixed_mpfs_for_free_symbols=True`; truly symbol-free expressions do not need a
@@ -163,11 +130,16 @@ source comparison neither compiles nor executes output.
 
 ### Focused Assertions
 
-A focused assertion may accompany or replace a golden only when it replaces an
-unnecessary full golden with a narrower durable semantic contract, or detects
-behavior that golden equality omits or formatting normalizes away. Narration or
-clarification alone cannot duplicate a failure already detected by full golden
-equality. Incidental assignment checks remain prohibited.
+A focused assertion may replace an unnecessary full golden with a narrower
+durable semantic contract, or test metadata, API behavior, runtime behavior, or
+information that full-source equality omits or formatting normalizes away.
+Once an owner has a complete emitted-source oracle for any member of a
+`CFunction` family, that owner must not also inspect generated-text fragments
+for any family variant through substring membership, counts, line matching, or
+position/order checks. Such fragment checks duplicate the oracle mechanism and
+must not substitute for variant coverage. Cover a variant gap with a complete
+variant oracle or a semantic compile/runtime test. Incidental assignment checks
+remain prohibited.
 
 ### Variant Selection
 
@@ -316,8 +288,13 @@ tree; never reset or delete shared generated output.
       and keys and use fixed substitutions where free symbols exist.
 - [ ] Normalize complete stable public-generator output; do not golden-test a
       large kernel or incidental substring.
-- [ ] Use focused assertions only to replace an unnecessary golden or detect
-      behavior equality or formatting omits.
+- [ ] For a `CFunction` family with any complete emitted-source oracle, add no
+      generated-fragment membership, count, line, or position/order assertions;
+      cover variant gaps with a complete variant oracle or semantic
+      compile/runtime test.
+- [ ] Use focused assertions only to replace an unnecessary golden, test
+      metadata, API, or runtime behavior, or detect information equality or
+      formatting omits.
 - [ ] Cover modified variant branches and each documented class, or all
       variants; record every omission and rationale.
 - [ ] Use an isolated owned intended-change tree and two fresh processes;

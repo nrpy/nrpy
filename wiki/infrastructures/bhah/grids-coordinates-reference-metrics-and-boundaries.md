@@ -1,6 +1,6 @@
 # Grids, Coordinates, Reference Metrics, And Boundaries
 
-> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed. Last reconciled: 06-29-2026
+> BHaH route for numerical grid setup, coordinate wrappers, reference-metric precompute, GeneralRFM, fisheye hooks, and curvilinear boundaries. Status: confirmed. Last reconciled: 07-20-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -51,16 +51,49 @@ inverts a supported GeneralRFM fisheye map and returns nonzero on failure.
 `fisheye_s*`, and `fisheye_c`, and provides a post-params hook that runs the
 conversion after `params_struct_set_to_default()`.
 
-Coordinate wrappers live in two layers. `xx_tofrom_Cart.py` registers
-coordinate-specific `xx_to_Cart` and `Cart_to_xx_and_nearest_i0i1i2` functions.
-The latter
-unshifts Cartesian points by `Cart_origin*` for local-grid calculations, maps to
-`xx`, and computes nearest cell-centered indices with `xxmin`, `dxx`, and
-`NGHOSTS`. GeneralRFM fisheye wrappers use a radial Newton solve for inverse
-mapping and a closed-form fisheye radius map for forward mapping. Then
+Coordinate wrappers live in two layers. `xx_tofrom_Cart.py` registers the Python
+registrars `register_CFunction_xx_to_Cart` and
+`register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, which emit the
+coordinate-specific C functions `xx_to_Cart` and
+`Cart_to_xx_and_nearest_i0i1i2_assume_valid`. For an independent grid, the
+inverse unshifts Cartesian points by `Cart_origin*` for local-grid calculations
+and maps them to `xx`. When the caller supplies `Cart_to_i0i1i2`, the emitted C
+function then converts `xx` to nearest indices with `xxmin`, `dxx`, and
+`NGHOSTS`; this conversion assumes a valid, in-domain, cell-centered point and
+does not perform a bounds check. When `Cart_to_i0i1i2 == NULL`, it returns after
+computing `xx`, before any floating-to-integer index conversion. For a
+multipatch grid with `params->grid_rotates`, inverse conversion builds the
+cumulative rotation matrix and applies `R^T` to the Cartesian vector before
+local-origin handling and native-coordinate inversion; forward `xx_to_Cart`
+applies `R` after native-to-Cartesian mapping and origin handling. GeneralRFM
+fisheye wrappers use a radial Newton solve for inverse mapping and a closed-form
+fisheye radius map for forward mapping. Each multipatch registrar also registers
+its exact SO(3) dependency closure: inverse registers the matrix builder and
+`R^T` vector helper, while forward registers the matrix builder and `R` vector
+helper. Registration remains duplicate-safe in either converter order and
+independent-grid registration adds no SO(3) helper.
+
+Maintenance rule: coordinate-admission checks are request-gated by
+[Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md);
+the nullable coordinates-only path does not authorize adding them.
+
+The 30 current `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and 30 current
+`xx_to_Cart` default independent-grid baselines and four explicitly named
+Cartesian multipatch OpenMP/CUDA baselines passed isolated candidate
+generation, review, byte comparison, and a second fresh-process source comparison. No C/CUDA
+compilation, runtime inverse check, or numerical-result guarantee was
+established. Then
 `rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions that
 switch on `params->CoordSystem_hash`, calls the matching coordinate-specific
 function, and registers uppercase coordinate hash macros in `BHaH_defines.h`.
+
+Claim evidence:
+- Claim: `Cart_to_xx_and_nearest_i0i1i2_assume_valid` returns logical coordinates without index conversion when `Cart_to_i0i1i2 == NULL`; each multipatch converter self-registers its exact SO(3) dependency closure; and rotating-multipatch inverse/forward conversion applies `R^T` and `R`, respectively.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
+- Corroboration: none available; owner-derived emitted-source comparisons are not independent evidence.
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=15 default independent coordinate systems plus Cartesian rotating multipatch; date=07-20-2026`
 
 Curvilinear boundary registration starts in
 `CurviBoundaryConditions/register_all.py`. It registers `outer_bc_type` with
@@ -96,10 +129,11 @@ functions.
 
 ## Sources
 
+- [coding_style.md](../../../coding_style.md) - `## Coordinate Bounds-Check Prohibition`
 - [numerical_grids_and_timestep.py](../../../nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py) - `register_CFunctions`, `register_CFunction_numerical_grid_params_Nxx_dxx_xx`, `register_CFunction_numerical_grids_and_timestep`, `register_CFunction_cfl_limited_timestep`, `register_CFunction_ds_min_single_pt`, `register_CFunction_ds_min_radial_like_dirns_single_pt`
 - [rfm_precompute.py](../../../nrpy/infrastructures/BHaH/rfm_precompute.py) - `ReferenceMetricPrecompute`, `register_CFunctions_rfm_precompute`
 - [rfm_wrapper_functions.py](../../../nrpy/infrastructures/BHaH/rfm_wrapper_functions.py) - `get_CoordSystem_hash`, `register_CFunctions_CoordSystem_wrapper_funcs`
-- [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction__Cart_to_xx_and_nearest_i0i1i2`, `register_CFunction_xx_to_Cart`
+- [xx_tofrom_Cart.py](../../../nrpy/infrastructures/BHaH/xx_tofrom_Cart.py) - `register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid`, `register_CFunction_xx_to_Cart`
 - [generalrfm_precompute.py](../../../nrpy/infrastructures/BHaH/generalrfm_precompute.py) - `register_CFunction_generalrfm_precompute`, `register_CFunctions_generalrfm_support`
 - [generalrfm_cart_to_xx.py](../../../nrpy/infrastructures/BHaH/generalrfm_cart_to_xx.py) - `register_CFunction_generalrfm_Cart_to_xx`
 - [phys_params_to_fisheye.py](../../../nrpy/infrastructures/BHaH/fisheye/phys_params_to_fisheye.py) - `register_CFunction_fisheye_params_from_physical_N`, `build_post_params_struct_set_to_default_hook`
@@ -113,5 +147,6 @@ functions.
 ## See Also
 
 - [BHaH](index.md)
+- Depends on: [Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md)
 - [Runtime Data, Parameters, Headers, And CLI](runtime-data-parameters-headers-and-cli.md)
 - [Reference Metrics](../../core/reference-metrics.md)

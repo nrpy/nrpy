@@ -18,6 +18,11 @@ import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+from nrpy.infrastructures.BHaH.rotation import (
+    so3_apply_R_to_vector,
+    so3_apply_RT_to_vector,
+    so3_build_R_from_hats,
+)
 
 
 def _prepare_sympy_exprs_for_codegen(
@@ -76,7 +81,7 @@ def _prepare_sympy_exprs_for_codegen(
     return [expr.subs(substitutions) for expr in sympy_exprs]
 
 
-def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
+def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
     gridding_approach: str = "independent grid(s)",
@@ -103,12 +108,12 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     >>> import nrpy.params as par
     >>> from nrpy.reference_metric import supported_CoordSystems
     >>> supported_Parallelizations = ["openmp", "cuda"]
-    >>> name = "Cart_to_xx_and_nearest_i0i1i2"
+    >>> name = "Cart_to_xx_and_nearest_i0i1i2_assume_valid"
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
     ...       cfc.CFunction_dict.clear()
-    ...       _ = register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+    ...       _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       _ = validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
@@ -127,6 +132,33 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
     Setting up reference_metric[GeneralRFM_fisheyeN2]...
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    ...        "Cartesian", gridding_approach="multipatch"
+    ...    )
+    ...    expected_names = {
+    ...        f"{name}__rfm__Cartesian",
+    ...        "so3_build_R_from_hats",
+    ...        "so3_apply_RT_to_vector",
+    ...    }
+    ...    assert set(cfc.CFunction_dict) == expected_names
+    ...    expected_decorator = "__host__ __device__" if parallelization == "cuda" else ""
+    ...    assert all(
+    ...        cfc.CFunction_dict[func_name].cfunc_decorators.strip()
+    ...        == expected_decorator
+    ...        for func_name in expected_names
+    ...    )
+    ...    generated_str = clang_format(
+    ...        cfc.CFunction_dict[f"{name}__rfm__Cartesian"].full_function
+    ...    )
+    ...    validation_desc = f"{name}__{parallelization}__Cartesian__multipatch"
+    ...    _ = validate_strings(
+    ...        generated_str,
+    ...        validation_desc,
+    ...        file_ext="cu" if parallelization == "cuda" else "c",
+    ...    )
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -139,6 +171,11 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
         )
 
     parallelization = par.parval_from_str("parallelization")
+    if gridding_approach == "multipatch":
+        if "so3_build_R_from_hats" not in cfc.CFunction_dict:
+            so3_build_R_from_hats.register_CFunction_so3_build_R_from_hats()
+        if "so3_apply_RT_to_vector" not in cfc.CFunction_dict:
+            so3_apply_RT_to_vector.register_CFunction_so3_apply_RT_to_vector()
 
     rfm = refmetric.reference_metric[CoordSystem]
     rfm_obj = rfm
@@ -149,7 +186,7 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
     if is_generalrfm and not is_fisheye_provider:
         raise ValueError(
-            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2."
+            f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2_assume_valid."
         )
     num_transitions = int(provider_meta.get("num_transitions", -1))
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
@@ -157,15 +194,16 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
     )
 
     namesuffix = f"_{relative_to}" if relative_to == "global_grid_center" else ""
-    name = f"Cart_to_xx_and_nearest_i0i1i2{namesuffix}"
+    name = f"Cart_to_xx_and_nearest_i0i1i2_assume_valid{namesuffix}"
     params = "const params_struct *restrict params, const REAL xCart[3], REAL xx[3], int Cart_to_i0i1i2[3]"
     cfunc_decorators = "__host__ __device__" if parallelization == "cuda" else ""
 
     desc = "Given Cartesian point (x,y,z), this function "
     if gridding_approach == "multipatch":
-        desc += "assumes any required multipatch preprocessing has already been applied, then "
+        desc += "first unrotates to the co-rotating frame, and then "
     desc += """unshifts the grid back to the origin to output the corresponding
             (xx0,xx1,xx2) and the "closest" (i0,i1,i2) for the given grid"""
+    desc += ". The index output may be NULL when only logical coordinates are needed."
 
     # Step 2: Generate the core C-code for the coordinate transformation.
     core_body_list: List[str] = []
@@ -386,6 +424,12 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
 
     # Step 2.c: Add logic to find the nearest grid point index.
     core_body_list.append("""
+      // A NULL index output requests logical coordinates only. In particular,
+      // recoverable callers use this path to validate logical coordinates before
+      // performing any floating-to-integer conversion.
+      if (Cart_to_i0i1i2 == NULL)
+        return;
+
       // Find the nearest grid indices (i0, i1, i2) for the given Cartesian coordinates (x, y, z).
       // Assuming a cell-centered grid, which follows the pattern:
       //   xx0[i0] = params->xxmin0 + ((REAL)(i0 - NGHOSTS) + 0.5) * params->dxx0
@@ -393,8 +437,8 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
       //   i0 = (xx0[i0] - params->xxmin0) / params->dxx0 - 0.5 + NGHOSTS
       // Now, including typecasts:
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS)
-      // C float-to-int conversion truncates toward zero; for nonnegative inputs this matches floor().
-      // Assuming (xx - xxmin)/dxx + NGHOSTS is nonnegative (typical for valid interior points), this is safe.
+      // C integer conversion truncates toward zero. For valid in-domain cell-centered
+      // coordinates, adding 0.5 converts the center-based quantity to the nearest index:
       //   i0 = (int)((xx[0] - params->xxmin0) / params->dxx0 - 0.5 + (REAL)NGHOSTS + 0.5)
       // The 0.5 values cancel out:
       //   i0 =           (int)( ( xx[0] - params->xxmin0 ) / params->dxx0 + (REAL)NGHOSTS )
@@ -413,6 +457,19 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   REAL Carty = xCart[1];
   REAL Cartz = xCart[2];
 """]
+    if gridding_approach == "multipatch":
+        body_parts.append("""
+if(params->grid_rotates) {
+  REAL R[3][3];
+  REAL vU[3] = {Cartx, Carty, Cartz};
+  so3_build_R_from_hats(params->cumulatively_rotated_xhatU, params->cumulatively_rotated_yhatU,
+                        params->cumulatively_rotated_zhatU, R);
+  so3_apply_RT_to_vector(R, vU);
+  Cartx = vU[0];
+  Carty = vU[1];
+  Cartz = vU[2];
+} // END IF: grid rotates
+""")
     if relative_to == "local_grid_center":
         body_parts.append("""
   // Set the origin, (Cartx, Carty, Cartz) = (0, 0, 0), to the center of the local grid patch.
@@ -422,13 +479,17 @@ def register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
   {
 """)
         body_parts.append(core_body)
-        body_parts.append("  }\n")
+        body_parts.append("  } // END BLOCK: Cartesian-to-grid conversion\n")
     else:
         body_parts.append(core_body)
 
     # Step 4: Register the C function.
     cfc.register_CFunction(
-        includes=["BHaH_defines.h"],
+        includes=(
+            ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+            if gridding_approach == "multipatch"
+            else ["BHaH_defines.h"]
+        ),
         desc=desc,
         cfunc_type="void",
         CoordSystem_for_wrapper_func=CoordSystem,
@@ -468,6 +529,56 @@ def register_CFunction_xx_to_Cart(
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
     ...       validation_desc = f"{name}__{parallelization}__{CoordSystem}"
     ...       validate_strings(generated_str, validation_desc, file_ext="cu" if parallelization == "cuda" else "c")
+    >>> for parallelization in supported_Parallelizations:
+    ...    par.set_parval_from_str("parallelization", parallelization)
+    ...    cfc.CFunction_dict.clear()
+    ...    _ = register_CFunction_xx_to_Cart(
+    ...        "Cartesian", gridding_approach="multipatch"
+    ...    )
+    ...    expected_names = {
+    ...        f"{name}__rfm__Cartesian",
+    ...        "so3_build_R_from_hats",
+    ...        "so3_apply_R_to_vector",
+    ...    }
+    ...    assert set(cfc.CFunction_dict) == expected_names
+    ...    expected_decorator = "__host__ __device__" if parallelization == "cuda" else ""
+    ...    assert all(
+    ...        cfc.CFunction_dict[func_name].cfunc_decorators.strip()
+    ...        == expected_decorator
+    ...        for func_name in expected_names
+    ...    )
+    ...    generated_str = clang_format(
+    ...        cfc.CFunction_dict[f"{name}__rfm__Cartesian"].full_function
+    ...    )
+    ...    validation_desc = f"{name}__{parallelization}__Cartesian__multipatch"
+    ...    _ = validate_strings(
+    ...        generated_str,
+    ...        validation_desc,
+    ...        file_ext="cu" if parallelization == "cuda" else "c",
+    ...    )
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> _ = register_CFunction_xx_to_Cart("Cartesian")
+    >>> assert not {
+    ...     "so3_build_R_from_hats",
+    ...     "so3_apply_R_to_vector",
+    ...     "so3_apply_RT_to_vector",
+    ... } & set(cfc.CFunction_dict)
+    >>> converter_registrars = (
+    ...     register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid,
+    ...     register_CFunction_xx_to_Cart,
+    ... )
+    >>> for registrar_order in (converter_registrars, converter_registrars[::-1]):
+    ...     cfc.CFunction_dict.clear()
+    ...     for registrar in registrar_order:
+    ...         _ = registrar("Cartesian", gridding_approach="multipatch")
+    ...     assert set(cfc.CFunction_dict) == {
+    ...         "Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Cartesian",
+    ...         "xx_to_Cart__rfm__Cartesian",
+    ...         "so3_build_R_from_hats",
+    ...         "so3_apply_R_to_vector",
+    ...         "so3_apply_RT_to_vector",
+    ...     }
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -480,6 +591,11 @@ def register_CFunction_xx_to_Cart(
         )
 
     parallelization = par.parval_from_str("parallelization")
+    if gridding_approach == "multipatch":
+        if "so3_build_R_from_hats" not in cfc.CFunction_dict:
+            so3_build_R_from_hats.register_CFunction_so3_build_R_from_hats()
+        if "so3_apply_R_to_vector" not in cfc.CFunction_dict:
+            so3_apply_R_to_vector.register_CFunction_so3_apply_R_to_vector()
 
     rfm = refmetric.reference_metric[CoordSystem]
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
@@ -553,12 +669,34 @@ const REAL xx1 = xx[1];
 const REAL xx2 = xx[2];
 """ + codegen_results
 
+    if gridding_approach == "multipatch":
+        body += """
+if(params->grid_rotates) {
+  REAL R[3][3];
+  so3_build_R_from_hats(params->cumulatively_rotated_xhatU, params->cumulatively_rotated_yhatU,
+                        params->cumulatively_rotated_zhatU, R);
+  so3_apply_R_to_vector(R, xCart);
+} // END IF: grid rotates
+"""
+
+    if gridding_approach == "multipatch":
+        desc = """Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} in terms of
+local grid coordinates {xx[0][i0], xx[1][i1], xx[2][i2]} = {xx0, xx1, xx2},
+taking into account the possibility that the origin of this grid is off-center,
+ and the grid is rotated."""
+    else:
+        desc = """Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} from the
+local coordinate vector {xx[0], xx[1], xx[2]} = {xx0, xx1, xx2},
+taking into account the possibility that the origin of this grid is off-center."""
+
     # Step 4: Register the C function.
     cfc.register_CFunction(
-        includes=["BHaH_defines.h"],
-        desc="""Compute Cartesian coordinates {x, y, z} = {xCart[0], xCart[1], xCart[2]} from the
-local coordinate vector {xx[0], xx[1], xx[2]} = {xx0, xx1, xx2},
-taking into account the possibility that the origin of this grid is off-center.""",
+        includes=(
+            ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+            if gridding_approach == "multipatch"
+            else ["BHaH_defines.h"]
+        ),
+        desc=desc,
         cfunc_type="void",
         CoordSystem_for_wrapper_func=CoordSystem,
         name="xx_to_Cart",
