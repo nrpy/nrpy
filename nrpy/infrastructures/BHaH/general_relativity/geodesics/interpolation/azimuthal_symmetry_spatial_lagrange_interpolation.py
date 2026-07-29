@@ -960,7 +960,7 @@ for the two metric methods or Christoffel components for ``GammaUDD``.
 @param num_target_slices Number of mapped slice payload pointers.
 @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
 @param[out] g4dd_out Flat metric output, ten values per slice.
-@param[out] g4dd_dD_out Metric-derivative output, forty values per slice.
+@param[out] rhs_geometry_out Forty metric-derivative or Christoffel values per slice, as selected at generation time.
 @return Interpolation status code.
 """
 

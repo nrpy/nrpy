@@ -507,7 +507,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         if (*cursor != expected_delimiter)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         cursor++;
-      } // END LOOP: for dirn over one trusted
+      } // END LOOP: for dirn over JSON values
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_parse_json_u64_array3
 
@@ -538,14 +538,14 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         if (errno != 0 || parse_end == cursor || parse_end > section_end ||
             !isfinite(parsed_value)) {
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one trusted double JSON array
+        } // END IF: JSON value parse invalid
         values[dirn] = parsed_value;
         cursor = time_window_manager_numerical_skip_json_ws(parse_end);
         const char expected_delimiter = (dirn < 2) ? ',' : ']';
         if (*cursor != expected_delimiter)
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
         cursor++;
-      } // END LOOP: for dirn over one trusted
+      } // END LOOP: for dirn over JSON values
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
     } // END FUNCTION: time_window_manager_numerical_parse_json_f64_array3
 
@@ -621,7 +621,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         free(metadata_buffer);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: one or more trusted first-slice
+      } // END IF: first-slice metadata invalid
 
       free(metadata_buffer);
       return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS;
@@ -664,7 +664,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         free(slice_payload_offsets);
         free(slice_payload_bytes);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice-table caches could not be
+      } // END IF: slice-table cache allocation failed
 
       for (uint64_t slice_index = 0ULL; slice_index < ntwm->num_time_slices; slice_index++) {
         const uint64_t entry_offset =
@@ -701,7 +701,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           free(slice_payload_offsets);
           free(slice_payload_bytes);
           return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-        } // END IF: one slice-table entry contained invalid
+        } // END IF: slice-table entry invalid
         if (point_record_count > UINT64_MAX / point_record_bytes ||
             payload_bytes != point_record_count * point_record_bytes) {
           free(slice_times);
@@ -730,7 +730,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
             free(slice_payload_offsets);
             free(slice_payload_bytes);
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-          } // END IF: slice times or payload offsets
+          } // END IF: slice times or offsets invalid
         } // END ELSE: additional slices allow monotonicity checks
 
         slice_times[slice_index] = this_time;
@@ -738,7 +738,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         slice_payload_bytes[slice_index] = payload_bytes;
         previous_time = this_time;
         previous_payload_end = payload_offset + payload_bytes;
-      } // END LOOP: for slice_index over the trusted
+      } // END LOOP: for slice_index over slices
 
       if (!isfinite(slice_times[0]) ||
           !isfinite(slice_times[ntwm->num_time_slices - 1ULL]) ||
@@ -775,8 +775,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           first = mid + 1ULL;
         } else {
           last = mid;
-        } // END ELSE: lower-bound search moved its upper
-      } // END WHILE: binary searching the lower-bound cached
+        } // END ELSE: lower-bound upper index updated
+      } // END WHILE: binary search over cached times
       return first;
     } // END FUNCTION: time_window_manager_numerical_lower_bound_slice_time
 
@@ -799,8 +799,8 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           first = mid + 1ULL;
         } else {
           last = mid;
-        } // END ELSE: upper-bound search moved its upper
-      } // END WHILE: binary searching the upper-bound cached
+        } // END ELSE: upper-bound upper index updated
+      } // END WHILE: binary search over cached times
       return first;
     } // END FUNCTION: time_window_manager_numerical_upper_bound_slice_time
 
@@ -842,7 +842,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         if (right_selected_slice >= final_selected_slice)
           return final_selected_slice;
         right_selected_slice += ntwm->time_slice_stride;
-      } // END IF: first selected slice at or
+      } // END IF: selected slice aligned upward
 
       if (right_selected_slice == 0ULL)
         return 0ULL;
@@ -990,18 +990,18 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
      * @param[in] ntwm Initialized numerical time-window manager.
      * @param[in] commondata Common runtime parameters.
      * @param[in] params Metadata-fed coordinate parameters.
-     * @param[in] camera_position Cartesian camera/initial-photon position.
-     * @param[in] camera_parameter_names Parameter names for that position.
+     * @param[in] observer_position Cartesian observer/initial-photon position.
+     * @param[in] observer_parameter_names Parameter names for that position.
      * @return TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS or TIME_WINDOW_MANAGER_NUMERICAL_ERROR.
      */
     static inline int time_window_manager_numerical_validate_startup_domain(
         const NumericalTimeWindowManager *ntwm,
         const commondata_struct *restrict commondata,
         const params_struct *restrict params,
-        const REAL camera_position[3],
-        const char *camera_parameter_names) {
+        const REAL observer_position[3],
+        const char *observer_parameter_names) {
       if (ntwm == NULL || commondata == NULL || params == NULL ||
-          camera_position == NULL || camera_parameter_names == NULL)
+          observer_position == NULL || observer_parameter_names == NULL)
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
 
       const int spatial_half_width =
@@ -1015,12 +1015,12 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       } // END IF: r_escape was invalid
 
       const REAL probe_points[4][3] = {
-          {camera_position[0], camera_position[1], camera_position[2]},
+          {observer_position[0], observer_position[1], observer_position[2]},
           {(REAL)commondata->r_escape, (REAL)0.0, (REAL)0.0},
           {(REAL)0.0, (REAL)commondata->r_escape, (REAL)0.0},
           {(REAL)0.0, (REAL)0.0, (REAL)commondata->r_escape}};
       const char *probe_names[4] = {
-          "camera", "r_escape x-axis", "r_escape y-axis", "r_escape z-axis"};
+          "observer", "r_escape x-axis", "r_escape y-axis", "r_escape z-axis"};
 
       // The reduced-phi interpolator uses stored phi planes; only rho and z
       // require a spatial Lagrange stencil check.
@@ -1032,10 +1032,10 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
                     "ERROR: numerical startup %s probe contains a nonfinite "
                     "Cartesian coordinate. Set %s in the generated .par file.\n",
                     probe_names[probe_idx],
-                    probe_idx == 0 ? camera_parameter_names : "r_escape");
+                    probe_idx == 0 ? observer_parameter_names : "r_escape");
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
           } // END IF: probe coordinate was nonfinite
-        } // END LOOP: for dirn over Cartesian probe coordinates
+        } // END LOOP: for dirn over Cartesian probes
 
         REAL xx[3];
         int center_idx[3];
@@ -1047,10 +1047,10 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
                     "ERROR: numerical startup %s probe produced a nonfinite "
                     "native coordinate.\n       Parameter: %s.\n",
                     probe_names[probe_idx],
-                    probe_idx == 0 ? camera_parameter_names : "r_escape");
+                    probe_idx == 0 ? observer_parameter_names : "r_escape");
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
           } // END IF: native coordinate was nonfinite
-        } // END LOOP: for dirn over native probe coordinates
+        } // END LOOP: for dirn over native probes
 
         for (int interp_dim_idx = 0; interp_dim_idx < 2; interp_dim_idx++) {
           const int dirn = interpolated_native_dims[interp_dim_idx];
@@ -1060,7 +1060,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           if (stencil_low < 0LL ||
               stencil_high >= (long long)ntwm->Nxx_plus_2NGHOSTS[dirn]) {
             const char *parameter_names =
-                probe_idx == 0 ? camera_parameter_names : "r_escape";
+                probe_idx == 0 ? observer_parameter_names : "r_escape";
             fprintf(stderr,
                     "ERROR: numerical startup %s probe requires native stencil "
                     "[%lld, %lld] on dimension %d, outside the full logical "
@@ -1073,7 +1073,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
                     (unsigned long long)ntwm->Nxx_plus_2NGHOSTS[dirn],
                     parameter_names);
             return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-          } // END IF: startup probe stencil was outside logical grid
+          } // END IF: startup stencil outside logical grid
         } // END LOOP: for interp_dim_idx over interpolated dimensions
       } // END LOOP: for probe_idx over startup probes
 
@@ -1157,7 +1157,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: fixed header could not be
+      } // END IF: fixed header read failed
 
       const uint64_t fixed_header_bytes = time_window_manager_numerical_load_u64(
           header_bytes + TIME_WINDOW_MANAGER_NUMERICAL_HEADER_FIXED_HEADER_BYTES);
@@ -1214,7 +1214,6 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       } // END IF: on-disk file size mismatched
 
       if (ntwm->metadata_offset < fixed_header_bytes ||
-          ntwm->metadata_offset % ntwm->alignment_bytes != 0ULL ||
           ntwm->metadata_offset > ntwm->total_file_bytes - ntwm->metadata_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
@@ -1224,14 +1223,14 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           UINT64_MAX / ntwm->slice_table_entry_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table byte count would
+      } // END IF: slice-table byte count overflowed
       const uint64_t slice_table_bytes =
           ntwm->num_time_slices * ntwm->slice_table_entry_bytes;
       const uint64_t metadata_end = ntwm->metadata_offset + ntwm->metadata_bytes;
       if (ntwm->slice_table_offset > UINT64_MAX - slice_table_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: trusted slice-table end offset would
+      } // END IF: slice-table end offset overflowed
       const uint64_t slice_table_end =
           ntwm->slice_table_offset + slice_table_bytes;
       if (ntwm->slice_table_offset < metadata_end ||
@@ -1276,7 +1275,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           expected_point_record_count > UINT64_MAX / expected_point_record_bytes) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: runtime ghost-zone or record-size metadata
+      } // END IF: ghost-zone or record metadata invalid
 
       const int spatial_half_width =
           commondata->numerical_spacetime_spatial_interp_half_width;
@@ -1308,14 +1307,14 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
           TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slice table could not be
+      } // END IF: slice-table validation failed
       if (!isfinite(ntwm->slice_times[0])) {
         fprintf(stderr,
                 "ERROR: first stored numerical slice time is not finite; "
                 "the combined .bin file is invalid.\n");
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      }
+      } // END IF: first slice time nonfinite
       commondata->t_numerical_initial = (REAL)ntwm->slice_times[0];
       if (!isfinite((double)commondata->t_numerical_end) ||
           commondata->t_numerical_initial >= commondata->t_numerical_end) {
@@ -1327,7 +1326,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
                 (double)commondata->t_numerical_end);
         time_window_manager_numerical_free(ntwm);
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: stored initial time was not below configured final time
+      } // END IF: stored time range invalid
       if (params != NULL &&
           time_window_manager_numerical_apply_metadata_to_params(ntwm, params) !=
               TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
@@ -1385,7 +1384,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
         *first_slice = 0ULL;
         *last_slice_exclusive = 0ULL;
         return TIME_WINDOW_MANAGER_NUMERICAL_ERROR;
-      } // END IF: slot query bounds or cached
+      } // END IF: slot query bounds invalid
 
       const uint64_t left =
           time_window_manager_numerical_lower_bound_slice_time(ntwm, query_min);
@@ -1669,7 +1668,7 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
             desired_slice =
                 center_slice + upper_offset * ntwm->time_slice_stride;
           } // END ELSE: conceptual stencil node inside window
-        } // END ELSE: conceptual stencil node was on
+        } // END ELSE: upper stencil node selected
 
         if (desired_slice_valid &&
             desired_slice < ntwm->num_time_slices) {
@@ -1742,12 +1741,12 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
       } // END IF: startup manager initialization failed
 
       fprintf(stderr,
-              "INFO: checking numerical camera and r_escape probes against "
+              "INFO: checking numerical observer and r_escape probes against "
               "the full logical .bin grid, including ghost zones.\n"
               "      If the next converter message reports Newton-Raphson "
-              "failure, adjust camera_pos_x/y/z or lower r_escape in the "
+              "failure, adjust observer_x/y/z or lower r_escape in the "
               "generated .par file.\n"
-              "      The first probe is the camera; the next three are the "
+              "      The first probe is the observer; the next three are the "
               "positive x-, y-, and z-axis r_escape probes.\n");
       fflush(stderr);
 
@@ -1756,13 +1755,13 @@ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__SinhCylindricalv2n2(
               &startup_window,
               commondata,
               &startup_params,
-              (const REAL[3]){(REAL)commondata->camera_pos_x,
-                              (REAL)commondata->camera_pos_y,
-                              (REAL)commondata->camera_pos_z},
-              "camera_pos_x, camera_pos_y, and camera_pos_z");
+              (const REAL[3]){(REAL)commondata->observer_x,
+                              (REAL)commondata->observer_y,
+                              (REAL)commondata->observer_z},
+              "observer_x, observer_y, and observer_z");
       if (validation_status == TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
         fprintf(stderr,
-                "INFO: numerical camera and r_escape startup stencil "
+                "INFO: numerical observer and r_escape startup stencil "
                 "check passed.\n");
         fflush(stderr);
       } // END IF: batch startup validation passed

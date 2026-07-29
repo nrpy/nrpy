@@ -64,7 +64,7 @@ parser.add_argument(
 parser.add_argument(
     "--raytracing-static-christoffels",
     action="store_true",
-    help="""Use static-spacetime Christoffels for the output slice nearest to T_FINAL when the selected mode includes GammaUDD.""",
+    help="""Use static-spacetime Christoffels for the last scheduled output not beyond T_FINAL when the selected mode includes GammaUDD; disabled by default.""",
 )
 parser.add_argument(
     "--raytracing-domain",

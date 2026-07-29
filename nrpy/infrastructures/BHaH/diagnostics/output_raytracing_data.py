@@ -7,8 +7,9 @@ evolution state using the transformed symbolic recipe in
 ``nrpy.equations.general_relativity.geodesics.geodesics``, and writes a stable
 binary payload for later raytracing.
 
-The payload stores the final Cartesian metric directly. The raytracer derives
-metric derivatives and Christoffel symbols from the stored metric data.
+Depending on ``raytracing_data_mode``, the payload stores the Cartesian metric
+alone, the metric plus its time derivative, or the metric plus Christoffels.
+The reader reconstructs only geometry absent from the selected payload.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -96,6 +97,9 @@ def register_CFunction_output_raytracing_data(
     1. Cartesian coordinates ``(x, y, z)``.
     2. The 10 unique covariant four-metric components ``g4DD`` in a fixed
        upper-triangular order.
+    3. The mode-selected secondary payload: ten metric time derivatives for
+       ``g4DD_d0``, forty Christoffels for ``GammaUDD``, or both secondary
+       payloads for ``all``.
 
     The exporter evaluates Cartesian metric expressions only on interior
     points. Cartesian coordinates are evaluated on the full logical grid.
@@ -112,9 +116,10 @@ def register_CFunction_output_raytracing_data(
     :param raytracing_data_mode: Data written by the generated exporter.
     :param enable_RbarDD_gridfunctions: Whether the generated project registers
         the Ricci path needed by derivative/Christoffel output.
-    :param enable_static_christoffels: Whether the final qualifying GammaUDD
-        output may use static-spacetime Christoffels. The diagnostics scheduler
-        supplies the per-call selection flag.
+    :param enable_static_christoffels: Whether the last scheduled qualifying
+        GammaUDD output may use static-spacetime Christoffels. The diagnostics
+        scheduler supplies the per-call selection flag; the option is
+        disabled by default.
     :return: None if in registration phase, else the updated NRPy environment.
     :raises ValueError: If ``CoordSystem`` is not a string.
     :raises ValueError: If ``enable_rfm_precompute`` is not a bool.

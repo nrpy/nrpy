@@ -4,8 +4,8 @@ Defines the static image rendering engine.
 
 Translates raw geodesic data (blueprints) into visual images. Performs texture mapping
 for the celestial sphere (background stars) and the accretion disk. Uses an
-accumulator-based approach to map ray endpoints from curved spacetime onto a 2D
-pixel grid via the camera's local window coordinates.
+accumulator-based approach to map terminal ray data onto the global pixel coordinates
+stored in each blueprint record.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -56,14 +56,14 @@ _WORKER_SPHERE_TEX: Optional[npt.NDArray[np.float64]] = None
 # Fixed high-contrast colors for opt-in termination diagnostics.
 DEBUG_FAILURE_INFO: Tuple[Tuple[int, str, Tuple[int, int, int]], ...] = (
     (
-        cfg.TERM_EVOLUTION_MEASURE_EXCEEDED,
-        "TERM_EVOLUTION_MEASURE_EXCEEDED",
+        cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED,
+        "STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED",
         (255, 0, 0),
     ),
-    (cfg.TERM_RKF45_REJECTION_LIMIT, "TERM_RKF45_REJECTION_LIMIT", (255, 0, 168)),
-    (cfg.TERM_T_MAX_EXCEEDED, "TERM_T_MAX_EXCEEDED", (255, 122, 0)),
-    (cfg.TERM_SLOT_MANAGER_ERROR, "TERM_SLOT_MANAGER_ERROR", (182, 255, 0)),
-    (cfg.TERM_FAILURE, "TERM_FAILURE", (0, 229, 255)),
+    (cfg.FAILURE_RKF45_REJECTION_LIMIT, "FAILURE_RKF45_REJECTION_LIMIT", (255, 0, 168)),
+    (cfg.STOP_CONDITION_T_MAX_EXCEEDED, "STOP_CONDITION_T_MAX_EXCEEDED", (255, 122, 0)),
+    (cfg.FAILURE_SLOT_MANAGER_ERROR, "FAILURE_SLOT_MANAGER_ERROR", (182, 255, 0)),
+    (cfg.FAILURE_GENERIC, "FAILURE_GENERIC", (0, 229, 255)),
 )
 
 
@@ -208,7 +208,7 @@ def generate_source_disk_array(
     import matplotlib.pyplot as plt
 
     half_width = disk_physical_width / 2.0
-    # Create coordinate grid representing the flat source plane
+    # Create coordinate grid representing the flat terminal plane
     y_coords = np.linspace(-half_width, half_width, pixel_width)
     z_coords = np.linspace(half_width, -half_width, pixel_width)
 
@@ -242,57 +242,49 @@ def generate_source_disk_array(
 
 
 @nb.njit(inline="always", nogil=True, fastmath=True)  # type: ignore
-def pixel_indices_from_ordinal(
-    ordinal: int,
-    tile_x: int,
-    tile_y: int,
-    scan_density: int,
-    tiles_width: int,
-    tiles_height: int,
+def pixel_indices_from_record(
+    image_width_fraction: float,
+    image_height_fraction: float,
     output_pixel_width: int,
     output_pixel_height: int,
 ) -> Tuple[int, int]:
     """
-    Map one dense launch-ray ordinal to a center-preserving output pixel.
+    Map a normalized ray-sample coordinate to an output pixel.
 
-    :param ordinal: Tile-local row-major ray ordinal.
-    :param tile_x: Horizontal tile index.
-    :param tile_y: Vertical tile index.
-    :param scan_density: Rays per tile side.
-    :param tiles_width: Number of tiles across the complete window.
-    :param tiles_height: Number of tiles down the complete window.
+    The normalized width coordinate increases left-to-right. The normalized
+    height coordinate increases in the image plane's upward direction because
+    initialization uses increasing ``b`` for increasing observer-up offset.
+    NumPy/PIL image rows increase downward, so only the vertical coordinate is
+    flipped here. Horizontal orientation is unchanged. Clamping handles the
+    mathematically valid boundary value ``fraction == 1``.
+
+    :param image_width_fraction: Normalized width coordinate in ``[0, 1]``.
+    :param image_height_fraction: Normalized height coordinate in ``[0, 1]``.
     :param output_pixel_width: Width of the output image.
     :param output_pixel_height: Height of the output image.
     :return: ``(pixel_x, pixel_y)`` in output-image coordinates.
     """
-    local_row = ordinal // scan_density
-    local_col = ordinal % scan_density
-    global_x = tile_x * scan_density + local_col
-    global_y = tile_y * scan_density + local_row
-    total_width = tiles_width * scan_density
-    total_height = tiles_height * scan_density
-    pixel_x = ((2 * global_x + 1) * output_pixel_width) // (2 * total_width)
-    pixel_y = (
-        output_pixel_height
-        - 1
-        - (((2 * global_y + 1) * output_pixel_height) // (2 * total_height))
+    pixel_x = min(
+        output_pixel_width - 1,
+        max(0, int(np.floor(image_width_fraction * output_pixel_width))),
     )
+    pixel_y_from_bottom = min(
+        output_pixel_height - 1,
+        max(0, int(np.floor(image_height_fraction * output_pixel_height))),
+    )
+    pixel_y = output_pixel_height - 1 - pixel_y_from_bottom
     return pixel_x, pixel_y
 
 
 @nb.njit(nogil=True, fastmath=True)  # type: ignore
 def _accumulate_ray_hits_jit(
     rays_term_type: npt.NDArray[np.int32],
-    rays_y_s: npt.NDArray[np.float64],
-    rays_z_s: npt.NDArray[np.float64],
+    rays_image_width_fraction: npt.NDArray[np.float64],
+    rays_image_height_fraction: npt.NDArray[np.float64],
+    rays_y_t: npt.NDArray[np.float64],
+    rays_z_t: npt.NDArray[np.float64],
     rays_phi: npt.NDArray[np.float64],
     rays_theta: npt.NDArray[np.float64],
-    record_start: int,
-    tile_x: int,
-    tile_y: int,
-    scan_density: int,
-    tiles_width: int,
-    tiles_height: int,
     output_pixel_width: int,
     output_pixel_height: int,
     source_image_width: float,
@@ -301,7 +293,7 @@ def _accumulate_ray_hits_jit(
     local_pixel_acc: npt.NDArray[np.float64],
     local_count_acc: npt.NDArray[np.int32],
     local_debug_term_types: npt.NDArray[np.int8],
-    term_source: int,
+    term_terminal_plane: int,
     term_sphere: int,
     term_evolution_measure: int,
     term_fail_generic: int,
@@ -316,23 +308,19 @@ def _accumulate_ray_hits_jit(
     sphere_w = sphere_tex.shape[1]
 
     for i, term in enumerate(rays_term_type):
-        px, py = pixel_indices_from_ordinal(
-            record_start + i,
-            tile_x,
-            tile_y,
-            scan_density,
-            tiles_width,
-            tiles_height,
+        px, py = pixel_indices_from_record(
+            rays_image_width_fraction[i],
+            rays_image_height_fraction[i],
             output_pixel_width,
             output_pixel_height,
         )
 
-        # --- CASE 1: Source Plane Hits (Accretion Disk) ---
-        if term == term_source:
-            y_s = rays_y_s[i]
-            z_s = rays_z_s[i]
-            norm_y = (y_s + (source_image_width / 2.0)) / source_image_width
-            norm_z = (z_s + (source_image_width / 2.0)) / source_image_width
+        # --- CASE 1: Terminal Plane Hits (Accretion Disk) ---
+        if term == term_terminal_plane:
+            y_t = rays_y_t[i]
+            z_t = rays_z_t[i]
+            norm_y = (y_t + (source_image_width / 2.0)) / source_image_width
+            norm_z = (z_t + (source_image_width / 2.0)) / source_image_width
 
             px_s = int(norm_y * (source_w - 1))
             py_s = int((1.0 - norm_z) * (source_h - 1))
@@ -407,27 +395,23 @@ def _process_blueprint_tile(
     if enable_debug:
         local_debug_term_types = np.full(
             (output_pixel_height, output_pixel_width),
-            cfg.TERM_ACTIVE,
+            cfg.ACTIVE,
             dtype=np.int8,
         )
     else:
         local_debug_term_types = np.empty((0, 0), dtype=np.int8)
 
-    for header, record_start, chunk_data in blueprint_io.iter_blueprint_chunks(
+    for _header, _, chunk_data in blueprint_io.iter_blueprint_chunks(
         blueprint_filename, chunk_records
     ):
         _accumulate_ray_hits_jit(
             chunk_data["termination_type"],
-            chunk_data["y_s"],
-            chunk_data["z_s"],
+            chunk_data["image_width_fraction"],
+            chunk_data["image_height_fraction"],
+            chunk_data["y_t"],
+            chunk_data["z_t"],
             chunk_data["final_phi"],
             chunk_data["final_theta"],
-            record_start,
-            header.tile_x,
-            header.tile_y,
-            header.scan_density,
-            header.tiles_width,
-            header.tiles_height,
             output_pixel_width,
             output_pixel_height,
             source_image_width,
@@ -436,10 +420,10 @@ def _process_blueprint_tile(
             local_pixel_acc,
             local_count_acc,
             local_debug_term_types,
-            cfg.TERM_SOURCE_PLANE,
-            cfg.TERM_COORD_RADIUS_EXCEEDED,
-            cfg.TERM_EVOLUTION_MEASURE_EXCEEDED,
-            cfg.TERM_FAILURE,
+            cfg.STOP_CONDITION_TERMINAL_PLANE,
+            cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED,
+            cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED,
+            cfg.FAILURE_GENERIC,
             enable_debug,
         )
 
@@ -451,7 +435,7 @@ def _process_blueprint_tile(
     flat_counts = local_count_acc[hit_mask]
 
     if enable_debug:
-        debug_mask = local_debug_term_types < cfg.TERM_ACTIVE
+        debug_mask = local_debug_term_types < cfg.ACTIVE
         debug_flat_y, debug_flat_x = np.nonzero(debug_mask)
         debug_flat_term_types = local_debug_term_types[debug_mask]
     else:
@@ -559,13 +543,13 @@ def generate_static_lensed_image(
     Generate a static lensed image from geodesic blueprint data.
 
     Reads native blueprint records in chunks, identifies where each ray terminated,
-    and maps each dense launch ordinal to a pixel on the final image. Uses a process
-    pool executor to process individual blueprint tiles in parallel.
+    and maps each record's normalized image-sample coordinate to the final image.
+    Uses a process pool executor to process individual blueprint tiles in parallel.
 
     :param output_filename: Path where the final rendered image will be saved.
     :param output_pixel_width: Desired width of the output image in pixels.
     :param output_pixel_height: Desired height of the output image in pixels.
-    :param source_image_width: The physical width of the accretion disk source plane.
+    :param source_image_width: The physical width of the accretion disk terminal plane.
     :param sphere_image: The background celestial sphere texture (path or array).
     :param source_image: The accretion disk texture (path or array).
     :param blueprint_filenames: List of paths to native blueprint files.
@@ -603,7 +587,7 @@ def generate_static_lensed_image(
     )
     if enable_debug:
         debug_term_types = np.full(
-            (output_pixel_height, output_pixel_width), cfg.TERM_ACTIVE, dtype=np.int8
+            (output_pixel_height, output_pixel_width), cfg.ACTIVE, dtype=np.int8
         )
     else:
         debug_term_types = np.empty((0, 0), dtype=np.int8)
@@ -624,10 +608,13 @@ def generate_static_lensed_image(
     if len(headers) != len(expected_tiles) or actual_tiles != expected_tiles:
         raise ValueError("Blueprint artifacts do not form the complete tile set")
     if any(
-        header.tiles_width != tiles_width or header.tiles_height != tiles_height
+        header.tiles_width != tiles_width
+        or header.tiles_height != tiles_height
+        or not np.isclose(header.alpha_w, headers[0].alpha_w, rtol=0.0, atol=1.0e-14)
+        or not np.isclose(header.alpha_h, headers[0].alpha_h, rtol=0.0, atol=1.0e-14)
         for header in headers
     ):
-        raise ValueError("Blueprint headers disagree about the tile grid")
+        raise ValueError("Blueprint headers disagree about tile grid or fields of view")
 
     chunk_records = chunk_size
 

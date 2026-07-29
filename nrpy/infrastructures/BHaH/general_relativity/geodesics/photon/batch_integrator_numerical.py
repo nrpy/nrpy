@@ -7,7 +7,10 @@ numerical spacetime. The generated integrator consumes a validated combined
 numerical raytracing ``.bin`` path stored on ``commondata``, initializes a
 ``NumericalTimeWindowManager``, maps numerical time windows per time slot, and
 calls ``numerical_interpolation()`` for the metric and selected forty-component
-geometry bundle.
+geometry bundle. The observer metric is interpolated once at the common
+initial event; the numerical initializer constructs one validated observer
+tetrad per tile-batch call and passes that same tetrad to every ray in the
+batch.
 
 The numerical time-window logic assumes the generator also registers
 ``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
@@ -38,7 +41,7 @@ def batch_integrator_numerical(
     r"""
     Construct the CPU numerical-spacetime photon batch integrator.
 
-    :param spacetime_name: Spacetime identifier used by photon-specific initial-condition helpers.
+    :param spacetime_name: Spacetime identifier used to validate registration context.
     :param dataset_coord_system: Coordinate system used by the numerical dataset.
     :param interpolation_method: Numerical geometry payload method used by the generated project.
     :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
@@ -58,9 +61,14 @@ def batch_integrator_numerical(
     True
     >>> "time_window_manager_numerical_mmap_for_slot" in generated
     True
+    >>> "observer_metric[10]" in generated
+    True
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
+
+    if not spacetime_name:
+        raise ValueError("spacetime_name must contain a valid identifier.")
 
     parallelization = par.parval_from_str("parallelization")
     if parallelization != "openmp":
@@ -129,15 +137,20 @@ def batch_integrator_numerical(
 
     This function bins active rays by coordinate time using TimeSlotManager,
     maps combined numerical-spacetime .bin time windows through
-    NumericalTimeWindowManager, interpolates the metric and selected geometry
-    bundle through numerical_interpolation(), advances photons with the existing RKF45 kernels,
-    and writes final blueprint results.
+    NumericalTimeWindowManager, interpolates the common observer metric once,
+    initializes all rays from one metric-orthonormal observer tetrad,
+    interpolates the selected geometry bundle through numerical_interpolation(),
+    advances photons with the existing RKF45 kernels, and writes final
+    blueprint results.
 
     @param[in,out] commondata Struct containing global numerical-spacetime,
-                              camera, and integration parameters. The numerical
+                              observer, and integration parameters. The numerical
                               time-window manager fills its authoritative first
                               stored slice time during initialization.
-    @param num_rays Total number of photon trajectories to simulate.
+    @param num_rays Number of rays in this tile batch. The caller derives this
+                     from the width-side scan density and the internally
+                     derived height-side scan density; this integrator does
+                     not calculate image placement or tile metadata.
     @param[out] results_buffer Host array storing the final physical
                                intersections.
     @param[in] norm_abs_bin_path Optional output filename for the raw float64
@@ -189,8 +202,8 @@ def batch_integrator_numerical(
         "0);"
     )
     set_initial_conditions_call = (
-        f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, "
-        "&all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
+        " set_initial_conditions_kernel"
+        "(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad);"
     )
 
     normalized_momentum_conversion = (
@@ -243,9 +256,20 @@ def batch_integrator_numerical(
         """
         for (long int init_i = 0; init_i < chunk_size; ++init_i) {
             d_integration_param_bundle[0][init_i] = commondata->t_start;
-            d_h[0][init_i] = commondata->numerical_initial_h;
+            d_h[0][init_i] = commondata->initial_h;
         } // END LOOP: for init_i over initial numerical
         """
+        if normalized_eom
+        else ""
+    )
+    observer_state_coordinate_time = "0.0" if normalized_eom else "commondata->t_start"
+    observer_state_integration_setup = (
+        """
+    // The normalized interpolation wrapper reads coordinate time from this
+    // auxiliary integration-parameter bundle while f[0] remains affine data.
+    d_integration_param_bundle[0][0] = commondata->t_start;
+    d_h[0][0] = commondata->initial_h;
+"""
         if normalized_eom
         else ""
     )
@@ -315,12 +339,12 @@ def batch_integrator_numerical(
                     time_window_manager_numerical_free(&numerical_window);
                     slot_manager_free(&tsm);
                     exit(1);
-                } // END IF: current trial spatial center was invalid
+                } // END IF: current trial spatial center invalid
                 d_spatial_stencil_center_i0[current][stencil_i] =
                     selected_center_idx[0];
                 d_spatial_stencil_center_i2[current][stencil_i] =
                     selected_center_idx[2];
-            } // END LOOP: for stencil_i over current trial rays
+            } // END LOOP: for stencil_i over trial rays
 """
         if normalized_eom
         else ""
@@ -345,12 +369,12 @@ def batch_integrator_numerical(
                         time_window_manager_numerical_free(&numerical_window);
                         slot_manager_free(&tsm);
                         exit(1);
-                    } // END IF: next trial spatial center was invalid
+                    } // END IF: next trial spatial center invalid
                     d_spatial_stencil_center_i0[next][stencil_i] =
                         selected_center_idx[0];
                     d_spatial_stencil_center_i2[next][stencil_i] =
                         selected_center_idx[2];
-                } // END LOOP: for stencil_i over next trial rays
+                } // END LOOP: for stencil_i over trial rays
 """
         if normalized_eom
         else ""
@@ -365,6 +389,7 @@ def batch_integrator_numerical(
         if normalized_eom
         else "fabs(d_norm_bundle[norm_i].C)"
     )
+    initial_constraint_target = "1.0" if normalized_eom else "0.0"
     finalize_current = """
             // Finalize step: apply RKF45 error control and update the
             // integration-parameter baseline and step size $h$.
@@ -380,7 +405,6 @@ def batch_integrator_numerical(
     def no_sync() -> str:
         return "// CPU memory operations above are complete at this point."
 
-    stream_arg = ", 0"
     stream_arg_current = ", current"
     stream_arg_next = ", next"
 
@@ -388,7 +412,7 @@ def batch_integrator_numerical(
     // Initialize caller-owned output records before any event handler writes fields.
     for (long int i = 0; i < num_rays; ++i) {{
         results_buffer[i] = (blueprint_data_t){{0}};
-        results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
+        results_buffer[i].termination_type = FAILURE_GENERIC;
     }} // END LOOP: initialize deterministic numerical-batch result records
 
     //==========================================
@@ -412,18 +436,18 @@ def batch_integrator_numerical(
     {malloc_pinned}(all_photons_host.status, sizeof(termination_type_t) * num_rays);
     // {pin_comment} the number of step-size rejections.
     {malloc_pinned}(all_photons_host.rejection_retries, sizeof(int) * num_rays);
-    // {pin_comment} the previous observer window boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
-    // {pin_comment} the previous source emission boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
+    // {pin_comment} the previous nonterminal plane boundary state.
+    {malloc_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev, sizeof(bool) * num_rays);
+    // {pin_comment} the previous terminal-plane boundary state.
+    {malloc_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev, sizeof(bool) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-1}}$.
     {malloc_pinned}(all_photons_host.integration_param_p, sizeof(double) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-2}}$.
     {malloc_pinned}(all_photons_host.integration_param_p_p, sizeof(double) * num_rays);
-    // {pin_comment} the observer window intersection lock.
-    {malloc_pinned}(all_photons_host.window_event_found, sizeof(bool) * num_rays);
-    // {pin_comment} the source emission plane intersection lock.
-    {malloc_pinned}(all_photons_host.source_event_found, sizeof(bool) * num_rays);
+    // {pin_comment} the nonterminal plane intersection lock.
+    {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
+    // {pin_comment} the terminal-plane intersection lock.
+    {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
 
     // CPU-only numerical integration: direct commondata access and no extra execution-buffer setup.
 
@@ -446,18 +470,18 @@ def batch_integrator_numerical(
     termination_type_t *status_bridge[2];
     // Bridge array staging the number of step-size rejections for memory transfers.
     int *retries_bridge[2];
-    // Bridge array staging the previous observer window boundary side flag for memory transfers.
-    bool *on_pos_window_prev_bridge[2];
-    // Bridge array staging the previous source emission boundary side flag for memory transfers.
-    bool *on_pos_source_prev_bridge[2];
+    // Bridge array staging the previous nonterminal plane boundary side flag for memory transfers.
+    bool *on_pos_non_terminal_plane_prev_bridge[2];
+    // Bridge array staging the previous terminal-plane boundary side flag for memory transfers.
+    bool *on_pos_terminal_plane_prev_bridge[2];
     // Bridge array staging the preceding integration parameter for chunked memory transfers.
     double *integration_param_p_bridge[2];
     // Bridge array staging the second preceding integration parameter for chunked memory transfers.
     double *integration_param_p_p_bridge[2];
-    // Bridge array staging the observer window event lock for memory transfers.
-    bool *window_event_found_bridge[2];
-    // Bridge array staging the source emission event lock for memory transfers.
-    bool *source_event_found_bridge[2];
+    // Bridge array staging the nonterminal plane event lock for memory transfers.
+    bool *non_terminal_plane_event_found_bridge[2];
+    // Bridge array staging the terminal-plane event lock for memory transfers.
+    bool *terminal_plane_event_found_bridge[2];
 
     //==========================================
     // DOUBLE-BUFFERED CPU SCRATCHPADS
@@ -486,18 +510,18 @@ def batch_integrator_numerical(
     termination_type_t *d_status[2];
     // Array tracking sequential error rejections per photon.
     int *d_retries[2];
-    // Array flagging the previous observer window boundary side.
-    bool *d_on_pos_window_prev[2];
-    // Array flagging the previous source emission boundary side.
-    bool *d_on_pos_source_prev[2];
+    // Array flagging the previous nonterminal plane boundary side.
+    bool *d_on_pos_non_terminal_plane_prev[2];
+    // Array flagging the previous terminal-plane boundary side.
+    bool *d_on_pos_terminal_plane_prev[2];
     // Array tracking the preceding integration parameter.
     double *d_integration_param_prev[2];
     // Array tracking the integration parameter two accepted steps ago.
     double *d_integration_param_pre_prev[2];
-    // Array guarding the window intersection coordinates from multi-trigger overwrites.
-    bool *d_window_event_found[2];
-    // Array guarding the source intersection coordinates from multi-trigger overwrites.
-    bool *d_source_event_found[2];
+    // Array guarding nonterminal-plane intersection coordinates from multi-trigger overwrites.
+    bool *d_non_terminal_plane_event_found[2];
+    // Array guarding the terminal-plane intersection coordinates from multi-trigger overwrites.
+    bool *d_terminal_plane_event_found[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
 {spatial_center_declarations}
@@ -513,12 +537,12 @@ def batch_integrator_numerical(
         {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
         {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
-        {malloc_pinned}(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
-        {malloc_pinned}(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
+        {malloc_pinned}(on_pos_non_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane flag bridges.
+        {malloc_pinned}(on_pos_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
         {malloc_pinned}(integration_param_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin preceding integration-parameter bridges.
         {malloc_pinned}(integration_param_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin second preceding integration-parameter bridges.
-        {malloc_pinned}(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
-        {malloc_pinned}(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
+        {malloc_pinned}(non_terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane lock bridges.
+        {malloc_pinned}(terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane lock bridges.
 
         // {scratch_alloc_comment}
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
@@ -533,15 +557,21 @@ def batch_integrator_numerical(
         {malloc_device}(d_integration_param_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate integration-parameter scratchpad.
         {malloc_device}(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
-        {malloc_device}(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
-        {malloc_device}(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
+        {malloc_device}(d_on_pos_non_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane flag scratchpad.
+        {malloc_device}(d_on_pos_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
         {malloc_device}(d_integration_param_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate preceding integration-parameter scratchpad.
         {malloc_device}(d_integration_param_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate second preceding integration-parameter scratchpad.
-        {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
-        {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
+        {malloc_device}(d_non_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane lock scratchpad.
+        {malloc_device}(d_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
 {spatial_center_allocations}
     }} // END LOOP: for s over 2
+
+    // Scratchpad array holding the initialization constraint outputs. It is
+    // always allocated because initialization must validate every ray before
+    // RKF45 starts, independent of the optional terminal diagnostic.
+    normalization_constraint_t *d_initial_norm_bundle = NULL;
+    {malloc_device}(d_initial_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY);
 
     // Scratchpad array holding the terminal normalization diagnostic outputs.
     normalization_constraint_t *d_norm_bundle = NULL;
@@ -624,16 +654,8 @@ def batch_integrator_numerical(
     //==========================================
     // 2. INITIALIZATION PHASE
     //==========================================
-    // Evaluate initial coordinate states and map global spacetime metrics to memory bounds.
-
-    double window_center_out[3]; // 3D array storing the spatial Cartesian coordinates $x^i$ of the observer window center.
-    double n_x_out[3]; // 3D orthonormal basis vector pointing along the $x$-axis of the local window geometry.
-    double n_y_out[3]; // 3D orthonormal basis vector pointing along the $y$-axis of the local window geometry.
-    double n_z_out[3]; // 3D orthonormal basis vector pointing along the $z$-axis of the local window geometry.
-
-    // Operates synchronously as the primary state array must be fully populated before pipeline dispatch.
-    {set_initial_conditions_call}
-
+    // Map the initial slot before any numerical interpolation. The mapped
+    // window is shared by the temporary observer state and all later rays.
     const int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
     if (initial_slot_idx < 0) {{
         fprintf(stderr,
@@ -656,7 +678,56 @@ def batch_integrator_numerical(
         exit(1);
     }} // END IF: initial slot time window mapping
 
+    // Interpolate the metric once at the common observer event. This temporary
+    // state uses the observer position and t_start, but does not represent a
+    // renderable ray. The observer initializer consumes only this ten-component
+    // covariant metric and constructs the tetrad once on the host.
+    double observer_metric[10];
+    double observer_tetrad[4][4];
+    for (int observer_component = 0; observer_component < 9; ++observer_component) {{
+        d_f_bundle[0][observer_component * BUNDLE_CAPACITY] = 0.0;
+    }} // END LOOP: clear temporary observer state
+    d_f_bundle[0][0 * BUNDLE_CAPACITY] = {observer_state_coordinate_time};
+    d_f_bundle[0][1 * BUNDLE_CAPACITY] = commondata->observer_x;
+    d_f_bundle[0][2 * BUNDLE_CAPACITY] = commondata->observer_y;
+    d_f_bundle[0][3 * BUNDLE_CAPACITY] = commondata->observer_z;
+{observer_state_integration_setup}
+
+    numerical_interpolation(
+        commondata,
+        &numerical_params,
+        &spatial_context,
+        &numerical_window,
+        d_f_bundle[0],
+        {interpolation_initial_integration_param_args}
+        d_metric_bundle[0],
+        NULL,
+        1,
+        0);
+
+    for (int observer_metric_component = 0; observer_metric_component < 10;
+         ++observer_metric_component) {{
+        observer_metric[observer_metric_component] =
+            d_metric_bundle[0][observer_metric_component * BUNDLE_CAPACITY];
+        if (!isfinite(observer_metric[observer_metric_component])) {{
+            fprintf(
+                stderr,
+                "ERROR: interpolated observer metric component %d is non-finite.\n",
+                observer_metric_component);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: observer metric component was invalid
+    }} // END LOOP: for observer_metric_component over metric
+
+    // Operates synchronously as the primary state array must be fully
+    // populated before pipeline dispatch. The initializer validates the
+    // metric-orthonormal tetrad and writes complete direct p^mu values.
+    {set_initial_conditions_call}
+
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
+    double max_initial_constraint_error = 0.0;
+    long int worst_initial_constraint_ray = -1;
 
     for (long int init_batch = 0; init_batch < num_batches; ++init_batch) {{ // Loop iterator $init_batch$ for evaluating the initialization constraint across sequential blocks.
         long int start_idx = init_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current initialization batch.
@@ -674,26 +745,23 @@ def batch_integrator_numerical(
         }} // END LOOP: for c_k over 9
 {initial_integration_param_setup}
 
-        // Calculates symmetric metric tensor $g_{{\mu\nu}}$ strictly on the primary CPU buffer for the Hamiltonian constraint.
-        numerical_interpolation(
-            commondata,
-            &numerical_params,
-            &spatial_context,
-            &numerical_window,
-            d_f_bundle[0],
-            {interpolation_initial_integration_param_args}
-            d_metric_bundle[0],
-            NULL,
-            chunk_size,
-            0);
+        // Reuse the one observer metric for every ray in this chunk. No
+        // per-ray observer interpolation or p^0 quadratic solve is performed.
+        for (int metric_component = 0; metric_component < 10; ++metric_component) {{
+            for (long int init_i = 0; init_i < chunk_size; ++init_i) {{
+                d_metric_bundle[0][metric_component * BUNDLE_CAPACITY + init_i] =
+                    observer_metric[metric_component];
+            }} // END LOOP: for init_i over current chunk
+        }} // END LOOP: replicate all ten metric components
 
         //==========================================
-        // DIAGNOSTIC PROBE: METRIC INTEGRITY CHECK
+        // DIAGNOSTIC PROBE: REUSED METRIC INTEGRITY CHECK
         //==========================================
-        // Extracts metric payload to confirm numerical stability prior to momentum solving.
+        // Confirms that the one observer metric was replicated without
+        // corruption before momentum conversion and constraint evaluation.
 
         double *metric_diag_bridge; // Pointer storing temporary metric data to validate the interpolation sequence.
-        // Memory allocation: Temporary bridge mapped to maximize throughput for the metric $g_{{\mu\nu}}$ diagnostic sequence.
+        // Memory allocation: temporary bridge for the replicated metric check.
         {malloc_pinned}(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY);
 
         for (int m_k = 0; m_k < 10; ++m_k) {{
@@ -718,7 +786,7 @@ def batch_integrator_numerical(
         if (metric_nan_count > 0) {{
             fprintf(stderr,
                     "ERROR: Init Batch %ld: %ld rays have invalid numerical metric "
-                    "G_mu_nu before p^0 solve.\n",
+                    "G_mu_nu before momentum conversion.\n",
                     init_batch,
                     metric_nan_count);
             {free_pinned}(metric_diag_bridge);
@@ -729,9 +797,54 @@ def batch_integrator_numerical(
         // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         {free_pinned}(metric_diag_bridge);
 
-        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p^0$ natively on the active pipeline.
-        p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
+        // The tetrad initializer already supplied the complete direct p^mu.
         {normalized_momentum_conversion}
+
+        // Evaluate the applicable initial constraint after normalized
+        // conversion, if requested. For direct evolution this is g_mu_nu p^mu
+        // p^nu and must be zero; for normalized evolution it is the spatial
+        // normalized constraint and must be one.
+        {normalization_kernel_name}(
+            d_f_bundle[0],
+            d_metric_bundle[0],
+            d_initial_norm_bundle,
+            chunk_size,
+            0);
+
+        const double initial_constraint_target = {initial_constraint_target};
+        const double initial_constraint_tolerance =
+            1.0e-9 * fmax(1.0, fabs(initial_constraint_target));
+        for (long int constraint_i = 0; constraint_i < chunk_size; ++constraint_i) {{
+            const double constraint_value = d_initial_norm_bundle[constraint_i].C;
+            const double constraint_error =
+                fabs(constraint_value - initial_constraint_target);
+            const long int master_idx = start_idx + constraint_i;
+            if (!isfinite(constraint_value) || !isfinite(constraint_error)) {{
+                fprintf(
+                    stderr,
+                    "ERROR: initial photon constraint is non-finite for ray %ld.\n",
+                    master_idx);
+                time_window_manager_numerical_free(&numerical_window);
+                slot_manager_free(&tsm);
+                exit(1);
+            }} // END IF: initial constraint was non-finite
+            if (constraint_error > max_initial_constraint_error) {{
+                max_initial_constraint_error = constraint_error;
+                worst_initial_constraint_ray = master_idx;
+            }} // END IF: update maximum initial constraint residual
+        }} // END LOOP: for constraint_i over initial chunk
+        if (max_initial_constraint_error > initial_constraint_tolerance) {{
+            fprintf(
+                stderr,
+                "ERROR: initial photon constraint residual %e exceeds tolerance %e "
+                "at ray %ld.\n",
+                max_initial_constraint_error,
+                initial_constraint_tolerance,
+                worst_initial_constraint_ray);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: initial constraint residual exceeded tolerance
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating memory transfer of the 9 constrained state vector $f^\mu$ components.
             {memcpy_cpu("f_bridge[0] + c_k * BUNDLE_CAPACITY", "d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
@@ -753,7 +866,7 @@ def batch_integrator_numerical(
         if (nonfinite_count > 0) {{
             fprintf(stderr,
                     "ERROR: Init Batch %ld: %ld rays contain nonfinite state values "
-                    "after p^0 solve. Aborting numerical batch integration.\n",
+                    "after tetrad initialization. Aborting numerical batch integration.\n",
                     init_batch,
                     nonfinite_count);
             time_window_manager_numerical_free(&numerical_window);
@@ -762,6 +875,7 @@ def batch_integrator_numerical(
         }} // END IF: nonfinite_count > 0 to abort
     }} // END LOOP: for init_batch over num_batches
 
+    {free_device}(d_initial_norm_bundle); // Purges the initialization constraint scratchpad.
 
     long int sync_i; // Loop iterator index $sync_i$ spanning the entire global ray count to synchronize starting properties across history states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
@@ -776,8 +890,8 @@ def batch_integrator_numerical(
 
         all_photons_host.integration_param_p[sync_i] = {initial_integration_param}; // Initializes the preceding integration parameter.
         all_photons_host.integration_param_p_p[sync_i] = {initial_integration_param}; // Initializes the second preceding integration parameter.
-        all_photons_host.window_event_found[sync_i] = false; // Sets the observer window intersection logical lock to false.
-        all_photons_host.source_event_found[sync_i] = false; // Sets the source emission intersection logical lock to false.
+        all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
+        all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
 
         int s_idx = slot_get_index(&tsm, {initial_coordinate_time}); // Maps coordinate time to a TimeSlotManager bin.
         if (s_idx != -1) {{
@@ -862,12 +976,12 @@ def batch_integrator_numerical(
                 status_bridge[current][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                 retries_bridge[current][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
                 integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
-                on_pos_window_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
-                on_pos_source_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
+                on_pos_non_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
+                on_pos_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
                 integration_param_p_bridge[current][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
                 integration_param_p_p_bridge[current][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
-                window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
-                source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
+                non_terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
+                terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
             }} // END LOOP: for bridge_i over active_chunks[current]
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
@@ -886,18 +1000,18 @@ def batch_integrator_numerical(
             {memcpy_cpu("d_retries[current]", "retries_bridge[current]", "sizeof(int) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes integration parameters to CPU scratch on buffer [current].
             {memcpy_cpu("d_integration_param_bundle[current]", "integration_param_bridge[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes window boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_on_pos_window_prev[current]", "on_pos_window_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes source boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_on_pos_source_prev[current]", "on_pos_source_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes nonterminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_on_pos_non_terminal_plane_prev[current]", "on_pos_non_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_on_pos_terminal_plane_prev[current]", "on_pos_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [current].
             {memcpy_cpu("d_integration_param_prev[current]", "integration_param_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [current].
             {memcpy_cpu("d_integration_param_pre_prev[current]", "integration_param_p_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes window intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_window_event_found[current]", "window_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Synchronously pushes source intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
-            {memcpy_cpu("d_source_event_found[current]", "source_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_non_terminal_plane_event_found[current]", "non_terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_terminal_plane_event_found[current]", "terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [current] to minimize latency.
             {memcpy_cpu("d_chunk_buffer[current]", "chunk_buffer[current]", "sizeof(long int) * active_chunks[current]")}
 
@@ -973,7 +1087,7 @@ def batch_integrator_numerical(
             attempted_rkf45_steps_since_print += active_chunks[current];
             // Event step: detect geometric events and record intersection coordinate
             // states on the active buffer.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
                 // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the active buffer.
@@ -991,18 +1105,18 @@ def batch_integrator_numerical(
             {memcpy_cpu("retries_bridge[current]", "d_retries[current]", "sizeof(int) * active_chunks[current]")}
             // CPU buffer copy: Retrieves integration-parameter progress from the active buffer.
             {memcpy_cpu("integration_param_bridge[current]", "d_integration_param_bundle[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves updated window boundary flags back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("on_pos_window_prev_bridge[current]", "d_on_pos_window_prev[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves updated source boundary flags back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("on_pos_source_prev_bridge[current]", "d_on_pos_source_prev[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves updated nonterminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[current]", "d_on_pos_non_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves updated terminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("on_pos_terminal_plane_prev_bridge[current]", "d_on_pos_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
             // CPU buffer copy: Retrieves preceding integration parameters from the active buffer.
             {memcpy_cpu("integration_param_p_bridge[current]", "d_integration_param_prev[current]", "sizeof(double) * active_chunks[current]")}
             // CPU buffer copy: Retrieves second preceding integration parameters from the active buffer.
             {memcpy_cpu("integration_param_p_p_bridge[current]", "d_integration_param_pre_prev[current]", "sizeof(double) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves active window locks back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("window_event_found_bridge[current]", "d_window_event_found[current]", "sizeof(bool) * active_chunks[current]")}
-            // CPU buffer copy: Retrieves active source locks back to CPU RAM synchronously on the active buffer.
-            {memcpy_cpu("source_event_found_bridge[current]", "d_source_event_found[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves active nonterminal-plane locks back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("non_terminal_plane_event_found_bridge[current]", "d_non_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves active terminal-plane locks back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("terminal_plane_event_found_bridge[current]", "d_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
         }} // END IF: active chunks available
 
         //==========================================
@@ -1033,12 +1147,12 @@ def batch_integrator_numerical(
                     status_bridge[next][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                     retries_bridge[next][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
                     integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
-                    on_pos_window_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
-                    on_pos_source_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
+                    on_pos_non_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
+                    on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
                     integration_param_p_bridge[next][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
                     integration_param_p_p_bridge[next][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
-                    window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
-                    source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
+                    non_terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
+                    terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
                 }} // END LOOP: for bridge_i over active_chunks[next]
 
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
@@ -1057,18 +1171,18 @@ def batch_integrator_numerical(
                 {memcpy_cpu("d_retries[next]", "retries_bridge[next]", "sizeof(int) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes integration parameters to CPU scratch on buffer [next].
                 {memcpy_cpu("d_integration_param_bundle[next]", "integration_param_bridge[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes window boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_on_pos_window_prev[next]", "on_pos_window_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes source boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_on_pos_source_prev[next]", "on_pos_source_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes nonterminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_on_pos_non_terminal_plane_prev[next]", "on_pos_non_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_on_pos_terminal_plane_prev[next]", "on_pos_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [next].
                 {memcpy_cpu("d_integration_param_prev[next]", "integration_param_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [next].
                 {memcpy_cpu("d_integration_param_pre_prev[next]", "integration_param_p_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes window intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_window_event_found[next]", "window_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Synchronously pushes source intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
-                {memcpy_cpu("d_source_event_found[next]", "source_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_non_terminal_plane_event_found[next]", "non_terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_terminal_plane_event_found[next]", "terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [next] to overlap execution.
                 {memcpy_cpu("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]")}
 
@@ -1145,7 +1259,7 @@ def batch_integrator_numerical(
                 attempted_rkf45_steps_since_print += active_chunks[next];
                 // Event step: detect geometric events and record intersection
                 // coordinate states on the alternate buffer.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
                     // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
                     {memcpy_cpu("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
@@ -1162,18 +1276,18 @@ def batch_integrator_numerical(
                 {memcpy_cpu("retries_bridge[next]", "d_retries[next]", "sizeof(int) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves integration-parameter progress from the alternate buffer.
                 {memcpy_cpu("integration_param_bridge[next]", "d_integration_param_bundle[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming updated window boundary flags back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("on_pos_window_prev_bridge[next]", "d_on_pos_window_prev[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming updated source boundary flags back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("on_pos_source_prev_bridge[next]", "d_on_pos_source_prev[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming updated nonterminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[next]", "d_on_pos_non_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming updated terminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("on_pos_terminal_plane_prev_bridge[next]", "d_on_pos_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves preceding integration parameters from the alternate buffer.
                 {memcpy_cpu("integration_param_p_bridge[next]", "d_integration_param_prev[next]", "sizeof(double) * active_chunks[next]")}
                 // CPU buffer copy: Retrieves second preceding integration parameters from the alternate buffer.
                 {memcpy_cpu("integration_param_p_p_bridge[next]", "d_integration_param_pre_prev[next]", "sizeof(double) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming active window locks back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("window_event_found_bridge[next]", "d_window_event_found[next]", "sizeof(bool) * active_chunks[next]")}
-                // CPU buffer copy: Retrieves upcoming active source locks back to CPU RAM synchronously on the alternate buffer.
-                {memcpy_cpu("source_event_found_bridge[next]", "d_source_event_found[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming active nonterminal-plane locks back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("non_terminal_plane_event_found_bridge[next]", "d_non_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming active terminal-plane locks back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("terminal_plane_event_found_bridge[next]", "d_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
             }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
@@ -1197,12 +1311,12 @@ def batch_integrator_numerical(
                     all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
                     all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
                     all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter into the global Host matrix.
-                    all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[current][fin_i]; // Unpacks the synchronized window boundary flag into the global Host matrix.
-                    all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[current][fin_i]; // Unpacks the synchronized source boundary flag into the global Host matrix.
+                    all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx] = on_pos_non_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane boundary flag into the global Host matrix.
+                    all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx] = on_pos_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane boundary flag into the global Host matrix.
                     all_photons_host.integration_param_p[m_idx] = integration_param_p_bridge[current][fin_i]; // Unpacks the synchronized preceding integration parameter into the global Host matrix.
                     all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized second preceding integration parameter into the global Host matrix.
-                    all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i]; // Unpacks the synchronized window lock into the global Host matrix.
-                    all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i]; // Unpacks the synchronized source lock into the global Host matrix.
+                    all_photons_host.non_terminal_plane_event_found[m_idx] = non_terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane lock into the global Host matrix.
+                    all_photons_host.terminal_plane_event_found[m_idx] = terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane lock into the global Host matrix.
                 }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
@@ -1213,7 +1327,7 @@ def batch_integrator_numerical(
                         if (next_s_idx != -1) {{  // Confirms the physical state has not exceeded the maximum simulation time bounds.
                             slot_add_photon(&tsm, next_s_idx, m_idx);  // Re-queues the updated physical state vector back into the host orchestrator.
                         }} else {{
-                            all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; // Flags the physical state as permanently failed due to excessive propagation time.
+                            all_photons_host.status[m_idx] = STOP_CONDITION_T_MAX_EXCEEDED; // Flags the physical state as stopped after excessive propagation time.
                             total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                         }} // END ELSE: state flagged failed
                     }} // END IF: trajectory remains active
@@ -1251,7 +1365,7 @@ def batch_integrator_numerical(
                     rkf45_attempts_per_sec_avg =
                         (1.0 - alpha) * rkf45_attempts_per_sec_avg + alpha * rkf45_attempts_per_sec;
                 }} // END ELSE: update the existing RKF45 throughput
-            }} // END IF: elapsed interval produced at least
+            }} // END IF: elapsed interval had attempts
 
             // Evaluates the global completion ratio bounded between $0.0$ and $1.0$.
             double percent_done = 100.0 * (1.0 - ((double)total_active_photons / (double)num_rays));
@@ -1285,7 +1399,7 @@ def batch_integrator_numerical(
             for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
                 if (status_bridge[current][sum_i] == REJECTED) {{
                     batch_rejections++; // Counts one rejected integration attempt for this chunk entry.
-                }} // END IF: finalized status for this attempted
+                }} // END IF: rejected finalized status
             }} // END LOOP: for sum_i over active_chunks[current]
 
             // Evaluates the fraction of attempted rays in this processed chunk whose current RKF45 attempt was rejected and re-queued.
@@ -1311,7 +1425,7 @@ def batch_integrator_numerical(
             int temp = current; // Temporary integer scalar storing the primary buffer index for logical pointer swapping.
             current = next; // Shifts the primary execution tracker to the alternate buffer index.
             next = temp; // Assigns the cleared buffer index back to the upcoming payload queue.
-        }} // END WHILE: alternating buffers to process temporal
+        }} // END WHILE: alternate buffers process temporal slot
 
         //==========================================
         // PHASE C: THE TIME BARRIER
@@ -1424,7 +1538,7 @@ def batch_integrator_numerical(
                             max_err_norm = current_norm_err;
                             worst_ray_norm = master_idx;
                         }} // END IF: current_norm_err > max_err_norm
-                        if (all_photons_host.status[master_idx] != FAILURE_EVOLUTION_MEASURE_EXCEEDED &&
+                        if (all_photons_host.status[master_idx] != STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED &&
                             all_photons_host.status[master_idx] != FAILURE_RKF45_REJECTION_LIMIT &&
                             current_norm_err > max_err_norm_excluding_failures) {{
                             max_err_norm_excluding_failures = current_norm_err;
@@ -1463,7 +1577,7 @@ def batch_integrator_numerical(
                 max_err_norm,
                 worst_ray_norm);
             printf(
-                "  Max Absolute Error, excluding FAILURE_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
+                "  Max Absolute Error, excluding STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
                 max_err_norm_excluding_failures,
                 worst_ray_norm_excluding_failures);
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
@@ -1495,12 +1609,12 @@ def batch_integrator_numerical(
             {free_pinned}(h_bridge[s]); // Purges the integration step size $h$ bridge.
             {free_pinned}(status_bridge[s]); // Purges the trajectory status bridge.
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
-            {free_pinned}(on_pos_window_prev_bridge[s]); // Purges the observer window boundary flag bridge.
-            {free_pinned}(on_pos_source_prev_bridge[s]); // Purges the source emission boundary flag bridge.
+            {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
+            {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
             {free_pinned}(integration_param_p_bridge[s]); // Purges the preceding integration-parameter bridge.
             {free_pinned}(integration_param_p_p_bridge[s]); // Purges the second preceding integration-parameter bridge.
-            {free_pinned}(window_event_found_bridge[s]); // Purges the observer window intersection lock bridge.
-            {free_pinned}(source_event_found_bridge[s]); // Purges the source emission intersection lock bridge.
+            {free_pinned}(non_terminal_plane_event_found_bridge[s]); // Purges the nonterminal plane intersection lock bridge.
+            {free_pinned}(terminal_plane_event_found_bridge[s]); // Purges the terminal-plane intersection lock bridge.
 
             // Host Memory Free: Purges remaining CPU scratch operational pipeline scratchpads.
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
@@ -1515,12 +1629,12 @@ def batch_integrator_numerical(
             {free_device}(d_integration_param_bundle[s]); // Purges the integration-parameter scratchpad.
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
-            {free_device}(d_on_pos_window_prev[s]); // Purges the previous observer window boundary side scratchpad.
-            {free_device}(d_on_pos_source_prev[s]); // Purges the previous source emission boundary side scratchpad.
+            {free_device}(d_on_pos_non_terminal_plane_prev[s]); // Purges the previous nonterminal plane boundary side scratchpad.
+            {free_device}(d_on_pos_terminal_plane_prev[s]); // Purges the previous terminal-plane boundary side scratchpad.
             {free_device}(d_integration_param_prev[s]); // Purges the preceding integration-parameter scratchpad.
             {free_device}(d_integration_param_pre_prev[s]); // Purges the second preceding integration-parameter scratchpad.
-            {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
-            {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
+            {free_device}(d_non_terminal_plane_event_found[s]); // Purges the nonterminal-plane intersection coordinate guard scratchpad.
+            {free_device}(d_terminal_plane_event_found[s]); // Purges the terminal-plane intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
 {spatial_center_frees}
         }} // END LOOP: for s over 2
@@ -1534,12 +1648,12 @@ def batch_integrator_numerical(
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
-        {free_pinned}(all_photons_host.on_positive_side_of_window_prev); // Purges the primary Host array observer window boundary flag.
-        {free_pinned}(all_photons_host.on_positive_side_of_source_prev); // Purges the primary Host array source emission boundary flag.
+        {free_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev); // Purges the primary Host array nonterminal plane boundary flag.
+        {free_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev); // Purges the primary Host array terminal-plane boundary flag.
         {free_pinned}(all_photons_host.integration_param_p); // Purges the preceding Host integration-parameter array.
         {free_pinned}(all_photons_host.integration_param_p_p); // Purges the second preceding Host integration-parameter array.
-        {free_pinned}(all_photons_host.window_event_found); // Purges the primary Host array observer window intersection lock.
-        {free_pinned}(all_photons_host.source_event_found); // Purges the primary Host array source emission intersection lock.
+        {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
+        {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
 
         // Release the active numerical spacetime window before the slot lattice is destroyed.
         time_window_manager_numerical_free(&numerical_window);

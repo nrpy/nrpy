@@ -20,7 +20,9 @@ uses its log-energy tolerance in the embedded error norm.
 
 When requested by `enable_numerical_time_window_step_cap`, the generated kernel
 also caps accepted next-step sizes using `rkf45_max_delta_t` so backward
-numerical-spacetime ray tracing remains inside the mapped time window.
+numerical-spacetime ray tracing remains inside the mapped numerical time window.
+This time window is distinct from the geometric `non_terminal_plane` event surface
+handled by the photon event-detection kernels.
 The numerical photon example registers the companion time-window manager before
 registering this kernel, so that the shared `rkf45_max_delta_t` parameter exists
 when the accepted-step cap is emitted.
@@ -53,7 +55,6 @@ from nrpy.infrastructures.BHaH import BHaH_defines_h
 def rkf45_finalize_and_control_kernel(
     enable_numerical_time_window_step_cap: bool = False,
     normalized_eom: bool = False,
-    register_numerical_initial_h: bool = True,
     enable_rkf45_trial_debug: bool = False,
 ) -> None:
     r"""
@@ -69,9 +70,6 @@ def rkf45_finalize_and_control_kernel(
         time-window manager separately before enabling this option.
     :param normalized_eom: Whether the nine-component state uses normalized
         photon variables with coordinate time as its integration parameter.
-    :param register_numerical_initial_h: Whether to register the legacy numerical
-        initial-step parameter. Standalone numerical single-photon integrations
-        use the shared ``initial_h`` parameter instead.
     :param enable_rkf45_trial_debug: Whether to emit per-trial RKF45 diagnostics
         through an additional output pointer. Disabled by default so existing
         callers keep the current generated interface.
@@ -238,10 +236,6 @@ def rkf45_finalize_and_control_kernel(
     if normalized_eom:
         real_param_names.append("rkf45_log_energy_tolerance")
         real_param_defaults.append(1e-8)
-    if register_numerical_initial_h:
-        # Retain this parameter for batch integrations that still consume it.
-        real_param_names.append("numerical_initial_h")
-        real_param_defaults.append(0.1)
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -364,7 +358,7 @@ static inline int rkf45_checked_floor_to_long(
             if (rkf45_checked_floor_to_long(slot_position, &slot_idx) != 0) {{
                 h_new_abs = {cd_access}rkf45_h_min;
                 h_new = h_sign * h_new_abs;
-                WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                WriteCUDA(&d_status[i], FAILURE_GENERIC);
             }} else {{
                 const double slot_lower =
                     {cd_access}slot_manager_t_min +
@@ -410,7 +404,7 @@ static inline int rkf45_checked_floor_to_long(
 
             if (rkf45_checked_floor_to_long(slot_position, &slot_idx) != 0) {{
                 h_new = {cd_access}rkf45_h_min;
-                WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                WriteCUDA(&d_status[i], FAILURE_GENERIC);
             }} else {{
                 const double slot_lower =
                     {cd_access}slot_manager_t_min +
@@ -437,12 +431,12 @@ static inline int rkf45_checked_floor_to_long(
                         // numerical time window that the companion manager
                         // promised to keep available.
                         h_new = time_window_h_cap;
-                        WriteCUDA(&d_status[i], TERMINATION_TYPE_FAILURE);
+                        WriteCUDA(&d_status[i], FAILURE_GENERIC);
                     }} else {{
                         h_new = fmin(h_new, time_window_h_cap);
                         h_new = fmax(h_new, {cd_access}rkf45_h_min);
                     }} // END ELSE: time-window cap compatible
-                }} // END IF: accepted temporal derivative supports a
+                }} // END IF: positive derivative and cap
             }} // END ELSE: slot position representable
         }} // END BLOCK: numerical time-window accepted-step cap
 """
@@ -468,7 +462,7 @@ static inline int rkf45_checked_floor_to_long(
 
             const double current_err = DivCUDA(err_abs, scale);
 {trial_debug_error_update}
-        } // END IF: exclude integration parameter and Eulerian
+        } // END IF: exclude integration and Eulerian slots
 """
         adaptive_step_control = rf"""
     const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
@@ -690,21 +684,23 @@ static inline int rkf45_checked_floor_to_long(
         includes.append("cuda_intrinsics.h")
 
     trial_debug_desc = (
-        "    @param d_trial_debug Optional per-ray trial diagnostic output.\n"
+        "    @param[out] d_trial_debug Optional per-ray trial diagnostic output.\n"
         if enable_rkf45_trial_debug
         else ""
     )
     desc = rf""" Finalizes the RKF45 step, checks errors, and updates state/stepsize.
 
-    @param d_f_persistent Pointer to the persistent nine-component state (updated on acceptance).
-    @param d_f_start Pointer to the base nine-component state (read-only).
-    @param d_k_bundle Pointer to all 6 derivative vectors $k_n$.
-    @param d_h Pointer to the step size $h$.
-    @param d_status Pointer to the ray status flag.
-    @param d_integration_param Pointer to the affine-parameter or coordinate-time tracker.
-    @param d_retries Pointer to the retry counter.
+    @param[in] commondata Global integration and numerical-spacetime parameters.
+    @param[in,out] d_f_persistent Persistent nine-component state, updated on acceptance.
+    @param[in] d_f_start Base nine-component state, read-only.
+    @param[in] d_k_bundle Six derivative vectors $k_n$.
+    @param[in,out] d_h Step size $h$, updated after acceptance or rejection.
+    @param[in,out] d_status Ray status flag, updated on terminal failure.
+    @param[in,out] d_integration_param Affine-parameter or coordinate-time tracker.
+    @param[in,out] d_retries Retry counter, updated on rejected steps.
 {trial_debug_desc}
     @param chunk_size The number of rays in the current bundle.
+    @param stream_idx CUDA stream identifier when CUDA is enabled.
 
     @note When numerical-spacetime support requests the optional accepted-step
     cap, this routine becomes the runtime enforcement layer for the

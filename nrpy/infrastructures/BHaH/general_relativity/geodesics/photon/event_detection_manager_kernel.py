@@ -2,8 +2,8 @@
 """
 Provides the C orchestrator for geometric event detection.
 
-This module provides the high-level logic for detecting crossings of the observer
-window and the source emission plane. It generates a C kernel that reads the current
+This module provides high-level logic for detecting crossings of the independent
+nonterminal and terminal planes. It generates a C kernel that reads current
 and historical integration state bundles from global device memory into local arrays
 to evaluate evolution-measure limits and coordinate-radius bounds before verifying
 physical plane intersections. The geometric boundaries remain mathematically immutable
@@ -21,6 +21,22 @@ import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.params as par
 
 
+def register_event_plane_parameters() -> None:
+    """Register user-controllable enable flags for both event planes."""
+    par.register_CodeParameters(
+        "bool",
+        __name__,
+        ["non_terminal_plane_enabled", "terminal_plane_enabled"],
+        [False, False],
+        commondata=True,
+        add_to_parfile=True,
+        descriptions=[
+            "Enable nonterminal-plane crossing detection.",
+            "Enable terminal-plane crossing detection.",
+        ],
+    )
+
+
 def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     """
     Define the configuration and parameters for the event-detection kernel.
@@ -28,12 +44,17 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     :param normalized_eom: Whether the state stores affine parameter in ``f[0]``
         and coordinate time in the integration-parameter tracker.
     """
+    register_event_plane_parameters()
     parallelization = par.parval_from_str("parallelization")
     cd_access = parallel_utils.get_commondata_access(parallelization)
 
     find_event_c_code = cfc.CFunction_dict["find_event_time_and_state"].full_function
-    window_c_code = cfc.CFunction_dict["handle_window_plane_intersection"].full_function
-    source_c_code = cfc.CFunction_dict["handle_source_plane_intersection"].full_function
+    non_terminal_plane_c_code = cfc.CFunction_dict[
+        "handle_non_terminal_plane_intersection"
+    ].full_function
+    terminal_plane_c_code = cfc.CFunction_dict[
+        "handle_terminal_plane_intersection"
+    ].full_function
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
@@ -44,10 +65,10 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         "d_integration_param_pre_prev": "double *restrict",
         "d_results_buffer": "blueprint_data_t *restrict",
         "d_status_bundle": "termination_type_t *restrict",
-        "d_on_pos_window_prev": "bool *restrict",
-        "d_on_pos_source_prev": "bool *restrict",
-        "d_window_event_found": "bool *restrict",
-        "d_source_event_found": "bool *restrict",
+        "d_on_pos_non_terminal_plane_prev": "bool *restrict",
+        "d_on_pos_terminal_plane_prev": "bool *restrict",
+        "d_non_terminal_plane_event_found": "bool *restrict",
+        "d_terminal_plane_event_found": "bool *restrict",
         "d_chunk_buffer": "const long int *restrict",
         "chunk_size": "const int",
     }
@@ -61,10 +82,10 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         "d_integration_param_pre_prev": "double *restrict",
         "d_results_buffer": "blueprint_data_t *restrict",
         "d_status_bundle": "termination_type_t *restrict",
-        "d_on_pos_window_prev": "bool *restrict",
-        "d_on_pos_source_prev": "bool *restrict",
-        "d_window_event_found": "bool *restrict",
-        "d_source_event_found": "bool *restrict",
+        "d_on_pos_non_terminal_plane_prev": "bool *restrict",
+        "d_on_pos_terminal_plane_prev": "bool *restrict",
+        "d_non_terminal_plane_event_found": "bool *restrict",
+        "d_terminal_plane_event_found": "bool *restrict",
         "d_chunk_buffer": "const long int *restrict",
         "chunk_size": "const int",
     }
@@ -115,7 +136,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
 
     core_math = rf"""
-    // Resolves the absolute global memory index $m_{{idx}}$ of the trajectory to bypass local array overwriting.
+    // Resolves absolute global memory index $m_{{idx}}$ of trajectory to bypass local array overwriting.
     const long int master_idx = d_chunk_buffer[i];
 
     //==========================================
@@ -132,7 +153,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     const double energy_measure = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
 
     if (AbsCUDA(energy_measure) > {cd_access}evolution_measure_max) {{
-        d_status_bundle[i] = FAILURE_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
+        d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
         {escape_statement}
     }} // END IF: mode-specific evolution-measure limit exceeded
 
@@ -168,7 +189,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     // Evaluates if the photon has exceeded the coordinate escape radius $r_{{escape}}$.
     const double r_sq = x*x + y*y + z*z; // Computes the squared radial distance $r^2$ from the origin.
     if (r_sq > ({cd_access}r_escape * {cd_access}r_escape)) {{
-        d_status_bundle[i] = TERMINATION_TYPE_COORD_RADIUS_EXCEEDED; // Marks the coordinate-radius limit termination.
+        d_status_bundle[i] = STOP_CONDITION_COORD_RADIUS_EXCEEDED; // Marks the coordinate-radius stop condition.
         {escape_statement}
     }} // END IF: coordinate-radius escape limit exceeded
 
@@ -177,70 +198,85 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     //==========================================
     // Evaluates physical plane intersections strictly using localized variables.
 
-    // Window plane logic is guarded to lock the intersection coordinates permanently.
-    if (!d_window_event_found[i]) {{
+    // Nonterminal-plane logic is guarded to lock the intersection coordinates permanently.
+    if ({cd_access}non_terminal_plane_enabled &&
+        !d_non_terminal_plane_event_found[i]) {{
         //==========================================
-        // GLOBAL WINDOW PLANE RECONSTRUCTION
+        // NONTERMINAL-PLANE RECONSTRUCTION
         //==========================================
 
-        double w_normal[3]; // 3D geometric unit normal vector $n_i$ of the global observer window.
-        w_normal[0] = {cd_access}original_window_center_x - {cd_access}camera_pos_x; // Computes the $x$ component of the global window normal.
-        w_normal[1] = {cd_access}original_window_center_y - {cd_access}camera_pos_y; // Computes the $y$ component of the global window normal.
-        w_normal[2] = {cd_access}original_window_center_z - {cd_access}camera_pos_z; // Computes the $z$ component of the global window normal.
+        double w_normal[3]; // 3D geometric unit normal of the nonterminal plane.
+        w_normal[0] = {cd_access}non_terminal_plane_normal_x; // Nonterminal-plane normal $x$ component.
+        w_normal[1] = {cd_access}non_terminal_plane_normal_y; // Nonterminal-plane normal $y$ component.
+        w_normal[2] = {cd_access}non_terminal_plane_normal_z; // Nonterminal-plane normal $z$ component.
 
         const double mag_inv = 1.0 / SqrtCUDA(w_normal[0]*w_normal[0] + w_normal[1]*w_normal[1] + w_normal[2]*w_normal[2]); // Computes the inverse magnitude $1/|n|$ for normalization.
         w_normal[0] *= mag_inv; // Normalizes the $x$ component.
         w_normal[1] *= mag_inv; // Normalizes the $y$ component.
         w_normal[2] *= mag_inv; // Normalizes the $z$ component.
 
-        // Calculates orthogonal distance $d_w$ from the origin to the global window plane.
-        const double w_dist = {cd_access}original_window_center_x*w_normal[0] + {cd_access}original_window_center_y*w_normal[1] + {cd_access}original_window_center_z*w_normal[2];
+        // Calculates signed distance $d_w$ from the independent nonterminal
+        // plane. Its normal and center are explicit plane parameters.
+        const double w_dist = {cd_access}non_terminal_plane_center_x*w_normal[0] + {cd_access}non_terminal_plane_center_y*w_normal[1] + {cd_access}non_terminal_plane_center_z*w_normal[2];
 
         // Evaluates the global plane equation $E_w$ for the photon's current spatial position.
         const double w_val = x*w_normal[0] + y*w_normal[1] + z*w_normal[2] - w_dist;
 
-        const bool on_pos_win_curr = (w_val > 1e-10); // Checks if the photon is on the positive side of the global window.
-        const bool on_pos_win_prev = d_on_pos_window_prev[i]; // Retrieves the previous integration step's window side evaluation.
+        const bool on_pos_non_terminal_plane_curr = (w_val > 1e-10); // Checks the nonterminal-plane side.
+        const bool on_pos_non_terminal_plane_prev = d_on_pos_non_terminal_plane_prev[i]; // Retrieves the previous nonterminal-plane side.
 
-        if (on_pos_win_curr != on_pos_win_prev) {{ // Triggers intersection event if the physical plane was crossed.
+        if (on_pos_non_terminal_plane_curr != on_pos_non_terminal_plane_prev) {{ // Triggers an event when the nonterminal plane is crossed.
             double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
             double event_integration_param;
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, integration_param_local, integration_param_prev_local, integration_param_pre_prev_local, w_normal, w_dist, &event_integration_param, f_int);
 {intersection_state_setup}
 
             // Writes the physical intersection to the persistent master index array slot via global mapping.
-            // The downstream function handle_window_plane_intersection safely handles mapping the global
+            // The downstream function handle_non_terminal_plane_intersection safely handles mapping the global
             // spatial coordinates to the local tile offsets.
-            // Window plane function call to pass commondata conditionally.
-            if (handle_window_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
-                d_window_event_found[i] = true;
-            }} // END IF: handle_window_plane_intersection succeeded
-        }} // END IF: physical window plane was crossed
-        d_on_pos_window_prev[i] = on_pos_win_curr; // Updates the window evaluation history for the next step.
-    }} // END IF: window event not found
+            // Nonterminal-plane function call; pass commondata conditionally.
+            if (handle_non_terminal_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
+                d_non_terminal_plane_event_found[i] = true;
+            }} // END IF: handle_non_terminal_plane_intersection succeeded
+        }} // END IF: physical nonterminal plane was crossed
+        d_on_pos_non_terminal_plane_prev[i] = on_pos_non_terminal_plane_curr; // Updates nonterminal-plane side history.
+    }} // END IF: nonterminal-plane event not found
 
-    // Source plane logic is guarded to lock the intersection coordinates permanently.
-    if (!d_source_event_found[i]) {{
-        const double s_normal[3] = {{{cd_access}source_plane_normal_x, {cd_access}source_plane_normal_y, {cd_access}source_plane_normal_z}}; // 3D geometric unit normal vector $n_i$ of the source plane.
-        const double s_dist = {cd_access}source_plane_center_x*s_normal[0] + {cd_access}source_plane_center_y*s_normal[1] + {cd_access}source_plane_center_z*s_normal[2]; // Calculates orthogonal distance $d_s$ to the source plane.
+    // Terminal plane logic is guarded to lock the intersection coordinates permanently.
+    if ({cd_access}terminal_plane_enabled &&
+        !d_terminal_plane_event_found[i]) {{
+        double s_normal[3] = {{{cd_access}terminal_plane_normal_x, {cd_access}terminal_plane_normal_y, {cd_access}terminal_plane_normal_z}}; // Terminal-plane normal supplied by the independent plane configuration.
+        const double s_normal_sq =
+            s_normal[0] * s_normal[0] +
+            s_normal[1] * s_normal[1] +
+            s_normal[2] * s_normal[2];
+        if (!isfinite(s_normal_sq) || s_normal_sq <= 1.0e-28) {{
+                d_status_bundle[i] = FAILURE_GENERIC;
+            {escape_statement}
+        }}
+        const double s_normal_inv = 1.0 / SqrtCUDA(s_normal_sq);
+        s_normal[0] *= s_normal_inv;
+        s_normal[1] *= s_normal_inv;
+        s_normal[2] *= s_normal_inv;
+        const double s_dist = {cd_access}terminal_plane_center_x*s_normal[0] + {cd_access}terminal_plane_center_y*s_normal[1] + {cd_access}terminal_plane_center_z*s_normal[2]; // Calculates orthogonal distance $d_s$ to the terminal plane.
         const double s_val = x*s_normal[0] + y*s_normal[1] + z*s_normal[2] - s_dist; // Evaluates the plane equation $E_s$ for the current position.
 
-        const bool on_pos_src_curr = (s_val > 1e-10); // Checks if the photon is on the positive side of the source.
-        const bool on_pos_src_prev = d_on_pos_source_prev[i]; // Retrieves the previous integration step's source side evaluation.
+        const bool on_pos_terminal_plane_curr = (s_val > 1e-10); // Checks the terminal-plane side.
+        const bool on_pos_terminal_plane_prev = d_on_pos_terminal_plane_prev[i]; // Retrieves the previous terminal-plane side.
 
-        if (on_pos_src_curr != on_pos_src_prev) {{ // Triggers intersection event if the plane was crossed.
+        if (on_pos_terminal_plane_curr != on_pos_terminal_plane_prev) {{ // Triggers intersection event if the plane was crossed.
             double f_int[9];  // Reconstructed $9$-component state vector $f^\mu$ at the intersection.
             double event_integration_param;
             find_event_time_and_state(f_local, f_p_local, f_p_p_local, integration_param_local, integration_param_prev_local, integration_param_pre_prev_local, s_normal, s_dist, &event_integration_param, f_int);
 {intersection_state_setup}
             // Writes the physical intersection to the persistent master index array slot via global mapping.
-            if (handle_source_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
-                d_status_bundle[i] = TERMINATION_TYPE_SOURCE_PLANE; // Marks the ray as terminated upon striking the source plane.
-                d_source_event_found[i] = true; // Locks the source intersection to prevent future overwrites.
-            }} // END IF: handle_source_plane_intersection succeeded
-        }} // END IF: physical source plane was crossed
-        d_on_pos_source_prev[i] = on_pos_src_curr; // Updates the source evaluation history for the next step.
-    }} // END IF: source event not found
+            if (handle_terminal_plane_intersection({intersection_state_name}, physical_lambda, &d_results_buffer[master_idx]{commondata_arg})) {{
+                d_status_bundle[i] = STOP_CONDITION_TERMINAL_PLANE; // Marks the ray as stopped upon striking the terminal plane.
+                d_terminal_plane_event_found[i] = true; // Locks the terminal intersection to prevent future overwrites.
+            }} // END IF: handle_terminal_plane_intersection succeeded
+        }} // END IF: physical terminal plane was crossed
+        d_on_pos_terminal_plane_prev[i] = on_pos_terminal_plane_curr; // Updates terminal-plane history.
+    }} // END IF: terminal-plane event not found
 
     //==========================================
     // HISTORY SHIFT
@@ -280,7 +316,12 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     )
 
     prefunc = "\n\n".join(
-        [find_event_c_code, window_c_code, source_c_code, prefunc_kernel]
+        [
+            find_event_c_code,
+            non_terminal_plane_c_code,
+            terminal_plane_c_code,
+            prefunc_kernel,
+        ]
     )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
@@ -290,19 +331,20 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
 
     desc = r""" Optimized detection of plane crossings using consolidated blueprints.
 
-    @param d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
-    @param d_f_prev_bundle SoA pointer to the state array for step $f^\mu_{n-1}$.
-    @param d_f_pre_prev_bundle SoA pointer to the state array for step $f^\mu_{n-2}$.
-    @param d_integration_param Pointer to the current integration parameter.
-    @param d_integration_param_prev Pointer to the preceding integration parameter.
-    @param d_integration_param_pre_prev Pointer to the integration parameter two steps earlier.
-    @param d_results_buffer Pointer to the flat array of blueprint data structures $b_i$.
-    @param d_status_bundle Pointer to the array of termination statuses.
-    @param d_on_pos_window_prev Array tracking the window plane side.
-    @param d_on_pos_source_prev Array tracking the source plane side.
-    @param d_window_event_found Array tracking if a window intersection has been locked.
-    @param d_source_event_found Array tracking if a source intersection has been locked.
-    @param d_chunk_buffer Array containing the absolute master mapping indices $m_{idx}$.
+    @param[in] commondata Global spacetime and plane parameters.
+    @param[in] d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
+    @param[in,out] d_f_prev_bundle Previous-step state array, shifted in place.
+    @param[in,out] d_f_pre_prev_bundle Pre-previous state array, shifted in place.
+    @param[in] d_integration_param Current integration parameter.
+    @param[in,out] d_integration_param_prev Previous parameter, shifted in place.
+    @param[in,out] d_integration_param_pre_prev Pre-previous parameter, shifted in place.
+    @param[in,out] d_results_buffer Blueprint records updated on intersections.
+    @param[in,out] d_status_bundle Per-ray termination statuses.
+    @param[in,out] d_on_pos_non_terminal_plane_prev Nonterminal-plane side history.
+    @param[in,out] d_on_pos_terminal_plane_prev Terminal-plane side history.
+    @param[in,out] d_non_terminal_plane_event_found Nonterminal event locks.
+    @param[in,out] d_terminal_plane_event_found Terminal event locks.
+    @param[in] d_chunk_buffer Absolute master mapping indices $m_{idx}$.
     @param chunk_size The number of active rays in the current bundle batch.
     @param stream_idx The hardware stream identifier."""
     cfunc_type = "void"
@@ -317,10 +359,10 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
         "double *restrict d_integration_param_pre_prev, "
         "blueprint_data_t *restrict d_results_buffer, "
         "termination_type_t *restrict d_status_bundle, "
-        "bool *restrict d_on_pos_window_prev, "
-        "bool *restrict d_on_pos_source_prev, "
-        "bool *restrict d_window_event_found, "
-        "bool *restrict d_source_event_found, "
+        "bool *restrict d_on_pos_non_terminal_plane_prev, "
+        "bool *restrict d_on_pos_terminal_plane_prev, "
+        "bool *restrict d_non_terminal_plane_event_found, "
+        "bool *restrict d_terminal_plane_event_found, "
         "const long int *restrict d_chunk_buffer, "
         "const int chunk_size,"
         "const int stream_idx"

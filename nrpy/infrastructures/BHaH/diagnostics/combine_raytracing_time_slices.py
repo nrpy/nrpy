@@ -86,9 +86,8 @@ class GridMetadata:
     """
     Grid metadata parsed from one source slice.
 
-    The combiner does not validate that these values match across slices.
-    When serialized into the combined metadata, they are recorded explicitly
-    as first-slice provenance only.
+    The combiner requires these values to match exactly across all slices.
+    After validation, the common values are serialized from the first slice.
     """
 
     Nxx: Tuple[int, int, int]

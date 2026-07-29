@@ -3,8 +3,8 @@
 Defines the visualization script for the Photon Geodesic Integrator.
 
 This script reads binary blueprints to render the final lensed image. It maps physical
-photon trajectories onto a static background texture and an accretion disk geometry,
-using r_min and r_max to define source bounds.
+photon trajectories onto a static background texture and terminal-plane accretion-disk
+geometry, using r_min and r_max to define disk-texture bounds.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -22,9 +22,11 @@ import numpy.typing as npt
 
 try:
     import blueprint_config_and_schema as cfg  # type: ignore
+    import blueprint_io  # type: ignore
     import render_lensed_image as rli  # type: ignore
 except ImportError:
     from nrpy.examples.geodesic_visualizations import blueprint_config_and_schema as cfg
+    from nrpy.examples.geodesic_visualizations import blueprint_io
     from nrpy.examples.geodesic_visualizations import render_lensed_image as rli
 
 
@@ -52,62 +54,34 @@ def main() -> None:
         help="Path where the output PNG will be saved.",
     )
 
+    # Physical parameters govern terminal-plane accretion-disk texture geometry.
+    # Image placement comes only from normalized image-sample fractions stored in
+    # records; plane coordinates remain diagnostics and terminal-texture samples.
     parser.add_argument(
-        "--window_tiles_width",
-        type=int,
-        default=1,
-        help="Number of horizontal tiles.",
-    )
-
-    parser.add_argument(
-        "--window_tiles_height",
-        type=int,
-        default=1,
-        help="Number of vertical tiles.",
-    )
-
-    # Physical parameters govern the source accretion disk geometry and window bounds.
-    parser.add_argument(
-        "--source_r_min",
+        "--terminal-plane-radius",
+        nargs=2,
         type=float,
-        default=6.0,
-        help="Inner physical radius r_min of the generated source disk.",
+        default=(0.0, 1.0),
+        metavar=("MIN_RADIUS", "MAX_RADIUS"),
+        help="Inner and outer physical radii of the terminal-plane disk texture.",
     )
     parser.add_argument(
-        "--source_r_max",
-        type=float,
-        default=20.0,
-        help="Outer physical radius r_max of the source disk.",
-    )
-    parser.add_argument(
-        "--window_width",
-        type=float,
-        default=1.0,
-        help="Camera window width w in coordinate units.",
-    )
-    parser.add_argument(
-        "--window_height",
-        type=float,
-        default=1.0,
-        help="Camera window height h in coordinate units.",
-    )
-    parser.add_argument(
-        "--pixel_width",
+        "--pixel-width",
         type=int,
         default=750,
-        help="Pixel width of the final static output image.",
+        help="Pixel width of the final output image; does not change ray-grid resolution.",
     )
     parser.add_argument(
-        "--sphere_image",
+        "--sphere-image",
         type=str,
         default=None,
         help="Optional path to a custom celestial sphere texture image.",
     )
     parser.add_argument(
-        "--source_image",
+        "--terminal-plane-image",
         type=str,
         default=None,
-        help="Optional path to a custom source-plane texture image.",
+        help="Optional path to a custom terminal-plane texture image.",
     )
     parser.add_argument(
         "--debug",
@@ -121,10 +95,19 @@ def main() -> None:
         ),
     )
 
-    # The parsed arguments struct contains all runtime configurations.
+    # The parsed argument namespace contains all runtime configurations.
     args = parser.parse_args()
     if args.debug not in (None, "", "key"):
         parser.error("--debug accepts no argument or the optional argument 'key'.")
+    terminal_plane_min_radius, terminal_plane_max_radius = args.terminal_plane_radius
+    if terminal_plane_min_radius < 0.0:
+        parser.error("--terminal-plane-radius MIN_RADIUS must be nonnegative.")
+    if terminal_plane_max_radius <= terminal_plane_min_radius:
+        parser.error(
+            "--terminal-plane-radius MAX_RADIUS must be greater than MIN_RADIUS."
+        )
+    if args.pixel_width < 1:
+        parser.error("--pixel-width must be positive.")
 
     # Absolute script directory ensures paths resolve independently of execution context.
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -136,10 +119,14 @@ def main() -> None:
         )
         return
 
-    # Deterministically build the expected file paths based on tile dimensions.
+    first_header = blueprint_io.read_blueprint_header(first_tile, expected_tile=(0, 0))
+
+    # Discover tile grid and fields of view from headers. Ray samples carry
+    # normalized image coordinates, so no serialized pixel-grid dimensions are
+    # needed for placement.
     blueprint_files = []
-    for i in range(args.window_tiles_width):
-        for j in range(args.window_tiles_height):
+    for i in range(first_header.tiles_width):
+        for j in range(first_header.tiles_height):
             blueprint_filename = f"light_blueprint_{i:02d}_{j:02d}.bin"
             blueprint_filepath = os.path.join(script_dir, blueprint_filename)
 
@@ -150,6 +137,10 @@ def main() -> None:
             blueprint_files.append(blueprint_filepath)
 
     print(f"Loading {len(blueprint_files)} blueprint tiles...")
+    print(
+        "Blueprint angular aspect ratio: "
+        f"{first_header.alpha_w:.6g} x {first_header.alpha_h:.6g} radians"
+    )
 
     # The custom sphere image overrides the default downloaded texture when provided.
     if args.sphere_image is None:
@@ -172,30 +163,30 @@ def main() -> None:
         print(f"Using custom celestial sphere texture: {sphere_image}")
 
     # Physical span encompasses full mathematical diameter of accretion disk geometry.
-    source_physical_width = 2.0 * args.source_r_max
+    source_physical_width = 2.0 * terminal_plane_max_radius
 
-    # Calculate the vertical pixel dimension to maintain the physical aspect ratio.
-    pixel_height = math.ceil(
-        (args.window_height / args.window_width) * args.pixel_width
+    # Preserve blueprint image aspect ratio while optionally resampling width.
+    pixel_height = max(
+        1, math.ceil(args.pixel_width * first_header.alpha_h / first_header.alpha_w)
     )
 
-    source_image: Union[str, npt.NDArray[np.float64]]
-    if args.source_image is None:
-        print("Creating source disk array...")
+    terminal_plane_texture: Union[str, npt.NDArray[np.float64]]
+    if args.terminal_plane_image is None:
+        print("Creating terminal-plane disk array...")
 
         # Texture array represents the equatorial source disk using defined radii.
         disk_texture = rli.generate_source_disk_array(
             disk_physical_width=source_physical_width,
-            disk_inner_radius=args.source_r_min,
-            disk_outer_radius=args.source_r_max,
+            disk_inner_radius=terminal_plane_min_radius,
+            disk_outer_radius=terminal_plane_max_radius,
             colormap=cfg.COLORMAP,
         )
 
         # Cast the uint8 array to float64 to satisfy mypy type constraints.
-        source_image = disk_texture.astype(np.float64)
+        terminal_plane_texture = disk_texture.astype(np.float64)
     else:
-        source_image = args.source_image
-        print(f"Using custom source texture: {source_image}")
+        terminal_plane_texture = args.terminal_plane_image
+        print(f"Using custom terminal-plane texture: {terminal_plane_texture}")
 
     print(f"Rendering image to: {args.output}...")
     if args.debug is not None:
@@ -211,10 +202,10 @@ def main() -> None:
         output_pixel_height=pixel_height,
         source_image_width=source_physical_width,
         sphere_image=sphere_image,
-        source_image=source_image,
+        source_image=terminal_plane_texture,
         blueprint_filenames=blueprint_files,
         custom_sphere_image=args.sphere_image is not None,
-        custom_source_image=args.source_image is not None,
+        custom_source_image=args.terminal_plane_image is not None,
         enable_debug=args.debug is not None,
         include_debug_key=args.debug == "key",
     )

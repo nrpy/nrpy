@@ -219,7 +219,7 @@ static void azimuthal_symmetry_spatial_lagrange_rotate_metric_and_derivatives_ab
  * @param num_target_slices Number of mapped slice payload pointers.
  * @param[in] slice_payloads Mapped ghost-zone-inclusive slice payload pointers.
  * @param[out] g4dd_out Flat metric output, ten values per slice.
- * @param[out] g4dd_dD_out Metric-derivative output, forty values per slice.
+ * @param[out] rhs_geometry_out Forty metric-derivative or Christoffel values per slice, as selected at generation time.
  * @return Interpolation status code.
  */
 int azimuthal_symmetry_spatial_lagrange_interpolation__rfm__SinhCylindricalv2n2(

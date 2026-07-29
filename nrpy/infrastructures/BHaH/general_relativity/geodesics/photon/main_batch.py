@@ -6,13 +6,11 @@ This module acts as the master orchestrator, handling the explicit population of
 RKF45 integrator configurations, simulation defaults, memory allocation for the
 trajectory results, and the final serialization of the light blueprint.
 
-The architecture implements spatial domain decomposition via tiling. Master parameters
-define the full global frame, referencing an immutable original center, while the tile
-orchestrator modifies the window center dynamically per tile. During the basis vector
-calculations, the system evaluates fallback logic for near-nadir camera angles to
-prevent coordinate degeneration. Finally, local 2D tile-space hits are translated back
-into the global window coordinate system by their spatial offsets before native binary
-serialization and archive compression.
+The architecture implements pure angular-sample tiling. Observer parameters define
+one common tetrad and field of view; each tile changes only its two tile indices.
+The independent nonterminal and terminal planes are never shifted by tiling.
+Normalized ray-sample coordinates are written during blueprint serialization;
+plane coordinates remain event diagnostics.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -132,17 +130,23 @@ def main(
 """
     )
 
-    # Step 1: Register Tiling Parameters
+    # Step 1: Register pure angular-grid tiling parameters. Physical plane
+    # parameters belong to the initializer and event handlers, not to tiling.
     par.register_CodeParameter(
-        "int", __name__, "window_tiles_width", 1, commondata=True, add_to_parfile=True
+        "int", __name__, "tiles_width", 1, commondata=True, add_to_parfile=True
     )
     par.register_CodeParameter(
-        "int", __name__, "window_tiles_height", 1, commondata=True, add_to_parfile=True
+        "int",
+        __name__,
+        "tiles_height",
+        1,
+        commondata=True,
+        add_to_parfile=True,
     )
-
     includes = [
         "BHaH_defines.h",
         "BHaH_function_prototypes.h",
+        "limits.h",
         "stdio.h",
         "stdlib.h",
         "math.h",
@@ -154,8 +158,8 @@ def main(
     1. Initializes core data structures and sets default physical constants.
     2. Parses command-line arguments and parameter files to override defaults.
     3. Performs numerical startup validation once when numerical mode is selected.
-    4. Calculates the orthonormal basis (nx, ny, nz) for the camera window.
-    5. Loops through a grid of tiles (tx, ty), shifting the window center.
+    4. Validates and normalizes the independent event-plane normals.
+    5. Loops through a grid of tiles (tx, ty), changing only active tile indices.
     6. Dispatches the selected {integrator_mode.lower()} batch integrator for the {spacetime_name} metric per tile.
     7. Serializes each tile to a versioned native 'light_blueprint_XX_YY.bin'.{serialization_desc}"""
 
@@ -168,205 +172,204 @@ def main(
     //==========================================
     // CORE STRUCTURE INITIALIZATION
     //==========================================
-    // Populates the master structure with the base metric parameters.
     commondata_struct commondata;
 
     //==========================================
     // PARAMETER PARSING
     //==========================================
-    // Sets default metric properties and overrides them based on host system input.
     commondata_struct_set_to_default(&commondata);
     cmdline_input_and_parfile_parser(&commondata, argc, argv);
 
 {numerical_startup_validation}
 
-    // Source-plane normals are a valid nonzero input precondition. Normalize once
-    // so crossing and source-coordinate projection use the same geometric plane.
-    const double source_normal_mag = sqrt(
-        commondata.source_plane_normal_x * commondata.source_plane_normal_x +
-        commondata.source_plane_normal_y * commondata.source_plane_normal_y +
-        commondata.source_plane_normal_z * commondata.source_plane_normal_z);
-    commondata.source_plane_normal_x /= source_normal_mag;
-    commondata.source_plane_normal_y /= source_normal_mag;
-    commondata.source_plane_normal_z /= source_normal_mag;
+    // Normalize the two independent plane normals once. Neither normal is
+    // derived from observer position or observer look-forward direction.
+    const double non_terminal_normal_mag = sqrt(
+        commondata.non_terminal_plane_normal_x * commondata.non_terminal_plane_normal_x +
+        commondata.non_terminal_plane_normal_y * commondata.non_terminal_plane_normal_y +
+        commondata.non_terminal_plane_normal_z * commondata.non_terminal_plane_normal_z);
+    const double terminal_normal_mag = sqrt(
+        commondata.terminal_plane_normal_x * commondata.terminal_plane_normal_x +
+        commondata.terminal_plane_normal_y * commondata.terminal_plane_normal_y +
+        commondata.terminal_plane_normal_z * commondata.terminal_plane_normal_z);
+    if (!isfinite(non_terminal_normal_mag) || !isfinite(terminal_normal_mag) ||
+        non_terminal_normal_mag <= 1.0e-14 || terminal_normal_mag <= 1.0e-14) {{
+        fprintf(stderr, "FATAL: event-plane normals must be finite and nonzero.\\n");
+        return 1;
+    }}
+    commondata.non_terminal_plane_normal_x /= non_terminal_normal_mag;
+    commondata.non_terminal_plane_normal_y /= non_terminal_normal_mag;
+    commondata.non_terminal_plane_normal_z /= non_terminal_normal_mag;
+    commondata.terminal_plane_normal_x /= terminal_normal_mag;
+    commondata.terminal_plane_normal_y /= terminal_normal_mag;
+    commondata.terminal_plane_normal_z /= terminal_normal_mag;
 
     //==========================================
-    // INITIALIZE DYNAMIC WINDOW CENTER
+    // TELEMETRY
     //==========================================
-    // The tile orchestrator modifies the window center dynamically per tile.
-    // We seed the active window center with the original master center provided by the configuration.
-    commondata.window_center_x = commondata.original_window_center_x;
-    commondata.window_center_y = commondata.original_window_center_y;
-    commondata.window_center_z = commondata.original_window_center_z;
-
-    //==========================================
-    // TELEMETRY AND PARAMETER VERIFICATION
-    //==========================================
-    // Outputs core physical and architectural variables to the standard output.
     printf("=============================================\\n");
-    printf("  Geodesic Engine  \\n");
+    printf("  Geodesic Engine\\n");
     printf("=============================================\\n");
     printf("Spacetime Metric: {spacetime_name}\\n");
 {analytic_spacetime_telemetry}
 {numerical_spacetime_telemetry}
 
-    printf("--- Camera & Window Plane ---\\n");
-    printf("Camera Pos (x, y, z): %.2f, %.2f, %.2f\\n", commondata.camera_pos_x, commondata.camera_pos_y, commondata.camera_pos_z);
-    printf("Original Window Center (x, y, z): %.2f, %.2f, %.2f\\n", commondata.original_window_center_x, commondata.original_window_center_y, commondata.original_window_center_z);
-    printf("Window Up Vec (x, y, z): %.2f, %.2f, %.2f\\n", commondata.window_up_vec_x, commondata.window_up_vec_y, commondata.window_up_vec_z);
-    printf("Window Dimensions (W x H): %.2f x %.2f\\n", commondata.window_width, commondata.window_height);
-    printf("Resolution Grid: %d x %d tiles, each %d x %d px\\n",
-           commondata.window_tiles_width, commondata.window_tiles_height,
-           commondata.scan_density, commondata.scan_density);
-    printf("Total Rays per Tile: %ld\\n", (long int)commondata.scan_density * commondata.scan_density);
+    printf("--- Observer ---\\n");
+    printf("Position (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.observer_x, commondata.observer_y, commondata.observer_z);
+    printf("Look-forward (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.observer_look_forward_x,
+           commondata.observer_look_forward_y,
+           commondata.observer_look_forward_z);
+    printf("Up seed (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.observer_up_x, commondata.observer_up_y, commondata.observer_up_z);
+    printf("FOV (width x height): %.6f x %.6f radians\\n",
+           commondata.alpha_w, commondata.alpha_h);
+    printf("Tile grid: %d x %d tiles, scan density width=%d\\n",
+           commondata.tiles_width, commondata.tiles_height,
+           commondata.scan_density);
 
-    printf("--- Source Plane (Target) ---\\n");
-    printf("Center (x, y, z): %.2f, %.2f, %.2f\\n", commondata.source_plane_center_x, commondata.source_plane_center_y, commondata.source_plane_center_z);
-    printf("Normal (x, y, z): %.2f, %.2f, %.2f\\n", commondata.source_plane_normal_x, commondata.source_plane_normal_y, commondata.source_plane_normal_z);
-    printf("Up Vector (x, y, z): %.2f, %.2f, %.2f\\n", commondata.source_up_vec_x, commondata.source_up_vec_y, commondata.source_up_vec_z);
-    printf("Radii Bounds (Min -> Max): %.2f -> %.2f\\n", commondata.source_r_min, commondata.source_r_max);
+    printf("--- Nonterminal Plane ---\\n");
+    printf("Center (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.non_terminal_plane_center_x,
+           commondata.non_terminal_plane_center_y,
+           commondata.non_terminal_plane_center_z);
+    printf("Normal (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.non_terminal_plane_normal_x,
+           commondata.non_terminal_plane_normal_y,
+           commondata.non_terminal_plane_normal_z);
+    printf("Up seed (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.non_terminal_plane_up_x,
+           commondata.non_terminal_plane_up_y,
+           commondata.non_terminal_plane_up_z);
+
+    printf("--- Terminal Plane ---\\n");
+    printf("Center (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.terminal_plane_center_x,
+           commondata.terminal_plane_center_y,
+           commondata.terminal_plane_center_z);
+    printf("Normal (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.terminal_plane_normal_x,
+           commondata.terminal_plane_normal_y,
+           commondata.terminal_plane_normal_z);
+    printf("Up seed (x, y, z): %.2f, %.2f, %.2f\\n",
+           commondata.terminal_plane_up_x,
+           commondata.terminal_plane_up_y,
+           commondata.terminal_plane_up_z);
+    printf("Coordinate-radius bounds: %.2f -> %.2f\\n",
+           commondata.terminal_plane_min_coord_radius,
+           commondata.terminal_plane_max_coord_radius);
 
     printf("--- Temporal & Boundary Conditions ---\\n");
     printf("Start Time (t_start): %.2f\\n", commondata.t_start);
     printf("Escape Radius (r_escape): %.2f\\n", commondata.r_escape);
-    printf("Evolution Measure Limit (evolution_measure_max): %.2f\\n", commondata.evolution_measure_max);
+    printf("Evolution Measure Limit: %.2f\\n", commondata.evolution_measure_max);
 
     printf("--- Batch Integrator & RKF45 Settings ---\\n");
-    printf("Initial Step Size (h_initial): %.2f\\n", commondata.numerical_initial_h);
-    printf("Min / Max Step (h_min / h_max): %e / %.2f\\n", commondata.rkf45_h_min, commondata.rkf45_h_max);
-    printf("Abs / Rel Tolerance: %e / %e\\n", commondata.rkf45_absolute_error_tolerance, commondata.rkf45_error_tolerance);
+    printf("Initial Step Size: %.2f\\n", commondata.initial_h);
+    printf("Min / Max Step: %e / %.2f\\n",
+           commondata.rkf45_h_min, commondata.rkf45_h_max);
+    printf("Abs / Rel Tolerance: %e / %e\\n",
+           commondata.rkf45_absolute_error_tolerance,
+           commondata.rkf45_error_tolerance);
 {eom_telemetry}
     printf("Adaptive Step Damping: 0.90\\n");
     printf("Max Retries: %d\\n", commondata.rkf45_max_retries);
     printf("{diagnostic_flag_label}: %d\\n", commondata.{diagnostic_flag_name});
-    printf("Slot Manager (Delta t / Min t): %.2f / %.2f\\n", commondata.slot_manager_delta_t, commondata.slot_manager_t_min);
+    printf("Slot Manager (Delta t / Min t): %.2f / %.2f\\n",
+           commondata.slot_manager_delta_t, commondata.slot_manager_t_min);
 
     //==========================================
-    // TILING CALCULATIONS
+    // ANGULAR SAMPLE-GRID VALIDATION
     //==========================================
-    // Master parameters define the full global frame, referencing the immutable original center.
-    const double master_center_x = commondata.original_window_center_x;
-    const double master_center_y = commondata.original_window_center_y;
-    const double master_center_z = commondata.original_window_center_z;
-    const double master_width    = commondata.window_width;
-    const double master_height   = commondata.window_height;
-
-    const double tile_w = master_width  / (double)commondata.window_tiles_width;
-    const double tile_h = master_height / (double)commondata.window_tiles_height;
-
-    //==========================================
-    // BASIS VECTOR CALCULATION
-    //==========================================
-    // n_z: The forward "Look" vector
-    double n_z[3] = {{master_center_x - commondata.camera_pos_x,
-                     master_center_y - commondata.camera_pos_y,
-                     master_center_z - commondata.camera_pos_z}};
-    double mag_n_z = sqrt(n_z[0]*n_z[0] + n_z[1]*n_z[1] + n_z[2]*n_z[2]);
-    for(int j=0; j<3; j++) n_z[j] /= mag_n_z;
-
-    // n_x: The "Right" vector (Horizontal)
-    // Calculated as Up (guide_up) x Forward (n_z) to point Right.
-    const double guide_up[3] = {{commondata.window_up_vec_x, commondata.window_up_vec_y, commondata.window_up_vec_z}};
-    double n_x[3] = {{guide_up[1]*n_z[2] - guide_up[2]*n_z[1],
-                     guide_up[2]*n_z[0] - guide_up[0]*n_z[2],
-                     guide_up[0]*n_z[1] - guide_up[1]*n_z[0]}};
-    double mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
-
-    // Fallback logic for near-nadir camera angles (looking straight up or down)
-    if (mag_n_x < 1e-9) {{
-        double alt_up[3] = {{0.0, 1.0, 0.0}};
-        if (fabs(n_z[1]) > 0.999) {{ alt_up[1] = 0.0; alt_up[2] = 1.0; }}
-        n_x[0] = alt_up[1]*n_z[2] - alt_up[2]*n_z[1];
-        n_x[1] = alt_up[2]*n_z[0] - alt_up[0]*n_z[2];
-        n_x[2] = alt_up[0]*n_z[1] - alt_up[1]*n_z[0];
-        mag_n_x = sqrt(n_x[0]*n_x[0] + n_x[1]*n_x[1] + n_x[2]*n_x[2]);
-    }} // END IF: near-nadir fallback
-    for(int j=0; j<3; j++) n_x[j] /= mag_n_x;
-
-    // n_y: The "Up" vector (Vertical)
-    // Calculated as Forward (n_z) x Right (n_x) to point Up.
-    double n_y[3] = {{n_z[1]*n_x[2] - n_z[2]*n_x[1],
-                     n_z[2]*n_x[0] - n_z[0]*n_x[2],
-                     n_z[0]*n_x[1] - n_z[1]*n_x[0]}};
-    double mag_n_y = sqrt(n_y[0]*n_y[0] + n_y[1]*n_y[1] + n_y[2]*n_y[2]);
-    for(int j=0; j<3; j++) n_y[j] /= mag_n_y;
-
-    //==========================================
-    // RESOURCE ALLOCATION
-    //==========================================
-    if (commondata.scan_density <= 0 || commondata.window_tiles_width <= 0 ||
-        commondata.window_tiles_height <= 0) {{
-        fprintf(stderr, "FATAL: Tile dimensions and scan_density must be positive.\\n");
+    const int scan_density_width = commondata.scan_density;
+    const double pi = acos(-1.0);
+    if (commondata.tiles_width <= 0 || commondata.tiles_height <= 0 ||
+        scan_density_width <= 0 || !isfinite(commondata.alpha_w) ||
+        !isfinite(commondata.alpha_h) || commondata.alpha_w <= 0.0 ||
+        commondata.alpha_h <= 0.0 || commondata.alpha_w >= pi ||
+        commondata.alpha_h >= pi) {{
+        fprintf(stderr,
+                "FATAL: tile counts, scan_density, and fields of view must be valid.\\n");
+        return 1;
+    }}
+    const double projected_tile_height_to_width =
+        tan(0.5 * commondata.alpha_h) * (double)commondata.tiles_width /
+        (tan(0.5 * commondata.alpha_w) * (double)commondata.tiles_height);
+    const double scan_density_height_real =
+        (double)scan_density_width * projected_tile_height_to_width;
+    if (!isfinite(scan_density_height_real) ||
+        scan_density_height_real < 1.0 ||
+        scan_density_height_real > (double)INT_MAX) {{
+        fprintf(stderr, "FATAL: derived scan-density height is invalid.\\n");
+        return 1;
+    }}
+    const int scan_density_height = (int)llround(scan_density_height_real);
+    if (scan_density_height <= 0 ||
+        (long int)scan_density_height >
+            LONG_MAX / (long int)scan_density_width) {{
+        fprintf(stderr, "FATAL: derived tile ray count is invalid.\\n");
         return 1;
     }}
     const uint64_t record_count =
-        (uint64_t)commondata.scan_density * (uint64_t)commondata.scan_density;
-    const long int num_rays = (long int)record_count;
-    if ((uint64_t)num_rays != record_count) {{
-        fprintf(stderr, "FATAL: Ray count does not fit in a host long int.\\n");
+        (uint64_t)scan_density_width * (uint64_t)scan_density_height;
+    if (record_count > (uint64_t)LONG_MAX) {{
+        fprintf(stderr, "FATAL: ray count does not fit in a host long int.\\n");
         return 1;
     }}
-    blueprint_data_t *restrict results_buffer = (blueprint_data_t *)malloc(sizeof(blueprint_data_t) * num_rays);
-
+    const long int num_rays = (long int)record_count;
+    blueprint_data_t *restrict results_buffer =
+        (blueprint_data_t *)malloc(sizeof(blueprint_data_t) * num_rays);
     if (results_buffer == NULL) {{
-        fprintf(stderr, "FATAL: Failed to allocate %ld rays. Check system RAM.\\n", num_rays);
-        exit(1);
+        fprintf(stderr, "FATAL: failed to allocate %ld rays.\\n", num_rays);
+        return 1;
     }}
+
     //==========================================
-    // NESTED TILING LOOP
+    // ANGULAR SAMPLE TILING LOOP
     //==========================================
-    for (int ty = 0; ty < commondata.window_tiles_height; ty++) {{
-        for (int tx = 0; tx < commondata.window_tiles_width; tx++) {{
+    for (int ty = 0; ty < commondata.tiles_height; ++ty) {{
+        for (int tx = 0; tx < commondata.tiles_width; ++tx) {{
+            // Only active tile indices change. Observer setup, fields of view,
+            // tetrad inputs, and both physical event planes stay fixed.
+            commondata.tile_index_width = tx;
+            commondata.tile_index_height = ty;
 
-            // 1. Update Tile Dimensions
-            commondata.window_width  = tile_w;
-            commondata.window_height = tile_h;
-
-            // 2. Calculate Local Tile Center
-            double offset_x = -master_width/2.0  + (tx + 0.5) * tile_w;
-            double offset_y = -master_height/2.0 + (ty + 0.5) * tile_h;
-
-            commondata.window_center_x = master_center_x + offset_x * n_x[0] + offset_y * n_y[0];
-            commondata.window_center_y = master_center_y + offset_x * n_x[1] + offset_y * n_y[1];
-            commondata.window_center_z = master_center_z + offset_x * n_x[2] + offset_y * n_y[2];
-
-            printf("[Tile %02d,%02d] Processing at Center (%.3f, %.3f, %.3f)...\\n",
-                    tx, ty, commondata.window_center_x, commondata.window_center_y, commondata.window_center_z);
+            printf("[Tile %02d,%02d] samples=%ld\\n", tx, ty, num_rays);
 
 {numerical_sidecar_path_setup}
-            // 2.5. Clear the reused results buffer before each tile integration.
-            for (long int i = 0; i < num_rays; i++) {{
+            for (long int i = 0; i < num_rays; ++i) {{
                 results_buffer[i] = (blueprint_data_t){{0}};
-                results_buffer[i].termination_type = TERMINATION_TYPE_FAILURE;
-            }} // END LOOP: for i over rays
+                results_buffer[i].termination_type = FAILURE_GENERIC;
+            }}
 
-            // 3. Execute Numerical Integration Pipeline
             {batch_integrator_call}
 
-            // 3.5. Coordinate Global Shift
-            // Maps local tile-space hits to the global window coordinate system.
-            // y_w (horizontal) corresponds to offset_x along n_x.
-            // z_w (vertical) corresponds to offset_y along n_y.
-            for (long int i = 0; i < num_rays; i++) {{
-                if (results_buffer[i].L_w > 0.0) {{
-                    results_buffer[i].y_w += offset_x;
-                    results_buffer[i].z_w += offset_y;
-                }} // END IF: shift only a valid observer-window
-            }} // END LOOP: for i over rays
+            // Store normalized ray-sample coordinates before serialization.
+            // They are derived from stable ray ordinal and tile indices, so
+            // integration does not carry image metadata in PhotonStateSoA.
+            for (long int i = 0; i < num_rays; ++i) {{
+                const int local_col = (int)(i % scan_density_width);
+                const int local_row = (int)(i / scan_density_width);
+                results_buffer[i].image_width_fraction =
+                    ((double)tx +
+                     ((double)local_col + 0.5) / (double)scan_density_width) /
+                    (double)commondata.tiles_width;
+                results_buffer[i].image_height_fraction =
+                    ((double)ty +
+                     ((double)local_row + 0.5) / (double)scan_density_height) /
+                    (double)commondata.tiles_height;
+            }}
 
-            // 4. Data Serialization
             char bin_name[256];
             const int name_status = snprintf(
-                bin_name,
-                sizeof(bin_name),
-                "light_blueprint_%02d_%02d.bin",
-                tx,
-                ty);
+                bin_name, sizeof(bin_name),
+                "light_blueprint_%02d_%02d.bin", tx, ty);
             if (name_status < 0 || (size_t)name_status >= sizeof(bin_name)) {{
-                fprintf(stderr, "ERROR: Blueprint filename is too long.\\n");
+                fprintf(stderr, "ERROR: blueprint filename is too long.\\n");
                 free(results_buffer);
                 return 1;
-            }} // END IF: blueprint filename bounds check
+            }}
 
             blueprint_header_t header = {{0}};
             memcpy(header.magic, BLUEPRINT_MAGIC, sizeof(header.magic));
@@ -375,21 +378,19 @@ def main(
             header.record_size = (uint32_t)sizeof(blueprint_data_t);
             header.tx = (uint32_t)tx;
             header.ty = (uint32_t)ty;
-            header.tiles_w = (uint32_t)commondata.window_tiles_width;
-            header.tiles_h = (uint32_t)commondata.window_tiles_height;
-            header.scan_density = (uint32_t)commondata.scan_density;
+            header.tiles_w = (uint32_t)commondata.tiles_width;
+            header.tiles_h = (uint32_t)commondata.tiles_height;
             header.record_count = record_count;
+            header.alpha_w = commondata.alpha_w;
+            header.alpha_h = commondata.alpha_h;
 
             if (write_blueprint_file(bin_name, &header, results_buffer, record_count) != 0) {{
                 free(results_buffer);
                 return 1;
-            }} // END IF: checked blueprint write
-        }} // END LOOP: for tx over window tile
-    }} // END LOOP: for ty over window tile
+            }}
+        }}
+    }}
 
-    //==========================================
-    // FINAL CLEANUP & SHUTDOWN
-    //==========================================
     free(results_buffer);
     printf("Simulation successful. Data stored in native blueprint tiles.\\n");
     return 0;

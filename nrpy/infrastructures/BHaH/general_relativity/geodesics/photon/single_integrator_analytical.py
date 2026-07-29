@@ -3,8 +3,10 @@
 Define the reusable single-photon analytical geodesic integrator orchestrator.
 
 This module registers the C function that evolves one massless test particle in an
-analytic spacetime using the split Runge-Kutta-Fehlberg 4(5) photon pipeline. The
-registered function writes trajectory samples and reports normalization and
+analytic spacetime using the split Runge-Kutta-Fehlberg 4(5) photon pipeline. Its
+initial state is constructed from the metric-driven observer tetrad shared with
+the numerical integrator. The registered function writes trajectory samples and
+reports normalization and
 conserved-quantity diagnostics while preserving the Structure of Arrays layout
 expected by the shared geodesic kernels.
 
@@ -15,27 +17,22 @@ Author: Dalton J. Moone
 import nrpy.c_function as cfc
 import nrpy.params as par
 from nrpy.infrastructures.BHaH import BHaH_defines_h
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_non_terminal_plane_intersection import (
+    register_non_terminal_plane_parameters,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.handle_terminal_plane_intersection import (
+    register_terminal_plane_parameters,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.set_initial_conditions_kernel import (
+    register_photon_batch_structs,
+)
 
 
 def register_struct_definitions() -> None:
-    """Register definitions needed only by the single-photon integrator."""
-    termination_enum_def = r"""
-    typedef enum {
-      ACTIVE = 0,
-      REJECTED,
-      FAILURE_RKF45_REJECTION_LIMIT
-    } termination_type_t; // END ENUM: termination_type_t
-    """
-    BHaH_defines_h.register_BHaH_defines("termination_type_t", termination_enum_def)
-
-    photon_soa_def = r"""
-    // Single-ray compatibility layout used by conserved-quantity diagnostics.
-    typedef struct {
-      double *f;            // State: t, x, y, z, p^0, p^1, p^2, p^3, Eulerian distance.
-      double *integration_param; // Direct-mode affine integration parameter.
-    } PhotonStateSoA; // END STRUCT: PhotonStateSoA
-    """
-    BHaH_defines_h.register_BHaH_defines("PhotonStateSoA", photon_soa_def)
+    """Register shared state definitions and single-ray-only macros."""
+    register_photon_batch_structs()
+    register_terminal_plane_parameters()
+    register_non_terminal_plane_parameters()
 
     macro_defs = r"""
     #ifndef BUNDLE_CAPACITY
@@ -66,31 +63,24 @@ def single_integrator_analytical(
         )
 
     register_struct_definitions()
+    # The shared initializer expects the batch tiling contract.  This
+    # standalone path is fixed to one tile containing one ray; the active
+    # indices and scan density are registered by set_initial_conditions_kernel.
+    par.register_CodeParameters(
+        "int",
+        __name__,
+        ["tiles_width", "tiles_height"],
+        [1, 1],
+        commondata=True,
+        add_to_parfile=False,
+    )
     par.register_CodeParameters(
         "REAL",
         __name__,
         [
-            "initial_t",
-            "initial_x",
-            "initial_y",
-            "initial_z",
-            "initial_p_x",
-            "initial_p_y",
-            "initial_p_z",
-            "initial_integration_param",
-            "initial_eulerian_distance",
-            "initial_h",
             "r_escape",
         ],
-        [0.0] * 11,
-        commondata=True,
-        add_to_parfile=True,
-    )
-    par.register_CodeParameter(
-        "int",
-        __name__,
-        "max_steps",
-        1,
+        [150.0],
         commondata=True,
         add_to_parfile=True,
     )
@@ -127,10 +117,19 @@ conserved-quantity diagnostics.
     const long int num_rays = 1;
     const long int chunk_size = 1;
     const int stream_idx = 0;
+    // These values match the shared termination_type_t used by the batch and
+    // numerical single-ray paths. ACTIVE and REJECTED are intentionally 7 and
+    // 8; they are not the first two enum values.
     const char *status_names[] = {{
+      "STOP_CONDITION_COORD_RADIUS_EXCEEDED",
+      "STOP_CONDITION_TERMINAL_PLANE",
+      "STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED",
+      "FAILURE_RKF45_REJECTION_LIMIT",
+      "STOP_CONDITION_T_MAX_EXCEEDED",
+      "FAILURE_SLOT_MANAGER_ERROR",
+      "FAILURE_GENERIC",
       "ACTIVE",
-      "REJECTED",
-      "FAILURE_RKF45_REJECTION_LIMIT"
+      "REJECTED"
     }};
 
     int exit_status = EXIT_SUCCESS;
@@ -172,23 +171,33 @@ conserved-quantity diagnostics.
       goto cleanup;
     }} // END IF: photon buffer allocation failed
 
-    PhotonStateSoA all_photons;
+    PhotonStateSoA all_photons = {{0}};
     all_photons.f = f;
+    all_photons.h = h;
     all_photons.integration_param = integration_param;
 
     // ==========================================
     // INITIAL CONDITIONS
     // ==========================================
-    f[0] = commondata.initial_t;
-    f[1] = commondata.initial_x;
-    f[2] = commondata.initial_y;
-    f[3] = commondata.initial_z;
-    f[5] = commondata.initial_p_x;
-    f[6] = commondata.initial_p_y;
-    f[7] = commondata.initial_p_z;
-    f[8] = commondata.initial_eulerian_distance;
+    f[0] = commondata.t_start;
+    f[1] = commondata.observer_x;
+    f[2] = commondata.observer_y;
+    f[3] = commondata.observer_z;
+    f[4] = 0.0;
+    f[5] = 0.0;
+    f[6] = 0.0;
+    f[7] = 0.0;
+    f[8] = 0.0;
 
-    *integration_param = commondata.initial_integration_param;
+    // Single-ray execution is the one-tile, one-sample specialization of the
+    // shared angular sampling contract.  Tile origins and pixel dimensions are
+    // deliberately not part of commondata.
+    commondata.tiles_width = 1;
+    commondata.tiles_height = 1;
+    commondata.tile_index_width = 0;
+    commondata.tile_index_height = 0;
+    commondata.scan_density = 1;
+    *integration_param = 0.0;
     *h = commondata.initial_h;
     *rejection_retries = 0;
     *status = ACTIVE;
@@ -199,7 +208,10 @@ conserved-quantity diagnostics.
     interpolation_kernel_{spacetime}(
       &commondata, f, metric, NULL, chunk_size, stream_idx
     );
-    p0_reverse_kernel(f, metric, chunk_size, stream_idx);
+    double observer_tetrad[4][4];
+    set_initial_conditions_kernel(
+      &commondata, num_rays, &all_photons, metric, observer_tetrad
+    );
 
     printf("Initial State:\n");
     printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
@@ -226,11 +238,12 @@ conserved-quantity diagnostics.
     // ==========================================
     int steps = 0;
 
-    while (steps < commondata.max_steps) {{
+    const long int max_accepted_steps = 200000;
+    while (steps < max_accepted_steps) {{
       for (int i = 0; i < 9; i++) {{
         f_base[i] = f[i];
         f_temp[i] = f[i];
-      }} // END LOOP: copy the current state into
+      }} // END LOOP: copy current state
 
       for (int stage = 1; stage <= 6; stage++) {{
         interpolation_kernel_{spacetime}(
@@ -244,7 +257,7 @@ conserved-quantity diagnostics.
           rkf45_stage_update(
             f, k_bundle, h, stage, chunk_size, f_temp, stream_idx
           );
-      }} // END LOOP: execute RKF45 stages 1 through
+      }} // END LOOP: for stage over RKF45 stages
 
       rkf45_finalize_and_control(
         &commondata,
@@ -286,7 +299,7 @@ conserved-quantity diagnostics.
       if (fabs(f[4]) > commondata.evolution_measure_max) {{
         printf("Evolution measure exceeded numerical limit.\n");
         break;
-      }} // END IF: evolution measure exceeded the configured
+      }} // END IF: evolution measure exceeded limit
 
       if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
         printf(

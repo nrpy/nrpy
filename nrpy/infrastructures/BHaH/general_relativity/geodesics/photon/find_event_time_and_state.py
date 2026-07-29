@@ -25,16 +25,16 @@ def find_event_time_and_state() -> None:
     includes = ["BHaH_defines.h"]
     desc = r""" Portable high-performance second-order root-finding.
 
-    @param f_local The thread-local state array for step $f^\mu_{n}$.
-    @param f_p_local The thread-local state array for step $f^\mu_{n-1}$.
-    @param f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
+    @param[in] f_local The thread-local state array for step $f^\mu_{n}$.
+    @param[in] f_p_local The thread-local state array for step $f^\mu_{n-1}$.
+    @param[in] f_p_p_local The thread-local state array for step $f^\mu_{n-2}$.
     @param integration_param The current integration parameter.
     @param integration_param_prev The preceding integration parameter.
     @param integration_param_pre_prev The integration parameter two steps earlier.
-    @param normal The geometric unit normal vector $n_i$ of the target plane.
+    @param[in] normal The geometric unit normal vector $n_i$ of the target plane.
     @param dist The scalar distance $d$ from the origin to the target plane.
-    @param event_integration_param Pointer to the interpolated event parameter.
-    @param event_f_intersect The thread-local array where the reconstructed state $f^\mu$ is stored.
+    @param[out] event_integration_param Interpolated event parameter.
+    @param[out] event_f_intersect Reconstructed event state $f^\mu$.
 
     Detailed algorithm: Uses position data $x^i$ from the current and two previous
     integration steps to construct a quadratic model of the trajectory relative
@@ -120,7 +120,7 @@ def find_event_time_and_state() -> None:
                     interpolated_event_integration_param = integration_param_quad;
                 } // END IF: quadratic root inside interval
             } // END IF: stable denominator for quadratic root
-        } // END IF: discriminant >= 0 and a
+        } // END IF: quadratic discriminant valid
     } // END IF: intervals are not degenerate
 
     //==========================================

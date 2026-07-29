@@ -104,12 +104,14 @@ def _register_CFunction_diagnostics(  # pylint: disable=unused-argument
         psi4_spinweightm2_decomposition(...) on output steps.
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_data_output: If True, include a call to
-        output_raytracing_data(...) on output steps. This export writes the
-        physical time together with final Cartesian metric data. The raytracer
-        derives metric derivatives and Christoffel symbols after loading it.
+        output_raytracing_data(...) on output steps. Depending on
+        ``raytracing_data_mode``, the payload stores the Cartesian metric alone,
+        the metric plus its time derivative, or the metric plus Christoffels.
+        The reader reconstructs only geometry absent from the selected payload.
     :param raytracing_data_mode: Raytracing storage mode passed to the exporter.
     :param enable_static_christoffels: If True, compile static GammaUDD output
-        and select it only for the output nearest to ``commondata->t_final``.
+        and select it only for the last scheduled output not beyond
+        ``commondata->t_final``. The option is disabled by default.
     :raises ValueError: If the raytracing mode and static-Christoffel option are
         incompatible.
     :return: None if in registration phase (after recording the requested registration),
@@ -196,19 +198,21 @@ fabs(round(time / diagnostics_output_every) * diagnostics_output_every - time)
     newline = "\n"  # Keep newline sequences as named constants to avoid escape/brace pitfalls inside f-strings.
     raytracing_output_code = ""
     if enable_raytracing_data_output:
+        raytracing_output_code = (
+            "    const int raytracing_output_index = "
+            "(int)round(currtime / outevery);\n"
+        )
         raytracing_static_selection = ""
         raytracing_static_argument = ""
         if enable_static_christoffels:
             raytracing_static_selection = (
                 "    const int final_output_index = "
-                "(int)round(commondata->t_final / outevery);\n"
+                "(int)floor(commondata->t_final / outevery);\n"
                 "    const int use_static_christoffels = "
                 "raytracing_output_index == final_output_index;\n"
             )
             raytracing_static_argument = ", use_static_christoffels"
-        raytracing_output_code = (
-            "    const int raytracing_output_index = "
-            "(int)round(currtime / outevery);\n"
+        raytracing_output_code += (
             f"{raytracing_static_selection}"
             "    // Export Cartesian raytracing data from the current BSSN state.\n"
             "    output_raytracing_data(commondata, griddata, "
@@ -346,11 +350,11 @@ def register_all_diagnostics(
         (driver call only).
     :param enable_bhahaha: If True, include a call to bhahaha_find_horizons(...) on output steps.
     :param enable_raytracing_data_output: If True, register and call the
-        raytracing slice-data exporter that writes final Cartesian metric data
-        during the evolution.
+        mode-selected raytracing slice-data exporter during the evolution.
     :param raytracing_data_mode: Raytracing storage mode to generate.
     :param enable_static_christoffels: If True, use static Christoffels for the
-        output nearest to the final evolution time.
+        last scheduled output not beyond the final evolution time. The option
+        is disabled by default.
     :raises ValueError: If raytracing-data export is enabled for CUDA code generation.
     :raises ValueError: If raytracing-data export is enabled for more than one
         coordinate system. Note: these exporters also currently support only

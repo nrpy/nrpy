@@ -1,8 +1,8 @@
 r"""
 Defines the CPU/OpenMP helper that converts direct photon momentum to normalized variables.
 
-This module registers a host-only C helper used during numerical photon
-initialization after the temporal momentum component ``p^0`` has been recovered.
+This module registers a host-only C helper used during photon initialization
+after the complete tetrad-based four-momentum has been constructed.
 It processes a batch of photons in parallel, reads the direct four-momentum
 state ``(p^0, p^1, p^2, p^3)`` together with the local four-metric ``g_{\mu\nu}``,
 and overwrites the momentum slots with the normalized variables
@@ -29,9 +29,9 @@ def photon_momentum_to_normalized_kernel(
     r"""
     Register the CPU/OpenMP helper that converts photon momentum to normalized form.
 
-    This helper is intended for the numerical photon initialization path after
-    ``p0_reverse_kernel()`` has solved for the signed temporal momentum
-    component. It operates on a batch of photons and overwrites the state bundle
+    This helper operates after the initializer has supplied the signed temporal
+    momentum component directly from the observer tetrad. It processes a batch
+    of photons and overwrites the state bundle
     slots storing the direct momentum variables with the normalized quantities
     used by the Bohn-style coordinate-time formulation.
 
@@ -160,8 +160,9 @@ def photon_momentum_to_normalized_kernel(
     //==========================================
     // GLOBAL MEMORY WRITE
     //==========================================
-    // Overwrite only the legacy momentum slots with the normalized state
-    // variables. The affine-parameter slot f[8] is left untouched here.
+    // Replace the direct contravariant momentum in f[4:8] with the normalized
+    // state variables required by the coordinate-time evolution equations.
+    // The affine-parameter slot f[0] and Eulerian-distance slot f[8] remain unchanged.
     d_f_bundle[IDX_F(4, i)] = u_out;
     d_f_bundle[IDX_F(5, i)] = PiD0_out;
     d_f_bundle[IDX_F(6, i)] = PiD1_out;
@@ -196,8 +197,8 @@ def photon_momentum_to_normalized_kernel(
 
     desc = r""" Convert direct photon four-momentum to normalized photon variables.
 
-    @param d_f_bundle Pointer to the photon state vector bundle in memory.
-    @param d_metric_bundle Pointer to the pre-calculated metric bundle $g_{\mu\nu}$ in memory.
+    @param[in,out] d_f_bundle Photon state-vector bundle updated in place.
+    @param[in] d_metric_bundle Pre-calculated metric bundle $g_{\mu\nu}$.
     @param chunk_size The number of active rays in the current bundle batch.
     @param stream_idx Unused placeholder kept only for interface compatibility with other photon helpers.
     """

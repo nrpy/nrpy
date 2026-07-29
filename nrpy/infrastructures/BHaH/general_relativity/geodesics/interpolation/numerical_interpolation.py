@@ -375,7 +375,7 @@ independently ray-by-ray.
           d_rhs_geometry_bundle[IDX_RHS_GEOMETRY(comp, i)] = NAN;
     } // END LOOP: for i over rays
     return;
-  } // END IF: runtime temporal stencil size did
+  } // END IF: runtime stencil size mismatched
 
   #pragma omp parallel for
   for (long int i = 0; i < chunk_size; i++) {
@@ -517,9 +517,9 @@ independently ray-by-ray.
                       AZIMUTHAL_SYMMETRY_SPATIAL_LAGRANGE_INTERP_SUCCESS)
                     ray_failed = 1;
                 } // END ELSE: first numerical slice selected
-              } // END ELSE: lower missing stencil edge uses
-            } // END ELSE: stencil edge classification invalid
-          } // END IF: one stencil edge must be
+              } // END ELSE: lower missing edge reconstructed
+            } // END ELSE: one-sided stencil classification valid
+          } // END IF: missing stencil nodes present
 
           if (!ray_failed) {
             // Step 5: Reconstruct the full ordered temporal stencil expected

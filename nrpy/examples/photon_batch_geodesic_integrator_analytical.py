@@ -44,11 +44,10 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
     find_event_time_and_state,
-    handle_source_plane_intersection,
-    handle_window_plane_intersection,
+    handle_non_terminal_plane_intersection,
+    handle_terminal_plane_intersection,
     interpolation_kernel,
     main_batch,
-    p0_reverse_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
@@ -56,22 +55,203 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
 )
 
 if __name__ == "__main__":
+    import sys
+
     # Step 1: Configure command-line arguments for the generation pipeline
     parser = argparse.ArgumentParser(
-        description="Generate the Split-Pipeline Photon Geodesic Integrator (Kerr-Schild)."
+        description=(
+            "Generate a tiled analytical photon raytracing project. "
+            "The project emits v6 light-blueprint records with normalized "
+            "image-sample coordinates."
+        )
     )
     parser.add_argument(
         "--outdir",
         type=str,
         default="project",
-        help="The parent directory where the generated C project will reside.",
+        help="Parent directory for the generated C project.",
     )
     parser.add_argument(
         "--cuda",
         action="store_true",
-        help="Enable CUDA support. Defaults to OpenMP if omitted.",
+        help="Generate CUDA code; omit this option for the OpenMP project.",
     )
+    parser.add_argument(
+        "--observer-position",
+        nargs=3,
+        type=float,
+        required=True,
+        metavar=("X", "Y", "Z"),
+        help="Observer coordinate position.",
+    )
+    parser.add_argument(
+        "--observer-look-forward",
+        nargs=3,
+        type=float,
+        required=True,
+        metavar=("X", "Y", "Z"),
+        help="Observer look-forward direction seed.",
+    )
+    parser.add_argument(
+        "--observer-up",
+        nargs=3,
+        type=float,
+        required=True,
+        metavar=("X", "Y", "Z"),
+        help="Observer up/roll direction seed.",
+    )
+    parser.add_argument(
+        "--observer-fov",
+        nargs=2,
+        type=float,
+        required=True,
+        metavar=("ALPHA_W", "ALPHA_H"),
+        help="Observer width and height fields of view, in radians.",
+    )
+    parser.add_argument(
+        "--scan-density",
+        type=int,
+        required=True,
+        metavar="SAMPLES_PER_TILE_WIDTH",
+        help="Width-side ray samples per tile; height-side count is derived.",
+    )
+    parser.add_argument(
+        "--tile-counts",
+        nargs=2,
+        type=int,
+        default=[1, 1],
+        metavar=("TILES_WIDTH", "TILES_HEIGHT"),
+        help="Number of angular image tiles; default: 1 1.",
+    )
+    parser.add_argument(
+        "--t-start",
+        type=float,
+        default=0.0,
+        help="Initial observer-event coordinate time; default: 0.0.",
+    )
+    parser.add_argument(
+        "--escape-radius",
+        type=float,
+        required=True,
+        metavar="R",
+        help="Coordinate-radius termination threshold.",
+    )
+    parser.add_argument(
+        "--terminal-plane-center",
+        nargs=3,
+        type=float,
+        metavar=("X", "Y", "Z"),
+        help="Terminal-plane center; requires all terminal-plane options.",
+    )
+    parser.add_argument(
+        "--terminal-plane-normal",
+        nargs=3,
+        type=float,
+        metavar=("NX", "NY", "NZ"),
+        help="Terminal-plane normal; requires all terminal-plane options.",
+    )
+    parser.add_argument(
+        "--terminal-plane-up",
+        nargs=3,
+        type=float,
+        metavar=("UX", "UY", "UZ"),
+        help="Terminal-plane up direction; requires all terminal-plane options.",
+    )
+    parser.add_argument(
+        "--terminal-plane-radius",
+        nargs=2,
+        type=float,
+        metavar=("MIN_RADIUS", "MAX_RADIUS"),
+        help="Terminal-plane accepted coordinate-radius range.",
+    )
+    parser.add_argument(
+        "--non-terminal-plane-center",
+        nargs=3,
+        type=float,
+        metavar=("X", "Y", "Z"),
+        help="Nonterminal-plane center; requires all nonterminal-plane options.",
+    )
+    parser.add_argument(
+        "--non-terminal-plane-normal",
+        nargs=3,
+        type=float,
+        metavar=("NX", "NY", "NZ"),
+        help="Nonterminal-plane normal; requires all nonterminal-plane options.",
+    )
+    parser.add_argument(
+        "--non-terminal-plane-up",
+        nargs=3,
+        type=float,
+        metavar=("UX", "UY", "UZ"),
+        help="Nonterminal-plane up direction; requires all nonterminal-plane options.",
+    )
+    parser.add_argument(
+        "--initial-step",
+        type=float,
+        metavar="H",
+        help="Initial RKF45 step magnitude; default: current analytical value.",
+    )
+    parser.add_argument(
+        "--rkf45-tolerances",
+        nargs=2,
+        type=float,
+        metavar=("ABSOLUTE", "RELATIVE"),
+        help="RKF45 absolute and relative error tolerances.",
+    )
+    parser.add_argument(
+        "--rkf45-step-range",
+        nargs=2,
+        type=float,
+        metavar=("H_MIN", "H_MAX"),
+        help="RKF45 minimum and maximum step magnitudes.",
+    )
+    parser.add_argument(
+        "--rkf45-max-retries",
+        type=int,
+        metavar="N",
+        help="Maximum RKF45 rejected-step retries; default: current value.",
+    )
+    parser.add_argument(
+        "--evolution-measure-max",
+        type=float,
+        metavar="VALUE",
+        help="Maximum absolute p^0 evolution measure in direct mode.",
+    )
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
     args = parser.parse_args()
+
+    if any(value <= 0.0 for value in args.observer_fov):
+        parser.error("--observer-fov values must be positive.")
+    if args.scan_density < 1:
+        parser.error("--scan-density must be a positive integer.")
+    if any(value < 1 for value in args.tile_counts):
+        parser.error("--tile-counts values must be positive integers.")
+    if args.escape_radius <= 0.0:
+        parser.error("--escape-radius must be positive.")
+
+    terminal_plane_values = (
+        args.terminal_plane_center,
+        args.terminal_plane_normal,
+        args.terminal_plane_up,
+        args.terminal_plane_radius,
+    )
+    if any(value is not None for value in terminal_plane_values) and not all(
+        value is not None for value in terminal_plane_values
+    ):
+        parser.error("Terminal-plane options must be supplied as one complete group.")
+    non_terminal_plane_values = (
+        args.non_terminal_plane_center,
+        args.non_terminal_plane_normal,
+        args.non_terminal_plane_up,
+    )
+    if any(value is not None for value in non_terminal_plane_values) and not all(
+        value is not None for value in non_terminal_plane_values
+    ):
+        parser.error(
+            "Nonterminal-plane options must be supplied as one complete group."
+        )
 
     # Step 2: Define strict project constants and simulation targets
     project_name = "photon_batch_geodesic_integrator_analytical"
@@ -103,14 +283,9 @@ if __name__ == "__main__":
     # Step 5: Register C functions in split-pipeline order.
     print(" -> Registering C functions and local CodeParameters...")
 
-    # Step 5.a: Register initialization kernels.
-    set_initial_conditions_kernel.set_initial_conditions_kernel(
-        SPACETIME, normalized_eom=False
-    )
-
-    if geodesic_data.p0_photon is None:
-        raise ValueError(f"p0_photon is None for {GEO_KEY}")
-    p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
+    # Step 5.a: Register batch state definitions and initialization kernels.
+    set_initial_conditions_kernel.register_photon_batch_structs()
+    set_initial_conditions_kernel.set_initial_conditions_kernel(normalized_eom=False)
 
     # Step 5.b: Register fundamental tensor and diagnostic kernels.
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
@@ -135,8 +310,8 @@ if __name__ == "__main__":
 
     # Step 5.d: Register event-detection and boundary-intersection kernels.
     find_event_time_and_state.find_event_time_and_state()
-    handle_source_plane_intersection.handle_source_plane_intersection()
-    handle_window_plane_intersection.handle_window_plane_intersection()
+    handle_terminal_plane_intersection.handle_terminal_plane_intersection()
+    handle_non_terminal_plane_intersection.handle_non_terminal_plane_intersection()
     event_detection_manager_kernel.event_detection_manager_kernel(normalized_eom=False)
     calculate_and_fill_blueprint_data_universal.calculate_and_fill_blueprint_data_universal(
         normalized_eom=False
@@ -156,8 +331,8 @@ if __name__ == "__main__":
     # definitions during device linking.
     for internal_func in [
         "find_event_time_and_state",
-        "handle_source_plane_intersection",
-        "handle_window_plane_intersection",
+        "handle_terminal_plane_intersection",
+        "handle_non_terminal_plane_intersection",
         f"g4DD_metric_{SPACETIME}",
         f"connections_{SPACETIME}",
     ]:
@@ -174,59 +349,140 @@ if __name__ == "__main__":
     # Step 6.b: Set batch-integrator and numerical-limit defaults.
     par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
     par.adjust_CodeParam_default("perform_conservation_check", True)
-    par.adjust_CodeParam_default("r_escape", 100.0)
+    par.adjust_CodeParam_default("r_escape", args.escape_radius)
     par.adjust_CodeParam_default("slot_manager_delta_t", 100.0)
     par.adjust_CodeParam_default("slot_manager_t_min", -1000.0)
 
-    # Step 6.c: Set source-plane geometry defaults.
-    par.adjust_CodeParam_default("source_plane_center_x", 0.0)
-    par.adjust_CodeParam_default("source_plane_center_y", 0.0)
-    par.adjust_CodeParam_default("source_plane_center_z", 0.0)
-    par.adjust_CodeParam_default("source_plane_normal_x", 0.0)
-    par.adjust_CodeParam_default("source_plane_normal_y", 0.0)
-    par.adjust_CodeParam_default("source_plane_normal_z", 1.0)
-    par.adjust_CodeParam_default("source_r_max", 20.0)
-    par.adjust_CodeParam_default("source_r_min", 6.0)
-    par.adjust_CodeParam_default("source_up_vec_x", 0.0)
-    par.adjust_CodeParam_default("source_up_vec_y", 1.0)
-    par.adjust_CodeParam_default("source_up_vec_z", 0.0)
+    # Step 6.c: Set observer and independent plane geometry from the CLI.
+    for name, value in zip(
+        ["observer_x", "observer_y", "observer_z"], args.observer_position
+    ):
+        par.adjust_CodeParam_default(name, value)
+    for name, value in zip(
+        [
+            "observer_look_forward_x",
+            "observer_look_forward_y",
+            "observer_look_forward_z",
+        ],
+        args.observer_look_forward,
+    ):
+        par.adjust_CodeParam_default(name, value)
+    for name, value in zip(
+        ["observer_up_x", "observer_up_y", "observer_up_z"], args.observer_up
+    ):
+        par.adjust_CodeParam_default(name, value)
+    par.adjust_CodeParam_default("alpha_w", args.observer_fov[0])
+    par.adjust_CodeParam_default("alpha_h", args.observer_fov[1])
 
-    # Step 6.d: Set camera window geometry defaults.
-    par.adjust_CodeParam_default("camera_pos_x", 51.0)
-    par.adjust_CodeParam_default("camera_pos_y", 0.0)
-    par.adjust_CodeParam_default("camera_pos_z", 10.2)
-    par.adjust_CodeParam_default("original_window_center_x", 50.0)
-    par.adjust_CodeParam_default("original_window_center_y", 0.0)
-    par.adjust_CodeParam_default("original_window_center_z", 10.0)
-    par.adjust_CodeParam_default("window_height", 1.0)
-    par.adjust_CodeParam_default("window_up_vec_x", 0.0)
-    par.adjust_CodeParam_default("window_up_vec_y", 0.0)
-    par.adjust_CodeParam_default("window_up_vec_z", 1.0)
-    par.adjust_CodeParam_default("window_width", 1.0)
+    terminal_defaults = {
+        "terminal_plane_center_x": -1.0e4,
+        "terminal_plane_center_y": 0.0,
+        "terminal_plane_center_z": 0.0,
+        "terminal_plane_normal_x": 1.0,
+        "terminal_plane_normal_y": 0.0,
+        "terminal_plane_normal_z": 0.0,
+        "terminal_plane_up_x": 0.0,
+        "terminal_plane_up_y": 0.0,
+        "terminal_plane_up_z": 1.0,
+        "terminal_plane_min_coord_radius": 0.0,
+        "terminal_plane_max_coord_radius": 1.0,
+        "terminal_plane_enabled": False,
+    }
+    if args.terminal_plane_center is not None:
+        terminal_defaults.update(
+            {
+                "terminal_plane_center_x": args.terminal_plane_center[0],
+                "terminal_plane_center_y": args.terminal_plane_center[1],
+                "terminal_plane_center_z": args.terminal_plane_center[2],
+                "terminal_plane_normal_x": args.terminal_plane_normal[0],
+                "terminal_plane_normal_y": args.terminal_plane_normal[1],
+                "terminal_plane_normal_z": args.terminal_plane_normal[2],
+                "terminal_plane_up_x": args.terminal_plane_up[0],
+                "terminal_plane_up_y": args.terminal_plane_up[1],
+                "terminal_plane_up_z": args.terminal_plane_up[2],
+                "terminal_plane_min_coord_radius": args.terminal_plane_radius[0],
+                "terminal_plane_max_coord_radius": args.terminal_plane_radius[1],
+                "terminal_plane_enabled": True,
+            }
+        )
+    non_terminal_defaults = {
+        "non_terminal_plane_center_x": -1.0e4,
+        "non_terminal_plane_center_y": 0.0,
+        "non_terminal_plane_center_z": 0.0,
+        "non_terminal_plane_normal_x": 1.0,
+        "non_terminal_plane_normal_y": 0.0,
+        "non_terminal_plane_normal_z": 0.0,
+        "non_terminal_plane_up_x": 0.0,
+        "non_terminal_plane_up_y": 0.0,
+        "non_terminal_plane_up_z": 1.0,
+        "non_terminal_plane_enabled": False,
+    }
+    if args.non_terminal_plane_center is not None:
+        non_terminal_defaults.update(
+            {
+                "non_terminal_plane_center_x": args.non_terminal_plane_center[0],
+                "non_terminal_plane_center_y": args.non_terminal_plane_center[1],
+                "non_terminal_plane_center_z": args.non_terminal_plane_center[2],
+                "non_terminal_plane_normal_x": args.non_terminal_plane_normal[0],
+                "non_terminal_plane_normal_y": args.non_terminal_plane_normal[1],
+                "non_terminal_plane_normal_z": args.non_terminal_plane_normal[2],
+                "non_terminal_plane_up_x": args.non_terminal_plane_up[0],
+                "non_terminal_plane_up_y": args.non_terminal_plane_up[1],
+                "non_terminal_plane_up_z": args.non_terminal_plane_up[2],
+                "non_terminal_plane_enabled": True,
+            }
+        )
+    for name, value in {**terminal_defaults, **non_terminal_defaults}.items():
+        par.adjust_CodeParam_default(name, value)
 
-    # Step 6.e: Set window tiling defaults for the selected backend.
-    if parallelization_mode == "cuda":
-        par.adjust_CodeParam_default("window_tiles_width", 1)
-        par.adjust_CodeParam_default("window_tiles_height", 1)
-    else:
-        par.adjust_CodeParam_default("window_tiles_width", 2)
-        par.adjust_CodeParam_default("window_tiles_height", 2)
+    # Step 6.e: Set angular tile-grid defaults for the selected backend.
+    par.adjust_CodeParam_default("tiles_width", args.tile_counts[0])
+    par.adjust_CodeParam_default("tiles_height", args.tile_counts[1])
 
     # Step 6.f: Set RKF45 controller defaults.
-    par.adjust_CodeParam_default("numerical_initial_h", 0.1)
+    par.adjust_CodeParam_default("initial_h", 0.1)
     par.adjust_CodeParam_default("rkf45_absolute_error_tolerance", 1e-10)
     par.adjust_CodeParam_default("rkf45_error_tolerance", 1e-10)
     par.adjust_CodeParam_default("rkf45_h_max", 10.0)
     par.adjust_CodeParam_default("rkf45_h_min", 1e-15)
 
     # Step 6.g: Set initial-condition defaults.
-    par.adjust_CodeParam_default("t_start", 1000.0)
+    par.adjust_CodeParam_default("t_start", args.t_start)
 
-    # Step 6.h: Set default scan density for the selected backend.
-    if parallelization_mode == "cuda":
-        par.adjust_CodeParam_default("scan_density", 1000)
-    else:
-        par.adjust_CodeParam_default("scan_density", 500)
+    # Step 6.h: Set width-side ray-sample density for the selected backend.
+    # The initializer derives the height-side density from the fields of view
+    # and tile-count aspect ratio. Final image resolution remains a renderer
+    # setting, not a photon-grid parameter.
+    par.adjust_CodeParam_default("scan_density", args.scan_density)
+
+    if args.initial_step is not None:
+        if args.initial_step <= 0.0:
+            parser.error("--initial-step must be positive.")
+        par.adjust_CodeParam_default("initial_h", args.initial_step)
+    if args.rkf45_tolerances is not None:
+        absolute_tolerance, relative_tolerance = args.rkf45_tolerances
+        if absolute_tolerance <= 0.0 or relative_tolerance <= 0.0:
+            parser.error("RKF45 tolerances must be positive.")
+        par.adjust_CodeParam_default(
+            "rkf45_absolute_error_tolerance", absolute_tolerance
+        )
+        par.adjust_CodeParam_default("rkf45_error_tolerance", relative_tolerance)
+    if args.rkf45_step_range is not None:
+        h_min, h_max = args.rkf45_step_range
+        if h_min <= 0.0 or h_max < h_min:
+            parser.error("RKF45 step range requires 0 < H_MIN <= H_MAX.")
+        par.adjust_CodeParam_default("rkf45_h_min", h_min)
+        par.adjust_CodeParam_default("rkf45_h_max", h_max)
+    if args.rkf45_max_retries is not None:
+        if args.rkf45_max_retries < 0:
+            parser.error("--rkf45-max-retries must be nonnegative.")
+        par.adjust_CodeParam_default("rkf45_max_retries", args.rkf45_max_retries)
+    if args.evolution_measure_max is not None:
+        if args.evolution_measure_max <= 0.0:
+            parser.error("--evolution-measure-max must be positive.")
+        par.adjust_CodeParam_default(
+            "evolution_measure_max", args.evolution_measure_max
+        )
 
     # Step 6.i: Generate C code for parameter handling.
     print(" -> Generating parameter handling code...")
@@ -238,12 +494,10 @@ if __name__ == "__main__":
     cmdline_input_and_parfiles.register_CFunction_cmdline_input_and_parfile_parser(
         project_name=project_name,
         cmdline_inputs=[
-            "source_r_min",
-            "source_r_max",
-            "window_width",
-            "window_height",
-            "window_tiles_width",
-            "window_tiles_height",
+            "terminal_plane_min_coord_radius",
+            "terminal_plane_max_coord_radius",
+            "tiles_width",
+            "tiles_height",
             "scan_density",
         ],
     )
@@ -348,8 +602,11 @@ if __name__ == "__main__":
         CC=compiler,
         src_code_file_ext=ext,
     )
-    # Step 8: Copy visualization helpers and print usage instructions.
-    vis_dir = os.path.join("nrpy", "examples", "geodesic_visualizations")
+    # Step 8: Copy the v6 blueprint schema/reader/renderer/diagnostic helpers
+    # and print usage instructions.
+    vis_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), "geodesic_visualizations"
+    )
     vis_script_src = os.path.join(vis_dir, "visualize_lensed_image.py")
     config_src = os.path.join(vis_dir, "blueprint_config_and_schema.py")
     render_src = os.path.join(vis_dir, "render_lensed_image.py")
@@ -366,25 +623,23 @@ if __name__ == "__main__":
         shutil.copy(script_src, project_dir)
 
     # Step 8.a: Build visualization command arguments from CodeParameter defaults.
-    c_r_min = float(par.glb_code_params_dict["source_r_min"].defaultvalue)
-    c_r_max = float(par.glb_code_params_dict["source_r_max"].defaultvalue)
-    c_window_width = float(par.glb_code_params_dict["window_width"].defaultvalue)
-    c_window_height = float(par.glb_code_params_dict["window_height"].defaultvalue)
-    c_tiles_width = int(par.glb_code_params_dict["window_tiles_width"].defaultvalue)
-    c_tiles_height = int(par.glb_code_params_dict["window_tiles_height"].defaultvalue)
+    c_r_min = float(
+        par.glb_code_params_dict["terminal_plane_min_coord_radius"].defaultvalue
+    )
+    c_r_max = float(
+        par.glb_code_params_dict["terminal_plane_max_coord_radius"].defaultvalue
+    )
+    c_scan_density = int(par.glb_code_params_dict["scan_density"].defaultvalue)
+    # Visualization output width; angular ray-sample density comes from
+    # CodeParameters and the renderer maps normalized fractions to output pixels.
     c_pixel_width = 600
     parfile_path = os.path.join(project_dir, f"{project_name}.par")
 
-    vis_command = (
-        f"python3 visualize_lensed_image.py "
-        f"--source_r_min {c_r_min} "
-        f"--source_r_max {c_r_max} "
-        f"--window_width {c_window_width} "
-        f"--window_height {c_window_height} "
-        f"--window_tiles_width {c_tiles_width} "
-        f"--window_tiles_height {c_tiles_height} "
-        f"--pixel_width {c_pixel_width}"
-    )
+    vis_command_parts = ["python3 visualize_lensed_image.py"]
+    if args.terminal_plane_radius is not None:
+        vis_command_parts.append(f"--terminal-plane-radius {c_r_min} {c_r_max}")
+    vis_command_parts.append(f"--pixel-width {c_pixel_width}")
+    vis_command = " ".join(vis_command_parts)
 
     print(
         f"Finished! Now go into {project_dir} and type `make` to build, "
@@ -400,14 +655,13 @@ if __name__ == "__main__":
         "    Then, execute the visualization script directly from the project directory:"
     )
     print(f"    {vis_command}\n")
-
-    blueprint_command = (
-        f"python3 blueprint_analysis.py "
-        f"--window_tiles_width {c_tiles_width} "
-        f"--window_tiles_height {c_tiles_height} "
-        f"--window_width {c_window_width} "
-        f"--window_height {c_window_height}"
+    print(
+        "    Ray sampling uses "
+        f"{c_scan_density} width-side samples per tile; height-side sampling "
+        "is derived from the fields of view and tile-grid aspect ratio.\n"
     )
+
+    blueprint_command = "python3 blueprint_analysis.py"
 
     print("    To run the blueprint diagnostic:")
     print(f"    {blueprint_command}\n")

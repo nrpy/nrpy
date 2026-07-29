@@ -2,12 +2,12 @@
 """
 Defines a streaming bundle architecture to project escaped photon trajectories.
 
-This module unpacks the 3D Cartesian coordinates of escaped photons from a flattened
-Structure of Arrays (SoA) layout and mathematically maps them into spherical polar
-and azimuthal angles on the celestial sphere. It manages memory usage by processing
-photons in fixed batches, ensuring compliance with general hardware memory limits
-across various execution contexts. Execution buffers are allocated statically to map
-to the active memory hierarchy.
+This module unpacks the 3D Cartesian coordinates of photons from a flattened
+Structure of Arrays (SoA) layout and mathematically maps escaped photons into
+spherical polar and azimuthal angles on the celestial sphere. It manages memory
+usage by processing photons in fixed batches, ensuring compliance with general
+hardware memory limits across various execution contexts. Execution buffers are
+allocated statically to map to the active memory hierarchy.
 
 The implementation relies on out-of-bounds execution guards to prevent invalid memory
 accesses for processing units that exceed the active chunk size. Final exit statuses
@@ -101,15 +101,17 @@ def calculate_and_fill_blueprint_data_universal(
     //==========================================
     // STATUS SYNCHRONIZATION
     //==========================================
-    // Synchronize final exit status directly into the persistent blueprint array.
+    // Synchronize final exit status directly into the persistent blueprint
+    // array. main_batch writes the immutable normalized image-sample location
+    // immediately before serialization.
     d_result_bundle[c].termination_type = d_status_bundle[c]; // Stores final termination state.
 
     //==========================================
     // TERMINATION STATE RECORD
     //==========================================
-    // Preserve the exact interpolated source-plane termination event already stored in
+    // Preserve the exact interpolated terminal-plane termination event already stored in
     // the blueprint. All other termination modes record the final evolved state.
-    if (d_status_bundle[c] != TERMINATION_TYPE_SOURCE_PLANE) {
+    if (d_status_bundle[c] != STOP_CONDITION_TERMINAL_PLANE) {
 {terminal_state_assignment}
     } // END IF: termination did not already store
 
@@ -117,7 +119,7 @@ def calculate_and_fill_blueprint_data_universal(
     // EVENT DETECTION & TERMINATION CHECKS
     //==========================================
     // === Termination Dispatch: Celestial Sphere (Escape) ===
-    if (d_status_bundle[c] == TERMINATION_TYPE_COORD_RADIUS_EXCEEDED) {
+    if (d_status_bundle[c] == STOP_CONDITION_COORD_RADIUS_EXCEEDED) {
         // Unpack final coordinates from the bundled state vector $f^mu$ in memory.
         const double x_final = d_f_bundle[IDX_LOCAL(1, c, BUNDLE_CAPACITY)]; // Photon $x$-coordinate.
         const double y_final = d_f_bundle[IDX_LOCAL(2, c, BUNDLE_CAPACITY)]; // Photon $y$-coordinate.
@@ -132,7 +134,7 @@ def calculate_and_fill_blueprint_data_universal(
         // Map the Cartesian escape coordinates to the celestial sphere.
         d_result_bundle[c].final_theta = acos(z_final / r_final); // Polar angle $\theta$ relative to the $z$-axis.
         d_result_bundle[c].final_phi = atan2(y_final, x_final);   // Azimuthal angle $\phi$ in the $x$-$y$ plane.
-    } // END IF: d_status_bundle[c] == TERMINATION_TYPE_COORD_RADIUS_EXCEEDED
+    } // END IF: d_status_bundle[c] == STOP_CONDITION_COORD_RADIUS_EXCEEDED
     """.replace("{terminal_state_assignment}", terminal_state_assignment)
 
     kernel_body = f"{loop_preamble}\n{core_math}\n{loop_postamble}"
@@ -224,17 +226,20 @@ def calculate_and_fill_blueprint_data_universal(
         includes.append("cuda_intrinsics.h")
 
     desc = r""" Evaluates the blueprint data for a batch of photon trajectories.
-    @param all_photons The master Structure of Arrays containing the state vectors.
+    @param[in] all_photons The master Structure of Arrays containing state and status inputs.
     @param num_rays The total number of photon trajectories.
-    @param result The array of blueprint data structures to be populated.
+    @param[out] result The array of blueprint data structures to be populated.
+    @param[in] normalization_abs_by_ray Optional per-ray normalization magnitudes.
+    @param[in] norm_abs_bin_path Optional separate normalization-sidecar filename.
     @param stream_idx The stream index identifier for asynchronous scheduling.
 
     Detailed algorithm:
     1. Allocates staging buffers for state vectors, status, and results.
     2. Iterates over the global dataset in chunks of BUNDLE_CAPACITY.
-    3. Transfers data, computes projections, and transfers results back.
+    3. Transfers state, computes projections, and transfers results back.
     4. Evaluates final 3D positions onto a celestial sphere $(\theta, \phi)$ for escaped rays.
-    5. Optionally writes one raw double per photon to the normalization sidecar."""
+    5. Optionally writes one raw double per photon to a separate normalization
+       sidecar; normalization values are never embedded in blueprint records."""
     cfunc_type = "void"
     name = "calculate_and_fill_blueprint_data_universal"
     params = (

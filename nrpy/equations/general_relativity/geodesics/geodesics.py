@@ -849,6 +849,123 @@ class GeodesicEquations:
         solutions = [sol1, sol2]
         return cast(sp.Expr, solutions[0])
 
+    @staticmethod
+    def photon_observer_ray_C_and_q() -> Tuple[sp.Expr, sp.Expr]:
+        r"""
+        Generate the observer-ray null normalization ``C`` and energy scale ``q``.
+
+        Let ``e_a^mu`` be a metric-orthonormal observer tetrad with signature
+        ``(-,+,+,+)``.  For screen-plane offsets ``h`` and ``v``, the paper
+        constructs the future-directed null tetrad vector
+
+        ``chi^mu = C e_0^mu - e_1^mu - v e_2^mu - h e_3^mu``.
+
+        The tetrad orthonormality relations reduce its metric norm to
+
+        ``g_mu_nu chi^mu chi^nu = -C^2 + 1 + v^2 + h^2``.
+
+        Setting this expression to zero gives
+
+        ``C = sqrt(1 + v^2 + h^2)``.
+
+        The physical future-directed photon momentum is ``p^mu = q chi^mu``.
+        A tetrad observer with four-velocity ``e_0^mu`` measures photon energy
+
+        ``E_obs = -g_mu_nu e_0^mu p^nu = q C``.
+
+        This method chooses unit initial observer-frame energy, ``E_obs = 1``;
+        therefore ``q = 1 / C``.  ``q`` is a momentum scale, not photon number
+        and not the affine parameter.
+
+        The numerical reverse-ray integrator evolves the past-directed outward
+        vector ``k^mu = -p^mu``.  That sign choice is documented in
+        :meth:`photon_observer_ray_past_directed_tetrad_coefficients` and must be
+        kept consistent with the state initialization and evolution code.
+
+        ``h`` and ``v`` are deliberately generic symbolic placeholders.  The
+        numerical initializer supplies their pixel-dependent values after it
+        computes the horizontal and vertical fields of view.
+
+        Reference:
+        ``What does a binary black hole merger look like?``, Section II.B,
+        Eqs. (7)-(9), arXiv:1410.7775.
+
+        :return: Tuple containing the symbolic ``C`` and ``q`` expressions.
+        """
+        # Step 1: Declare screen-plane angular offsets.  Both symbols are real
+        # because they represent horizontal and vertical image-plane offsets.
+        h = sp.Symbol("h", real=True)
+        v = sp.Symbol("v", real=True)
+
+        # Step 2: Compute squared spatial magnitude of the screen direction in
+        # the orthonormal observer frame.  The tetrad makes this Euclidean-looking
+        # expression valid even when the coordinate metric is non-Euclidean.
+        screen_norm_squared = sp.sympify(1) + h**2 + v**2
+
+        # Step 3: Enforce chi_mu chi^mu = 0.  The positive root is required so
+        # C represents the positive temporal magnitude of the future-directed
+        # photon at the observer.
+        C = sp.sqrt(screen_norm_squared)
+
+        # Step 4: Set observer-frame energy to one.  Since E_obs = q*C for the
+        # future-directed vector, q is the reciprocal of C.
+        q = sp.sympify(1) / C
+
+        return cast(sp.Expr, C), cast(sp.Expr, q)
+
+    @staticmethod
+    def photon_observer_ray_past_directed_tetrad_coefficients() -> List[sp.Expr]:
+        r"""
+        Generate coefficients for the past-directed outward observer ray.
+
+        The future-directed vector used in the observer construction is
+
+        ``p^mu = q (C e_0^mu - e_1^mu - v e_2^mu - h e_3^mu)``.
+
+        Reverse ray tracing starts at the observer and integrates outward into
+        the past.  It therefore evolves ``k^mu = -p^mu``:
+
+        ``k^mu = -q C e_0^mu + q e_1^mu + q v e_2^mu + q h e_3^mu``.
+
+        With unit observer-frame energy, ``q C = 1``.  In tetrad ordering
+        ``(e_0, e_1, e_2, e_3)``, the coefficients are therefore
+
+        ``(-1, 1/C, v/C, h/C)``.
+
+        The central ray has ``h = v = 0`` and becomes
+
+        ``k^mu = -e_0^mu + e_1^mu``.
+
+        For this past-directed convention,
+
+        ``g_mu_nu e_0^mu k^nu = +1`` and
+        ``-g_mu_nu e_0^mu k^nu = -1``.
+
+        Thus the signed observer energy is negative, while its magnitude is
+        one.  This is intentional and distinguishes the past-directed state
+        from the future-directed momentum in the paper.
+
+        :return: Four symbolic coefficients multiplying ``(e_0, e_1, e_2, e_3)``.
+        """
+        # Step 1: Reuse the canonical C and q expressions so this method cannot
+        # drift from the unit-energy normalization defined above.
+        C, q = GeodesicEquations.photon_observer_ray_C_and_q()
+
+        # Step 2: Declare the same screen offsets used by the C and q helper.
+        # SymPy symbols with the same name and assumptions represent the same
+        # symbolic quantities, allowing q*v and q*h to combine correctly.
+        h = sp.Symbol("h", real=True)
+        v = sp.Symbol("v", real=True)
+
+        # Step 3: Negate the future-directed tetrad vector.  The e_0 coefficient
+        # is written as -q*C to expose its origin; with q=1/C it evaluates to
+        # -1.  Remaining coefficients preserve pixel-dependent h and v factors.
+        past_directed_coefficients = [-q * C, q, q * v, q * h]
+
+        return [
+            cast(sp.Expr, coefficient) for coefficient in past_directed_coefficients
+        ]
+
     def normalization_constraint(self) -> sp.Expr:
         r"""
         Generate the symbolic expression for the metric normalization constraint.
@@ -899,7 +1016,7 @@ class GeodesicEquations:
         Convert direct photon momentum variables to normalized photon quantities.
 
         This helper is intended for the numerical photon initialization pipeline,
-        where a one-time conversion is needed from the legacy direct four-momentum
+        where a one-time conversion is needed from the direct four-momentum
         state ``(p^0, p^1, p^2, p^3)`` to the normalized variables used by the
         Bohn-style coordinate-time evolution system:
 
@@ -909,8 +1026,8 @@ class GeodesicEquations:
 
         The conversion uses only the generic placeholder metric ``metric_g4DD``
         and direct four-momentum ``pU`` so it can be consumed by a dedicated
-        photon-side infrastructure helper that operates after the initial camera
-        geometry has been seeded and the local metric has been interpolated.
+        photon-side infrastructure helper after the observer tetrad has been
+        constructed and the local metric has been interpolated.
 
         :return: Tuple containing ``u`` and the 3-component covariant normalized
             spatial momentum ``PiD``.

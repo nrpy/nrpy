@@ -10,7 +10,7 @@ Author: Dalton J. Moone
 
 import os
 from contextlib import ExitStack
-from typing import BinaryIO, Dict, List, Optional, Tuple
+from typing import BinaryIO, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -25,37 +25,37 @@ except ImportError:
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 TERMINATION_TYPE_INFO: Dict[int, Tuple[str, str]] = {
-    cfg.TERM_COORD_RADIUS_EXCEEDED: (
-        "TERM_COORD_RADIUS_EXCEEDED",
+    cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED: (
+        "STOP_CONDITION_COORD_RADIUS_EXCEEDED",
         "Ray exceeded the coordinate-radius escape limit",
     ),
-    cfg.TERM_SOURCE_PLANE: (
-        "TERM_SOURCE_PLANE",
-        "Ray hit the accretion disk / source plane",
+    cfg.STOP_CONDITION_TERMINAL_PLANE: (
+        "STOP_CONDITION_TERMINAL_PLANE",
+        "Ray hit the accretion disk / terminal plane",
     ),
-    cfg.TERM_EVOLUTION_MEASURE_EXCEEDED: (
-        "TERM_EVOLUTION_MEASURE_EXCEEDED",
+    cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED: (
+        "STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED",
         "Evolution measure exceeded its configured limit",
     ),
-    cfg.TERM_RKF45_REJECTION_LIMIT: (
-        "TERM_RKF45_REJECTION_LIMIT",
+    cfg.FAILURE_RKF45_REJECTION_LIMIT: (
+        "FAILURE_RKF45_REJECTION_LIMIT",
         "RKF45 rejected too many consecutive steps",
     ),
-    cfg.TERM_T_MAX_EXCEEDED: (
-        "TERM_T_MAX_EXCEEDED",
+    cfg.STOP_CONDITION_T_MAX_EXCEEDED: (
+        "STOP_CONDITION_T_MAX_EXCEEDED",
         "Ray exceeded the maximum allowed coordinate time",
     ),
-    cfg.TERM_SLOT_MANAGER_ERROR: (
-        "TERM_SLOT_MANAGER_ERROR",
+    cfg.FAILURE_SLOT_MANAGER_ERROR: (
+        "FAILURE_SLOT_MANAGER_ERROR",
         "Slot manager failed to handle the ray",
     ),
-    cfg.TERM_FAILURE: ("TERM_FAILURE", "Unspecified integration failure"),
-    cfg.TERM_ACTIVE: (
-        "TERM_ACTIVE",
+    cfg.FAILURE_GENERIC: ("FAILURE_GENERIC", "Unspecified integration failure"),
+    cfg.ACTIVE: (
+        "ACTIVE",
         "Ray is still being processed (should not appear in final blueprints)",
     ),
-    cfg.TERM_REJECTED: (
-        "TERM_REJECTED",
+    cfg.REJECTED: (
+        "REJECTED",
         "Ray is in a rejected RKF45 stage (not a final status)",
     ),
 }
@@ -109,7 +109,7 @@ def _print_termination_diagnostics(
         name, description = TERMINATION_TYPE_INFO[enum_value]
         print(f"  Enum {enum_value:2d} ({name}): {description}")
 
-    configured_status = cfg.TERM_EVOLUTION_MEASURE_EXCEEDED
+    configured_status = cfg.STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED
     configured_name, _ = _termination_type_info(configured_status)
     print(
         f"\n  Configured evolution-measure status = {configured_status} "
@@ -128,9 +128,39 @@ def _calculate_subsample_rate(total_expected_records: int, max_viz_points: int) 
     return max(1, (total_expected_records + max_viz_points - 1) // max_viz_points)
 
 
+def _has_nonterminal_diagnostic(data: npt.NDArray[np.void]) -> npt.NDArray[np.bool_]:
+    """
+    Identify records containing a nonterminal-plane crossing.
+
+    The v6 blueprint record has no separate nonterminal event flag.  Its
+    ``non_terminal_plane_lambda`` field is initialized to zero and is written
+    only after a successful nonterminal crossing, so a nonzero finite value is
+    the serialized crossing marker.  This is independent of
+    ``termination_type``: a nonterminal crossing does not terminate a ray.
+
+    :param data: Structured blueprint records.
+    :return: Boolean mask for records with usable nonterminal diagnostics.
+    """
+    return cast(
+        npt.NDArray[np.bool_],
+        (
+            np.isfinite(data["non_terminal_plane_lambda"])
+            & (data["non_terminal_plane_lambda"] != 0.0)
+            & np.isfinite(data["y_nt"])
+            & np.isfinite(data["z_nt"])
+        ),
+    )
+
+
 def plot_heatmaps(data: npt.NDArray[np.void]) -> None:
     """
-    Generate heatmaps for window, source, and celestial-sphere data.
+    Generate diagnostic heatmaps for the three recorded event classes.
+
+    Nonterminal coordinates are plotted only for records that crossed the
+    nonterminal plane. Terminal coordinates are plotted only for records whose
+    final status is ``STOP_CONDITION_TERMINAL_PLANE``. These plots never place pixels;
+    image placement belongs to the renderer and uses normalized image-sample
+    fractions.
 
     :param data: Structured blueprint records to plot.
     """
@@ -138,29 +168,43 @@ def plot_heatmaps(data: npt.NDArray[np.void]) -> None:
     import matplotlib.pyplot as plt
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-    hb0 = axes[0].hexbin(
-        data["y_w"], data["z_w"], gridsize=50, cmap="viridis", mincnt=1
-    )
-    axes[0].set_title("Window Plane (Camera)\n$y_w$ vs $z_w$")
-    axes[0].set_xlabel("$y_w$")
-    axes[0].set_ylabel("$z_w$")
-    fig.colorbar(hb0, ax=axes[0], label="Ray Count")
+    nonterminal_mask = _has_nonterminal_diagnostic(data)
+    if np.any(nonterminal_mask):
+        hb0 = axes[0].hexbin(
+            data["y_nt"][nonterminal_mask],
+            data["z_nt"][nonterminal_mask],
+            gridsize=50,
+            cmap="viridis",
+            mincnt=1,
+        )
+        fig.colorbar(hb0, ax=axes[0], label="Ray Count")
+    axes[0].set_title("Nonterminal Plane Diagnostics\ny_nt vs z_nt")
+    axes[0].set_xlabel("y_nt")
+    axes[0].set_ylabel("z_nt")
 
-    source_mask = data["termination_type"] == cfg.TERM_SOURCE_PLANE
-    if np.any(source_mask):
+    terminal_mask = (
+        (data["termination_type"] == cfg.STOP_CONDITION_TERMINAL_PLANE)
+        & np.isfinite(data["y_t"])
+        & np.isfinite(data["z_t"])
+    )
+    if np.any(terminal_mask):
         hb1 = axes[1].hexbin(
-            data["y_s"][source_mask],
-            data["z_s"][source_mask],
+            data["y_t"][terminal_mask],
+            data["z_t"][terminal_mask],
             gridsize=50,
             cmap="inferno",
             mincnt=1,
         )
         fig.colorbar(hb1, ax=axes[1], label="Ray Count")
-    axes[1].set_title("Source Plane\n$y_s$ vs $z_s$")
-    axes[1].set_xlabel("$y_s$")
-    axes[1].set_ylabel("$z_s$")
+    axes[1].set_title("Terminal Plane\ny_t vs z_t")
+    axes[1].set_xlabel("y_t")
+    axes[1].set_ylabel("z_t")
 
-    sphere_mask = data["termination_type"] == cfg.TERM_COORD_RADIUS_EXCEEDED
+    sphere_mask = (
+        (data["termination_type"] == cfg.STOP_CONDITION_COORD_RADIUS_EXCEEDED)
+        & np.isfinite(data["final_phi"])
+        & np.isfinite(data["final_theta"])
+    )
     if np.any(sphere_mask):
         hb2 = axes[2].hexbin(
             data["final_phi"][sphere_mask],
@@ -214,33 +258,31 @@ def plot_norm_abs_log_histogram(
     plt.show()
 
 
-def diagnose_blueprint(
-    window_tiles_width: int = 1,
-    window_tiles_height: int = 1,
-    window_width: float = 1.0,
-    window_height: float = 1.0,
-) -> None:
+def diagnose_blueprint() -> None:
     """
-    Read every expected tile and print integrity/physics diagnostics.
+    Read every metadata-described tile and print integrity/physics diagnostics.
 
-    :param window_tiles_width: Number of horizontal tiles.
-    :param window_tiles_height: Number of vertical tiles.
-    :param window_width: Physical camera-window width for diagnostics.
-    :param window_height: Physical camera-window height for diagnostics.
     :raises FileNotFoundError: If an expected tile is missing.
     :raises ValueError: If an artifact or normalization sidecar is malformed.
     """
+    first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
+    if not os.path.exists(first_tile):
+        raise FileNotFoundError(f"Expected first blueprint tile: {first_tile}")
+    first_header = blueprint_io.read_blueprint_header(first_tile, expected_tile=(0, 0))
+    tiles_width = first_header.tiles_width
+    tiles_height = first_header.tiles_height
+
     print("=================================================================")
     print(" BLUEPRINT DIAGNOSTICS & VISUALIZATION")
-    print(f" Grid: {window_tiles_width}x{window_tiles_height} Tiles")
+    print(f" Grid: {tiles_width}x{tiles_height} Tiles")
     print("=================================================================")
 
     blueprint_files: List[str] = []
     headers: List[blueprint_io.BlueprintHeader] = []
     missing_sidecars: List[str] = []
     total_expected_records = 0
-    for tile_x in range(window_tiles_width):
-        for tile_y in range(window_tiles_height):
+    for tile_x in range(tiles_width):
+        for tile_y in range(tiles_height):
             filename = f"light_blueprint_{tile_x:02d}_{tile_y:02d}.bin"
             filepath = os.path.join(script_dir, filename)
             if not os.path.exists(filepath):
@@ -248,10 +290,7 @@ def diagnose_blueprint(
             header = blueprint_io.read_blueprint_header(
                 filepath, expected_tile=(tile_x, tile_y)
             )
-            if (
-                header.tiles_width != window_tiles_width
-                or header.tiles_height != window_tiles_height
-            ):
+            if header.tiles_width != tiles_width or header.tiles_height != tiles_height:
                 raise ValueError(f"Blueprint '{filename}' has an unexpected tile grid")
             blueprint_files.append(filepath)
             headers.append(header)
@@ -287,9 +326,6 @@ def diagnose_blueprint(
     first_records: List[npt.NDArray[np.void]] = []
     sampled_records: List[npt.NDArray[np.void]] = []
     sampled_norm_abs: List[npt.NDArray[np.float64]] = []
-    half_w = window_width / 2.0
-    half_h = window_height / 2.0
-
     for filepath, header in zip(blueprint_files, headers):
         sidecar_path = os.path.join(
             script_dir,
@@ -325,14 +361,8 @@ def diagnose_blueprint(
                     enum_int = int(enum_value)
                     enum_counts[enum_int] = enum_counts.get(enum_int, 0) + int(count)
                 total_rays += len(chunk_data)
-                in_view += int(
-                    np.sum(
-                        (chunk_data["y_w"] >= -half_w)
-                        & (chunk_data["y_w"] < half_w)
-                        & (chunk_data["z_w"] >= -half_h)
-                        & (chunk_data["z_w"] < half_h)
-                    )
-                )
+                nonterminal_mask = _has_nonterminal_diagnostic(chunk_data)
+                in_view += int(np.sum(nonterminal_mask))
                 if len(first_records) < 9:
                     first_records.extend(chunk_data[: 9 - len(first_records)])
                 sampled_records.append(chunk_data[::subsample_rate])
@@ -344,17 +374,21 @@ def diagnose_blueprint(
                 )
 
     _print_termination_diagnostics(enum_counts, total_rays)
-    print("\n--- Window Coordinate Bounds (y_w, z_w) ---")
-    print(f"  Rays inside diagnostic FOV: {in_view:,} ({in_view/total_rays*100:.2f}%)")
+    print("\n--- Nonterminal-Plane Diagnostics ---")
+    print(
+        "  Rays with a recorded nonterminal-plane crossing: "
+        f"{in_view:,} ({in_view/total_rays*100:.2f}%)"
+    )
     print("\n--- First 5 Raw Records ---")
-    print(f"{'Ray#':<6} | {'Term Type':<38} | {'y_w':>8} | {'z_w':>8}")
+    print(f"{'Ray#':<6} | {'Term Type':<38} | " f"{'y_nt':>17} | {'z_nt':>17}")
     print("-" * 71)
     for index, record in enumerate(first_records[:5]):
         enum_value = int(record["termination_type"])
         enum_name, _ = _termination_type_info(enum_value)
         print(
             f"{index:<6} | {enum_value} ({enum_name}) | "
-            f"{record['y_w']:>8.5f} | {record['z_w']:>8.5f}"
+            f"{record['y_nt']:>17.5f} | "
+            f"{record['z_nt']:>17.5f}"
         )
 
     if sampled_records:
@@ -369,21 +403,18 @@ def diagnose_blueprint(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Blueprint Diagnostic Suite")
-    parser.add_argument("--window_tiles_width", type=int, default=1)
-    parser.add_argument("--window_tiles_height", type=int, default=1)
-    parser.add_argument("--window_width", type=float, default=1.0)
-    parser.add_argument("--window_height", type=float, default=1.0)
-    args = parser.parse_args()
-    first_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
-    if not os.path.exists(first_tile):
+    parser = argparse.ArgumentParser(
+        description=(
+            "Diagnose blueprint artifacts using tile counts and fields of view "
+            "stored in their headers."
+        )
+    )
+    parser.parse_args()
+
+    first_blueprint_tile = os.path.join(script_dir, "light_blueprint_00_00.bin")
+    if not os.path.exists(first_blueprint_tile):
         print(
             f"No native blueprint artifacts found in {script_dir}; nothing to diagnose."
         )
     else:
-        diagnose_blueprint(
-            args.window_tiles_width,
-            args.window_tiles_height,
-            args.window_width,
-            args.window_height,
-        )
+        diagnose_blueprint()

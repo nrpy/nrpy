@@ -32,10 +32,15 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.interpolation import
 )
 from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
+    handle_non_terminal_plane_intersection,
+    handle_terminal_plane_intersection,
     main_single,
-    p0_reverse_kernel,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
+)
+from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.set_initial_conditions_kernel import (
+    register_photon_batch_structs,
+    set_initial_conditions_kernel,
 )
 
 
@@ -114,47 +119,27 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         )
     phi_dim = 1
 
-    single_photon_definitions = r"""
-    #ifndef BUNDLE_CAPACITY
-    #define BUNDLE_CAPACITY 1
-    #endif
+    # Register the shared batch state definitions and metric-tetrad initializer.
+    register_photon_batch_structs()
+    set_initial_conditions_kernel(normalized_eom=normalized_eom)
+    handle_terminal_plane_intersection.register_terminal_plane_parameters()
+    handle_non_terminal_plane_intersection.register_non_terminal_plane_parameters()
 
-    typedef enum {
-      TERMINATION_TYPE_COORD_RADIUS_EXCEEDED,
-      TERMINATION_TYPE_SOURCE_PLANE,
-      FAILURE_EVOLUTION_MEASURE_EXCEEDED,
-      FAILURE_RKF45_REJECTION_LIMIT,
-      FAILURE_T_MAX_EXCEEDED,
-      FAILURE_SLOT_MANAGER_ERROR,
-      TERMINATION_TYPE_FAILURE,
-      ACTIVE,
-      REJECTED
-    } termination_type_t; // END ENUM: termination_type_t
-    """
-    BHaH_defines_h.register_BHaH_defines(
-        "single_photon_numerical_definitions", single_photon_definitions
-    )
-
-    # Step 1: Register direct single-photon initial-state parameters.
+    # The shared initializer uses the batch tiling contract.  A single-ray
+    # executable has one tile containing one ray, so register the two tile
+    # counts locally rather than inheriting batch-only parameters from
+    # main_batch.py.  The active tile indices and scan density are registered
+    # by set_initial_conditions_kernel().
     par.register_CodeParameters(
-        "REAL",
+        "int",
         __name__,
-        [
-            "initial_t",
-            "initial_x",
-            "initial_y",
-            "initial_z",
-            "initial_p_x",
-            "initial_p_y",
-            "initial_p_z",
-            "initial_integration_param",
-            "initial_eulerian_distance",
-            "initial_h",
-        ],
-        [28.0, 10.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.05],
+        ["tiles_width", "tiles_height"],
+        [1, 1],
         commondata=True,
-        add_to_parfile=True,
+        add_to_parfile=False,
     )
+
+    # Step 1: Register single-photon escape and numerical-dataset parameters.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -183,11 +168,12 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         commondata=True,
         add_to_parfile=True,
     )
-
     # Step 2: Select emitted C expressions for the two state conventions.
     if normalized_eom:
-        initial_state_time = "commondata.initial_integration_param"
-        initial_integration_param = "commondata.initial_t"
+        # Normalized state stores affine parameter in f[0].  Its origin is
+        # always lambda=0; coordinate time remains the integration parameter.
+        initial_state_time = "0.0"
+        initial_integration_value = "commondata.t_start"
         coordinate_time_expression = "*integration_param"
         trajectory_lambda_expression = "f[0]"
         trajectory_time_expression = "*integration_param"
@@ -211,7 +197,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
       fprintf(stderr, "ERROR: could not resolve the RKF45 trial spatial center.\n");
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    } // END IF: RKF45 trial spatial center was invalid
+    } // END IF: RKF45 trial center invalid
     trial_spatial_center.i0 = trial_selected_center_idx[0];
     trial_spatial_center.i2 = trial_selected_center_idx[2];
 """
@@ -222,8 +208,10 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         normalization_kernel_name = "normalization_constraint_photon_normalized"
         normalization_diagnostic_expression = "normalization.C - 1.0"
     else:
-        initial_state_time = "commondata.initial_t"
-        initial_integration_param = "commondata.initial_integration_param"
+        # Direct state stores coordinate time in f[0].  Affine integration
+        # parameter starts at lambda=0.
+        initial_state_time = "commondata.t_start"
+        initial_integration_value = "0.0"
         coordinate_time_expression = "f[0]"
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
@@ -534,13 +522,13 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   const long int max_rkf45_attempts = 2000000;
 
   const char *status_names[] = {{
-    "TERMINATION_TYPE_COORD_RADIUS_EXCEEDED",
-    "TERMINATION_TYPE_SOURCE_PLANE",
-    "FAILURE_EVOLUTION_MEASURE_EXCEEDED",
+    "STOP_CONDITION_COORD_RADIUS_EXCEEDED",
+    "STOP_CONDITION_TERMINAL_PLANE",
+    "STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED",
     "FAILURE_RKF45_REJECTION_LIMIT",
-    "FAILURE_T_MAX_EXCEEDED",
+    "STOP_CONDITION_T_MAX_EXCEEDED",
     "FAILURE_SLOT_MANAGER_ERROR",
-    "TERMINATION_TYPE_FAILURE",
+    "FAILURE_GENERIC",
     "ACTIVE",
     "REJECTED"
   }};
@@ -556,12 +544,15 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   double *f_start = NULL;
   double *f_temp = NULL;
   double *metric = NULL;
+  double observer_metric[10];
+  double observer_tetrad[4][4];
   double *rhs_geometry = NULL;
   double *k_bundle = NULL;
   double *integration_param = NULL;
   double *h = NULL;
   int *rejection_retries = NULL;
   termination_type_t *status = NULL;
+  PhotonStateSoA initial_photon = {{0}};
 
   //==========================================
   // 2. SINGLE-RAY CPU MEMORY
@@ -589,7 +580,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   // 3. TIME-SLOT AND NUMERICAL-WINDOW SETUP
   //==========================================
   TimeSlotManager tsm;
-  const double slot_manager_t_max = commondata.initial_t + 1.0e-5;
+  const double slot_manager_t_max = commondata.t_start + 1.0e-5;
   slot_manager_init(
       &tsm,
       commondata.slot_manager_t_min,
@@ -639,19 +630,19 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   printf("Numerical spacetime first stored slice time: %.15e\n",
          (double)commondata.t_numerical_initial);
 
-  const REAL camera_position[3] = {{
-      (REAL)commondata.initial_x,
-      (REAL)commondata.initial_y,
-      (REAL)commondata.initial_z}};
+  const REAL observer_position[3] = {{
+      (REAL)commondata.observer_x,
+      (REAL)commondata.observer_y,
+      (REAL)commondata.observer_z}};
   if (time_window_manager_numerical_validate_startup_domain(
           &numerical_window,
           &commondata,
           &numerical_params,
-          camera_position,
-          "initial_x, initial_y, and initial_z") !=
+          observer_position,
+          "observer_x, observer_y, and observer_z") !=
       TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
     fprintf(stderr,
-            "ERROR: numerical camera/r_escape startup stencil validation failed.\n");
+            "ERROR: numerical observer/r_escape startup stencil validation failed.\n");
     exit_status = EXIT_FAILURE;
     goto cleanup;
   }} // END IF: startup domain validation failed
@@ -664,7 +655,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         numerical_params.Nxx{phi_dim});
     exit_status = EXIT_FAILURE;
     goto cleanup;
-  }} // END IF: numerical dataset did not contain
+  }} // END IF: dataset lacked two phi planes
 
   azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
   spatial_context.stored_phi_samples[0] =
@@ -673,22 +664,33 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       numerical_params.xxmin{phi_dim} + 1.5 * numerical_params.dxx{phi_dim};
 
   //==========================================
-  // 4. DIRECT INITIAL CONDITIONS
+  // 4. OBSERVER-TETRAD INITIAL CONDITIONS
   //==========================================
+  // Reuse the batch initializer's observer parameters. The single-ray
+  // command-line momentum is the observer look-forward direction seed, while q
+  // sets the initial observer-frame energy to one.
+  // Single-ray execution is the one-tile, one-sample specialization of the
+  // shared angular sampling contract.  Tile origins and pixel dimensions are
+  // deliberately not part of commondata; the initializer derives the sample
+  // from these canonical indices and counts.
+  commondata.tiles_width = 1;
+  commondata.tiles_height = 1;
+  commondata.tile_index_width = 0;
+  commondata.tile_index_height = 0;
+  commondata.scan_density = 1;
+  // The temporary state supplies the observer event to one metric
+  // interpolation. The shared initializer overwrites f and h with the
+  // validated complete direct tetrad ray.
   f[0] = {initial_state_time};
-  f[1] = commondata.initial_x;
-  f[2] = commondata.initial_y;
-  f[3] = commondata.initial_z;
-  f[4] = 0.0;
-  f[5] = commondata.initial_p_x;
-  f[6] = commondata.initial_p_y;
-  f[7] = commondata.initial_p_z;
-  f[8] = commondata.initial_eulerian_distance;
+  f[1] = commondata.observer_x;
+  f[2] = commondata.observer_y;
+  f[3] = commondata.observer_z;
+  for (int component = 4; component < 9; ++component) {{
+    f[component] = 0.0;
+  }} // END LOOP: for component over temporary momentum
 
-  *integration_param = {initial_integration_param};
+  *integration_param = {initial_integration_value};
   *h = commondata.initial_h;
-  *rejection_retries = 0;
-  *status = ACTIVE;
 
   for (int component = 0; component < 9; ++component) {{
     if (!isfinite(f[component])) {{
@@ -697,13 +699,9 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       goto cleanup;
     }} // END IF: one initial photon state component
   }} // END LOOP: for component over initial photon
-  const double spatial_momentum_squared =
-      f[5] * f[5] + f[6] * f[6] + f[7] * f[7];
-  if (!isfinite(spatial_momentum_squared) || spatial_momentum_squared <= 0.0) {{
-    fprintf(stderr, "ERROR: initial spatial photon momentum must be finite and nonzero.\n");
-    exit_status = EXIT_FAILURE;
-    goto cleanup;
-  }} // END IF: initial spatial momentum invalid
+  // The temporary observer state intentionally has zero momentum. The shared
+  // tetrad initializer supplies and validates the complete momentum after the
+  // one observer-metric interpolation below.
   if (!isfinite(*h) || *h == 0.0) {{
     fprintf(stderr, "ERROR: initial_h must be finite and nonzero.\n");
     exit_status = EXIT_FAILURE;
@@ -711,12 +709,12 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
   }} // END IF: initial integration step was invalid
 
   int mapped_slot_index = -1;
-  const int initial_slot_index = slot_get_index(&tsm, commondata.initial_t);
+  const int initial_slot_index = slot_get_index(&tsm, commondata.t_start);
   if (initial_slot_index < 0) {{
     fprintf(
         stderr,
-        "ERROR: initial_t=%e is outside the configured TimeSlotManager range.\n",
-        (double)commondata.initial_t);
+        "ERROR: t_start=%e is outside the configured TimeSlotManager range.\n",
+        (double)commondata.t_start);
     exit_status = EXIT_FAILURE;
     goto cleanup;
   }} // END IF: initial coordinate time outside bounds
@@ -756,8 +754,35 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     }} // END IF: initial metric component invalid
   }} // END LOOP: for component over initial metric
 
-  p0_reverse_kernel(f, metric, chunk_size, stream_idx);
+  // Preserve the one interpolated observer metric while the shared initializer
+  // constructs and validates the observer tetrad.
+  for (int component = 0; component < 10; ++component) {{
+    observer_metric[component] = metric[component];
+  }} // END LOOP: for component over observer metric
+
+  initial_photon.f = f;
+  initial_photon.h = h;
+  initial_photon.integration_param = integration_param;
+  initial_photon.integration_param_p = integration_param;
+  initial_photon.integration_param_p_p = integration_param;
+  set_initial_conditions_kernel(
+      &commondata, num_rays, &initial_photon, observer_metric, observer_tetrad);
   {momentum_conversion_call}
+
+  normalization_constraint_t initial_normalization;
+  {normalization_kernel_name}(
+      f, metric, &initial_normalization, chunk_size, stream_idx);
+  const double initial_constraint_error =
+      fabs(initial_normalization.C - {"1.0" if normalized_eom else "0.0"});
+  if (!isfinite(initial_constraint_error) ||
+      initial_constraint_error > 1.0e-9) {{
+    fprintf(
+        stderr,
+        "ERROR: initial tetrad-ray constraint residual=%e exceeds tolerance.\n",
+        initial_constraint_error);
+    exit_status = EXIT_FAILURE;
+    goto cleanup;
+  }} // END IF: initial tetrad-ray constraint invalid
 
   for (int component = 0; component < 9; ++component) {{
     if (!isfinite(f[component])) {{
@@ -768,7 +793,10 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       exit_status = EXIT_FAILURE;
       goto cleanup;
     }} // END IF: one initial constrained state component
-  }} // END LOOP: for component over the initial
+  }} // END LOOP: for component over initial state
+
+  *rejection_retries = 0;
+  *status = ACTIVE;
 
   printf("Initial State:\n");
   printf("  Pos (%.4f, %.4f, %.4f)\n", f[1], f[2], f[3]);
@@ -811,7 +839,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
     const double coordinate_time = {coordinate_time_expression};
     const int slot_index = slot_get_index(&tsm, coordinate_time);
     if (slot_index < 0) {{
-      *status = FAILURE_T_MAX_EXCEEDED;
+      *status = STOP_CONDITION_T_MAX_EXCEEDED;
       printf(
           "Coordinate time %.15e left the configured numerical slot range.\n",
           coordinate_time);
@@ -831,7 +859,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         goto cleanup;
       }} // END IF: numerical time-window mapping failed
       mapped_slot_index = slot_index;
-    }} // END IF: photon moved to a different
+    }} // END IF: photon moved to different slot
 
     memcpy(f_start, f, sizeof(double) * 9);
     memcpy(f_temp, f, sizeof(double) * 9);
@@ -925,7 +953,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           exit_status = EXIT_FAILURE;
           goto cleanup;
         }} // END IF: accepted state component invalid
-      }} // END LOOP: for component over the accepted
+      }} // END LOOP: for component over accepted state
 
       numerical_interpolation(
           &commondata,
@@ -979,14 +1007,14 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
       const double radius_squared = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
       if (radius_squared > commondata.r_escape * commondata.r_escape) {{
-        *status = TERMINATION_TYPE_COORD_RADIUS_EXCEEDED;
+        *status = STOP_CONDITION_COORD_RADIUS_EXCEEDED;
         printf("Photon escaped to r > %.15e.\n", (double)commondata.r_escape);
         break;
       }} // END IF: photon state crossed boundary
 
       // f[4] is p^0 for direct evolution and the normalized log-energy measure otherwise.
       if (fabs(f[4]) > commondata.evolution_measure_max) {{
-        *status = FAILURE_EVOLUTION_MEASURE_EXCEEDED;
+        *status = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
         printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
         break;
       }} // END IF: evolution measure exceeded limit
@@ -999,16 +1027,16 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
       fprintf(stderr, "ERROR: unexpected integration status %d.\n", (int)*status);
       exit_status = EXIT_FAILURE;
       goto cleanup;
-    }} // END ELSE: RKF45 finalization returned an unexpected
-  }} // END WHILE: evolve one photon through accepted
+    }} // END ELSE: unexpected RKF45 finalization status
+  }} // END WHILE: evolve photon through accepted steps
 
   if ((*status == ACTIVE || *status == REJECTED) &&
       accepted_steps >= max_accepted_steps) {{
-    *status = TERMINATION_TYPE_FAILURE;
+    *status = FAILURE_GENERIC;
     printf("Integration stopped at the accepted-step safety limit.\n");
   }} else if ((*status == ACTIVE || *status == REJECTED) &&
              rkf45_attempts >= max_rkf45_attempts) {{
-    *status = TERMINATION_TYPE_FAILURE;
+    *status = FAILURE_GENERIC;
     printf("Integration stopped at the RKF45-attempt safety limit.\n");
   }} // END ELSE IF: integration reached the RKF45-attempt safety
 
@@ -1051,7 +1079,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           goto cleanup;
         }} // END IF: terminal normalization time-window mapping failed
         mapped_slot_index = terminal_slot_index;
-      }} // END IF: terminal state occupied a different
+      }} // END IF: terminal state changed slot
 
       numerical_interpolation(
           &commondata,
@@ -1153,8 +1181,6 @@ if __name__ == "__main__":
 
     # Step 5: Register the numerical interpolation and shared RKF45 pipeline.
     print("Registering numerical single-photon kernels...")
-    if geodesic_data.p0_photon is None:
-        raise ValueError(f"p0_photon is None for {GEO_KEY}")
     if rhs_uses_metric_derivatives:
         geodesic_rhs = (
             geodesic_data.geodesic_eom_rhs_photon_normalized()
@@ -1168,7 +1194,6 @@ if __name__ == "__main__":
             else geodesic_data.geodesic_eom_rhs_photon_christoffel()
         )
 
-    p0_reverse_kernel.p0_reverse_kernel(geodesic_data.p0_photon)
     normalization_constraint.normalization_constraint(
         geodesic_data.norm_constraint_expr, PARTICLE
     )
@@ -1188,7 +1213,6 @@ if __name__ == "__main__":
     rkf45_stage_update.rkf45_stage_update()
     rkf45_finalize_and_control_kernel.rkf45_finalize_and_control_kernel(
         enable_numerical_time_window_step_cap=True,
-        register_numerical_initial_h=False,
     )
     single_integrator_numerical(
         SPACETIME,
