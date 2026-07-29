@@ -962,9 +962,7 @@ class GeodesicEquations:
         # -1.  Remaining coefficients preserve pixel-dependent h and v factors.
         past_directed_coefficients = [-q * C, q, q * v, q * h]
 
-        return [
-            cast(sp.Expr, coefficient) for coefficient in past_directed_coefficients
-        ]
+        return past_directed_coefficients
 
     def normalization_constraint(self) -> sp.Expr:
         r"""
