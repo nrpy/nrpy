@@ -30,7 +30,7 @@ of Lines timestepping, fourth-order finite differences, reference-metric
 precomputation, outgoing radiation boundaries, and a separate Ricci evaluation
 before BSSN RHS evaluation. Its defaults place equal masses at opposite
 z-axis positions. The generator accepts `--cuda`,
-`--floating_point_precision`, and `--raytracing-outputs`; raytracing output is
+`--floating_point_precision`, and `--raytracing-time`; raytracing output is
 explicitly OpenMP-only and is rejected with `--cuda`.
 
 `python -m nrpy.examples.blackhole_spectroscopy` generates
@@ -94,7 +94,7 @@ generator that horizon-enabled black-hole examples call.
 
 ## Sources
 
-- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-outputs`, `enable_bhahaha`
+- [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-time`, `--raytracing-data-mode`, `enable_bhahaha`
 - [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
 - [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`

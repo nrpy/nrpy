@@ -215,9 +215,11 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/superB_two_blackholes_collide.py` | living |
 | `nrpy/examples/superB_blackhole_spectroscopy.py` | living |
 | `nrpy/examples/superB_nrpyelliptic_conformally_flat.py` | living |
-| `nrpy/examples/mass_geodesic_integrator.py` | living |
-| `nrpy/examples/photon_geodesic_integrator.py` | living |
-| `nrpy/examples/photon_geodesic_batch_integrator.py` | living |
+| `nrpy/examples/massive_single_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_single_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_batch_geodesic_integrator_analytical.py` | living |
+| `nrpy/examples/photon_single_geodesic_integrator_numerical.py` | living |
+| `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` | living |
 | `nrpy/examples/tovola_neutron_star.py` | living |
 | `nrpy/examples/hydro_without_hydro.py` | living |
 | `nrpy/examples/groovy_TOV_BSSN.py` | living |

@@ -163,9 +163,9 @@ These generators cover additional relativistic physics applications beyond the m
 
 These generators focus on test-particle dynamics in curved spacetimes. They produce standalone C or CUDA projects that evolve trajectories and include companion Python scripts for visualization (e.g., trajectory plots and lensed image rendering).
 
-- Single massive particle integration, requires GSL: `python -m nrpy.examples.mass_geodesic_integrator`
-- Single photon integration: `python -m nrpy.examples.photon_geodesic_integrator`
-- Batch photon ray-tracing (supports CUDA or OpenMP): `python -m nrpy.examples.photon_geodesic_batch_integrator`
+- Single massive particle integration, requires GSL: `python -m nrpy.examples.massive_single_geodesic_integrator_analytical`
+- Single photon integration: `python -m nrpy.examples.photon_single_geodesic_integrator_analytical`
+- Batch photon ray-tracing (supports CUDA or OpenMP): `python -m nrpy.examples.photon_batch_geodesic_integrator_analytical`
 
 ### Specialized Utilities
 

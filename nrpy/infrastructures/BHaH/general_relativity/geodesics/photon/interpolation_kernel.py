@@ -104,7 +104,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     for (comp = 0; comp < 9; ++comp) {{
         // Load the state vector components from global memory into registers.
         f_local[comp] = d_f_bundle[IDX_F(comp, i)]; // Component of the photon state vector $f^{{\mu}}$.
-    }} // END LOOP: for comp over 9 state vector components
+    }} // END LOOP: state bundle components
 
     //==========================================
     // METRIC TENSOR EVALUATION
@@ -119,7 +119,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
     for (comp = 0; comp < 10; ++comp) {{
         // Write the computed metric components $g_{{\mu\nu}}$ back to the global memory bundle.
         d_metric_bundle[IDX_METRIC(comp, i)] = metric_local[comp]; // Component of the spacetime metric $g_{{\mu\nu}}$.
-    }} // END LOOP: for comp over 10 metric components
+    }} // END LOOP: metric bundle components
 
     //==========================================
     // CHRISTOFFEL CONNECTION EVALUATION
@@ -138,7 +138,7 @@ def interpolation_kernel(spacetime_name: str) -> None:
         for (comp = 0; comp < 40; ++comp) {{
             // Write the computed connection components $\Gamma^{{\alpha}}_{{\beta\gamma}}$ to the global memory bundle.
             d_connection_bundle[IDX_CONN(comp, i)] = Gamma_local[comp];
-        }} // END LOOP: for comp over 40 connection components
+        }} // END LOOP: connection bundle components
     }} // END IF: d_connection_bundle is not NULL
 
     //==========================================

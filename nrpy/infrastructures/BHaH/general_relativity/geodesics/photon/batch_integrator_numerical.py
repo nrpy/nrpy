@@ -1,24 +1,25 @@
 # nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py
 r"""
-Defines the orchestration module for the numerical integration pipeline.
+Emit the CPU/OpenMP numerical-spacetime photon batch integrator.
 
-This module structures the C orchestrator responsible for managing the life cycle of
-photon trajectories $x^\mu$ in numerical spacetimes. It implements a split-pipeline
-architecture, decoupling the Runge-Kutta-Fehlberg 4(5) integration kernels.
-Intermediate tensors and state vectors are persisted in flattened Structure of Arrays
-bundles. The orchestrator manages asynchronous data transfers and parallel execution
-streams.
+This module registers the C orchestrator for batched photon geodesics in a
+numerical spacetime. The generated integrator consumes a validated combined
+numerical raytracing ``.bin`` path stored on ``commondata``, initializes a
+``NumericalTimeWindowManager``, maps numerical time windows per time slot, and
+calls ``numerical_interpolation()`` for the metric and selected forty-component
+geometry bundle. The observer metric is interpolated once at the common
+initial event; the numerical initializer constructs one validated observer
+tetrad per tile-batch call and passes that same tetrad to every ray in the
+batch.
 
-Double-buffered streams hide data transfer latency behind the integration compute
-time. The primary execution stream dynamically computes the metric and checks the
-normalization constraint without persistent memory allocation. Pinned memory increases
-transfer bandwidth for diagnostic arrays. Evaluating relative numerical drift natively
-prevents device memory bottlenecks. Pre-computing states prior to the temporal loop
-enables coalesced memory access during iterative integration. Diagnostic probes verify
-that the logic populated coordinates and zeroed the temporal momentum and distance
-traveled components. Intercepting unphysical spacetime regions after calculation
-ensures constraint solver convergence. Evaluating conserved quantities establishes a
-data baseline before the pipeline mutates the state vectors.
+The numerical time-window logic assumes the generator also registers
+``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
+so accepted RKF45 steps remain inside the mapped numerical window.
+
+The script keeps the broad photon orchestration, RKF45 stepping, and
+``TimeSlotManager`` structure used by the analytic photon batch integrator, but
+all geometry evaluations go through the numerical ``.bin`` data path.
+It does not compute analytic conserved quantities.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -31,153 +32,391 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon.time_slot_man
 )
 
 
-def batch_integrator_numerical(spacetime_name: str) -> None:
+def batch_integrator_numerical(
+    spacetime_name: str,
+    dataset_coord_system: str,
+    interpolation_method: str = "g4DD",
+    normalized_eom: bool = False,
+) -> None:
     r"""
-    Construct the Native CUDA orchestrator for the batched numerical integration pipeline.
+    Construct the CPU numerical-spacetime photon batch integrator.
 
-    :param spacetime_name: The identifier for the spacetime metric (e.g., 'KerrSchild').
+    :param spacetime_name: Spacetime identifier used to validate registration context.
+    :param dataset_coord_system: Coordinate system used by the numerical dataset.
+    :param interpolation_method: Numerical geometry payload method used by the generated project.
+    :param normalized_eom: Whether to evolve normalized coordinate-time photon equations.
+    :raises ValueError: If the parallelization mode, interpolation method, or
+        dataset coordinate system is unsupported.
+
+    Doctests:
+    >>> import os
+    >>> import nrpy.c_function as cfc
+    >>> os.environ["XDG_CACHE_HOME"] = "/tmp"
+    >>> cfc.CFunction_dict.clear()
+    >>> batch_integrator_numerical(
+    ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD"
+    ... )
+    >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
+    >>> "@param[in,out] commondata" in generated
+    True
+    >>> "time_window_manager_numerical_mmap_for_slot" in generated
+    True
+    >>> "observer_metric[10]" in generated
+    True
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
         time_slot_manager_helpers()
 
+    if not spacetime_name:
+        raise ValueError("spacetime_name must contain a valid identifier.")
+
+    parallelization = par.parval_from_str("parallelization")
+    if parallelization != "openmp":
+        raise ValueError(
+            "batch_integrator_numerical currently supports only "
+            "parallelization='openmp'."
+        )
+    if interpolation_method not in ("g4DD", "g4DD_d0", "GammaUDD"):
+        raise ValueError(
+            "interpolation_method must be one of ('g4DD', 'g4DD_d0', 'GammaUDD'); "
+            f"found '{interpolation_method}'."
+        )
+    if dataset_coord_system != "SinhCylindricalv2n2":
+        raise ValueError(
+            "batch_integrator_numerical currently supports only "
+            "dataset_coord_system='SinhCylindricalv2n2'; "
+            f"found '{dataset_coord_system}'."
+        )
+    phi_dim = 1
+
+    # Supplied-name mapping: the checklist aliases numerical_time_window_manager_set_inert,
+    # numerical_time_window_manager_init, numerical_time_window_manager_mmap_for_slot,
+    # and numerical_time_window_manager_free correspond to the supplied helper names
+    # time_window_manager_numerical_set_inert/init/mmap_for_slot/free.
     # Core physics and numerical simulation parameters for the global spacetime struct.
     par.register_CodeParameters(
         "REAL",
         __name__,
-        [
-            "t_integration_max",
-            "r_escape",
-            "p_t_max",
-            "numerical_initial_h",
-        ],
-        [10000.0, 150.0, 1e3, 0.1],
+        ["r_escape"],
+        [150.0],
         commondata=True,
         add_to_parfile=True,
+    )
+    par.register_CodeParameter(
+        "char[4096]",
+        __name__,
+        "numerical_spacetime_bin_path",
+        "",
+        commondata=True,
+        add_to_parfile=True,
+        description=(
+            "Path to the validated combined numerical raytracing .bin file used by "
+            "the numerical photon batch integrator."
+        ),
     )
     par.register_CodeParameters(
         "bool",
         __name__,
-        ["perform_conservation_check"],
-        [True],
+        ["perform_normalization_check"],
+        [False],
         commondata=True,
         add_to_parfile=True,
     )
 
-    parallelization = par.parval_from_str("parallelization")
+    includes = [
+        "BHaH_defines.h",
+        "BHaH_function_prototypes.h",
+        "<math.h>",
+        "<stdio.h>",
+        "<stdlib.h>",
+        "<string.h>",
+        "<time.h>",
+    ]
 
-    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
+    desc = r"""CPU numerical-spacetime photon batch integrator.
 
-    if parallelization == "cuda":
-        includes.extend(
-            ["cuda_runtime.h", "cuda_intrinsics.h", "BHaH_global_device_defines.h"]
-        )
+    This function bins active rays by coordinate time using TimeSlotManager,
+    maps combined numerical-spacetime .bin time windows through
+    NumericalTimeWindowManager, interpolates the common observer metric once,
+    initializes all rays from one metric-orthonormal observer tetrad,
+    interpolates the selected geometry bundle through numerical_interpolation(),
+    advances photons with the existing RKF45 kernels, and writes final
+    blueprint results.
 
-    desc = r""" Central Host-bound CPU orchestrator for the batched Split-Pipeline relativistic ray tracing loop.
-
-    This function acts as the primary loop for evaluating photon geodesics $x^\mu$.
-    It utilizes a TimeSlotManager to bin active rays by their physical coordinate time $t$.
-    The Split-Pipeline architecture maps mathematical tensors like $g_{\mu\nu}$ and $\Gamma^\alpha_{\beta\gamma}$ to memory scratchpads.
-    Mapping tensors to memory respects the hardware limit per thread on modern architectures.
-
-    @param commondata Struct containing global spacetime and numerical tolerances.
-    @param num_rays Total number of photon trajectories to simulate.
-    @param results_buffer Device array storing the final physical intersections."""
+    @param[in,out] commondata Struct containing global numerical-spacetime,
+                              observer, and integration parameters. The numerical
+                              time-window manager fills its authoritative first
+                              stored slice time during initialization.
+    @param num_rays Number of rays in this tile batch. The caller derives this
+                     from the width-side scan density and the internally
+                     derived height-side scan density; this integrator does
+                     not calculate image placement or tile metadata.
+    @param[out] results_buffer Host array storing the final physical
+                               intersections.
+    @param[in] norm_abs_bin_path Optional output filename for the raw float64
+                                 normalization sidecar."""
 
     cfunc_type = "void"
 
     name = "batch_integrator_numerical"
 
-    params = "const commondata_struct *restrict commondata, long int num_rays, blueprint_data_t *restrict results_buffer"
+    params = (
+        "commondata_struct *restrict commondata, "
+        "long int num_rays, "
+        "blueprint_data_t *restrict results_buffer, "
+        "const char *restrict norm_abs_bin_path"
+    )
 
     include_CodeParameters_h = True
 
-    # --- DYNAMIC MACRO GENERATION ---
-    malloc_pinned = "BHAH_MALLOC_PINNED" if parallelization == "cuda" else "BHAH_MALLOC"
-    malloc_device = "BHAH_MALLOC_DEVICE" if parallelization == "cuda" else "BHAH_MALLOC"
+    malloc_pinned = "BHAH_MALLOC"
+    malloc_device = "BHAH_MALLOC"
+    free_pinned = "BHAH_FREE"
+    free_device = "BHAH_FREE"
+    pin_comment = "Host memory allocation: CPU RAM mapped for"
+    bridge_alloc_comment = (
+        "Allocate memory arrays in Host RAM for the structural bridge payloads."
+    )
+    scratch_alloc_comment = (
+        "Allocate 1D Host scratchpad arrays for temporal data staging."
+    )
+    results_memcpy = (
+        "// Event outputs are written directly to results_buffer on the CPU."
+    )
+    calc_blueprint = (
+        "calculate_and_fill_blueprint_data_universal("
+        "&all_photons_host, "
+        "num_rays, "
+        "results_buffer, "
+        "NULL, "
+        "NULL, "
+        "0);"
+    )
+    calc_blueprint_with_norm_abs = (
+        "calculate_and_fill_blueprint_data_universal("
+        "&all_photons_host, "
+        "num_rays, "
+        "results_buffer, "
+        "normalization_abs_by_ray, "
+        "norm_abs_bin_path, "
+        "0);"
+    )
+    set_initial_conditions_call = (
+        " set_initial_conditions_kernel"
+        "(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad);"
+    )
 
-    if parallelization == "cuda":
-        stream_setup_str = """
-        // Array of CUDA streams for asynchronous hardware orchestration.
-        cudaStream_t streams[2];
-        // Initializes the primary CUDA stream mapped to the first double-buffer context.
-        cudaStreamCreate(&streams[0]);
-        // Initializes the secondary CUDA stream mapped to the second double-buffer context.
-        cudaStreamCreate(&streams[1]);
+    normalized_momentum_conversion = (
+        "photon_momentum_to_normalized_kernel("
+        "d_f_bundle[0], d_metric_bundle[0], chunk_size, 0);"
+        if normalized_eom
+        else ""
+    )
+    initial_integration_param = "commondata->t_start" if normalized_eom else "0.0"
+    initial_coordinate_time = (
+        "all_photons_host.integration_param[sync_i]"
+        if normalized_eom
+        else "all_photons_host.f[0 * num_rays + sync_i]"
+    )
+    updated_coordinate_time = (
+        "all_photons_host.integration_param[m_idx]"
+        if normalized_eom
+        else "all_photons_host.f[0 * num_rays + m_idx]"
+    )
+    terminal_coordinate_time = (
+        "all_photons_host.integration_param[norm_ray]"
+        if normalized_eom
+        else "all_photons_host.f[0 * num_rays + norm_ray]"
+    )
+    interpolation_integration_param_args = (
+        "d_spatial_stencil_center_i0[current], "
+        "d_spatial_stencil_center_i2[current], "
+        "d_integration_param_bundle[current], d_h[current], stage,"
+        if normalized_eom
+        else ""
+    )
+    interpolation_integration_param_args_next = (
+        "d_spatial_stencil_center_i0[next], "
+        "d_spatial_stencil_center_i2[next], "
+        "d_integration_param_bundle[next], d_h[next], stage,"
+        if normalized_eom
+        else ""
+    )
+    interpolation_initial_integration_param_args = (
+        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
+        if normalized_eom
+        else ""
+    )
+    interpolation_terminal_integration_param_args = (
+        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
+        if normalized_eom
+        else ""
+    )
+    initial_integration_param_setup = (
+        """
+        for (long int init_i = 0; init_i < chunk_size; ++init_i) {
+            d_integration_param_bundle[0][init_i] = commondata->t_start;
+            d_h[0][init_i] = commondata->initial_h;
+        } // END LOOP: for init_i over initial numerical
+        """
+        if normalized_eom
+        else ""
+    )
+    observer_state_coordinate_time = "0.0" if normalized_eom else "commondata->t_start"
+    observer_state_integration_setup = (
+        """
+    // The normalized interpolation wrapper reads coordinate time from this
+    // auxiliary integration-parameter bundle while f[0] remains affine data.
+    d_integration_param_bundle[0][0] = commondata->t_start;
+    d_h[0][0] = commondata->initial_h;
+"""
+        if normalized_eom
+        else ""
+    )
+    terminal_integration_param_setup = (
+        """
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {
+                        const long int master_idx = chunk_buffer[0][norm_i];
+                        integration_param_bridge[0][norm_i] =
+                            all_photons_host.integration_param[master_idx];
+                    } // END LOOP: for norm_i over terminal integration
+                    memcpy(
+                        d_integration_param_bundle[0],
+                        integration_param_bridge[0],
+                        sizeof(double) * chunk_size);
+        """
+        if normalized_eom
+        else ""
+    )
+    rhs_integration_param_args = (
+        "d_integration_param_bundle[current], d_h[current]," if normalized_eom else ""
+    )
+    rhs_integration_param_args_next = (
+        "d_integration_param_bundle[next], d_h[next]," if normalized_eom else ""
+    )
+    spatial_center_declarations = (
+        """
+    // Trial-locked spatial stencil centers, one pair per double-buffered ray.
+    int *d_spatial_stencil_center_i0[2];
+    int *d_spatial_stencil_center_i2[2];
+"""
+        if normalized_eom
+        else ""
+    )
+    spatial_center_allocations = (
+        f"""
+        {malloc_device}(d_spatial_stencil_center_i0[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-0 trial centers.
+        {malloc_device}(d_spatial_stencil_center_i2[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-2 trial centers.
+"""
+        if normalized_eom
+        else ""
+    )
+    spatial_center_frees = (
+        f"""
+            {free_device}(d_spatial_stencil_center_i0[s]); // Purges native dimension-0 trial centers.
+            {free_device}(d_spatial_stencil_center_i2[s]); // Purges native dimension-2 trial centers.
+"""
+        if normalized_eom
+        else ""
+    )
+    trial_spatial_center_setup_current = (
+        r"""
+            for (long int stencil_i = 0; stencil_i < active_chunks[current]; ++stencil_i) {
+                const REAL trial_cartesian[3] = {
+                    (REAL)d_f_start_bundle[current][1 * BUNDLE_CAPACITY + stencil_i],
+                    (REAL)d_f_start_bundle[current][2 * BUNDLE_CAPACITY + stencil_i],
+                    (REAL)d_f_start_bundle[current][3 * BUNDLE_CAPACITY + stencil_i]};
+                REAL trial_native[3];
+                int automatic_center_idx[3];
+                int selected_center_idx[3];
+                if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+                        &numerical_params, trial_cartesian, NULL, trial_native,
+                        automatic_center_idx, selected_center_idx) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                    fprintf(stderr,
+                            "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
+                            current, stencil_i);
+                    time_window_manager_numerical_free(&numerical_window);
+                    slot_manager_free(&tsm);
+                    exit(1);
+                } // END IF: current trial spatial center invalid
+                d_spatial_stencil_center_i0[current][stencil_i] =
+                    selected_center_idx[0];
+                d_spatial_stencil_center_i2[current][stencil_i] =
+                    selected_center_idx[2];
+            } // END LOOP: for stencil_i over trial rays
+"""
+        if normalized_eom
+        else ""
+    )
+    trial_spatial_center_setup_next = (
+        r"""
+                for (long int stencil_i = 0; stencil_i < active_chunks[next]; ++stencil_i) {
+                    const REAL trial_cartesian[3] = {
+                        (REAL)d_f_start_bundle[next][1 * BUNDLE_CAPACITY + stencil_i],
+                        (REAL)d_f_start_bundle[next][2 * BUNDLE_CAPACITY + stencil_i],
+                        (REAL)d_f_start_bundle[next][3 * BUNDLE_CAPACITY + stencil_i]};
+                    REAL trial_native[3];
+                    int automatic_center_idx[3];
+                    int selected_center_idx[3];
+                    if (time_window_manager_numerical_resolve_spatial_target_and_stencil(
+                            &numerical_params, trial_cartesian, NULL, trial_native,
+                            automatic_center_idx, selected_center_idx) !=
+                        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {
+                        fprintf(stderr,
+                                "ERROR: could not resolve a trial spatial center for buffer %d ray %ld.\n",
+                                next, stencil_i);
+                        time_window_manager_numerical_free(&numerical_window);
+                        slot_manager_free(&tsm);
+                        exit(1);
+                    } // END IF: next trial spatial center invalid
+                    d_spatial_stencil_center_i0[next][stencil_i] =
+                        selected_center_idx[0];
+                    d_spatial_stencil_center_i2[next][stencil_i] =
+                        selected_center_idx[2];
+                } // END LOOP: for stencil_i over trial rays
+"""
+        if normalized_eom
+        else ""
+    )
+    normalization_kernel_name = (
+        "normalization_constraint_photon_normalized"
+        if normalized_eom
+        else "normalization_constraint_photon"
+    )
+    normalization_error_expr = (
+        "fabs(d_norm_bundle[norm_i].C - 1.0)"
+        if normalized_eom
+        else "fabs(d_norm_bundle[norm_i].C)"
+    )
+    initial_constraint_target = "1.0" if normalized_eom else "0.0"
+    finalize_current = """
+            // Finalize step: apply RKF45 error control and update the
+            // integration-parameter baseline and step size $h$.
+            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_integration_param_bundle[current], d_retries[current], active_chunks[current], current);"""
+    finalize_next = """
+                // Finalize step: apply RKF45 error control and update the
+                // integration-parameter baseline and step size $h$.
+                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_integration_param_bundle[next], d_retries[next], active_chunks[next], next);"""
 
-        // Host-to-Device transfer: Maps the global spacetime constants to the device cache to ensure zero-latency read access.
-        cudaMemcpyToSymbol(d_commondata, commondata, sizeof(commondata_struct));"""
-        pin_comment = "Host-to-Device transfer allocation: Pinned memory utilized to maximize PCIe DMA throughput for"
-        dev_comment = "Device memory allocation: Dedicated VRAM array ensuring strict adherence to the hardware bounds for"
-        bridge_alloc_comment = "Allocate Bridge arrays in Host Pinned Memory to allow fast, overlapped chunked transfers to the GPU."
-        scratch_alloc_comment = "Allocate 1D VRAM Scratchpad arrays ensuring strict adherence to the hardware bounds."
-    else:
-        stream_setup_str = """
-        // Streams not required for CPU execution.
+    def memcpy_cpu(dest: str, src: str, size: str) -> str:
+        return f"memcpy({dest}, {src}, {size});"
 
-        // Direct struct access utilized; explicit device symbol copying bypassed."""
-        pin_comment = "Host memory allocation: Primary CPU RAM mapped for"
-        dev_comment = "Host memory allocation: Primary CPU RAM mapped for"
-        bridge_alloc_comment = (
-            "Allocate memory arrays in Host RAM for the structural bridge payloads."
-        )
-        scratch_alloc_comment = (
-            "Allocate 1D Host Scratchpad arrays for temporal data staging."
-        )
+    def no_sync() -> str:
+        return "// CPU memory operations above are complete at this point."
 
-    # This block configures the hardware-specific teardown and memory synchronization sequences.
-    if parallelization == "cuda":
-        results_memcpy = "cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);"
-        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);"
-        set_intitial_con = f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out,0);"
-        stream_destroy = "cudaStreamDestroy(streams[s]); // Purges the hardware stream execution context."
-        free_device = "BHAH_FREE_DEVICE"
-        free_pinned = "BHAH_FREE_PINNED"
-    else:
-        results_memcpy = "memcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays);"
-        calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, 0);"
-        set_intitial_con = f" set_initial_conditions_kernel_{spacetime_name}(commondata, num_rays, &all_photons_host, window_center_out, n_x_out, n_y_out, n_z_out);"
-        stream_destroy = (
-            "// Stream destruction natively omitted for synchronous CPU execution."
-        )
-        free_device = "BHAH_FREE"
-        free_pinned = "BHAH_FREE"
-
-    # Establish memory transfer protocols based on the target parallelization architecture.
-    if parallelization == "cuda":
-        # Generates asynchronous PCIe transfer commands for CUDA architectures.
-        def memcpy_async(
-            dest: str, src: str, size: str, direction: str, stream: str
-        ) -> str:
-            return f"cudaMemcpyAsync({dest}, {src}, {size}, {direction}, {stream});"
-
-        # Generates hardware synchronization barriers for CUDA streams.
-        def stream_sync(stream: str) -> str:
-            return f"cudaStreamSynchronize({stream});"
-
-        stream_arg = ", 0"
-        free_pinned = "BHAH_FREE_PINNED"
-    else:
-        # Generates synchronous Host memory copies for native OpenMP architectures.
-        def memcpy_async(
-            dest: str, src: str, size: str, direction: str, stream: str
-        ) -> str:
-            # pylint: disable=unused-argument
-            return f"memcpy({dest}, {src}, {size});"
-
-        def stream_sync(stream: str) -> str:
-            # pylint: disable=unused-argument
-            return r"// Stream synchronization is natively omitted for synchronous CPU execution."
-
-        stream_arg = ", 0"
-        free_pinned = "BHAH_FREE"
-
-    # Define stream args for CUDA
-    stream_arg_current = ", current" if parallelization == "cuda" else ", current"
-    stream_arg_next = ", next" if parallelization == "cuda" else ", next"
+    stream_arg_current = ", current"
+    stream_arg_next = ", next"
 
     body = rf"""
+    // Initialize caller-owned output records before any event handler writes fields.
+    for (long int i = 0; i < num_rays; ++i) {{
+        results_buffer[i] = (blueprint_data_t){{0}};
+        results_buffer[i].termination_type = FAILURE_GENERIC;
+    }} // END LOOP: initialize deterministic numerical-batch result records
+
     //==========================================
-    // 1. HOST & DEVICE ALLOCATION
+    // 1. HOST ALLOCATION
     //==========================================
 
     // The master host-side Structure of Arrays (SoA) tracking all photons $f^\mu$.
@@ -189,28 +428,28 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     {malloc_pinned}(all_photons_host.f_p, sizeof(double) * 9 * num_rays);
     // {pin_comment} the second derivative $\ddot{{f}}^\mu$.
     {malloc_pinned}(all_photons_host.f_p_p, sizeof(double) * 9 * num_rays);
-    // {pin_comment} the physical affine parameter $\lambda$.
-    {malloc_pinned}(all_photons_host.affine_param, sizeof(double) * num_rays);
+    // {pin_comment} the integration parameter.
+    {malloc_pinned}(all_photons_host.integration_param, sizeof(double) * num_rays);
     // {pin_comment} individual integration step sizes $h$.
     {malloc_pinned}(all_photons_host.h, sizeof(double) * num_rays);
     // {pin_comment} the trajectory termination status.
     {malloc_pinned}(all_photons_host.status, sizeof(termination_type_t) * num_rays);
     // {pin_comment} the number of step-size rejections.
     {malloc_pinned}(all_photons_host.rejection_retries, sizeof(int) * num_rays);
-    // {pin_comment} the previous observer window boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_window_prev, sizeof(bool) * num_rays);
-    // {pin_comment} the previous source emission boundary state.
-    {malloc_pinned}(all_photons_host.on_positive_side_of_source_prev, sizeof(bool) * num_rays);
+    // {pin_comment} the previous nonterminal plane boundary state.
+    {malloc_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev, sizeof(bool) * num_rays);
+    // {pin_comment} the previous terminal-plane boundary state.
+    {malloc_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev, sizeof(bool) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-1}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p, sizeof(double) * num_rays);
+    {malloc_pinned}(all_photons_host.integration_param_p, sizeof(double) * num_rays);
     // {pin_comment} the history step $\lambda_{{n-2}}$.
-    {malloc_pinned}(all_photons_host.affine_param_p_p, sizeof(double) * num_rays);
-    // {pin_comment} the observer window intersection lock.
-    {malloc_pinned}(all_photons_host.window_event_found, sizeof(bool) * num_rays);
-    // {pin_comment} the source emission plane intersection lock.
-    {malloc_pinned}(all_photons_host.source_event_found, sizeof(bool) * num_rays);
+    {malloc_pinned}(all_photons_host.integration_param_p_p, sizeof(double) * num_rays);
+    // {pin_comment} the nonterminal plane intersection lock.
+    {malloc_pinned}(all_photons_host.non_terminal_plane_event_found, sizeof(bool) * num_rays);
+    // {pin_comment} the terminal-plane intersection lock.
+    {malloc_pinned}(all_photons_host.terminal_plane_event_found, sizeof(bool) * num_rays);
 
-    {stream_setup_str}
+    // CPU-only numerical integration: direct commondata access and no extra execution-buffer setup.
 
     //==========================================
     // DOUBLE-BUFFERED BRIDGE ARRAYS
@@ -223,32 +462,30 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     double *f_p_bridge[2];
     // Bridge array staging the second derivative $\ddot{{f}}^\mu$ for memory transfers.
     double *f_p_p_bridge[2];
-    // Bridge array staging the affine parameter $\lambda$ for memory transfers.
-    double *affine_bridge[2];
+    // Bridge array staging the integration parameter for memory transfers.
+    double *integration_param_bridge[2];
     // Bridge array staging the current integration step size $h$ for memory transfers.
     double *h_bridge[2];
     // Bridge array staging the current trajectory termination status for memory transfers.
     termination_type_t *status_bridge[2];
     // Bridge array staging the number of step-size rejections for memory transfers.
     int *retries_bridge[2];
-    // Bridge array staging the previous observer window boundary side flag for memory transfers.
-    bool *on_pos_window_prev_bridge[2];
-    // Bridge array staging the previous source emission boundary side flag for memory transfers.
-    bool *on_pos_source_prev_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-1}}$ for chunked memory transfers.
-    double *affine_p_bridge[2];
-    // Bridge array staging the historical affine parameter $\lambda_{{n-2}}$ for chunked memory transfers.
-    double *affine_p_p_bridge[2];
-    // Bridge array staging the observer window event lock for memory transfers.
-    bool *window_event_found_bridge[2];
-    // Bridge array staging the source emission event lock for memory transfers.
-    bool *source_event_found_bridge[2];
+    // Bridge array staging the previous nonterminal plane boundary side flag for memory transfers.
+    bool *on_pos_non_terminal_plane_prev_bridge[2];
+    // Bridge array staging the previous terminal-plane boundary side flag for memory transfers.
+    bool *on_pos_terminal_plane_prev_bridge[2];
+    // Bridge array staging the preceding integration parameter for chunked memory transfers.
+    double *integration_param_p_bridge[2];
+    // Bridge array staging the second preceding integration parameter for chunked memory transfers.
+    double *integration_param_p_p_bridge[2];
+    // Bridge array staging the nonterminal plane event lock for memory transfers.
+    bool *non_terminal_plane_event_found_bridge[2];
+    // Bridge array staging the terminal-plane event lock for memory transfers.
+    bool *terminal_plane_event_found_bridge[2];
 
     //==========================================
-    // DOUBLE-BUFFERED VRAM SCRATCHPADS
+    // DOUBLE-BUFFERED CPU SCRATCHPADS
     //==========================================
-    // Scratchpad array holding the physical normalization diagnostic outputs.
-    normalization_constraint_t *d_norm_bundle[2];
     // Scratchpad tracking the current state vector $f^\mu$ bounding the RKF45 step.
     double *d_f_bundle[2];
     // Scratchpad locking the anchor state vector $f_{{start}}$ to calculate the final stage update.
@@ -261,32 +498,33 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     double *d_f_pre_prev_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
-    // Scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
-    double *d_connection_bundle[2];
+    // Scratchpad persisting the selected forty-component geometry bundle.
+    double *d_rhs_geometry_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
     double *d_k_bundle[2];
     // Array regulating active integration step sizing $h$.
     double *d_h[2];
-    // Array regulating total affine parameter progress $\lambda$.
-    double *d_affine[2];
+    // Array regulating integration-parameter progress.
+    double *d_integration_param_bundle[2];
     // Array holding the current trajectory status limits.
     termination_type_t *d_status[2];
     // Array tracking sequential error rejections per photon.
     int *d_retries[2];
-    // Array flagging the previous observer window boundary side.
-    bool *d_on_pos_window_prev[2];
-    // Array flagging the previous source emission boundary side.
-    bool *d_on_pos_source_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-1}}$.
-    double *d_affine_prev[2];
-    // Array tracking historical affine parameter $\lambda_{{n-2}}$.
-    double *d_affine_pre_prev[2];
-    // Array guarding the window intersection coordinates from multi-trigger overwrites.
-    bool *d_window_event_found[2];
-    // Array guarding the source intersection coordinates from multi-trigger overwrites.
-    bool *d_source_event_found[2];
+    // Array flagging the previous nonterminal plane boundary side.
+    bool *d_on_pos_non_terminal_plane_prev[2];
+    // Array flagging the previous terminal-plane boundary side.
+    bool *d_on_pos_terminal_plane_prev[2];
+    // Array tracking the preceding integration parameter.
+    double *d_integration_param_prev[2];
+    // Array tracking the integration parameter two accepted steps ago.
+    double *d_integration_param_pre_prev[2];
+    // Array guarding nonterminal-plane intersection coordinates from multi-trigger overwrites.
+    bool *d_non_terminal_plane_event_found[2];
+    // Array guarding the terminal-plane intersection coordinates from multi-trigger overwrites.
+    bool *d_terminal_plane_event_found[2];
     // Array carrying the absolute master indices $m_{{idx}}$ mapping the execution chunk.
     long int *d_chunk_buffer[2];
+{spatial_center_declarations}
 
     // Loop iterator for instantiating the double-buffered operational arrays.
     for (int s = 0; s < 2; ++s) {{
@@ -295,16 +533,16 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         {malloc_pinned}(f_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $f^\mu$ bridges.
         {malloc_pinned}(f_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\dot{{f}}^\mu$ bridges.
         {malloc_pinned}(f_p_p_bridge[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Pin $\ddot{{f}}^\mu$ bridges.
-        {malloc_pinned}(affine_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda$ bridges.
+        {malloc_pinned}(integration_param_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin integration-parameter bridges.
         {malloc_pinned}(h_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $h$ bridges.
         {malloc_pinned}(status_bridge[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Pin status bridges.
         {malloc_pinned}(retries_bridge[s], sizeof(int) * BUNDLE_CAPACITY); // Pin retries bridges.
-        {malloc_pinned}(on_pos_window_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window flag bridges.
-        {malloc_pinned}(on_pos_source_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
-        {malloc_pinned}(affine_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-1}}$ bridges.
-        {malloc_pinned}(affine_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin $\lambda_{{n-2}}$ bridges.
-        {malloc_pinned}(window_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin window lock bridges.
-        {malloc_pinned}(source_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source lock bridges.
+        {malloc_pinned}(on_pos_non_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane flag bridges.
+        {malloc_pinned}(on_pos_terminal_plane_prev_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin source flag bridges.
+        {malloc_pinned}(integration_param_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin preceding integration-parameter bridges.
+        {malloc_pinned}(integration_param_p_p_bridge[s], sizeof(double) * BUNDLE_CAPACITY); // Pin second preceding integration-parameter bridges.
+        {malloc_pinned}(non_terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin nonterminal-plane lock bridges.
+        {malloc_pinned}(terminal_plane_event_found_bridge[s], sizeof(bool) * BUNDLE_CAPACITY); // Pin terminal-plane lock bridges.
 
         // {scratch_alloc_comment}
         {malloc_device}(d_f_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu$ scratchpad.
@@ -313,107 +551,183 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
         {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
-        {malloc_device}(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
+        {malloc_device}(d_rhs_geometry_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate the geometry scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
-        {malloc_device}(d_affine[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda$ scratchpad.
+        {malloc_device}(d_integration_param_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate integration-parameter scratchpad.
         {malloc_device}(d_status[s], sizeof(termination_type_t) * BUNDLE_CAPACITY); // Allocate status scratchpad.
         {malloc_device}(d_retries[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate retries scratchpad.
-        {malloc_device}(d_on_pos_window_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window flag scratchpad.
-        {malloc_device}(d_on_pos_source_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
-        {malloc_device}(d_affine_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-1}}$ scratchpad.
-        {malloc_device}(d_affine_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $\lambda_{{n-2}}$ scratchpad.
-        {malloc_device}(d_window_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate window lock scratchpad.
-        {malloc_device}(d_source_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source lock scratchpad.
+        {malloc_device}(d_on_pos_non_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane flag scratchpad.
+        {malloc_device}(d_on_pos_terminal_plane_prev[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate source flag scratchpad.
+        {malloc_device}(d_integration_param_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate preceding integration-parameter scratchpad.
+        {malloc_device}(d_integration_param_pre_prev[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate second preceding integration-parameter scratchpad.
+        {malloc_device}(d_non_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate nonterminal-plane lock scratchpad.
+        {malloc_device}(d_terminal_plane_event_found[s], sizeof(bool) * BUNDLE_CAPACITY); // Allocate terminal-plane lock scratchpad.
         {malloc_device}(d_chunk_buffer[s], sizeof(long int) * BUNDLE_CAPACITY); // Allocate chunk mapping scratchpad.
-        {malloc_device}(d_norm_bundle[s], sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate diagnostic outputs scratchpad.
-    }} // END LOOP: for s over 2 to instantiate the double-buffered operational arrays
+{spatial_center_allocations}
+    }} // END LOOP: for s over 2
 
-    // Device-native struct pointer storing the final physical plane intersections.
-    blueprint_data_t *d_results_buffer;
-    // {dev_comment} the blueprint results buffer to avoid mid-computation memory transfers.
-    {malloc_device}(d_results_buffer, sizeof(blueprint_data_t) * num_rays);
+    // Scratchpad array holding the initialization constraint outputs. It is
+    // always allocated because initialization must validate every ray before
+    // RKF45 starts, independent of the optional terminal diagnostic.
+    normalization_constraint_t *d_initial_norm_bundle = NULL;
+    {malloc_device}(d_initial_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY);
+
+    // Scratchpad array holding the terminal normalization diagnostic outputs.
+    normalization_constraint_t *d_norm_bundle = NULL;
+    // Host array storing one absolute normalization value per photon in master-ray order.
+    double *normalization_abs_by_ray = NULL;
+
+    if (commondata->perform_normalization_check) {{
+        {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
+        {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon normalization sidecar buffer.
+        for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
+            normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
+        }} // END LOOP: for norm_init_i over num_rays
+    }} // END IF: commondata->perform_normalization_check to allocate normalization scratchpad
+
+    // Event-detection kernels write final physical plane intersections directly to results_buffer.
 
     // Host-bound struct managing temporal binning of photon trajectories $x^\mu$.
     TimeSlotManager tsm;
-    // Initializes the temporal manager strictly on the CPU to coordinate the Split-Pipeline batches.
-    slot_manager_init(&tsm, commondata->slot_manager_t_min, commondata->t_start + 1.0, commondata->slot_manager_delta_t, num_rays);
+    // The slot-manager upper bound is exclusive, so it must sit slightly above
+    // t_start; exact equality would reject the initial photon state.
+    const double slot_manager_t_max = commondata->t_start + 1.0e-5;
+    // The main slot range is controlled by commondata, not by combined-file metadata.
+    slot_manager_init(
+        &tsm,
+        commondata->slot_manager_t_min,
+        slot_manager_t_max,
+        commondata->slot_manager_delta_t,
+        num_rays);
 
-    //==========================================
-    // DIAGNOSTIC MEMORY ALLOCATION
-    //==========================================
-    // Host pointer tracking the initial conserved quantities prior to integration.
-    conserved_quantities_t *initial_cq_host = NULL;
-    // Host pointer tracking the terminal conserved quantities post integration.
-    conserved_quantities_t *final_cq_host = NULL;
+    // Numerical spacetime window manager and metadata-fed grid params.
+    NumericalTimeWindowManager numerical_window;
+    time_window_manager_numerical_set_inert(&numerical_window);
 
-    if (commondata->perform_conservation_check) {{
-        // {pin_comment} the initial diagnostic data.
-        {malloc_pinned}(initial_cq_host, sizeof(conserved_quantities_t) * num_rays);
-        // {pin_comment} the final diagnostic data.
-        {malloc_pinned}(final_cq_host, sizeof(conserved_quantities_t) * num_rays);
-    }} // END IF: commondata->perform_conservation_check to allocate diagnostic arrays
+    // Seed the runtime params with generator-time defaults so coordinate-map
+    // parameters like AMPL, SINHW, and any slope terms remain valid after
+    // metadata overlay.
+    commondata_struct commondata_for_params_defaults = *commondata;
+    griddata_struct dummy_griddata[MAXNUMGRIDS];
+    params_struct_set_to_default(&commondata_for_params_defaults, dummy_griddata);
+    params_struct numerical_params = dummy_griddata[0].params;
+
+    if (commondata->numerical_spacetime_bin_path[0] == '\0') {{
+        fprintf(stderr,
+                "ERROR: commondata->numerical_spacetime_bin_path is empty. "
+                "The numerical photon batch integrator requires a validated combined .bin file path.\n");
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: numerical_spacetime_bin_path was empty
+
+    if (time_window_manager_numerical_init(
+            &numerical_window,
+            commondata->numerical_spacetime_bin_path,
+            commondata,
+            commondata->numerical_spacetime_temporal_interp_half_width,
+            &numerical_params) != TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+        fprintf(stderr,
+                "ERROR: failed to initialize numerical time-window manager from '%s'.\n",
+                commondata->numerical_spacetime_bin_path);
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: numerical time-window manager initialization failed
+    printf("Numerical spacetime first stored slice time: %.15e\n",
+           (double)commondata->t_numerical_initial);
+
+    if (numerical_params.Nxx{phi_dim} != 2) {{
+        fprintf(stderr,
+                "ERROR: numerical spatial interpolation expects exactly two stored phi planes in native dimension {phi_dim}; got Nxx{phi_dim}=%d.\n",
+                numerical_params.Nxx{phi_dim});
+        time_window_manager_numerical_free(&numerical_window);
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: stored phi-plane count was incompatible
+
+    azimuthal_symmetry_spatial_lagrange_context_struct spatial_context;
+    spatial_context.stored_phi_samples[0] =
+        numerical_params.xxmin{phi_dim} + 0.5 * numerical_params.dxx{phi_dim};
+    spatial_context.stored_phi_samples[1] =
+        numerical_params.xxmin{phi_dim} + 1.5 * numerical_params.dxx{phi_dim};
 
     //==========================================
     // 2. INITIALIZATION PHASE
     //==========================================
-    // Evaluate initial coordinate states and map global spacetime metrics to memory bounds.
+    // Map the initial slot before any numerical interpolation. The mapped
+    // window is shared by the temporary observer state and all later rays.
+    const int initial_slot_idx = slot_get_index(&tsm, commondata->t_start);
+    if (initial_slot_idx < 0) {{
+        fprintf(stderr,
+                "ERROR: initial photon time t_start=%e is outside the configured TimeSlotManager range.\n",
+                (double)commondata->t_start);
+        time_window_manager_numerical_free(&numerical_window);
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: initial photon time outside bounds
 
-    double window_center_out[3]; // 3D array storing the spatial Cartesian coordinates $x^i$ of the observer window center.
-    double n_x_out[3]; // 3D orthonormal basis vector pointing along the $x$-axis of the local window geometry.
-    double n_y_out[3]; // 3D orthonormal basis vector pointing along the $y$-axis of the local window geometry.
-    double n_z_out[3]; // 3D orthonormal basis vector pointing along the $z$-axis of the local window geometry.
+    if (time_window_manager_numerical_mmap_for_slot(
+            &numerical_window, &tsm, initial_slot_idx) !=
+        TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+        fprintf(stderr,
+                "ERROR: failed to map numerical time window for initial slot %d at t_start=%e.\n",
+                initial_slot_idx,
+                (double)commondata->t_start);
+        time_window_manager_numerical_free(&numerical_window);
+        slot_manager_free(&tsm);
+        exit(1);
+    }} // END IF: initial slot time window mapping
 
-    // Operates synchronously as the primary state array must be fully populated before pipeline dispatch.
-    {set_intitial_con}
+    // Interpolate the metric once at the common observer event. This temporary
+    // state uses the observer position and t_start, but does not represent a
+    // renderable ray. The observer initializer consumes only this ten-component
+    // covariant metric and constructs the tetrad once on the host.
+    double observer_metric[10];
+    double observer_tetrad[4][4];
+    for (int observer_component = 0; observer_component < 9; ++observer_component) {{
+        d_f_bundle[0][observer_component * BUNDLE_CAPACITY] = 0.0;
+    }} // END LOOP: clear temporary observer state
+    d_f_bundle[0][0 * BUNDLE_CAPACITY] = {observer_state_coordinate_time};
+    d_f_bundle[0][1 * BUNDLE_CAPACITY] = commondata->observer_x;
+    d_f_bundle[0][2 * BUNDLE_CAPACITY] = commondata->observer_y;
+    d_f_bundle[0][3 * BUNDLE_CAPACITY] = commondata->observer_z;
+{observer_state_integration_setup}
 
-    //==========================================
-    // DIAGNOSTIC PROBE: DETAILED INITIAL POSITION & PLACEHOLDER ALIGNMENT
-    //==========================================
-    // Scans the master Host SoA immediately following the initialization kernel call.
+    numerical_interpolation(
+        commondata,
+        &numerical_params,
+        &spatial_context,
+        &numerical_window,
+        d_f_bundle[0],
+        {interpolation_initial_integration_param_args}
+        d_metric_bundle[0],
+        NULL,
+        1,
+        0);
 
-    long int init_mismatch_count = 0; // Accumulator tracking the total number of physical state initializations that failed structural validation.
-    long int mismatch_t = 0; // Counter tracking validation failures for the temporal coordinate $t$.
-    long int mismatch_x = 0; // Counter tracking validation failures for the spatial coordinate $x$.
-    long int mismatch_y = 0; // Counter tracking validation failures for the spatial coordinate $y$.
-    long int mismatch_z = 0; // Counter tracking validation failures for the spatial coordinate $z$.
-    long int mismatch_pt = 0; // Counter tracking validation failures for the temporal momentum $p_t$.
-    long int mismatch_lam = 0; // Counter tracking validation failures for the distance traveled.
+    for (int observer_metric_component = 0; observer_metric_component < 10;
+         ++observer_metric_component) {{
+        observer_metric[observer_metric_component] =
+            d_metric_bundle[0][observer_metric_component * BUNDLE_CAPACITY];
+        if (!isfinite(observer_metric[observer_metric_component])) {{
+            fprintf(
+                stderr,
+                "ERROR: interpolated observer metric component %d is non-finite.\n",
+                observer_metric_component);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: observer metric component was invalid
+    }} // END LOOP: for observer_metric_component over metric
 
-    for (long int p = 0; p < num_rays; p++) {{ // Loop iterator index $p$ mapping to a unique photon trajectory $x^\mu$ during diagnostic validation.
-        const double t_check = all_photons_host.f[0 * num_rays + p]; // Evaluates the current temporal coordinate $t$ from the Host SoA.
-        const double x_check = all_photons_host.f[1 * num_rays + p]; // Evaluates the current spatial coordinate $x$ from the Host SoA.
-        const double y_check = all_photons_host.f[2 * num_rays + p]; // Evaluates the current spatial coordinate $y$ from the Host SoA.
-        const double z_check = all_photons_host.f[3 * num_rays + p]; // Evaluates the current spatial coordinate $z$ from the Host SoA.
-        const double pt_check = all_photons_host.f[4 * num_rays + p]; // Evaluates the initial temporal momentum $p_t$ from the Host SoA.
-        const double lam_check = all_photons_host.f[8 * num_rays + p]; // Evaluates the initial distance traveled from the Host SoA.
-
-        bool fail_t = fabs(t_check - commondata->t_start) > 1e-10; // Boolean flag indicating temporal coordinate $t$ validation failure.
-        bool fail_x = fabs(x_check - commondata->camera_pos_x) > 1e-10; // Boolean flag indicating spatial coordinate $x$ validation failure.
-        bool fail_y = fabs(y_check - commondata->camera_pos_y) > 1e-10; // Boolean flag indicating spatial coordinate $y$ validation failure.
-        bool fail_z = fabs(z_check - commondata->camera_pos_z) > 1e-10; // Boolean flag indicating spatial coordinate $z$ validation failure.
-        bool fail_pt = fabs(pt_check) > 1e-15; // Boolean flag indicating temporal momentum $p_t$ validation failure.
-        bool fail_lam = fabs(lam_check) > 1e-15; // Boolean flag indicating distance traveled validation failure.
-
-        if (fail_t) mismatch_t++; // Increments the validation failure counter for temporal coordinate $t$.
-        if (fail_x) mismatch_x++; // Increments the validation failure counter for spatial coordinate $x$.
-        if (fail_y) mismatch_y++; // Increments the validation failure counter for spatial coordinate $y$.
-        if (fail_z) mismatch_z++; // Increments the validation failure counter for spatial coordinate $z$.
-        if (fail_pt) mismatch_pt++; // Increments the validation failure counter for temporal momentum $p_t$.
-        if (fail_lam) mismatch_lam++; // Increments the validation failure counter for the distance traveled.
-
-        if (fail_t || fail_x || fail_y || fail_z || fail_pt || fail_lam) {{
-            init_mismatch_count++; // Increments the total accumulation of trajectory structural validation failures.
-        }} // END IF: validate initialization coordinates
-    }} // END LOOP: for p over num_rays to validate initialization
-
-    if (init_mismatch_count > 0) {{
-        const double mismatch_percent = ((double)init_mismatch_count / (double)num_rays) * 100.0; // Calculates the failure rate percentage for the initial state alignment.
-        // This is a soft warning to surface initialization inconsistencies without halting execution.
-        printf("[DIAGNOSTIC] Initialization Alignment Check: %ld out of %ld rays (%.2f%%) fail coordinate/placeholder validation.\n", init_mismatch_count, num_rays, mismatch_percent);
-    }} // END IF: init_mismatch_count > 0 to print diagnostic
+    // Operates synchronously as the primary state array must be fully
+    // populated before pipeline dispatch. The initializer validates the
+    // metric-orthonormal tetrad and writes complete direct p^mu values.
+    {set_initial_conditions_call}
 
     long int num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Total integer calculation defining total iterative blocks required to process all photon indices.
+    double max_initial_constraint_error = 0.0;
+    long int worst_initial_constraint_ray = -1;
 
     for (long int init_batch = 0; init_batch < num_batches; ++init_batch) {{ // Loop iterator $init_batch$ for evaluating the initialization constraint across sequential blocks.
         long int start_idx = init_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current initialization batch.
@@ -423,30 +737,38 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             long int master_idx = start_idx + init_i; // Computes the absolute master index $m_{{idx}}$ tracking the photon within the global array.
             for (int init_k = 0; init_k < 9; ++init_k) {{ // Loop index $init_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
                 f_bridge[0][init_k * BUNDLE_CAPACITY + init_i] = all_photons_host.f[init_k * num_rays + master_idx]; // Assigns the active tensor state component to the primary bridge.
-            }} // END LOOP: for init_k over 9 to iterate over tensor components
-        }} // END LOOP: for init_i over chunk_size to pack the bridge
+            }} // END LOOP: for init_k over 9
+        }} // END LOOP: for init_i over chunk_size
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating the memory transfer of the 9 state vector $f^\mu$ components.
-            {memcpy_async("d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "f_bridge[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyHostToDevice", "streams[0]")}
-        }} // END LOOP: for c_k over 9 to orchestrate memory transfer of state vector
+            {memcpy_cpu("d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "f_bridge[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
+        }} // END LOOP: for c_k over 9
+{initial_integration_param_setup}
 
-        // Calculates symmetric metric tensor $g_{{\mu\nu}}$ strictly on the primary operational pipeline for the Hamiltonian constraint.
-        interpolation_kernel_{spacetime_name}(commondata,d_f_bundle[0], d_metric_bundle[0], NULL, chunk_size{stream_arg});
+        // Reuse the one observer metric for every ray in this chunk. No
+        // per-ray observer interpolation or p^0 quadratic solve is performed.
+        for (int metric_component = 0; metric_component < 10; ++metric_component) {{
+            for (long int init_i = 0; init_i < chunk_size; ++init_i) {{
+                d_metric_bundle[0][metric_component * BUNDLE_CAPACITY + init_i] =
+                    observer_metric[metric_component];
+            }} // END LOOP: for init_i over current chunk
+        }} // END LOOP: replicate all ten metric components
 
         //==========================================
-        // DIAGNOSTIC PROBE: METRIC INTEGRITY CHECK
+        // DIAGNOSTIC PROBE: REUSED METRIC INTEGRITY CHECK
         //==========================================
-        // Extracts metric payload to confirm numerical stability prior to momentum solving.
+        // Confirms that the one observer metric was replicated without
+        // corruption before momentum conversion and constraint evaluation.
 
         double *metric_diag_bridge; // Pointer storing temporary metric data to validate the interpolation sequence.
-        // Memory allocation: Temporary bridge mapped to maximize throughput for the metric $g_{{\mu\nu}}$ diagnostic sequence.
+        // Memory allocation: temporary bridge for the replicated metric check.
         {malloc_pinned}(metric_diag_bridge, sizeof(double) * 10 * BUNDLE_CAPACITY);
 
         for (int m_k = 0; m_k < 10; ++m_k) {{
             // Loop index $m_k$ orchestrating memory transfer of the 10 metric tensor $g_{{\mu\nu}}$ components.
-            {memcpy_async("metric_diag_bridge + m_k * BUNDLE_CAPACITY", "d_metric_bundle[0] + m_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyDeviceToHost", "streams[0]")}
-        }} // END LOOP: for m_k over 10 to orchestrate memory transfer of metric tensor
-        {stream_sync('streams[0]')}
+            {memcpy_cpu("metric_diag_bridge + m_k * BUNDLE_CAPACITY", "d_metric_bundle[0] + m_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
+        }} // END LOOP: for m_k over 10
+        {no_sync()}
 
         long int metric_nan_count = 0; // Accumulator tracking the total number of metric tensor evaluations containing non-finite values.
         for (int m_diag_i = 0; m_diag_i < chunk_size; ++m_diag_i) {{ // Loop iterator $m_diag_i$ scanning each trajectory within the current initialization chunk.
@@ -455,54 +777,105 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 if (isnan(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i]) ||
                     isinf(metric_diag_bridge[m_diag_k * BUNDLE_CAPACITY + m_diag_i])) {{
                     m_has_nan = true; // Flags the trajectory metric state as invalid due to a non-finite value.
-                    break; // Terminates the tensor component loop early to conserve execution cycles upon detecting a failure.
-                }} // END IF: check for NaN or Inf in metric
-            }} // END LOOP: for m_diag_k over 10 to check metric tensor components
+                    break; // Terminates the tensor component loop early to avoid unnecessary work upon detecting a failure.
+                }} // END IF: check for NaN or Inf
+            }} // END LOOP: for m_diag_k over 10
             if (m_has_nan) metric_nan_count++; // Increments the total accumulation of corrupted metric tensor evaluations.
-        }} // END LOOP: for m_diag_i over chunk_size to scan for metric integrity
+        }} // END LOOP: for m_diag_i over chunk_size
 
         if (metric_nan_count > 0) {{
-            // This is a soft warning to highlight numerical metric singularities without aborting the physics engine.
-            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays have invalid Metric G_mu_nu before p_t solve.\n", init_batch, metric_nan_count);
-        }} // END IF: metric_nan_count > 0 to print diagnostic
+            fprintf(stderr,
+                    "ERROR: Init Batch %ld: %ld rays have invalid numerical metric "
+                    "G_mu_nu before momentum conversion.\n",
+                    init_batch,
+                    metric_nan_count);
+            {free_pinned}(metric_diag_bridge);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: metric_nan_count > 0 to fail
         // Memory Free: Purges the diagnostic bridge utilized for metric integrity checks.
         {free_pinned}(metric_diag_bridge);
 
-        // Solves the constraint $p_\mu p^\mu = 0$ to find the temporal momentum $p_t$ natively on the active pipeline.
-        p0_reverse_kernel(d_f_bundle[0], d_metric_bundle[0], chunk_size{stream_arg});
+        // The tetrad initializer already supplied the complete direct p^mu.
+        {normalized_momentum_conversion}
+
+        // Evaluate the applicable initial constraint after normalized
+        // conversion, if requested. For direct evolution this is g_mu_nu p^mu
+        // p^nu and must be zero; for normalized evolution it is the spatial
+        // normalized constraint and must be one.
+        {normalization_kernel_name}(
+            d_f_bundle[0],
+            d_metric_bundle[0],
+            d_initial_norm_bundle,
+            chunk_size,
+            0);
+
+        const double initial_constraint_target = {initial_constraint_target};
+        const double initial_constraint_tolerance =
+            1.0e-9 * fmax(1.0, fabs(initial_constraint_target));
+        for (long int constraint_i = 0; constraint_i < chunk_size; ++constraint_i) {{
+            const double constraint_value = d_initial_norm_bundle[constraint_i].C;
+            const double constraint_error =
+                fabs(constraint_value - initial_constraint_target);
+            const long int master_idx = start_idx + constraint_i;
+            if (!isfinite(constraint_value) || !isfinite(constraint_error)) {{
+                fprintf(
+                    stderr,
+                    "ERROR: initial photon constraint is non-finite for ray %ld.\n",
+                    master_idx);
+                time_window_manager_numerical_free(&numerical_window);
+                slot_manager_free(&tsm);
+                exit(1);
+            }} // END IF: initial constraint was non-finite
+            if (constraint_error > max_initial_constraint_error) {{
+                max_initial_constraint_error = constraint_error;
+                worst_initial_constraint_ray = master_idx;
+            }} // END IF: update maximum initial constraint residual
+        }} // END LOOP: for constraint_i over initial chunk
+        if (max_initial_constraint_error > initial_constraint_tolerance) {{
+            fprintf(
+                stderr,
+                "ERROR: initial photon constraint residual %e exceeds tolerance %e "
+                "at ray %ld.\n",
+                max_initial_constraint_error,
+                initial_constraint_tolerance,
+                worst_initial_constraint_ray);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: initial constraint residual exceeded tolerance
 
         for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating memory transfer of the 9 constrained state vector $f^\mu$ components.
-            {memcpy_async("f_bridge[0] + c_k * BUNDLE_CAPACITY", "d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyDeviceToHost", "streams[0]")}
-        }} // END LOOP: for c_k over 9 to orchestrate memory transfer of constrained state vector
-        {stream_sync('streams[0]')}
+            {memcpy_cpu("f_bridge[0] + c_k * BUNDLE_CAPACITY", "d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
+        }} // END LOOP: for c_k over 9
+        {no_sync()}
 
-        long int nan_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing NaN values post-constraint solving.
+        long int nonfinite_count = 0; // Accumulator tracking the total number of physical states $f^\mu$ containing non-finite values post-constraint solving.
         for (int gather_i = 0; gather_i < chunk_size; ++gather_i) {{ // Loop iterator $gather_i$ scanning each trajectory within the retrieved initialization chunk.
             long int master_idx = start_idx + gather_i; // Computes the absolute master index $m_{{idx}}$ mapping the localized chunk to the global master SoA.
-            bool has_nan = false; // Boolean flag indicating if the specific state vector $f^\mu$ contains a NaN value.
+            bool has_nonfinite = false; // Boolean flag indicating if the specific state vector $f^\mu$ contains a non-finite value.
             for (int gather_k = 0; gather_k < 9; ++gather_k) {{ // Loop index $gather_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
                 double val = f_bridge[0][gather_k * BUNDLE_CAPACITY + gather_i]; // Evaluates the updated numerical value of the specific tensor component.
                 all_photons_host.f[gather_k * num_rays + master_idx] = val; // Maps the valid constrained tensor scalar back to the global Host SoA.
-                if (isnan(val)) has_nan = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
-            }} // END LOOP: for gather_k over 9 to iterate over tensor components
-            if (has_nan) nan_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
-        }} // END LOOP: for gather_i over chunk_size to retrieve updated constrained state vectors
+                if (!isfinite(val)) has_nonfinite = true; // Flags the physical state vector as invalid due to a non-finite evaluation.
+            }} // END LOOP: for gather_k over 9
+            if (has_nonfinite) nonfinite_count++; // Increments the total count of unresolved physical state vectors $f^\mu$.
+        }} // END LOOP: for gather_i over chunk_size
 
-        if (nan_count > 0) {{
-            // This is a soft warning alerting to unresolved constraints $p_\mu p^\mu = 0$ for isolated trajectories.
-            printf("[DIAGNOSTIC] Init Batch %ld: %ld rays contain NaN in state f^mu after p_t solve.\n", init_batch, nan_count);
-        }} // END IF: nan_count > 0 to print diagnostic
-    }} // END LOOP: for init_batch over num_batches to evaluate initialization constraints
+        if (nonfinite_count > 0) {{
+            fprintf(stderr,
+                    "ERROR: Init Batch %ld: %ld rays contain nonfinite state values "
+                    "after tetrad initialization. Aborting numerical batch integration.\n",
+                    init_batch,
+                    nonfinite_count);
+            time_window_manager_numerical_free(&numerical_window);
+            slot_manager_free(&tsm);
+            exit(1);
+        }} // END IF: nonfinite_count > 0 to abort
+    }} // END LOOP: for init_batch over num_batches
 
-    //==========================================
-    // BASELINE CONSERVED QUANTITIES
-    //==========================================
-    // Evaluate initial conserved quantities immediately after generating valid physical null states.
-
-    if (commondata->perform_conservation_check) {{
-        // Executes global conserved quantities natively via chunked device parameters before pipeline processing.
-        calculate_conserved_quantities_universal_{spacetime_name}_photon(commondata, &all_photons_host, num_rays, initial_cq_host);
-    }} // END IF: perform_conservation_check to evaluate baseline conserved quantities
+    {free_device}(d_initial_norm_bundle); // Purges the initialization constraint scratchpad.
 
     long int sync_i; // Loop iterator index $sync_i$ spanning the entire global ray count to synchronize starting properties across history states.
     for(sync_i = 0; sync_i < num_rays; ++sync_i) {{
@@ -510,26 +883,34 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
         for (sync_k = 0; sync_k < 9; ++sync_k) {{
             all_photons_host.f_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the first history derivative matrix.
             all_photons_host.f_p_p[sync_k * num_rays + sync_i] = all_photons_host.f[sync_k * num_rays + sync_i]; // Propagates the initial coordinate state vector $f^\mu$ to the second history derivative matrix.
-        }} // END LOOP: for sync_k over 9 to propagate historical derivatives
+        }} // END LOOP: for sync_k over 9
         all_photons_host.status[sync_i] = ACTIVE; // Assigns the initial trajectory activity enum for the global physics engine.
-        all_photons_host.affine_param[sync_i] = 0.0; // Sets the initial baseline progression scalar for the affine parameter $\lambda$.
+        all_photons_host.integration_param[sync_i] = {initial_integration_param}; // Sets the initial integration parameter.
         all_photons_host.rejection_retries[sync_i] = 0; // Clears the error rejection scalar to initialize the step size convergence tracking.
 
-        all_photons_host.affine_param_p[sync_i] = 0.0; // Initializes the first historical affine parameter $\lambda_{{n-1}}$.
-        all_photons_host.affine_param_p_p[sync_i] = 0.0; // Initializes the second historical affine parameter $\lambda_{{n-2}}$.
-        all_photons_host.window_event_found[sync_i] = false; // Sets the observer window intersection logical lock to false.
-        all_photons_host.source_event_found[sync_i] = false; // Sets the source emission intersection logical lock to false.
+        all_photons_host.integration_param_p[sync_i] = {initial_integration_param}; // Initializes the preceding integration parameter.
+        all_photons_host.integration_param_p_p[sync_i] = {initial_integration_param}; // Initializes the second preceding integration parameter.
+        all_photons_host.non_terminal_plane_event_found[sync_i] = false; // Sets the nonterminal plane intersection logical lock to false.
+        all_photons_host.terminal_plane_event_found[sync_i] = false; // Sets the terminal-plane intersection logical lock to false.
 
-        int s_idx = slot_get_index(&tsm, all_photons_host.f[sync_i]); // Integer index $s_{{idx}}$ mapping the current photon's temporal coordinate $t$ to a discrete execution bin in the TimeSlotManager.
+        int s_idx = slot_get_index(&tsm, {initial_coordinate_time}); // Maps coordinate time to a TimeSlotManager bin.
         if (s_idx != -1) {{
             slot_add_photon(&tsm, s_idx, sync_i); // Registers the active photon index to its corresponding temporal bin mapped by the orchestrator.
-        }} // END IF: s_idx != -1 to add photon to slot
-    }} // END LOOP: for sync_i over num_rays to synchronize starting properties
+        }} // END IF: s_idx != -1 to add
+    }} // END LOOP: for sync_i over num_rays
 
     // Hardware clock state marking the beginning of the active integration chunk.
     struct timespec batch_start_time;
     // Hardware clock state marking the conclusion of the active integration chunk.
     struct timespec batch_end_time;
+    // Counter tracking the number of finalized full RKF45 attempts since the previous dashboard print.
+    long int attempted_rkf45_steps_since_print = 0;
+    // User-tunable exponential moving average window for the RKF45 throughput display.
+    const double rkf45_speed_avg_window_sec = 1.0;
+    // Smoothed RKF45 attempt throughput displayed in the live dashboard.
+    double rkf45_attempts_per_sec_avg = 0.0;
+    // Tracks whether the throughput average has received its first valid sample.
+    bool rkf45_speed_avg_initialized = false;
     // Captures the initial hardware clock state prior to temporal loop execution.
     clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
 
@@ -546,19 +927,34 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
     for (int slot_idx = tsm.num_slots - 1; slot_idx >= 0; --slot_idx) {{
         // Evaluates the early exit condition to terminate the temporal engine if all geometric trajectories have concluded.
         if (total_active_photons <= 0) {{
-            break; // Terminates the temporal engine early to conserve hardware cycles.
+            break; // Terminates the temporal engine early to avoid unnecessary work.
         }} // END IF: total_active_photons <= 0 to break
 
-        int current = 0; // Integer index tracking the primary active hardware stream for execution overlapping.
-        int next = 1; // Integer index tracking the secondary hardware stream preparing the upcoming payload.
-        long int active_chunks[2] = {{ 0, 0}}; // 1D array storing the total number of trajectories queued for each operational stream.
+        if (tsm.slot_counts[slot_idx] > 0) {{
+            if (time_window_manager_numerical_mmap_for_slot(
+                    &numerical_window, &tsm, slot_idx) !=
+                TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+                fprintf(stderr,
+                        "ERROR: failed to map numerical time window for slot %d [%e, %e).\n",
+                        slot_idx,
+                        (double)slot_lower_time(&tsm, slot_idx),
+                        (double)slot_upper_time(&tsm, slot_idx));
+                time_window_manager_numerical_free(&numerical_window);
+                slot_manager_free(&tsm);
+                exit(1);
+            }} // END IF: slot time window mapping failed
+        }} // END IF: slot_idx still contained active photons
+
+        int current = 0; // Integer index tracking the primary active CPU buffer for execution.
+        int next = 1; // Integer index tracking the secondary CPU buffer preparing the upcoming payload.
+        long int active_chunks[2] = {{ 0, 0}}; // 1D array storing the total number of trajectories queued for each operational buffer.
 
         //==========================================
-        // PHASE A: PRIME THE PUMP (Stream 0)
+        // PHASE A: PRIME THE PUMP (Buffer 0)
         //==========================================
-        // Populate the first bridge and launch asynchronous integration on the primary stream.
+        // Populate the first bridge and launch synchronous integration on the primary buffer.
 
-        active_chunks[current] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the PCIe transfer to avoid VRAM overflow.
+        active_chunks[current] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the CPU staging to avoid CPU scratch overflow.
 
         if (active_chunks[current] > 0) {{
             slot_remove_chunk(&tsm, slot_idx, chunk_buffer[current], active_chunks[current]); // Extracts the execution chunk mapping from the Host-side temporal bin.
@@ -570,8 +966,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     f_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                     f_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
                     f_p_p_bridge[current][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
-                }} // END LOOP: for bridge_i over active_chunks[current] to pack payloads
-            }} // END LOOP: for c_k over 9 to pack tensor components
+                }} // END LOOP: for bridge_i over active_chunks[current]
+            }} // END LOOP: for c_k over 9
 
             // 2. Pack the 1D arrays in a separate sequential loop
             for (int bridge_i = 0; bridge_i < active_chunks[current]; ++bridge_i) {{
@@ -579,105 +975,158 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 h_bridge[current][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
                 status_bridge[current][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                 retries_bridge[current][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
-                affine_bridge[current][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
-                on_pos_window_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
-                on_pos_source_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
-                affine_p_bridge[current][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
-                affine_p_p_bridge[current][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
-                window_event_found_bridge[current][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
-                source_event_found_bridge[current][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
-            }} // END LOOP: for bridge_i over active_chunks[current] to pack 1D arrays
+                integration_param_bridge[current][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
+                on_pos_non_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
+                on_pos_terminal_plane_prev_bridge[current][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
+                integration_param_p_bridge[current][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
+                integration_param_p_p_bridge[current][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
+                non_terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
+                terminal_plane_event_found_bridge[current][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
+            }} // END LOOP: for bridge_i over active_chunks[current]
 
-            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components.
-                // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [current] to minimize latency.
-                {memcpy_async("d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "f_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-                // Host-to-Device transfer: Asynchronously pushes first derivatives $\dot{{ f}}^\mu$ to VRAM strictly on stream [current] to minimize latency.
-                {memcpy_async("d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-                // Host-to-Device transfer: Asynchronously pushes second derivatives $\ddot{{ f}}^\mu$ to VRAM strictly on stream [current] to minimize latency.
-                {memcpy_async("d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            }} // END LOOP: for c_k over 9 to orchestrate Host-to-Device transfer
-            // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_h[current]", "h_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes status enums to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_status[current]", "status_bridge[current]", "sizeof(termination_type_t) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_retries[current]", "retries_bridge[current]", "sizeof(int) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine[current]", "affine_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_on_pos_window_prev[current]", "on_pos_window_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_on_pos_source_prev[current]", "on_pos_source_prev_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine_prev[current]", "affine_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_affine_pre_prev[current]", "affine_p_p_bridge[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_window_event_found[current]", "window_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_source_event_found[current]", "source_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
-            // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [current] to minimize latency.
-            {memcpy_async("d_chunk_buffer[current]", "chunk_buffer[current]", "sizeof(long int) * active_chunks[current]", "cudaMemcpyHostToDevice", "streams[current]")}
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
+                // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
+                {memcpy_cpu("d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "f_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+                // CPU buffer copy: Synchronously pushes first derivatives $\dot{{ f}}^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
+                {memcpy_cpu("d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+                // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [current] to minimize latency.
+                {memcpy_cpu("d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+            }} // END LOOP: for c_k over 9
+            // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_h[current]", "h_bridge[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes status enums to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_status[current]", "status_bridge[current]", "sizeof(termination_type_t) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes rejection scalars to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_retries[current]", "retries_bridge[current]", "sizeof(int) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes integration parameters to CPU scratch on buffer [current].
+            {memcpy_cpu("d_integration_param_bundle[current]", "integration_param_bridge[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes nonterminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_on_pos_non_terminal_plane_prev[current]", "on_pos_non_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_on_pos_terminal_plane_prev[current]", "on_pos_terminal_plane_prev_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [current].
+            {memcpy_cpu("d_integration_param_prev[current]", "integration_param_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [current].
+            {memcpy_cpu("d_integration_param_pre_prev[current]", "integration_param_p_p_bridge[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_non_terminal_plane_event_found[current]", "non_terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_terminal_plane_event_found[current]", "terminal_plane_event_found_bridge[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [current] to minimize latency.
+            {memcpy_cpu("d_chunk_buffer[current]", "chunk_buffer[current]", "sizeof(long int) * active_chunks[current]")}
 
-            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Device baseline setup of the 9 state vector components.
-                // Device-to-Device transfer: Duplicates the initial physical state vector $f^\mu$ to anchor the final RKF45 evaluation.
-                {memcpy_async("d_f_start_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToDevice", "streams[current]")}
-                // Device-to-Device transfer: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
-                {memcpy_async("d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToDevice", "streams[current]")}
-            }} // END LOOP: for c_k over 9 to setup Device-to-Device baseline
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer baseline setup of the 9 state vector components.
+                // CPU buffer copy: Duplicates the initial physical state vector $f^\mu$ to anchor the final RKF45 evaluation.
+                {memcpy_cpu("d_f_start_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+                // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for iterative stage accumulation.
+                {memcpy_cpu("d_f_temp_bundle[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+            }} // END LOOP: for c_k over 9
+{trial_spatial_center_setup_current}
 
             for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the RKF45 Runge-Kutta numerical solver.
-                // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ asynchronously on the active stream.
-                interpolation_kernel_{ spacetime_name}(commondata, d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], active_chunks[current]{stream_arg_current});
-                // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the active stream.
-                calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_connection_bundle[current], d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
-                // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the active stream.
-                rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
-            }} // END LOOP: for stage over 6 to execute RKF45 stages
+                // Interpolation step: evaluate the metric and selected geometry
+                // bundle on the active buffer.
+                numerical_interpolation(
+                    commondata,
+                    &numerical_params,
+                    &spatial_context,
+                    &numerical_window,
+                    d_f_temp_bundle[current],
+                    {interpolation_integration_param_args}
+                    d_metric_bundle[current],
+                    d_rhs_geometry_bundle[current],
+                    active_chunks[current],
+                    current);
+                long int bad_interp_current = 0;
+                for (int interp_i = 0; interp_i < active_chunks[current]; ++interp_i) {{
+                    bool bad_interp = false;
+                    for (int interp_c = 0; interp_c < 10; ++interp_c) {{
+                        const double val = d_metric_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
+                        if (!isfinite(val)) {{
+                            bad_interp = true;
+                            break;
+                        }} // END IF: metric component invalid
+                    }} // END LOOP: for interp_c over metric components
+                    if (!bad_interp) {{
+                        for (int interp_c = 0; interp_c < 40; ++interp_c) {{
+                            const double val = d_rhs_geometry_bundle[current][interp_c * BUNDLE_CAPACITY + interp_i];
+                            if (!isfinite(val)) {{
+                                bad_interp = true;
+                                break;
+                            }} // END IF: geometry component invalid
+                        }} // END LOOP: for interp_c over geometry components
+                    }} // END IF: metric components finite
+                    if (bad_interp)
+                        bad_interp_current++;
+                }} // END LOOP: for interp_i over active chunks
+                if (bad_interp_current > 0) {{
+                    fprintf(stderr,
+                            "ERROR: Slot %d stage %d buffer %d: %ld rays had "
+                            "nonfinite numerical interpolation output. "
+                            "Aborting numerical batch integration.\n",
+                            slot_idx,
+                            stage,
+                            current,
+                            bad_interp_current);
+                    time_window_manager_numerical_free(&numerical_window);
+                    slot_manager_free(&tsm);
+                    exit(1);
+                }} // END IF: bad_interp_current > 0 to abort
+                // RHS step: compute the geodesic equation derivatives $\dot{{ f}}^\mu$
+                // on the active buffer.
+                calculate_ode_rhs_kernel(d_f_temp_bundle[current], d_metric_bundle[current], d_rhs_geometry_bundle[current], {rhs_integration_param_args} d_k_bundle[current], stage, active_chunks[current]{stream_arg_current});
+                // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                if (stage < 6) {{
+                    // Stage update: accumulate the intermediate RKF45 state updates on the
+                    // active buffer.
+                    rkf45_stage_update(d_f_start_bundle[current], d_k_bundle[current], d_h[current], stage, active_chunks[current], d_f_temp_bundle[current]{stream_arg_current});
+                }} // END IF: skip stage-6 intermediate state update
+            }} // END LOOP: for stage over 6
 
-            // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the integration baseline.
-            rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_affine[current], d_retries[current], active_chunks[current]{stream_arg_current});
-            // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the active stream.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_affine[current], d_affine_prev[current], d_affine_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_window_prev[current], d_on_pos_source_prev[current], d_window_event_found[current], d_source_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+{finalize_current}
+            attempted_rkf45_steps_since_print += active_chunks[current];
+            // Event step: detect geometric events and record intersection coordinate
+            // states on the active buffer.
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
-            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 state vector components.
-                // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the active stream.
-                {memcpy_async("f_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-                // Device-to-Host transfer: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM asynchronously on the active stream.
-                {memcpy_async("f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-                // Device-to-Host transfer: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM asynchronously on the active stream.
-                {memcpy_async("f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            }} // END LOOP: for c_k over 9 to orchestrate Device-to-Host transfer
-            // Device-to-Host transfer: Retrieves active step sizes $h$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("h_bridge[current]", "d_h[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves updated status enums back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("status_bridge[current]", "d_status[current]", "sizeof(termination_type_t) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves active rejection counts back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("retries_bridge[current]", "d_retries[current]", "sizeof(int) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves total affine progression $\lambda$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_bridge[current]", "d_affine[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves updated window boundary flags back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("on_pos_window_prev_bridge[current]", "d_on_pos_window_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves updated source boundary flags back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("on_pos_source_prev_bridge[current]", "d_on_pos_source_prev[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_p_bridge[current]", "d_affine_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("affine_p_p_bridge[current]", "d_affine_pre_prev[current]", "sizeof(double) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves active window locks back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("window_event_found_bridge[current]", "d_window_event_found[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-            // Device-to-Host transfer: Retrieves active source locks back to CPU RAM asynchronously on the active stream.
-            {memcpy_async("source_event_found_bridge[current]", "d_source_event_found[current]", "sizeof(bool) * active_chunks[current]", "cudaMemcpyDeviceToHost", "streams[current]")}
-        }} // END IF: active_chunks[current] > 0 to prime the pump on Stream 0
+            for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
+                // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the active buffer.
+                {memcpy_cpu("f_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+                // CPU buffer copy: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM synchronously on the active buffer.
+                {memcpy_cpu("f_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+                // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the active buffer.
+                {memcpy_cpu("f_p_p_bridge[current] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[current] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[current]")}
+            }} // END LOOP: for c_k over 9
+            // CPU buffer copy: Retrieves active step sizes $h$ back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("h_bridge[current]", "d_h[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves updated status enums back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("status_bridge[current]", "d_status[current]", "sizeof(termination_type_t) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves active rejection counts back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("retries_bridge[current]", "d_retries[current]", "sizeof(int) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves integration-parameter progress from the active buffer.
+            {memcpy_cpu("integration_param_bridge[current]", "d_integration_param_bundle[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves updated nonterminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[current]", "d_on_pos_non_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves updated terminal-plane boundary flags back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("on_pos_terminal_plane_prev_bridge[current]", "d_on_pos_terminal_plane_prev[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves preceding integration parameters from the active buffer.
+            {memcpy_cpu("integration_param_p_bridge[current]", "d_integration_param_prev[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves second preceding integration parameters from the active buffer.
+            {memcpy_cpu("integration_param_p_p_bridge[current]", "d_integration_param_pre_prev[current]", "sizeof(double) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves active nonterminal-plane locks back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("non_terminal_plane_event_found_bridge[current]", "d_non_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
+            // CPU buffer copy: Retrieves active terminal-plane locks back to CPU RAM synchronously on the active buffer.
+            {memcpy_cpu("terminal_plane_event_found_bridge[current]", "d_terminal_plane_event_found[current]", "sizeof(bool) * active_chunks[current]")}
+        }} // END IF: active chunks available
 
         //==========================================
         // PHASE B: THE OVERLAP LOOP
         //==========================================
-        // Continuously alternate between streams, packing the next payload while syncing the current.
+        // Continuously alternate between buffers, packing the next payload while syncing the current.
 
         while (active_chunks[current] > 0 || tsm.slot_counts[slot_idx] > 0) {{
 
-            active_chunks[next] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming PCIe transfer execution block.
+            active_chunks[next] = NRPYMIN((long int)BUNDLE_CAPACITY, tsm.slot_counts[slot_idx]); // Evaluates the active chunk size bounding the upcoming CPU staging execution block.
             if (active_chunks[next] > 0) {{
                 slot_remove_chunk(&tsm, slot_idx, chunk_buffer[next], active_chunks[next]); // Extracts the next execution chunk mapping from the Host-side temporal bin.
 
@@ -688,8 +1137,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                         f_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f[c_k * num_rays + m_idx]; // Packs the coordinate state vector $f^\mu$ into the transfer bridge.
                         f_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p[c_k * num_rays + m_idx]; // Packs the first derivative $\dot{{ f}}^\mu$ into the transfer bridge.
                         f_p_p_bridge[next][c_k * BUNDLE_CAPACITY + bridge_i] = all_photons_host.f_p_p[c_k * num_rays + m_idx]; // Packs the second derivative $\ddot{{ f}}^\mu$ into the transfer bridge.
-                    }} // END LOOP: for bridge_i over active_chunks[next] to pack payloads
-                }} // END LOOP: for c_k over 9 to pack tensor components
+                    }} // END LOOP: for bridge_i over active_chunks[next]
+                }} // END LOOP: for c_k over 9
 
                 // 2. Pack the 1D arrays in a separate sequential loop
                 for (int bridge_i = 0; bridge_i < active_chunks[next]; ++bridge_i) {{
@@ -697,99 +1146,153 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     h_bridge[next][bridge_i] = all_photons_host.h[m_idx]; // Packs the current integration step size $h$ into the transfer bridge.
                     status_bridge[next][bridge_i] = all_photons_host.status[m_idx]; // Packs the trajectory status enum into the transfer bridge.
                     retries_bridge[next][bridge_i] = all_photons_host.rejection_retries[m_idx]; // Packs the error rejection scalar into the transfer bridge.
-                    affine_bridge[next][bridge_i] = all_photons_host.affine_param[m_idx]; // Packs the affine parameter $\lambda$ into the transfer bridge.
-                    on_pos_window_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_window_prev[m_idx]; // Packs the observer window boundary flag into the transfer bridge.
-                    on_pos_source_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_source_prev[m_idx]; // Packs the source emission boundary flag into the transfer bridge.
-                    affine_p_bridge[next][bridge_i] = all_photons_host.affine_param_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-1}}$ into the transfer bridge.
-                    affine_p_p_bridge[next][bridge_i] = all_photons_host.affine_param_p_p[m_idx]; // Packs the historical affine parameter $\lambda_{{ n-2}}$ into the transfer bridge.
-                    window_event_found_bridge[next][bridge_i] = all_photons_host.window_event_found[m_idx]; // Packs the observer window intersection lock into the transfer bridge.
-                    source_event_found_bridge[next][bridge_i] = all_photons_host.source_event_found[m_idx]; // Packs the source emission intersection lock into the transfer bridge.
-                }} // END LOOP: for bridge_i over active_chunks[next] to pack 1D arrays
+                    integration_param_bridge[next][bridge_i] = all_photons_host.integration_param[m_idx]; // Packs the integration parameter into the transfer bridge.
+                    on_pos_non_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx]; // Packs the nonterminal plane boundary flag into the transfer bridge.
+                    on_pos_terminal_plane_prev_bridge[next][bridge_i] = all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx]; // Packs the terminal-plane boundary flag into the transfer bridge.
+                    integration_param_p_bridge[next][bridge_i] = all_photons_host.integration_param_p[m_idx]; // Packs the preceding integration parameter into the transfer bridge.
+                    integration_param_p_p_bridge[next][bridge_i] = all_photons_host.integration_param_p_p[m_idx]; // Packs the second preceding integration parameter into the transfer bridge.
+                    non_terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.non_terminal_plane_event_found[m_idx]; // Packs the nonterminal plane intersection lock into the transfer bridge.
+                    terminal_plane_event_found_bridge[next][bridge_i] = all_photons_host.terminal_plane_event_found[m_idx]; // Packs the terminal-plane intersection lock into the transfer bridge.
+                }} // END LOOP: for bridge_i over active_chunks[next]
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Host-to-Device transfer of the 9 state vector components for the upcoming payload.
-                    // Host-to-Device transfer: Asynchronously pushes bounded state vectors $f^\mu$ to VRAM strictly on stream [next] to overlap execution.
-                    {memcpy_async("d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "f_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                    // Host-to-Device transfer: Asynchronously pushes first derivatives $\dot{{ f}}^\mu$ to VRAM strictly on stream [next] to overlap execution.
-                    {memcpy_async("d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                    // Host-to-Device transfer: Asynchronously pushes second derivatives $\ddot{{ f}}^\mu$ to VRAM strictly on stream [next] to overlap execution.
-                    {memcpy_async("d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                }} // END LOOP: for c_k over 9 to orchestrate Host-to-Device transfer
-                // Host-to-Device transfer: Asynchronously pushes step sizes $h$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_h[next]", "h_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes status enums to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_status[next]", "status_bridge[next]", "sizeof(termination_type_t) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes rejection scalars to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_retries[next]", "retries_bridge[next]", "sizeof(int) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes affine parameters $\lambda$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine[next]", "affine_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes window boundary flags to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_on_pos_window_prev[next]", "on_pos_window_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes source boundary flags to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_on_pos_source_prev[next]", "on_pos_source_prev_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-1}}$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine_prev[next]", "affine_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes historical affine parameters $\lambda_{{ n-2}}$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_affine_pre_prev[next]", "affine_p_p_bridge[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes window intersection locks to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_window_event_found[next]", "window_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes source intersection locks to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_source_event_found[next]", "source_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
-                // Host-to-Device transfer: Asynchronously pushes chunk indices $m_{{ idx}}$ to VRAM strictly on stream [next] to overlap execution.
-                {memcpy_async("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]", "cudaMemcpyHostToDevice", "streams[next]")}
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components for the upcoming payload.
+                    // CPU buffer copy: Synchronously pushes bounded state vectors $f^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
+                    {memcpy_cpu("d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "f_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                    // CPU buffer copy: Synchronously pushes first derivatives $\dot{{ f}}^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
+                    {memcpy_cpu("d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                    // CPU buffer copy: Synchronously pushes second derivatives $\ddot{{ f}}^\mu$ to CPU scratch strictly on buffer [next] to overlap execution.
+                    {memcpy_cpu("d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                }} // END LOOP: for c_k over 9
+                // CPU buffer copy: Synchronously pushes step sizes $h$ to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_h[next]", "h_bridge[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes status enums to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_status[next]", "status_bridge[next]", "sizeof(termination_type_t) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes rejection scalars to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_retries[next]", "retries_bridge[next]", "sizeof(int) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes integration parameters to CPU scratch on buffer [next].
+                {memcpy_cpu("d_integration_param_bundle[next]", "integration_param_bridge[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes nonterminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_on_pos_non_terminal_plane_prev[next]", "on_pos_non_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes terminal-plane boundary flags to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_on_pos_terminal_plane_prev[next]", "on_pos_terminal_plane_prev_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes preceding integration parameters to CPU scratch on buffer [next].
+                {memcpy_cpu("d_integration_param_prev[next]", "integration_param_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes second preceding integration parameters to CPU scratch on buffer [next].
+                {memcpy_cpu("d_integration_param_pre_prev[next]", "integration_param_p_p_bridge[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes nonterminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_non_terminal_plane_event_found[next]", "non_terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes terminal-plane intersection locks to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_terminal_plane_event_found[next]", "terminal_plane_event_found_bridge[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Synchronously pushes chunk indices $m_{{ idx}}$ to CPU scratch strictly on buffer [next] to overlap execution.
+                {memcpy_cpu("d_chunk_buffer[next]", "chunk_buffer[next]", "sizeof(long int) * active_chunks[next]")}
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Device baseline setup of the 9 state vector components for the upcoming payload.
-                    // Device-to-Device transfer: Duplicates the initial physical state vector $f^\mu$ to anchor the upcoming RKF45 evaluation.
-                    {memcpy_async("d_f_start_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToDevice", "streams[next]")}
-                    // Device-to-Device transfer: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
-                    {memcpy_async("d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToDevice", "streams[next]")}
-                }} // END LOOP: for c_k over 9 to setup Device-to-Device baseline
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer baseline setup of the 9 state vector components for the upcoming payload.
+                    // CPU buffer copy: Duplicates the initial physical state vector $f^\mu$ to anchor the upcoming RKF45 evaluation.
+                    {memcpy_cpu("d_f_start_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                    // CPU buffer copy: Primes the temporary state vector bundle $f^\mu_{{ temp}}$ for the upcoming iterative stage accumulation.
+                    {memcpy_cpu("d_f_temp_bundle[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                }} // END LOOP: for c_k over 9
+{trial_spatial_center_setup_next}
 
                 for (int stage = 1; stage <= 6; ++stage) {{  // Loop iterator $stage$ executing the 6 discrete stages of the upcoming RKF45 Runge-Kutta numerical solver.
-                    // Kernel Launch: Evaluates the metric tensor $g_{{ \mu\nu}}$ and connection $\Gamma^\alpha_{{ \beta\gamma}}$ asynchronously on the alternate stream.
-                    interpolation_kernel_{spacetime_name}(commondata, d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next],active_chunks[next]{stream_arg_next});
-                    // Kernel Launch: Computes the geodesic equation right-hand-side derivatives $\dot{{ f}}^\mu$ asynchronously on the alternate stream.
-                    calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_connection_bundle[next], d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
-                    // Kernel Launch: Accumulates the intermediate RKF45 stage numerical updates asynchronously on the alternate stream.
-                    rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
-                }} // END LOOP: for stage over 6 to execute RKF45 stages
+                    // Interpolation step: evaluate the metric tensor
+                    // $g_{{ \mu\nu}}$ and the selected geometry bundle
+                    // on the alternate buffer.
+                    numerical_interpolation(
+                        commondata,
+                        &numerical_params,
+                        &spatial_context,
+                        &numerical_window,
+                        d_f_temp_bundle[next],
+                        {interpolation_integration_param_args_next}
+                        d_metric_bundle[next],
+                        d_rhs_geometry_bundle[next],
+                        active_chunks[next],
+                        next);
+                    long int bad_interp_next = 0;
+                    for (int interp_i = 0; interp_i < active_chunks[next]; ++interp_i) {{
+                        bool bad_interp = false;
+                        for (int interp_c = 0; interp_c < 10; ++interp_c) {{
+                            const double val = d_metric_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
+                            if (!isfinite(val)) {{
+                                bad_interp = true;
+                                break;
+                            }} // END IF: metric component invalid
+                        }} // END LOOP: for interp_c over metric components
+                        if (!bad_interp) {{
+                            for (int interp_c = 0; interp_c < 40; ++interp_c) {{
+                                const double val = d_rhs_geometry_bundle[next][interp_c * BUNDLE_CAPACITY + interp_i];
+                                if (!isfinite(val)) {{
+                                    bad_interp = true;
+                                    break;
+                                }} // END IF: geometry component invalid
+                            }} // END LOOP: for interp_c over geometry components
+                        }} // END IF: metric components finite
+                        if (bad_interp)
+                            bad_interp_next++;
+                    }} // END LOOP: for interp_i over active chunks
+                    if (bad_interp_next > 0) {{
+                        fprintf(stderr,
+                                "ERROR: Slot %d stage %d buffer %d: %ld rays had "
+                                "nonfinite numerical interpolation output. "
+                                "Aborting numerical batch integration.\n",
+                                slot_idx,
+                                stage,
+                                next,
+                                bad_interp_next);
+                        time_window_manager_numerical_free(&numerical_window);
+                        slot_manager_free(&tsm);
+                        exit(1);
+                    }} // END IF: bad_interp_next > 0 to abort
+                    // RHS step: compute the geodesic equation derivatives
+                    // $\dot{{ f}}^\mu$ on the alternate buffer.
+                    calculate_ode_rhs_kernel(d_f_temp_bundle[next], d_metric_bundle[next], d_rhs_geometry_bundle[next], {rhs_integration_param_args_next} d_k_bundle[next], stage, active_chunks[next]{stream_arg_next});
+                    // Stage 6 still computes its RHS; only intermediate state update is skipped.
+                    if (stage < 6) {{
+                        // Stage update: accumulate the intermediate RKF45 state updates on
+                        // the alternate buffer.
+                        rkf45_stage_update(d_f_start_bundle[next], d_k_bundle[next], d_h[next], stage, active_chunks[next], d_f_temp_bundle[next]{stream_arg_next});
+                    }} // END IF: skip stage-6 intermediate state update
+                }} // END LOOP: for stage over 6
 
-                // Kernel Launch: Applies Cash-Karp error control to finalize the step-size $h$ and update the upcoming integration baseline.
-                rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_affine[next], d_retries[next], active_chunks[next]{stream_arg_next});
-                // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the alternate stream.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_affine[next], d_affine_prev[next], d_affine_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_window_prev[next], d_on_pos_source_prev[next], d_window_event_found[next], d_source_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
-                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 upcoming state vector components.
-                    // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the alternate stream.
-                    {memcpy_async("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                    // Device-to-Host transfer: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM asynchronously on the alternate stream.
-                    {memcpy_async("f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                    // Device-to-Host transfer: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM asynchronously on the alternate stream.
-                    {memcpy_async("f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                }} // END LOOP: for c_k over 9 to orchestrate Device-to-Host transfer
-                // Device-to-Host transfer: Retrieves upcoming active step sizes $h$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("h_bridge[next]", "d_h[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming updated status enums back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("status_bridge[next]", "d_status[next]", "sizeof(termination_type_t) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming active rejection counts back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("retries_bridge[next]", "d_retries[next]", "sizeof(int) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming total affine progression $\lambda$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_bridge[next]", "d_affine[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming updated window boundary flags back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("on_pos_window_prev_bridge[next]", "d_on_pos_window_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming updated source boundary flags back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("on_pos_source_prev_bridge[next]", "d_on_pos_source_prev[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-1}}$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_p_bridge[next]", "d_affine_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming historical affine parameter $\lambda_{{ n-2}}$ back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("affine_p_p_bridge[next]", "d_affine_pre_prev[next]", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming active window locks back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("window_event_found_bridge[next]", "d_window_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-                // Device-to-Host transfer: Retrieves upcoming active source locks back to CPU RAM asynchronously on the alternate stream.
-                {memcpy_async("source_event_found_bridge[next]", "d_source_event_found[next]", "sizeof(bool) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
-            }} // END IF: active_chunks[next] > 0 to process upcoming payload
+{finalize_next}
+                attempted_rkf45_steps_since_print += active_chunks[next];
+                // Event step: detect geometric events and record intersection
+                // coordinate states on the alternate buffer.
+                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
+                    // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
+                    {memcpy_cpu("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                    // CPU buffer copy: Retrieves updated first derivatives $\dot{{ f}}^\mu$ back to CPU RAM synchronously on the alternate buffer.
+                    {memcpy_cpu("f_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                    // CPU buffer copy: Retrieves updated second derivatives $\ddot{{ f}}^\mu$ back to CPU RAM synchronously on the alternate buffer.
+                    {memcpy_cpu("f_p_p_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_pre_prev_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
+                }} // END LOOP: for c_k over 9
+                // CPU buffer copy: Retrieves upcoming active step sizes $h$ back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("h_bridge[next]", "d_h[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming updated status enums back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("status_bridge[next]", "d_status[next]", "sizeof(termination_type_t) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming active rejection counts back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("retries_bridge[next]", "d_retries[next]", "sizeof(int) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves integration-parameter progress from the alternate buffer.
+                {memcpy_cpu("integration_param_bridge[next]", "d_integration_param_bundle[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming updated nonterminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("on_pos_non_terminal_plane_prev_bridge[next]", "d_on_pos_non_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming updated terminal-plane boundary flags back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("on_pos_terminal_plane_prev_bridge[next]", "d_on_pos_terminal_plane_prev[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves preceding integration parameters from the alternate buffer.
+                {memcpy_cpu("integration_param_p_bridge[next]", "d_integration_param_prev[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves second preceding integration parameters from the alternate buffer.
+                {memcpy_cpu("integration_param_p_p_bridge[next]", "d_integration_param_pre_prev[next]", "sizeof(double) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming active nonterminal-plane locks back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("non_terminal_plane_event_found_bridge[next]", "d_non_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
+                // CPU buffer copy: Retrieves upcoming active terminal-plane locks back to CPU RAM synchronously on the alternate buffer.
+                {memcpy_cpu("terminal_plane_event_found_bridge[next]", "d_terminal_plane_event_found[next]", "sizeof(bool) * active_chunks[next]")}
+            }} // END IF: next chunks available
 
             if (active_chunks[current] > 0) {{
-                // Device synchronization barrier strictly enforcing completion of the current stream before payload unpacking.
-                {stream_sync("streams[current]")}
+                // CPU memory operations are complete before payload unpacking.
+                {no_sync()}
 
                 // 1. Unpack 9-component tensors sequentially
                 for (int fin_k = 0; fin_k < 9; ++fin_k) {{  // Loop index $fin_k$ retrieving the 9 tensor components back into the global Host matrix.
@@ -798,8 +1301,8 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                         all_photons_host.f[fin_k * num_rays + m_idx] = f_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized state vector $f^\mu$ into the global Host matrix.
                         all_photons_host.f_p[fin_k * num_rays + m_idx] = f_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized first derivative $\dot{{ f}}^\mu$ into the global Host matrix.
                         all_photons_host.f_p_p[fin_k * num_rays + m_idx] = f_p_p_bridge[current][fin_k * BUNDLE_CAPACITY + fin_i]; // Unpacks the synchronized second derivative $\ddot{{ f}}^\mu$ into the global Host matrix.
-                    }} // END LOOP: for fin_i over active_chunks[current] to unpack finalized data
-                }} // END LOOP: for fin_k over 9 to retrieve tensor components
+                    }} // END LOOP: for fin_i over active_chunks[current]
+                }} // END LOOP: for fin_k over 9
 
                 // 2. Unpack 1D arrays sequentially
                 for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{
@@ -807,34 +1310,34 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                     all_photons_host.h[m_idx] = h_bridge[current][fin_i]; // Unpacks the synchronized step size $h$ into the global Host matrix.
                     all_photons_host.status[m_idx] = status_bridge[current][fin_i]; // Unpacks the synchronized trajectory status into the global Host matrix.
                     all_photons_host.rejection_retries[m_idx] = retries_bridge[current][fin_i]; // Unpacks the synchronized rejection count into the global Host matrix.
-                    all_photons_host.affine_param[m_idx] = affine_bridge[current][fin_i]; // Unpacks the synchronized affine parameter $\lambda$ into the global Host matrix.
-                    all_photons_host.on_positive_side_of_window_prev[m_idx] = on_pos_window_prev_bridge[current][fin_i]; // Unpacks the synchronized window boundary flag into the global Host matrix.
-                    all_photons_host.on_positive_side_of_source_prev[m_idx] = on_pos_source_prev_bridge[current][fin_i]; // Unpacks the synchronized source boundary flag into the global Host matrix.
-                    all_photons_host.affine_param_p[m_idx] = affine_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-1}}$ into the global Host matrix.
-                    all_photons_host.affine_param_p_p[m_idx] = affine_p_p_bridge[current][fin_i]; // Unpacks the synchronized historical affine parameter $\lambda_{{ n-2}}$ into the global Host matrix.
-                    all_photons_host.window_event_found[m_idx] = window_event_found_bridge[current][fin_i]; // Unpacks the synchronized window lock into the global Host matrix.
-                    all_photons_host.source_event_found[m_idx] = source_event_found_bridge[current][fin_i]; // Unpacks the synchronized source lock into the global Host matrix.
-                }} // END LOOP: for fin_i over active_chunks[current] to unpack 1D arrays
+                    all_photons_host.integration_param[m_idx] = integration_param_bridge[current][fin_i]; // Unpacks the synchronized integration parameter into the global Host matrix.
+                    all_photons_host.on_positive_side_of_non_terminal_plane_prev[m_idx] = on_pos_non_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane boundary flag into the global Host matrix.
+                    all_photons_host.on_positive_side_of_terminal_plane_prev[m_idx] = on_pos_terminal_plane_prev_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane boundary flag into the global Host matrix.
+                    all_photons_host.integration_param_p[m_idx] = integration_param_p_bridge[current][fin_i]; // Unpacks the synchronized preceding integration parameter into the global Host matrix.
+                    all_photons_host.integration_param_p_p[m_idx] = integration_param_p_p_bridge[current][fin_i]; // Unpacks the synchronized second preceding integration parameter into the global Host matrix.
+                    all_photons_host.non_terminal_plane_event_found[m_idx] = non_terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized nonterminal-plane lock into the global Host matrix.
+                    all_photons_host.terminal_plane_event_found[m_idx] = terminal_plane_event_found_bridge[current][fin_i]; // Unpacks the synchronized terminal-plane lock into the global Host matrix.
+                }} // END LOOP: for fin_i over active_chunks[current]
 
                 // 3. TimeSlotManager State Update (Cache-hot, strictly sequential)
                 for (int fin_i = 0; fin_i < active_chunks[current]; ++fin_i) {{
                     long int m_idx = chunk_buffer[current][fin_i];
                     if (status_bridge[current][fin_i] == ACTIVE) {{  // Evaluates the continuation logic if the trajectory remains within safe physical bounds.
-                        int next_s_idx = slot_get_index(&tsm, all_photons_host.f[m_idx]); // Evaluates the updated temporal coordinate $t$ to determine the next operational bin.
+                        int next_s_idx = slot_get_index(&tsm, {updated_coordinate_time}); // Maps updated coordinate time to the next operational bin.
                         if (next_s_idx != -1) {{  // Confirms the physical state has not exceeded the maximum simulation time bounds.
                             slot_add_photon(&tsm, next_s_idx, m_idx);  // Re-queues the updated physical state vector back into the host orchestrator.
                         }} else {{
-                            all_photons_host.status[m_idx] = FAILURE_T_MAX_EXCEEDED; // Flags the physical state as permanently failed due to excessive propagation time.
+                            all_photons_host.status[m_idx] = STOP_CONDITION_T_MAX_EXCEEDED; // Flags the physical state as stopped after excessive propagation time.
                             total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
-                        }} // END ELSE: flag state as failed and decrement total active photons
+                        }} // END ELSE: state flagged failed
                     }} // END IF: trajectory remains active
                     else if (status_bridge[current][fin_i] == REJECTED) {{   // Evaluates the retry logic if the numerical step exceeded the requested tolerances.
                         slot_add_photon(&tsm, slot_idx, m_idx); // Re-adds to the current bin to attempt integration with an adapted step-size scalar $h$.
                     }} else {{
                         total_active_photons--; // Decrements the global counter as the physical trajectory has reached a terminal state.
                     }} // END ELSE: trajectory reached terminal state
-                }} // END LOOP: for fin_i over active_chunks[current] to update TimeSlotManager state
-            }} // END IF: active_chunks[current] > 0 to complete stream and unpack
+                }} // END LOOP: for fin_i over active_chunks[current]
+            }} // END IF: active chunks completed
 
             //==========================================
             // PROGRESS DASHBOARD
@@ -847,8 +1350,22 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             // Evaluates the absolute wall-clock duration of the integration chunk in seconds.
             double elapsed_sec = (batch_end_time.tv_sec - batch_start_time.tv_sec) + (batch_end_time.tv_nsec - batch_start_time.tv_nsec) / 1e9;
 
-            // Evaluates the raw integration steps per second to monitor pipeline throughput.
-            double steps_per_sec = (elapsed_sec > 0.0) ? ((double)active_chunks[current] / elapsed_sec) : 0.0;
+            // Evaluates the finalized full-RKF45-attempt throughput across the current dashboard interval.
+            double rkf45_attempts_per_sec =
+                (elapsed_sec > 0.0) ? ((double)attempted_rkf45_steps_since_print / elapsed_sec) : 0.0;
+
+            // Updates the smoothed RKF45 attempt throughput using an exponential moving average.
+            if (elapsed_sec > 0.0 && attempted_rkf45_steps_since_print > 0) {{
+                const double alpha = elapsed_sec / (rkf45_speed_avg_window_sec + elapsed_sec);
+
+                if (!rkf45_speed_avg_initialized) {{
+                    rkf45_attempts_per_sec_avg = rkf45_attempts_per_sec;
+                    rkf45_speed_avg_initialized = true;
+                }} else {{
+                    rkf45_attempts_per_sec_avg =
+                        (1.0 - alpha) * rkf45_attempts_per_sec_avg + alpha * rkf45_attempts_per_sec;
+                }} // END ELSE: update the existing RKF45 throughput
+            }} // END IF: elapsed interval had attempts
 
             // Evaluates the global completion ratio bounded between $0.0$ and $1.0$.
             double percent_done = 100.0 * (1.0 - ((double)total_active_photons / (double)num_rays));
@@ -868,18 +1385,24 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
                 if (bar_i < pos) bar[bar_i] = '='; // Appends the completed progression character.
                 else if (bar_i == pos) bar[bar_i] = '>'; // Appends the active vanguard character.
                 else bar[bar_i] = ' '; // Appends the uncompleted progression character.
-            }} // END LOOP: for bar_i over bar_width to construct loading bar
+            }} // END LOOP: for bar_i over bar_width
             bar[bar_width] = '\0'; // Terminates the loading bar character array to prevent buffer overruns.
 
-            // Accumulator tracking the total number of adaptive step size $h$ rejections in the active chunk.
+            // Accumulator tracking how many rays in the just-processed chunk finished this RKF45 attempt in the recoverable REJECTED state.
+            // This deliberately counts finalized per-attempt outcomes instead of summing rejection_retries, because rejection_retries stores
+            // each ray's current consecutive retry depth rather than a binary "this attempt was rejected" flag.
             long int batch_rejections = 0;
 
-            // Loop iterator $sum_i$ scanning the finalized physical state bridge for error tolerance failures.
+            // Loop iterator $sum_i$ scans finalized status after RKF45 control.
+            // A status of REJECTED means the current attempt failed error control and the ray will be re-queued into the same slot with its
+            // adapted step size, so this produces the intended per-chunk rejection count for the dashboard percentage readout.
             for (int sum_i = 0; sum_i < active_chunks[current]; ++sum_i) {{
-                batch_rejections += retries_bridge[current][sum_i]; // Accumulates the localized step rejection tally.
-            }} // END LOOP: for sum_i over active_chunks[current] to calculate rejection count
+                if (status_bridge[current][sum_i] == REJECTED) {{
+                    batch_rejections++; // Counts one rejected integration attempt for this chunk entry.
+                }} // END IF: rejected finalized status
+            }} // END LOOP: for sum_i over active_chunks[current]
 
-            // Evaluates the relative frequency of adaptive step size $h$ rejections.
+            // Evaluates the fraction of attempted rays in this processed chunk whose current RKF45 attempt was rejected and re-queued.
             double reject_percent = (active_chunks[current] > 0) ? (100.0 * (double)batch_rejections / (double)active_chunks[current]) : 0.0;
 
             // Restores the terminal cursor position vertically to overwrite the previous dashboard iteration.
@@ -888,242 +1411,252 @@ def batch_integrator_numerical(spacetime_name: str) -> None:
             printf(" Progress:   [%s] %5.1f%% \033[K\n", bar, percent_done); // Prints the global completion loading bar and percentage.
             printf(" Active:     %ld / %ld \033[K\n", total_active_photons, num_rays); // Prints the remaining active photon trajectories $x^\mu$.
             printf(" Slot Time:  Slot %d (t = %.1f) \033[K\n", slot_idx, current_t); // Prints the current physical temporal bin coordinate $t$.
-            printf(" Speed:      %.2e integration steps/s \033[K\n", steps_per_sec); // Prints the pipeline execution throughput.
+            printf(" Speed:      %.2e RKF45 attempts/s, %.0fs avg \033[K\n", rkf45_attempts_per_sec_avg, rkf45_speed_avg_window_sec); // Prints the smoothed pipeline execution throughput.
             printf(" Rejects:    %ld (%.1f%%) \033[K\n", batch_rejections, reject_percent); // Prints the adaptive step size $h$ rejection frequency.
             printf("--------------------------------------------------\n"); // Prints the lower border of the diagnostic dashboard.
             fflush(stdout); // Flushes the standard output buffer to ensure instantaneous terminal rendering.
 
             // Resets the hardware clock state for the upcoming integration chunk.
             clock_gettime(CLOCK_MONOTONIC, &batch_start_time);
+            attempted_rkf45_steps_since_print = 0;
             // --------------------------
 
             active_chunks[current] = 0; // Clears the execution queue tracker to indicate the active chunk has been fully processed.
-            int temp = current; // Temporary integer scalar storing the primary stream index for logical pointer swapping.
-            current = next; // Shifts the primary execution tracker to the alternate stream index.
-            next = temp; // Assigns the cleared stream index back to the upcoming payload queue.
-        }} // END WHILE: alternating streams to process temporal bin
+            int temp = current; // Temporary integer scalar storing the primary buffer index for logical pointer swapping.
+            current = next; // Shifts the primary execution tracker to the alternate buffer index.
+            next = temp; // Assigns the cleared buffer index back to the upcoming payload queue.
+        }} // END WHILE: alternate buffers process temporal slot
 
         //==========================================
         // PHASE C: THE TIME BARRIER
         //==========================================
-        // Enforce a rigid hardware sync before advancing the physical time clock.
-        BHAH_DEVICE_SYNC(); // Synchronize global state convergence before advancing the central time engine.
+        // CPU execution is synchronous here; no additional extra barrier is needed.
 
-     }} // END LOOP: for slot_idx down to 0 to process all temporal bins
+     }} // END LOOP: for slot_idx down to 0
 
     //==========================================
-    // 4. Conserved Values & CLEANUP & FINALIZATION
+    // 4. RESULT WRITING, CLEANUP, AND FINALIZATION
     //==========================================
-    // Process terminal photon trajectories and extract final geometric intersections.
+    // Process terminal photon trajectories, evaluate optional diagnostics, and extract final geometric intersections.
 
-        // Device-to-Host transfer: Extracts validated device-native blueprints $b_i$ containing geometric plane intersections.
+        // CPU buffer copy: Extracts validated CPU-side blueprints $b_i$ containing geometric plane intersections.
         {results_memcpy}
-
-        // Kernel Launch: Processes escaped photons intersecting the celestial sphere $r > r_{{escape}}$.
-        {calc_blueprint}
 
         //==========================================
         // TERMINAL NORMALIZATION DIAGNOSTIC
         //==========================================
-        // Evaluate terminal normalization constraint.
-        if (commondata->perform_conservation_check) {{
-            normalization_constraint_t *norm_diag_bridge; // Host pointer for retrieving diagnostic normalization records.
-            {malloc_pinned}(norm_diag_bridge, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Pinned memory maximizes PCIe transfer bandwidth for diagnostic arrays.
+        if (commondata->perform_normalization_check) {{
+            TimeSlotManager norm_tsm;
+            int normalization_failure_mode = 0;
+            long int normalization_failure_ray = -1;
+            int normalization_failure_slot = -1;
+            slot_manager_init(
+                &norm_tsm,
+                commondata->slot_manager_t_min,
+                slot_manager_t_max,
+                commondata->slot_manager_delta_t,
+                num_rays);
 
-            double max_err_norm = 0.0; // Scalar tracking the maximum absolute drift from the expected normalization constraint invariant $C$.
-            long int worst_ray_norm = -1; // Absolute index identifying the trajectory $x^\mu$ with the highest constraint violation.
+            double max_err_norm = 0.0;
+            long int worst_ray_norm = -1;
+            double max_err_norm_excluding_failures = 0.0;
+            long int worst_ray_norm_excluding_failures = -1;
 
-            long int norm_num_batches = (num_rays + BUNDLE_CAPACITY - 1) / BUNDLE_CAPACITY; // Integer calculation defining the total sequential blocks required to process all photon trajectories.
+            for (long int norm_ray = 0; norm_ray < num_rays; ++norm_ray) {{
+                const int norm_slot_idx = slot_get_index(
+                    &norm_tsm, {terminal_coordinate_time});
+                if (norm_slot_idx < 0) {{
+                    continue;
+                }} // END IF: norm_slot_idx < 0 to skip
+                slot_add_photon(&norm_tsm, norm_slot_idx, norm_ray);
+            }} // END LOOP: for norm_ray over num_rays
 
-            for (long int norm_batch = 0; norm_batch < norm_num_batches; ++norm_batch) {{ // Loop iterator $norm_batch$ for evaluating the terminal normalization constraint across sequential chunks.
-                long int start_idx = norm_batch * BUNDLE_CAPACITY; // Absolute starting index mapped to the master SoA for the current normalization batch.
-                long int chunk_size = NRPYMIN((long int)BUNDLE_CAPACITY, num_rays - start_idx); // Dynamically sized operational boundary ensuring the active chunk does not exceed the total trajectory count.
+            for (int norm_slot_idx = norm_tsm.num_slots - 1;
+                 norm_slot_idx >= 0 && normalization_failure_mode == 0;
+                 --norm_slot_idx) {{
+                if (norm_tsm.slot_counts[norm_slot_idx] <= 0) {{
+                    continue;
+                }} // END IF: normalization slot empty
 
-                for (int norm_i = 0; norm_i < chunk_size; ++norm_i) {{ // Loop index $norm_i$ iterating over the specific normalization batch elements to pack the bridge.
-                    long int master_idx = start_idx + norm_i; // Computes the absolute master index $m_{{idx}}$ tracking the specific photon within the global matrix.
-                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{ // Loop index $norm_k$ iterating over the 9 tensor components of the state vector $f^\mu$.
-                        f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] = all_photons_host.f[norm_k * num_rays + master_idx]; // Assigns the terminal tensor state vector component to the primary bridge array.
-                    }} // END LOOP: for norm_k over 9 to assign terminal tensor state vector component
-                }} // END LOOP: for norm_i over chunk_size to pack bridge array
+                if (time_window_manager_numerical_mmap_for_slot(
+                        &numerical_window, &norm_tsm, norm_slot_idx) !=
+                    TIME_WINDOW_MANAGER_NUMERICAL_SUCCESS) {{
+                    normalization_failure_mode = 2;
+                    normalization_failure_slot = norm_slot_idx;
+                    break;
+                }} // END IF: terminal normalization mmap fails
 
-                for (int c_k = 0; c_k < 9; ++c_k) {{ // Loop index $c_k$ orchestrating the asynchronous memory transfer of the 9 state vector $f^\mu$ components.
-                    {memcpy_async("d_f_bundle[0] + c_k * BUNDLE_CAPACITY", "f_bridge[0] + c_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size", "cudaMemcpyHostToDevice", "streams[0]")}
-                }} // END LOOP: for c_k over 9 to orchestrate memory transfer of state vector
+                while (norm_tsm.slot_counts[norm_slot_idx] > 0 &&
+                       normalization_failure_mode == 0) {{
+                    const long int chunk_size = NRPYMIN(
+                        (long int)BUNDLE_CAPACITY, norm_tsm.slot_counts[norm_slot_idx]);
+                    slot_remove_chunk(
+                        &norm_tsm, norm_slot_idx, chunk_buffer[0], chunk_size);
 
-                // Kernel Launch: Calculates the symmetric metric tensor $g_{{\mu\nu}}$ strictly on the primary operational pipeline to supply the normalization constraint evaluator.
-                interpolation_kernel_{spacetime_name}(commondata, d_f_bundle[0], d_metric_bundle[0], NULL, chunk_size{stream_arg});
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
+                        for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                            const long int master_idx = chunk_buffer[0][norm_i];
+                            f_bridge[0][norm_k * BUNDLE_CAPACITY + norm_i] =
+                                all_photons_host.f[norm_k * num_rays + master_idx];
+                        }} // END LOOP: for norm_i over chunk_size
+                    }} // END LOOP: for norm_k over 9
 
-                // Kernel Launch: Computes the normalization constraint $C = g_{{\mu\nu}} p^\mu p^\nu$ natively on the active hardware pipeline synchronously with the memory stream.
-                normalization_constraint_photon(d_f_bundle[0], d_metric_bundle[0], d_norm_bundle[0], chunk_size{stream_arg});
+                    for (int norm_k = 0; norm_k < 9; ++norm_k) {{
+                        {memcpy_cpu("d_f_bundle[0] + norm_k * BUNDLE_CAPACITY", "f_bridge[0] + norm_k * BUNDLE_CAPACITY", "sizeof(double) * chunk_size")}
+                    }} // END LOOP: for norm_k over 9
+{terminal_integration_param_setup}
 
-                // Device-to-Host transfer: Retrieves active diagnostic normalization records back to the Host RAM asynchronously on the primary stream.
-                {memcpy_async("norm_diag_bridge", "d_norm_bundle[0]", "sizeof(normalization_constraint_t) * chunk_size", "cudaMemcpyDeviceToHost", "streams[0]")}
+                    numerical_interpolation(
+                        commondata,
+                        &numerical_params,
+                        &spatial_context,
+                        &numerical_window,
+                        d_f_bundle[0],
+                        {interpolation_terminal_integration_param_args}
+                        d_metric_bundle[0],
+                        NULL,
+                        chunk_size,
+                        0);
 
-                // Device synchronization barrier strictly enforcing completion of the primary stream before diagnostic payload unpacking.
-                {stream_sync('streams[0]')}
+                    {normalization_kernel_name}(
+                        d_f_bundle[0],
+                        d_metric_bundle[0],
+                        d_norm_bundle,
+                        chunk_size,
+                        0);
 
-                for (int norm_i = 0; norm_i < chunk_size; ++norm_i) {{ // Loop iterator $norm_i$ scanning each trajectory within the current diagnostic memory chunk.
-                    double current_norm_err = fabs(norm_diag_bridge[norm_i].C); // Evaluates the absolute numerical drift for the physical scalar invariant $C$.
-                    if (current_norm_err > max_err_norm) {{
-                        max_err_norm = current_norm_err; // Updates the maximum tracked absolute error for the geometric normalization constraint.
-                        worst_ray_norm = start_idx + norm_i; // Updates the absolute master index $m_{{idx}}$ associated with the maximum geometric constraint violation.
-                    }} // END IF: current_norm_err > max_err_norm
-                }} // END LOOP: for norm_i over chunk_size to scan trajectory and evaluate constraint violation
-            }} // END LOOP: for norm_batch over norm_num_batches to evaluate terminal normalization constraint
+                    for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
+                        const long int master_idx = chunk_buffer[0][norm_i];
+                        const double current_norm_err = {normalization_error_expr};
+                        if (!isfinite(current_norm_err)) {{
+                            normalization_failure_mode = 3;
+                            normalization_failure_ray = master_idx;
+                            break;
+                        }} // END IF: current_norm_err is non-finite
+                        normalization_abs_by_ray[master_idx] = current_norm_err;
+                        if (current_norm_err > max_err_norm) {{
+                            max_err_norm = current_norm_err;
+                            worst_ray_norm = master_idx;
+                        }} // END IF: current_norm_err > max_err_norm
+                        if (all_photons_host.status[master_idx] != STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED &&
+                            all_photons_host.status[master_idx] != FAILURE_RKF45_REJECTION_LIMIT &&
+                            current_norm_err > max_err_norm_excluding_failures) {{
+                            max_err_norm_excluding_failures = current_norm_err;
+                            worst_ray_norm_excluding_failures = master_idx;
+                        }} // END IF: current_norm_err updates maximum
+                    }} // END LOOP: for norm_i over chunk_size
+                }} // END WHILE: normalization slot has photons
+            }} // END LOOP: for norm_slot_idx down to 0
+
+            slot_manager_free(&norm_tsm);
+
+            if (normalization_failure_mode != 0) {{
+                if (normalization_failure_mode == 1) {{
+                    fprintf(stderr,
+                            "ERROR: terminal normalization diagnostic could not bin photon %ld.\n",
+                            normalization_failure_ray);
+                }} else if (normalization_failure_mode == 2) {{
+                    fprintf(stderr,
+                            "ERROR: failed to map numerical time window for terminal normalization slot %d.\n",
+                            normalization_failure_slot);
+                }} else if (normalization_failure_mode == 3) {{
+                    fprintf(stderr,
+                            "ERROR: terminal normalization diagnostic produced a non-finite constraint for photon %ld.\n",
+                            normalization_failure_ray);
+                }} // END ELSE IF: normalization_failure_mode == 3 to report
+                time_window_manager_numerical_free(&numerical_window);
+                slot_manager_free(&tsm);
+                exit(1);
+            }} // END IF: normalization_failure_mode != 0 to abort
 
             printf("\n=================================================\n");
             printf(" NORMALIZATION DIAGNOSTIC REPORT\n");
             printf("=================================================\n");
-            printf("  Max Absolute Error (Normalization Constraint |g_mu_nu p^mu p^nu|): %e (Ray %ld)\n", max_err_norm, worst_ray_norm);
-            {free_pinned}(norm_diag_bridge); // Memory Free: Purges the diagnostic bridge utilized for the geometric normalization constraint checks.
-        }} // END IF: commondata->perform_conservation_check to evaluate terminal normalization constraint
+            printf(
+                "  Max Absolute Error, all checked photons: %e (Ray %ld)\n",
+                max_err_norm,
+                worst_ray_norm);
+            printf(
+                "  Max Absolute Error, excluding STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; FAILURE_RKF45_REJECTION_LIMIT: %e (Ray %ld)\n",
+                max_err_norm_excluding_failures,
+                worst_ray_norm_excluding_failures);
+        }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
 
-        // Loop iterator $s$ purging the double-buffered arrays across both hardware streams.
+        // Final output step: process escaped photons intersecting the celestial
+        // sphere $r > r_{{escape}}$ and optionally write the normalization sidecar.
+        if (commondata->perform_normalization_check &&
+            normalization_abs_by_ray != NULL &&
+            norm_abs_bin_path != NULL &&
+            norm_abs_bin_path[0] != '\0') {{
+            {calc_blueprint_with_norm_abs}
+        }} else {{
+            {calc_blueprint}
+        }} // END ELSE: blueprint post-processing without normalization sidecar
+
+        if (commondata->perform_normalization_check) {{
+            {free_device}(d_norm_bundle); // Purges the terminal normalization diagnostic scratchpad.
+            {free_pinned}(normalization_abs_by_ray); // Purges the per-photon normalization sidecar buffer.
+        }} // END IF: commondata->perform_normalization_check to purge normalization scratchpad
+
+        // Loop iterator $s$ purging the double-buffered arrays across both CPU buffers.
         for (int s = 0; s < 2; ++s) {{
-            // Host Memory Free: Purges bridge components supporting scatter logic mapped to PCIe DMA transfers.
+            // Host Memory Free: Purges bridge components supporting scatter logic mapped to CPU memory transfers.
             {free_pinned}(chunk_buffer[s]); // Purges the execution chunk mapping bridge.
             {free_pinned}(f_bridge[s]); // Purges the state vector $f^\mu$ bridge.
             {free_pinned}(f_p_bridge[s]); // Purges the first derivative $\dot{{f}}^\mu$ bridge.
             {free_pinned}(f_p_p_bridge[s]); // Purges the second derivative $\ddot{{f}}^\mu$ bridge.
-            {free_pinned}(affine_bridge[s]); // Purges the affine parameter $\lambda$ bridge.
+            {free_pinned}(integration_param_bridge[s]); // Purges the integration-parameter bridge.
             {free_pinned}(h_bridge[s]); // Purges the integration step size $h$ bridge.
             {free_pinned}(status_bridge[s]); // Purges the trajectory status bridge.
             {free_pinned}(retries_bridge[s]); // Purges the error rejection scalar bridge.
-            {free_pinned}(on_pos_window_prev_bridge[s]); // Purges the observer window boundary flag bridge.
-            {free_pinned}(on_pos_source_prev_bridge[s]); // Purges the source emission boundary flag bridge.
-            {free_pinned}(affine_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ bridge.
-            {free_pinned}(affine_p_p_bridge[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ bridge.
-            {free_pinned}(window_event_found_bridge[s]); // Purges the observer window intersection lock bridge.
-            {free_pinned}(source_event_found_bridge[s]); // Purges the source emission intersection lock bridge.
+            {free_pinned}(on_pos_non_terminal_plane_prev_bridge[s]); // Purges the nonterminal plane boundary flag bridge.
+            {free_pinned}(on_pos_terminal_plane_prev_bridge[s]); // Purges the terminal-plane boundary flag bridge.
+            {free_pinned}(integration_param_p_bridge[s]); // Purges the preceding integration-parameter bridge.
+            {free_pinned}(integration_param_p_p_bridge[s]); // Purges the second preceding integration-parameter bridge.
+            {free_pinned}(non_terminal_plane_event_found_bridge[s]); // Purges the nonterminal plane intersection lock bridge.
+            {free_pinned}(terminal_plane_event_found_bridge[s]); // Purges the terminal-plane intersection lock bridge.
 
-            // Device Memory Free: Purges remaining VRAM operational pipeline scratchpads.
+            // Host Memory Free: Purges remaining CPU scratch operational pipeline scratchpads.
             {free_device}(d_f_bundle[s]); // Purges the state vector $f^\mu$ scratchpad.
             {free_device}(d_f_start_bundle[s]); // Purges the anchor state vector $f_{{start}}$ scratchpad.
             {free_device}(d_f_temp_bundle[s]); // Purges the temporary stage $f^\mu_{{temp}}$ scratchpad.
             {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
             {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
-            {free_device}(d_connection_bundle[s]); // Purges the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
+            {free_device}(d_rhs_geometry_bundle[s]); // Purges the geometry scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.
-            {free_device}(d_affine[s]); // Purges the total affine parameter progress $\lambda$ scratchpad.
+            {free_device}(d_integration_param_bundle[s]); // Purges the integration-parameter scratchpad.
             {free_device}(d_status[s]); // Purges the current trajectory status limit scratchpad.
             {free_device}(d_retries[s]); // Purges the sequential error rejection scratchpad.
-            {free_device}(d_on_pos_window_prev[s]); // Purges the previous observer window boundary side scratchpad.
-            {free_device}(d_on_pos_source_prev[s]); // Purges the previous source emission boundary side scratchpad.
-            {free_device}(d_affine_prev[s]); // Purges the historical affine parameter $\lambda_{{n-1}}$ scratchpad.
-            {free_device}(d_affine_pre_prev[s]); // Purges the historical affine parameter $\lambda_{{n-2}}$ scratchpad.
-            {free_device}(d_window_event_found[s]); // Purges the window intersection coordinate guard scratchpad.
-            {free_device}(d_source_event_found[s]); // Purges the source intersection coordinate guard scratchpad.
+            {free_device}(d_on_pos_non_terminal_plane_prev[s]); // Purges the previous nonterminal plane boundary side scratchpad.
+            {free_device}(d_on_pos_terminal_plane_prev[s]); // Purges the previous terminal-plane boundary side scratchpad.
+            {free_device}(d_integration_param_prev[s]); // Purges the preceding integration-parameter scratchpad.
+            {free_device}(d_integration_param_pre_prev[s]); // Purges the second preceding integration-parameter scratchpad.
+            {free_device}(d_non_terminal_plane_event_found[s]); // Purges the nonterminal-plane intersection coordinate guard scratchpad.
+            {free_device}(d_terminal_plane_event_found[s]); // Purges the terminal-plane intersection coordinate guard scratchpad.
             {free_device}(d_chunk_buffer[s]); // Purges the absolute master indices $m_{{idx}}$ mapping scratchpad.
-            {free_device}(d_norm_bundle[s]); // Purges the diagnostic outputs scratchpad.
+{spatial_center_frees}
+        }} // END LOOP: for s over 2
 
-            {stream_destroy}
-        }} // END LOOP: for s over 2 to purge double-buffered arrays
 
-        //==========================================
-        // CPU CONSERVATION DRIFT EVALUATION
-        //==========================================
-        // Evaluate relative numerical drift on the CPU.
-        if (commondata->perform_conservation_check) {{
-            // Kernel Launch: Calculates terminal conserved quantities natively on the executing architecture.
-            calculate_conserved_quantities_universal_{spacetime_name}_photon(commondata, &all_photons_host, num_rays, final_cq_host);
-
-            printf("\n=================================================\n");
-            printf(" CONSERVED QUANTITIES DIAGNOSTIC REPORT\n");
-            printf("=================================================\n");
-
-            double max_err_E = 0.0; // Scalar variable tracking the maximum recorded relative drift for energy $E$.
-            double max_err_Lz = 0.0; // Scalar variable tracking the maximum recorded relative drift for angular momentum $L_z$.
-            double max_err_Q = 0.0; // Scalar variable tracking the maximum recorded relative drift for Carter constant $Q$.
-
-            long int worst_ray_E = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum relative numerical drift in energy $E$.
-            long int worst_ray_Lz = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum relative numerical drift in angular momentum $L_z$.
-            long int worst_ray_Q = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum relative numerical drift in Carter constant $Q$.
-
-            double max_abs_err_E = 0.0; // Scalar variable tracking the maximum recorded absolute drift for energy $E$.
-            double max_abs_err_Lz = 0.0; // Scalar variable tracking the maximum recorded absolute drift for angular momentum $L_z$.
-            double max_abs_err_Q = 0.0; // Scalar variable tracking the maximum recorded absolute drift for Carter constant $Q$.
-
-            long int worst_ray_abs_E = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum absolute numerical drift in energy $E$.
-            long int worst_ray_abs_Lz = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum absolute numerical drift in angular momentum $L_z$.
-            long int worst_ray_abs_Q = -1; // Absolute master index $m_{{idx}}$ identifying the trajectory responsible for the maximum absolute numerical drift in Carter constant $Q$.
-
-            // Loop iterator $i$ spanning the global dataset to calculate errors natively on the CPU.
-            for (long int i = 0; i < num_rays; i++) {{
-
-                double err_E = fabs((final_cq_host[i].E - initial_cq_host[i].E) / (initial_cq_host[i].E + 1e-15)); // Evaluates the relative numerical drift for energy $E$.
-                double err_Lz = fabs((final_cq_host[i].Lz - initial_cq_host[i].Lz) / (initial_cq_host[i].Lz + 1e-15)); // Evaluates the relative numerical drift for angular momentum $L_z$.
-                double err_Q = fabs((final_cq_host[i].Q - initial_cq_host[i].Q) / (initial_cq_host[i].Q + 1e-15)); // Evaluates the relative numerical drift for Carter constant $Q$.
-
-                double abs_err_E = fabs(final_cq_host[i].E - initial_cq_host[i].E); // Evaluates the absolute numerical drift for energy $E$.
-                double abs_err_Lz = fabs(final_cq_host[i].Lz - initial_cq_host[i].Lz); // Evaluates the absolute numerical drift for angular momentum $L_z$.
-                double abs_err_Q = fabs(final_cq_host[i].Q - initial_cq_host[i].Q); // Evaluates the absolute numerical drift for Carter constant $Q$.
-
-                if (err_E > max_err_E) {{
-                    max_err_E = err_E; // Updates the maximum tracked relative error for energy $E$.
-                    worst_ray_E = i; // Updates the absolute master index $m_{{idx}}$ for the maximum relative energy drift.
-                }} // END IF: err_E > max_err_E
-
-                if (err_Lz > max_err_Lz) {{
-                    max_err_Lz = err_Lz; // Updates the maximum tracked relative error for angular momentum $L_z$.
-                    worst_ray_Lz = i; // Updates the absolute master index $m_{{idx}}$ for the maximum relative angular momentum drift.
-                }} // END IF: err_Lz > max_err_Lz
-
-                if (err_Q > max_err_Q) {{
-                    max_err_Q = err_Q; // Updates the maximum tracked relative error for Carter constant $Q$.
-                    worst_ray_Q = i; // Updates the absolute master index $m_{{idx}}$ for the maximum relative Carter constant drift.
-                }} // END IF: err_Q > max_err_Q
-
-                if (abs_err_E > max_abs_err_E) {{
-                    max_abs_err_E = abs_err_E; // Updates the maximum tracked absolute error for energy $E$.
-                    worst_ray_abs_E = i; // Updates the absolute master index $m_{{idx}}$ for the maximum absolute energy drift.
-                }} // END IF: abs_err_E > max_abs_err_E
-
-                if (abs_err_Lz > max_abs_err_Lz) {{
-                    max_abs_err_Lz = abs_err_Lz; // Updates the maximum tracked absolute error for angular momentum $L_z$.
-                    worst_ray_abs_Lz = i; // Updates the absolute master index $m_{{idx}}$ for the maximum absolute angular momentum drift.
-                }} // END IF: abs_err_Lz > max_abs_err_Lz
-
-                if (abs_err_Q > max_abs_err_Q) {{
-                    max_abs_err_Q = abs_err_Q; // Updates the maximum tracked absolute error for Carter constant $Q$.
-                    worst_ray_abs_Q = i; // Updates the absolute master index $m_{{idx}}$ for the maximum absolute Carter constant drift.
-                }} // END IF: abs_err_Q > max_abs_err_Q
-            }} // END LOOP: for i over num_rays to calculate errors natively on the CPU
-
-            printf("  Max Relative Error (Energy E): %e (Ray %ld)\n", max_err_E, worst_ray_E); // Output block printing the maximum relative error for energy $E$.
-            printf("  Max Absolute Error (Energy E): %e (Ray %ld)\n\n", max_abs_err_E, worst_ray_abs_E); // Output block printing the maximum absolute error for energy $E$.
-
-            printf("  Max Relative Error (Momentum Lz): %e (Ray %ld)\n", max_err_Lz, worst_ray_Lz); // Output block printing the maximum relative error for angular momentum $L_z$.
-            printf("  Max Absolute Error (Momentum Lz): %e (Ray %ld)\n\n", max_abs_err_Lz, worst_ray_abs_Lz); // Output block printing the maximum absolute error for angular momentum $L_z$.
-
-            printf("  Max Relative Error (Carter Q): %e (Ray %ld)\n", max_err_Q, worst_ray_Q); // Output block printing the maximum relative error for Carter constant $Q$.
-            printf("  Max Absolute Error (Carter Q): %e (Ray %ld)\n", max_abs_err_Q, worst_ray_abs_Q); // Output block printing the maximum absolute error for Carter constant $Q$.
-
-            printf("=================================================\n\n"); // Output block printing the terminal footer for the diagnostic sequence.
-
-            // Host Memory Free: Purges pinned diagnostic buffers.
-            {free_pinned}(initial_cq_host); // Purges pinned initial diagnostic data buffer.
-            {free_pinned}(final_cq_host); // Purges pinned final diagnostic data buffer.
-        }} // END IF: commondata->perform_conservation_check to evaluate numerical drift on the CPU
-
-        // Host Memory Free: Purges the primary Host array states $f^\mu$ and affine parameters $\lambda$.
+        // Host Memory Free: Purges the primary Host state and integration-parameter arrays.
         {free_pinned}(all_photons_host.f); // Purges the primary Host array state $f^\mu$.
         {free_pinned}(all_photons_host.f_p); // Purges the primary Host array first derivative $\dot{{f}}^\mu$.
         {free_pinned}(all_photons_host.f_p_p); // Purges the primary Host array second derivative $\ddot{{f}}^\mu$.
-        {free_pinned}(all_photons_host.affine_param); // Purges the primary Host array affine parameter $\lambda$.
+        {free_pinned}(all_photons_host.integration_param); // Purges the primary Host integration-parameter array.
         {free_pinned}(all_photons_host.h); // Purges the primary Host array integration step size $h$.
         {free_pinned}(all_photons_host.status); // Purges the primary Host array trajectory status enum.
         {free_pinned}(all_photons_host.rejection_retries); // Purges the primary Host array error rejection scalar.
-        {free_pinned}(all_photons_host.on_positive_side_of_window_prev); // Purges the primary Host array observer window boundary flag.
-        {free_pinned}(all_photons_host.on_positive_side_of_source_prev); // Purges the primary Host array source emission boundary flag.
-        {free_pinned}(all_photons_host.affine_param_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-1}}$.
-        {free_pinned}(all_photons_host.affine_param_p_p); // Purges the primary Host array historical affine parameter $\lambda_{{n-2}}$.
-        {free_pinned}(all_photons_host.window_event_found); // Purges the primary Host array observer window intersection lock.
-        {free_pinned}(all_photons_host.source_event_found); // Purges the primary Host array source emission intersection lock.
+        {free_pinned}(all_photons_host.on_positive_side_of_non_terminal_plane_prev); // Purges the primary Host array nonterminal plane boundary flag.
+        {free_pinned}(all_photons_host.on_positive_side_of_terminal_plane_prev); // Purges the primary Host array terminal-plane boundary flag.
+        {free_pinned}(all_photons_host.integration_param_p); // Purges the preceding Host integration-parameter array.
+        {free_pinned}(all_photons_host.integration_param_p_p); // Purges the second preceding Host integration-parameter array.
+        {free_pinned}(all_photons_host.non_terminal_plane_event_found); // Purges the primary Host array nonterminal plane intersection lock.
+        {free_pinned}(all_photons_host.terminal_plane_event_found); // Purges the primary Host array terminal-plane intersection lock.
 
-        // Device Memory Free: Purges the final single-pointer intersection blueprint buffer $b_i$.
-        {free_device}(d_results_buffer); // Purges the intersection blueprint buffer $b_i$.
+        // Release the active numerical spacetime window before the slot lattice is destroyed.
+        time_window_manager_numerical_free(&numerical_window);
 
         // Memory Free: Purges the temporal sorting struct mapping the Host-side execution grid.
         slot_manager_free(&tsm); // Purges the central time slot orchestrator.

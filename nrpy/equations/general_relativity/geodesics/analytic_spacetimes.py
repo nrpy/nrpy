@@ -2,9 +2,12 @@
 Construct symbolic expressions for analytic spacetime metrics.
 
 This module provides a class-based structure for generating the symbolic
-metric tensor for the Kerr-Schild analytic solution to Einstein's equations.
+metric tensor for supported analytic or analytic-like spacetime recipes.
 It is designed to integrate with nrpy's CodeParameter system.
 
+For Kerr, ``a_spin`` is the dimensional Kerr parameter ``a = J/M`` in
+geometric units, with the same length units as ``M_scale``. The dimensionless
+spin is ``a_spin / M_scale``. Analytic geodesic examples use ``M_scale = 1``.
 
 Author: Dalton J. Moone
         daltonmoone **at** gmail **dot** com
@@ -18,7 +21,6 @@ from typing import Dict, List, Tuple
 # Step 0.b: Import third-party modules
 import sympy as sp
 
-# Step 0.c: Import NRPy core modules
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.validate_expressions.validate_expressions as ve
@@ -43,7 +45,7 @@ class AnalyticSpacetimes:
         Initialize and generate the symbolic metric for a given spacetime.
 
         :param spacetime_name: The name of the spacetime to generate
-                               (e.g., "KerrSchild_Cartesian", "Schwarzschild_Cartesian_Isotropic").
+                               (e.g., "KerrSchild_Cartesian").
         :raises ValueError: If the requested spacetime is not supported.
         """
         self.spacetime_name = spacetime_name
@@ -75,7 +77,9 @@ class AnalyticSpacetimes:
         t, x, y, z = sp.symbols("t x y z", real=True)
         xx = [t, x, y, z]
 
-        # Step 1.b: Register physical parameters (G=c=1; M_scale = ADM mass)
+        # Step 1.b: Register physical parameters in geometric units (G=c=1).
+        # M_scale is ADM mass; a_spin is dimensional Kerr a=J/M. The
+        # dimensionless spin is a_spin / M_scale.
         M_scale = par.register_CodeParameter(
             "REAL", __name__, "M_scale", 1.0, commondata=True
         )
@@ -157,7 +161,9 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Use a distinct loop variable name to avoid pylint redefined-outer-name warnings.
-    for spacetime_name_str in ["KerrSchild_Cartesian"]:
+    for spacetime_name_str in [
+        "KerrSchild_Cartesian",
+    ]:
         spacetimes = Analytic_Spacetimes[spacetime_name_str]
         results_dict = ve.process_dictionary_of_expressions(
             spacetimes.__dict__, fixed_mpfs_for_free_symbols=True

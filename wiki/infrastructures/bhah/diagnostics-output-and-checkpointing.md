@@ -109,7 +109,7 @@ Cartesian coordinates, the ten unique covariant four-metric components, and the
 forty unique four-Christoffel components at interior logical-grid points. The
 header records binary64, little-endian, format-version, coordinate-system,
 conformal-factor convention, logical-grid extents, offsets, component names,
-and that ghost zones are excluded. `combine_raytracing_time_slices.py` is the
+and that the payload includes ghost zones. `combine_raytracing_time_slices.py` is the
 stage-2 containerizer: it strictly parses and validates stage-1 files, sorts
 them by physical simulation time, validates compatibility and unique times,
 optionally records coordinate-table and axisymmetry metadata, then atomically
