@@ -228,21 +228,15 @@ akv_primme_c_sources = [
     "akv_primme_eigensolver/memman.c",
     "akv_primme_eigensolver/wtime.c",
 ]
-akv_primme_object_files = [
-    source.replace(".c", ".o") for source in akv_primme_c_sources
+akv_primme_source_records = [
+    f"SOURCES += $(call ADD_SOURCE,{source})" for source in akv_primme_c_sources
 ]
-akv_primme_makefile_rule = "\n".join(
-    [
-        "akv_primme_eigensolver/primme_c.o: akv_primme_eigensolver/primme_c.c",
-        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) -DBHAHAHA_AKV_PRIMME_NAMESPACE -c $< -o $@",
-    ]
-)
 akv_linkcheck_makefile_rule = "\n".join(
     [
         ".PHONY: linkcheck",
-        "linkcheck: $(OBJ_FILES)",
+        "linkcheck: $(OBJECTS)",
         "\tprintf 'int main(void) { return 0; }\\n' > .akv_linkcheck_main.c",
-        "\t$(CC) $(CFLAGS) $(INCLUDEDIRS) .akv_linkcheck_main.c $(OBJ_FILES) $(LDFLAGS) -o .akv_linkcheck",
+        "\t$(LINKER) $(ALL_CPPFLAGS) $(ALL_CFLAGS) .akv_linkcheck_main.c $(OBJECTS) $(ALL_LDFLAGS) $(ALL_LDLIBS) -o .akv_linkcheck",
     ]
 )
 
@@ -279,24 +273,26 @@ shutil.copytree(akv_primme_src, akv_primme_dst)
 
 makefile_path = Path(project_dir) / "Makefile"
 lines = makefile_path.read_text(encoding="utf-8").splitlines()
-for line_number, line in enumerate(lines):
-    if line.startswith("OBJ_FILES = "):
-        lines[line_number] = line + " " + " ".join(akv_primme_object_files)
-        break
-else:
-    raise ValueError(f"Could not find OBJ_FILES in generated Makefile: {makefile_path}")
 
 for line_number, line in enumerate(lines):
-    if line.startswith("\t$(RM) "):
+    if line.startswith("OBJECTS := "):
+        lines[line_number:line_number] = akv_primme_source_records
+        break
+else:
+    raise ValueError(
+        f"Could not find OBJECTS assignment in generated Makefile: {makefile_path}"
+    )
+
+for line_number, line in enumerate(lines):
+    if line.startswith("\t$(RM) $(OBJECTS) "):
         lines[line_number] = line + " .akv_linkcheck .akv_linkcheck_main.c"
         break
 else:
     raise ValueError(
-        f"Could not find clean rule in generated Makefile: {makefile_path}"
+        f"Could not find clean object-removal rule in generated Makefile: {makefile_path}"
     )
 
 makefile_text = "\n".join(lines) + "\n"
-makefile_text += "\n" + akv_primme_makefile_rule + "\n\n"
 makefile_text += akv_linkcheck_makefile_rule + "\n"
 makefile_path.write_text(makefile_text, encoding="utf-8")
 
