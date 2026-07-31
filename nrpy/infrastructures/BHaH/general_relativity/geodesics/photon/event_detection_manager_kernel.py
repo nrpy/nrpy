@@ -42,7 +42,8 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     Define the configuration and parameters for the event-detection kernel.
 
     :param normalized_eom: Whether the state stores affine parameter in ``f[0]``
-        and coordinate time in the integration-parameter tracker.
+        and coordinate time in the integration-parameter tracker. The caller
+        supplies the common upper-only log-energy scalar for either mode.
     """
     register_event_plane_parameters()
     parallelization = par.parval_from_str("parallelization")
@@ -58,6 +59,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
 
     arg_dict_cuda = {
         "d_f_bundle": "const double *restrict",
+        "d_log_energy_bundle": "const double *restrict",
         "d_f_prev_bundle": "double *restrict",
         "d_f_pre_prev_bundle": "double *restrict",
         "d_integration_param": "const double *restrict",
@@ -75,6 +77,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
 
     arg_dict_host = {
         "d_f_bundle": "const double *restrict",
+        "d_log_energy_bundle": "const double *restrict",
         "d_f_prev_bundle": "double *restrict",
         "d_f_pre_prev_bundle": "double *restrict",
         "d_integration_param": "const double *restrict",
@@ -149,10 +152,11 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     //==========================================
     // MODE-SPECIFIC EVOLUTION-MEASURE LIMIT CHECK
     //==========================================
-    // Direct evolution stores $p^0$ in f[4]; normalized evolution stores its log-energy measure.
-    const double energy_measure = ReadCUDA(&d_f_bundle[IDX_F(4, i)]);
+    // Both EOM modes supply the common upper-only log-energy measure
+    // ln|alpha p^0| through d_log_energy_bundle.
+    const double log_energy_measure = ReadCUDA(&d_log_energy_bundle[i]);
 
-    if (AbsCUDA(energy_measure) > {cd_access}evolution_measure_max) {{
+    if (log_energy_measure > {cd_access}evolution_measure_max) {{
         d_status_bundle[i] = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED; // Stops a ray whose evolution measure exceeded its limit.
         {escape_statement}
     }} // END IF: mode-specific evolution-measure limit exceeded
@@ -333,6 +337,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
 
     @param[in] commondata Global spacetime and plane parameters.
     @param[in] d_f_bundle SoA pointer to the state array for step $f^\mu_{n}$.
+    @param[in] d_log_energy_bundle Per-ray common log-energy measure $\ln|\alpha p^0|$.
     @param[in,out] d_f_prev_bundle Previous-step state array, shifted in place.
     @param[in,out] d_f_pre_prev_bundle Pre-previous state array, shifted in place.
     @param[in] d_integration_param Current integration parameter.
@@ -352,6 +357,7 @@ def event_detection_manager_kernel(normalized_eom: bool = False) -> None:
     params = (
         "const commondata_struct *restrict commondata, "
         "const double *restrict d_f_bundle, "
+        "const double *restrict d_log_energy_bundle, "
         "double *restrict d_f_prev_bundle, "
         "double *restrict d_f_pre_prev_bundle, "
         "const double *restrict d_integration_param, "

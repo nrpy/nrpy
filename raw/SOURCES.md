@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-20-2026.
+> trigger re-ingest. Last audited: 07-30-2026.
 
 ## Aggregate Sources
 
@@ -101,6 +101,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |

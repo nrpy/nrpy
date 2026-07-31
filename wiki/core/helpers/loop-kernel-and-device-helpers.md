@@ -1,6 +1,6 @@
 # Loop Kernel And Device Helpers
 
-> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 07-12-2026
+> Helper leaf for generic loop emitters, GPU kernel wrappers, and host/device code-generation utilities. · Status: confirmed · Last reconciled: 07-30-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary
@@ -9,9 +9,9 @@
 
 ## Detail
 
-`loop1D()` validates that its index, bounds, increment, and pragma inputs are strings, then returns a C `for`-loop header and matching footer comment. The pragma is optional, and an increment of `"1"` is emitted as `++`; other increments become `+= <increment>`.
+`loop1D()` validates that its index, bounds, increment, pragma, and `idx_type` inputs are strings, then returns a C `for`-loop header and matching footer comment. `idx_type` defaults to `int` and can emit a wider C index type such as `long int`. The pragma is optional, and an increment of `"1"` is emitted as `++`; other increments become `+= <increment>`.
 
-`loop()` normalizes scalar loop inputs into lists, requires the index, lower-bound, upper-bound, increment, and pragma lists to have the same length, and emits nested loops. Without a body it returns `(header, footer)`. With `loop_body`, it returns one full loop string. When `tile_size` is supplied, it adds an outer block loop with a `B` suffix and uses `NRPYMIN(<upper>, <block> + <tile>)` for the inner-loop upper bound; the helper emits that macro use but does not define the macro.
+`loop()` normalizes scalar loop inputs into lists, including `idx_type`, requires the index, lower-bound, upper-bound, increment, pragma, and index-type lists to have the same length, and emits nested loops. The default type for every dimension is `int`; a list permits different C index types per dimension. Without a body it returns `(header, footer)`. With `loop_body`, it returns one full loop string. When `tile_size` is supplied, it adds an outer block loop with a `B` suffix using the selected index type and uses `NRPYMIN(<upper>, <block> + <tile>)` for the inner-loop upper bound; the helper emits that macro use but does not define the macro.
 
 `GPUKernel` wraps a generated kernel body in a `CFunction`. Its constructor records the body, decorators, parameter dictionary, generated name, launch dictionary, optional stream parameter, CUDA error-check policy, and BHaH thread-tiling suffix. A launch dictionary is required only for the exact default decorator string `decorators == "__global__"`. If `streamid_param` is enabled and the decorator string does not contain `__host__`, `streamid` is prepended to the generated argument dictionary. This is a substring test, not semantic classification of a host-only function.
 

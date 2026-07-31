@@ -162,7 +162,7 @@ def photon_momentum_to_normalized_kernel(
     //==========================================
     // Replace the direct contravariant momentum in f[4:8] with the normalized
     // state variables required by the coordinate-time evolution equations.
-    // The affine-parameter slot f[0] and Eulerian-distance slot f[8] remain unchanged.
+    // The affine-parameter slot f[0] and normal-observer-distance slot f[8] remain unchanged.
     d_f_bundle[IDX_F(4, i)] = u_out;
     d_f_bundle[IDX_F(5, i)] = PiD0_out;
     d_f_bundle[IDX_F(6, i)] = PiD1_out;

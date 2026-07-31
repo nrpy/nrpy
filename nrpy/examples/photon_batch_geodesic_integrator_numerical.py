@@ -50,6 +50,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     handle_non_terminal_plane_intersection,
     handle_terminal_plane_intersection,
     main_batch,
+    normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
@@ -283,8 +284,8 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         type=float,
         metavar="VALUE",
         help=(
-            "Maximum evolution measure: abs(p^0) in direct mode, or "
-            "abs(ln(abs(alpha*p^0))) in normalized mode."
+            "Upper limit on the common normal-observer log-energy measure "
+            "ln(abs(alpha*p^0)) in both EOM modes; default: 3."
         ),
     )
     parser.add_argument(
@@ -486,13 +487,13 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
         normalized_eom=normalized_eom
     )
 
+    u_expr, PiD_exprs = geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
     if normalized_eom:
-        u_expr, PiD_exprs = (
-            geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
-        )
         photon_momentum_to_normalized_kernel.photon_momentum_to_normalized_kernel(
             u_expr, PiD_exprs
         )
+    else:
+        normal_observer_log_energy.normal_observer_log_energy(u_expr)
 
     # Step 5.b: Register normalization diagnostics.
     if normalized_eom:
@@ -627,9 +628,7 @@ python3 photon_batch_geodesic_integrator_numerical.py --bin-name two_blackholes_
     par.adjust_CodeParam_default("scan_density", args.scan_density)
 
     # Step 6.e: Set batch-integrator and numerical-limit defaults.
-    par.adjust_CodeParam_default(
-        "evolution_measure_max", 3.0 if normalized_eom else 1000.0
-    )
+    par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_normalization_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
 

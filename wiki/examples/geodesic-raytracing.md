@@ -1,6 +1,6 @@
 # Geodesic Raytracing
 
-> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-12-2026
+> Explain standalone massive and photon geodesic examples plus batch photon raytracing visualization artifacts. · Status: confirmed · Last reconciled: 07-30-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -16,6 +16,12 @@ lensed-image renderer and diagnostic scripts. The numerical single- and batch-
 photon generators use the same photon runtime with a combined numerical-
 spacetime `.bin` dataset and currently support CPU/OpenMP
 `SinhCylindricalv2n2` interpolation.
+
+All four photon generators initialize rays with a metric-orthonormal observer
+tetrad and unit initial normal-observer energy, `E_obs = 1`. Direct and
+normalized photon EOMs use the same upper-only normal-observer log-energy
+termination measure: direct states evaluate `ln|alpha p^0|`, while normalized
+states use `u`.
 
 All generation, build, executable, trajectory, and rendering commands on this
 page are manual/source-supported. Neither GitHub workflow nor the local full-CI
@@ -72,13 +78,15 @@ GSL. It allocates one Structure-of-Arrays photon state, constructs the complete
 initial momentum from the observer tetrad, and runs the split RKF45 pipeline through
 `interpolation_kernel`, `calculate_ode_rhs_kernel`, `rkf45_stage_update`, and
 `rkf45_finalize_and_control`, writes `trajectory.txt`, and reports null
-normalization and conserved-quantity errors. Both single-ray generators copy
+normalization and conserved-quantity errors. Accepted states also use the
+normal-observer log-energy cutoff, whose default `--evolution-measure-max` is
+`3` and which triggers only when the log measure is above the threshold. Both single-ray generators copy
 `visualize_trajectory.py` into the generated project and print
 `pip install matplotlib numpy`; those Python visualization dependencies are
 source-limited to the checked-in script imports and generator message.
 
 Claim evidence:
-- Claim: The single-photon analytical generator constructs initial momentum from the observer tetrad, runs the split RKF45 pipeline, writes `trajectory.txt`, and reports normalization and conserved-quantity diagnostics.
+- Claim: The single-photon analytical generator constructs unit-energy initial momentum from the observer tetrad, runs the split RKF45 pipeline, applies the upper-only log-energy cutoff, writes `trajectory.txt`, and reports normalization and conserved-quantity diagnostics.
 - Role: generated-output boundary
 - Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_analytical.py` — generator registration and `single_integrator_analytical`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer-tetrad initialization
@@ -158,6 +166,10 @@ Claim evidence:
 - Corroboration: `nrpy/examples/geodesic_visualizations/visualize_lensed_image.py` — header-driven tile and aspect-ratio handling
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
 - Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
+
+The analytical batch integrator applies the same upper-only log-energy cutoff
+after each accepted state. Its direct-EOM path refreshes the accepted-state
+metric before computing `ln|alpha p^0|`; normalized mode uses `u` directly.
 
 The batch executable produces tiled `light_blueprint_XX_YY.bin` files in its
 project directory. Those binary files are generated artifacts, not KB sources.
@@ -286,6 +298,21 @@ python -m nrpy.examples.photon_single_geodesic_integrator_numerical \
 The numerical batch generator has the same numerical-data arguments and adds
 the batch visualization/blueprint workflow. Both generators currently require
 the numerical `.bin` file to be available under `project/raytracing_data/`.
+Both accept `--eom geodesic|normalized` and share the upper-only
+`--evolution-measure-max` cutoff (default `3`). For accepted-state normalization
+sidecars, direct EOM stores `|g_{mu nu} p^mu p^nu|`; normalized EOM stores
+`|exp(2u)(gamma^{ij} Pi_i Pi_j - 1)|`, putting the normalized residual on the
+direct-momentum scale. The numerical batch path locks the spatial interpolation
+center selected for each RK trial and reuses that same center for every RK
+substage and the accepted-state metric refresh.
+
+Claim evidence:
+- Claim: Numerical photon generators expose direct and normalized EOM modes with a common upper-only log-energy cutoff and direct-scale-equivalent normalized norm sidecars; numerical batch RK stages reuse one spatial interpolation center per trial.
+- Role: public/scientific contract
+- Deciding authority: `nrpy/examples/photon_single_geodesic_integrator_numerical.py` and `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — CLI and parameter wiring
+- Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` and `numerical_interpolation.py` — generated integration and interpolation contracts
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-30-2026`
 
 ## Sources
 
@@ -294,6 +321,7 @@ the numerical `.bin` file to be available under `project/raytracing_data/`.
 - [photon_batch_geodesic_integrator_analytical.py](../../nrpy/examples/photon_batch_geodesic_integrator_analytical.py) - `--outdir`, `--cuda`, `parallelization_mode`, `vis_command`, `blueprint_command`; official NVIDIA [NVCC guide](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html) - `NVCC: The NVIDIA CUDA Compiler`
 - [photon_single_geodesic_integrator_numerical.py](../../nrpy/examples/photon_single_geodesic_integrator_numerical.py) - numerical dataset CLI, `register_CFunction_numerical_interpolation`, `--t-start`
 - [photon_batch_geodesic_integrator_numerical.py](../../nrpy/examples/photon_batch_geodesic_integrator_numerical.py) - numerical dataset CLI, `combine_raytracing_time_slices.py`, batch visualization workflow
+- [normal_observer_log_energy.py](../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py) - direct-EOM `ln|alpha p^0|` helper
 - [combine_raytracing_time_slices.py](../../nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py) - `InputSliceInfo`, `parse_args`, `--run-metadata`
 - [visualize_trajectory.py](../../nrpy/examples/geodesic_visualizations/visualize_trajectory.py) - `visualize_trajectory`, `plot_trajectory`
 - [blueprint_config_and_schema.py](../../nrpy/examples/geodesic_visualizations/blueprint_config_and_schema.py) - `BLUEPRINT_DTYPE`, `STOP_CONDITION_TERMINAL_PLANE`

@@ -152,13 +152,15 @@ def register_CFunction_numerical_interpolation(
         if interpolation_method == "g4DD_d0"
         else ""
     )
-    if normalized_eom:
-        spatial_center_params = """const int *restrict d_spatial_stencil_center_i0,
+    # Both EOM modes accept optional fixed spatial centers. The numerical batch
+    # integrator locks these once per RK trial and reuses them for every stage,
+    # including the accepted-state metric refresh used by direct EOM.
+    spatial_center_params = """const int *restrict d_spatial_stencil_center_i0,
                 const int *restrict d_spatial_stencil_center_i2,"""
-        spatial_center_desc = """@param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
+    spatial_center_desc = """@param[in] d_spatial_stencil_center_i0 Trial-locked native dimension-0 centers, or NULL.
 @param[in] d_spatial_stencil_center_i2 Trial-locked native dimension-2 centers, or NULL.
 """
-        spatial_center_setup = r"""
+    spatial_center_setup = r"""
     NumericalSpatialStencilCenter fixed_center;
     const NumericalSpatialStencilCenter *fixed_spatial_center = NULL;
     if (d_spatial_stencil_center_i0 != NULL &&
@@ -168,6 +170,7 @@ def register_CFunction_numerical_interpolation(
       fixed_spatial_center = &fixed_center;
     } // END IF: trial-locked centers supplied
 """
+    if normalized_eom:
         integration_parameter_params = """const double *restrict d_integration_param_bundle,
                 const double *restrict d_h,
                 const int stage,"""
@@ -184,11 +187,6 @@ def register_CFunction_numerical_interpolation(
             : NAN;
     const REAL t = integration_param + rkf45_stage_time_fraction * h;"""
     else:
-        spatial_center_params = ""
-        spatial_center_desc = ""
-        spatial_center_setup = """
-    const NumericalSpatialStencilCenter *fixed_spatial_center = NULL;
-"""
         integration_parameter_params = ""
         integration_parameter_desc = ""
         coordinate_time_c_code = "const REAL t = (REAL)f_local[0];"

@@ -11,6 +11,7 @@ from . import (
     interpolation_kernel,
     main_batch,
     main_single,
+    normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,

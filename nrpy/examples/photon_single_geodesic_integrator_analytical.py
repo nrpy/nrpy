@@ -43,6 +43,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     event_detection_manager_kernel,
     interpolation_kernel,
     main_single,
+    normal_observer_log_energy,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
@@ -192,7 +193,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--evolution-measure-max",
         type=float,
         metavar="VALUE",
-        help="Maximum absolute p^0 evolution measure in direct mode.",
+        help="Upper limit on the common normal-observer log-energy measure ln(abs(alpha*p^0)).",
     )
     return parser
 
@@ -273,6 +274,8 @@ if __name__ == "__main__":
     normalization_constraint.normalization_constraint(
         geodesic_data.norm_constraint_expr, PARTICLE
     )
+    u_expr, _ = geodesic_data.photon_momentum_to_normalized_quantities()
+    normal_observer_log_energy.normal_observer_log_energy(u_expr)
 
     set_initial_conditions_kernel.register_photon_batch_structs()
     set_initial_conditions_kernel.set_initial_conditions_kernel(normalized_eom=False)
@@ -330,7 +333,7 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("t_start", args.t_start)
     par.adjust_CodeParam_default("initial_h", 0.1)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
-    par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
+    par.adjust_CodeParam_default("evolution_measure_max", 3.0)
 
     terminal_defaults = {
         "terminal_plane_center_x": -1.0e4,

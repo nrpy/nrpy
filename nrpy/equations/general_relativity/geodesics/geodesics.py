@@ -244,24 +244,24 @@ class GeodesicEquations:
 
         The equations of motion are: d(p^\alpha)/d(\kappa) = -\Gamma^\alpha_{\mu\nu} p^\mu p^\nu.
         The ninth ODE provides a diagnostic for the spatial distance traveled by the photon,
-        as measured by a local Eulerian observer.
+        as measured by a local normal observer.
 
-        **Equation 9: Eulerian Distance**
-        The rate of change of the proper spatial distance L_Euler with respect
+        **Equation 9: Normal-Observer Distance**
+        The rate of change of the proper spatial distance L_normal with respect
         to the affine parameter \lambda is given by:
 
-            dL_Euler/d\lambda = \alpha p^0 = p^0 / sqrt(-g^00)
+            dL_normal/d\lambda = \alpha p^0 = p^0 / sqrt(-g^00)
 
         **Physical Interpretation:**
-        This value represents the "lab frame" distance measured by an **Eulerian Observer**
-        (also known as a Normal Observer). This observer has a 4-velocity n^\mu normal
+        This value represents the "lab frame" distance measured by a **Normal Observer**.
+        This observer has a 4-velocity n^\mu normal
         to the spatial hypersurface (slice of constant coordinate time t).
 
-        * **Observer:** The Eulerian observer is "hovering" at a specific spatial coordinate,
+        * **Observer:** The normal observer is "hovering" at a specific spatial coordinate,
             moving orthogonal to the spatial slice. In the ADM formalism, their 4-velocity
             is n_\mu = (-\alpha, 0, 0, 0).
         * **Measurement:** It answers the question: "How much distance does the local
-            Eulerian observer see the photon cover in this instant?"
+            normal observer see the photon cover in this instant?"
         * **Invariance:** This scalar is spatially invariant (valid under spatial rotations)
             but slicing dependent (depends on the definition of time t).
 
@@ -274,7 +274,7 @@ class GeodesicEquations:
             This formulation assumes a metric signature where g^00 < 0 (e.g., -+++).
             It is well-behaved in horizon-penetrating coordinates (like Kerr-Schild) where
             g^00 remains finite, but may diverge in static coordinates (like Schwarzschild)
-            at the horizon where the Eulerian observer cannot exist.
+            at the horizon where the normal observer cannot exist.
 
         Reference:
         Wikipedia: Geodesics in general relativity
@@ -304,10 +304,10 @@ class GeodesicEquations:
                     sum_term += term
             mom_rhs[alpha] = -sum_term
 
-        # Ninth Equation: Eulerian Distance Evolution
-        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
-        # Note: L_Euler is a *signed* distance. In reverse ray tracing, p^0 < 0
-        # generally causes L_Euler to decrease, except inside an ergosphere
+        # Ninth Equation: Normal-Observer Distance Evolution
+        # dL_normal/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+        # Note: L_normal is a *signed* distance. In reverse ray tracing, p^0 < 0
+        # generally causes L_normal to decrease, except inside an ergosphere
         # where p^0 > 0 causes it to increase.
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
@@ -332,9 +332,9 @@ class GeodesicEquations:
                   (g_{\beta\nu,\mu} + g_{\beta\mu,\nu} - g_{\mu\nu,\beta})
 
         The ninth ODE provides a diagnostic for the spatial distance traveled
-        by the photon, as measured by a local Eulerian observer:
+        by the photon, as measured by a local normal observer:
 
-            dL_Euler/d\lambda = p^0 / sqrt(-g^00)
+            dL_normal/d\lambda = p^0 / sqrt(-g^00)
 
         :return: A list of 9 SymPy expressions for the RHS of the ODEs.
         """
@@ -392,8 +392,8 @@ class GeodesicEquations:
 
             mom_rhs[alpha] = -sum_term
 
-        # Ninth Equation: Eulerian Distance Evolution
-        # dL_Euler/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
+        # Ninth Equation: Normal-Observer Distance Evolution
+        # dL_normal/dlambda = p^0 / sqrt(-g^00) = alpha * p^0
         path_len_rhs = [pU[0] / sp.sqrt(-g4UU[0][0])]
 
         return pos_rhs + mom_rhs + path_len_rhs
@@ -509,7 +509,7 @@ class GeodesicEquations:
         Generate normalized photon equations from four-Christoffel symbols.
 
         The state ordering matches the existing normalized numerical pipeline:
-        ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_Euler)``. Coordinate time is
+        ``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``. Coordinate time is
         the independent variable. This method preserves the existing metric-based
         normalized method while providing the Christoffel-based geometry contract.
 
@@ -565,7 +565,7 @@ class GeodesicEquations:
             rhs -= sp.Rational(1, 2) * alpha * inverse_metric_derivative_contract
             Pi_rhs[i] = rhs
 
-        # Step 6: Preserve the existing signed Eulerian-distance diagnostic.
+        # Step 6: Preserve the existing signed normal-observer-distance diagnostic.
         path_len_rhs = [alpha]
         return lambda_rhs + pos_rhs + u_rhs + list(Pi_rhs) + path_len_rhs
 
@@ -576,7 +576,7 @@ class GeodesicEquations:
         This formulation is a normalized photon evolution system. Coordinate
         time ``t`` is the external independent variable, and the state is
 
-        ``(\lambda, x, y, z, u, \Pi_1, \Pi_2, \Pi_3, L_Euler)``,
+        ``(\lambda, x, y, z, u, \Pi_1, \Pi_2, \Pi_3, L_normal)``,
 
         where
 
@@ -591,9 +591,9 @@ class GeodesicEquations:
 
         ``d\lambda / dt = -\alpha e^{-u}``.
 
-        The ninth equation evolves signed Eulerian path length:
+        The ninth equation evolves signed normal-observer path length:
 
-        ``dL_Euler / dt = \alpha``.
+        ``dL_normal / dt = \alpha``.
 
         The sign of the accumulated path-length change follows the direction
         of coordinate-time integration.
@@ -642,7 +642,7 @@ class GeodesicEquations:
         # f[1:4] = x^i
         # f[4] = u = ln|alpha p^0|
         # f[5:8] = Pi_i = p_i / (alpha p^0)
-        # f[8] = L_Euler
+        # f[8] = L_normal
         u = sp.Symbol("u", real=True)
         PiD = ixp.declarerank1("PiD", dimension=3)
 
@@ -743,7 +743,7 @@ class GeodesicEquations:
         # dlambda/dt = -alpha exp(-u)
         lambda_rhs = [-alpha * sp.exp(-u)]
 
-        # Ninth Equation: Signed Eulerian Path-Length Evolution
+        # Ninth Equation: Signed Normal-Observer Path-Length Evolution
         path_len_rhs = [alpha]
 
         return lambda_rhs + pos_rhs + u_rhs + Pi_rhs + path_len_rhs

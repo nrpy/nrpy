@@ -96,6 +96,18 @@ def rkf45_finalize_and_control_kernel(
     >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
     ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
     ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
+    ...     rkf45_finalize_and_control_kernel()
+    ...     generated = cfc.CFunction_dict["rkf45_finalize_and_control"].full_function
+    ...     if old_cache_home is None:
+    ...         _ = os.environ.pop("XDG_CACHE_HOME", None)
+    ...     else:
+    ...         _ = os.environ.__setitem__("XDG_CACHE_HOME", old_cache_home)
+    >>> "rkf45_checked_floor_to_long" not in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> with tempfile.TemporaryDirectory(dir=os.getcwd()) as temp_dir:
+    ...     old_cache_home = os.environ.get("XDG_CACHE_HOME")
+    ...     _ = os.environ.__setitem__("XDG_CACHE_HOME", temp_dir)
     ...     rkf45_finalize_and_control_kernel(
     ...         enable_numerical_time_window_step_cap=True, normalized_eom=True
     ...     )
@@ -321,7 +333,8 @@ def rkf45_finalize_and_control_kernel(
         """
         loop_postamble = "    } // END LOOP: for i over chunk_size rays"
 
-    prefunc = r"""
+    prefunc = (
+        r"""
 static inline int rkf45_checked_floor_to_long(
     const double value,
     long int *out) {
@@ -333,6 +346,9 @@ static inline int rkf45_checked_floor_to_long(
   return 0;
 } // END FUNCTION: rkf45_checked_floor_to_long
 """
+        if enable_numerical_time_window_step_cap
+        else ""
+    )
 
     accepted_time_window_step_cap = ""
     proposed_time_window_step_cap = ""
@@ -462,7 +478,7 @@ static inline int rkf45_checked_floor_to_long(
 
             const double current_err = DivCUDA(err_abs, scale);
 {trial_debug_error_update}
-        } // END IF: exclude integration and Eulerian slots
+        } // END IF: exclude integration and normal-observer slots
 """
         adaptive_step_control = rf"""
     const double h_sign = (h_local < 0.0) ? -1.0 : 1.0;
@@ -495,7 +511,7 @@ static inline int rkf45_checked_floor_to_long(
 
             const double current_err = DivCUDA(err_abs, scale);
 {trial_debug_error_update}
-        } // END IF: exclude Eulerian length from error
+        } // END IF: exclude normal-observer path length from error
 """
         adaptive_step_control = rf"""
     double h_new = MulCUDA(safety, MulCUDA(h_local, factor));

@@ -16,6 +16,11 @@ The numerical time-window logic assumes the generator also registers
 ``rkf45_finalize_and_control_kernel(enable_numerical_time_window_step_cap=True)``
 so accepted RKF45 steps remain inside the mapped numerical window.
 
+After finalization, direct-EOM batches re-interpolate ``g4DD`` at the current
+state using the same trial-locked spatial stencil centers used by every RK
+stage. Both EOM modes then pass the common ``ln|alpha p^0|`` scalar to event
+detection; normalized mode reads it directly from ``u``.
+
 The script keeps the broad photon orchestration, RKF45 stepping, and
 ``TimeSlotManager`` structure used by the analytic photon batch integrator, but
 all geometry evaluations go through the numerical ``.bin`` data path.
@@ -62,6 +67,30 @@ def batch_integrator_numerical(
     >>> "time_window_manager_numerical_mmap_for_slot" in generated
     True
     >>> "observer_metric[10]" in generated
+    True
+    >>> "normal_observer_log_energy(" in generated
+    True
+    >>> "d_spatial_stencil_center_i0[current]" in generated
+    True
+    >>> "d_log_energy_bundle[current]" in generated
+    True
+    >>> cfc.CFunction_dict.clear()
+    >>> batch_integrator_numerical(
+    ...     "Schwarzschild", "SinhCylindricalv2n2", interpolation_method="g4DD",
+    ...     normalized_eom=True
+    ... )
+    >>> generated = cfc.CFunction_dict["batch_integrator_numerical"].full_function
+    >>> "fabs(exp(2.0 * d_f_bundle[0][4 * BUNDLE_CAPACITY + norm_i]) * (d_norm_bundle[norm_i].C - 1.0))" in generated
+    True
+    >>> "const double current_norm_err = fabs(d_norm_bundle[norm_i].C - 1.0);" in generated
+    True
+    >>> "const double sidecar_norm_err = fabs(exp(2.0 * d_f_bundle[0][4 * BUNDLE_CAPACITY + norm_i]) * (d_norm_bundle[norm_i].C - 1.0));" in generated
+    True
+    >>> "normalization_abs_by_ray[master_idx] = sidecar_norm_err;" in generated
+    True
+    >>> "normal_observer_log_energy(" in generated
+    False
+    >>> "d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i]" in generated
     True
     """
     if "time_slot_manager" not in par.glb_extras_dict.get("BHaH_defines", {}):
@@ -154,7 +183,8 @@ def batch_integrator_numerical(
     @param[out] results_buffer Host array storing the final physical
                                intersections.
     @param[in] norm_abs_bin_path Optional output filename for the raw float64
-                                 normalization sidecar."""
+                                 absolute direct-scale-equivalent null-constraint
+                                 error sidecar."""
 
     cfunc_type = "void"
 
@@ -231,26 +261,26 @@ def batch_integrator_numerical(
     interpolation_integration_param_args = (
         "d_spatial_stencil_center_i0[current], "
         "d_spatial_stencil_center_i2[current], "
-        "d_integration_param_bundle[current], d_h[current], stage,"
-        if normalized_eom
-        else ""
+        + (
+            "d_integration_param_bundle[current], d_h[current], stage,"
+            if normalized_eom
+            else ""
+        )
     )
     interpolation_integration_param_args_next = (
         "d_spatial_stencil_center_i0[next], "
         "d_spatial_stencil_center_i2[next], "
-        "d_integration_param_bundle[next], d_h[next], stage,"
-        if normalized_eom
-        else ""
+        + (
+            "d_integration_param_bundle[next], d_h[next], stage,"
+            if normalized_eom
+            else ""
+        )
     )
-    interpolation_initial_integration_param_args = (
-        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
-        if normalized_eom
-        else ""
+    interpolation_initial_integration_param_args = "NULL, NULL, " + (
+        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
     )
-    interpolation_terminal_integration_param_args = (
-        "NULL, NULL, d_integration_param_bundle[0], d_h[0], 1,"
-        if normalized_eom
-        else ""
+    interpolation_terminal_integration_param_args = "NULL, NULL, " + (
+        "d_integration_param_bundle[0], d_h[0], 1," if normalized_eom else ""
     )
     initial_integration_param_setup = (
         """
@@ -294,33 +324,20 @@ def batch_integrator_numerical(
     rhs_integration_param_args_next = (
         "d_integration_param_bundle[next], d_h[next]," if normalized_eom else ""
     )
-    spatial_center_declarations = (
-        """
+    spatial_center_declarations = """
     // Trial-locked spatial stencil centers, one pair per double-buffered ray.
     int *d_spatial_stencil_center_i0[2];
     int *d_spatial_stencil_center_i2[2];
 """
-        if normalized_eom
-        else ""
-    )
-    spatial_center_allocations = (
-        f"""
+    spatial_center_allocations = f"""
         {malloc_device}(d_spatial_stencil_center_i0[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-0 trial centers.
         {malloc_device}(d_spatial_stencil_center_i2[s], sizeof(int) * BUNDLE_CAPACITY); // Allocate native dimension-2 trial centers.
 """
-        if normalized_eom
-        else ""
-    )
-    spatial_center_frees = (
-        f"""
+    spatial_center_frees = f"""
             {free_device}(d_spatial_stencil_center_i0[s]); // Purges native dimension-0 trial centers.
             {free_device}(d_spatial_stencil_center_i2[s]); // Purges native dimension-2 trial centers.
 """
-        if normalized_eom
-        else ""
-    )
-    trial_spatial_center_setup_current = (
-        r"""
+    trial_spatial_center_setup_current = r"""
             for (long int stencil_i = 0; stencil_i < active_chunks[current]; ++stencil_i) {
                 const REAL trial_cartesian[3] = {
                     (REAL)d_f_start_bundle[current][1 * BUNDLE_CAPACITY + stencil_i],
@@ -346,11 +363,7 @@ def batch_integrator_numerical(
                     selected_center_idx[2];
             } // END LOOP: for stencil_i over trial rays
 """
-        if normalized_eom
-        else ""
-    )
-    trial_spatial_center_setup_next = (
-        r"""
+    trial_spatial_center_setup_next = r"""
                 for (long int stencil_i = 0; stencil_i < active_chunks[next]; ++stencil_i) {
                     const REAL trial_cartesian[3] = {
                         (REAL)d_f_start_bundle[next][1 * BUNDLE_CAPACITY + stencil_i],
@@ -376,9 +389,6 @@ def batch_integrator_numerical(
                         selected_center_idx[2];
                 } // END LOOP: for stencil_i over trial rays
 """
-        if normalized_eom
-        else ""
-    )
     normalization_kernel_name = (
         "normalization_constraint_photon_normalized"
         if normalized_eom
@@ -386,6 +396,14 @@ def batch_integrator_numerical(
     )
     normalization_error_expr = (
         "fabs(d_norm_bundle[norm_i].C - 1.0)"
+        if normalized_eom
+        else "fabs(d_norm_bundle[norm_i].C)"
+    )
+    # Keep the terminal report in its existing convention. Only the optional
+    # per-ray .bin sidecar uses the direct-scale-equivalent normalized error.
+    normalization_sidecar_error_expr = (
+        "fabs(exp(2.0 * d_f_bundle[0][4 * BUNDLE_CAPACITY + norm_i]) * "
+        "(d_norm_bundle[norm_i].C - 1.0))"
         if normalized_eom
         else "fabs(d_norm_bundle[norm_i].C)"
     )
@@ -398,6 +416,85 @@ def batch_integrator_numerical(
                 // Finalize step: apply RKF45 error control and update the
                 // integration-parameter baseline and step size $h$.
                 rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_integration_param_bundle[next], d_retries[next], active_chunks[next], next);"""
+
+    accepted_metric_refresh_current = (
+        """
+            // Direct-EOM diagnostic refresh: evaluate g4DD at the finalized
+            // state while reusing the exact spatial centers selected for this
+            // RK trial and every substep.
+            numerical_interpolation(
+                commondata,
+                &numerical_params,
+                &spatial_context,
+                &numerical_window,
+                d_f_bundle[current],
+                d_spatial_stencil_center_i0[current],
+                d_spatial_stencil_center_i2[current],
+                d_metric_bundle[current],
+                NULL,
+                active_chunks[current],
+                current);
+"""
+        if not normalized_eom
+        else ""
+    )
+    accepted_metric_refresh_next = (
+        """
+                // Direct-EOM diagnostic refresh: evaluate g4DD at the finalized
+                // state while reusing the exact spatial centers selected for this
+                // RK trial and every substep.
+                numerical_interpolation(
+                    commondata,
+                    &numerical_params,
+                    &spatial_context,
+                    &numerical_window,
+                    d_f_bundle[next],
+                    d_spatial_stencil_center_i0[next],
+                    d_spatial_stencil_center_i2[next],
+                    d_metric_bundle[next],
+                    NULL,
+                    active_chunks[next],
+                    next);
+"""
+        if not normalized_eom
+        else ""
+    )
+    log_energy_evaluation_current = (
+        """
+            for (long int log_energy_i = 0;
+                 log_energy_i < active_chunks[current]; ++log_energy_i) {
+                d_log_energy_bundle[current][log_energy_i] =
+                    d_f_bundle[current][4 * BUNDLE_CAPACITY + log_energy_i];
+            } // END LOOP: copy normalized u into common log-energy bundle
+"""
+        if normalized_eom
+        else """
+            normal_observer_log_energy(
+                d_f_bundle[current],
+                d_metric_bundle[current],
+                d_log_energy_bundle[current],
+                active_chunks[current],
+                0);
+"""
+    )
+    log_energy_evaluation_next = (
+        """
+                for (long int log_energy_i = 0;
+                     log_energy_i < active_chunks[next]; ++log_energy_i) {
+                    d_log_energy_bundle[next][log_energy_i] =
+                        d_f_bundle[next][4 * BUNDLE_CAPACITY + log_energy_i];
+                } // END LOOP: copy normalized u into common log-energy bundle
+"""
+        if normalized_eom
+        else """
+                normal_observer_log_energy(
+                    d_f_bundle[next],
+                    d_metric_bundle[next],
+                    d_log_energy_bundle[next],
+                    active_chunks[next],
+                    0);
+"""
+    )
 
     def memcpy_cpu(dest: str, src: str, size: str) -> str:
         return f"memcpy({dest}, {src}, {size});"
@@ -498,6 +595,8 @@ def batch_integrator_numerical(
     double *d_f_pre_prev_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
+    // Scratchpad carrying the common upper-only log-energy measure.
+    double *d_log_energy_bundle[2];
     // Scratchpad persisting the selected forty-component geometry bundle.
     double *d_rhs_geometry_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
@@ -551,6 +650,7 @@ def batch_integrator_numerical(
         {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
         {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
+        {malloc_device}(d_log_energy_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate common log-energy scratchpad.
         {malloc_device}(d_rhs_geometry_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate the geometry scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
@@ -575,12 +675,13 @@ def batch_integrator_numerical(
 
     // Scratchpad array holding the terminal normalization diagnostic outputs.
     normalization_constraint_t *d_norm_bundle = NULL;
-    // Host array storing one absolute normalization value per photon in master-ray order.
+    // Host array storing one absolute direct-scale-equivalent null-constraint
+    // error per photon in master-ray order.
     double *normalization_abs_by_ray = NULL;
 
     if (commondata->perform_normalization_check) {{
         {malloc_device}(d_norm_bundle, sizeof(normalization_constraint_t) * BUNDLE_CAPACITY); // Allocate terminal normalization scratchpad.
-        {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon normalization sidecar buffer.
+        {malloc_pinned}(normalization_abs_by_ray, sizeof(double) * num_rays); // Allocate per-photon direct-scale-equivalent normalization sidecar buffer.
         for (long int norm_init_i = 0; norm_init_i < num_rays; ++norm_init_i) {{
             normalization_abs_by_ray[norm_init_i] = NAN; // Marks photons whose terminal normalization was not evaluated.
         }} // END LOOP: for norm_init_i over num_rays
@@ -1084,10 +1185,12 @@ def batch_integrator_numerical(
             }} // END LOOP: for stage over 6
 
 {finalize_current}
+{accepted_metric_refresh_current}
+{log_energy_evaluation_current}
             attempted_rkf45_steps_since_print += active_chunks[current];
             // Event step: detect geometric events and record intersection coordinate
             // states on the active buffer.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_log_energy_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param_bundle[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 state vector components.
                 // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the active buffer.
@@ -1256,10 +1359,12 @@ def batch_integrator_numerical(
                 }} // END LOOP: for stage over 6
 
 {finalize_next}
+{accepted_metric_refresh_next}
+{log_energy_evaluation_next}
                 attempted_rkf45_steps_since_print += active_chunks[next];
                 // Event step: detect geometric events and record intersection
                 // coordinate states on the alternate buffer.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                event_detection_manager_kernel(commondata, d_f_bundle[next], d_log_energy_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param_bundle[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating CPU buffer copy of the 9 upcoming state vector components.
                     // CPU buffer copy: Retrieves updated coordinate states $f^\mu$ back to CPU RAM synchronously on the alternate buffer.
                     {memcpy_cpu("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]")}
@@ -1528,12 +1633,13 @@ def batch_integrator_numerical(
                     for (long int norm_i = 0; norm_i < chunk_size; ++norm_i) {{
                         const long int master_idx = chunk_buffer[0][norm_i];
                         const double current_norm_err = {normalization_error_expr};
-                        if (!isfinite(current_norm_err)) {{
+                        const double sidecar_norm_err = {normalization_sidecar_error_expr};
+                        if (!isfinite(current_norm_err) || !isfinite(sidecar_norm_err)) {{
                             normalization_failure_mode = 3;
                             normalization_failure_ray = master_idx;
                             break;
-                        }} // END IF: current_norm_err is non-finite
-                        normalization_abs_by_ray[master_idx] = current_norm_err;
+                        }} // END IF: normalization diagnostic is non-finite
+                        normalization_abs_by_ray[master_idx] = sidecar_norm_err;
                         if (current_norm_err > max_err_norm) {{
                             max_err_norm = current_norm_err;
                             worst_ray_norm = master_idx;
@@ -1583,7 +1689,8 @@ def batch_integrator_numerical(
         }} // END IF: commondata->perform_normalization_check to evaluate terminal normalization
 
         // Final output step: process escaped photons intersecting the celestial
-        // sphere $r > r_{{escape}}$ and optionally write the normalization sidecar.
+        // sphere $r > r_{{escape}}$ and optionally write the direct-scale-equivalent
+        // normalization-error sidecar.
         if (commondata->perform_normalization_check &&
             normalization_abs_by_ray != NULL &&
             norm_abs_bin_path != NULL &&
@@ -1623,6 +1730,7 @@ def batch_integrator_numerical(
             {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
             {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
+            {free_device}(d_log_energy_bundle[s]); // Purges the common log-energy scratchpad.
             {free_device}(d_rhs_geometry_bundle[s]); // Purges the geometry scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.

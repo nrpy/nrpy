@@ -168,22 +168,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         commondata=True,
         add_to_parfile=True,
     )
-    # Step 2: Select emitted C expressions for the two state conventions.
-    if normalized_eom:
-        # Normalized state stores affine parameter in f[0].  Its origin is
-        # always lambda=0; coordinate time remains the integration parameter.
-        initial_state_time = "0.0"
-        initial_integration_value = "commondata.t_start"
-        coordinate_time_expression = "*integration_param"
-        trajectory_lambda_expression = "f[0]"
-        trajectory_time_expression = "*integration_param"
-        interpolation_stage_arguments = (
-            "&trial_spatial_center.i0, &trial_spatial_center.i2, "
-            "integration_param, h, stage,"
-        )
-        interpolation_initial_arguments = "NULL, NULL, integration_param, h, 1,"
-        rhs_integration_arguments = "integration_param, h,"
-        trial_spatial_center_setup = r"""
+    trial_spatial_center_setup = r"""
     NumericalSpatialStencilCenter trial_spatial_center;
     const REAL trial_cartesian[3] = {
         (REAL)f_start[1], (REAL)f_start[2], (REAL)f_start[3]};
@@ -201,6 +186,22 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     trial_spatial_center.i0 = trial_selected_center_idx[0];
     trial_spatial_center.i2 = trial_selected_center_idx[2];
 """
+
+    # Step 2: Select emitted C expressions for the two state conventions.
+    if normalized_eom:
+        # Normalized state stores affine parameter in f[0].  Its origin is
+        # always lambda=0; coordinate time remains the integration parameter.
+        initial_state_time = "0.0"
+        initial_integration_value = "commondata.t_start"
+        coordinate_time_expression = "*integration_param"
+        trajectory_lambda_expression = "f[0]"
+        trajectory_time_expression = "*integration_param"
+        interpolation_stage_arguments = (
+            "&trial_spatial_center.i0, &trial_spatial_center.i2, "
+            "integration_param, h, stage,"
+        )
+        interpolation_initial_arguments = "NULL, NULL, integration_param, h, 1,"
+        rhs_integration_arguments = "integration_param, h,"
         momentum_conversion_call = (
             "photon_momentum_to_normalized_kernel("
             "f, metric, chunk_size, stream_idx);"
@@ -215,13 +216,28 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
         coordinate_time_expression = "f[0]"
         trajectory_lambda_expression = "*integration_param"
         trajectory_time_expression = "f[0]"
-        interpolation_stage_arguments = ""
-        interpolation_initial_arguments = ""
+        interpolation_stage_arguments = (
+            "&trial_spatial_center.i0, &trial_spatial_center.i2,"
+        )
+        interpolation_initial_arguments = "NULL, NULL,"
         rhs_integration_arguments = ""
-        trial_spatial_center_setup = ""
         momentum_conversion_call = ""
         normalization_kernel_name = "normalization_constraint_photon"
         normalization_diagnostic_expression = "normalization.C"
+
+    accepted_metric_interpolation_arguments = (
+        interpolation_initial_arguments
+        if normalized_eom
+        else "&trial_spatial_center.i0, &trial_spatial_center.i2,"
+    )
+    log_energy_evaluation = (
+        "const double log_energy_measure = f[4];"
+        if normalized_eom
+        else "double log_energy_bundle[1];\n"
+        "      normal_observer_log_energy(\n"
+        "          f, metric, log_energy_bundle, chunk_size, stream_idx);\n"
+        "      const double log_energy_measure = log_energy_bundle[0];"
+    )
 
     stage_normalization_diagnostic_expression = (
         normalization_diagnostic_expression.replace(
@@ -245,7 +261,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     "Pi_1",
     "Pi_2",
     "Pi_3",
-    "L_Euler"
+    "L_normal"
 """
             if normalized_eom
             else r"""
@@ -257,7 +273,7 @@ def single_integrator_numerical(  # pylint: disable=invalid-name,too-many-locals
     "p^1",
     "p^2",
     "p^3",
-    "L_Euler"
+    "L_normal"
 """
         )
         trial_debug_declarations = r"""
@@ -490,9 +506,9 @@ trial and ``rkf45_stages.txt`` records all six interpolation/RHS stages of every
 trial in execution order.
 
 For normalized equations, the state layout is
-``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_Euler)``: ``f[0]`` is lambda and
+``(lambda, x, y, z, u, Pi_1, Pi_2, Pi_3, L_normal)``: ``f[0]`` is lambda and
 the RKF45 integration parameter is coordinate time. For non-normalized
-equations, the state layout is ``(t, x, y, z, p_0, p_1, p_2, p_3, L_Euler)``:
+equations, the state layout is ``(t, x, y, z, p_0, p_1, p_2, p_3, L_normal)``:
 the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
 
 @param argc Number of command-line arguments.
@@ -961,7 +977,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           &spatial_context,
           &numerical_window,
           f,
-          {interpolation_initial_arguments}
+          {accepted_metric_interpolation_arguments}
           metric,
           NULL,
           chunk_size,
@@ -977,6 +993,13 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
           goto cleanup;
         }} // END IF: accepted-state metric component invalid
       }} // END LOOP: for component over accepted-state metric
+
+      {log_energy_evaluation}
+      if (!isfinite(log_energy_measure)) {{
+        fprintf(stderr, "ERROR: accepted-state log-energy measure was not finite.\n");
+        exit_status = EXIT_FAILURE;
+        goto cleanup;
+      }} // END IF: accepted-state log-energy measure invalid
 
       normalization_constraint_t normalization;
       {normalization_kernel_name}(
@@ -1012,8 +1035,7 @@ the RKF45 integration parameter is lambda and ``f[0]`` is coordinate time.
         break;
       }} // END IF: photon state crossed boundary
 
-      // f[4] is p^0 for direct evolution and the normalized log-energy measure otherwise.
-      if (fabs(f[4]) > commondata.evolution_measure_max) {{
+      if (log_energy_measure > commondata.evolution_measure_max) {{
         *status = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
         printf("Evolution measure exceeded %.15e.\n", commondata.evolution_measure_max);
         break;

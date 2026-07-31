@@ -42,6 +42,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     calculate_ode_rhs_kernel,
     event_detection_manager_kernel,
     main_single,
+    normal_observer_log_energy,
     normalization_constraint_photon_normalized,
     photon_momentum_to_normalized_kernel,
     rkf45_finalize_and_control_kernel,
@@ -258,10 +259,7 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
         "--evolution-measure-max",
         type=float,
         metavar="VALUE",
-        help=(
-            "Maximum evolution measure: abs(p^0) in direct mode, or "
-            "abs(ln(abs(alpha*p^0))) in normalized mode."
-        ),
+        help="Upper limit on the common normal-observer log-energy measure ln(abs(alpha*p^0)).",
     )
     arg_parser.add_argument(
         "--rkf45-log-energy-tolerance",
@@ -467,13 +465,13 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
 
     # Step 5.a: single_integrator_numerical() registers the shared numerical
     # initializer, which pulls observer-ray C and q from geodesics.py.
+    u_expr, PiD_exprs = geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
     if normalized_eom:
-        u_expr, PiD_exprs = (
-            geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
-        )
         photon_momentum_to_normalized_kernel.photon_momentum_to_normalized_kernel(
             u_expr, PiD_exprs
         )
+    else:
+        normal_observer_log_energy.normal_observer_log_energy(u_expr)
 
     # Step 5.b: Register normalization diagnostics.
     if normalized_eom:
@@ -604,9 +602,7 @@ python3 photon_single_geodesic_integrator_numerical.py --bin-name two_blackholes
     par.adjust_CodeParam_default("initial_h", -0.05 if normalized_eom else 0.05)
 
     # Step 6.e: Set single-integrator and numerical-limit defaults.
-    par.adjust_CodeParam_default(
-        "evolution_measure_max", 3.0 if normalized_eom else 1000.0
-    )
+    par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_normalization_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
 

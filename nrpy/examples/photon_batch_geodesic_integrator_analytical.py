@@ -48,6 +48,7 @@ from nrpy.infrastructures.BHaH.general_relativity.geodesics.photon import (
     handle_terminal_plane_intersection,
     interpolation_kernel,
     main_batch,
+    normal_observer_log_energy,
     rkf45_finalize_and_control_kernel,
     rkf45_stage_update,
     set_initial_conditions_kernel,
@@ -215,7 +216,7 @@ if __name__ == "__main__":
         "--evolution-measure-max",
         type=float,
         metavar="VALUE",
-        help="Maximum absolute p^0 evolution measure in direct mode.",
+        help="Upper limit on the common normal-observer log-energy measure ln(abs(alpha*p^0)).",
     )
     if len(sys.argv) == 1:
         parser.print_help()
@@ -287,6 +288,9 @@ if __name__ == "__main__":
     set_initial_conditions_kernel.register_photon_batch_structs()
     set_initial_conditions_kernel.set_initial_conditions_kernel(normalized_eom=False)
 
+    u_expr, _ = geo.GeodesicEquations.photon_momentum_to_normalized_quantities()
+    normal_observer_log_energy.normal_observer_log_energy(u_expr)
+
     # Step 5.b: Register fundamental tensor and diagnostic kernels.
     g4DD_metric.g4DD_metric(metric_data.g4DD, SPACETIME, PARTICLE)
     connections.connections(geodesic_data.Gamma4UDD, SPACETIME, PARTICLE)
@@ -347,7 +351,7 @@ if __name__ == "__main__":
     par.adjust_CodeParam_default("a_spin", 0.9)
 
     # Step 6.b: Set batch-integrator and numerical-limit defaults.
-    par.adjust_CodeParam_default("evolution_measure_max", 1000.0)
+    par.adjust_CodeParam_default("evolution_measure_max", 3.0)
     par.adjust_CodeParam_default("perform_conservation_check", True)
     par.adjust_CodeParam_default("r_escape", args.escape_radius)
     par.adjust_CodeParam_default("slot_manager_delta_t", 100.0)

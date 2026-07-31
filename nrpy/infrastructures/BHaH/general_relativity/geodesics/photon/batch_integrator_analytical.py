@@ -181,7 +181,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     if parallelization == "cuda":
         results_memcpy = "cudaMemcpy(results_buffer, d_results_buffer, sizeof(blueprint_data_t) * num_rays, cudaMemcpyDeviceToHost);"
         calc_blueprint = "calculate_and_fill_blueprint_data_universal(&all_photons_host, num_rays, results_buffer, NULL, NULL, 0);"
-        set_initial_conditions_call = " set_initial_conditions_kernel(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad);"
+        set_initial_conditions_call = " set_initial_conditions_kernel(commondata, num_rays, &all_photons_host, observer_metric, observer_tetrad, 0);"
         stream_destroy = "cudaStreamDestroy(streams[s]); // Purges the hardware stream execution context."
         free_device = "BHAH_FREE_DEVICE"
         free_pinned = "BHAH_FREE_PINNED"
@@ -352,6 +352,8 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
     double *d_f_pre_prev_bundle[2];
     // Scratchpad persisting the symmetric metric tensor $g_{{\mu\nu}}$.
     double *d_metric_bundle[2];
+    // Scratchpad carrying the common upper-only log-energy measure $\ln|\alpha p^0|$.
+    double *d_log_energy_bundle[2];
     // Scratchpad persisting the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$.
     double *d_connection_bundle[2];
     // Derivative tensor storing $\dot{{f}}^\mu$ across all 6 intermediate RKF45 stages.
@@ -404,6 +406,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
         {malloc_device}(d_f_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-1}}$ scratchpad.
         {malloc_device}(d_f_pre_prev_bundle[s], sizeof(double) * 9 * BUNDLE_CAPACITY); // Allocate $f^\mu_{{n-2}}$ scratchpad.
         {malloc_device}(d_metric_bundle[s], sizeof(double) * 10 * BUNDLE_CAPACITY); // Allocate $g_{{\mu\nu}}$ scratchpad.
+        {malloc_device}(d_log_energy_bundle[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate common log-energy scratchpad.
         {malloc_device}(d_connection_bundle[s], sizeof(double) * 40 * BUNDLE_CAPACITY); // Allocate $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
         {malloc_device}(d_k_bundle[s], sizeof(double) * 6 * 9 * BUNDLE_CAPACITY); // Allocate derivative scratchpad.
         {malloc_device}(d_h[s], sizeof(double) * BUNDLE_CAPACITY); // Allocate $h$ scratchpad.
@@ -706,8 +709,12 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
             // Kernel Launch: Applies RKF45 error control to finalize the step-size $h$ and update the integration baseline.
             rkf45_finalize_and_control(commondata, d_f_bundle[current], d_f_start_bundle[current], d_k_bundle[current], d_h[current], d_status[current], d_integration_param[current], d_retries[current], active_chunks[current]{stream_arg_current});
-            // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the active stream.
-            event_detection_manager_kernel(commondata, d_f_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
+            // Kernel Launch: Refreshes the accepted-state metric before evaluating the common log-energy measure.
+            interpolation_kernel_{spacetime_name}(commondata, d_f_bundle[current], d_metric_bundle[current], NULL, active_chunks[current]{stream_arg_current});
+            // Kernel Launch: Computes the accepted-state normal-observer log-energy measure $\ln|\alpha p^0|$.
+            normal_observer_log_energy(d_f_bundle[current], d_metric_bundle[current], d_log_energy_bundle[current], active_chunks[current]{stream_arg_current});
+            // Kernel Launch: Detects geometric events and records intersection coordinates asynchronously on the active stream.
+            event_detection_manager_kernel(commondata, d_f_bundle[current], d_log_energy_bundle[current], d_f_prev_bundle[current], d_f_pre_prev_bundle[current], d_integration_param[current], d_integration_param_prev[current], d_integration_param_pre_prev[current], d_results_buffer, d_status[current], d_on_pos_non_terminal_plane_prev[current], d_on_pos_terminal_plane_prev[current], d_non_terminal_plane_event_found[current], d_terminal_plane_event_found[current], d_chunk_buffer[current], active_chunks[current]{stream_arg_current});
 
             for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 state vector components.
                 // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the active stream.
@@ -827,8 +834,12 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
 
                 // Kernel Launch: Applies RKF45 error control to finalize the step-size $h$ and update the upcoming integration baseline.
                 rkf45_finalize_and_control(commondata, d_f_bundle[next], d_f_start_bundle[next], d_k_bundle[next], d_h[next], d_status[next], d_integration_param[next], d_retries[next], active_chunks[next]{stream_arg_next});
-                // Kernel Launch: Detects geometric events and records intersection coordinate states asynchronously on the alternate stream.
-                event_detection_manager_kernel(commondata, d_f_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
+                // Kernel Launch: Refreshes the accepted-state metric before evaluating the common log-energy measure.
+                interpolation_kernel_{spacetime_name}(commondata, d_f_bundle[next], d_metric_bundle[next], NULL, active_chunks[next]{stream_arg_next});
+                // Kernel Launch: Computes the accepted-state normal-observer log-energy measure $\ln|\alpha p^0|$.
+                normal_observer_log_energy(d_f_bundle[next], d_metric_bundle[next], d_log_energy_bundle[next], active_chunks[next]{stream_arg_next});
+                // Kernel Launch: Detects geometric events and records intersection coordinates asynchronously on the alternate stream.
+                event_detection_manager_kernel(commondata, d_f_bundle[next], d_log_energy_bundle[next], d_f_prev_bundle[next], d_f_pre_prev_bundle[next], d_integration_param[next], d_integration_param_prev[next], d_integration_param_pre_prev[next], d_results_buffer, d_status[next], d_on_pos_non_terminal_plane_prev[next], d_on_pos_terminal_plane_prev[next], d_non_terminal_plane_event_found[next], d_terminal_plane_event_found[next], d_chunk_buffer[next], active_chunks[next]{stream_arg_next});
                 for (int c_k = 0; c_k < 9; ++c_k) {{  // Loop index $c_k$ orchestrating Device-to-Host transfer of the 9 upcoming state vector components.
                     // Device-to-Host transfer: Retrieves updated coordinate states $f^\mu$ back to CPU RAM asynchronously on the alternate stream.
                     {memcpy_async("f_bridge[next] + c_k * BUNDLE_CAPACITY", "d_f_bundle[next] + c_k * BUNDLE_CAPACITY", "sizeof(double) * active_chunks[next]", "cudaMemcpyDeviceToHost", "streams[next]")}
@@ -1075,6 +1086,7 @@ def batch_integrator_analytical(spacetime_name: str) -> None:
             {free_device}(d_f_prev_bundle[s]); // Purges the history state $f^\mu_{{n-1}}$ scratchpad.
             {free_device}(d_f_pre_prev_bundle[s]); // Purges the history state $f^\mu_{{n-2}}$ scratchpad.
             {free_device}(d_metric_bundle[s]); // Purges the symmetric metric tensor $g_{{\mu\nu}}$ scratchpad.
+            {free_device}(d_log_energy_bundle[s]); // Purges the common log-energy scratchpad.
             {free_device}(d_connection_bundle[s]); // Purges the Christoffel symbols $\Gamma^\alpha_{{\beta\gamma}}$ scratchpad.
             {free_device}(d_k_bundle[s]); // Purges the derivative tensor $\dot{{f}}^\mu$ scratchpad.
             {free_device}(d_h[s]); // Purges the active integration step sizing $h$ scratchpad.

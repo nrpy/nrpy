@@ -97,6 +97,34 @@ batch_structs_c_code = r"""
         double image_height_fraction; // Normalized height coordinate in [0,1].
     } __attribute__((packed)) blueprint_data_t; // END STRUCT: blueprint_data_t
 
+#if defined(__cplusplus)
+    static_assert(sizeof(blueprint_header_t) == 60, "blueprint_header_t size changed");
+    static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
+    static_assert(offsetof(blueprint_header_t, native_schema_version) == 8, "blueprint header version offset changed");
+    static_assert(offsetof(blueprint_header_t, header_size) == 12, "blueprint header size offset changed");
+    static_assert(offsetof(blueprint_header_t, record_size) == 16, "blueprint header record size offset changed");
+    static_assert(offsetof(blueprint_header_t, tx) == 20, "blueprint header tx offset changed");
+    static_assert(offsetof(blueprint_header_t, ty) == 24, "blueprint header ty offset changed");
+    static_assert(offsetof(blueprint_header_t, tiles_w) == 28, "blueprint header tiles_w offset changed");
+    static_assert(offsetof(blueprint_header_t, tiles_h) == 32, "blueprint header tiles_h offset changed");
+    static_assert(offsetof(blueprint_header_t, record_count) == 36, "blueprint header count offset changed");
+    static_assert(offsetof(blueprint_header_t, alpha_w) == 44, "blueprint alpha_w offset changed");
+    static_assert(offsetof(blueprint_header_t, alpha_h) == 52, "blueprint alpha_h offset changed");
+    static_assert(sizeof(blueprint_data_t) == 100, "blueprint_data_t size changed");
+    static_assert(offsetof(blueprint_data_t, termination_type) == 0, "blueprint termination offset changed");
+    static_assert(offsetof(blueprint_data_t, y_nt) == 4, "blueprint y_nt offset changed");
+    static_assert(offsetof(blueprint_data_t, z_nt) == 12, "blueprint z_nt offset changed");
+    static_assert(offsetof(blueprint_data_t, y_t) == 20, "blueprint y_t offset changed");
+    static_assert(offsetof(blueprint_data_t, z_t) == 28, "blueprint z_t offset changed");
+    static_assert(offsetof(blueprint_data_t, final_theta) == 36, "blueprint final_theta offset changed");
+    static_assert(offsetof(blueprint_data_t, final_phi) == 44, "blueprint final_phi offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_plane_lambda) == 52, "blueprint non_terminal_plane_lambda offset changed");
+    static_assert(offsetof(blueprint_data_t, non_terminal_plane_t) == 60, "blueprint non_terminal_plane_t offset changed");
+    static_assert(offsetof(blueprint_data_t, L_f) == 68, "blueprint L_f offset changed");
+    static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
+    static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
+    static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
+#else
     _Static_assert(sizeof(blueprint_header_t) == 60, "blueprint_header_t size changed");
     _Static_assert(offsetof(blueprint_header_t, magic) == 0, "blueprint header magic offset changed");
     _Static_assert(offsetof(blueprint_header_t, native_schema_version) == 8, "blueprint header version offset changed");
@@ -123,6 +151,7 @@ batch_structs_c_code = r"""
     _Static_assert(offsetof(blueprint_data_t, t_f) == 76, "blueprint t_f offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_width_fraction) == 84, "blueprint width fraction offset changed");
     _Static_assert(offsetof(blueprint_data_t, image_height_fraction) == 92, "blueprint height fraction offset changed");
+#endif
 
     // ==========================================
     // Flattened SoA Struct (Master Storage)
@@ -515,6 +544,7 @@ __OBSERVER_RAY_MATH__
         upper_bound="num_rays",
         increment="BUNDLE_CAPACITY",
         pragma="",
+        idx_type="long int",
         loop_body=f"""
         const long int chunk_size = NRPYMIN(num_rays - start_idx, BUNDLE_CAPACITY);
         {launch_code}

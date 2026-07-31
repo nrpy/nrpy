@@ -151,6 +151,7 @@ conserved-quantity diagnostics.
     double *h = NULL;
     int *rejection_retries = NULL;
     termination_type_t *status = NULL;
+    double *log_energy_bundle = NULL;
 
     BHAH_MALLOC(f, 9 * sizeof(double));
     BHAH_MALLOC(f_base, 9 * sizeof(double));
@@ -162,10 +163,12 @@ conserved-quantity diagnostics.
     BHAH_MALLOC(h, sizeof(double));
     BHAH_MALLOC(rejection_retries, sizeof(int));
     BHAH_MALLOC(status, sizeof(termination_type_t));
+    BHAH_MALLOC(log_energy_bundle, sizeof(double));
 
     if (f == NULL || f_base == NULL || f_temp == NULL || metric == NULL ||
         connection == NULL || k_bundle == NULL || integration_param == NULL ||
-        h == NULL || rejection_retries == NULL || status == NULL) {{
+        h == NULL || rejection_retries == NULL || status == NULL ||
+        log_energy_bundle == NULL) {{
       fprintf(stderr, "Error: failed to allocate photon state buffers.\n");
       exit_status = EXIT_FAILURE;
       goto cleanup;
@@ -273,6 +276,19 @@ conserved-quantity diagnostics.
       );
 
       if (*rejection_retries == 0) {{
+        interpolation_kernel_{spacetime}(
+          &commondata, f, metric, NULL, chunk_size, stream_idx
+        );
+        normal_observer_log_energy(
+          f, metric, log_energy_bundle, chunk_size, stream_idx
+        );
+        const double log_energy_measure = log_energy_bundle[0];
+        if (!isfinite(log_energy_measure)) {{
+          fprintf(stderr, "ERROR: accepted-state log-energy measure was not finite.\n");
+          exit_status = EXIT_FAILURE;
+          goto cleanup;
+        }} // END IF: accepted-state log-energy measure invalid
+
         fprintf(
           fp,
           "%.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e %.15e\n",
@@ -288,6 +304,12 @@ conserved-quantity diagnostics.
           f[8]
         );
         steps++;
+
+        if (log_energy_measure > commondata.evolution_measure_max) {{
+          *status = STOP_CONDITION_EVOLUTION_MEASURE_EXCEEDED;
+          printf("Evolution measure exceeded numerical limit.\n");
+          break;
+        }} // END IF: evolution measure exceeded limit
       }} // END IF: accepted step written
 
       const double r2 = f[1] * f[1] + f[2] * f[2] + f[3] * f[3];
@@ -295,11 +317,6 @@ conserved-quantity diagnostics.
         printf("Particle escaped to r > %.2f.\n", commondata.r_escape);
         break;
       }} // END IF: particle crossed the escape radius
-
-      if (fabs(f[4]) > commondata.evolution_measure_max) {{
-        printf("Evolution measure exceeded numerical limit.\n");
-        break;
-      }} // END IF: evolution measure exceeded limit
 
       if (*status == FAILURE_RKF45_REJECTION_LIMIT) {{
         printf(
@@ -352,6 +369,7 @@ conserved-quantity diagnostics.
     BHAH_FREE(h);
     BHAH_FREE(rejection_retries);
     BHAH_FREE(status);
+    BHAH_FREE(log_energy_bundle);
 
     return exit_status;
     """

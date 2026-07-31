@@ -1,6 +1,6 @@
 # Geodesics And Raytracing Runtime
 
-> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed · Last reconciled: 06-29-2026
+> BHaH runtime pieces for standalone geodesics and evolution-time raytracing export. · Status: confirmed · Last reconciled: 07-30-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -39,9 +39,11 @@ batch call. It uses that tetrad for every ray in the call, writes complete
 contravariant `p^mu`, and only then performs any requested normalized-variable
 conversion. The event-coordinate-independent plane bases serve event-coordinate
 diagnostics; they are not the metric tetrad used to initialize momentum.
+The generated ray construction sets the initial normal-observer photon energy
+to `E_obs = 1` before any normalized-variable conversion.
 
 Claim evidence:
-- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal observer tetrad per batch call, writes complete contravariant momentum, and performs normalized-variable conversion afterward when requested.
+- Claim: `set_initial_conditions_kernel` constructs one validated metric-orthonormal observer tetrad per batch call, initializes unit normal-observer energy `E_obs=1`, writes complete contravariant momentum, and performs normalized-variable conversion afterward when requested.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py` — observer initialization
 - Corroboration: `nrpy/examples/photon_batch_geodesic_integrator_numerical.py` — shared observer initialization arguments
@@ -54,10 +56,17 @@ Structure-of-Arrays photon state, history, step-size, status, event-lock, and
 result buffers, sets up CUDA streams or CPU equivalents, and uses the
 TimeSlotManager to process active rays by coordinate-time slots. The split
 pipeline stages exchange flat bundles for state, metric, connection, derivative
-stages, affine parameter, retries, and termination state.
+stages, affine parameter, retries, and termination state. After an accepted RKF45
+step, direct mode refreshes the metric at the accepted state using the same
+trial-locked spatial stencil centers used by the RK stages. The integrator then
+fills a common per-ray log-energy bundle: normalized mode copies `u`, while
+direct mode computes `ln|alpha p^0|` with `normal_observer_log_energy`. The event
+manager applies the shared upper-only `evolution_measure_max` cutoff. Its
+normalization sidecar stores `|C_direct|` for direct EOM and
+`|exp(2u)(C_normalized - 1)|` for normalized EOM.
 
 Claim evidence:
-- Claim: `batch_integrator_numerical` orchestrates host-side photon batches, manages flat state/history/geometry/result bundles, and processes active rays through coordinate-time slots.
+- Claim: `batch_integrator_numerical` orchestrates host-side photon batches, manages flat state/history/geometry/result bundles, reuses trial-locked spatial centers for accepted-state metric refresh, computes the common log-energy bundle, and processes active rays through coordinate-time slots.
 - Role: generated-output boundary
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py` — `batch_integrator_numerical`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/time_slot_manager_helpers.py` — `TimeSlotManager`
@@ -72,27 +81,30 @@ nine photon RHS expressions, and writes the selected RK stage into
 `d_k_bundle`. `rkf45_stage_update` reads the base state, stage derivatives, and
 per-ray step size, applies the RKF45 Butcher coefficients for stages 1-5, skips
 stage 6, and writes the temporary state for the next stage. The finalization and
-control kernel, event manager, and time-slot helpers then decide which rays
-remain active and which step sizes advance.
+control kernel commits accepted states; the accepted-state metric refresh,
+log-energy calculation, event manager, and time-slot helpers then decide which
+rays remain active and which step sizes advance.
 
 Claim evidence:
-- Claim: The split RKF45 pipeline writes ten metric and forty Christoffel components, evaluates the selected photon RHS at each stage, skips the stage-6 intermediate update, and delegates acceptance/control and termination decisions to the remaining kernels.
+- Claim: The split RKF45 pipeline writes ten metric and forty Christoffel components, evaluates the selected photon RHS at each stage, skips the stage-6 intermediate update, commits accepted states, and delegates downstream metric, energy, control, and termination decisions to the remaining kernels.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py`, `calculate_ode_rhs_kernel.py`, and `rkf45_stage_update.py` — generated kernel interfaces
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/rkf45_finalize_and_control_kernel.py` — acceptance/control
 - Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
 - Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=not-applicable; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=not-applicable; date=07-28-2026`
 
-`event_detection_manager_kernel` owns geometric termination and result capture.
-It rejects rays whose temporal momentum exceeds `p_t_max`, marks rays outside
-`r_escape`, checks crossings of the independent nonterminal and terminal planes
+`event_detection_manager_kernel` owns energy/geometric termination and result
+capture. It first consumes the common per-ray log-energy bundle and marks rays
+whose measure exceeds the upper-only `evolution_measure_max` threshold; direct
+mode's bundle value is `ln|alpha p^0|`, while normalized mode's value is `u`.
+It then marks rays outside `r_escape`, checks crossings of the independent nonterminal and terminal planes
 using current and two historical states, calls `find_event_time_and_state` to
 reconstruct the crossing, delegates physical coordinate extraction to
 `handle_non_terminal_plane_intersection` or `handle_terminal_plane_intersection`,
 and shifts the state history only for rays that remain active.
 
 Claim evidence:
-- Claim: `event_detection_manager_kernel` owns photon termination and result capture for momentum limits, escape radius, independent plane crossings, event-state reconstruction, and active-ray history shifts.
+- Claim: `event_detection_manager_kernel` owns photon termination and result capture for the common upper-only log-energy limit, escape radius, independent plane crossings, event-state reconstruction, and active-ray history shifts.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/event_detection_manager_kernel.py` — `event_detection_manager_kernel`
 - Corroboration: `nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/find_event_time_and_state.py` — event reconstruction
@@ -148,9 +160,14 @@ user supplies only `t_numerical_end`. The nominal `dt_numerical_spacetime_data`
 describes approximate evolution spacing and is used only when synthetic
 stencil edge times are required; stored output times may be nearby, nonuniform
 values.
+Callers may supply trial-locked native spatial-stencil centers; when provided,
+the wrapper reuses those center indices for every temporal-stencil payload and
+endpoint refresh. Normalized-EOM calls also provide the integration parameter,
+trial step, and RK stage so interpolated geometry uses the RK stage coordinate
+time; direct-EOM calls continue to read coordinate time from the state.
 
 Claim evidence:
-- Claim: Numerical interpolation uses authoritative combined-container slice times, preserves the full logical grid including ghost zones, and uses nominal spacing only for approximate synthetic temporal-stencil edge times.
+- Claim: Numerical interpolation uses authoritative combined-container slice times, preserves the full logical grid including ghost zones, reuses caller-supplied trial-locked spatial centers, supplies RK stage coordinate time for normalized EOM, and uses nominal spacing only for approximate synthetic temporal-stencil edge times.
 - Role: public/scientific contract
 - Deciding authority: `nrpy/infrastructures/BHaH/general_relativity/geodesics/interpolation/time_window_manager_numerical.py` — slice-table loading and stencil construction
 - Corroboration: `nrpy/infrastructures/BHaH/diagnostics/combine_raytracing_time_slices.py` — combined layout and metadata
@@ -218,6 +235,11 @@ Claim evidence:
 
 - [main_batch.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/main_batch.py) - `main`
 - [batch_integrator_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_numerical.py) - `batch_integrator_numerical`
+- [batch_integrator_analytical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/batch_integrator_analytical.py) - `batch_integrator_analytical`
+- [single_integrator_analytical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_analytical.py) - `single_integrator_analytical`
+- [single_integrator_numerical.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/single_integrator_numerical.py) - `single_integrator_numerical`
+- [normal_observer_log_energy.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/normal_observer_log_energy.py) - `normal_observer_log_energy`
+- [set_initial_conditions_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/set_initial_conditions_kernel.py) - `set_initial_conditions_kernel`
 - [time_slot_manager_helpers.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/time_slot_manager_helpers.py) - `time_slot_manager_helpers`, `TimeSlotManager`
 - [interpolation_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/interpolation_kernel.py) - `interpolation_kernel`
 - [calculate_ode_rhs_kernel.py](../../../nrpy/infrastructures/BHaH/general_relativity/geodesics/photon/calculate_ode_rhs_kernel.py) - `calculate_ode_rhs_kernel`

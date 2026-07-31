@@ -20,6 +20,7 @@ def loop1D(
     upper_bound: str = "N",
     increment: str = "1",
     pragma: str = "#pragma omp parallel for",
+    idx_type: str = "int",
 ) -> Tuple[str, str]:
     """
     Generate a one-dimensional loop in C.
@@ -29,6 +30,7 @@ def loop1D(
     :param upper_bound: The upper bound on the index variable.
     :param increment: The increment for the index variable.
     :param pragma: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
+    :param idx_type: The C type of the loop index.
 
     :raises ValueError: If any argument has a type other than string, an error is thrown.
 
@@ -48,18 +50,23 @@ def loop1D(
     >>> print(header)
     for (int i = 0; i < N; i += 2) {
     <BLANKLINE>
+
+    >>> header, _ = loop1D(pragma='', idx_type='long int')
+    >>> print(header)
+    for (long int i = 0; i < N; i++) {
+    <BLANKLINE>
     """
     # If some argument has a different type other than string, then throw an error
     if any(
         not isinstance(i, str)
-        for i in (idx_var, lower_bound, upper_bound, increment, pragma)
+        for i in (idx_var, lower_bound, upper_bound, increment, pragma, idx_type)
     ):
         raise ValueError("all parameters must have type string.")
     # Generate header and footer for a one-dimensional loop with optional parallelization using OpenMP
     pragma = pragma + "\n" if pragma else ""
     increment = " += " + increment if increment != "1" else "++"
-    header = "for (int {i0} = {i1}; {i0} < {i2}; {i0}{i3})".format(
-        i0=idx_var, i1=lower_bound, i2=upper_bound, i3=increment
+    header = "for ({i_type} {i0} = {i1}; {i0} < {i2}; {i0}{i3})".format(
+        i_type=idx_type, i0=idx_var, i1=lower_bound, i2=upper_bound, i3=increment
     )
     footer = (
         "} // END LOOP: " + f"for {idx_var} over [{lower_bound}, {upper_bound})" + "\n"
@@ -75,6 +82,7 @@ def loop(
     pragma: Union[str, List[str]],
     loop_body: str = "",
     tile_size: Union[str, List[str]] = "",
+    idx_type: Union[str, List[str]] = "int",
 ) -> Union[Tuple[str, str], str]:
     """
     Generate a nested loop of arbitrary dimension in C.
@@ -86,6 +94,7 @@ def loop(
     :param pragma: The OpenMP pragma (https://en.wikipedia.org/wiki/OpenMP).
     :param loop_body: The body of the loop.
     :param tile_size: The tile size for cache blocking.
+    :param idx_type: The C type of each loop index.
 
     :raises ValueError: If all list parameters do not have the same length, an error is thrown.
 
@@ -127,10 +136,21 @@ def loop(
         if tile_size == ""
         else [tile_size] if isinstance(tile_size, str) else tile_size
     )
+    idx_type = [idx_type] if isinstance(idx_type, str) else idx_type
 
-    if len(set(map(len, [idx_var, lower_bound, upper_bound, increment, pragma]))) != 1:
+    if (
+        len(
+            set(
+                map(
+                    len,
+                    [idx_var, lower_bound, upper_bound, increment, pragma, idx_type],
+                )
+            )
+        )
+        != 1
+    ):
         raise ValueError(
-            f"All list parameters must have the same length. Found lengths: idx_var[{len(idx_var)}], lower_bound[{len(lower_bound)}], upper_bound[{len(upper_bound)}], increment[{len(increment)}], pragma[{len(pragma)}]."
+            f"All list parameters must have the same length. Found lengths: idx_var[{len(idx_var)}], lower_bound[{len(lower_bound)}], upper_bound[{len(upper_bound)}], increment[{len(increment)}], pragma[{len(pragma)}], idx_type[{len(idx_type)}]."
         )
 
     headers: List[str] = []
@@ -143,6 +163,7 @@ def loop(
                 upper_bound[i],
                 tile_size[i],
                 "",
+                idx_type=idx_type[i],
             )
             header, footer = loop1D(
                 var,
@@ -150,6 +171,7 @@ def loop(
                 f"NRPYMIN({upper_bound[i]}, {var}B + {tile_size[i]})",
                 increment[i],
                 pragma[i],
+                idx_type=idx_type[i],
             )
             headers.insert(i, ext_header)
             footers.insert(i, ext_footer)
@@ -160,6 +182,7 @@ def loop(
                 upper_bound[i],
                 increment[i],
                 pragma[i],
+                idx_type=idx_type[i],
             )
         headers.append(header)
         footers.append(footer)
