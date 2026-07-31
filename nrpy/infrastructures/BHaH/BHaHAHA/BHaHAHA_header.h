@@ -244,6 +244,10 @@ typedef struct {
   REAL spin_chi_x_spectre;
   REAL spin_chi_y_spectre;
   REAL spin_chi_z_spectre;
+  // Direct Gram-matrix correction of the independently Kerr-normalized AKV modes.
+  REAL spin_chi_x_gram_matrix;
+  REAL spin_chi_y_gram_matrix;
+  REAL spin_chi_z_gram_matrix;
 
 } bhahaha_diagnostics_struct;
 
@@ -251,6 +255,9 @@ static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct 
   diags->spin_chi_x_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_y_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_z_spectre = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_x_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
 } // END FUNCTION: bah_initialize_diagnostics_struct
 
 //==================

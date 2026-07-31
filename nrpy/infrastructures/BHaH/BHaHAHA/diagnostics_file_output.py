@@ -108,6 +108,9 @@ Operations performed:
     fprintf(fileptr, "# column 22 = Dimensionless spin x-component (based on spin function Omega)\n");
     fprintf(fileptr, "# column 23 = Dimensionless spin y-component (based on spin function Omega)\n");
     fprintf(fileptr, "# column 24 = Dimensionless spin z-component (based on spin function Omega)\n");
+    fprintf(fileptr, "# column 25 = Dimensionless spin x-component (direct Gram-matrix AKV correction)\n");
+    fprintf(fileptr, "# column 26 = Dimensionless spin y-component (direct Gram-matrix AKV correction)\n");
+    fprintf(fileptr, "# column 27 = Dimensionless spin z-component (direct Gram-matrix AKV correction)\n");
     fflush(fileptr);
   } // END IF: file size zero -> need to write header
 
@@ -124,12 +127,15 @@ Operations performed:
   const REAL spin_chi_x_spectre = (diags->spin_chi_x_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_x_spectre : NAN;
   const REAL spin_chi_y_spectre = (diags->spin_chi_y_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_y_spectre : NAN;
   const REAL spin_chi_z_spectre = (diags->spin_chi_z_spectre != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_z_spectre : NAN;
+  const REAL spin_chi_x_gram_matrix = (diags->spin_chi_x_gram_matrix != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_x_gram_matrix : NAN;
+  const REAL spin_chi_y_gram_matrix = (diags->spin_chi_y_gram_matrix != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_y_gram_matrix : NAN;
+  const REAL spin_chi_z_gram_matrix = (diags->spin_chi_z_gram_matrix != BHAHAHA_DIAGNOSTIC_UNAVAILABLE) ? diags->spin_chi_z_gram_matrix : NAN;
 
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
           "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
@@ -153,7 +159,10 @@ Operations performed:
           a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
           spin_chi_x_spectre,                                // (22) Dimensionless spin x (Omega)
           spin_chi_y_spectre,                                // (23) Dimensionless spin y (Omega)
-          spin_chi_z_spectre                                 // (24) Dimensionless spin z (Omega)
+          spin_chi_z_spectre,                                // (24) Dimensionless spin z (Omega)
+          spin_chi_x_gram_matrix,                             // (25) Dimensionless spin x (Gram matrix)
+          spin_chi_y_gram_matrix,                             // (26) Dimensionless spin y (Gram matrix)
+          spin_chi_z_gram_matrix                              // (27) Dimensionless spin z (Gram matrix)
   );
 
   fflush(fileptr);
