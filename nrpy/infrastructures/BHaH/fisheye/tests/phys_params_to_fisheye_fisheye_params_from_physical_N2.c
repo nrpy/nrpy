@@ -195,7 +195,7 @@ int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata
     x[2 * i + 1] = (REAL)0.5 * w_trans[i];
   } // END LOOP: for i over initial Newton guess
 
-  const REAL tol = (REAL)1e-12;
+  const REAL tol = (REAL)1e-11;
   const int max_iter = 80;
   const REAL eps = (REAL)1e-6;
 
@@ -366,7 +366,7 @@ static int write_fisheye_grid_txt(const char *fname) {
     x[2 * i + 1] = (REAL)0.5 * w_trans[i];
   } // END LOOP: for i over standalone initial Newton guess
   REAL c = (REAL)1.0;
-  const REAL tol = (REAL)1e-12;
+  const REAL tol = (REAL)1e-11;
   const int max_iter = 60;
 
   int converged = 0;
