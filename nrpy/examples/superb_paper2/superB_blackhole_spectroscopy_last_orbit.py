@@ -106,7 +106,7 @@ enable_fd_functions = True
 outer_bcs_type = "radiation"
 # Number of chares, Nchare0, Nchare1, and Nchare2, in each direction,
 # should be chosen such that Nxx0/Nchare0, Nxx1/Nchare1, Nxx2/Nchare2 are integers greater than NGHOSTS,
-# NGHOSTS is fd_order/2
+# NGHOSTS is fd_order/2 + 1 because upwinding requires one additional ghost zone
 par.adjust_CodeParam_default("Nchare0", 12)
 par.adjust_CodeParam_default("Nchare1", 12)
 par.adjust_CodeParam_default("Nchare2", 12)
@@ -305,20 +305,23 @@ superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
 
 rhs_string = ""
 if enable_SSL:
-    rhs_string += """
+    rhs_string += r"""
 // Set SSL strength (SSL_Gaussian_prefactor):
-commondata->SSL_Gaussian_prefactor = commondata->SSL_h * exp(-commondata->time * commondata->time / (2 * commondata->SSL_sigma * commondata->SSL_sigma));
+commondata->SSL_Gaussian_prefactor =
+  commondata->SSL_h *
+  exp(-commondata->time * commondata->time /
+      (2 * commondata->SSL_sigma * commondata->SSL_sigma));
 """
 if separate_Ricci_and_BSSN_RHS:
     rhs_string += "Ricci_eval(params, rfmstruct, RK_INPUT_GFS, auxevol_gfs);"
 if outer_bcs_type == "radiation":
-    rhs_string += """
+    rhs_string += r"""
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);
 apply_bcs_outerradiation_and_inner(commondata, params, bcstruct, griddata[grid].xx,
-                                   gridfunctions_wavespeed,gridfunctions_f_infinity,
+                                   gridfunctions_wavespeed, gridfunctions_f_infinity,
                                    RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 else:
-    rhs_string += """
+    rhs_string += r"""
 rhs_eval(commondata, params, rfmstruct, auxevol_gfs, RK_INPUT_GFS, RK_OUTPUT_GFS);"""
 
 if not enable_rfm_precompute:
@@ -326,14 +329,14 @@ if not enable_rfm_precompute:
 
 post_rhs_bcs_str = ""
 if outer_bcs_type != "radiation":
-    post_rhs_bcs_str += """
+    post_rhs_bcs_str += r"""
 apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);"""
 
 superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+    post_rhs_string="enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
@@ -444,9 +447,11 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
-    post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
-}\n"""
+    post_non_y_n_auxevol_mallocs = r"""for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
+  cahdprefactor_auxevol_gridfunction(
+      &commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,
+      griddata_chare[grid].gridfuncs.auxevol_gfs);
+"""
 
 timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(
     post_params_struct_set_to_default=(
