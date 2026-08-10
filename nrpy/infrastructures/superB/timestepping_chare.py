@@ -1349,7 +1349,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
       for (int which_srcpt = 0; which_srcpt < num_srcpts_tosend_each_chare[which_dst_chare]; which_srcpt++) {
         const int64_t globalidx3srcpt = globalidx3_srcpts_tosend[which_dst_chare][which_srcpt];
         int globali, globalj, globalk;
-        REVERSE_IDX3GENERAL_64(globalidx3srcpt, Nxx_plus_2NGHOSTS0_global, Nxx_plus_2NGHOSTS1_global, globali, globalj, globalk);
+        reverse_idx3general_64(globalidx3srcpt, Nxx_plus_2NGHOSTS0_global, Nxx_plus_2NGHOSTS1_global, &globali, &globalj, &globalk);
         const int locali = MAP_GLOBAL_TO_LOCAL_IDX0(thisIndex.x, globali, Nxx0);
         const int localj = MAP_GLOBAL_TO_LOCAL_IDX1(thisIndex.y, globalj, Nxx1);
         const int localk = MAP_GLOBAL_TO_LOCAL_IDX2(thisIndex.z, globalk, Nxx2);

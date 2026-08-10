@@ -43,15 +43,14 @@
     j = temp / (Ni); \
     i = temp % (Ni); \
 }
-#define REVERSE_IDX3GENERAL_64(index, Ni, Nj, i, j, k) \
-{ \
-    const int64_t idx64 = (index); \
-    const int64_t plane64 = (int64_t)(Ni) * (int64_t)(Nj); \
-    k = (int)(idx64 / plane64); \
-    const int64_t temp64 = idx64 % plane64; \
-    j = (int)(temp64 / (Ni)); \
-    i = (int)(temp64 % (Ni)); \
-}
+
+static inline void reverse_idx3general_64(const int64_t index, const int ni, const int nj, int *restrict i, int *restrict j, int *restrict k) {
+  const int64_t plane64 = (int64_t)ni * (int64_t)nj;
+  *k = (int)(index / plane64);
+  const int64_t temp64 = index % plane64;
+  *j = (int)(temp64 / ni);
+  *i = (int)(temp64 % ni);
+} // END FUNCTION: reverse_idx3general_64
 #define IDX4GENERAL(g, i, j, k, Ni, Nj, Nk) ((i) + Ni * ((j) + Nj * ((k) + Nk * (g))))
 #define MAP_LOCAL_TO_GLOBAL_IDX0(chareidx0, local_idx0, Nxx0chare) ((chareidx0 * Nxx0chare) + local_idx0)
 #define MAP_LOCAL_TO_GLOBAL_IDX1(chareidx1, local_idx1, Nxx1chare) ((chareidx1 * Nxx1chare) + local_idx1)
@@ -76,7 +75,7 @@ static inline int globalidx3pt_to_chareidx3(const int64_t globalidx3, const int 
                                             const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare, const int Nchare0,
                                             const int Nchare1, const int Nchare2) {
   int globali, globalj, globalk;
-  REVERSE_IDX3GENERAL_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  reverse_idx3general_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, &globali, &globalj, &globalk);
   const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
   const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
   const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
@@ -90,7 +89,7 @@ static inline int globalidx3pt_to_localidx3pt(const int64_t globalidx3, const in
                                               const int Nxx_plus_2NGHOSTS0_chare, const int Nxx_plus_2NGHOSTS1_chare,
                                               const int Nchare0, const int Nchare1, const int Nchare2) {
   int globali, globalj, globalk;
-  REVERSE_IDX3GENERAL_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, globali, globalj, globalk);
+  reverse_idx3general_64(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, &globali, &globalj, &globalk);
   const int ghost_offset = (Nxx_plus_2NGHOSTS0 - Nchare0 * Nxx0_chare) / 2;
   const int charei = global_idx_1d_to_chare_idx_1d(globali, Nxx0_chare, Nchare0, ghost_offset);
   const int charej = global_idx_1d_to_chare_idx_1d(globalj, Nxx1_chare, Nchare1, ghost_offset);
