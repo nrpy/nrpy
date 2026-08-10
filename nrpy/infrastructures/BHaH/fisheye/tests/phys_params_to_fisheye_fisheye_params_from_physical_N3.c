@@ -213,7 +213,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   } // END LOOP: for i over initial Newton guess
 
-  const REAL tol = (REAL)1e-10;
+  const REAL relative_tol = (REAL)1e-10;
   const int max_iter = 80;
   const REAL eps = (REAL)1e-6;
 
@@ -237,10 +237,12 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
       return 1;
 
-    REAL Fnorm = (REAL)0.0;
-    for (int i = 0; i < NUNK; i++)
-      Fnorm += fabs(F[i]);
-    if (Fnorm < tol) {
+    REAL relative_Fnorm = (REAL)0.0;
+    for (int i = 0; i < NTRANS; i++) {
+      relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
+      relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
+    } // END LOOP: for i over normalized fisheye constraints
+    if (relative_Fnorm < relative_tol) {
       converged = 1;
       break;
     }
@@ -311,15 +313,17 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
         REAL F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
           return 1;
-        REAL Fnorm_trial = (REAL)0.0;
-        for (int i = 0; i < NUNK; i++)
-          Fnorm_trial += fabs(F_trial[i]);
-        if (Fnorm_trial < Fnorm) {
+        REAL relative_Fnorm_trial = (REAL)0.0;
+        for (int i = 0; i < NTRANS; i++) {
+          relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
+          relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
+        } // END LOOP: for i over normalized trial fisheye constraints
+        if (relative_Fnorm_trial < relative_Fnorm) {
           for (int i = 0; i < NUNK; i++)
             x[i] = x_trial[i];
           accepted = 1;
           break;
-        } // END IF: trial step reduces residual norm
+        } // END IF: trial step reduces normalized residual norm
       } // END IF: trial state passes validation
       alpha *= (REAL)0.5;
     } // END LOOP: for attempt over damping attempts
@@ -402,7 +406,7 @@ static int write_fisheye_grid_txt(const char *fname) {
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   } // END LOOP: for i over standalone initial Newton guess
   REAL c = (REAL)1.0;
-  const REAL tol = (REAL)1e-10;
+  const REAL relative_tol = (REAL)1e-10;
   const int max_iter = 60;
 
   int converged = 0;
@@ -424,10 +428,12 @@ static int write_fisheye_grid_txt(const char *fname) {
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
       return 1;
 
-    REAL Fnorm = (REAL)0.0;
-    for (int i = 0; i < NUNK; i++)
-      Fnorm += fabs(F[i]);
-    if (Fnorm < tol) {
+    REAL relative_Fnorm = (REAL)0.0;
+    for (int i = 0; i < NTRANS; i++) {
+      relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
+      relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
+    } // END LOOP: for i over standalone normalized fisheye constraints
+    if (relative_Fnorm < relative_tol) {
       converged = 1;
       break;
     }
@@ -489,15 +495,17 @@ static int write_fisheye_grid_txt(const char *fname) {
         REAL F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
           return 1;
-        REAL Fnorm_trial = (REAL)0.0;
-        for (int i = 0; i < NUNK; i++)
-          Fnorm_trial += fabs(F_trial[i]);
-        if (Fnorm_trial < Fnorm) {
+        REAL relative_Fnorm_trial = (REAL)0.0;
+        for (int i = 0; i < NTRANS; i++) {
+          relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
+          relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
+        } // END LOOP: for i over standalone normalized trial fisheye constraints
+        if (relative_Fnorm_trial < relative_Fnorm) {
           for (int i = 0; i < NUNK; i++)
             x[i] = x_trial[i];
           accepted = 1;
           break;
-        } // END IF: standalone trial step reduces residual norm
+        } // END IF: standalone trial step reduces normalized residual norm
       } // END IF: standalone trial state passes validation
       alpha *= (REAL)0.5;
     } // END LOOP: for attempt over standalone damping attempts
