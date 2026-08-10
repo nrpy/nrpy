@@ -243,8 +243,9 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     :param relative_to: Whether the computation is relative to the "local_grid_center"
                         (default) or "global_grid_center".
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
-                        or "multipatch".
+    :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
+                        unsupported or missing, or GeneralRFM conversion is requested
+                        with CUDA parallelization.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
@@ -582,7 +583,9 @@ def register_CFunction_xx_to_Cart(
 
     :param CoordSystem: The coordinate system name as a string.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :raises ValueError: If an invalid gridding_approach is provided.
+    :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
+                        unsupported or missing, or GeneralRFM conversion is requested
+                        with CUDA parallelization.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:

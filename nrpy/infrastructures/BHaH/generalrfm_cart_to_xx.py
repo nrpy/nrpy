@@ -31,7 +31,8 @@ def register_CFunction_generalrfm_Cart_to_xx(
     Register a C function to numerically invert the GeneralRFM map Cart -> xx.
 
     :param CoordSystem: GeneralRFM coordinate system name.
-    :raises ValueError: If CoordSystem is not GeneralRFM or its provider is unsupported/missing.
+    :raises ValueError: If CoordSystem is not GeneralRFM, its provider is
+                        unsupported or missing, or CUDA parallelization is active.
     :return: None during parallel-codegen registration phase, otherwise the NRPy environment.
     """
     if pcg.pcg_registration_phase():
