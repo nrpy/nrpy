@@ -98,9 +98,8 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Genera
         REAL trial_seed = (REAL)0.5 * (low + high);
         if (isfinite(radial_map_prime) && fabs(radial_map_prime) > (REAL)1.0e-14) {
           const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
-          if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high) {
+          if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
             trial_seed = newton_seed;
-          }
         }
         REAL trial_map;
         const REAL trial_tmp0 = (1.0 / (params->fisheye_s1));
@@ -145,11 +144,10 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Genera
             exit(1);
           } // END IF: fallback residual is non-finite
         } // END IF: primary trial residual is non-finite
-        if (trial_residual >= (REAL)0.0) {
+        if (trial_residual >= (REAL)0.0)
           high = trial_seed;
-        } else {
+        else
           low = trial_seed;
-        }
         if (fabs(trial_residual) < residual_tolerance &&
             (fabs(high - low) < bracket_tolerance || fabs(trial_seed - radial_seed) < bracket_tolerance)) {
           radial_seed = trial_seed;

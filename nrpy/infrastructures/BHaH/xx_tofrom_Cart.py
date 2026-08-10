@@ -191,9 +191,8 @@ def _generate_bracketed_radial_inverse_body(
       REAL trial_seed = (REAL)0.5 * (low + high);
       if (isfinite(radial_map_prime) && fabs(radial_map_prime) > (REAL)1.0e-14) {{
         const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
-        if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high) {{
+        if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
           trial_seed = newton_seed;
-        }}
       }}
       REAL trial_map;
 {trial_map_codegen}
@@ -207,11 +206,10 @@ def _generate_bracketed_radial_inverse_body(
 {failure_body}
         }} // END IF: fallback residual is non-finite
       }} // END IF: primary trial residual is non-finite
-      if (trial_residual >= (REAL)0.0) {{
+      if (trial_residual >= (REAL)0.0)
         high = trial_seed;
-      }} else {{
+      else
         low = trial_seed;
-      }}
       if (fabs(trial_residual) < residual_tolerance &&
           (fabs(high - low) < bracket_tolerance || fabs(trial_seed - radial_seed) < bracket_tolerance)) {{
         radial_seed = trial_seed;
