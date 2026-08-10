@@ -486,9 +486,11 @@ def register_CFunction_bcstruct_set_up(
     desc = r"""At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
 Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
   Recall that at each inner boundary point we must set innerpt_bc_struct:
-    innerpt_bc_struct stores the flattened destination and source grid indices
-    for the inner boundary point, plus parity[10], which stores the dot-product
-    signs for the 10 independent parity types.
+    typedef struct __innerpt_bc_struct__ {
+      int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
+       int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
+      int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
+    } innerpt_bc_struct;
   At each ghostzone (i.e., each point within NGHOSTS points from grid boundary):
     Call EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt().
         This function converts the curvilinear coordinate (x0,x1,x2) to the corresponding
