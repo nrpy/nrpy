@@ -30,12 +30,16 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
-from nrpy.infrastructures.BHaH import checkpointing, xx_tofrom_Cart
+from nrpy.infrastructures.BHaH import checkpointing
 from nrpy.infrastructures.BHaH.fisheye import phys_params_to_fisheye
 from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
     ID_persist_struct,
     TwoPunctures_lib,
+)
+from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
+    register_CFunction__Cart_to_xx_and_nearest_i0i1i2,
+    register_CFunction_xx_to_Cart,
 )
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
@@ -363,8 +367,8 @@ superB.MoL.register_CFunctions(
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
 )
-xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
+register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+register_CFunction_xx_to_Cart(CoordSystem)
 checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()

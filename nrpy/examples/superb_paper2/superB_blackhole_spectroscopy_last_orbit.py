@@ -36,6 +36,9 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
     ID_persist_struct,
     TwoPunctures_lib,
 )
+from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
+    register_CFunction__Cart_to_xx_and_nearest_i0i1i2,
+)
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
 par.set_parval_from_str("Infrastructure", "BHaH")
@@ -341,7 +344,7 @@ superB.MoL.register_CFunctions(
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.checkpointing.register_CFunctions(
     default_checkpoint_every=default_checkpoint_every
