@@ -150,7 +150,7 @@ def _generate_bracketed_radial_inverse_body(
         "fallback_",
     )
 
-    return f"""
+    return rf"""
   const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
   if (!(isfinite(rCart))) {{
 {failure_body}
@@ -377,14 +377,14 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
             r_local
         )
         asymptotic_scale_expr = provider.c * provider.a_list[-1]
-        origin_body = """    xx[0] = (REAL)0.0;
+        origin_body = r"""    xx[0] = (REAL)0.0;
     xx[1] = (REAL)0.0;
     xx[2] = (REAL)0.0;"""
-        success_body = """    const REAL scale = radial_seed / rCart;
+        success_body = r"""    const REAL scale = radial_seed / rCart;
     xx[0] = scale * Cartx;
     xx[1] = scale * Carty;
     xx[2] = scale * Cartz;"""
-        failure_body = f"""      fprintf(stderr, "ERROR: bracketed inverse failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
+        failure_body = rf"""      fprintf(stderr, "ERROR: bracketed inverse failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n",
               (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
       exit(1);"""
         fisheye_body = _generate_bracketed_radial_inverse_body(
