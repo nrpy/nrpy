@@ -412,37 +412,70 @@ def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:
 
 def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     """
-    Compute the single transition kernel G(r; R, s).
+    Compute the single transition kernel G(r; R, s) for numerical inversion.
 
     Kernel definition:
 
         G(r; R, s) = s / (2*tanh(R/s)) * log( cosh((r+R)/s) / cosh((r-R)/s) )
 
+    This value-only form assumes a positive transition width and evaluates the
+    log-cosh difference directly to avoid catastrophic cancellation when
+    `r << R`.
+
     :param r: Raw radius expression.
     :param R: Transition center parameter.
-    :param s: Transition width parameter.
+    :param s: Positive transition width parameter.
     :return: The kernel value G(r; R, s).
+
+    Doctests:
+    >>> import math
+    >>> r, R, s = sp.symbols("r R s", positive=True, real=True)
+    >>> kernel = sp.lambdify(
+    ...     (r, R, s),
+    ...     _G_kernel(r=r, R=R, s=s),
+    ...     [{"log1p": math.log1p, "expm1": math.expm1}, "math"],
+    ... )
+    >>> abs(kernel(1.0e-15, 100.0, 0.1) - 1.0e-15) < 1.0e-30
+    True
     """
-    # Use a stable log(cosh(.)) representation so large-|x| inputs stay finite.
-    ap = (r + R) / s
-    am = (r - R) / s
     return cast(
         sp.Expr,
-        (s / (2 * sp.tanh(R / s))) * (_logcosh_stable(ap) - _logcosh_stable(am)),
+        (s / (2 * sp.tanh(R / s))) * _logcosh_difference_stable(r=r, R=R, s=s),
     )
 
 
-def _logcosh_stable(x: sp.Expr) -> sp.Expr:
+def _logcosh_difference_stable(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     """
-    Compute log(cosh(x)) in a numerically stable symbolic form.
+    Compute log(cosh((r+R)/s)) - log(cosh((r-R)/s)) stably.
 
-    :param x: Input expression.
-    :return: Stable expression equal to log(cosh(x)).
+    This expression is intended for C code generation, where the symbolic
+    `log1p` and `expm1` functions emit the corresponding libm calls.
+
+    :param r: Raw radius expression.
+    :param R: Transition center parameter.
+    :param s: Positive transition width parameter.
+    :return: Stable expression equal to the log-cosh difference.
+
+    Doctests:
+    >>> import math
+    >>> r, R, s = sp.symbols("r R s", positive=True, real=True)
+    >>> expr = _logcosh_difference_stable(r=r, R=R, s=s)
+    >>> stable = sp.lambdify(
+    ...     (r, R, s),
+    ...     expr,
+    ...     [{"log1p": math.log1p, "expm1": math.expm1}, "math"],
+    ... )
+    >>> abs(stable(1.0e-15, 100.0, 0.1) - 2.0e-14) < 1.0e-30
+    True
     """
-    abs_x = sp.Abs(x)
+    scaled_min = sp.Min(r, R) / s
+    scaled_max = sp.Max(r, R) / s
+    tail = sp.exp(-2 * (scaled_max - scaled_min))
+    log1p = sp.Function("log1p")
+    expm1 = sp.Function("expm1")
     return cast(
         sp.Expr,
-        abs_x + sp.log(sp.Integer(1) + sp.exp(-2 * abs_x)) - sp.log(sp.Integer(2)),
+        2 * scaled_min + log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)),
     )
 
 
@@ -470,7 +503,7 @@ def _radius_map_unscaled(
         delta_a = a_list[i] - a_list[i + 1]
         rb += delta_a * _G_kernel(r=r, R=R_i, s=s_i)
 
-    return rb
+    return cast(sp.Expr, rb)
 
 
 def _G_and_derivs_closed_form(

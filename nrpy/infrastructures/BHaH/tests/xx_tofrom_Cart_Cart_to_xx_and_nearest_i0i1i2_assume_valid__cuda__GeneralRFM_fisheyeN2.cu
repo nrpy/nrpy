@@ -45,18 +45,18 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Genera
       for (int expand = 0; expand < 80; expand++) {
         REAL high_map;
         const REAL high_tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL high_tmp3 = (1.0 / (params->fisheye_s2));
-        const REAL high_tmp1 = fabs(high_tmp0 * (high - params->fisheye_R1));
-        const REAL high_tmp2 = fabs(high_tmp0 * (high + params->fisheye_R1));
-        const REAL high_tmp4 = fabs(high_tmp3 * (high - params->fisheye_R2));
-        const REAL high_tmp5 = fabs(high_tmp3 * (high + params->fisheye_R2));
-        high_map =
-            params->fisheye_c *
-            (high * params->fisheye_a2 +
-             (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
-                 (-high_tmp1 + high_tmp2 - log(1 + exp(-2 * high_tmp1)) + log(1 + exp(-2 * high_tmp2))) / tanh(high_tmp0 * params->fisheye_R1) +
-             (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
-                 (-high_tmp4 + high_tmp5 - log(1 + exp(-2 * high_tmp4)) + log(1 + exp(-2 * high_tmp5))) / tanh(high_tmp3 * params->fisheye_R2));
+        const REAL high_tmp1 = fmin(high, params->fisheye_R1);
+        const REAL high_tmp4 = (1.0 / (params->fisheye_s2));
+        const REAL high_tmp5 = fmin(high, params->fisheye_R2);
+        const REAL high_tmp3 = exp(2 * high_tmp0 * high_tmp1 - 2 * high_tmp0 * fmax(high, params->fisheye_R1));
+        const REAL high_tmp7 = exp(2 * high_tmp4 * high_tmp5 - 2 * high_tmp4 * fmax(high, params->fisheye_R2));
+        high_map = params->fisheye_c * (high * params->fisheye_a2 +
+                                        (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                                            (2 * high_tmp0 * high_tmp1 + log1p(high_tmp3 * expm1(-4 * high_tmp0 * high_tmp1) / (high_tmp3 + 1))) /
+                                            tanh(high_tmp0 * params->fisheye_R1) +
+                                        (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                                            (2 * high_tmp4 * high_tmp5 + log1p(high_tmp7 * expm1(-4 * high_tmp4 * high_tmp5) / (high_tmp7 + 1))) /
+                                            tanh(high_tmp4 * params->fisheye_R2));
 
         const REAL high_residual = high_map - rCart;
         if (isfinite(high_residual) && high_residual >= (REAL)0.0) {
@@ -74,25 +74,25 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Genera
       for (int iter = 0; iter < 80; iter++) {
         REAL radial_map;
         REAL radial_map_prime;
-        const REAL radial_tmp0 = (1.0 / (params->fisheye_s1));
-        const REAL radial_tmp7 = (1.0 / (params->fisheye_s2));
-        const REAL radial_tmp2 = params->fisheye_R1 - radial_seed;
-        const REAL radial_tmp4 = radial_tmp0 * (params->fisheye_R1 + radial_seed);
-        const REAL radial_tmp6 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * radial_tmp0);
-        const REAL radial_tmp8 = params->fisheye_R2 - radial_seed;
-        const REAL radial_tmp10 = radial_tmp7 * (params->fisheye_R2 + radial_seed);
-        const REAL radial_tmp12 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * radial_tmp7);
-        const REAL radial_tmp3 = fabs(radial_tmp0 * radial_tmp2);
-        const REAL radial_tmp5 = fabs(radial_tmp4);
-        const REAL radial_tmp9 = fabs(radial_tmp7 * radial_tmp8);
-        const REAL radial_tmp11 = fabs(radial_tmp10);
-        radial_map =
+        const REAL radial_tmp0 = fmin(params->fisheye_R1, radial_seed);
+        const REAL radial_tmp1 = (1.0 / (params->fisheye_s1));
+        const REAL radial_tmp5 = fmin(params->fisheye_R2, radial_seed);
+        const REAL radial_tmp6 = (1.0 / (params->fisheye_s2));
+        const REAL radial_tmp4 = (1.0 / 2.0) * (params->fisheye_a0 - params->fisheye_a1) / tanh(params->fisheye_R1 * radial_tmp1);
+        const REAL radial_tmp9 = (1.0 / 2.0) * (params->fisheye_a1 - params->fisheye_a2) / tanh(params->fisheye_R2 * radial_tmp6);
+        const REAL radial_tmp3 = exp(2 * radial_tmp0 * radial_tmp1 - 2 * radial_tmp1 * fmax(params->fisheye_R1, radial_seed));
+        const REAL radial_tmp8 = exp(2 * radial_tmp5 * radial_tmp6 - 2 * radial_tmp6 * fmax(params->fisheye_R2, radial_seed));
+        radial_map = params->fisheye_c *
+                     (params->fisheye_a2 * radial_seed +
+                      params->fisheye_s1 * radial_tmp4 *
+                          (2 * radial_tmp0 * radial_tmp1 + log1p(radial_tmp3 * expm1(-4 * radial_tmp0 * radial_tmp1) / (radial_tmp3 + 1))) +
+                      params->fisheye_s2 * radial_tmp9 *
+                          (2 * radial_tmp5 * radial_tmp6 + log1p(radial_tmp8 * expm1(-4 * radial_tmp5 * radial_tmp6) / (radial_tmp8 + 1))));
+        radial_map_prime =
             params->fisheye_c *
-            (params->fisheye_a2 * radial_seed +
-             params->fisheye_s1 * radial_tmp6 * (-radial_tmp3 + radial_tmp5 - log(1 + exp(-2 * radial_tmp3)) + log(1 + exp(-2 * radial_tmp5))) +
-             params->fisheye_s2 * radial_tmp12 * (radial_tmp11 - radial_tmp9 + log(1 + exp(-2 * radial_tmp11)) - log(1 + exp(-2 * radial_tmp9))));
-        radial_map_prime = params->fisheye_c * (params->fisheye_a2 + radial_tmp12 * (tanh(radial_tmp10) + tanh(radial_tmp7 * radial_tmp8)) +
-                                                radial_tmp6 * (tanh(radial_tmp4) + tanh(radial_tmp0 * radial_tmp2)));
+            (params->fisheye_a2 +
+             radial_tmp4 * (-tanh(radial_tmp1 * (-params->fisheye_R1 + radial_seed)) + tanh(radial_tmp1 * (params->fisheye_R1 + radial_seed))) +
+             radial_tmp9 * (-tanh(radial_tmp6 * (-params->fisheye_R2 + radial_seed)) + tanh(radial_tmp6 * (params->fisheye_R2 + radial_seed))));
 
         const REAL radial_residual = radial_map - rCart;
         REAL trial_seed = (REAL)0.5 * (low + high);
@@ -104,37 +104,39 @@ __host__ __device__ void Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__Genera
         }
         REAL trial_map;
         const REAL trial_tmp0 = (1.0 / (params->fisheye_s1));
+        const REAL trial_tmp1 = fmin(params->fisheye_R1, trial_seed);
         const REAL trial_tmp4 = (1.0 / (params->fisheye_s2));
-        const REAL trial_tmp2 = fabs(trial_tmp0 * (params->fisheye_R1 - trial_seed));
-        const REAL trial_tmp3 = fabs(trial_tmp0 * (params->fisheye_R1 + trial_seed));
-        const REAL trial_tmp5 = fabs(trial_tmp4 * (params->fisheye_R2 - trial_seed));
-        const REAL trial_tmp6 = fabs(trial_tmp4 * (params->fisheye_R2 + trial_seed));
+        const REAL trial_tmp5 = fmin(params->fisheye_R2, trial_seed);
+        const REAL trial_tmp3 = exp(2 * trial_tmp0 * trial_tmp1 - 2 * trial_tmp0 * fmax(params->fisheye_R1, trial_seed));
+        const REAL trial_tmp7 = exp(2 * trial_tmp4 * trial_tmp5 - 2 * trial_tmp4 * fmax(params->fisheye_R2, trial_seed));
         trial_map =
-            params->fisheye_c *
-            (params->fisheye_a2 * trial_seed +
-             (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
-                 (-trial_tmp2 + trial_tmp3 - log(1 + exp(-2 * trial_tmp2)) + log(1 + exp(-2 * trial_tmp3))) / tanh(params->fisheye_R1 * trial_tmp0) +
-             (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
-                 (-trial_tmp5 + trial_tmp6 - log(1 + exp(-2 * trial_tmp5)) + log(1 + exp(-2 * trial_tmp6))) / tanh(params->fisheye_R2 * trial_tmp4));
+            params->fisheye_c * (params->fisheye_a2 * trial_seed +
+                                 (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                                     (2 * trial_tmp0 * trial_tmp1 + log1p(trial_tmp3 * expm1(-4 * trial_tmp0 * trial_tmp1) / (trial_tmp3 + 1))) /
+                                     tanh(params->fisheye_R1 * trial_tmp0) +
+                                 (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                                     (2 * trial_tmp4 * trial_tmp5 + log1p(trial_tmp7 * expm1(-4 * trial_tmp4 * trial_tmp5) / (trial_tmp7 + 1))) /
+                                     tanh(params->fisheye_R2 * trial_tmp4));
 
         REAL trial_residual = trial_map - rCart;
         if (!isfinite(trial_residual)) {
           trial_seed = (REAL)0.5 * (low + high);
           REAL trial_map_fallback;
           const REAL fallback_tmp0 = (1.0 / (params->fisheye_s1));
+          const REAL fallback_tmp1 = fmin(params->fisheye_R1, trial_seed);
           const REAL fallback_tmp4 = (1.0 / (params->fisheye_s2));
-          const REAL fallback_tmp2 = fabs(fallback_tmp0 * (params->fisheye_R1 - trial_seed));
-          const REAL fallback_tmp3 = fabs(fallback_tmp0 * (params->fisheye_R1 + trial_seed));
-          const REAL fallback_tmp5 = fabs(fallback_tmp4 * (params->fisheye_R2 - trial_seed));
-          const REAL fallback_tmp6 = fabs(fallback_tmp4 * (params->fisheye_R2 + trial_seed));
+          const REAL fallback_tmp5 = fmin(params->fisheye_R2, trial_seed);
+          const REAL fallback_tmp3 = exp(2 * fallback_tmp0 * fallback_tmp1 - 2 * fallback_tmp0 * fmax(params->fisheye_R1, trial_seed));
+          const REAL fallback_tmp7 = exp(2 * fallback_tmp4 * fallback_tmp5 - 2 * fallback_tmp4 * fmax(params->fisheye_R2, trial_seed));
           trial_map_fallback =
-              params->fisheye_c * (params->fisheye_a2 * trial_seed +
-                                   (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
-                                       (-fallback_tmp2 + fallback_tmp3 - log(1 + exp(-2 * fallback_tmp2)) + log(1 + exp(-2 * fallback_tmp3))) /
-                                       tanh(fallback_tmp0 * params->fisheye_R1) +
-                                   (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
-                                       (-fallback_tmp5 + fallback_tmp6 - log(1 + exp(-2 * fallback_tmp5)) + log(1 + exp(-2 * fallback_tmp6))) /
-                                       tanh(fallback_tmp4 * params->fisheye_R2));
+              params->fisheye_c *
+              (params->fisheye_a2 * trial_seed +
+               (1.0 / 2.0) * params->fisheye_s1 * (params->fisheye_a0 - params->fisheye_a1) *
+                   (2 * fallback_tmp0 * fallback_tmp1 + log1p(fallback_tmp3 * expm1(-4 * fallback_tmp0 * fallback_tmp1) / (fallback_tmp3 + 1))) /
+                   tanh(fallback_tmp0 * params->fisheye_R1) +
+               (1.0 / 2.0) * params->fisheye_s2 * (params->fisheye_a1 - params->fisheye_a2) *
+                   (2 * fallback_tmp4 * fallback_tmp5 + log1p(fallback_tmp7 * expm1(-4 * fallback_tmp4 * fallback_tmp5) / (fallback_tmp7 + 1))) /
+                   tanh(fallback_tmp4 * params->fisheye_R2));
 
           trial_residual = trial_map_fallback - rCart;
           if (!isfinite(trial_residual)) {
