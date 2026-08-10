@@ -21,7 +21,7 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict
+from typing import Callable, Dict, cast
 
 #########################################################
 # Step 1: Import needed Python modules, then set codegen
@@ -37,11 +37,16 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
     ID_persist_struct,
     TwoPunctures_lib,
 )
-from nrpy.infrastructures.BHaH.xx_tofrom_Cart import (
-    register_CFunction__Cart_to_xx_and_nearest_i0i1i2,
-    register_CFunction_xx_to_Cart,
-)
+import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xx_tofrom_Cart
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
+
+register_CFunction__Cart_to_xx_and_nearest_i0i1i2 = cast(
+    Callable[[str], object],
+    getattr(
+        xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"
+    ),
+)
+register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
