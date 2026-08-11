@@ -27,6 +27,7 @@ from typing import Callable, Dict, cast
 # Step 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import nrpy.helpers.parallel_codegen as pcg
+import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xx_tofrom_Cart
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
@@ -36,14 +37,11 @@ from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
     ID_persist_struct,
     TwoPunctures_lib,
 )
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xx_tofrom_Cart
 from nrpy.infrastructures.superB import initial_data, timestepping_chare
 
 register_CFunction__Cart_to_xx_and_nearest_i0i1i2 = cast(
     Callable[[str], object],
-    getattr(
-        xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"
-    ),
+    getattr(xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"),
 )
 
 par.set_parval_from_str("Infrastructure", "BHaH")
