@@ -436,44 +436,17 @@ def _G_kernel(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
     >>> abs(kernel(1.0e-15, 100.0, 0.1) - 1.0e-15) < 1.0e-30
     True
     """
-    return cast(
-        sp.Expr,
-        (s / (2 * sp.tanh(R / s))) * _logcosh_difference_stable(r=r, R=R, s=s),
-    )
-
-
-def _logcosh_difference_stable(r: sp.Expr, R: sp.Expr, s: sp.Expr) -> sp.Expr:
-    """
-    Compute log(cosh((r+R)/s)) - log(cosh((r-R)/s)) stably.
-
-    This expression is intended for C code generation, where the symbolic
-    `log1p` and `expm1` functions emit the corresponding libm calls.
-
-    :param r: Raw radius expression.
-    :param R: Transition center parameter.
-    :param s: Positive transition width parameter.
-    :return: Stable expression equal to the log-cosh difference.
-
-    Doctests:
-    >>> import math
-    >>> r, R, s = sp.symbols("r R s", positive=True, real=True)
-    >>> expr = _logcosh_difference_stable(r=r, R=R, s=s)
-    >>> stable = sp.lambdify(
-    ...     (r, R, s),
-    ...     expr,
-    ...     [{"log1p": math.log1p, "expm1": math.expm1}, "math"],
-    ... )
-    >>> abs(stable(1.0e-15, 100.0, 0.1) - 2.0e-14) < 1.0e-30
-    True
-    """
     scaled_min = sp.Min(r, R) / s
     scaled_max = sp.Max(r, R) / s
     tail = sp.exp(-2 * (scaled_max - scaled_min))
     log1p = sp.Function("log1p")
     expm1 = sp.Function("expm1")
+    logcosh_difference = 2 * scaled_min + log1p(
+        tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)
+    )
     return cast(
         sp.Expr,
-        2 * scaled_min + log1p(tail * expm1(-4 * scaled_min) / (sp.Integer(1) + tail)),
+        (s / (2 * sp.tanh(R / s))) * logcosh_difference,
     )
 
 
