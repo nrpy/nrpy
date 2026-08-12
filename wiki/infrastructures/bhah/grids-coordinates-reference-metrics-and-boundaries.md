@@ -77,12 +77,15 @@ Maintenance rule: coordinate-admission checks are request-gated by
 [Contribution Style And Static Analysis](../../architecture/contribution-style-and-static-analysis.md);
 the nullable coordinates-only path does not authorize adding them.
 
-The 30 current `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and 30 current
-`xx_to_Cart` default independent-grid baselines and four explicitly named
-Cartesian multipatch OpenMP/CUDA baselines passed isolated candidate
-generation, review, byte comparison, and a second fresh-process source comparison. No C/CUDA
-compilation, runtime inverse check, or numerical-result guarantee was
-established. Then
+The 28 current full-source `Cart_to_xx_and_nearest_i0i1i2_assume_valid` and
+29 current full-source `xx_to_Cart` default independent-grid baselines, four
+explicitly named Cartesian multipatch OpenMP/CUDA baselines, and the OpenMP
+GeneralRFM fisheye inverse structural doctest passed isolated candidate
+generation, review, byte comparison where a full-source oracle exists, and a
+second fresh-process source comparison. GeneralRFM CUDA converters are
+unsupported, and the GeneralRFM fisheye inverse is intentionally excluded from
+full-source golden comparison. No C/CUDA compilation, runtime inverse check, or
+numerical-result guarantee was established. Then
 `rfm_wrapper_functions.py` creates non-coordinate-specific wrapper functions that
 switch on `params->CoordSystem_hash`, calls the matching coordinate-specific
 function, and registers uppercase coordinate hash macros in `BHaH_defines.h`.
