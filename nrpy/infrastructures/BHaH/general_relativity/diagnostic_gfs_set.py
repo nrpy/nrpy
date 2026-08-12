@@ -50,7 +50,21 @@ def register_CFunction_diagnostic_gfs_set(
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
-    TBD
+    >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+    >>> original_cfunctions = cfc.CFunction_dict.copy()
+    >>> try:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     cfc.CFunction_dict.clear()
+    ...     _ = register_CFunction_diagnostic_gfs_set(True, False)
+    ...     lambda_gf = gri.glb_gridfcs_dict["DIAG_LAMBDA_CONSTRAINT"]
+    ...     lambda_metadata = (lambda_gf.name, lambda_gf.group, lambda_gf.desc)
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+    ...     cfc.CFunction_dict.clear()
+    ...     cfc.CFunction_dict.update(original_cfunctions)
+    >>> lambda_metadata
+    ('DIAG_LAMBDA_CONSTRAINT', 'DIAG', 'Covariant_conformal_connection_constraint_magnitude')
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -66,6 +80,11 @@ def register_CFunction_diagnostic_gfs_set(
         names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
     )
     gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(
+        names="DIAG_LAMBDA_CONSTRAINT",
+        desc_list=["Covariant_conformal_connection_constraint_magnitude"],
+        group="DIAG",
+    )
     gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
     gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
     gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
@@ -197,3 +216,15 @@ def register_CFunction_diagnostic_gfs_set(
         body=body,
     )
     return pcg.NRPyEnv()
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

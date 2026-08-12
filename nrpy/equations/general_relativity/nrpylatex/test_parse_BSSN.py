@@ -25,28 +25,33 @@ def test_example_BSSN() -> bool:
 
     :returns: True if test is successful, otherwise False.
     """
-    # Initialize to junk values, to make the linter and mypy happy.
-    h_rhsDD: List[List[sp.Expr]] = [[]]
-    a_rhsDD: List[List[sp.Expr]] = [[]]
-    RbarDD: List[List[sp.Expr]] = [[]]
-    bet_rhsU: List[sp.Expr] = []
-    vet_rhsU: List[sp.Expr] = []
-    Lambdabar_rhsU: List[sp.Expr] = []
-    MU: List[sp.Expr] = []
-    H = cast(sp.Expr, None)
-    cf_rhs = cast(sp.Expr, None)
-    alpha_rhs = cast(sp.Expr, None)
-    trK_rhs = cast(sp.Expr, None)
+    h_rhsDD: List[List[sp.Expr]]
+    a_rhsDD: List[List[sp.Expr]]
+    RbarDD: List[List[sp.Expr]]
+    bet_rhsU: List[sp.Expr]
+    vet_rhsU: List[sp.Expr]
+    Lambdabar_rhsU: List[sp.Expr]
+    MU: List[sp.Expr]
+    H: sp.Expr
+    cf_rhs: sp.Expr
+    alpha_rhs: sp.Expr
+    trK_rhs: sp.Expr
 
-    parse_latex(r"""
+    # The default metric alias below makes unadorned a and Delta indices use
+    # gammabar. Both partial-derivative rules are needed because the equations
+    # contain braced and unbraced indices.
+    parsed_namespace = parse_latex(r"""
         % declare coord x y z
         % ignore "\begin{align}" "\end{align}" "\\%" "\qquad"
 
         \begin{align}
             % declare metric gammahatDD --zeros --dim 3
             % \hat{\gamma}_{ii} = 1 % noimpsum
-            % declare metric gammabarDD hDD --dim 3
+            % declare hDD --dim 3 --sym sym01
+            % declare metric gammabarDD --dim 3
             % \bar{\gamma}_{ij} = h_{ij} + \hat{\gamma}_{ij}
+            % declare metric gDD --dim 3
+            % g_{ij} = \bar{\gamma}_{ij}
 
             % replace "\beta" -> "\mathrm{vet}"
             % declare vetU --dim 3
@@ -67,6 +72,7 @@ def test_example_BSSN() -> bool:
             % replace "e^{-4\phi}" -> "\mathrm{cf}^2"
             % replace "\partial_t \phi = \1* \\" -> "\mathrm{cf_rhs} = -2 \mathrm{cf} (\1*) \\"
             % replace "\partial_{\1*} \phi" -> "\partial_{\1*} \mathrm{cf} \frac{-1}{2 \mathrm{cf}}"
+            % replace "\partial_\1 \phi" -> "\partial_\1 \mathrm{cf} \frac{-1}{2 \mathrm{cf}}"
             \partial_t \phi &= \mathcal{L}_\beta \phi + \frac{1}{6} \left(\bar{D}_k \beta^k - \alpha K \right) \\
 
             % declare alpha --dim 3
@@ -125,6 +131,22 @@ def test_example_BSSN() -> bool:
                 &\qquad+ \bar{\gamma}^{kl} \left(\Delta^m_{ki} \Delta_{jml} + \Delta^m_{kj} \Delta_{iml} + \Delta^m_{ik} \Delta_{mjl}\right)
         \end{align}
     """)
+    # Tuple results identify expressions exported into module globals; other
+    # returned objects provide expressions through their namespaces.
+    parsed_values = (
+        globals() if isinstance(parsed_namespace, tuple) else vars(parsed_namespace)
+    )
+    h_rhsDD = cast(List[List[sp.Expr]], parsed_values["h_rhsDD"])
+    a_rhsDD = cast(List[List[sp.Expr]], parsed_values["a_rhsDD"])
+    RbarDD = cast(List[List[sp.Expr]], parsed_values["RbarDD"])
+    bet_rhsU = cast(List[sp.Expr], parsed_values["bet_rhsU"])
+    vet_rhsU = cast(List[sp.Expr], parsed_values["vet_rhsU"])
+    Lambdabar_rhsU = cast(List[sp.Expr], parsed_values["Lambdabar_rhsU"])
+    MU = cast(List[sp.Expr], parsed_values["MU"])
+    H = cast(sp.Expr, parsed_values["H"])
+    cf_rhs = cast(sp.Expr, parsed_values["cf_rhs"])
+    alpha_rhs = cast(sp.Expr, parsed_values["alpha_rhs"])
+    trK_rhs = cast(sp.Expr, parsed_values["trK_rhs"])
     rhs = BSSN_RHSs.BSSN_RHSs["Cartesian_RbarDD_gridfunctions"]
     (
         trusted_alpha_rhs,

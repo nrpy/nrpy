@@ -196,8 +196,6 @@ void MoL_step_forward_in_time(commondata_struct *restrict commondata, griddata_s
     rk_substep_2__launcher(params, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs, y_n_gfs, k2_or_y_nplus_a32_k2_gfs, commondata->dt);
     if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
       apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, k2_or_y_nplus_a32_k2_gfs);
-    if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
-      apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, k1_or_y_nplus_a21_k1_or_y_nplus1_running_total_gfs);
   } // END LOOP over grids
   // -={ END k2 substep }=-
 

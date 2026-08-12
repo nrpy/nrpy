@@ -29,10 +29,10 @@ def register_CFunction_root_finding_1d() -> Union[None, pcg.NRPyEnv_type]:
     desc = """
 Implements 1-dimensional root finding using GSL.
 
-@param x_low - Lower bound of the root finding interval.
-@param x_high - Upper bound of the root finding interval.
-@param F - GSL function to find the root of.
-@returns x - The root of the function F.
+@param x_low Lower bound of the root finding interval.
+@param x_high Upper bound of the root finding interval.
+@param[in] F GSL function to find the root of.
+@return The root of the function F.
 """
     cfunc_type = "REAL"
     name = "root_finding_1d"

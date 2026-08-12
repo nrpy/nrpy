@@ -69,6 +69,7 @@ def register_CFunction_integration_stencil() -> Union[None, pcg.NRPyEnv_type]:
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
     Evaluate 8-th order accurate integration stencils.
+
     This function evaluates the integral
            /x_i
     I_i =  | f(x) dx
@@ -78,9 +79,9 @@ def register_CFunction_integration_stencil() -> Union[None, pcg.NRPyEnv_type]:
     the point (x_i,f_i) with arbitrary offset (default is centered at x_i)
     and performing integration between x_{i-1} and x_i.
     
-    @param offset - offset of the point (determines the forwards/backwards/centralized interpolation).
-    @param coeffs - Array of integration weights for the stencil.
-    @param indices - Array of indices for the stencil.
+    @param offset offset of the point (determines the forwards/backwards/centralized interpolation).
+    @param[out] coeffs Array of integration weights for the stencil.
+    @param[out] indices Array of indices for the stencil.
     """
     cfunc_type = "void"
     name = "integration_stencil"

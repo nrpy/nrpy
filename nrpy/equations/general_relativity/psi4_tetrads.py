@@ -15,7 +15,6 @@ import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy
 import nrpy.indexedexp as ixp  # NRPy: Symbolic indexed expression (e.g., tensors, vectors, etc.) support
 import nrpy.params as par  # NRPy: Parameter interface
 import nrpy.reference_metric as refmetric  # NRPy: Reference metric support
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_to_ADM import BSSN_to_ADM
 
 
@@ -26,22 +25,55 @@ class Psi4Tetrads:
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.
-    :param tetrad: quasiKinnersley = choice made in Baker, Campanelli, and Lousto. PRD 65, 044001 (2002)
+    :param tetrad: ``BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad`` selects
+        Sec. V.A step (a) of Baker, Campanelli, and Lousto,
+        https://arxiv.org/pdf/gr-qc/0104063v3, published as Phys. Rev. D 65,
+        044001 (2002), https://doi.org/10.1103/PhysRevD.65.044001. Eq. (5.6)
+        forms the null tetrad, Eq. (5.7) supplies the spatial seed vectors, and
+        the following unnumbered Gram-Schmidt procedure orthonormalizes those
+        vectors. The Kerr-alignment rotation in Eq. (5.9) is not implemented.
 
     :raises ValueError: If an unsupported tetrad choice is made.
+
+    Doctests:
+        >>> import contextlib
+        >>> import inspect
+        >>> import io
+        >>> tuple(inspect.signature(Psi4Tetrads).parameters)
+        ('CoordSystem', 'enable_rfm_precompute', 'tetrad')
+        >>> with contextlib.redirect_stdout(io.StringIO()):
+        ...     tetrads = Psi4Tetrads(CoordSystem="Cartesian")
+        >>> tetrads.tetrad_choice
+        'BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad'
+        >>> str(tetrads.l4U[0]), str(tetrads.n4U[0])
+        ('M_SQRT1_2', 'M_SQRT1_2')
+        >>> tetrads.mre4U[0], tetrads.mim4U[0]
+        (0, 0)
+        >>> lapse_shift_symbols = {"alpha", "vetU0", "vetU1", "vetU2"}
+        >>> tetrad_symbols = {
+        ...     str(symbol)
+        ...     for vector in (
+        ...         tetrads.l4U,
+        ...         tetrads.n4U,
+        ...         tetrads.mre4U,
+        ...         tetrads.mim4U,
+        ...     )
+        ...     for component in vector
+        ...     for symbol in component.free_symbols
+        ... }
+        >>> lapse_shift_symbols.isdisjoint(tetrad_symbols)
+        True
     """
 
     def __init__(
         self,
         CoordSystem: str = "Cartesian",
         enable_rfm_precompute: bool = False,
-        tetrad: str = "quasiKinnersley",
-        # use_metric_to_construct_unit_normal=False: consistent with WeylScal4 ETK thorn.
-        use_metric_to_construct_unit_normal: bool = False,
+        tetrad: str = "BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad",
     ):
         # Step 1.c: Check if tetrad choice is implemented:
         self.tetrad_choice = tetrad
-        if self.tetrad_choice != "quasiKinnersley":
+        if self.tetrad_choice != "BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad":
             raise ValueError(
                 f"ERROR: tetrad = {self.tetrad_choice} currently unsupported!"
             )
@@ -78,7 +110,7 @@ class Psi4Tetrads:
                 # The simplify() here is SLOW, so we try to use it sparingly.
                 gammaUU[i][j] = gammaUU[j][i] = BtoA.gammaUU[i][j]
 
-        # Step 2.c: Define v1U and v2U
+        # Step 2.c: Define two of Eq. (5.7)'s spatial seed vectors.
         v1UCart = [-y, x, sp.sympify(0)]
         v2UCart = [x, y, z]
 
@@ -94,7 +126,7 @@ class Psi4Tetrads:
                 v1U[i] += Jac_dUrfm_dDCartUD[i][j] * v1UCart[j]
                 v2U[i] += Jac_dUrfm_dDCartUD[i][j] * v2UCart[j]
 
-        # Step 2.g: Define v3U
+        # Step 2.g: Define v3U, completing Eq. (5.7)'s spatial seed vectors.
         v3U = ixp.zerorank1()
         LeviCivitaSymbolDDD = ixp.LeviCivitaSymbol_dim3_rank3()
         for a in range(3):
@@ -117,7 +149,8 @@ class Psi4Tetrads:
             v2U[a] = v2U[a].doit()
             v3U[a] = v3U[a].doit()
 
-        # Step 2.h: Define omega_{ij}
+        # Step 2.h: Begin the unnumbered Gram-Schmidt procedure immediately
+        #           following Eq. (5.7) by defining omega_{ij}.
         omegaDD = ixp.zerorank2()
         gammaDD = BtoA.gammaDD
 
@@ -168,9 +201,12 @@ class Psi4Tetrads:
         for a in range(3):
             e3U[a] /= sp.sqrt(omegaDD[2][2])
 
-        # Step 2.j: Construct l^mu, n^mu, and m^mu, based on r^mu, theta^mu, phi^mu, and u^mu:
+        # Step 2.j: Form the Eq. (5.6) tetrad of Baker, Campanelli, and Lousto,
+        #           https://arxiv.org/pdf/gr-qc/0104063v3.
+        #           Components use Eq. (5.1)'s mixed {n_hat, partial_i} frame:
+        #           the temporal leg is the hypersurface unit normal, while the
+        #           spatial legs use the coordinate basis.
         r4U = ixp.zerorank1(dimension=4)
-        # u4U = cast(List[Union[int, sp.Expr]], ixp.zerorank1(dimension=4))
         u4U = ixp.zerorank1(dimension=4)
         theta4U = ixp.zerorank1(dimension=4)
         phi4U = ixp.zerorank1(dimension=4)
@@ -180,19 +216,10 @@ class Psi4Tetrads:
             theta4U[a + 1] = e3U[a]
             phi4U[a + 1] = e1U[a]
 
-        # FIXME? assumes alpha=1, beta^i = 0
-        if use_metric_to_construct_unit_normal:
-            # Eq. 2.116 in Baumgarte & Shapiro:
-            #  n^mu = {1/alpha, -beta^i/alpha}. Note that n_mu = {alpha,0}, so n^mu n_mu = -1.
-            Bq = BSSN_quantities[
-                CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-            ]
-
-            u4U[0] = 1 / Bq.alpha
-            for i in range(3):
-                u4U[i + 1] = -Bq.betaU[i] / Bq.alpha
-        else:
-            u4U[0] = sp.sympify(1)
+        # The unit normal has components (1, 0, 0, 0) in this frame. Coordinate
+        # components (1 / alpha, -beta^i / alpha) do not belong in the Psi4
+        # contractions, which are expressed in the same mixed frame.
+        u4U[0] = sp.sympify(1)
 
         self.l4U = ixp.zerorank1(dimension=4)
         self.n4U = ixp.zerorank1(dimension=4)

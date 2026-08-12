@@ -33,11 +33,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_right_hand_sides() -> (
     desc = """
 Evaluate SEOBNRv5 Hamiltonian, flux, and needed derivatives to compute binary dynamics.
 
-@param t - The current time.
-@param y - Array of dynamical variables.
-@param f - Array to store the right-hand sides.
-@param params - Common data structure containing the model parameters.
-@return - GSL_SUCCESS (0) as required by GSL.
+@param t The current time.
+@param[in] y Array of dynamical variables.
+@param[out] f Array to store the right-hand sides.
+@param[in] params Common data structure containing the model parameters.
+@return GSL_SUCCESS (0) as required by GSL.
 """
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_right_hand_sides"

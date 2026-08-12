@@ -29,9 +29,9 @@ def register_CFunction_commondata_io() -> Union[None, pcg.NRPyEnv_type]:
     desc = """
 Store the commondata struct in a binary file for debugging purposes.
 
-@param data - The commondata struct to store.
-@param filename - The name of the file to store the commondata struct in.
-@returns - GSL_SUCCESS (0) on success, non-zero on failure.
+@param[in] data The commondata struct to store.
+@param[in] filename The name of the file to store the commondata struct in.
+@return GSL_SUCCESS (0) on success, non-zero on failure.
 """
     cfunc_type = "int"
     name = "commondata_io"

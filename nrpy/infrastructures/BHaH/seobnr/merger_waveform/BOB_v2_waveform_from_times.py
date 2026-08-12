@@ -29,11 +29,12 @@ def register_CFunction_BOB_v2_waveform_from_times() -> Union[None, pcg.NRPyEnv_t
     desc = """
 Calculates the BOBv2 (2,2) mode for a given array of times.
 
-@param times - Array of times at which to evaluate the waveform.
-@param amps - Array to store the calculated amplitudes.
-@param phases - Array to store the calculated phases.
-@param nsteps_BOB - length of the times array.
-@param commondata - Common data structure containing the model parameters."""
+@param[in] times Array of times at which to evaluate the waveform.
+@param[out] amps Array to store the calculated amplitudes.
+@param[out] phases Array to store the calculated phases.
+@param nsteps_BOB Length of the times array.
+@param[in] commondata Common data structure containing the model parameters.
+"""
     cfunc_type = "void"
     name = "BOB_v2_waveform_from_times"
     params = "REAL *restrict times , REAL *restrict amps , REAL *restrict phases , const size_t nsteps_BOB , commondata_struct *restrict commondata"
@@ -41,21 +42,20 @@ Calculates the BOBv2 (2,2) mode for a given array of times.
 size_t i;
 REAL *restrict wrapped_phases = (REAL *)malloc(nsteps_BOB*sizeof(REAL));
 REAL waveform[2];
+// Step 1: Evaluate BOBv2 amplitudes and wrapped phases at each requested time.
 for (i = 0; i < nsteps_BOB; i++) {
-  //compute
   BOB_v2_waveform(times[i], commondata , waveform);
-  //store
   amps[i] = waveform[0];
   wrapped_phases[i] = waveform[1];
-}
-//unwrap the phase
+} // END LOOP: for i over BOBv2 evaluation times
+
+// Step 2: Unwrap and zero-reference the BOBv2 phase at the first sample.
 SEOBNRv5_aligned_spin_unwrap(wrapped_phases,phases,nsteps_BOB);
 
-//zero shift the phase
 const REAL pshift = phases[0];
 for (i = 0; i < nsteps_BOB; i++){
   phases[i] = phases[i] - pshift;
-}
+} // END LOOP: for i over unwrapped BOBv2 phases
 free(wrapped_phases);
 """
     cfc.register_CFunction(

@@ -32,10 +32,11 @@ def register_CFunction_root_finding_multidimensional() -> Union[None, pcg.NRPyEn
 """
     desc = """
 Evaluates the multidimensional root finding using GSL, when the Jacobian of the root function is not specified.
-@params n - The dimensionality of the root-finding problem.
-@params x_guess - The initial guess for the root.
-@params f - The GSL structure containing the root function and derivatives.
-@params x_result - The result of the root-finding.
+
+@param n The dimensionality of the root-finding problem.
+@param[in] x_guess The initial guess for the root.
+@param[in] f The GSL structure containing the root function and derivatives.
+@param[out] x_result The result of the root-finding.
 """
     cfunc_type = "void"
     name = "root_finding_multidimensional"

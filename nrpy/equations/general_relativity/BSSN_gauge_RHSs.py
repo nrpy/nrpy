@@ -49,6 +49,19 @@ def BSSN_gauge_RHSs(
     :return: Returns a tuple of sympy expressions for the right-hand-side of the gauge evolution equations.
 
     :raises ValueError: If LapseEvolutionOption or ShiftEvolutionOption parameters are set to unsupported values.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     bq = BSSN_quantities["Cartesian"]
+    >>> original_BU = bq.BU.copy()
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _ = BSSN_gauge_RHSs(ShiftEvolutionOption="Frozen")
+    >>> BU_is_unchanged = bq.BU == original_BU
+    >>> bq.BU[:] = original_BU
+    >>> BU_is_unchanged
+    True
     """
     # Step 1.b: Given the chosen coordinate system, set up
     #           corresponding reference metric and needed
@@ -148,15 +161,6 @@ def BSSN_gauge_RHSs(
     # Define needed quantities
     beta_rhsU = ixp.zerorank1()
     B_rhsU = ixp.zerorank1()
-
-    # In the case of Frozen shift condition, we
-    #    explicitly set the betaU and BU RHS's to zero
-    #    instead of relying on the ixp.zerorank1()'s above,
-    #    for safety.
-    if ShiftEvolutionOption == "Frozen":
-        for i in range(3):
-            beta_rhsU[i] = sp.sympify(0)
-            BU[i] = sp.sympify(0)
 
     if ShiftEvolutionOption == "GammaDriving2ndOrder_NoCovariant":
         # Step 3.a.i: Compute right-hand side of beta^i

@@ -199,7 +199,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()

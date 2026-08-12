@@ -184,7 +184,7 @@ for CoordSystem in set_of_CoordSystems:
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         OMP_collapse=OMP_collapse,
     )
-    BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(
+    BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
         CoordSystem=CoordSystem
     )
     if CoordSystem.startswith("GeneralRFM"):
@@ -262,7 +262,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()

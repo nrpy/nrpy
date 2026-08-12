@@ -31,9 +31,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_gamma_wrapper() -> (
     desc = """
 Wrapper function for evaluating the complex gamma function using GSL's lngamma_complex_e.
 
-@param z_real - The real part of the input complex number.
-@param z_imag - The imaginary part of the input complex number.
-@returns - The gamma function evaluated at z.
+@param z_real The real part of the input complex number.
+@param z_imag The imaginary part of the input complex number.
+@return The gamma function evaluated at z.
 """
     cfunc_type = "double complex"
     name = "SEOBNRv5_aligned_spin_gamma_wrapper"

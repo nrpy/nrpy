@@ -6,7 +6,7 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -573,13 +573,78 @@ class BSSNQuantities:
 class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
     """Custom dictionary for storing BSSNQuantities objects."""
 
+    def __init__(self) -> None:
+        """Initialize an empty cache and its construction-parameter metadata."""
+        super().__init__()
+        self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
+
     def __getitem__(self, CoordSystem_in: str) -> BSSNQuantities:
+        """
+        Return quantities built for the current expression-affecting parameters.
+
+        :param CoordSystem_in: Coordinate-system cache key.
+        :return: Cached or newly built BSSN quantities.
+
+        Doctests:
+        >>> import contextlib
+        >>> import io
+        >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+        >>> original_parameters = par.glb_params_dict.copy()
+        >>> original_code_parameters = par.glb_code_params_dict.copy()
+        >>> original_reference_metrics = refmetric.reference_metric.copy()
+        >>> cache = BSSNQuantities_dict()
+        >>> objects = []
+        >>> invalid_cf_raised = False
+        >>> try:
+        ...     with contextlib.redirect_stdout(io.StringIO()):
+        ...         for cf_choice in ("W", "chi", "phi"):
+        ...             par.set_parval_from_str(
+        ...                 "EvolvedConformalFactor_cf", cf_choice
+        ...             )
+        ...             objects.append(cache["Cartesian"])
+        ...         same_parameters_reused = cache["Cartesian"] is objects[-1]
+        ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
+        ...         try:
+        ...             _ = cache["Cartesian"]
+        ...         except ValueError:
+        ...             invalid_cf_raised = True
+        ... finally:
+        ...     par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        ...     gri.glb_gridfcs_dict.clear()
+        ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+        ...     par.glb_params_dict.clear()
+        ...     par.glb_params_dict.update(original_parameters)
+        ...     par.glb_code_params_dict.clear()
+        ...     par.glb_code_params_dict.update(original_code_parameters)
+        ...     refmetric.reference_metric.clear()
+        ...     refmetric.reference_metric.update(original_reference_metrics)
+        >>> expressions_match = [
+        ...     objects[0].cf**2,
+        ...     objects[1].cf,
+        ...     sp.exp(-4 * objects[2].cf),
+        ... ] == [obj.exp_m4phi for obj in objects]
+        >>> objects_rebuilt = all(
+        ...     objects[i] is not objects[i + 1] for i in range(2)
+        ... )
+        >>> (
+        ...     expressions_match,
+        ...     objects_rebuilt,
+        ...     same_parameters_reused,
+        ...     invalid_cf_raised,
+        ... )
+        (True, True, True, True)
+        """
         # In case [CoordSystem]_rfm_precompute is passed:
         CoordSystem = CoordSystem_in.replace("_rfm_precompute", "").replace(
             "_RbarDD_gridfunctions", ""
         )
         enable_rfm_precompute = "_rfm_precompute" in CoordSystem_in
         enable_RbarDD_gridfunctions = "_RbarDD_gridfunctions" in CoordSystem_in
+        construction_parameters = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
 
         if enable_RbarDD_gridfunctions and "RbarDD00" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank2(
@@ -589,7 +654,11 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
                 gf_array_name="auxevol_gfs",
             )
 
-        if CoordSystem_in not in self:
+        if (
+            CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        ):
             print(f"Setting up BSSN_Quantities[{CoordSystem_in}]...")
             self.__setitem__(
                 CoordSystem_in,
@@ -603,9 +672,19 @@ class BSSNQuantities_dict(Dict[str, BSSNQuantities]):
 
     def __setitem__(self, CoordSystem: str, value: BSSNQuantities) -> None:
         dict.__setitem__(self, CoordSystem, value)
+        self._construction_parameters[CoordSystem] = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
 
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
+        self._construction_parameters.pop(CoordSystem, None)
+
+    def clear(self) -> None:
+        """Remove all cached quantities and their construction metadata."""
+        dict.clear(self)
+        self._construction_parameters.clear()
 
 
 BSSN_quantities = BSSNQuantities_dict()

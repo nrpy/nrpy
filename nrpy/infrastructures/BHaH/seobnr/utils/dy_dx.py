@@ -29,10 +29,10 @@ def register_CFunction_dy_dx() -> Union[None, pcg.NRPyEnv_type]:
     desc = """
     Compute the derivative of an array by finite difference.
 
-    @param y - Array to differentiate.
-    @param x - Array of independent variables.
-    @param dy_dx - Array to store the derivative.
-    @param nsteps - Size of the array.
+    @param[in] y Array to differentiate.
+    @param[in] x Array of independent variables.
+    @param[out] dy_dx Array to store the derivative.
+    @param nsteps Size of the array.
     """
     cfunc_type = "void"
     name = "dy_dx"
