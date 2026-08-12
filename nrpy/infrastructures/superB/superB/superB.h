@@ -70,7 +70,7 @@ static inline int global_idx_1d_to_chare_idx_1d(const int global_idx, const int 
   return chare_idx;
 }
 
-// On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_chareidx3 map.
+// On-the-fly replacement for the deprecated global-index owner map.
 static inline int globalidx3pt_to_chareidx3(const int64_t globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
                                             const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare, const int Nchare0,
                                             const int Nchare1, const int Nchare2) {
@@ -83,7 +83,7 @@ static inline int globalidx3pt_to_chareidx3(const int64_t globalidx3, const int 
   return charei + Nchare0 * (charej + Nchare1 * charek);
 }
 
-// On-the-fly replacement for deprecated charecommstruct->globalidx3pt_to_localidx3pt map.
+// On-the-fly replacement for the deprecated global-to-local map.
 static inline int globalidx3pt_to_localidx3pt(const int64_t globalidx3, const int Nxx_plus_2NGHOSTS0, const int Nxx_plus_2NGHOSTS1,
                                               const int Nxx0_chare, const int Nxx1_chare, const int Nxx2_chare,
                                               const int Nxx_plus_2NGHOSTS0_chare, const int Nxx_plus_2NGHOSTS1_chare,
@@ -167,10 +167,6 @@ void psi4_spinweightm2_shell_fill_points(const params_struct *restrict params, c
 void psi4_spinweightm2_decompose_shell(const commondata_struct *restrict commondata, const psi4_shell_angular_grid_t *restrict shell, const REAL curr_time,
                                        const REAL R_ext, const REAL *restrict psi4r_at_R_ext, const REAL *restrict psi4i_at_R_ext);
 int unpack_interpolation_buffer(const int num_gfs, const char *buf, const size_t buf_sz, REAL *dst_data_ptrs[]);
-
-typedef struct __charecomm_struct__ {
-  int64_t *localidx3pt_to_globalidx3pt;  // local to this chare
-} charecomm_struct;
 
 typedef struct __diagnostic_struct__ {
   int num_output_quantities;

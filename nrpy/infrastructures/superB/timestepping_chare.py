@@ -965,7 +965,6 @@ Timestepping::~Timestepping() {
     free(griddata_chare[grid].diagnosticstruct.offset_diagnostic_2d_yz_pt);"""
 
     file_output_str += r"""
-    free(griddata_chare[grid].charecommstruct.localidx3pt_to_globalidx3pt);
     free(griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_src_chares);
     free(griddata_chare[grid].nonlocalinnerbcstruct.idx3chare_to_src_chare_id);
     free(griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_each_chare);
@@ -1329,7 +1328,7 @@ void Timestepping::send_nonlocalinnerbc_data(const int type_gfs, const int grid)
   const int Nxx_plus_2NGHOSTS0_global = Nchare0 * Nxx0 + 2 * NGHOSTS;
   const int Nxx_plus_2NGHOSTS1_global = Nchare1 * Nxx1 + 2 * NGHOSTS;
 
-  // Unpack nonlocalinnerbcstruct and charecommstruct
+  // Unpack nonlocalinnerbcstruct
   const int tot_num_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.tot_num_dst_chares;
   const int *restrict idx3_of_dst_chares = griddata_chare[grid].nonlocalinnerbcstruct.idx3_of_dst_chares;
   const int *restrict num_srcpts_tosend_each_chare = griddata_chare[grid].nonlocalinnerbcstruct.num_srcpts_tosend_each_chare;

@@ -84,8 +84,8 @@ def register_CFunction_diagnostics_nearest(
  *
  *   griddata_chare
  *   Pointer to an array of per-grid, chare-local data structures. For grid index "grid", griddata_chare[grid]
- *   provides chare-local parameters, coordinates, and per-chare diagnostic/charecomm structs required by the
- *   diagnostics helper routines.
+ *   provides chare-local parameters, coordinates, and per-chare diagnostic structs required by the diagnostics
+ *   helper routines.
  *
  *   gridfuncs_diags
  *   Array of length MAXNUMGRIDS. For each grid index "grid", gridfuncs_diags[grid] must point to caller-owned
