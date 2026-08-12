@@ -31,6 +31,7 @@ import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xx_tofrom_Cart
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
+from nrpy.infrastructures.BHaH import checkpointing
 from nrpy.infrastructures.BHaH.fisheye import phys_params_to_fisheye
 from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
@@ -43,6 +44,7 @@ register_CFunction__Cart_to_xx_and_nearest_i0i1i2 = cast(
     Callable[[str], object],
     getattr(xx_tofrom_Cart, "register_CFunction__Cart_to_xx_and_nearest_i0i1i2"),
 )
+register_CFunction_xx_to_Cart = xx_tofrom_Cart.register_CFunction_xx_to_Cart
 
 par.set_parval_from_str("Infrastructure", "BHaH")
 
@@ -348,10 +350,8 @@ superB.MoL.register_CFunctions(
     enable_psi4=enable_psi4,
 )
 register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
-BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-BHaH.checkpointing.register_CFunctions(
-    default_checkpoint_every=default_checkpoint_every
-)
+register_CFunction_xx_to_Cart(CoordSystem)
+checkpointing.register_CFunctions(default_checkpoint_every=default_checkpoint_every)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
