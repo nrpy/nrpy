@@ -258,7 +258,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
-    ...       if parallelization == "cuda" and CoordSystem.startswith("GeneralRFM"):
+    ...       if CoordSystem.startswith("GeneralRFM"):
     ...          continue
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
@@ -279,7 +279,19 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[UWedgeHSinhSph]...
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    ...     "GeneralRFM_fisheyeN2"
+    ... )
     Setting up reference_metric[GeneralRFM_fisheyeN2]...
+    >>> generalrfm_body = cfc.CFunction_dict[
+    ...     f"{name}__rfm__GeneralRFM_fisheyeN2"
+    ... ].body
+    >>> "bracketed inverse failed" in generalrfm_body
+    True
+    >>> "radial_seed" in generalrfm_body
+    True
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
