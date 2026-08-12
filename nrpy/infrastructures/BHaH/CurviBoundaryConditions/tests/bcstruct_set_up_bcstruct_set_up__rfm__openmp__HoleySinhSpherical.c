@@ -278,12 +278,10 @@ static void set_parity_for_inner_boundary_single_pt(const commondata_struct *res
 /**
  * At each coordinate point (x0,x1,x2) situated at grid index (i0,i1,i2):
  * Step 1: Set up inner boundary structs bcstruct->inner_bc_array[].
- *   Recall that at each inner boundary point we must set innerpt_bc_struct:
- *     typedef struct __innerpt_bc_struct__ {
- *       int dstpt;  // dstpt is the 3D grid index IDX3(i0,i1,i2) of the inner boundary point (i0,i1,i2)
- *        int srcpt;  // srcpt is the 3D grid index (a la IDX3) to which the inner boundary point maps
- *       int8_t parity[10];  // parity[10] is a calculation of dot products for the 10 independent parity types
- *     } innerpt_bc_struct;
+ *   Recall that at each inner boundary point, innerpt_bc_struct stores:
+ *     dstpt: the 3D grid index of the inner boundary point (i0,i1,i2)
+ *     srcpt: the 3D grid index to which the inner boundary point maps
+ *     parity[10]: dot products for the 10 independent parity types
  *   At each ghostzone (i.e., each point within NGHOSTS points from grid boundary):
  *     Call EigenCoord_set_x0x1x2_inbounds__i0i1i2_inbounds_single_pt().
  *         This function converts the curvilinear coordinate (x0,x1,x2) to the corresponding
