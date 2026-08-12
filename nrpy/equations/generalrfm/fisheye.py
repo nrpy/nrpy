@@ -496,14 +496,14 @@ def _radius_map_unscaled(
     :return: The unscaled radius map rbar_unscaled(r).
     """
     # rb = aN * r
-    rb = a_list[-1] * r
+    rb: sp.Expr = a_list[-1] * r
 
     # rb += sum_i (a[i] - a[i+1]) * G(r; R_i, s_i)
     for i, (R_i, s_i) in enumerate(zip(R_list, s_list)):
         delta_a = a_list[i] - a_list[i + 1]
         rb += delta_a * _G_kernel(r=r, R=R_i, s=s_i)
 
-    return cast(sp.Expr, rb)
+    return rb
 
 
 def _G_and_derivs_closed_form(
