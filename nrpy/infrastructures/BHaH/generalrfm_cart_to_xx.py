@@ -55,7 +55,7 @@ def register_CFunction_generalrfm_Cart_to_xx(
         raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
 
     r_local = sp.Symbol("r", real=True, nonnegative=True)
-    rbar_expr, drbar_dr_expr, _, _ = fisheye.radius_map_and_derivs_for_inverse(r_local)
+    rbar_expr, drbar_dr_expr = fisheye.radius_map_and_deriv_for_inverse(r_local)
     asymptotic_scale_expr = fisheye.c * fisheye.a_list[-1]
 
     origin_body = r"""    xx[0] = (REAL)0.0;

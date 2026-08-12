@@ -377,18 +377,16 @@ class GeneralRFMFisheye:
             s_list=self.s_list,
         )
 
-    def radius_map_and_derivs_for_inverse(
-        self, r: sp.Expr
-    ) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+    def radius_map_and_deriv_for_inverse(self, r: sp.Expr) -> Tuple[sp.Expr, sp.Expr]:
         """
-        Return a codegen-stable scaled radial map and its first 3 derivatives.
+        Return a codegen-stable scaled radial map and first derivative.
 
         This interface is intended for numerical inversion. The radial value uses
-        a stable log-cosh representation, while the derivatives retain their
-        explicit closed forms.
+        a stable log-cosh representation, while the derivative retains its
+        explicit closed form.
 
         :param r: Radial coordinate.
-        :return: (rbar, drbar, d2rbar, d3rbar)
+        :return: (rbar, drbar)
         """
         rb0 = _radius_map_unscaled(
             r=r,
@@ -396,8 +394,8 @@ class GeneralRFMFisheye:
             R_list=self.R_list,
             s_list=self.s_list,
         )
-        _, rb1, rb2, rb3 = self.radius_map_unscaled_and_derivs_closed_form(r)
-        return self.c * rb0, self.c * rb1, self.c * rb2, self.c * rb3
+        _, rb1, _, _ = self.radius_map_unscaled_and_derivs_closed_form(r)
+        return self.c * rb0, self.c * rb1
 
 
 def build_fisheye(num_transitions: int) -> GeneralRFMFisheye:

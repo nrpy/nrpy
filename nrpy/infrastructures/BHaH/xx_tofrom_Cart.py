@@ -374,9 +374,7 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_expr, drbar_dr_expr, _, _ = provider.radius_map_and_derivs_for_inverse(
-            r_local
-        )
+        rbar_expr, drbar_dr_expr = provider.radius_map_and_deriv_for_inverse(r_local)
         asymptotic_scale_expr = provider.c * provider.a_list[-1]
         origin_body = r"""    xx[0] = (REAL)0.0;
     xx[1] = (REAL)0.0;
