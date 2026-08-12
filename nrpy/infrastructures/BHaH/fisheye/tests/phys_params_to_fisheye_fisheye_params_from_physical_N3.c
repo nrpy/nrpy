@@ -98,7 +98,7 @@ static inline int evaluate_constraints(const REAL L, const REAL r_trans[], const
     const REAL Rphys_Rm = c * rbar_unscaled(Rm, a, R, s, N);
     F[2 * i + 0] = Rphys_R - r_trans[i];
     F[2 * i + 1] = (Rphys_Rp - Rphys_Rm) - w_trans[i];
-  } // END LOOP: for i over fisheye constraints
+  } // END LOOP: for i over constraints
 
   if (c_out)
     *c_out = c;
@@ -125,7 +125,7 @@ static inline int solve_linear_system(const int n, const REAL *A_in, const REAL 
     for (int j = 0; j < n; j++)
       A[i][j] = A_in[i * n + j];
     A[i][n] = b_in[i];
-  } // END LOOP: for i over augmented matrix rows
+  } // END LOOP: for i over matrix rows
 
   for (int k = 0; k < n; k++) {
     int pivot = k;
@@ -184,7 +184,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
   for (int i = 0; i < NTRANS + 1; i++) {
     if (!(a[i] > (REAL)0.0))
       return 1;
-  } // END LOOP: for i over fisheye plateau factors
+  } // END LOOP: for i over plateau factors
   if (!(L > (REAL)0.0))
     return 1;
   for (int i = 0; i < NTRANS; i++) {
@@ -192,14 +192,14 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
       return 1;
     if (i > 0 && !(r_trans[i] > r_trans[i - 1]))
       return 1;
-  } // END LOOP: for i over physical transition inputs
+  } // END LOOP: for i over inputs
 
   REAL approx_R[NTRANS];
   REAL approx_s[NTRANS];
   for (int i = 0; i < NTRANS; i++) {
     approx_R[i] = r_trans[i];
     approx_s[i] = (REAL)0.5 * w_trans[i];
-  } // END LOOP: for i over approximate transition inputs
+  } // END LOOP: for i over approximations
   const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
   if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
     return 1;
@@ -211,7 +211,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
   for (int i = 0; i < NTRANS; i++) {
     x[2 * i + 0] = r_trans[i] / approx_c;
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
-  } // END LOOP: for i over initial Newton guess
+  } // END LOOP: for i over initial guess
 
   const REAL relative_tol = (REAL)1e-10;
   const int max_iter = 80;
@@ -231,7 +231,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
         return 1;
       if (!(R[i] > s[i]))
         return 1;
-    } // END LOOP: for i over Newton state unpacking
+    } // END LOOP: for i over Newton state
 
     REAL F[NUNK];
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
@@ -241,7 +241,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
     for (int i = 0; i < NTRANS; i++) {
       relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
       relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
-    } // END LOOP: for i over normalized fisheye constraints
+    } // END LOOP: for i over normalized constraints
     if (relative_Fnorm < relative_tol) {
       converged = 1;
       break;
@@ -259,7 +259,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
       for (int i = 0; i < NTRANS; i++) {
         Rp[i] = x[2 * i + 0];
         sp[i] = x[2 * i + 1];
-      } // END LOOP: for i over perturbed Newton state unpacking
+      } // END LOOP: for i over perturbed state
 
       REAL Fp[NUNK];
       if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL))
@@ -289,7 +289,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
           ok = 0;
           break;
         }
-      } // END LOOP: for i over trial Newton values
+      } // END LOOP: for i over trial values
       if (ok) {
         for (int i = 0; i < NTRANS; i++) {
           const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
@@ -298,7 +298,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
             ok = 0;
             break;
           }
-        } // END LOOP: for i over positive-width trial checks
+        } // END LOOP: for i over width checks
       } // END IF: trial values are positive
       if (ok) {
         REAL x_trial[NUNK];
@@ -309,7 +309,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
         for (int i = 0; i < NTRANS; i++) {
           Rt[i] = x_trial[2 * i + 0];
           st[i] = x_trial[2 * i + 1];
-        } // END LOOP: for i over accepted trial state unpacking
+        } // END LOOP: for i over accepted state
         REAL F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
           return 1;
@@ -317,13 +317,13 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
         for (int i = 0; i < NTRANS; i++) {
           relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
           relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
-        } // END LOOP: for i over normalized trial fisheye constraints
+        } // END LOOP: for i over trial constraints
         if (relative_Fnorm_trial < relative_Fnorm) {
           for (int i = 0; i < NUNK; i++)
             x[i] = x_trial[i];
           accepted = 1;
           break;
-        } // END IF: trial step reduces normalized residual norm
+        } // END IF: trial reduces residual
       } // END IF: trial state passes validation
       alpha *= (REAL)0.5;
     } // END LOOP: for attempt over damping attempts
@@ -356,7 +356,7 @@ int fisheye_params_from_physical_N3(const commondata_struct *restrict commondata
       break;
 
     } // END SWITCH: assign fisheye transition parameters
-  } // END LOOP: for i over fisheye transition outputs
+  } // END LOOP: for i over outputs
   params->fisheye_c = c;
   return 0;
 } // END FUNCTION: fisheye_params_from_physical_N3
@@ -385,14 +385,14 @@ static int write_fisheye_grid_txt(const char *fname) {
   for (int i = 0; i < NTRANS + 1; i++) {
     if (!(a[i] > (REAL)0.0))
       return 1;
-  } // END LOOP: for i over standalone fisheye plateau factors
+  } // END LOOP: for i over standalone plateaus
 
   REAL approx_R[NTRANS];
   REAL approx_s[NTRANS];
   for (int i = 0; i < NTRANS; i++) {
     approx_R[i] = r_trans[i];
     approx_s[i] = (REAL)0.5 * w_trans[i];
-  } // END LOOP: for i over standalone approximate transition inputs
+  } // END LOOP: for i over standalone approximations
   const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
   if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
     return 1;
@@ -404,7 +404,7 @@ static int write_fisheye_grid_txt(const char *fname) {
   for (int i = 0; i < NTRANS; i++) {
     x[2 * i + 0] = r_trans[i] / approx_c;
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
-  } // END LOOP: for i over standalone initial Newton guess
+  } // END LOOP: for i over standalone guess
   REAL c = (REAL)1.0;
   const REAL relative_tol = (REAL)1e-10;
   const int max_iter = 60;
@@ -414,7 +414,7 @@ static int write_fisheye_grid_txt(const char *fname) {
     for (int i = 0; i < NUNK; i++) {
       if (!(x[i] > (REAL)0.0))
         return 1;
-    } // END LOOP: for i over standalone Newton state positivity
+    } // END LOOP: for i over standalone positivity
 
     REAL R[NTRANS];
     REAL s[NTRANS];
@@ -423,7 +423,7 @@ static int write_fisheye_grid_txt(const char *fname) {
       s[i] = x[2 * i + 1];
       if (!(R[i] > s[i]))
         return 1;
-    } // END LOOP: for i over standalone Newton state unpacking
+    } // END LOOP: for i over standalone state
     REAL F[NUNK];
     if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c))
       return 1;
@@ -432,11 +432,11 @@ static int write_fisheye_grid_txt(const char *fname) {
     for (int i = 0; i < NTRANS; i++) {
       relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
       relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
-    } // END LOOP: for i over standalone normalized fisheye constraints
+    } // END LOOP: for i over standalone constraints
     if (relative_Fnorm < relative_tol) {
       converged = 1;
       break;
-    }
+    } // END IF: standalone converged
 
     REAL J[NUNK][NUNK];
     const REAL eps = (REAL)1e-6;
@@ -450,15 +450,15 @@ static int write_fisheye_grid_txt(const char *fname) {
       for (int i = 0; i < NTRANS; i++) {
         Rp[i] = x[2 * i + 0];
         sp[i] = x[2 * i + 1];
-      } // END LOOP: for i over standalone perturbed state unpacking
+      } // END LOOP: for i over standalone perturbations
       REAL Fp[NUNK];
       if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL))
         return 1;
       for (int i = 0; i < NUNK; i++) {
         J[i][j] = (Fp[i] - F[i]) / dx;
-      } // END LOOP: for i over standalone Jacobian rows
+      } // END LOOP: for i over standalone rows
       x[j] = xj;
-    } // END LOOP: for j over standalone Jacobian columns
+    } // END LOOP: for j over standalone columns
 
     REAL delta[NUNK];
     REAL minusF[NUNK];
@@ -476,22 +476,22 @@ static int write_fisheye_grid_txt(const char *fname) {
         x_trial[i] = x[i] + alpha * delta[i];
         if (!(x_trial[i] > (REAL)0.0))
           ok = 0;
-      } // END LOOP: for i over standalone trial state
+      } // END LOOP: for i over standalone trial
       if (ok) {
         for (int i = 0; i < NTRANS; i++) {
           const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
           const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
           if (!(Rtrial > strial))
             ok = 0;
-        } // END LOOP: for i over standalone positive-width trial checks
-      } // END IF: standalone trial state is positive
+        } // END LOOP: for i over standalone widths
+      } // END IF: standalone trial positive
       if (ok) {
         REAL Rt[NTRANS];
         REAL st[NTRANS];
         for (int i = 0; i < NTRANS; i++) {
           Rt[i] = x_trial[2 * i + 0];
           st[i] = x_trial[2 * i + 1];
-        } // END LOOP: for i over standalone trial state unpacking
+        } // END LOOP: for i over standalone unpack
         REAL F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL))
           return 1;
@@ -499,19 +499,19 @@ static int write_fisheye_grid_txt(const char *fname) {
         for (int i = 0; i < NTRANS; i++) {
           relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
           relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
-        } // END LOOP: for i over standalone normalized trial fisheye constraints
+        } // END LOOP: for i over standalone residuals
         if (relative_Fnorm_trial < relative_Fnorm) {
           for (int i = 0; i < NUNK; i++)
             x[i] = x_trial[i];
           accepted = 1;
           break;
-        } // END IF: standalone trial step reduces normalized residual norm
-      } // END IF: standalone trial state passes validation
+        } // END IF: standalone trial reduces
+      } // END IF: standalone trial valid
       alpha *= (REAL)0.5;
-    } // END LOOP: for attempt over standalone damping attempts
+    } // END LOOP: for attempt over damping
     if (!accepted)
       return 1;
-  } // END LOOP: for iter over standalone Newton iterations
+  } // END LOOP: for iter over standalone Newton
   if (!converged)
     return 1;
 
@@ -522,7 +522,7 @@ static int write_fisheye_grid_txt(const char *fname) {
     s[i] = x[2 * i + 1];
     if (!(R[i] > s[i]))
       return 1;
-  } // END LOOP: for i over final standalone transition parameters
+  } // END LOOP: for i over final params
   const REAL dx = (REAL)2.0 * L / (REAL)(N - 1);
 
   FILE *fp = fopen(fname, "w");
@@ -539,10 +539,10 @@ static int write_fisheye_grid_txt(const char *fname) {
         const REAL scale = Rphys / r;
         Xb = X * scale;
         Yb = Y * scale;
-      } // END IF: nonzero radius maps to scaled coordinates
+      } // END IF: nonzero radius maps
       fprintf(fp, "%d %d %.15e %.15e\n", i, j, Xb, Yb);
-    } // END LOOP: for j over standalone grid y points
-  } // END LOOP: for i over standalone grid x points
+    } // END LOOP: for j over grid y
+  } // END LOOP: for i over grid x
   fclose(fp);
   return 0;
 } // END FUNCTION: write_fisheye_grid_txt

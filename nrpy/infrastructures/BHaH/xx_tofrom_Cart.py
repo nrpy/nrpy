@@ -154,9 +154,11 @@ def _generate_bracketed_radial_inverse_body(
   const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
   if (!(isfinite(rCart))) {{
 {failure_body}
-  }} else if (rCart <= (REAL)0.0) {{
+  }} // END IF: invalid radius
+  else if (rCart <= (REAL)0.0) {{
 {origin_body}
-  }} else {{
+  }} // END ELSE IF: handle origin
+  else {{
     const REAL radial_scale = rCart;
     const REAL residual_tolerance = (REAL)1.0e-12 * radial_scale;
     REAL asymptotic_scale;
@@ -176,12 +178,12 @@ def _generate_bracketed_radial_inverse_body(
       if (isfinite(high_residual) && high_residual >= (REAL)0.0) {{
         bracket_found = 1;
         break;
-      }}
+      }} // END IF: found bracket
       high = NRPYMAX(high * (REAL)2.0, (REAL)1.0);
     }} // END LOOP: for expand over bracket expansions
     if (!bracket_found) {{
 {failure_body}
-    }}
+    }} // END IF: bracket failed
     radial_seed = (REAL)0.5 * (low + high);
     for (int iter = 0; iter < 80; iter++) {{
       REAL radial_map;
@@ -193,7 +195,7 @@ def _generate_bracketed_radial_inverse_body(
         const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
         if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
           trial_seed = newton_seed;
-      }}
+      }} // END IF: use Newton seed
       REAL trial_map;
 {trial_map_codegen}
       REAL trial_residual = trial_map - rCart;
@@ -215,14 +217,14 @@ def _generate_bracketed_radial_inverse_body(
         radial_seed = trial_seed;
         converged = 1;
         break;
-      }}
+      }} // END IF: inverse converged
       radial_seed = trial_seed;
-    }} // END LOOP: for iter over bracketed Newton iterations
+    }} // END LOOP: for iter over inverse
     if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {{
 {failure_body}
-    }}
+    }} // END IF: inverse failed
 {success_body}
-  }} // END ELSE: invert fisheye radius away from the origin
+  }} // END ELSE: invert fisheye radius
 """
 
 
