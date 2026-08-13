@@ -35,7 +35,8 @@
     i = (index) % (Ni);                      \
 }
 #define IDX3GENERAL(i, j, k, Ni, Nj) ((i) + (Ni) * ((j) + (Nj) * (k)))
-#define IDX3GENERAL_64(i, j, k, Ni, Nj) ((int64_t)(i) + (int64_t)(Ni) * ((int64_t)(j) + (int64_t)(Nj) * (int64_t)(k)))
+#define IDX3GENERAL_64(i, j, k, Ni, Nj) \
+  ((int64_t)(i) + (int64_t)(Ni) * ((int64_t)(j) + (int64_t)(Nj) * (int64_t)(k)))
 #define REVERSE_IDX3GENERAL(index, Ni, Nj, i, j, k) \
 { \
     k = (index) / ((Ni) * (Nj)); \
@@ -44,7 +45,12 @@
     i = temp % (Ni); \
 }
 
-static inline void reverse_idx3general_64(const int64_t index, const int ni, const int nj, int *restrict i, int *restrict j, int *restrict k) {
+static inline void reverse_idx3general_64(const int64_t index,
+                                          const int ni,
+                                          const int nj,
+                                          int *restrict i,
+                                          int *restrict j,
+                                          int *restrict k) {
   const int64_t plane64 = (int64_t)ni * (int64_t)nj;
   *k = (int)(index / plane64);
   const int64_t temp64 = index % plane64;
