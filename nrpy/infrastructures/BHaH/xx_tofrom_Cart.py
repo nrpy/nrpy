@@ -160,14 +160,18 @@ def _generate_bracketed_radial_inverse_body(
   }} // END ELSE IF: handle origin
   else {{
     const REAL radial_scale = rCart;
-    const REAL residual_tolerance = (REAL)1.0e-12 * radial_scale;
+    const REAL inverse_relative_tol =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
+    const REAL derivative_floor =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-7 : (REAL)1.0e-14;
+    const REAL residual_tolerance = inverse_relative_tol * radial_scale;
     REAL asymptotic_scale;
 {asymptotic_scale_codegen}
     const REAL inv_asymptotic_scale =
         (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
     REAL low = (REAL)0.0;
     REAL high = NRPYMAX(rCart * inv_asymptotic_scale, radial_scale);
-    const REAL bracket_tolerance = (REAL)1.0e-12 * NRPYMAX(high, radial_scale);
+    const REAL bracket_tolerance = inverse_relative_tol * NRPYMAX(high, radial_scale);
     REAL radial_seed = (REAL)0.5 * high;
     int bracket_found = 0;
     int converged = 0;
@@ -191,7 +195,7 @@ def _generate_bracketed_radial_inverse_body(
 {radial_map_codegen}
       const REAL radial_residual = radial_map - rCart;
       REAL trial_seed = (REAL)0.5 * (low + high);
-      if (isfinite(radial_map_prime) && fabs(radial_map_prime) > (REAL)1.0e-14) {{
+      if (isfinite(radial_map_prime) && fabs(radial_map_prime) > derivative_floor) {{
         const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
         if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
           trial_seed = newton_seed;
