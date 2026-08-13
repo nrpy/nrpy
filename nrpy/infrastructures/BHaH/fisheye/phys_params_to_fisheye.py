@@ -386,7 +386,8 @@ static inline int solve_linear_system(const int n,
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   }} // END LOOP: for i over initial guess
 
-  const REAL relative_tol = (REAL)1e-10;
+  const REAL relative_tol =
+      (sizeof(REAL) == sizeof(float)) ? (REAL)1e-5 : (REAL)1e-10;
   const int max_iter = 80;
   const REAL eps = (REAL)1e-6;
 
@@ -578,7 +579,8 @@ static int write_fisheye_grid_txt(const char *fname) {{
     x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
   }} // END LOOP: for i over standalone guess
   REAL c = (REAL)1.0;
-  const REAL relative_tol = (REAL)1e-10;
+  const REAL relative_tol =
+      (sizeof(REAL) == sizeof(float)) ? (REAL)1e-5 : (REAL)1e-10;
   const int max_iter = 60;
 
   int converged = 0;
