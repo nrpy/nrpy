@@ -349,16 +349,31 @@ static inline int solve_linear_system(const int n,
   for (int i = 0; i < n; i++) x_out[i] = A[i][n];
   return 0;
 }} // END FUNCTION: solve_linear_system
-"""
 
-    body = rf"""
-  const int NTRANS = {num_transitions};
+/**
+ * Solve physical fisheye inputs for internal transition centers and widths.
+ *
+ * @param[in] L Outer physical boundary radius.
+ * @param[in] a Fisheye plateau factors.
+ * @param[in] r_trans Physical transition centers.
+ * @param[in] w_trans Physical transition widths.
+ * @param[in] NTRANS Number of fisheye transitions.
+ * @param[in] max_iter Maximum Newton iterations.
+ * @param[out] R_out Internal transition centers.
+ * @param[out] s_out Internal transition widths.
+ * @param[out] c_out Outer-boundary scale factor.
+ * @return 0 on success, nonzero on invalid input or Newton failure.
+ */
+static inline int solve_physical_fisheye_params(const REAL L,
+                                                const REAL a[],
+                                                const REAL r_trans[],
+                                                const REAL w_trans[],
+                                                const int NTRANS,
+                                                const int max_iter,
+                                                REAL R_out[],
+                                                REAL s_out[],
+                                                REAL *c_out) {{
   const int NUNK = 2 * NTRANS;
-
-  const REAL L = commondata->fisheye_phys_L;
-  const REAL a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};
-  const REAL r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
-  const REAL w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
 
   for (int i = 0; i < NTRANS + 1; i++) {{
     if (!(a[i] > (REAL)0.0)) return 1;
@@ -367,7 +382,7 @@ static inline int solve_linear_system(const int n,
   for (int i = 0; i < NTRANS; i++) {{
     if (!(r_trans[i] > (REAL)0.0) || !(w_trans[i] > (REAL)0.0)) return 1;
     if (i > 0 && !(r_trans[i] > r_trans[i - 1])) return 1;
-  }} // END LOOP: for i over inputs
+  }} // END LOOP: for i over physical inputs
 
   REAL approx_R[NTRANS];
   REAL approx_s[NTRANS];
@@ -388,7 +403,6 @@ static inline int solve_linear_system(const int n,
 
   const REAL relative_tol =
       (sizeof(REAL) == sizeof(float)) ? (REAL)1e-5 : (REAL)1e-10;
-  const int max_iter = 80;
   const REAL eps = (REAL)1e-6;
 
   int converged = 0;
@@ -467,7 +481,7 @@ static inline int solve_linear_system(const int n,
         for (int i = 0; i < NTRANS; i++) {{
           Rt[i] = x_trial[2 * i + 0];
           st[i] = x_trial[2 * i + 1];
-        }} // END LOOP: for i over accepted state
+        }} // END LOOP: for i over trial state
         REAL F_trial[NUNK];
         if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL)) return 1;
         REAL relative_Fnorm_trial = (REAL)0.0;
@@ -488,10 +502,34 @@ static inline int solve_linear_system(const int n,
 
   if (!converged) return 1;
 
+  for (int i = 0; i < NTRANS; i++) {{
+    R_out[i] = x[2 * i + 0];
+    s_out[i] = x[2 * i + 1];
+  }} // END LOOP: for i over solved parameters
+  *c_out = c;
+  return 0;
+}} // END FUNCTION: solve_physical_fisheye_params
+"""
+
+    body = rf"""
+  const int NTRANS = {num_transitions};
+
+  const REAL L = commondata->fisheye_phys_L;
+  const REAL a[{num_transitions + 1}] = {{ {_c_array_initializer(a_vals)} }};
+  const REAL r_trans[{num_transitions}] = {{ {_c_array_initializer(r_trans_vals)} }};
+  const REAL w_trans[{num_transitions}] = {{ {_c_array_initializer(w_trans_vals)} }};
+
+  const int max_iter = 80;
+  REAL R[NTRANS];
+  REAL s[NTRANS];
+  REAL c = (REAL)1.0;
+  if (solve_physical_fisheye_params(L, a, r_trans, w_trans, NTRANS, max_iter,
+                                    R, s, &c)) return 1;
+
   // Step 4: Commit results into params.
   for (int i = 0; i < NTRANS; i++) {{
-    const REAL Ri = x[2 * i + 0];
-    const REAL si = x[2 * i + 1];
+    const REAL Ri = R[i];
+    const REAL si = s[i];
     switch (i) {{
 """
 
@@ -553,143 +591,14 @@ static int write_fisheye_grid_txt(const char *fname) {{
   const REAL w_trans[] = {{ {standalone_w_trans} }};
   const REAL a[] = {{ {standalone_a} }};
   const int NTRANS = (int)(sizeof(r_trans) / sizeof(r_trans[0]));
-  const int NUNK = 2 * NTRANS;
-
-  for (int i = 0; i < NTRANS + 1; i++) {{
-    if (!(a[i] > (REAL)0.0))
-      return 1;
-  }} // END LOOP: for i over standalone plateaus
-
-  REAL approx_R[NTRANS];
-  REAL approx_s[NTRANS];
-  for (int i = 0; i < NTRANS; i++) {{
-    approx_R[i] = r_trans[i];
-    approx_s[i] = (REAL)0.5 * w_trans[i];
-  }} // END LOOP: for i over standalone approximations
-  const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
-  if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
-    return 1;
-  const REAL approx_c = L / approx_rbar_L;
-  if (!(isfinite(approx_c)) || !(approx_c > (REAL)0.0))
-    return 1;
-
-  REAL x[NUNK];
-  for (int i = 0; i < NTRANS; i++) {{
-    x[2 * i + 0] = r_trans[i] / approx_c;
-    x[2 * i + 1] = ((REAL)0.5 * w_trans[i]) / approx_c;
-  }} // END LOOP: for i over standalone guess
-  REAL c = (REAL)1.0;
-  const REAL relative_tol =
-      (sizeof(REAL) == sizeof(float)) ? (REAL)1e-5 : (REAL)1e-10;
   const int max_iter = 60;
-
-  int converged = 0;
-  for (int iter = 0; iter < max_iter; iter++) {{
-    for (int i = 0; i < NUNK; i++) {{
-      if (!(x[i] > (REAL)0.0))
-        return 1;
-    }} // END LOOP: for i over standalone positivity
-
-    REAL R[NTRANS];
-    REAL s[NTRANS];
-    for (int i = 0; i < NTRANS; i++) {{
-      R[i] = x[2 * i + 0];
-      s[i] = x[2 * i + 1];
-      if (!(R[i] > s[i]))
-        return 1;
-    }} // END LOOP: for i over standalone state
-    REAL F[NUNK];
-    if (evaluate_constraints(L, r_trans, w_trans, a, R, s, NTRANS, F, &c)) return 1;
-
-    REAL relative_Fnorm = (REAL)0.0;
-    for (int i = 0; i < NTRANS; i++) {{
-      relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
-      relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
-    }} // END LOOP: for i over standalone constraints
-    if (relative_Fnorm < relative_tol) {{
-      converged = 1;
-      break;
-    }} // END IF: standalone converged
-
-    REAL J[NUNK][NUNK];
-    const REAL eps = (REAL)1e-6;
-    for (int j = 0; j < NUNK; j++) {{
-      REAL xj = x[j];
-      const REAL dx = eps * (fabs(xj) + (REAL)1.0);
-      x[j] = xj + dx;
-
-      REAL Rp[NTRANS];
-      REAL sp[NTRANS];
-      for (int i = 0; i < NTRANS; i++) {{
-        Rp[i] = x[2 * i + 0];
-        sp[i] = x[2 * i + 1];
-      }} // END LOOP: for i over standalone perturbations
-      REAL Fp[NUNK];
-      if (evaluate_constraints(L, r_trans, w_trans, a, Rp, sp, NTRANS, Fp, NULL)) return 1;
-      for (int i = 0; i < NUNK; i++) {{
-        J[i][j] = (Fp[i] - F[i]) / dx;
-      }} // END LOOP: for i over standalone rows
-      x[j] = xj;
-    }} // END LOOP: for j over standalone columns
-
-    REAL delta[NUNK];
-    REAL minusF[NUNK];
-    for (int i = 0; i < NUNK; i++) minusF[i] = -F[i];
-    if (solve_linear_system(NUNK, &J[0][0], minusF, delta))
-      return 1;
-
-    REAL alpha = (REAL)1.0;
-    int accepted = 0;
-    for (int attempt = 0; attempt < 12; attempt++) {{
-      int ok = 1;
-      REAL x_trial[NUNK];
-      for (int i = 0; i < NUNK; i++) {{
-        x_trial[i] = x[i] + alpha * delta[i];
-        if (!(x_trial[i] > (REAL)0.0)) ok = 0;
-      }} // END LOOP: for i over standalone trial
-      if (ok) {{
-        for (int i = 0; i < NTRANS; i++) {{
-          const REAL Rtrial = x[2 * i + 0] + alpha * delta[2 * i + 0];
-          const REAL strial = x[2 * i + 1] + alpha * delta[2 * i + 1];
-          if (!(Rtrial > strial)) ok = 0;
-        }} // END LOOP: for i over standalone widths
-      }} // END IF: standalone trial positive
-      if (ok) {{
-        REAL Rt[NTRANS];
-        REAL st[NTRANS];
-        for (int i = 0; i < NTRANS; i++) {{
-          Rt[i] = x_trial[2 * i + 0];
-          st[i] = x_trial[2 * i + 1];
-        }} // END LOOP: for i over standalone unpack
-        REAL F_trial[NUNK];
-        if (evaluate_constraints(L, r_trans, w_trans, a, Rt, st, NTRANS, F_trial, NULL)) return 1;
-        REAL relative_Fnorm_trial = (REAL)0.0;
-        for (int i = 0; i < NTRANS; i++) {{
-          relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
-          relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
-        }} // END LOOP: for i over standalone residuals
-        if (relative_Fnorm_trial < relative_Fnorm) {{
-          for (int i = 0; i < NUNK; i++) x[i] = x_trial[i];
-          accepted = 1;
-          break;
-        }} // END IF: standalone trial reduces
-      }} // END IF: standalone trial valid
-      alpha *= (REAL)0.5;
-    }} // END LOOP: for attempt over damping
-    if (!accepted)
-      return 1;
-  }} // END LOOP: for iter over standalone Newton
-  if (!converged)
-    return 1;
-
   REAL R[NTRANS];
   REAL s[NTRANS];
-  for (int i = 0; i < NTRANS; i++) {{
-    R[i] = x[2 * i + 0];
-    s[i] = x[2 * i + 1];
-    if (!(R[i] > s[i]))
-      return 1;
-  }} // END LOOP: for i over final params
+  REAL c = (REAL)1.0;
+  if (solve_physical_fisheye_params(L, a, r_trans, w_trans, NTRANS, max_iter,
+                                    R, s, &c))
+    return 1;
+
   const REAL dx = (REAL)2.0 * L / (REAL)(N - 1);
 
   FILE *fp = fopen(fname, "w");
