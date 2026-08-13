@@ -93,7 +93,7 @@ static inline int evaluate_constraints(const REAL L, const REAL r_trans[], const
     const REAL Rphys_Rm = c * rbar_unscaled(Rm, a, R, s, N);
     F[2 * i + 0] = Rphys_R - r_trans[i];
     F[2 * i + 1] = (Rphys_Rp - Rphys_Rm) - w_trans[i];
-  } // END LOOP: for i over constraints
+  } // END LOOP: for i over fisheye constraints
 
   if (c_out)
     *c_out = c;
@@ -120,7 +120,7 @@ static inline int solve_linear_system(const int n, const REAL *A_in, const REAL 
     for (int j = 0; j < n; j++)
       A[i][j] = A_in[i * n + j];
     A[i][n] = b_in[i];
-  } // END LOOP: for i over matrix rows
+  } // END LOOP: for i over augmented matrix rows
 
   for (int k = 0; k < n; k++) {
     int pivot = k;
@@ -186,14 +186,14 @@ static inline int solve_physical_fisheye_params(const REAL L, const REAL a[], co
       return 1;
     if (i > 0 && !(r_trans[i] > r_trans[i - 1]))
       return 1;
-  } // END LOOP: for i over physical inputs
+  } // END LOOP: for i over physical transition inputs
 
   REAL approx_R[NTRANS];
   REAL approx_s[NTRANS];
   for (int i = 0; i < NTRANS; i++) {
     approx_R[i] = r_trans[i];
     approx_s[i] = (REAL)0.5 * w_trans[i];
-  } // END LOOP: for i over approximations
+  } // END LOOP: for i over initial approximations
   const REAL approx_rbar_L = rbar_unscaled(L, a, approx_R, approx_s, NTRANS);
   if (!(isfinite(approx_rbar_L)) || !(approx_rbar_L > (REAL)0.0))
     return 1;
@@ -234,7 +234,7 @@ static inline int solve_physical_fisheye_params(const REAL L, const REAL a[], co
     for (int i = 0; i < NTRANS; i++) {
       relative_Fnorm += fabs(F[2 * i + 0]) / r_trans[i];
       relative_Fnorm += fabs(F[2 * i + 1]) / w_trans[i];
-    } // END LOOP: for i over normalized constraints
+    } // END LOOP: for i over normalized residuals
     if (relative_Fnorm < relative_tol) {
       converged = 1;
       break;
@@ -310,13 +310,13 @@ static inline int solve_physical_fisheye_params(const REAL L, const REAL a[], co
         for (int i = 0; i < NTRANS; i++) {
           relative_Fnorm_trial += fabs(F_trial[2 * i + 0]) / r_trans[i];
           relative_Fnorm_trial += fabs(F_trial[2 * i + 1]) / w_trans[i];
-        } // END LOOP: for i over trial constraints
+        } // END LOOP: for i over trial residuals
         if (relative_Fnorm_trial < relative_Fnorm) {
           for (int i = 0; i < NUNK; i++)
             x[i] = x_trial[i];
           accepted = 1;
           break;
-        } // END IF: trial reduces residual
+        } // END IF: trial reduces residual norm
       } // END IF: trial state passes validation
       alpha *= (REAL)0.5;
     } // END LOOP: for attempt over damping attempts
@@ -330,7 +330,7 @@ static inline int solve_physical_fisheye_params(const REAL L, const REAL a[], co
   for (int i = 0; i < NTRANS; i++) {
     R_out[i] = x[2 * i + 0];
     s_out[i] = x[2 * i + 1];
-  } // END LOOP: for i over solved parameters
+  } // END LOOP: for i over solved transitions
   *c_out = c;
   return 0;
 } // END FUNCTION: solve_physical_fisheye_params
@@ -377,7 +377,7 @@ int fisheye_params_from_physical_N2(const commondata_struct *restrict commondata
       break;
 
     } // END SWITCH: assign fisheye transition parameters
-  } // END LOOP: for i over outputs
+  } // END LOOP: for i over transition outputs
   params->fisheye_c = c;
   return 0;
 } // END FUNCTION: fisheye_params_from_physical_N2
@@ -424,7 +424,7 @@ static int write_fisheye_grid_txt(const char *fname) {
         const REAL scale = Rphys / r;
         Xb = X * scale;
         Yb = Y * scale;
-      } // END IF: nonzero radius maps
+      } // END IF: nonzero radius mapping
       fprintf(fp, "%d %d %.15e %.15e\n", i, j, Xb, Yb);
     } // END LOOP: for j over grid y
   } // END LOOP: for i over grid x
