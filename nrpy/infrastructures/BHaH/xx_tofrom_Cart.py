@@ -6,7 +6,12 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import contextlib
+import io
+import subprocess
 from inspect import currentframe as cfr
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import FrameType as FT
 from typing import Dict, List, Set, Tuple, Union, cast
 
@@ -232,6 +237,176 @@ def _generate_bracketed_radial_inverse_body(
 """
 
 
+def _remove_c_includes(c_source: str) -> str:
+    """
+    Drop generated include directives before embedding C functions in a doctest harness.
+
+    :param c_source: Full generated C function text.
+    :return: Generated C function text without `#include` directives.
+    """
+    return "\n".join(
+        line for line in c_source.splitlines() if not line.startswith("#include ")
+    )
+
+
+def _run_generalrfm_fisheye_inverse_roundtrip_check(real_type: str) -> None:
+    """
+    Compile and run a semantic round-trip check for the GeneralRFM fisheye inverse.
+
+    :param real_type: C floating-point type to use for `REAL`; must be `float` or `double`.
+    :raises ValueError: If `real_type` is unsupported.
+    :raises RuntimeError: If the generated C harness fails to compile or run.
+    """
+    if real_type not in {"float", "double"}:
+        raise ValueError("real_type must be 'float' or 'double'.")
+
+    from nrpy.infrastructures.BHaH.generalrfm_cart_to_xx import (
+        register_CFunction_generalrfm_Cart_to_xx,
+    )
+
+    par.set_parval_from_str("parallelization", "openmp")
+    cfc.CFunction_dict.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        _ = register_CFunction_xx_to_Cart("GeneralRFM_fisheyeN2")
+        _ = register_CFunction_generalrfm_Cart_to_xx("GeneralRFM_fisheyeN2")
+        _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+            "GeneralRFM_fisheyeN2"
+        )
+
+    function_names = (
+        "xx_to_Cart__rfm__GeneralRFM_fisheyeN2",
+        "generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2",
+        "Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__GeneralRFM_fisheyeN2",
+    )
+    generated_functions = "\n\n".join(
+        _remove_c_includes(cfc.CFunction_dict[name].full_function)
+        for name in function_names
+    )
+    roundtrip_tolerance = "1.0e-4" if real_type == "float" else "1.0e-10"
+    source = f"""
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef {real_type} REAL;
+#define NRPYMAX(a, b) ((a) > (b) ? (a) : (b))
+#define NGHOSTS 3
+
+typedef struct params_struct {{
+  REAL Cart_originx, Cart_originy, Cart_originz;
+  REAL dxx0, dxx1, dxx2;
+  REAL xxmin0, xxmin1, xxmin2;
+  REAL fisheye_a0, fisheye_a1, fisheye_a2;
+  REAL fisheye_R1, fisheye_R2;
+  REAL fisheye_s1, fisheye_s2;
+  REAL fisheye_c;
+}} params_struct;
+
+{generated_functions}
+
+static int compare_vectors(const REAL expected[3], const REAL actual[3]) {{
+  const REAL tolerance = (REAL){roundtrip_tolerance};
+  for (int i = 0; i < 3; i++) {{
+    const REAL scale = fmax((REAL)1.0, fabs(expected[i]));
+    if (fabs(expected[i] - actual[i]) > tolerance * scale) {{
+      fprintf(stderr, "mismatch[%d]: expected=%.17g actual=%.17g\\n",
+              i, (double)expected[i], (double)actual[i]);
+      return 1;
+    }}
+  }}
+  return 0;
+}}
+
+int main(void) {{
+  params_struct params = {{0}};
+  params.dxx0 = (REAL)1.0;
+  params.dxx1 = (REAL)1.0;
+  params.dxx2 = (REAL)1.0;
+  params.xxmin0 = (REAL)-128.0;
+  params.xxmin1 = (REAL)-128.0;
+  params.xxmin2 = (REAL)-128.0;
+  params.fisheye_a0 = (REAL)1.0;
+  params.fisheye_a1 = (REAL)2.0;
+  params.fisheye_a2 = (REAL)4.0;
+  params.fisheye_R1 = (REAL)2.0;
+  params.fisheye_R2 = (REAL)5.0;
+  params.fisheye_s1 = (REAL)0.5;
+  params.fisheye_s2 = (REAL)1.0;
+  params.fisheye_c = (REAL)0.7;
+
+  const REAL test_xx[][3] = {{
+    {{(REAL)0.0, (REAL)0.0, (REAL)0.0}},
+    {{(REAL)0.1, (REAL)-0.2, (REAL)0.3}},
+    {{(REAL)1.0, (REAL)2.0, (REAL)-3.0}},
+    {{(REAL)-8.0, (REAL)4.0, (REAL)2.0}},
+    {{(REAL)50.0, (REAL)-25.0, (REAL)10.0}},
+  }};
+  const int num_tests = (int)(sizeof(test_xx) / sizeof(test_xx[0]));
+  for (int n = 0; n < num_tests; n++) {{
+    REAL Cart[3];
+    REAL xx_back[3];
+    REAL xx_direct[3];
+    xx_to_Cart__rfm__GeneralRFM_fisheyeN2(&params, test_xx[n], Cart);
+    Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__GeneralRFM_fisheyeN2(
+        &params, Cart, xx_back, NULL);
+    if (compare_vectors(test_xx[n], xx_back) != 0)
+      return 1;
+    if (generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2(&params, Cart, xx_direct) != 0)
+      return 2;
+    if (compare_vectors(test_xx[n], xx_direct) != 0)
+      return 3;
+  }}
+
+  REAL bad_Cart[3] = {{NAN, (REAL)0.0, (REAL)0.0}};
+  REAL xx_bad[3];
+  if (generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2(&params, bad_Cart, xx_bad) == 0)
+    return 4;
+  return 0;
+}}
+"""
+
+    with TemporaryDirectory() as temporary_directory:
+        directory = Path(temporary_directory)
+        source_path = directory / "generalrfm_fisheye_roundtrip.c"
+        executable_path = directory / "generalrfm_fisheye_roundtrip"
+        source_path.write_text(source)
+        compile_command = [
+            "gcc",
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-pedantic",
+            str(source_path),
+            "-lm",
+            "-o",
+            str(executable_path),
+        ]
+        try:
+            subprocess.run(
+                compile_command,
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            subprocess.run(
+                [str(executable_path)],
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(
+                "GeneralRFM fisheye round-trip harness failed.\n"
+                f"Command: {' '.join(err.cmd)}\n"
+                f"stdout:\n{err.stdout}\n"
+                f"stderr:\n{err.stderr}"
+            ) from err
+
+
 def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     CoordSystem: str,
     relative_to: str = "local_grid_center",
@@ -285,19 +460,8 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[UWedgeHSinhSph]...
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
-    >>> par.set_parval_from_str("parallelization", "openmp")
-    >>> cfc.CFunction_dict.clear()
-    >>> _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
-    ...     "GeneralRFM_fisheyeN2"
-    ... )
-    Setting up reference_metric[GeneralRFM_fisheyeN2]...
-    >>> generalrfm_body = cfc.CFunction_dict[
-    ...     f"{name}__rfm__GeneralRFM_fisheyeN2"
-    ... ].body
-    >>> "bracketed inverse failed" in generalrfm_body
-    True
-    >>> "radial_seed" in generalrfm_body
-    True
+    >>> _run_generalrfm_fisheye_inverse_roundtrip_check("float")
+    >>> _run_generalrfm_fisheye_inverse_roundtrip_check("double")
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
