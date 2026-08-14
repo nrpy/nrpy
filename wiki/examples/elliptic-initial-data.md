@@ -72,9 +72,9 @@ diagnostics, RHS, residual, stop conditions, curvilinear boundary conditions,
 MoL timestepping, checkpointing, headers, generated `main`, cleanup, copied
 intrinsics, and a standalone Makefile. The superB example reuses the same
 equation-side NRPyElliptic functions, but wraps them in superB numerical grids,
-diagnostics, chare communication maps, CurviBCs, superB MoL, PUP routines,
-`Main` and `Timestepping` chare files, copied `superB` headers, and a Charm++
-Makefile linked with `-module CkIO`.
+diagnostics, chare-local CurviBCs, superB MoL, PUP routines, `Main` and
+`Timestepping` chare files, copied `superB` headers, and a Charm++ Makefile
+linked with `-module CkIO`.
 
 Validation status is split the same way. The Ubuntu and macOS codegen jobs run
 `python -m nrpy.examples.nrpyelliptic_conformally_flat`, build
