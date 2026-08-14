@@ -19,6 +19,7 @@ import os
 # STEP 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import shutil
+import subprocess
 from pathlib import Path
 
 import nrpy.helpers.parallel_codegen as pcg
@@ -132,6 +133,15 @@ boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
 num_cuda_streams = 1
+enable_bhahaha = parallelization == "openmp"
+if enable_bhahaha and fp_type != "double":
+    raise ValueError(
+        "BHaHAHA integration currently requires --floating_point_precision double."
+    )
+
+BHaHAHA_subdir = "BHaHAHA"
+if fd_order != 6:
+    BHaHAHA_subdir = f"BHaHAHA-{fd_order}o"
 
 OMP_collapse = 1
 if "Spherical" in CoordSystem:
@@ -158,6 +168,44 @@ par.set_parval_from_str("CoordSystem_to_register_CodeParameters", CoordSystem)
 #########################################################
 # STEP 2: Declare core C functions & register each to
 #         cfc.CFunction_dict["function_name"]
+
+if enable_bhahaha:
+    try:
+        # Attempt to run as a script path
+        subprocess.run(
+            [
+                "python",
+                "nrpy/examples/bhahaha.py",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    except subprocess.CalledProcessError:
+        # If it fails (e.g., from a pip install), try running as a module
+        subprocess.run(
+            [
+                "python",
+                "-m",
+                "nrpy.examples.bhahaha",
+                "--fdorder",
+                str(fd_order),
+                "--outrootdir",
+                project_dir,
+            ],
+            check=True,
+        )
+    BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons(
+        max_horizons=3
+    )
+if enable_bhahaha or enable_psi4_diagnostics:
+    BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
+        enable_simd=enable_intrinsics,
+        project_dir=project_dir,
+        use_cpp=(parallelization == "cuda"),
+    )
 
 if parallelization == "cuda":
     BHaH.parallelization.cuda_utilities.register_CFunctions_HostDevice__operations()
@@ -186,11 +234,6 @@ TP_solve(&ID_persist);
 }
 """,
 )
-BHaH.BHaHAHA.interpolation_3d_general__uniform_src_grid.register_CFunction_interpolation_3d_general__uniform_src_grid(
-    enable_simd=enable_intrinsics,
-    project_dir=project_dir,
-    use_cpp=(parallelization == "cuda"),
-)
 BHaH.diagnostics.diagnostics.register_all_diagnostics(
     project_dir=project_dir,
     set_of_CoordSystems=set_of_CoordSystems,
@@ -200,6 +243,7 @@ BHaH.diagnostics.diagnostics.register_all_diagnostics(
     enable_volume_integration_diagnostics=True,
     enable_free_auxevol=False,
     enable_psi4_diagnostics=enable_psi4_diagnostics,
+    enable_bhahaha=enable_bhahaha,
 )
 BHaH.general_relativity.diagnostic_gfs_set.register_CFunction_diagnostic_gfs_set(
     enable_interp_diagnostics=False, enable_psi4=enable_psi4_diagnostics
@@ -321,12 +365,19 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-BHaH.checkpointing.register_CFunctions(
-    default_checkpoint_every=default_checkpoint_every
+BHaH.read_checkpoint.register_CFunction_read_checkpoint(enable_bhahaha=enable_bhahaha)
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
+    default_checkpoint_every=default_checkpoint_every,
+    enable_bhahaha=enable_bhahaha,
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
+BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(
+    set_of_CoordSystems=set_of_CoordSystems,
+)
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 
 # Reset CodeParameter defaults according to variables set above.
@@ -364,6 +415,30 @@ if enable_psi4_diagnostics:
     par.adjust_CodeParam_default(
         "swm2sh_maximum_l_mode_to_compute", swm2sh_maximum_l_mode_to_compute
     )
+if enable_bhahaha:
+    # Set BHaHAHA defaults for the two individual horizons plus a common horizon.
+    par.adjust_CodeParam_default(
+        "bah_initial_grid_z_center", [default_BH1_z_posn, default_BH2_z_posn, 0.0]
+    )
+    par.adjust_CodeParam_default("bah_Nr_interp_max", 40)
+    par.adjust_CodeParam_default(
+        "bah_M_scale",
+        [default_BH1_mass, default_BH2_mass, default_BH1_mass + default_BH2_mass],
+    )
+    par.adjust_CodeParam_default(
+        "bah_max_search_radius",
+        [
+            0.6 * default_BH1_mass,
+            0.6 * default_BH2_mass,
+            1.1 * (default_BH1_mass + default_BH2_mass),
+        ],
+    )
+    par.adjust_CodeParam_default(
+        "bah_Theta_L2_times_M_tolerance",
+        [2e-4, 2e-4, 2e-4],
+    )
+    par.adjust_CodeParam_default("bah_enable_BBH_mode", 1)
+    par.adjust_CodeParam_default("bah_verbosity_level", 0)
 if num_fisheye_transitions is not None:
     for parname, value in fisheye_param_defaults.items():
         par.adjust_CodeParam_default(parname, value)
@@ -396,7 +471,10 @@ gpu_defines_filename = BHaH.BHaH_device_defines_h.output_device_headers(
     set_parity_on_aux=True,
 )
 BHaH.BHaH_defines_h.output_BHaH_defines_h(
-    additional_includes=[str(Path("TwoPunctures") / Path("TwoPunctures.h"))],
+    additional_includes=[
+        str(Path("TwoPunctures") / Path("TwoPunctures.h")),
+        *([os.path.join(BHaHAHA_subdir, "BHaHAHA.h")] if enable_bhahaha else []),
+    ],
     project_dir=project_dir,
     enable_rfm_precompute=enable_rfm_precompute,
     fin_NGHOSTS_add_one_for_upwinding_or_KO=True,
@@ -433,7 +511,9 @@ BHaH.main_c.register_CFunction_main_c(
     ),
 )
 BHaH.griddata_commondata.register_CFunction_griddata_free(
-    enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_CurviBCs=True,
+    enable_bhahaha=enable_bhahaha,
 )
 
 # SIMD intrinsics needed for 3D interpolation, constraints evaluation, etc.
@@ -454,7 +534,11 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     exec_or_library_name=project_name,
     compiler_opt_option=("nvcc" if parallelization == "cuda" else "default"),
     addl_CFLAGS=["$(shell gsl-config --cflags)"],
-    addl_libraries=["$(shell gsl-config --libs)"],
+    addl_dirs_to_make=([BHaHAHA_subdir] if enable_bhahaha else []),
+    addl_libraries=[
+        "$(shell gsl-config --libs)",
+        *([f"-L{BHaHAHA_subdir}", f"-l{BHaHAHA_subdir}"] if enable_bhahaha else []),
+    ],
     CC=("nvcc" if parallelization == "cuda" else "autodetect"),
     src_code_file_ext=("cu" if parallelization == "cuda" else "c"),
 )

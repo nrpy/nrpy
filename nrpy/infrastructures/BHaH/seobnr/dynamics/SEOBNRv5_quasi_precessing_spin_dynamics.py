@@ -74,6 +74,7 @@ static inline REAL *seobnr_realloc_real_or_exit(REAL *restrict ptr, const size_t
 """
     desc = """
 Integrates the SEOBNRv5 quasi-precessing spin evolution equations of motion.
+
 Creates splines that are accessed by the orbital dynamics.
 
 @param[in,out] commondata Common data struct containing model parameters and updated spin splines.
@@ -93,7 +94,7 @@ const REAL tmax = 2e9;
 REAL z[NUMVARS_SPIN], dzdt[NUMVARS_SPIN], L[3];
 int status = 0;
 int stop = 0;
-// Initial conditions
+// Step 1: Set initial spin and orbital-frequency data.
 z[LN_X] = 0.;
 z[LN_Y] = 0.;
 z[LN_Z] = 1.;
@@ -107,9 +108,11 @@ z[OMEGA_PN] = commondata->initial_omega;
 SEOBNRv5_quasi_precessing_spin_angular_momentum(z, L, commondata);
 int rhs_status[1] = {GSL_SUCCESS};
 char rhs_name[] = "gsl_odeiv2_evolve_apply";
-// set the step size according to the orbital frequency
+
+// Step 2: Set the adaptive step size from the orbital frequency.
 REAL h = 2 * M_PI / commondata->initial_omega / 5;
-// declare relevant pointers
+
+// Step 3: Allocate temporary spin-dynamics sample buffers.
 size_t bufferlength = (size_t)(tmax / h); // runs up to 0.01x maximum time (we should not ideally run that long)
 REAL *chi1_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
 REAL *chi2_lnhat = (REAL *)malloc(bufferlength * sizeof(REAL));
@@ -134,7 +137,7 @@ if (chi1_lnhat == NULL || chi2_lnhat == NULL || chi1_l == NULL || chi2_l == NULL
 }
 size_t nsteps = 0;
 
-// store
+// Step 4: Store the initial spin-dynamics sample.
 chi1_lnhat[nsteps] = z[LN_X]*z[CHI1_X] + z[LN_Y]*z[CHI1_Y] + z[LN_Z]*z[CHI1_Z];
 REAL L_mod_inv = 1./sqrt(L[0]*L[0] + L[1]*L[1] + L[2]*L[2]);
 status = SEOBNRv5_quasi_precessing_spin_equations(t, z, dzdt, commondata);
@@ -161,11 +164,11 @@ REAL time_previous = t;
 REAL r, v, Omega;
 
 while (t < tmax && stop == 0) {
-  // integrate
+  // Step 5: Advance the spin ODE state by one adaptive step.
   status = gsl_odeiv2_evolve_apply(e, c, s, &sys, &t, tmax, &h, z);
   handle_gsl_return_status(status,rhs_status,1,rhs_name);
 
-  // buffercheck
+  // Step 5.a: Grow all spin-dynamics sample buffers when needed.
   if (nsteps >= bufferlength) {
     bufferlength = 2 * bufferlength;
     chi1_lnhat = seobnr_realloc_real_or_exit(chi1_lnhat, bufferlength);
@@ -187,8 +190,7 @@ while (t < tmax && stop == 0) {
     omega = seobnr_realloc_real_or_exit(omega, bufferlength);
   } // END IF: spin-dynamics output buffers need growth
 
-  // update
-  // store
+  // Step 5.b: Store the current spin-dynamics sample.
   SEOBNRv5_quasi_precessing_spin_angular_momentum(z, L, commondata);
   L_mod_inv = 1./sqrt(L[0]*L[0] + L[1]*L[1] + L[2]*L[2]);
   L_x[nsteps] = L[0];
@@ -211,7 +213,7 @@ while (t < tmax && stop == 0) {
   omega[nsteps] = z[OMEGA_PN];
   nsteps++;
 
-  // stopcheck
+  // Step 5.c: Evaluate spin-dynamics stop conditions.
   Omega = omega[nsteps - 1];
   r = pow(Omega, -2.0 / 3.0);
   v = 1.0 / sqrt(r);
@@ -232,14 +234,12 @@ while (t < tmax && stop == 0) {
   time_previous = t;
 } // END WHILE: integrating spin dynamics until a stop condition is reached
 
-// free up gsl ode solver
+// Step 6: Free the GSL ODE solver state.
 gsl_odeiv2_control_free(c);
 gsl_odeiv2_step_free(s);
 gsl_odeiv2_evolve_free(e);
 
-// remove the last point if:
-// there is a peak in omega
-// the last timestep is too small
+// Step 7: Remove the final sample if it corresponds to a peak stop or tiny step.
 REAL dt_last = t - time_previous;
 if (stop == OMEGA_PN || dt_last < 1e-12){
   nsteps--;
@@ -248,7 +248,7 @@ if (stop == OMEGA_PN || dt_last < 1e-12){
 commondata->omega_spin_min = nsteps > 0 ? omega[0] : commondata->initial_omega;
 commondata->omega_spin_max = nsteps > 0 ? omega[nsteps - 1] : commondata->initial_omega;
 
-// create the splines
+// Step 8: Allocate output splines on commondata.
 commondata->chi1_lnhat.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
 commondata->chi1_lnhat.acc = gsl_interp_accel_alloc();
 commondata->chi2_lnhat.spline = gsl_spline_alloc(gsl_interp_cspline, nsteps);
@@ -318,7 +318,7 @@ gsl_spline_init(commondata->L_x.spline, omega, L_x, nsteps);
 gsl_spline_init(commondata->L_y.spline, omega, L_y, nsteps);
 gsl_spline_init(commondata->L_z.spline, omega, L_z, nsteps);
 
-// free up memory
+// Step 9: Free temporary spin-dynamics sample buffers.
 free(chi1_lnhat);
 free(chi2_lnhat);
 free(chi1_l);

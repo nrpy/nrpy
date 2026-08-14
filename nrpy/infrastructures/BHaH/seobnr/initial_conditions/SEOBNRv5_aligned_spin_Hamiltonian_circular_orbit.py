@@ -37,12 +37,13 @@ def register_CFunction_SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit() -> (
 """
     desc = """
 Computes the derivative of the SEOBNRv5 Hamiltonian with respect to the radial separation and angular momentum.
+
 The above values are used to evaluate the conservative initial conditions given by a circular orbit at input orbital frequency.
 
-@params x - The gsl_vector object containing the radial separation and angular momentum.
-@params params - The Common data structure containing the model parameters.
-@params f - The gsl_vector object to store the respective derivatives of the Hamiltonian.
-@returns - GSL_SUCCESS (0) as required by GSL.
+@param[in] x The gsl_vector object containing the radial separation and angular momentum.
+@param[in] params The Common data structure containing the model parameters.
+@param[out] f The gsl_vector object to store the respective derivatives of the Hamiltonian.
+@return GSL_SUCCESS (0) as required by GSL.
 """
     cfunc_type = "int"
     name = "SEOBNRv5_aligned_spin_Hamiltonian_circular_orbit"

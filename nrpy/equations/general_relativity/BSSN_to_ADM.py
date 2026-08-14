@@ -196,7 +196,10 @@ if __name__ == "__main__":
         "SinhSymTP",
     ]:
         enable_rfm_pre = "rfm_precompute" in Coord
-        bssn2adm = BSSN_to_ADM(Coord.replace("_rfm_precompute", "", enable_rfm_pre))
+        bssn2adm = BSSN_to_ADM(
+            Coord.replace("_rfm_precompute", ""),
+            enable_rfm_precompute=enable_rfm_pre,
+        )
         results_dict = ve.process_dictionary_of_expressions(
             bssn2adm.__dict__, fixed_mpfs_for_free_symbols=True
         )

@@ -77,6 +77,11 @@ This routine is alias-safe: it snapshots the input vector before overwriting
         params=params,
         body=body,
         include_CodeParameters_h=False,
+        cfunc_decorators=(
+            "__host__ __device__"
+            if par.parval_from_str("parallelization") == "cuda"
+            else ""
+        ),
     )
 
 

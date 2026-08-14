@@ -29,9 +29,9 @@ def register_CFunction_eval_abs_deriv() -> Union[None, pcg.NRPyEnv_type]:
     desc = """
 Evaluates the absolute value of the derivative of a spline at a given point.
 
-@param t - The point at which to evaluate the derivative.
-@param params - The spline data.
-@returns - The absolute value of the derivative of the spline at the given point.
+@param t The point at which to evaluate the derivative.
+@param[in] params The spline data.
+@return The absolute value of the derivative of the spline at the given point.
 """
     cfunc_type = "double"
     name = "eval_abs_deriv"

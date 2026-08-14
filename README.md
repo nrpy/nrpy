@@ -32,6 +32,13 @@ python -m pip install -e .
 
 After an editable install, you can run generators from the repository root with `python -m nrpy.examples.<example_name>`.
 
+If you run Python examples directly from this directory without relying on an
+editable install, append `.` to `PYTHONPATH` first:
+
+```bash
+export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."
+```
+
 ## Prerequisites by Workflow
 
 `python -m pip install nrpy` installs the Python package, but many generated projects also need external tools:
@@ -194,6 +201,12 @@ python -m pip install -e .
 ```
 
 You do not need to modify `PYTHONPATH` if you install the repository in editable mode.
+If you run Python examples directly from this directory without using the editable
+install, append `.` to `PYTHONPATH` first:
+
+```bash
+export PYTHONPATH="${PYTHONPATH:+${PYTHONPATH}:}."
+```
 
 Useful local sanity checks include:
 

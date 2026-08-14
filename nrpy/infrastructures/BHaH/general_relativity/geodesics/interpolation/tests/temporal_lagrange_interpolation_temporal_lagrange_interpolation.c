@@ -1,6 +1,6 @@
 #include "BHaH_defines.h"
 #include "BHaH_function_prototypes.h"
-#include "interpolation_lagrange_uniform.h"
+#include "interpolation/interpolation_lagrange_uniform.h"
 
 /**
  * Interpolate trusted Cartesian geodesic tensors in physical time.

@@ -7,7 +7,7 @@ Author: Zachariah B. Etienne
 """
 
 # Step 1.a: import needed modules
-from typing import List, cast
+from typing import List
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -22,7 +22,19 @@ class Psi4:
 
     :param CoordSystem: The coordinate system to be used. Default is 'Cartesian'.
     :param enable_rfm_precompute: Flag to enable/disable reference metric precomputation. Default is False.
-    :param tetrad: Specify the tetrad explicitly? Default is True. False means to leave it symbolic.
+    :param tetrad: Tetrad selection. Default is ``"leave_symbolic"``, which
+        declares symbolic ``mre4U``, ``mim4U``, and ``n4U`` vectors; any other
+        value is delegated to ``Psi4Tetrads``.
+
+    Note: Tetrad four-vector components use the mixed frame
+    ``{n_hat, partial_i}``: component 0 is along the hypersurface unit normal,
+    while components 1 through 3 are along the spatial coordinate basis. They
+    are not coordinate-basis four-vector components. This is the 3+1 basis used
+    for the Psi4 contraction in Eq. (5.1) of Baker, Campanelli, and Lousto,
+    https://arxiv.org/pdf/gr-qc/0104063v3, published as Phys. Rev. D 65, 044001
+    (2002), https://doi.org/10.1103/PhysRevD.65.044001. Their Eq. (5.5)
+    separately gives the conversion between 3+1-basis and coordinate
+    components; it is not the tetrad construction.
     """
 
     def __init__(
@@ -37,7 +49,10 @@ class Psi4:
             enable_rfm_precompute=enable_rfm_precompute,
         )
 
-        # Step 1.c: Set up tetrad vectors
+        # Step 1.c: Set up tetrad vectors in the mixed frame {n_hat, partial_i}
+        #           used by the curvature projections below; see Baker,
+        #           Campanelli, and Lousto, Sec. V, Eq. (5.1),
+        #           https://arxiv.org/pdf/gr-qc/0104063v3.
         mre4U: List[sp.Expr]
         mim4U: List[sp.Expr]
         n4U: List[sp.Expr]
@@ -90,7 +105,7 @@ class Psi4:
                                 )
 
         # Step 3: Construct the (rank-4) tensor in term 1 of psi_4 (referring to Eq 5.1 in
-        #   Baker, Campanelli, Lousto (2001); https://arxiv.org/pdf/gr-qc/0104063.pdf
+        #   Baker, Campanelli, Lousto; https://arxiv.org/pdf/gr-qc/0104063v3
         rank4term1DDDD = ixp.zerorank4()
         KDD = BtoA.KDD
 
@@ -105,7 +120,7 @@ class Psi4:
                         )
 
         # Step 4: Construct the (rank-3) tensor in term 2 of psi_4 (referring to Eq 5.1 in
-        #   Baker, Campanelli, Lousto (2001); https://arxiv.org/pdf/gr-qc/0104063.pdf
+        #   Baker, Campanelli, Lousto; https://arxiv.org/pdf/gr-qc/0104063v3
         rank3term2DDD = ixp.zerorank3()
         KDDdD = ixp.declarerank3("KDDdD", symmetry="sym01")
         for j in range(3):
@@ -133,7 +148,7 @@ class Psi4:
                     rank3term2DDD[j][k][l] *= sp.sympify(-8)
 
         # Step 5: Construct the (rank-2) tensor in term 3 of psi_4 (referring to Eq 5.1 in
-        #   Baker, Campanelli, Lousto (2001); https://arxiv.org/pdf/gr-qc/0104063.pdf
+        #   Baker, Campanelli, Lousto; https://arxiv.org/pdf/gr-qc/0104063v3
 
         # Step 5.1: Construct 3-Ricci tensor R_{ij} = gamma^{im} R_{ijml}
         RDD = ixp.zerorank2()
@@ -360,7 +375,10 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for in_tetrad in ["quasiKinnersley", "leave_symbolic"]:
+    for in_tetrad in [
+        "BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad",
+        "leave_symbolic",
+    ]:
         for Coord in [
             "Spherical",
             "SinhSpherical",

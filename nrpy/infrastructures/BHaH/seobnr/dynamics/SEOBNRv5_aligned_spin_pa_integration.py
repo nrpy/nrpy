@@ -45,10 +45,11 @@ def register_CFunction_SEOBNRv5_aligned_spin_pa_integration() -> (
 #include <gsl/gsl_odeiv2.h>
 """
     desc = """
-Integrates the SEOBNRv5 post-adiabatic equations of motion to obtain the dynamics of the EOB perturber
-as well as the augmented dynamical quantities for generating the inspiral waveform.
+Integrates the SEOBNRv5 post-adiabatic equations of motion to obtain the EOB dynamics.
 
-@param commondata - Common data struct containing the model parameters.
+The routine also stores augmented dynamical quantities for generating the inspiral waveform.
+
+@param[in,out] commondata Common data struct containing the model parameters.
 """
     cfunc_type = "void"
     name = "SEOBNRv5_aligned_spin_pa_integration"
@@ -63,10 +64,9 @@ const REAL chi_eff = (m1 * chi1 + m2 * chi2) / (m1 + m2);
 const REAL r_final_prefactor = 2.7 + chi_eff * (1.0 - 4.0 * nu);
 REAL final_r = fmax(10.0, r_final_prefactor * commondata->r_ISCO);
 REAL initial_r = commondata->r;
-// fiducial dr = .3
+// Step 1: Build the radial grid for post-adiabatic integration.
 REAL dr = .3;
 size_t nsteps = (size_t)((initial_r - final_r) / dr + 1);
-// update nsteps and dr to ensure a minimum of 10 steps
 nsteps = nsteps > 10 ? nsteps : 10;
 dr = (initial_r - final_r) / (nsteps - 1);
 REAL *restrict r = (REAL *)malloc(nsteps * sizeof(REAL));
@@ -116,7 +116,7 @@ gsl_function F_prstar;
 F_prstar.function = &SEOBNRv5_aligned_spin_pr_equation;
 F_prstar.params = commondata;
 
-// perform zero PA integration
+// Step 2: Perform zero-order post-adiabatic integration.
 for (size_t i = 0; i < nsteps; i++) {
   r[i] = initial_r - dr * i;
   prstar[i] = 0.;
@@ -126,11 +126,12 @@ for (size_t i = 0; i < nsteps; i++) {
   x_hi = sqrt(r[i]) * 1.4;
   F_pphi0.params = commondata;
   pphi[i] = root_finding_1d(x_lo, x_hi, &F_pphi0);
-}
-// only compute dpphi_dr for zero PA integration
+} // END LOOP: for i over zero-order radial points
+
+// Step 3: Compute derivatives needed by the post-adiabatic iterations.
 dy_dx(pphi, r, dpphi_dr, nsteps);
-// perform PA integration
-// fiducial PA order = 8
+
+// Step 4: Perform post-adiabatic iterations.
 const int PA_ORDER = 8;
 for (int j = 1; j <= PA_ORDER; j++) {
   for (size_t i = 0; i < nsteps; i++) {
@@ -158,20 +159,23 @@ for (int j = 1; j <= PA_ORDER; j++) {
       break;
     default:
       break;
-    }
-  }
-  // compute dprstar/dr and dpphi/dr
+    } // END SWITCH: choose PA variable to solve at this order
+  } // END LOOP: for i over radial points in PA iteration
+
+  // Step 4.a: Refresh radial derivatives for the next PA iteration.
   dy_dx(prstar, r, dprstar_dr, nsteps);
   dy_dx(pphi, r, dpphi_dr, nsteps);
-}
-// compute derivatives of time and phase
+} // END LOOP: for j over post-adiabatic orders
+
+// Step 5: Compute derivatives of time and phase.
 for (size_t i = 0; i < nsteps; i++) {
   commondata->pphi = pphi[i];
   commondata->prstar = prstar[i];
   dt_dr[i] = SEOBNRv5_aligned_spin_t_equation(r[i], commondata);
   dphi_dr[i] = SEOBNRv5_aligned_spin_phi_equation(r[i], commondata);
-}
-// compute cumulative integrals
+} // END LOOP: for i over radial points for time and phase derivatives
+
+// Step 6: Compute cumulative integrals.
 REAL *restrict t = (REAL *)malloc(nsteps * sizeof(REAL));
 if (t == NULL) {
   fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_pa_integration, malloc failed for t\\n");
@@ -185,20 +189,14 @@ if (phi == NULL) {
 cumulative_integration(dt_dr, r, t, nsteps);
 cumulative_integration(dphi_dr, r, phi, nsteps);
 
-
-// run the ODE integration with the final PA values as initial conditions
+// Step 7: Run the ODE integration with the final PA values as initial conditions.
 commondata->r = r[nsteps - 1];
 commondata->phi = phi[nsteps - 1];
 commondata->prstar = prstar[nsteps - 1];
 commondata->pphi = pphi[nsteps - 1];
 SEOBNRv5_aligned_spin_ode_integration(commondata);
-// Store the dynamics array.
-// In the case where the ODE integration is needed
-// for less than 250 M, dynamics->low is never initialized
-// Also note that ODE integrator contains the zeroth timestep 
-// which is the last timestep of PA.
-// We will not include the last PA timestep to ensure there is no
-// double counting of trajectory points
+
+// Step 8: Merge PA dynamics with ODE dynamics, avoiding the duplicate interface point.
 if (commondata->dynamics_low == NULL) {
   commondata->nsteps_low = nsteps - 1;
   commondata->dynamics_low = (REAL *)malloc(commondata->nsteps_low * NUMVARS * sizeof(REAL));
@@ -220,7 +218,7 @@ if (commondata->dynamics_low == NULL) {
     commondata->dynamics_low[IDX(i, H)] = commondata->Hreal;
     commondata->dynamics_low[IDX(i, OMEGA)] = commondata->dHreal_dpphi;
     commondata->dynamics_low[IDX(i, OMEGA_CIRC)] = commondata->Omega_circ;
-  }
+  } // END LOOP: for i over PA-only low-dynamics samples
 } else {
   size_t nsteps_ode_dynamics_low = commondata->nsteps_low;
   REAL *ode_dynamics_low = (REAL *)malloc(nsteps_ode_dynamics_low * NUMVARS * sizeof(REAL));
@@ -249,21 +247,22 @@ if (commondata->dynamics_low == NULL) {
     commondata->dynamics_low[IDX(i, H)] = commondata->Hreal;
     commondata->dynamics_low[IDX(i, OMEGA)] = commondata->dHreal_dpphi;
     commondata->dynamics_low[IDX(i, OMEGA_CIRC)] = commondata->Omega_circ;
-  }
+  } // END LOOP: for i over PA low-dynamics samples
   memcpy(commondata->dynamics_low + (nsteps - 1) * NUMVARS, ode_dynamics_low, nsteps_ode_dynamics_low * NUMVARS * sizeof(REAL));
-  // add the time offset to the dynamics_low
+
+  // Step 8.a: Add the PA time offset to the ODE low-dynamics segment.
   for (size_t i = nsteps - 1; i < commondata->nsteps_low; i++) {
     commondata->dynamics_low[IDX(i, TIME)] += t[nsteps - 1];
-  }
+  } // END LOOP: for i over ODE low-dynamics samples
   free(ode_dynamics_low);
-}
-// add the time offset to the dynamics_fine.
-// Note that this works regardless of the ODE low dynamics since the
-// last PA timestep is always removed.
+} // END ELSE: merge PA low-dynamics samples with existing ODE low-dynamics segment
+
+// Step 9: Add the PA time offset to the fine dynamics.
 for (size_t i = 0; i < commondata->nsteps_fine; i++) {
   commondata->dynamics_fine[IDX(i, TIME)] += t[nsteps - 1];
-}
-// free memory
+} // END LOOP: for i over fine-dynamics samples
+
+// Step 10: Free temporary PA integration arrays.
 free(r);
 free(pphi);
 free(prstar);

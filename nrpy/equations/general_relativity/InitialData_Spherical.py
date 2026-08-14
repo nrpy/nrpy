@@ -91,7 +91,10 @@ class InitialData_Spherical:
 
         :return: A tuple containing the 3-metric gammaDD and the extrinsic curvature KDD.
         """
-        M, chi = par.register_CodeParameters("REAL", __name__, ["M", "chi"], [1.0, 0.99], commondata=True)
+        M = par.register_CodeParameter("REAL", __name__, "M", 1.0, commondata=True)
+        chi = par.register_CodeParameter(
+            "REAL", __name__, "chi", 0.99, commondata=True, add_to_parfile=False
+        )
         r = self.r
         th = self.th
 

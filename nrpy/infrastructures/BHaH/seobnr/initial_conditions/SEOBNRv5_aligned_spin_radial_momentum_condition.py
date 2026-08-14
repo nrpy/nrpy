@@ -33,9 +33,9 @@ def register_CFunction_SEOBNRv5_aligned_spin_radial_momentum_condition() -> (
     desc = """
 Evaluates the SEOBNRv5 adiabatic radial momentum condition.
 
-@params x - The radial tortoise momentum.
-@params params - The Common data structure containing the model parameters.
-@returns - The radial momentum condition.
+@param x The radial tortoise momentum.
+@param[in] params The Common data structure containing the model parameters.
+@return The radial momentum condition.
 """
     cfunc_type = "REAL"
     name = "SEOBNRv5_aligned_spin_radial_momentum_condition"
