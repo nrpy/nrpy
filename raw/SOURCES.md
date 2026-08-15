@@ -101,6 +101,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
+| `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` | living |
+| `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics.py` | living |
+| `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py` | living |
+| `nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |

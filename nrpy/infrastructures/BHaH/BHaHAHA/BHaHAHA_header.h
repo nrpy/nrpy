@@ -248,6 +248,10 @@ typedef struct {
   REAL spin_chi_x_gram_matrix;
   REAL spin_chi_y_gram_matrix;
   REAL spin_chi_z_gram_matrix;
+  // Dimensionless lowest-shear AKV spin directed along its refined pole axis.
+  REAL spin_chi_x_akv_poles;
+  REAL spin_chi_y_akv_poles;
+  REAL spin_chi_z_akv_poles;
 
 } bhahaha_diagnostics_struct;
 
@@ -258,6 +262,9 @@ static inline void bah_initialize_diagnostics_struct(bhahaha_diagnostics_struct 
   diags->spin_chi_x_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_y_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
   diags->spin_chi_z_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_x_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_y_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  diags->spin_chi_z_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
 } // END FUNCTION: bah_initialize_diagnostics_struct
 
 //==================

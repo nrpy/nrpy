@@ -25,6 +25,9 @@ Derivation and AKV convention summary:
   takes the Euclidean norm of the three resulting spin integrals. The direct
   Gram-matrix estimate corrects that same integral vector for the off-diagonal
   L2(dA) overlaps of exactly the same three normalized eigenmodes.
+- The lowest-shear AKV-pole estimate instead uses the signed z_0 integral for
+  its vector amplitude and directs it along the refined minimum-to-maximum
+  pole axis of that same strict lowest-eigenvalue normalized mode.
 
 Author: Ralston Graves
         ralstonkgraves **at** gmail **dot** com
@@ -76,7 +79,7 @@ def register_CFunction_diagnostics_spectre_spin(
     enable_fd_functions: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register a C function that computes the SpECTRE-style spin vector.
+    Register a C function that computes the three AKV-based spin vectors.
 
     :param CoordSystem: The coordinate system to use, defaults to "Spherical".
     :param enable_rfm_precompute: Whether to enable RFM precompute.
@@ -98,7 +101,7 @@ def register_CFunction_diagnostics_spectre_spin(
         return None
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h", "akv_primme.h"]
-    desc = """Compute the SpECTRE-style dimensionless spin vector diagnostic.
+    desc = """Compute the SpECTRE-style, Gram-matrix, and AKV-pole dimensionless spin vector diagnostics.
 
 @param[in,out] commondata Global state receiving diagnostics and saved AKV modes.
 @param[in] griddata Grid and horizon-field data.
@@ -1370,6 +1373,275 @@ static void spectre_spin_reflect_scalar_index(int *restrict j1, int *restrict j2
 } // END FUNCTION: spectre_spin_reflect_scalar_index
 
 /**
+ * Refine one extremum of the lowest-shear AKV potential on the horizon.
+ *
+ * A reflected 5x5 angular stencil is mapped to a nonsingular Cartesian
+ * tangent plane at the coarse extremum. One scaled quadratic design matrix
+ * is used for both the AKV potential and horizon radius. A pivoted solve,
+ * Hessian-sign check, and local trust region reject unstable refinements.
+ *
+ * @param[in] mode Lowest-eigenvalue normalized AKV potential.
+ * @param[in] in_gfs Evolution gridfunctions containing the horizon radius.
+ * @param[in] xx1 Physical theta coordinate array including ghost zones.
+ * @param[in] xx2 Physical phi coordinate array including ghost zones.
+ * @param i0 Active radial horizon-grid index.
+ * @param Nxx_plus_2NGHOSTS0 Radial grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS1 Theta grid size including ghost zones.
+ * @param Nxx_plus_2NGHOSTS2 Phi grid size including ghost zones.
+ * @param Ntheta Number of physical theta points.
+ * @param Nphi Number of physical phi points.
+ * @param dtheta Theta grid spacing.
+ * @param dphi Phi grid spacing.
+ * @param find_max Nonzero to refine a maximum, zero to refine a minimum.
+ * @param[out] refined_point Refined Cartesian horizon point.
+ * @return 1 if refinement succeeds, otherwise 0.
+ */
+static int spectre_spin_refine_akv_pole(
+    const REAL *restrict mode,
+    const REAL *restrict in_gfs,
+    const REAL *restrict xx1,
+    const REAL *restrict xx2,
+    const int i0,
+    const int Nxx_plus_2NGHOSTS0,
+    const int Nxx_plus_2NGHOSTS1,
+    const int Nxx_plus_2NGHOSTS2,
+    const int Ntheta,
+    const int Nphi,
+    const REAL dtheta,
+    const REAL dphi,
+    const int find_max,
+    REAL refined_point[3]) {
+  for (int a = 0; a < 3; a++)
+    refined_point[a] = 0.0;
+
+  int coarse_j1 = -1;
+  int coarse_j2 = -1;
+  REAL coarse_value = 0.0;
+  for (int j2 = 0; j2 < Nphi; j2++) {
+    for (int j1 = 0; j1 < Ntheta; j1++) {
+      const int p = spectre_spin_active_index(j1, j2, Ntheta);
+      const size_t hh_idx =
+          (size_t)i0 + (size_t)Nxx_plus_2NGHOSTS0 *
+                           ((size_t)(NGHOSTS + j1) +
+                            (size_t)Nxx_plus_2NGHOSTS1 *
+                                ((size_t)(NGHOSTS + j2) + (size_t)Nxx_plus_2NGHOSTS2 * (size_t)HHGF));
+      const REAL z = mode[p];
+      const REAL hh = in_gfs[hh_idx];
+      if (!isfinite(z) || !isfinite(hh))
+        return 0;
+      if (coarse_j1 < 0 || (find_max ? z > coarse_value : z < coarse_value)) {
+        coarse_j1 = j1;
+        coarse_j2 = j2;
+        coarse_value = z;
+      } // END IF: coarse AKV extremum improved
+    } // END LOOP: for j1 over theta points
+  } // END LOOP: for j2 over phi points
+  if (coarse_j1 < 0 || coarse_j2 < 0)
+    return 0;
+
+  const REAL theta_c = xx1[NGHOSTS + coarse_j1];
+  const REAL phi_c = xx2[NGHOSTS + coarse_j2];
+  if (!isfinite(theta_c) || !isfinite(phi_c))
+    return 0;
+  const REAL n_c[3] = {
+      sin(theta_c) * cos(phi_c),
+      sin(theta_c) * sin(phi_c),
+      cos(theta_c)};
+  int reference_component = 0;
+  if (fabs(n_c[1]) < fabs(n_c[reference_component]))
+    reference_component = 1;
+  if (fabs(n_c[2]) < fabs(n_c[reference_component]))
+    reference_component = 2;
+  REAL reference_axis[3] = {0.0, 0.0, 0.0};
+  reference_axis[reference_component] = 1.0;
+  REAL t1[3] = {
+      reference_axis[1] * n_c[2] - reference_axis[2] * n_c[1],
+      reference_axis[2] * n_c[0] - reference_axis[0] * n_c[2],
+      reference_axis[0] * n_c[1] - reference_axis[1] * n_c[0]};
+  const REAL t1_norm = sqrt(t1[0] * t1[0] + t1[1] * t1[1] + t1[2] * t1[2]);
+  if (!(t1_norm > 0.0) || !isfinite(t1_norm))
+    return 0;
+  for (int a = 0; a < 3; a++)
+    t1[a] /= t1_norm;
+  const REAL t2[3] = {
+      n_c[1] * t1[2] - n_c[2] * t1[1],
+      n_c[2] * t1[0] - n_c[0] * t1[2],
+      n_c[0] * t1[1] - n_c[1] * t1[0]};
+
+  int sample_indices[25];
+  REAL sample_u[25];
+  REAL sample_v[25];
+  REAL sample_z[25];
+  REAL sample_hh[25];
+  int sample_count = 0;
+  REAL coordinate_scale = 0.0;
+  for (int offset2 = -2; offset2 <= 2; offset2++) {
+    for (int offset1 = -2; offset1 <= 2; offset1++) {
+      int j1 = coarse_j1 + offset1;
+      int j2 = coarse_j2 + offset2;
+      spectre_spin_reflect_scalar_index(&j1, &j2, Ntheta, Nphi);
+      const int p = spectre_spin_active_index(j1, j2, Ntheta);
+      int duplicate = 0;
+      for (int sample = 0; sample < sample_count; sample++)
+        duplicate |= sample_indices[sample] == p;
+      if (duplicate)
+        continue;
+
+      const REAL theta = xx1[NGHOSTS + j1];
+      const REAL phi = xx2[NGHOSTS + j2];
+      if (!isfinite(theta) || !isfinite(phi))
+        return 0;
+      const REAL n[3] = {
+          sin(theta) * cos(phi),
+          sin(theta) * sin(phi),
+          cos(theta)};
+      const REAL denominator = n[0] * n_c[0] + n[1] * n_c[1] + n[2] * n_c[2];
+      if (!(denominator > 0.0) || !isfinite(denominator))
+        continue;
+      const REAL u = (n[0] * t1[0] + n[1] * t1[1] + n[2] * t1[2]) / denominator;
+      const REAL v = (n[0] * t2[0] + n[1] * t2[1] + n[2] * t2[2]) / denominator;
+      if (!isfinite(u) || !isfinite(v))
+        continue;
+      const size_t hh_idx =
+          (size_t)i0 + (size_t)Nxx_plus_2NGHOSTS0 *
+                           ((size_t)(NGHOSTS + j1) +
+                            (size_t)Nxx_plus_2NGHOSTS1 *
+                                ((size_t)(NGHOSTS + j2) + (size_t)Nxx_plus_2NGHOSTS2 * (size_t)HHGF));
+      sample_indices[sample_count] = p;
+      sample_u[sample_count] = u;
+      sample_v[sample_count] = v;
+      sample_z[sample_count] = mode[p];
+      sample_hh[sample_count] = in_gfs[hh_idx];
+      coordinate_scale = fmax(coordinate_scale, fmax(fabs(u), fabs(v)));
+      sample_count++;
+    } // END LOOP: for offset1 over pole stencil
+  } // END LOOP: for offset2 over pole stencil
+  if (sample_count < 6 || !(coordinate_scale > 0.0) || !isfinite(coordinate_scale))
+    return 0;
+
+  REAL augmented[6][8] = {{0.0}};
+  for (int sample = 0; sample < sample_count; sample++) {
+    const REAL u = sample_u[sample] / coordinate_scale;
+    const REAL v = sample_v[sample] / coordinate_scale;
+    const REAL design[6] = {1.0, u, v, 0.5 * u * u, u * v, 0.5 * v * v};
+    for (int row = 0; row < 6; row++) {
+      for (int col = 0; col < 6; col++)
+        augmented[row][col] += design[row] * design[col];
+      augmented[row][6] += design[row] * sample_z[sample];
+      augmented[row][7] += design[row] * sample_hh[sample];
+    } // END LOOP: for row over design columns
+  } // END LOOP: for sample over unique stencil
+  REAL matrix_scale = 0.0;
+  for (int row = 0; row < 6; row++) {
+    for (int col = 0; col < 8; col++) {
+      if (!isfinite(augmented[row][col]))
+        return 0;
+      if (col < 6)
+        matrix_scale = fmax(matrix_scale, fabs(augmented[row][col]));
+    } // END LOOP: for col over fit matrix
+  } // END LOOP: for row over fit matrix
+  if (!(matrix_scale > 0.0) || !isfinite(matrix_scale))
+    return 0;
+
+  REAL pivot_min = DBL_MAX;
+  REAL pivot_max = 0.0;
+  for (int col = 0; col < 6; col++) {
+    int pivot_row = col;
+    REAL pivot_abs = fabs(augmented[col][col]);
+    for (int row = col + 1; row < 6; row++) {
+      if (fabs(augmented[row][col]) > pivot_abs) {
+        pivot_row = row;
+        pivot_abs = fabs(augmented[row][col]);
+      } // END IF: partial-pivot candidate is larger
+    } // END LOOP: for row over pivot candidates
+    if (!(pivot_abs > 4096.0 * DBL_EPSILON * matrix_scale) || !isfinite(pivot_abs))
+      return 0;
+    if (pivot_row != col) {
+      for (int entry = col; entry < 8; entry++) {
+        const REAL tmp = augmented[col][entry];
+        augmented[col][entry] = augmented[pivot_row][entry];
+        augmented[pivot_row][entry] = tmp;
+      } // END LOOP: for entry over pivot rows
+    } // END IF: partial pivot row exchange
+    pivot_min = fmin(pivot_min, pivot_abs);
+    pivot_max = fmax(pivot_max, pivot_abs);
+    const REAL pivot = augmented[col][col];
+    for (int entry = col; entry < 8; entry++) {
+      augmented[col][entry] /= pivot;
+      if (!isfinite(augmented[col][entry]))
+        return 0;
+    } // END LOOP: for entry over pivot row
+    for (int row = 0; row < 6; row++) {
+      if (row == col)
+        continue;
+      const REAL factor = augmented[row][col];
+      for (int entry = col; entry < 8; entry++) {
+        augmented[row][entry] -= factor * augmented[col][entry];
+        if (!isfinite(augmented[row][entry]))
+          return 0;
+      } // END LOOP: for entry over eliminated row
+    } // END LOOP: for row over non-pivot rows
+  } // END LOOP: for col over quadratic-fit pivots
+  if (!(pivot_min > 0.0) || !isfinite(pivot_min) || !isfinite(pivot_max) || pivot_max / pivot_min > 1.0e12)
+    return 0;
+
+  REAL z_coeff[6];
+  REAL hh_coeff[6];
+  for (int row = 0; row < 6; row++) {
+    z_coeff[row] = augmented[row][6];
+    hh_coeff[row] = augmented[row][7];
+    if (!isfinite(z_coeff[row]) || !isfinite(hh_coeff[row]))
+      return 0;
+  } // END LOOP: for row over fit coefficients
+
+  const REAL hessian_scale = fmax(fabs(z_coeff[3]), fmax(fabs(z_coeff[4]), fabs(z_coeff[5])));
+  if (!(hessian_scale > 0.0) || !isfinite(hessian_scale))
+    return 0;
+  const REAL half_trace = 0.5 * (z_coeff[3] + z_coeff[5]);
+  const REAL eigen_radius = hypot(0.5 * (z_coeff[3] - z_coeff[5]), z_coeff[4]);
+  const REAL eigenvalue_min = half_trace - eigen_radius;
+  const REAL eigenvalue_max = half_trace + eigen_radius;
+  const REAL hessian_tolerance = 512.0 * DBL_EPSILON * hessian_scale;
+  if ((find_max && !(eigenvalue_max < -hessian_tolerance)) ||
+      (!find_max && !(eigenvalue_min > hessian_tolerance)))
+    return 0;
+  const REAL hessian_determinant = z_coeff[3] * z_coeff[5] - z_coeff[4] * z_coeff[4];
+  if (!(hessian_determinant > 512.0 * DBL_EPSILON * hessian_scale * hessian_scale) || !isfinite(hessian_determinant))
+    return 0;
+  const REAL u_scaled_star = (-z_coeff[5] * z_coeff[1] + z_coeff[4] * z_coeff[2]) / hessian_determinant;
+  const REAL v_scaled_star = (z_coeff[4] * z_coeff[1] - z_coeff[3] * z_coeff[2]) / hessian_determinant;
+  const REAL u_star = coordinate_scale * u_scaled_star;
+  const REAL v_star = coordinate_scale * v_scaled_star;
+  if (!isfinite(u_scaled_star) || !isfinite(v_scaled_star) || !isfinite(u_star) || !isfinite(v_star))
+    return 0;
+  const REAL trust_radius = 1.5 * fmax(fabs(dtheta), fabs(sin(theta_c) * dphi));
+  if (!(trust_radius > 0.0) || !isfinite(trust_radius) || hypot(u_star, v_star) > trust_radius)
+    return 0;
+
+  const REAL hh_star = hh_coeff[0] + hh_coeff[1] * u_scaled_star + hh_coeff[2] * v_scaled_star +
+                       0.5 * hh_coeff[3] * u_scaled_star * u_scaled_star +
+                       hh_coeff[4] * u_scaled_star * v_scaled_star +
+                       0.5 * hh_coeff[5] * v_scaled_star * v_scaled_star;
+  if (!(hh_star > 0.0) || !isfinite(hh_star))
+    return 0;
+  REAL direction[3];
+  REAL direction_norm_squared = 0.0;
+  for (int a = 0; a < 3; a++) {
+    direction[a] = n_c[a] + u_star * t1[a] + v_star * t2[a];
+    direction_norm_squared += direction[a] * direction[a];
+  } // END LOOP: for a over inverse-gnomonic components
+  if (!(direction_norm_squared > 0.0) || !isfinite(direction_norm_squared))
+    return 0;
+  const REAL direction_norm = sqrt(direction_norm_squared);
+  for (int a = 0; a < 3; a++) {
+    refined_point[a] = hh_star * direction[a] / direction_norm;
+    if (!isfinite(refined_point[a]))
+      return 0;
+  } // END LOOP: for a over refined point
+  return 1;
+} // END FUNCTION: spectre_spin_refine_akv_pole
+
+/**
  * Build one finite-difference derivative row for a scalar on the horizon grid.
  *
  * @param[in,out] row Sparse row receiving the finite-difference stencil.
@@ -1654,15 +1926,20 @@ static int spectre_spin_procrustes(const REAL C[3][3], REAL O[3][3]) {
  * @param[in] auxevol_gfs Auxiliary evolution gridfunctions.
  * @param[in,out] spectre_spin_gfs Spin-diagnostic scratch gridfunctions.
  * @param[out] normalized_gram Normalized scalar-potential Gram matrix.
+ * @param[out] akv_axis Lowest-shear AKV refined-pole unit axis, or zero.
+ * @param[out] akv_axis_valid Nonzero when both poles were refined.
  * @return BHAHAHA_SUCCESS, or an allocation, geometry, PRIMME, or
  * normalization error code.
  */
 static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commondata, griddata_struct *restrict griddata,
                                                const REAL *restrict auxevol_gfs, REAL *restrict spectre_spin_gfs,
-                                               REAL normalized_gram[3][3]) {
+                                               REAL normalized_gram[3][3], REAL akv_axis[3], int *restrict akv_axis_valid) {
   for (int a = 0; a < 3; a++)
     for (int b = 0; b < 3; b++)
       normalized_gram[a][b] = 0.0;
+  for (int a = 0; a < 3; a++)
+    akv_axis[a] = 0.0;
+  *akv_axis_valid = 0;
 
   const int grid = 0;
   bhahaha_params_and_data_struct *restrict horizon_params = commondata->bhahaha_params_and_data;
@@ -2306,7 +2583,10 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
     return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR;
   } // END IF: PRIMME eigensolve failed
   for (int a = 0; a < 3; a++) {
-    if (!isfinite(evals[a]) || !isfinite(resnorms[a])) {
+    int eigenpair_is_finite = isfinite(evals[a]) && isfinite(resnorms[a]);
+    for (int r = 0; r < Nred; r++)
+      eigenpair_is_finite &= isfinite(evecs_red[(size_t)a * (size_t)Nred + (size_t)r]);
+    if (!eigenpair_is_finite) {
       if (horizon_params != NULL)
         horizon_params->spectre_spin_akv_seed_valid = 0;
       spectre_spin_csr_free(&K_csr);
@@ -2329,6 +2609,24 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       return DIAG_SPECTRE_SPIN_POTENTIAL_PRIMME_ERROR;
     } // END IF: PRIMME eigenpair contains non-finite value
   } // END LOOP: for a over PRIMME eigenpairs
+  // Make the zU0 contract independent of PRIMME's returned eigenpair order.
+  for (int a = 0; a < 2; a++) {
+    for (int b = a + 1; b < 3; b++) {
+      if (evals[b] < evals[a]) {
+        const double eval_tmp = evals[a];
+        evals[a] = evals[b];
+        evals[b] = eval_tmp;
+        const double resnorm_tmp = resnorms[a];
+        resnorms[a] = resnorms[b];
+        resnorms[b] = resnorm_tmp;
+        for (int r = 0; r < Nred; r++) {
+          const double evec_tmp = evecs_red[(size_t)a * (size_t)Nred + (size_t)r];
+          evecs_red[(size_t)a * (size_t)Nred + (size_t)r] = evecs_red[(size_t)b * (size_t)Nred + (size_t)r];
+          evecs_red[(size_t)b * (size_t)Nred + (size_t)r] = evec_tmp;
+        } // END LOOP: for r over eigenvector column
+      } // END IF: PRIMME eigenpairs out of order
+    } // END LOOP: for b over later eigenpairs
+  } // END LOOP: for a over eigenpair sort
   if (horizon_params != NULL && horizon_params->verbosity_level >= 2) {
     for (int a = 0; a < 3; a++)
       printf("AKV generalized squared-Killing-residual eigenpair: mode=%d lambda=%+.17e PRIMME_residual_norm=%+.17e\n",
@@ -2406,6 +2704,43 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
       } // END ELSE: potential norm is usable
     } // END IF: mass-null removal succeeded
   } // END LOOP: for mode over independently-normalized AKV-eigenvectors
+
+  if (status == BHAHAHA_SUCCESS) {
+    REAL x_max[3];
+    REAL x_min[3];
+    const int max_is_valid = spectre_spin_refine_akv_pole(
+        &modes[0], in_gfs, xx[1], xx[2], i0, Nxx_plus_2NGHOSTS0,
+        Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, Ntheta, Nphi, dxx1, dxx2, 1, x_max);
+    const int min_is_valid = spectre_spin_refine_akv_pole(
+        &modes[0], in_gfs, xx[1], xx[2], i0, Nxx_plus_2NGHOSTS0,
+        Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, Ntheta, Nphi, dxx1, dxx2, 0, x_min);
+    if (max_is_valid && min_is_valid) {
+      REAL axis_norm_squared = 0.0;
+      REAL horizon_length_scale_squared = 0.0;
+      for (int a = 0; a < 3; a++) {
+        akv_axis[a] = x_max[a] - x_min[a];
+        axis_norm_squared += akv_axis[a] * akv_axis[a];
+        horizon_length_scale_squared = fmax(horizon_length_scale_squared, fmax(x_max[a] * x_max[a], x_min[a] * x_min[a]));
+      } // END LOOP: for a over refined-pole axis
+      const REAL axis_norm = sqrt(axis_norm_squared);
+      const REAL horizon_length_scale = sqrt(horizon_length_scale_squared);
+      const REAL axis_norm_tolerance = 128.0 * DBL_EPSILON * fmax(horizon_length_scale, DBL_MIN);
+      if (isfinite(axis_norm) && axis_norm > axis_norm_tolerance) {
+        int normalized_axis_is_finite = 1;
+        for (int a = 0; a < 3; a++) {
+          akv_axis[a] /= axis_norm;
+          normalized_axis_is_finite &= isfinite(akv_axis[a]);
+        } // END LOOP: for a over normalized axis
+        *akv_axis_valid = normalized_axis_is_finite;
+      } // END IF: refined extrema define resolvable axis
+    } // END IF: both AKV extrema refined
+    if (!*akv_axis_valid) {
+      for (int a = 0; a < 3; a++)
+        akv_axis[a] = 0.0;
+      if (horizon_params != NULL && horizon_params->verbosity_level > 0)
+        fprintf(stderr, "WARNING: lowest-shear AKV pole localization failed; the AKV-pole vector is unavailable.\n");
+    } // END IF: lowest-shear AKV axis unavailable
+  } // END IF: normalized lowest-shear AKV available
 
   if (status == BHAHAHA_SUCCESS) {
     for (int a = 0; a < 3; a++) {
@@ -2559,6 +2894,11 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 @DIAGNOSTIC_PARAMETER_DEFINITIONS@
 @DIAGNOSTIC_COMMONDATA_DEFINITIONS@
 
+  bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
+  bhahaha_diags->spin_chi_x_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  bhahaha_diags->spin_chi_y_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+  bhahaha_diags->spin_chi_z_akv_poles = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
+
   const size_t spectre_spin_npoints =
       (size_t)Nxx_plus_2NGHOSTS0 * (size_t)Nxx_plus_2NGHOSTS1 * (size_t)Nxx_plus_2NGHOSTS2;
   REAL *restrict spectre_spin_gfs =
@@ -2634,8 +2974,10 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
   }} // END BLOCK: fill SE_qDD/SE_XD ghosts before differentiation
 
   REAL G[3][3];
+  REAL akv_axis_U[3];
+  int akv_axis_valid;
   const int spin_potential_status =
-      bah_compute_spectre_spin_potentials(commondata, griddata, auxevol_gfs, spectre_spin_gfs, G);
+      bah_compute_spectre_spin_potentials(commondata, griddata, auxevol_gfs, spectre_spin_gfs, G, akv_axis_U, &akv_axis_valid);
   if (spin_potential_status != BHAHAHA_SUCCESS) {{
     free(spectre_spin_gfs);
     return spin_potential_status;
@@ -2729,7 +3071,6 @@ static int bah_compute_spectre_spin_potentials(commondata_struct *restrict commo
 } // END OMP PARALLEL: integrate spin diagnostic
 
 // Step 8: Compute the dimensionless spin vector from the integrated quantities.
-bhahaha_diagnostics_struct *restrict bhahaha_diags = commondata->bhahaha_diagnostics;
 
 const REAL surface_weight = dxx1 * dxx2;
 const REAL spin_norm_tolerance = 1.0e-14;
@@ -2758,6 +3099,8 @@ REAL S_U[3] = {0.0, 0.0, 0.0};
 REAL chi_U[3] = {0.0, 0.0, 0.0};
 REAL S_Gram_U[3] = {0.0, 0.0, 0.0};
 REAL chi_Gram_U[3] = {0.0, 0.0, 0.0};
+REAL chi_AKV_U[3] = {0.0, 0.0, 0.0};
+int akv_spin_is_valid = 0;
 
 if (!(A > spin_norm_tolerance) || !isfinite(A) || !isfinite(R0) || !isfinite(O0) ||
     !isfinite(Oabs)) {
@@ -2884,6 +3227,23 @@ if (!(M_irr_squared > 0.0) || !isfinite(M_irr_squared)) {
     free(spectre_spin_gfs);
     return DIAG_SPECTRE_SPIN_POTENTIAL_NORMALIZATION_ERROR;
 } // END IF: irreducible mass squared is invalid
+if (akv_axis_valid) {
+    const REAL J_akv = ZOU[0] / (8.0 * M_PI);
+    const REAL J_akv_squared = J_akv * J_akv;
+    const REAL M_horizon_AKV_squared = M_irr_squared + J_akv_squared / (4.0 * M_irr_squared);
+    REAL S_AKV_U[3];
+    int akv_spin_is_finite = isfinite(J_akv) && isfinite(J_akv_squared) &&
+                             isfinite(M_horizon_AKV_squared) && M_horizon_AKV_squared > 0.0;
+    for (int i = 0; i < 3; i++) {
+        S_AKV_U[i] = J_akv * akv_axis_U[i];
+        chi_AKV_U[i] = S_AKV_U[i] / M_horizon_AKV_squared;
+        akv_spin_is_finite &= isfinite(akv_axis_U[i]) && isfinite(S_AKV_U[i]) && isfinite(chi_AKV_U[i]);
+    } // END LOOP: for i over AKV-pole spin
+    akv_spin_is_valid = akv_spin_is_finite;
+    if (!akv_spin_is_finite && commondata->bhahaha_params_and_data != NULL &&
+             commondata->bhahaha_params_and_data->verbosity_level > 0)
+        fprintf(stderr, "WARNING: lowest-shear AKV pole spin is non-finite; the AKV-pole vector is unavailable.\n");
+} // END IF: refined AKV axis available
 const REAL M_horizon_squared = M_irr_squared + S * S / (4.0 * M_irr_squared);
 const REAL M_horizon_Gram_squared = M_irr_squared + S_Gram * S_Gram / (4.0 * M_irr_squared);
 if (!(M_horizon_squared > 0.0) || !isfinite(M_horizon_squared) ||
@@ -2907,6 +3267,11 @@ bhahaha_diags->spin_chi_z_spectre = chi_U[2];
 bhahaha_diags->spin_chi_x_gram_matrix = chi_Gram_U[0];
 bhahaha_diags->spin_chi_y_gram_matrix = chi_Gram_U[1];
 bhahaha_diags->spin_chi_z_gram_matrix = chi_Gram_U[2];
+if (akv_spin_is_valid) {
+    bhahaha_diags->spin_chi_x_akv_poles = chi_AKV_U[0];
+    bhahaha_diags->spin_chi_y_akv_poles = chi_AKV_U[1];
+    bhahaha_diags->spin_chi_z_akv_poles = chi_AKV_U[2];
+} // END IF: finite AKV-pole spin and mass
 
 free(spectre_spin_gfs);
 return BHAHAHA_SUCCESS;
