@@ -58,9 +58,6 @@ error_code_msg_tuples_list += [("INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS",
 error_code_msg_tuples_list += [
     ("DIAG_PROPER_CIRCUM_MALLOC_ERROR", "diagnostics_proper_circumferences(): One or more malloc's failed.")]
 error_code_msg_tuples_list += [
-    ("DIAG_SPECTRE_SPIN_POTENTIAL_ERROR",
-     "diagnostics_spectre_spin(): Failed to compute finite normalized spin-potential modes.")]
-error_code_msg_tuples_list += [
     ("DIAG_SPECTRE_SPIN_POTENTIAL_MALLOC_ERROR",
      "diagnostics_spectre_spin(): Failed to allocate spin-potential eigenproblem work arrays.")]
 error_code_msg_tuples_list += [

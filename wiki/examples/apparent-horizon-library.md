@@ -1,6 +1,6 @@
 # Apparent Horizon Library
 
-> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed · Last reconciled: 07-12-2026
+> Route BHaHAHA library generation and keep horizon-enabled examples linked to, not owners of, the apparent-horizon internals. · Status: confirmed · Last reconciled: 08-14-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -46,12 +46,28 @@ boundary, RHS, KO, and BHaH define/header functions, then removes
 `__rfm__Spherical` wrapper suffixes so the library exports plain `bah_`
 functions.
 
+Before Makefile generation, the generator validates and copies its frozen,
+symbol-prefixed PRIMME tree. One explicit `.c` inventory supplies typed
+additional source records to the canonical Makefile helper, so PRIMME follows
+the same `SOURCES` to `OBJECTS` pipeline as generated functions and enters the
+static archive through `$(OBJECTS)`. The same extension declares the phony
+`linkcheck` target and its two cleanup artifacts; `bhahaha.py` does not parse or
+rewrite the emitted Makefile.
+
 The Makefile helper is called with `exec_or_library_name = "lib<project_name>"`,
 `lib_function_prefix = "bah_"`, `create_lib = True`, and `static_lib = True`.
 The resulting generated project is therefore a static library workflow, not a
 standalone evolution executable. The final generator message tells users to
 build in the generated BHaHAHA directory and start linking guidance from
 `BHaHAHA.h`.
+
+Claim evidence:
+- Claim: BHaHAHA supplies one explicit PRIMME source inventory plus typed `linkcheck` and cleanup metadata, while the canonical BHaH helper renders the Makefile; an isolated OpenMP-disabled serial-codegen generation built `libBHaHAHA.a` with PRIMME members, linked `linkcheck`, and cleaned objects, `.deps`, the archive, and both linkcheck artifacts.
+- Role: descriptive behavior
+- Deciding authority: [bhahaha.py](../../nrpy/examples/bhahaha.py), `akv_primme_c_sources` and `akv_makefile_extension`; [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `MakefileExtension` and `_construct_makefile_content`
+- Corroboration: none available; validation artifacts were temporary and were not registered
+- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, GNU Make 4.3, Python 3.13.7; backend=BHaHAHA CPU C static library; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=serial codegen in an isolated copy, --no-openmp, OPENMP=0; date=08-14-2026`
 
 `BHaHAHA.h` is assembled from the checked-in header template plus generator
 additions. It defines `REAL` when absent, declares the 12 Cartesian ADM input
@@ -79,6 +95,7 @@ internals belong under [BHaHAHA Horizon Runtime](../infrastructures/bhah/bhahaha
 ## Sources
 
 - [bhahaha.py](../../nrpy/examples/bhahaha.py) - `--fdorder`, `--outrootdir`, `--cpp`, `--no-openmp`, `project_name`, `output_CFunctions_function_prototypes_and_construct_Makefile`
+- [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `MakefileExtension`, `MakefileTarget`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [BHaHAHA_header.h](../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_params_and_data_struct`, `bhahaha_diagnostics_struct`, `NUM_EXT_INPUT_CARTESIAN_GFS`, `IDX2`, public `bah_*` prototypes
 - [error_message.py](../../nrpy/infrastructures/BHaH/BHaHAHA/error_message.py) - `error_code_msg_tuples_list`, `register_CFunction_error_message`
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `BHaH.BHaHAHA.BHaH_implementation.register_CFunction_bhahaha_find_horizons`

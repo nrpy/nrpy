@@ -228,16 +228,37 @@ akv_primme_c_sources = [
     "akv_primme_eigensolver/memman.c",
     "akv_primme_eigensolver/wtime.c",
 ]
-akv_primme_source_records = [
-    f"SOURCES += $(call ADD_SOURCE,{source})" for source in akv_primme_c_sources
-]
-akv_linkcheck_makefile_rule = "\n".join(
-    [
-        ".PHONY: linkcheck",
-        "linkcheck: $(OBJECTS)",
-        "\tprintf 'int main(void) { return 0; }\\n' > .akv_linkcheck_main.c",
-        "\t$(LINKER) $(ALL_CPPFLAGS) $(ALL_CFLAGS) .akv_linkcheck_main.c $(OBJECTS) $(ALL_LDFLAGS) $(ALL_LDLIBS) -o .akv_linkcheck",
-    ]
+
+akv_primme_src = Path(BHaH.BHaHAHA.__file__).resolve().parent / "akv_primme_eigensolver"
+akv_primme_dst = Path(project_dir) / "akv_primme_eigensolver"
+
+if not akv_primme_src.is_dir():
+    raise FileNotFoundError(
+        f"Missing internal PRIMME source directory: {akv_primme_src}"
+    )
+if not Path(akv_primme_src, "primme.h").is_file():
+    raise FileNotFoundError(
+        f"Could not find primme.h in internal PRIMME source directory: {akv_primme_src}"
+    )
+
+shutil.copytree(akv_primme_src, akv_primme_dst)
+
+akv_makefile_extension = BHaH.Makefile_helpers.MakefileExtension(
+    source_records=[(source, []) for source in akv_primme_c_sources],
+    targets=[
+        BHaH.Makefile_helpers.MakefileTarget(
+            name="linkcheck",
+            prerequisites=["$(OBJECTS)"],
+            recipe=[
+                "printf 'int main(void) { return 0; }\\n' > .akv_linkcheck_main.c",
+                "$(LINKER) $(ALL_CPPFLAGS) $(ALL_CFLAGS) "
+                ".akv_linkcheck_main.c $(OBJECTS) "
+                "$(ALL_LDFLAGS) $(ALL_LDLIBS) -o .akv_linkcheck",
+            ],
+            phony=True,
+        )
+    ],
+    clean_files=[".akv_linkcheck", ".akv_linkcheck_main.c"],
 )
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
@@ -255,46 +276,8 @@ BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefi
     ],
     include_dirs=["akv_primme_eigensolver"],
     use_openmp=use_openmp,
+    makefile_extension=akv_makefile_extension,
 )
-
-akv_primme_src = Path(BHaH.BHaHAHA.__file__).resolve().parent / "akv_primme_eigensolver"
-akv_primme_dst = Path(project_dir) / "akv_primme_eigensolver"
-
-if not akv_primme_src.is_dir():
-    raise FileNotFoundError(
-        f"Missing internal PRIMME source directory: {akv_primme_src}"
-    )
-if not Path(akv_primme_src, "primme.h").is_file():
-    raise FileNotFoundError(
-        f"Could not find primme.h in internal PRIMME source directory: {akv_primme_src}"
-    )
-
-shutil.copytree(akv_primme_src, akv_primme_dst)
-
-makefile_path = Path(project_dir) / "Makefile"
-lines = makefile_path.read_text(encoding="utf-8").splitlines()
-
-for line_number, line in enumerate(lines):
-    if line.startswith("OBJECTS := "):
-        lines[line_number:line_number] = akv_primme_source_records
-        break
-else:
-    raise ValueError(
-        f"Could not find OBJECTS assignment in generated Makefile: {makefile_path}"
-    )
-
-for line_number, line in enumerate(lines):
-    if line.startswith("\t$(RM) $(OBJECTS) "):
-        lines[line_number] = line + " .akv_linkcheck .akv_linkcheck_main.c"
-        break
-else:
-    raise ValueError(
-        f"Could not find clean object-removal rule in generated Makefile: {makefile_path}"
-    )
-
-makefile_text = "\n".join(lines) + "\n"
-makefile_text += akv_linkcheck_makefile_rule + "\n"
-makefile_path.write_text(makefile_text, encoding="utf-8")
 
 # Append latest error codes & error message function prototype to BHaHAHA.h
 # Load the header file using pkgutil
