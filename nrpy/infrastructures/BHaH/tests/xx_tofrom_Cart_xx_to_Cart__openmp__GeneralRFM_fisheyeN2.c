@@ -19,13 +19,6 @@ void xx_to_Cart__rfm__GeneralRFM_fisheyeN2(const params_struct *restrict params,
   } else {
     const REAL r = sqrt(r2);
     REAL rbar;
-    /*
-     *  Original SymPy expression:
-     *  "rbar = params->fisheye_c*(params->fisheye_a2*r + params->fisheye_s1*(params->fisheye_a0 - params->fisheye_a1)*log(cosh((params->fisheye_R1 +
-     * r)/params->fisheye_s1)/cosh((-params->fisheye_R1 + r)/params->fisheye_s1))/(2*tanh(params->fisheye_R1/params->fisheye_s1)) +
-     * params->fisheye_s2*(params->fisheye_a1 - params->fisheye_a2)*log(cosh((params->fisheye_R2 + r)/params->fisheye_s2)/cosh((-params->fisheye_R2 +
-     * r)/params->fisheye_s2))/(2*tanh(params->fisheye_R2/params->fisheye_s2)))"
-     */
     const REAL tmp0 = (1.0 / (params->fisheye_s1));
     const REAL tmp2 = (1.0 / (params->fisheye_s2));
     rbar = params->fisheye_c *

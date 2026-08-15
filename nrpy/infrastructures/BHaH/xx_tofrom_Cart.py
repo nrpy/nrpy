@@ -6,9 +6,14 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import contextlib
+import io
+import subprocess
 from inspect import currentframe as cfr
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import FrameType as FT
-from typing import Any, Dict, List, Set, Union, cast
+from typing import Dict, List, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -66,8 +71,7 @@ def _prepare_sympy_exprs_for_codegen(
     """
     # Create a single substitution dictionary for all unique parameters.
     all_symbols = set().union(*(expr.free_symbols for expr in sympy_exprs))
-    # FIX: Use Dict[Any, Any] to satisfy mypy's variance checks for .subs()
-    substitutions: Dict[Any, Any] = {}
+    substitutions: Dict[sp.Basic, sp.Basic] = {}
 
     for sym in all_symbols:
         # We explicitly cast Basic -> Symbol to access .name safely
@@ -77,8 +81,330 @@ def _prepare_sympy_exprs_for_codegen(
             # We explicitly type the replacement as a Symbol (which is an Expr)
             substitutions[symbol] = sp.symbols(f"params->{symbol.name}")
 
-    # Apply the substitution to each expression.
-    return [expr.subs(substitutions) for expr in sympy_exprs]
+    # Apply exact symbol replacements without triggering algebraic rewriting.
+    return [expr.xreplace(substitutions) for expr in sympy_exprs]
+
+
+def _generate_bracketed_radial_inverse_body(
+    radius_symbol: sp.Symbol,
+    rbar_expr: sp.Expr,
+    drbar_dr_expr: sp.Expr,
+    asymptotic_scale_expr: sp.Expr,
+    cart_components: Tuple[str, str, str],
+    origin_body: str,
+    success_body: str,
+    failure_body: str,
+) -> str:
+    """
+    Generate a bracketed radial inverse for monotone fisheye maps.
+
+    :param radius_symbol: Symbol representing the raw radial coordinate.
+    :param rbar_expr: Provider-owned scaled fisheye radius map.
+    :param drbar_dr_expr: Provider-owned radial derivative of the scaled radius map.
+    :param asymptotic_scale_expr: Provider-owned asymptotic scale for the far-field map.
+    :param cart_components: Cartesian component expressions `(x, y, z)`.
+    :param origin_body: C statements used when `rCart` is effectively zero.
+    :param success_body: C statements used after a successful inverse solve.
+    :param failure_body: C statements used when the inverse solve fails.
+    :return: C code string for the inverse solve.
+    """
+    cartx, carty, cartz = cart_components
+
+    def emit_codegen(
+        radius_var: str,
+        outputs: Tuple[Tuple[str, sp.Expr], ...],
+        cse_varprefix: str,
+    ) -> str:
+        local_vars = {"rCart", "high", "radial_seed", "trial_seed", radius_var}
+        local_radius = sp.Symbol(radius_var, real=True, nonnegative=True)
+        processed_exprs = _prepare_sympy_exprs_for_codegen(
+            [expr.xreplace({radius_symbol: local_radius}) for _, expr in outputs],
+            local_vars,
+        )
+        return ccg.c_codegen(
+            processed_exprs,
+            [name for name, _ in outputs],
+            include_braces=False,
+            verbose=False,
+            cse_varprefix=cse_varprefix,
+        )
+
+    asymptotic_scale_codegen = emit_codegen(
+        "radial_seed",
+        (("asymptotic_scale", asymptotic_scale_expr),),
+        "asymptotic_",
+    )
+    high_map_codegen = emit_codegen(
+        "high",
+        (("high_map", rbar_expr),),
+        "high_",
+    )
+    radial_map_codegen = emit_codegen(
+        "radial_seed",
+        (("radial_map", rbar_expr), ("radial_map_prime", drbar_dr_expr)),
+        "radial_",
+    )
+    trial_map_codegen = emit_codegen(
+        "trial_seed",
+        (("trial_map", rbar_expr),),
+        "trial_",
+    )
+    fallback_map_codegen = emit_codegen(
+        "trial_seed",
+        (("trial_map_fallback", rbar_expr),),
+        "fallback_",
+    )
+
+    return rf"""
+  const REAL rCart = sqrt(({cartx}) * ({cartx}) + ({carty}) * ({carty}) + ({cartz}) * ({cartz}));
+  if (!(isfinite(rCart))) {{
+{failure_body}
+  }} // END IF: invalid radius
+  else if (rCart <= (REAL)0.0) {{
+{origin_body}
+  }} // END ELSE IF: handle origin
+  else {{
+    const REAL radial_scale = rCart;
+    const REAL inverse_relative_tol =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-5 : (REAL)1.0e-12;
+    const REAL derivative_floor =
+        (sizeof(REAL) == sizeof(float)) ? (REAL)1.0e-7 : (REAL)1.0e-14;
+    const REAL residual_tolerance = inverse_relative_tol * radial_scale;
+    REAL asymptotic_scale;
+{asymptotic_scale_codegen}
+    const REAL inv_asymptotic_scale =
+        (fabs(asymptotic_scale) > (REAL)1.0e-15) ? (REAL)1.0 / asymptotic_scale : (REAL)1.0;
+    REAL low = (REAL)0.0;
+    REAL high = NRPYMAX(rCart * inv_asymptotic_scale, radial_scale);
+    const REAL bracket_tolerance = inverse_relative_tol * NRPYMAX(high, radial_scale);
+    REAL radial_seed = (REAL)0.5 * high;
+    int bracket_found = 0;
+    int converged = 0;
+    for (int expand = 0; expand < 80; expand++) {{
+      REAL high_map;
+{high_map_codegen}
+      const REAL high_residual = high_map - rCart;
+      if (isfinite(high_residual) && high_residual >= (REAL)0.0) {{
+        bracket_found = 1;
+        break;
+      }} // END IF: found bracket
+      high = NRPYMAX(high * (REAL)2.0, (REAL)1.0);
+    }} // END LOOP: for expand over bracket expansions
+    if (!bracket_found) {{
+{failure_body}
+    }} // END IF: bracket failed
+    radial_seed = (REAL)0.5 * (low + high);
+    for (int iter = 0; iter < 80; iter++) {{
+      REAL radial_map;
+      REAL radial_map_prime;
+{radial_map_codegen}
+      const REAL radial_residual = radial_map - rCart;
+      REAL trial_seed = (REAL)0.5 * (low + high);
+      if (isfinite(radial_map_prime) && fabs(radial_map_prime) > derivative_floor) {{
+        const REAL newton_seed = radial_seed - radial_residual / radial_map_prime;
+        if (isfinite(newton_seed) && newton_seed >= low && newton_seed <= high)
+          trial_seed = newton_seed;
+      }} // END IF: use Newton seed
+      REAL trial_map;
+{trial_map_codegen}
+      REAL trial_residual = trial_map - rCart;
+      if (!isfinite(trial_residual)) {{
+        trial_seed = (REAL)0.5 * (low + high);
+        REAL trial_map_fallback;
+{fallback_map_codegen}
+        trial_residual = trial_map_fallback - rCart;
+        if (!isfinite(trial_residual)) {{
+{failure_body}
+        }} // END IF: fallback residual is non-finite
+      }} // END IF: primary trial residual is non-finite
+      if (trial_residual >= (REAL)0.0)
+        high = trial_seed;
+      else
+        low = trial_seed;
+      if (fabs(trial_residual) < residual_tolerance &&
+          (fabs(high - low) < bracket_tolerance || fabs(trial_seed - radial_seed) < bracket_tolerance)) {{
+        radial_seed = trial_seed;
+        converged = 1;
+        break;
+      }} // END IF: inverse converged
+      radial_seed = trial_seed;
+    }} // END LOOP: for iter over inverse
+    if (!converged || !isfinite(radial_seed) || radial_seed < (REAL)0.0) {{
+{failure_body}
+    }} // END IF: inverse failed
+{success_body}
+  }} // END ELSE: invert fisheye radius
+"""
+
+
+def _remove_c_includes(c_source: str) -> str:
+    """
+    Drop generated include directives before embedding C functions in a doctest harness.
+
+    :param c_source: Full generated C function text.
+    :return: Generated C function text without `#include` directives.
+    """
+    return "\n".join(
+        line for line in c_source.splitlines() if not line.startswith("#include ")
+    )
+
+
+def _run_generalrfm_fisheye_inverse_roundtrip_check(real_type: str) -> None:
+    """
+    Compile and run a semantic round-trip check for the GeneralRFM fisheye inverse.
+
+    :param real_type: C floating-point type to use for `REAL`; must be `float` or `double`.
+    :raises ValueError: If `real_type` is unsupported.
+    :raises RuntimeError: If the generated C harness fails to compile or run.
+    """
+    if real_type not in {"float", "double"}:
+        raise ValueError("real_type must be 'float' or 'double'.")
+
+    from nrpy.infrastructures.BHaH.generalrfm_cart_to_xx import (
+        register_CFunction_generalrfm_Cart_to_xx,
+    )
+
+    par.set_parval_from_str("parallelization", "openmp")
+    cfc.CFunction_dict.clear()
+    with contextlib.redirect_stdout(io.StringIO()):
+        _ = register_CFunction_xx_to_Cart("GeneralRFM_fisheyeN2")
+        _ = register_CFunction_generalrfm_Cart_to_xx("GeneralRFM_fisheyeN2")
+        _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+            "GeneralRFM_fisheyeN2"
+        )
+
+    function_names = (
+        "xx_to_Cart__rfm__GeneralRFM_fisheyeN2",
+        "generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2",
+        "Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__GeneralRFM_fisheyeN2",
+    )
+    generated_functions = "\n\n".join(
+        _remove_c_includes(cfc.CFunction_dict[name].full_function)
+        for name in function_names
+    )
+    roundtrip_tolerance = "1.0e-4" if real_type == "float" else "1.0e-10"
+    source = f"""
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+typedef {real_type} REAL;
+#define NRPYMAX(a, b) ((a) > (b) ? (a) : (b))
+#define NGHOSTS 3
+
+typedef struct params_struct {{
+  REAL Cart_originx, Cart_originy, Cart_originz;
+  REAL dxx0, dxx1, dxx2;
+  REAL xxmin0, xxmin1, xxmin2;
+  REAL fisheye_a0, fisheye_a1, fisheye_a2;
+  REAL fisheye_R1, fisheye_R2;
+  REAL fisheye_s1, fisheye_s2;
+  REAL fisheye_c;
+}} params_struct;
+
+{generated_functions}
+
+static int compare_vectors(const REAL expected[3], const REAL actual[3]) {{
+  const REAL tolerance = (REAL){roundtrip_tolerance};
+  for (int i = 0; i < 3; i++) {{
+    const REAL scale = fmax((REAL)1.0, fabs(expected[i]));
+    if (fabs(expected[i] - actual[i]) > tolerance * scale) {{
+      fprintf(stderr, "mismatch[%d]: expected=%.17g actual=%.17g\\n",
+              i, (double)expected[i], (double)actual[i]);
+      return 1;
+    }}
+  }}
+  return 0;
+}}
+
+int main(void) {{
+  params_struct params = {{0}};
+  params.dxx0 = (REAL)1.0;
+  params.dxx1 = (REAL)1.0;
+  params.dxx2 = (REAL)1.0;
+  params.xxmin0 = (REAL)-128.0;
+  params.xxmin1 = (REAL)-128.0;
+  params.xxmin2 = (REAL)-128.0;
+  params.fisheye_a0 = (REAL)1.0;
+  params.fisheye_a1 = (REAL)2.0;
+  params.fisheye_a2 = (REAL)4.0;
+  params.fisheye_R1 = (REAL)2.0;
+  params.fisheye_R2 = (REAL)5.0;
+  params.fisheye_s1 = (REAL)0.5;
+  params.fisheye_s2 = (REAL)1.0;
+  params.fisheye_c = (REAL)0.7;
+
+  const REAL test_xx[][3] = {{
+    {{(REAL)0.0, (REAL)0.0, (REAL)0.0}},
+    {{(REAL)0.1, (REAL)-0.2, (REAL)0.3}},
+    {{(REAL)1.0, (REAL)2.0, (REAL)-3.0}},
+    {{(REAL)-8.0, (REAL)4.0, (REAL)2.0}},
+    {{(REAL)50.0, (REAL)-25.0, (REAL)10.0}},
+  }};
+  const int num_tests = (int)(sizeof(test_xx) / sizeof(test_xx[0]));
+  for (int n = 0; n < num_tests; n++) {{
+    REAL Cart[3];
+    REAL xx_back[3];
+    REAL xx_direct[3];
+    xx_to_Cart__rfm__GeneralRFM_fisheyeN2(&params, test_xx[n], Cart);
+    Cart_to_xx_and_nearest_i0i1i2_assume_valid__rfm__GeneralRFM_fisheyeN2(
+        &params, Cart, xx_back, NULL);
+    if (compare_vectors(test_xx[n], xx_back) != 0)
+      return 1;
+    if (generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2(&params, Cart, xx_direct) != 0)
+      return 2;
+    if (compare_vectors(test_xx[n], xx_direct) != 0)
+      return 3;
+  }}
+
+  REAL bad_Cart[3] = {{NAN, (REAL)0.0, (REAL)0.0}};
+  REAL xx_bad[3];
+  if (generalrfm_Cart_to_xx__GeneralRFM_fisheyeN2(&params, bad_Cart, xx_bad) == 0)
+    return 4;
+  return 0;
+}}
+"""
+
+    with TemporaryDirectory() as temporary_directory:
+        directory = Path(temporary_directory)
+        source_path = directory / "generalrfm_fisheye_roundtrip.c"
+        executable_path = directory / "generalrfm_fisheye_roundtrip"
+        source_path.write_text(source)
+        compile_command = [
+            "gcc",
+            "-std=c99",
+            "-Wall",
+            "-Wextra",
+            "-pedantic",
+            str(source_path),
+            "-lm",
+            "-o",
+            str(executable_path),
+        ]
+        try:
+            subprocess.run(
+                compile_command,
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            subprocess.run(
+                [str(executable_path)],
+                check=True,
+                cwd=str(directory),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+        except subprocess.CalledProcessError as err:
+            raise RuntimeError(
+                "GeneralRFM fisheye round-trip harness failed.\n"
+                f"Command: {' '.join(err.cmd)}\n"
+                f"stdout:\n{err.stdout}\n"
+                f"stderr:\n{err.stderr}"
+            ) from err
 
 
 def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
@@ -98,8 +424,9 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     :param relative_to: Whether the computation is relative to the "local_grid_center"
                         (default) or "global_grid_center".
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :raises ValueError: When the value of `gridding_approach` is not "independent grid(s)"
-                        or "multipatch".
+    :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
+                        unsupported or missing, or GeneralRFM conversion is requested
+                        with CUDA parallelization.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
@@ -112,6 +439,8 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
+    ...       if CoordSystem.startswith("GeneralRFM"):
+    ...          continue
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
@@ -131,7 +460,8 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     Setting up reference_metric[UWedgeHSinhSph]...
     Setting up reference_metric[RingHoleySinhSpherical]...
     Setting up reference_metric[HoleySinhSpherical]...
-    Setting up reference_metric[GeneralRFM_fisheyeN2]...
+    >>> _run_generalrfm_fisheye_inverse_roundtrip_check("float")
+    >>> _run_generalrfm_fisheye_inverse_roundtrip_check("double")
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    cfc.CFunction_dict.clear()
@@ -182,13 +512,15 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
     is_generalrfm = CoordSystem.startswith("GeneralRFM")
     provider_name = getattr(rfm, "general_rfm_provider_name", "")
     provider = getattr(rfm, "general_rfm_provider", None)
-    provider_meta = getattr(rfm, "general_rfm_provider_meta", {})
     is_fisheye_provider = is_generalrfm and provider_name == "fisheye"
     if is_generalrfm and not is_fisheye_provider:
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in Cart_to_xx_and_nearest_i0i1i2_assume_valid."
         )
-    num_transitions = int(provider_meta.get("num_transitions", -1))
+    if parallelization == "cuda" and is_generalrfm:
+        raise ValueError(
+            "GeneralRFM Cart_to_xx_and_nearest_i0i1i2 does not support CUDA parallelization."
+        )
     local_C_vars = {"xx0", "xx1", "xx2", "Cartx", "Carty", "Cartz"} | (
         {"r", "rCart"} if is_fisheye_provider else set()
     )
@@ -216,117 +548,37 @@ def register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
         # Taking norms gives:
         #   rCart = ||Cart|| = rbar(r)
         #
-        # So we solve the 1D equation rbar(r) - rCart = 0 for r (Newton-Raphson),
+        # So we solve the 1D equation rbar(r) - rCart = 0 for r using
+        # safeguarded bracketed Newton iterations,
         # then recover:
         #   xx^i = (r / rCart) * Cart^i    (with the rCart=0 limit giving xx=0).
         # ---------------------------------------------------------------------
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
-        fisheye_provider = provider
-
-        # Closed-form 1D expressions for rbar(r) and drbar/dr:
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_unscaled, drbar_unscaled, _, _ = (
-            fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
-        )
-        rbar_of_r_expr = fisheye_provider.c * rbar_unscaled
-        drbar_dr_expr = fisheye_provider.c * drbar_unscaled
-
-        # Newton solve: f(r) = rbar(r) - rCart = 0, so f'(r) = drbar/dr
-        rCart_sym = sp.Symbol("rCart", real=True, nonnegative=True)
-        f_of_r_expr = rbar_of_r_expr - rCart_sym
-        fprime_of_r_expr = drbar_dr_expr
-
-        nr_processed_exprs = _prepare_sympy_exprs_for_codegen(
-            [f_of_r_expr, fprime_of_r_expr],
-            local_C_vars,
-        )
-        nr_codegen_output = ccg.c_codegen(
-            nr_processed_exprs,
-            ["f_of_r", "fprime_of_r"],
-            include_braces=True,
-            verbose=False,
-        )
-
-        core_body_list.append(f"""
-  const REAL rCart = sqrt(Cartx*Cartx + Carty*Carty + Cartz*Cartz);
-  if(rCart <= (REAL)0.0) {{
-    xx[0] = (REAL)0.0;
+        rbar_expr, drbar_dr_expr = provider.radius_map_and_deriv_for_inverse(r_local)
+        asymptotic_scale_expr = provider.c * provider.a_list[-1]
+        origin_body = r"""    xx[0] = (REAL)0.0;
     xx[1] = (REAL)0.0;
-    xx[2] = (REAL)0.0;
-  }} else {{
-    const REAL XX_TOLERANCE = (REAL)1e-12;
-    const REAL F_TOLERANCE  = (REAL)1e-12;
-    const int  ITER_MAX     = 100;
-
-    // Use a robust scale for convergence tests:
-    const REAL dxx_scale = (params->dxx0 + params->dxx1 + params->dxx2) / (REAL)3.0;
-    const REAL rscale = (rCart > dxx_scale) ? rCart : dxx_scale;
-
-    int iter = 0;
-    int tolerance_has_been_met = 0;
-
-    // Two heuristic initial guesses:
-    //   Near origin: rbar ~ c*a0*r  => r ~ rCart/(c*a0)
-    //   Far field  : rbar ~ c*aN*r  => r ~ rCart/(c*aN)
-    REAL r_guess0 = rCart / (params->fisheye_c * params->fisheye_a0);
-    REAL r_guessN = rCart / (params->fisheye_c * params->fisheye_a{num_transitions});
-    if(!(r_guess0 > (REAL)0.0)) r_guess0 = rCart;
-    if(!(r_guessN > (REAL)0.0)) r_guessN = rCart;
-
-    // Pick the initial guess that yields the smaller |f(r)|.
-    REAL r = r_guessN;
-    REAL f_of_r, fprime_of_r;
-{nr_codegen_output}
-    REAL fN = fabs(f_of_r);
-
-    r = r_guess0;
-{nr_codegen_output}
-    REAL f0 = fabs(f_of_r);
-
-    r = (f0 < fN) ? r_guess0 : r_guessN;
-
-    while(iter < ITER_MAX && !tolerance_has_been_met) {{
-
-{nr_codegen_output}
-
-      // Unnecessary guard against division by zero in Newton step;
-      //   valid coordinate systems must have f'(r) > 0
-      // if(fprime_of_r == (REAL)0.0) {{
-      //  break;
-      // }}
-
-      const REAL r_np1_unclamped = r - f_of_r / fprime_of_r;
-
-      // Keep r nonnegative (fisheye assumes r >= 0 and rbar(r) is odd/monotone).
-      REAL r_np1 = r_np1_unclamped;
-      if(r_np1 <= (REAL)0.0) r_np1 = (REAL)0.5 * r;
-
-      if( fabs(r - r_np1) <= XX_TOLERANCE * rscale && fabs(f_of_r) <= F_TOLERANCE * rscale ) {{
-        tolerance_has_been_met = 1;
-      }}
-      r = r_np1;
-      iter++;
-    }} // END WHILE: Newton iteration until tolerance or iteration cap
-
-    if(iter >= ITER_MAX || !tolerance_has_been_met) {{
-#ifdef __CUDA_ARCH__
-      printf("ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
-             (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
-      asm("trap;");
-#else
-      fprintf(stderr, "ERROR: Newton-Raphson failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\\n",
-              (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
-      exit(1);
-#endif
-    }} // END IF: Newton-Raphson did not converge
-
-    const REAL scale = r / rCart;
+    xx[2] = (REAL)0.0;"""
+        success_body = r"""    const REAL scale = radial_seed / rCart;
     xx[0] = scale * Cartx;
     xx[1] = scale * Carty;
-    xx[2] = scale * Cartz;
-  }} // END ELSE: invert fisheye radius away from the origin
-""")
+    xx[2] = scale * Cartz;"""
+        failure_body = rf"""      fprintf(stderr, "ERROR: bracketed inverse failed for {CoordSystem} (fisheye): rCart, x,y,z = %.15e %.15e %.15e %.15e\n",
+              (double)rCart, (double)Cartx, (double)Carty, (double)Cartz);
+      exit(1);"""
+        fisheye_body = _generate_bracketed_radial_inverse_body(
+            r_local,
+            rbar_expr,
+            drbar_dr_expr,
+            asymptotic_scale_expr,
+            ("Cartx", "Carty", "Cartz"),
+            origin_body,
+            success_body,
+            failure_body,
+        )
+        core_body_list.append(fisheye_body)
 
     elif rfm_obj.requires_NewtonRaphson_for_Cart_to_xx:
         # Step 2.a: Handle mixed analytical and Newton-Raphson inversions.
@@ -511,7 +763,9 @@ def register_CFunction_xx_to_Cart(
 
     :param CoordSystem: The coordinate system name as a string.
     :param gridding_approach: Choices: "independent grid(s)" (default) or "multipatch".
-    :raises ValueError: If an invalid gridding_approach is provided.
+    :raises ValueError: If `gridding_approach` is invalid, a GeneralRFM provider is
+                        unsupported or missing, or GeneralRFM conversion is requested
+                        with CUDA parallelization.
     :return: None if in registration phase, else the updated NRPy environment.
 
     Doctests:
@@ -524,6 +778,8 @@ def register_CFunction_xx_to_Cart(
     >>> for parallelization in supported_Parallelizations:
     ...    par.set_parval_from_str("parallelization", parallelization)
     ...    for CoordSystem in supported_CoordSystems:
+    ...       if parallelization == "cuda" and CoordSystem.startswith("GeneralRFM"):
+    ...          continue
     ...       cfc.CFunction_dict.clear()
     ...       _ = register_CFunction_xx_to_Cart(CoordSystem)
     ...       generated_str = clang_format(cfc.CFunction_dict[f'{name}__rfm__{CoordSystem}'].full_function)
@@ -606,6 +862,8 @@ def register_CFunction_xx_to_Cart(
         raise ValueError(
             f"GeneralRFM provider '{provider_name}' for {CoordSystem} is not yet supported in xx_to_Cart."
         )
+    if parallelization == "cuda" and is_generalrfm:
+        raise ValueError("GeneralRFM xx_to_Cart does not support CUDA parallelization.")
 
     local_C_vars = {"xx0", "xx1", "xx2"} | ({"r"} if is_fisheye_provider else set())
 
@@ -613,19 +871,17 @@ def register_CFunction_xx_to_Cart(
     if is_fisheye_provider:
         if provider is None:
             raise ValueError(f"GeneralRFM provider object missing for {CoordSystem}.")
-        fisheye_provider = provider
-
-        # Closed-form 1D expression for rbar(r):
         r_local = sp.Symbol("r", real=True, nonnegative=True)
-        rbar_unscaled, _, _, _ = (
-            fisheye_provider.radius_map_unscaled_and_derivs_closed_form(r_local)
+        rbar_unscaled, _, _, _ = provider.radius_map_unscaled_and_derivs_closed_form(
+            r_local
         )
-        rbar_expr_local = fisheye_provider.c * rbar_unscaled
-
-        rbar_processed = _prepare_sympy_exprs_for_codegen(
-            [rbar_expr_local], local_C_vars
+        rbar_expr = provider.c * rbar_unscaled
+        processed_expr = _prepare_sympy_exprs_for_codegen(
+            [rbar_expr], local_C_vars | {"r"}
         )
-        rbar_codegen = ccg.c_codegen(rbar_processed, ["rbar"], include_braces=False)
+        rbar_codegen = ccg.c_codegen(
+            processed_expr, ["rbar"], include_braces=False, verbose=False
+        )
 
         body = f"""
 const REAL xx0 = xx[0];
