@@ -161,6 +161,16 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
     )
 
     par.register_CodeParameters(
+        "bool",
+        __name__,
+        ["projected_attachment_active"],
+        [False],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
+    par.register_CodeParameters(
         "REAL *restrict",
         __name__,
         [
