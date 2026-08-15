@@ -91,17 +91,19 @@ static void display_spectre_spin(const double spin_chi_x_spectre, const double s
   if (spin_chi_x_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
       spin_chi_z_spectre == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
     printf("#spin_chi_spectre = (    N/A    ,     N/A    ,     N/A    ) based on SpECTRE spin diagnostic.\n");
-  } else {
+  } // END IF: unavailable SpECTRE spin values
+  else {
     printf("#spin_chi_spectre = (%.4g, %.4g, %.4g) based on SpECTRE spin diagnostic.\n", spin_chi_x_spectre, spin_chi_y_spectre,
            spin_chi_z_spectre);
-  } // END IF: SpECTRE spin diagnostic produced valid values
+  } // END ELSE: valid SpECTRE spin diagnostic values
   if (spin_chi_x_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE || spin_chi_y_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE ||
       spin_chi_z_gram_matrix == BHAHAHA_DIAGNOSTIC_UNAVAILABLE) {
     printf("#spin_chi_gram_matrix = (    N/A    ,     N/A    ,     N/A    ) based on direct Gram-matrix correction.\n");
-  } else {
+  } // END IF: unavailable Gram-matrix comparison values
+  else {
     printf("#spin_chi_gram_matrix = (%.4g, %.4g, %.4g) based on direct Gram-matrix correction.\n", spin_chi_x_gram_matrix,
            spin_chi_y_gram_matrix, spin_chi_z_gram_matrix);
-  } // END IF: Gram-matrix comparison produced valid values
+  } // END ELSE: valid Gram-matrix comparison values
 } // END FUNCTION: display_spectre_spin
 """
     desc = """Performs apparent horizon diagnostics for BHaHAHA.
@@ -214,9 +216,9 @@ calculations, norm evaluations, and detailed final iteration analyses.
           bhahaha_diags->spin_chi_z_gram_matrix = BHAHAHA_DIAGNOSTIC_UNAVAILABLE;
           if (commondata->bhahaha_params_and_data->verbosity_level > 0) {
             fprintf(stderr, "WARNING: SpECTRE spin diagnostic failed with code %d; continuing without spin output.\n", spin_rc);
-          }
-        }
-      } // END IF: compute and store spins if SpECTRE spin diagnostic enabled
+          } // END IF: spin failure verbosity enabled
+        } // END IF: SpECTRE spin diagnostic failed
+      } // END IF: SpECTRE spin diagnostic enabled
 
       // Display detailed final iteration diagnostics if verbosity is enabled.
       {

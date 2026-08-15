@@ -257,7 +257,7 @@ static void pup_bhahaha_params_and_data_struct(PUP::er &p, bhahaha_params_and_da
   int has_valid_seed = 0;
   if (!p.isUnpacking()) {
     has_valid_seed = bp.spectre_spin_akv_seed_valid && bp.spectre_spin_akv_modes_m1 != nullptr;
-  } // END IF: computing valid SpECTRE AKV seed presence while packing
+  } // END IF: packing valid SpECTRE AKV-seed presence
   p | has_valid_seed;
   if (p.isUnpacking()) {
     bp.spectre_spin_akv_modes_m1 = (REAL *)calloc((size_t)seed_length, sizeof(REAL));

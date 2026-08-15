@@ -378,7 +378,7 @@ static void initialize_bhahaha_solver_params_and_shapes(commondata_struct *restr
     if (!current_horizon_params->spectre_spin_akv_modes_m1) {
       fprintf(stderr, "ERROR: Memory allocation failed for SpECTRE AKV seed data for horizon %d.\n", h);
       exit(EXIT_FAILURE);
-    } // END IF: memory allocation failed for SpECTRE AKV seed data
+    } // END IF: SpECTRE AKV seed allocation failed
     current_horizon_params->spectre_spin_akv_seed_valid = 0;
     current_horizon_params->spectre_spin_akv_seed_Ntheta = -1;
     current_horizon_params->spectre_spin_akv_seed_Nphi = -1;
