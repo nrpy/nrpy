@@ -336,9 +336,6 @@ superB.numerical_grids.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superB.chare_communication_maps.chare_comm_register_C_functions(
-    set_of_CoordSystems={CoordSystem}
-)
 superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,

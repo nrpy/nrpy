@@ -242,9 +242,6 @@ BHaH.nrpyelliptic.stop_conditions_check.register_CFunction_stop_conditions_check
 if __name__ == "__main__" and enable_parallel_codegen:
     pcg.do_parallel_codegen()
 
-superB.chare_communication_maps.chare_comm_register_C_functions(
-    set_of_CoordSystems=set_of_CoordSystems
-)
 superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems=set_of_CoordSystems,
     radiation_BC_fd_order=radiation_BC_fd_order,
