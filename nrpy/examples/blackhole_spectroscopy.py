@@ -132,6 +132,7 @@ enable_fd_functions = True
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
+basis_transform_CoordSystems = set_of_CoordSystems | {"Spherical"}
 num_cuda_streams = 1
 enable_bhahaha = parallelization == "openmp"
 if enable_bhahaha and fp_type != "double":
@@ -438,7 +439,8 @@ if enable_bhahaha:
         [2e-4, 2e-4, 2e-4],
     )
     par.adjust_CodeParam_default("bah_enable_BBH_mode", 1)
-    par.adjust_CodeParam_default("bah_verbosity_level", 0)
+    par.adjust_CodeParam_default("bah_enable_spectre_spin_diagnostic", 1)
+    par.adjust_CodeParam_default("bah_verbosity_level", 2)
 if num_fisheye_transitions is not None:
     for parname, value in fisheye_param_defaults.items():
         par.adjust_CodeParam_default(parname, value)

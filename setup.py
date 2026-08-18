@@ -162,6 +162,26 @@ if __name__ == "__main__":
     if "py.typed" not in auto_pkg_data["nrpy"]:
         auto_pkg_data["nrpy"].append("py.typed")
 
+    primme_pkg = "nrpy.infrastructures.BHaH.BHaHAHA"
+    auto_pkg_data.setdefault(primme_pkg, [])
+
+    primme_dir = (
+        Path(dir_setup)
+        / "nrpy"
+        / "infrastructures"
+        / "BHaH"
+        / "BHaHAHA"
+        / "akv_primme_eigensolver"
+    )
+
+    for path in primme_dir.iterdir():
+        if path.is_file() and path.suffix in {".c", ".h", ".txt", ".md"}:
+            rel_primme_path = path.relative_to(
+                Path(dir_setup) / "nrpy" / "infrastructures" / "BHaH" / "BHaHAHA"
+            ).as_posix()
+            if rel_primme_path not in auto_pkg_data[primme_pkg]:
+                auto_pkg_data[primme_pkg].append(rel_primme_path)
+
     setup(
         name="nrpy",
         version=get_nrpy_version(dir_setup),
