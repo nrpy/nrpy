@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 07-12-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-14-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -23,18 +23,18 @@ cell-centered `xx[0..2]` arrays over `Nxx_plus_2NGHOSTS*` local extents.
 
 `numerical_grids_chare` is the chare-local assembly point. For every grid, it
 copies grid identity fields, calls the local-grid setup function, optionally
-allocates reference-metric precompute storage, builds the chare communication
-map, and, when CurviBCs are enabled, builds the chare-local boundary-condition
-structs. It also initializes the per-grid diagnostic struct and invokes the
-setup modes for 1D and 2D diagnostics; the diagnostics dispatcher behavior is
-covered by the diagnostics leaf, not here.
+allocates reference-metric precompute storage, and, when CurviBCs are enabled,
+builds the chare-local boundary-condition structs. It also initializes the
+per-grid diagnostic struct and invokes the setup modes for 1D and 2D
+diagnostics; the diagnostics dispatcher behavior is covered by the diagnostics
+leaf, not here.
 
-Index ownership is split between a local map and header-level arithmetic.
-`charecommstruct_set_up` allocates `localidx3pt_to_globalidx3pt` for every local
-point including ghost zones. The global-owner and global-to-local conversions
-are computed on demand through `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX*`,
+Index ownership is arithmetic rather than a stored chare communication map.
+`superB.h` provides `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX*`,
 `MAP_GLOBAL_TO_LOCAL_IDX*`, `globalidx3pt_to_chareidx3`, and
-`globalidx3pt_to_localidx3pt` in `superB.h`.
+`globalidx3pt_to_localidx3pt`. Nonlocal inner-boundary setup and send code maps
+global source and destination indices to owning chares and local indices on
+demand.
 
 The grid transport paths are ordinary Charm++ entry-method sends generated for
 the `Timestepping` array:
@@ -134,14 +134,13 @@ run was performed during this KB audit.
 ## Sources
 
 - [numerical_grids.py](../../../nrpy/infrastructures/superB/numerical_grids.py) - `register_CFunction_numerical_grid_params_Nxx_dxx_xx_chare`, `register_CFunction_numerical_grids_chare`, `register_CFunctions`
-- [chare_communication_maps.py](../../../nrpy/infrastructures/superB/chare_communication_maps.py) - `register_CFunction_charecommstruct_set_up`, `chare_comm_register_C_functions`
 - [CurviBoundaryConditions.py](../../../nrpy/infrastructures/superB/CurviBoundaryConditions.py) - `register_CFunction_apply_bcs_inner_only_nonlocal`, `register_CFunction_bcstruct_chare_set_up`, `CurviBoundaryConditions_register_C_functions`
 - [MoL.py](../../../nrpy/infrastructures/superB/MoL.py) - `register_CFunctions`, `register_CFunction_MoL_step_forward_in_time`, `generate_rhs_output_exprs`, `generate_post_rhs_output_list`, `register_CFunction_MoL_sync_data_defines`
 - [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py) - `register_CFunction_initial_data`, `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_mol_step_forward_code`, `generate_send_neighbor_data_code`, `generate_process_ghost_code`, `generate_send_nonlocalinnerbc_data_code`, `generate_process_nonlocalinnerbc_code`, `output_timestepping_h_cpp_ci_register_CFunctions`
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `cahdprefactor_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
-- [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX0`, `MAP_GLOBAL_TO_LOCAL_IDX0`, `MOL_PRE_RK_UPDATE`, `INITIALDATA_BIN_ONE`, `nonlocalinnerbc_struct`
+- [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX0`, `MAP_GLOBAL_TO_LOCAL_IDX0`, `globalidx3pt_to_chareidx3`, `globalidx3pt_to_localidx3pt`, `MOL_PRE_RK_UPDATE`, `INITIALDATA_BIN_ONE`, `nonlocalinnerbc_struct`
 - [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
 
 ## See Also
