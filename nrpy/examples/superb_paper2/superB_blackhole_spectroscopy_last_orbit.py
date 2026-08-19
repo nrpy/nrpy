@@ -27,11 +27,10 @@ from typing import Callable, Dict, cast
 # Step 1: Import needed Python modules, then set codegen
 #         and compile-time parameters.
 import nrpy.helpers.parallel_codegen as pcg
-import nrpy.infrastructures.BHaH.xx_tofrom_Cart as xx_tofrom_Cart
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures import BHaH, superB
-from nrpy.infrastructures.BHaH import checkpointing
+from nrpy.infrastructures.BHaH import checkpointing, xx_tofrom_Cart
 from nrpy.infrastructures.BHaH.fisheye import phys_params_to_fisheye
 from nrpy.infrastructures.BHaH.general_relativity import NRPyPN_quasicircular_momenta
 from nrpy.infrastructures.BHaH.general_relativity.TwoPunctures import (
@@ -301,9 +300,6 @@ superB.numerical_grids.register_CFunctions(
     set_of_CoordSystems={CoordSystem},
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
-)
-superB.chare_communication_maps.chare_comm_register_C_functions(
-    set_of_CoordSystems={CoordSystem}
 )
 superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
