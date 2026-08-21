@@ -13,6 +13,7 @@ Author: Zachariah B. Etienne
 
 import hashlib
 import pickle
+import tempfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -83,6 +84,26 @@ def read_cached(unique_id: str) -> Any:
         return pickle.load(file)
 
 
+def _write_pickle_via_temporary_file(cache_path: Path, data: Any) -> None:
+    """
+    Write pickled data via a unique temporary file in the cache directory.
+
+    :param cache_path: Destination path for the pickled data.
+    :param data: Data to pickle.
+    """
+    temporary_file = tempfile.NamedTemporaryFile(
+        mode="wb", dir=str(cache_path.parent), delete=False
+    )
+    temporary_path = Path(temporary_file.name)
+    try:
+        with temporary_file as file:
+            pickle.dump(data, file)
+        temporary_path.replace(cache_path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
 def write_cached(unique_id: str, data: Any) -> None:
     """
     Write data to the cache file associated with a unique ID.
@@ -94,11 +115,39 @@ def write_cached(unique_id: str, data: Any) -> None:
     >>> write_cached('test_write', {'value': 456})
     >>> read_cached('test_write') == {'value': 456}
     True
+    >>> import os
+    >>> from threading import Event, Thread
+    >>> from unittest.mock import patch
+    >>> concurrent_write_test_id = f"test_concurrent_write_{os.getpid()}"
+    >>> write_cached(concurrent_write_test_id, "old")
+    >>> dump_started = Event()
+    >>> allow_dump = Event()
+    >>> original_dump = pickle.dump
+    >>> def paused_dump(data, file):
+    ...     dump_started.set()
+    ...     if not allow_dump.wait(timeout=5):
+    ...         raise RuntimeError("Timed out waiting to finish cache dump.")
+    ...     original_dump(data, file)
+    >>> with patch.object(pickle, "dump", paused_dump):
+    ...     writer = Thread(target=write_cached, args=(concurrent_write_test_id, "new"))
+    ...     writer.start()
+    ...     started = dump_started.wait(timeout=5)
+    ...     try:
+    ...         value_during_write = read_cached(concurrent_write_test_id)
+    ...     finally:
+    ...         allow_dump.set()
+    ...         writer.join(timeout=5)
+    >>> started
+    True
+    >>> writer.is_alive()
+    False
+    >>> value_during_write
+    'old'
+    >>> read_cached(concurrent_write_test_id)
+    'new'
     """
     # print(f"Writing " + str(unique_id[:80]).replace("\n", ""))
-    with open(cache_file(unique_id), "wb") as file:
-        # print(f"Writing cached file {file.name}.")
-        pickle.dump(data, file)
+    _write_pickle_via_temporary_file(cache_file(unique_id), data)
 
 
 def cached_simplify(expr: sp.Basic) -> sp.Expr:
@@ -114,6 +163,41 @@ def cached_simplify(expr: sp.Basic) -> sp.Expr:
     >>> simplified_expr = cached_simplify(expr)
     >>> simplified_expr.equals((x + 1)**2)
     True
+    >>> import sys
+    >>> from threading import Event, Thread
+    >>> from unittest.mock import patch
+    >>> concurrent_expr = sp.sympify("x + x")
+    >>> expected_expr = sp.sympify("2*x")
+    >>> module = sys.modules[cached_simplify.__module__]
+    >>> dump_started = Event()
+    >>> allow_dump = Event()
+    >>> original_dump = pickle.dump
+    >>> def paused_first_dump(data, file):
+    ...     if not dump_started.is_set():
+    ...         dump_started.set()
+    ...         if not allow_dump.wait(timeout=5):
+    ...             raise RuntimeError("Timed out waiting to finish cache dump.")
+    ...     original_dump(data, file)
+    >>> worker_results = []
+    >>> def cached_write():
+    ...     worker_results.append(cached_simplify(concurrent_expr))
+    >>> with tempfile.TemporaryDirectory(prefix="nrpy-cache-") as cache_root:
+    ...     with patch.object(module, "user_cache_dir", return_value=cache_root):
+    ...         with patch.object(pickle, "dump", paused_first_dump):
+    ...             writer = Thread(target=cached_write)
+    ...             writer.start()
+    ...             started = dump_started.wait(timeout=5)
+    ...             try:
+    ...                 concurrent_result = cached_simplify(concurrent_expr)
+    ...             finally:
+    ...                 allow_dump.set()
+    ...                 writer.join(timeout=5)
+    ...             if writer.is_alive():
+    ...                 raise RuntimeError("Timed out waiting for cache writer.")
+    >>> started and concurrent_result == expected_expr
+    True
+    >>> worker_results == [expected_expr]
+    True
     """
     if expr == sp.sympify(0):
         return cast(sp.Expr, sp.sympify(0))
@@ -127,8 +211,7 @@ def cached_simplify(expr: sp.Basic) -> sp.Expr:
                 return cast(sp.Expr, pickle.load(file))
         else:
             simplified = sp.simplify(expr)
-            with open(cache_fle, "wb") as file:
-                pickle.dump(simplified, file)
+            _write_pickle_via_temporary_file(cache_fle, simplified)
             return cast(sp.Expr, simplified)
     except pickle.PicklingError:
         return cast(sp.Expr, sp.simplify(expr))
