@@ -38,7 +38,9 @@ Create one candidate outside live tree by resolving every material critique. Pre
 
 Validate exact candidate with existing checks appropriate to its format and risk. Inspect the diff for target confinement and unrelated changes; run applicable syntax, format, lint, build, focused behavior, documentation, or structural checks. Record commands, outcomes, manual limits, established components reused, and why any new abstraction is necessary. Any failed required check or unresolved material critique blocks approval.
 
-Freeze candidate bytes and validation evidence. Any change to either creates a new candidate round and requires fresh validation and two fresh decisions.
+Treat review and validation evidence as provisional until root mechanically verifies every declared candidate/input/validation binding against the exact brief, candidate bytes, and recorded check output. Before this preflight succeeds and evidence freezes, root may correct only mechanical binding or transcription defects; review reasoning, decisions, and conclusions cannot change under this exception.
+
+After preflight succeeds, freeze candidate bytes and all review and validation evidence. Any later change to candidate bytes or evidence creates a new candidate round and requires fresh validation and two fresh decisions.
 
 ## Require unanimity and install
 
