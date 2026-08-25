@@ -1,6 +1,6 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 07-19-2026
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 08-25-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -64,7 +64,7 @@ evidence.
 OpenMP and `double`, accepts `--cuda` to generate CUDA source and use `nvcc`,
 and accepts `--floating_point_precision`. Its default coordinate and ID choices
 are `CoordSystem = "Spherical"` and `IDtype = "TOVola_interp"` with spherical
-TOV initial-data coordinates. It uses `HarmonicSlicing`, frozen shift, RK4,
+TOV initial-data coordinates. It uses `BHSHarmonicSlicing`, frozen shift, RK4,
 fourth-order finite differences, outgoing radiation boundaries, checkpointing
 every `2.0`, and `t_final = 7.5` from `grid_physical_size`.
 

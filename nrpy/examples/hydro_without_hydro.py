@@ -56,7 +56,7 @@ par.set_parval_from_str("fp_type", fp_type)
 project_name = "hydro_without_hydro"
 IDtype = "TOVola_interp"
 CoordSystem = "Spherical"
-LapseEvolutionOption = "HarmonicSlicing"
+LapseEvolutionOption = "BHSHarmonicSlicing"
 ShiftEvolutionOption = "Frozen"
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25

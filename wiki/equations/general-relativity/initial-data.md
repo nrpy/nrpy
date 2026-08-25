@@ -1,6 +1,6 @@
 # Initial Data
 
-> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 07-12-2026
+> Map Cartesian and spherical ADM initial-data providers used by GR equation consumers. · Status: confirmed · Last reconciled: 08-25-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -30,6 +30,18 @@ shift. `OffsetKerrSchild` registers `M`, `a`, and `r0`, uses the offset
 Kerr-Schild radius `r + r0`, and returns ADM metric, extrinsic curvature,
 lapse, radial shift, and zero `BU`.
 
+For the `R0=M` StaticTrumpet solution, the lapse is
+`alpha=r/(r+M)=exp(-2*phi)=W`. Ruchlin, Etienne, and Baumgarte pair these data
+with `partial_0(alpha)=-alpha*(1-alpha)*K`, a lapse condition they describe
+as consistent with staticity. [BSSN Family](bssn-family.md) owns the current
+NRPy option-name mapping and its distinction from `BHSHarmonicSlicing`.
+
+Claim evidence:
+- Claim: The `R0=M` StaticTrumpet solution has `alpha=r/(r+M)=exp(-2*phi)=W`, and Ruchlin, Etienne, and Baumgarte pair these data with `partial_0(alpha)=-alpha*(1-alpha)*K`, which they describe as consistent with staticity.
+- Role: public/scientific contract
+- Deciding authority: [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2), Eqs. (65), (67), and (69)
+- Corroboration: [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py), `StaticTrumpet`, for the lapse/conformal-factor identity only; none separate for the paper-defined evolution pairing
+
 Gauge handling is explicit. If an initial-data family does not define gauge
 quantities, or if `override_gauge_with_standard=True`, the provider sets
 `betaU` and `BU` to zero and computes the standard lapse from
@@ -55,6 +67,7 @@ TwoPunctures data.
 
 ## Sources
 
+- [Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658v2](https://arxiv.org/pdf/1712.07658v2) - Eqs. (65), (67), and (69), StaticTrumpet conformal factor, staticity-compatible lapse evolution, lapse, and shift
 - [InitialData_Cartesian.py](../../../nrpy/equations/general_relativity/InitialData_Cartesian.py) - `InitialData_Cartesian`, `BrillLindquist`, `Kasner`, `kasner_adm_quantities`
 - [InitialData_Spherical.py](../../../nrpy/equations/general_relativity/InitialData_Spherical.py) - `InitialData_Spherical`, `UIUCBlackHole`, `StaticTrumpet`, `OffsetKerrSchild`
 - [ADM_to_BSSN.py](../../../nrpy/equations/general_relativity/ADM_to_BSSN.py) - `ADM_to_BSSN`, `compute_cf_only`

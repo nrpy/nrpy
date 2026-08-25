@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 07-28-2026
+> Map the main BSSN equation modules and their validation expectations. · Status: confirmed · Last reconciled: 08-25-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -25,9 +25,49 @@ names such as `cf_rhs`, `trK_rhs`, `lambda_rhsU0`, `a_rhsDD00`, and `h_rhsDD00`.
 
 `BSSN_gauge_RHSs` handles lapse and shift choices separately from the main RHS
 class. It returns `alpha_rhs`, `vet_rhsU`, and `bet_rhsU`, validates supported
-lapse options such as `OnePlusLog`, `HarmonicSlicing`, `Frozen`, and
+lapse options such as `OnePlusLog`, `BHSHarmonicSlicing`, `Frozen`, and
 `OnePlusLogAlt`, and validates supported shift options such as frozen and
 Gamma-driver variants.
+
+`BHSHarmonicSlicing` names NRPy's Baumgarte-Hughes-Shapiro
+`exp(6*phi)`-tracking prescription:
+`partial_t(alpha) = partial_t(exp(6*phi))`. The implementation applies that
+chain rule to the already constructed total coordinate-time conformal-factor
+RHS: `alpha_rhs = -3*W**(-4)*W_rhs` when `W = exp(-2*phi)`, and
+`alpha_rhs = 6*exp(6*phi)*phi_rhs` when `phi` is evolved. The option supports
+`W` and `phi`, but not `chi`. Its evolution preserves the difference
+`alpha-exp(6*phi)`, so it preserves `alpha=exp(6*phi)` only when that relation
+is imposed initially. `OnePlusLogAlt` separately implements
+`partial_0(alpha)=-alpha*(1-alpha)*K`. These distinct option formulas do not
+imply that the `exp(6*phi)`-tracking branch must have a nonzero RHS on exact
+stationary data. Descriptively, the BHS branch is an `exp(6*phi)`-tracking
+lapse. The former `HarmonicSlicing` option string is unsupported; no alias or
+compatibility path is retained.
+[Initial Data](initial-data.md) owns the cited StaticTrumpet scientific pairing.
+
+Claim evidence:
+- Claim: `BSSN_gauge_RHSs(..., LapseEvolutionOption="BHSHarmonicSlicing")` sets the lapse RHS to the total coordinate-time derivative of `exp(6*phi)` by applying the displayed chain rule to `cf_rhs`; it supports `W` and `phi`, rejects `chi`, preserves `alpha-exp(6*phi)`, and therefore preserves `alpha=exp(6*phi)` only from initial data satisfying that relation. The former `HarmonicSlicing` string is rejected. `OnePlusLogAlt` separately implements `partial_0(alpha)=-alpha*(1-alpha)*K`; neither separate formula implies that the BHS branch must be nonzero on exact stationary data.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
+- Corroboration: [legacy NRPy gauge tutorial](https://github.com/zachetienne/nrpytutorial/blob/a32e120f5642bee00e32e9e04dd8cb4c58ae661c/Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb), Steps 2.b and 2.d
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact symbolic equality and trusted-expression comparison; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass for chi and the removed HarmonicSlicing string; options=BHSHarmonicSlicing and OnePlusLogAlt across the module validation matrix, with W, phi, and chi checked for the BHS branch; date=08-25-2026`
+
+General Bona-Masso harmonic slicing is
+`(partial_t-beta^i*partial_i)alpha=-alpha**2*K`. At zero shift, Baumgarte and
+Shapiro integrate it as `alpha=C(x)*exp(6*phi)`, equivalently preserving
+`alpha*exp(-6*phi)`, and choose the special normalization `C(x)=1`. Only that
+special case yields `alpha=exp(6*phi)` and hence the derivative equality used
+by the NRPy branch; the branch itself instead preserves an additive difference
+and is not a general harmonic-slicing implementation. Baumgarte, Hughes, and
+Shapiro later used the derivative equality as their zero-shift harmonic
+prescription, which explains NRPy's historical option name.
+
+Claim evidence:
+- Claim: Bona-Masso harmonic slicing is `(partial_t-beta^i*partial_i)alpha=-alpha**2*K`; at zero shift it preserves `alpha*exp(-6*phi)` and has solution `alpha=C(x)*exp(6*phi)`, with `C(x)=1` giving the derivative equality adopted by the historical NRPy branch.
+- Role: public/scientific contract
+- Deciding authority: [Baumgarte and de Oliveira, arXiv:2201.08857v1](https://arxiv.org/pdf/2201.08857v1), Eq. (1) and `f(alpha)=1`; [Baumgarte and Shapiro, arXiv:gr-qc/9810065v1](https://arxiv.org/pdf/gr-qc/9810065v1), Eqs. (30)-(32); [Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024v1](https://arxiv.org/pdf/gr-qc/9902024v1), p. 2
+- Corroboration: none available; the papers define the scientific relations, while current NRPy option mapping is covered by the descriptive claim above
 
 `BSSNconstraints` constructs Hamiltonian, momentum, and covariant conformal
 connection constraint expressions. It registers diagnostic gridfunctions for
@@ -90,6 +130,10 @@ corresponding trusted files.
 ## Sources
 
 - [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
+- [Baumgarte and de Oliveira, arXiv:2201.08857v1](https://arxiv.org/pdf/2201.08857v1) - Eq. (1), Bona-Masso slicing and the `f(alpha)=1` harmonic specialization
+- [Baumgarte and Shapiro, arXiv:gr-qc/9810065v1](https://arxiv.org/pdf/gr-qc/9810065v1) - Eqs. (30)-(32), zero-shift harmonic slicing and its integrated lapse relation
+- [Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024v1](https://arxiv.org/pdf/gr-qc/9902024v1) - p. 2, zero-shift harmonic-slicing relation
+- [legacy NRPy gauge tutorial](https://github.com/zachetienne/nrpytutorial/blob/a32e120f5642bee00e32e9e04dd8cb4c58ae661c/Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb) - Step 2.b, `HarmonicSlicing` chain-rule derivation
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs_varname_to_expr_dict`
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
