@@ -481,8 +481,12 @@ if __name__ == "__main__":
                         -rhs.Z4constraintU[k] * validation_Dhat_betaUD[i][k]
                     )
 
-        actual_reconstructions = {"Mewes_delta": rhs.Lambdatilde_rhsU_delta}
-        expected_reconstructions = {"Mewes_delta": expected_delta}
+        actual_reconstructions: Dict[str, ve.ExpressionValue] = {
+            "Mewes_delta": rhs.Lambdatilde_rhsU_delta
+        }
+        expected_reconstructions: Dict[str, ve.ExpressionValue] = {
+            "Mewes_delta": expected_delta
+        }
         if case_coord == "Cartesian":
             actual_reconstructions["Mewes_minus_Alic"] = [
                 expected_mewes_shift_delta[i] - expected_alic_shift_delta[i]
@@ -566,7 +570,9 @@ if __name__ == "__main__":
         aggregate_Theta_rhs = rhs.Theta_rhs
         aggregate_cf_rhs = rhs.cf_rhs
         aggregate_trK_rhs = rhs.trK_rhs
-        expression_dict = dict(rhs.fCCZ4_RHSs_varname_to_expr_dict)
+        expression_dict: Dict[str, ve.ExpressionValue] = dict(
+            rhs.fCCZ4_RHSs_varname_to_expr_dict
+        )
         expression_dict.update(
             {
                 "Theta": rhs.Theta,
