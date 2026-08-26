@@ -13,8 +13,8 @@
 | `core-top-level-package-modules` | Core top-level package modules from `find nrpy -maxdepth 1 -type f \( -name '*.py' -o -name '*.txt' -o -name 'py.typed' \)`, 12 files. | living | partial |
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
-| `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 367 files. | living | partial |
+| `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`: 339 Python files and `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`, 340 files total. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 366 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
 | `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |
@@ -85,10 +85,21 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/BSSN_quantities.py` | living |
 | `nrpy/equations/general_relativity/BSSN_gauge_RHSs.py` | living |
 | `nrpy/equations/general_relativity/BSSN_constraints.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_constraints.py` | living |
 | `nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_RHSs.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py` | living |
 | `nrpy/infrastructures/BHaH/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/main_c.py` | living |
 | `nrpy/infrastructures/BHaH/bhah_lib.py` | living |
@@ -138,7 +149,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/ETLegacy/general_relativity/T4DD_to_T4UU.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/RegisterSlicing.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py` | living |
-| `nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgammahat_constraint.py` | living |
+| `nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living |
@@ -162,7 +173,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/T4DD_to_T4UU.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/floor_the_lapse.py` | living |
-| `nrpy/infrastructures/CarpetX/general_relativity/enforce_detgammahat_constraint.py` | living |
+| `nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py` | living |
@@ -347,6 +358,9 @@ aggregate rows and `wiki/source-map.md`.
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`, pinned to revision `ac46de1ad27f92b28ac95459c782c07f6b8c964a`. | frozen | 06-30-2026 | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
 | `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | 07-27-2026 | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
 | `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | 07-28-2026 | ingested | Deciding source for the covariant conformal connection constraint in Eqs. (12a), (12b), and (15); it does not prescribe the local conformal-metric norm diagnostic. |
+| `https://arxiv.org/pdf/1106.2254v2` | Version-pinned v2 PDF for Alic et al., arXiv:1106.2254. | frozen | 08-25-2026 | ingested | Corroborating source for covariant CCZ4, the `kappa3=1` covariance choice, and the exact advective 1+log formula in Eq. (20). At equal `kappa3=1`, Cartesian subtraction gives `S_Mewes^i-S_Alic^i=-C^k partial_k beta^i` off the connection-constraint surface. |
+| `https://arxiv.org/pdf/1403.3653v1` | Version-pinned v1 PDF for Sanchis-Gual et al., arXiv:1403.3653. | frozen | 08-25-2026 | ingested | Corroborating source for reference-metric fCCZ4 variables, constraints, gauge equations, and reduction to BSSN. Its displayed general and spherical connection-RHS shift sectors do not provide an unqualified off-constraint cross-check of the adopted literal Mewes equation. |
+| `https://arxiv.org/pdf/2002.06225v2` | Version-pinned v2 PDF for Mewes et al., arXiv:2002.06225. | frozen | 08-25-2026 | ingested | Principal scientific specification for NRPy's three-dimensional reference-metric fCCZ4 variables, Ricci tensor, evolution equations, gauge, and matter projections in Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). |
 | `https://arxiv.org/pdf/2201.08857v1` | Version-pinned v1 PDF for Baumgarte and de Oliveira, arXiv:2201.08857. | frozen | 08-25-2026 | ingested | Deciding source for the general Bona-Masso lapse equation and its `f(alpha)=1` harmonic specialization. |
 | `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | 08-25-2026 | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
 | `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | 08-25-2026 | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |

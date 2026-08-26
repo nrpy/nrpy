@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-14-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-26-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -100,7 +100,22 @@ call `INITIALDATA_BIN_TWO`, apply outer-extrapolated plus inner BCs, then repeat
 the needed nonlocal syncs. The initial-data function itself registers exact ADM
 initial data when available, registers ADM-to-BSSN converters for the requested
 coordinate systems, optionally reads checkpoint data, performs the two converter
-bins, and dispatches the named BC application stages.
+bins, and dispatches the named BC application stages. The checked collision
+example opts into the
+same combined conformal determinant/trace projection after checkpoint recovery
+and after final outer-plus-inner BC handling; its MoL post-RHS hook applies it
+again after each RK update. `enable_conformal_projection` defaults to `False`,
+so this lifecycle exists only for callers that opt in and supply the Method of
+Lines hook. The checked collision example uses BSSN owners and does not wire
+fCCZ4 RHSs, gauge RHSs, or `Theta_fCCZ4`.
+
+Claim evidence:
+- Claim: superB initial-data projection is opt-in with default `False`; the checked collision example enables it and explicitly provides a Method of Lines post-RHS projection hook while using BSSN, not the new fCCZ4 evolution owners.
+- Role: public/scientific contract
+- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py), `register_CFunction_initial_data`; [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), initial-data and Method of Lines registrations
+- Corroboration: [MoL.py](../../../nrpy/infrastructures/superB/MoL.py), `register_CFunctions`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB source registration; precision=not-applicable; GPU=not-run; restart=source-path-inspected only; distributed=not-run; error_path=not-run; options=opt-in collision example call site inspected; date=08-26-2026`
 
 The generated `post_non_y_n_auxevol_mallocs` hook runs after memory for
 non-`y_n` and auxiliary-evolution gridfunctions has been allocated. In the
@@ -140,6 +155,7 @@ run was performed during this KB audit.
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_mol_step_forward_code`, `generate_send_neighbor_data_code`, `generate_process_ghost_code`, `generate_send_nonlocalinnerbc_data_code`, `generate_process_nonlocalinnerbc_code`, `output_timestepping_h_cpp_ci_register_CFunctions`
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `cahdprefactor_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
+- [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - opt-in conformal projection in initial-data and Method of Lines registration
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX0`, `MAP_GLOBAL_TO_LOCAL_IDX0`, `globalidx3pt_to_chareidx3`, `globalidx3pt_to_localidx3pt`, `MOL_PRE_RK_UPDATE`, `INITIALDATA_BIN_ONE`, `nonlocalinnerbc_struct`
 - [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
 

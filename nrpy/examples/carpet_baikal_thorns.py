@@ -131,8 +131,11 @@ for evol_thorn_name in thorn_names:
     general_relativity.floor_the_lapse.register_CFunction_floor_the_lapse(
         thorn_name=evol_thorn_name
     )
-    general_relativity.enforce_detgammahat_constraint.register_CFunction_enforce_detgammahat_constraint(
-        thorn_name=evol_thorn_name, CoordSystem="Cartesian", enable_rfm_precompute=False
+    general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
+        thorn_name=evol_thorn_name,
+        CoordSystem="Cartesian",
+        enable_rfm_precompute=False,
+        fd_orders=fd_order_list,
     )
 
 ########################

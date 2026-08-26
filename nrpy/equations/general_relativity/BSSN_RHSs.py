@@ -88,11 +88,7 @@ class BSSNRHSs:
                     gammabar_rhsDD[i][j] += betaU[k] * gammabarDD_dupD[i][j][k] + betaU_dD[k][i] * gammabarDD[k][j] \
                                             + betaU_dD[k][j] * gammabarDD[i][k]
 
-        # Step 2.b.i: First import \bar{A}_{ij}'s contraction trAbar = \bar{A}^k_k
-        #           from BSSN_quantities
-        trAbar = Bq.trAbar
-
-        # Step 2.b.ii: Import detgammabar from BSSN_quantities:
+        # Step 2.b.i: Import detgammabar from BSSN_quantities:
         detgammabar = Bq.detgammabar
         detgammabar_dD = Bq.detgammabar_dD
 
@@ -101,11 +97,11 @@ class BSSNRHSs:
         for k in range(3):
             Dbarbetacontraction += betaU_dD[k][k] + betaU[k] * detgammabar_dD[k] / (2 * detgammabar)
 
-        # Step 2.b.iii: Second term of \partial_t \bar{\gamma}_{i j} right-hand side:
-        # \frac{2}{3} \bar{\gamma}_{i j} \left (\alpha \bar{A}_{k}^{k} - \bar{D}_{k} \beta^{k}\right )
+        # Step 2.b.ii: Second term of \partial_t \bar{\gamma}_{i j} right-hand side:
+        # -\frac{2}{3} \bar{\gamma}_{i j} \bar{D}_{k} \beta^{k}
         for i in range(3):
             for j in range(3):
-                gammabar_rhsDD[i][j] += sp.Rational(2, 3) * gammabarDD[i][j] * (alpha * trAbar - Dbarbetacontraction)
+                gammabar_rhsDD[i][j] += -sp.Rational(2, 3) * gammabarDD[i][j] * Dbarbetacontraction
 
         # Step 2.c: Third term of \partial_t \bar{\gamma}_{i j} right-hand side:
         # -2 \alpha \bar{A}_{ij}
@@ -117,7 +113,7 @@ class BSSNRHSs:
         # \beta^k \partial_k \bar{A}_{ij} + \partial_i \beta^k \bar{A}_{kj} + \partial_j \beta^k \bar{A}_{ik}
 
         # First define AbarDD_dupD:
-        AbarDD_dupD = Bq.AbarDD_dupD # From Bq.AbarUU_AbarUD_trAbar_AbarDD_dD()
+        AbarDD_dupD = Bq.AbarDD_dupD
 
         Abar_rhsDD = ixp.zerorank2()
         for i in range(3):
@@ -129,7 +125,7 @@ class BSSNRHSs:
         # Step 3.b: Second term of \partial_t \bar{A}_{i j}:
         # - (2/3) \bar{A}_{i j} \bar{D}_{k} \beta^{k} - 2 \alpha \bar{A}_{i k} {\bar{A}^{k}}_{j} + \alpha \bar{A}_{i j} K
         gammabarUU = Bq.gammabarUU  # From Bq.gammabar__inverse_and_derivs()
-        AbarUD = Bq.AbarUD  # From Bq.AbarUU_AbarUD_trAbar()
+        AbarUD = Bq.AbarUD
         for i in range(3):
             for j in range(3):
                 Abar_rhsDD[i][j] += -sp.Rational(2, 3) * AbarDD[i][j] * Dbarbetacontraction + alpha * AbarDD[i][j] * trK

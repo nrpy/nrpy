@@ -11,7 +11,7 @@ from . import (
     diagnostic_gfs_set,
     diagnostics_nearest,
     diagnostics_volume_integration,
-    enforce_detgammabar_equals_detgammahat,
+    enforce_detgbar_equals_detghat_trAzero,
     geodesics,
     initial_data,
     psi4,
