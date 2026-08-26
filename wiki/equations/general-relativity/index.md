@@ -5,6 +5,7 @@
 | Page | Go here when... |
 | --- | --- |
 | [BSSN Family](bssn-family.md) | You need the high-level shape of the BSSN quantities, RHSs, gauge RHSs, constraints, trusted variants, or NRPyLaTeX cross-check. |
+| [Fully Covariant Conformal Z4](fccz4.md) | You need the reference-metric fCCZ4 variables, evolution and gauge equations, implementation mapping, or validation boundary. |
 | [Metric Conversions And Matter](metric-conversions-and-matter.md) | You need ADM/BSSN/four-metric conversions, stress-energy projections, source terms, or Lorentz boosts. |
 | [Initial Data](initial-data.md) | You need Cartesian or spherical ADM providers, or the boundary with TwoPunctures and NRPyElliptic initial data. |
 | [Psi4 And Tetrads](psi4-and-tetrads.md) | You need Psi4 radiation-scalar construction or tetrad options. |

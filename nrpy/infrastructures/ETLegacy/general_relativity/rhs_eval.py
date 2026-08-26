@@ -501,9 +501,12 @@ if(fd_order == {fd_order}) {{
 if __name__ == "__main__":
     Coord = "Cartesian"
     LapseEvolOption = "OnePlusLog"
-    ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
-    for enable_T4munu in [True, False]:
-        for enable_improvements in [True, False]:
+    for ShiftEvolOption, enable_improvements, trusted_suffix in (
+        ("GammaDriving2ndOrder_Covariant", True, ""),
+        ("GammaDriving2ndOrder_Covariant", False, ""),
+        ("GammaDriving2ndOrder_NoCovariant", False, "_KOTrue"),
+    ):
+        for enable_T4munu in [True, False]:
             results_dict = register_CFunction_rhs_eval(
                 thorn_name="dummy_thorn_name",
                 CoordSystem=Coord,
@@ -520,12 +523,18 @@ if __name__ == "__main__":
                 validate_expressions=True,
                 return_validation_dict=True,
             )
+            trusted_basename = (
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_"
+                f"{LapseEvolOption}_{ShiftEvolOption}_{Coord}_"
+                f"T4munu{enable_T4munu}{trusted_suffix}_"
+                f"improvements{enable_improvements}"
+            )
             ve.compare_or_generate_trusted_results(
                 os.path.abspath(__file__),
                 os.getcwd(),
                 # File basename. If this is set to "trusted_module_test1", then
                 #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{enable_T4munu}_improvements{enable_improvements}",
+                trusted_basename,
                 cast(Dict[str, Union[mpf, mpc]], results_dict),
             )
 

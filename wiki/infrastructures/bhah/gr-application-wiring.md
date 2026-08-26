@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 07-27-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 08-26-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -14,7 +14,7 @@ CFunctions such as `rhs_eval`, `Ricci_eval`, `constraints_eval`,
 
 The black-hole and GRHD examples show the dataflow shape: register initial-data
 import/conversion, grid and diagnostic helpers, reference-metric precompute,
-Ricci/RHS/determinant enforcement/constraints, Method of Lines step glue,
+Ricci/RHS/algebraic constraint projection/constraints, Method of Lines step glue,
 coordinate and basis transforms, wrapper dispatchers, headers, parser, `main`,
 and cleanup.
 
@@ -55,13 +55,32 @@ to `RBARDD` and optional `T4UU` auxiliary gridfunctions are rewritten to
 diagnostic channels so host-side constraint evaluation consumes the diagnostic
 buffer filled for output.
 
-`register_CFunction_enforce_detgammabar_equals_detgammahat` emits the
-determinant-enforcement CFunction used after RHS/MoL updates. It reconstructs
-`detgammabar` from `BSSN_quantities[...]`, builds corrected `hDD` components so
-`det(gammabar)` matches `det(gammahat)`, writes those components back into
-`in_gfs`, and runs over all points rather than only interiors. The generated
-kernel accepts either `rfmstruct` or coordinate arrays according to
-`enable_rfm_precompute`, plus read-only `auxevol_gfs`.
+`register_CFunction_enforce_detgbar_equals_detghat_trAzero` emits the combined
+algebraic-constraint CFunction. In one all-points loop it loads all independent
+`hDD` and `aDD` components, rescales reconstructed `gammabarDD` so
+`det(gammabar)=det(gammahat)`, inverts that corrected metric, and then projects
+`AbarDD` trace-free using the same metric. All twelve corrected components are
+formed before stores. The generated kernel accepts either `rfmstruct` or
+coordinate arrays according to `enable_rfm_precompute`, plus read-only
+`auxevol_gfs`.
+
+`register_CFunction_initial_data(..., enable_conformal_projection=True)` adds
+projection after its checkpoint branch and after fresh-data boundary handling;
+the option defaults to `False`. The inspected collision example enables it and
+explicitly places the same call in its caller-supplied Method of Lines
+`post_rhs_string`.
+Neither initial-data registration nor Method of Lines automatically enables
+projection for every caller. The inspected collision example uses BSSN owners,
+not the fCCZ4 RHS, gauge, or `Theta_fCCZ4` storage; this review does not
+establish repository-wide absence.
+
+Claim evidence:
+- Claim: BHaH exposes opt-in initial-data conformal projection with default `False`; the inspected collision example enables it and adds projection through a caller-supplied Method of Lines hook while using BSSN, not the new fCCZ4 evolution owners; repository-wide integration absence was not established.
+- Role: public/scientific contract
+- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), initial-data and Method of Lines registrations
+- Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH source registration; precision=not-applicable; GPU=not-run; restart=source-path-inspected only; distributed=not-run; error_path=not-run; options=initial-data opt-in and representative BSSN Method of Lines call site inspected; date=08-26-2026`
 
 `register_CFunction_initial_data` is the application-level initial-data
 assembler. For built-in exact data it instantiates `InitialData_Cartesian` or
@@ -177,7 +196,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
 - [Ricci_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/Ricci_eval.py) - `register_CFunction_Ricci_eval`
 - [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
-- [enforce_detgammabar_equals_detgammahat.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgammabar_equals_detgammahat.py) - `register_CFunction_enforce_detgammabar_equals_detgammahat`
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
 - [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - `register_CFunction_exact_ADM_ID_function`, `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`, `Cfunction_ADM_SphorCart_to_Cart`, `Cfunction_ADM_Cart_to_BSSN_Cart`, `Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm`, `Cfunction_initial_data_lambdaU_grid_interior`
 - [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py) - `register_CFunction_diagnostic_gfs_set`

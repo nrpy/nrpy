@@ -1,6 +1,6 @@
 # CarpetX GR ADM/BSSN And Matter Coupling
 
-> CarpetX ADMBaseX import/export and TmunuBaseX stress-energy raising around BSSN evolution. · Status: confirmed · Last reconciled: 06-30-2026
+> CarpetX ADMBaseX import/export and TmunuBaseX stress-energy raising around BSSN evolution. · Status: confirmed · Last reconciled: 08-26-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -40,7 +40,17 @@ handoff. The function copies BSSN `alpha`, `vetU*`, and `betU*` into ADMBaseX
 lapse, shift, and `dtshift`, reconstructs ADM metric and extrinsic curvature
 from `cf`, `trK`, `hDD*`, and `aDD*`, and writes the ADMBaseX groups
 everywhere. Its schedule runs in `ODESolvers_PostStep` after
-`<thorn>_enforce_detgammahat_constraint` and before `ADMBaseX_SetADMVars`.
+`<thorn>_enforce_detgbar_equals_detghat_trAzero` and before
+`ADMBaseX_SetADMVars`, so exported ADM data consumes both the determinant- and
+trace-projected conformal tensors.
+
+Claim evidence:
+- Claim: CarpetX emits `BSSN_to_ADM` schedule text placing ADM export after the combined determinant/trace projection in `ODESolvers_PostStep`; this audit did not build or run a generated thorn.
+- Role: generated evidence
+- Deciding authority: [BSSN_to_ADM.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py), `register_CFunction_BSSN_to_ADM`
+- Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=CarpetX schedule registration; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=generated registration metadata inspection; date=08-26-2026`
 
 `register_CFunction_T4DD_to_T4UU()` emits `<thorn>_T4DD_to_T4UU`. It builds
 `g4UU` from BSSN variables through the symbolic BSSN-to-four-metric conversion,

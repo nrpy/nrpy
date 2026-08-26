@@ -109,7 +109,7 @@ def register_CFunction_BSSN_constraints(
     schedule = f"""
 if(fd_order == {fd_order}) {{
   # Originally in MoL_PseudoEvolution; consider changing when subcycling is added
-  schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints
+  schedule FUNC_NAME in ODESolvers_PostStep as {thorn_name}_BSSN_constraints after {thorn_name}_enforce_detgbar_equals_detghat_trAzero
   {{
     LANG: C
     READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
