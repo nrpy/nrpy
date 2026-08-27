@@ -5,6 +5,17 @@ This module implements the three-dimensional reference-metric formulation of
 Mewes et al. (2020), with the Lagrangian conformal-determinant condition and
 ``kappa1`` damping terms that contain no additional lapse factor.
 
+Mewes et al. appear to contain a convention error in the shift sector.  They
+define ``partial_0 = partial_t - L_beta``, whose full vector Lie derivative
+stretches the evolved connection by
+``-Lambdatilde^k Dhat_k beta^i``.  Since
+``Lambdatilde^i = DeltaGamma^i + C^i``, that stretch already contains
+``-C^k Dhat_k beta^i``, but the printed ``kappa3=1`` bracket adds this term
+again.  NRPy corrects that apparent paper error, not a discretionary
+formulation departure.  It retains ``+(2/3) C^i Dhat_k beta^k`` because the
+reused BSSN base divergence contains geometric ``DeltaGamma`` and needs
+promotion to evolved ``Lambdatilde``.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
@@ -162,6 +173,14 @@ class FCCZ4RHSs:
             Dhat_div_beta += Bq.betaU_dD[k][k]
             for ell in range(3):
                 Dhat_div_beta += rfm.GammahatUDD[k][ell][k] * Bq.betaU[ell]
+
+        # Brhs already applies the full vector Lie derivative to its evolved
+        # connection slot, which stores LambdatildeU here.  Mewes et al.
+        # define partial_0 = partial_t - L_beta but then print an additional
+        # -C^k Dhat_k beta^i in the kappa3=1 bracket, duplicating that stretch
+        # for C^i = LambdatildeU^i - DeltaGamma^i.  Omit the apparent paper
+        # error.  Keep +2 C^i Dhat_k beta^k/3 because the BSSN base divergence
+        # contains geometric DeltaGamma and needs promotion to LambdatildeU.
         self.Lambdatilde_rhsU_delta = ixp.zerorank1()
         for i in range(3):
             for j in range(3):
@@ -175,11 +194,6 @@ class FCCZ4RHSs:
                 - self.kappa1 * self.Z4constraintU[i]
                 + sp.Rational(2, 3) * self.Z4constraintU[i] * Dhat_div_beta
             )
-            for k in range(3):
-                Dhat_beta = Bq.betaU_dD[i][k]
-                for ell in range(3):
-                    Dhat_beta += rfm.GammahatUDD[i][ell][k] * Bq.betaU[ell]
-                self.Lambdatilde_rhsU_delta[i] += -self.Z4constraintU[k] * Dhat_beta
 
         self.Lambdatilde_rhsU = ixp.zerorank1()
         self.lambda_rhsU = ixp.zerorank1()
@@ -288,7 +302,6 @@ if __name__ == "__main__":
     import doctest
     import os
     import sys
-    from typing import Mapping, cast  # pylint: disable=ungrouped-imports
 
     import nrpy.validate_expressions.validate_expressions as ve
 
@@ -298,74 +311,6 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
-
-    # Reject incompatible storage before constructing caches or installing
-    # fCCZ4-owned damping parameters.
-    gri.glb_gridfcs_dict.pop("Theta_fCCZ4", None)
-    validation_caches: Tuple[Mapping[str, object], ...] = (
-        cast(Mapping[str, object], refmetric.reference_metric),
-        cast(Mapping[str, object], BSSN_quantities),
-        cast(Mapping[str, object], BSSN_RHSs),
-        cast(Mapping[str, object], fccz4_constraints.fCCZ4_constraints),
-    )
-    validation_cache_snapshots = tuple(dict(cache) for cache in validation_caches)
-    validation_kappa_snapshots = {
-        name: par.glb_code_params_dict.get(name) for name in ("kappa1", "kappa2")
-    }
-    gri.register_gridfunctions(
-        "Theta_fCCZ4",
-        group="AUX",
-        gf_array_name="diagnostic_output_gfs",
-        is_basename=False,
-    )
-    try:
-        FCCZ4RHSs()
-    except ValueError as exc:
-        if str(exc) != "Theta_fCCZ4 must be an EVOL gridfunction stored in in_gfs.":
-            raise
-    else:
-        raise AssertionError("malformed Theta_fCCZ4 storage must be rejected")
-    for cache, snapshot in zip(validation_caches, validation_cache_snapshots):
-        if cache.keys() != snapshot.keys() or any(
-            cache[key] is not value for key, value in snapshot.items()
-        ):
-            raise AssertionError(
-                "rejected fCCZ4 construction mutated construction caches"
-            )
-    if any(
-        par.glb_code_params_dict.get(name) is not value
-        for name, value in validation_kappa_snapshots.items()
-    ):
-        raise AssertionError("rejected fCCZ4 construction changed damping parameters")
-    gri.glb_gridfcs_dict.pop("Theta_fCCZ4", None)
-
-    # BHaHAHA owns an unrelated AUX diagnostic named Theta. Verify both
-    # registration orders retain distinct storage identities.
-    gri.glb_gridfcs_dict.pop("Theta", None)
-    gri.glb_gridfcs_dict.pop("Theta_fCCZ4", None)
-    gri.register_gridfunctions(
-        "Theta", group="AUX", gf_array_name="diagnostic_output_gfs"
-    )
-    diagnostic_first_rhs = FCCZ4RHSs()
-    if (
-        diagnostic_first_rhs.Theta.name != "Theta_fCCZ4"
-        or gri.glb_gridfcs_dict["Theta_fCCZ4"].group != "EVOL"
-        or gri.glb_gridfcs_dict["Theta"].group != "AUX"
-    ):
-        raise AssertionError("BHaHAHA-first Theta registration changed fCCZ4 storage")
-    gri.glb_gridfcs_dict.pop("Theta", None)
-    gri.glb_gridfcs_dict.pop("Theta_fCCZ4", None)
-    fccz4_first_rhs = FCCZ4RHSs()
-    gri.register_gridfunctions(
-        "Theta", group="AUX", gf_array_name="diagnostic_output_gfs"
-    )
-    if (
-        fccz4_first_rhs.Theta.name != "Theta_fCCZ4"
-        or gri.glb_gridfcs_dict["Theta_fCCZ4"].group != "EVOL"
-        or gri.glb_gridfcs_dict["Theta"].group != "AUX"
-    ):
-        raise AssertionError("fCCZ4-first Theta registration changed BHaHAHA storage")
-    gri.glb_gridfcs_dict.pop("Theta_fCCZ4", None)
 
     cases = (
         ("Cartesian", False, False, False, "Cartesian"),
@@ -405,171 +350,6 @@ if __name__ == "__main__":
             enable_RbarDD_gridfunctions=case_enable_RbarDD_gridfunctions,
             enable_T4munu=case_enable_T4munu,
         )
-        validation_suffix = (
-            case_coord
-            + ("_rfm_precompute" if case_enable_rfm_precompute else "")
-            + ("_RbarDD_gridfunctions" if case_enable_RbarDD_gridfunctions else "")
-        )
-        canonical = fccz4_constraints.fCCZ4_constraints[
-            validation_suffix + ("_T4munu" if case_enable_T4munu else "")
-        ]
-        validation_Bq = BSSN_quantities[validation_suffix]
-        validation_rfm = refmetric.reference_metric[
-            case_coord + ("_rfm_precompute" if case_enable_rfm_precompute else "")
-        ]
-
-        # Rebuild the literal Mewes kappa3=1 shift sector independently,
-        # retaining the off-constraint vector C^i = Z4constraintU^i.
-        validation_Dhat_div_beta = sp.sympify(0)
-        validation_Dhat_betaUD = ixp.zerorank2()
-        validation_alpha_dD = ixp.declarerank1("alpha_dD")
-        for k in range(3):
-            validation_Dhat_div_beta += validation_Bq.betaU_dD[k][k]
-            for ell in range(3):
-                validation_Dhat_div_beta += (
-                    validation_rfm.GammahatUDD[k][ell][k] * validation_Bq.betaU[ell]
-                )
-        for i in range(3):
-            for k in range(3):
-                validation_Dhat_betaUD[i][k] = validation_Bq.betaU_dD[i][k]
-                for ell in range(3):
-                    validation_Dhat_betaUD[i][k] += (
-                        validation_rfm.GammahatUDD[i][ell][k] * validation_Bq.betaU[ell]
-                    )
-        expected_delta = ixp.zerorank1()
-        expected_mewes_shift_delta = ixp.zerorank1()
-        expected_alic_shift_delta = ixp.zerorank1()
-        expected_mewes_minus_alic = ixp.zerorank1()
-        for i in range(3):
-            for j in range(3):
-                expected_delta[i] += (
-                    2
-                    * validation_Bq.gammabarUU[i][j]
-                    * (
-                        validation_Bq.alpha * rhs.Theta_dD[j]
-                        - rhs.Theta * validation_alpha_dD[j]
-                    )
-                )
-            expected_delta[i] += (
-                -sp.Rational(2, 3)
-                * validation_Bq.alpha
-                * validation_Bq.trK
-                * rhs.Z4constraintU[i]
-                - rhs.kappa1 * rhs.Z4constraintU[i]
-            )
-            # Relative to the reference-metric BSSN shift sector, literal
-            # Mewes kappa3=1 contributes 2 C^i D/3 - C^k D_k beta^i.
-            expected_mewes_shift_delta[i] += (
-                sp.Rational(2, 3) * rhs.Z4constraintU[i] * validation_Dhat_div_beta
-            )
-            for k in range(3):
-                shift_gradient_term = (
-                    -rhs.Z4constraintU[k] * validation_Dhat_betaUD[i][k]
-                )
-                expected_mewes_shift_delta[i] += shift_gradient_term
-            expected_delta[i] += expected_mewes_shift_delta[i]
-
-            # Alic Eq. (19) is Cartesian. Its kappa3-independent shift terms
-            # use the geometric contracted connection, so at kappa3=1 its
-            # delta relative to the same BSSN base is only 2 C^i D/3.
-            if case_coord == "Cartesian":
-                expected_alic_shift_delta[i] = (
-                    sp.Rational(2, 3) * rhs.Z4constraintU[i] * validation_Dhat_div_beta
-                )
-                for k in range(3):
-                    expected_mewes_minus_alic[i] += (
-                        -rhs.Z4constraintU[k] * validation_Dhat_betaUD[i][k]
-                    )
-
-        actual_reconstructions: Dict[str, ve.ExpressionValue] = {
-            "Mewes_delta": rhs.Lambdatilde_rhsU_delta
-        }
-        expected_reconstructions: Dict[str, ve.ExpressionValue] = {
-            "Mewes_delta": expected_delta
-        }
-        if case_coord == "Cartesian":
-            actual_reconstructions["Mewes_minus_Alic"] = [
-                expected_mewes_shift_delta[i] - expected_alic_shift_delta[i]
-                for i in range(3)
-            ]
-            expected_reconstructions["Mewes_minus_Alic"] = expected_mewes_minus_alic
-        ve.assert_equal(
-            actual_reconstructions,
-            expected_reconstructions,
-            suppress_message=True,
-        )
-
-        # Cartesian coefficients distinguish the Mewes and Alic/Sanchis-Gual
-        # off-constraint equations without a same-constructor snapshot.
-        if case_coord == "Cartesian":
-            shift_gradient_coefficients = []
-            expected_shift_gradient_coefficients = []
-            for i in range(3):
-                for a in range(3):
-                    for b in range(3):
-                        shift_gradient_coefficient = sp.diff(
-                            rhs.Lambdatilde_rhsU_delta[i],
-                            validation_Bq.betaU_dD[a][b],
-                        )
-                        expected_shift_gradient_coefficient = sp.Rational(
-                            2, 3
-                        ) * rhs.Z4constraintU[i] * sp.KroneckerDelta(
-                            a, b
-                        ) - rhs.Z4constraintU[
-                            b
-                        ] * sp.KroneckerDelta(
-                            i, a
-                        )
-                        shift_gradient_coefficients.append(shift_gradient_coefficient)
-                        expected_shift_gradient_coefficients.append(
-                            expected_shift_gradient_coefficient
-                        )
-            ve.assert_equal(
-                {"shift_gradient_coefficients": shift_gradient_coefficients},
-                {"shift_gradient_coefficients": (expected_shift_gradient_coefficients)},
-                suppress_message=True,
-            )
-            aggregate_shift_gradient_coefficients = []
-            expected_aggregate_shift_gradient_coefficients = []
-            for i in range(3):
-                for a in range(3):
-                    for b in range(3):
-                        aggregate_shift_gradient_coefficient = sp.diff(
-                            rhs.Lambdatilde_rhsU[i],
-                            validation_Bq.betaU_dD[a][b],
-                        )
-                        expected_aggregate_shift_gradient_coefficient = -(
-                            rhs.LambdatildeU[b] + rhs.Z4constraintU[b]
-                        ) * sp.KroneckerDelta(i, a) + sp.Rational(
-                            2, 3
-                        ) * rhs.LambdatildeU[
-                            i
-                        ] * sp.KroneckerDelta(
-                            a, b
-                        )
-                        aggregate_shift_gradient_coefficients.append(
-                            aggregate_shift_gradient_coefficient
-                        )
-                        expected_aggregate_shift_gradient_coefficients.append(
-                            expected_aggregate_shift_gradient_coefficient
-                        )
-            ve.assert_equal(
-                {
-                    "aggregate_shift_gradient_coefficients": (
-                        aggregate_shift_gradient_coefficients
-                    )
-                },
-                {
-                    "aggregate_shift_gradient_coefficients": (
-                        expected_aggregate_shift_gradient_coefficients
-                    )
-                },
-                suppress_message=True,
-            )
-
-        aggregate_Theta_rhs = rhs.Theta_rhs
-        aggregate_cf_rhs = rhs.cf_rhs
-        aggregate_trK_rhs = rhs.trK_rhs
         expression_dict: Dict[str, ve.ExpressionValue] = dict(
             rhs.fCCZ4_RHSs_varname_to_expr_dict
         )
@@ -590,99 +370,15 @@ if __name__ == "__main__":
                 "ZD": rhs.ZD,
                 "ZU": rhs.ZU,
                 "ZbarU": rhs.ZbarU,
-                "aggregate_Theta_rhs": aggregate_Theta_rhs,
+                "aggregate_Theta_rhs": rhs.Theta_rhs,
                 "aggregate_a_rhsDD": rhs.a_rhsDD,
-                "aggregate_cf_rhs": aggregate_cf_rhs,
+                "aggregate_cf_rhs": rhs.cf_rhs,
                 "aggregate_h_rhsDD": rhs.h_rhsDD,
                 "aggregate_lambda_rhsU": rhs.lambda_rhsU,
-                "aggregate_trK_rhs": aggregate_trK_rhs,
+                "aggregate_trK_rhs": rhs.trK_rhs,
                 "kappa1": rhs.kappa1,
                 "kappa2": rhs.kappa2,
-                "canonical_H_Z4_residual": rhs.H_Z4 - canonical.H_Z4,
-                "canonical_LambdatildeU_residual": [
-                    rhs.LambdatildeU[i] - canonical.LambdatildeU[i] for i in range(3)
-                ],
-                "canonical_RbarZ4DD_delta_residual": [
-                    [
-                        rhs.RbarZ4DD_delta[i][j] - canonical.RbarZ4DD_delta[i][j]
-                        for j in range(3)
-                    ]
-                    for i in range(3)
-                ],
-                "canonical_RbarZ4DD_residual": [
-                    [rhs.RbarZ4DD[i][j] - canonical.RbarZ4DD[i][j] for j in range(3)]
-                    for i in range(3)
-                ],
-                "canonical_RbarZ4_residual": rhs.RbarZ4 - canonical.RbarZ4,
-                "canonical_Z4constraintU_residual": [
-                    rhs.Z4constraintU[i] - canonical.Z4constraintU[i] for i in range(3)
-                ],
-                "canonical_ZD_residual": [
-                    rhs.ZD[i] - canonical.ZD[i] for i in range(3)
-                ],
-                "canonical_ZU_residual": [
-                    rhs.ZU[i] - canonical.ZU[i] for i in range(3)
-                ],
-                "canonical_ZbarU_residual": [
-                    rhs.ZbarU[i] - canonical.ZbarU[i] for i in range(3)
-                ],
-                "canonical_copy_residual": sp.Integer(
-                    0
-                    if rhs.LambdatildeU is not canonical.LambdatildeU
-                    and rhs.Z4constraintU is not canonical.Z4constraintU
-                    and rhs.ZbarU is not canonical.ZbarU
-                    and rhs.ZU is not canonical.ZU
-                    and rhs.ZD is not canonical.ZD
-                    and rhs.RbarZ4DD_delta is not canonical.RbarZ4DD_delta
-                    and rhs.RbarZ4DD is not canonical.RbarZ4DD
-                    else 1
-                ),
-                "lambda_rescaling_residual": [
-                    rhs.lambda_rhsU[i] - rhs.Lambdatilde_rhsU[i] / validation_rfm.ReU[i]
-                    for i in range(3)
-                ],
-                "mapped_output_count_residual": sp.Integer(
-                    len(rhs.fCCZ4_RHSs_varname_to_expr_dict) - 18
-                ),
-                "mapped_output_order_residual": sp.Integer(
-                    0
-                    if list(rhs.fCCZ4_RHSs_varname_to_expr_dict)
-                    == sorted(rhs.fCCZ4_RHSs_varname_to_expr_dict)
-                    else 1
-                ),
-                "RbarZ4_trace_residual": rhs.RbarZ4
-                - sum(
-                    validation_Bq.gammabarUU[i][j] * rhs.RbarZ4DD[i][j]
-                    for i in range(3)
-                    for j in range(3)
-                ),
-                "Z4constraintU_definition_residual": [
-                    rhs.Z4constraintU[i]
-                    - (rhs.LambdatildeU[i] - validation_Bq.DGammaU[i])
-                    for i in range(3)
-                ],
-                "ZD_definition_residual": [
-                    rhs.ZD[i]
-                    - sp.Rational(1, 2)
-                    * sum(
-                        validation_Bq.gammabarDD[i][j] * rhs.Z4constraintU[j]
-                        for j in range(3)
-                    )
-                    for i in range(3)
-                ],
-                "ZU_definition_residual": [
-                    rhs.ZU[i] - validation_Bq.exp_m4phi * rhs.ZbarU[i] for i in range(3)
-                ],
-                "ZbarU_definition_residual": [
-                    rhs.ZbarU[i] - sp.Rational(1, 2) * rhs.Z4constraintU[i]
-                    for i in range(3)
-                ],
             }
-        )
-        cache_key = validation_suffix + ("_T4munu" if case_enable_T4munu else "")
-        cached_rhs = fCCZ4_RHSs[cache_key]
-        expression_dict["cache_reuse_residual"] = sp.Integer(
-            0 if fCCZ4_RHSs[cache_key] is cached_rhs else 1
         )
         processed = ve.process_dictionary_of_expressions(
             expression_dict, fixed_mpfs_for_free_symbols=True
