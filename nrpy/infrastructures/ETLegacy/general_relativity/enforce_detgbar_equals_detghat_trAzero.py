@@ -276,9 +276,9 @@ if __name__ == "__main__":
         [validation_full_q * validation_gammabarDD[i][j] for j in range(3)]
         for i in range(3)
     ]
-    validation_gammabarprimeUU, _ = ixp.symm_matrix_inverter3x3(
+    validation_gammabarprimeUU = ixp.symm_matrix_inverter3x3(
         validation_gammabarprimeDD
-    )
+    )[0]
     validation_full_trA = sum(
         validation_gammabarprimeUU[i][j] * validation_AbarDD[i][j]
         for i in range(3)

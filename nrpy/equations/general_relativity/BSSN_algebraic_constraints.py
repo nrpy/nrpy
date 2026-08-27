@@ -107,6 +107,17 @@ def BSSN_algebraic_constraints(
 
 
 if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
+
     import os
 
     import nrpy.validate_expressions.validate_expressions as ve
