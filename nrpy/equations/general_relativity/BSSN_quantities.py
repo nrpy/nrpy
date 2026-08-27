@@ -210,7 +210,7 @@ class BSSNQuantities:
 
         # Step 6: Quantities related to conformal traceless
         #         extrinsic curvature AbarDD:
-        #         AbarUU, AbarUD, trAbar, AbarDD_dD, and AbarDD_dupD
+        #         AbarUU, AbarUD, AbarDD_dD, and AbarDD_dupD
 
         # Step 6.a.i: Compute Abar^{ij} in terms of Abar_{ij} and gammabar^{ij}
         self.AbarUU = ixp.zerorank2()
@@ -233,13 +233,7 @@ class BSSNQuantities:
                     # Abar^i_j = gammabar^{ik} Abar_{kj}
                     self.AbarUD[i][j] += self.gammabarUU[i][k] * self.AbarDD[k][j]
 
-        # Step 6.a.iii: Compute Abar^k_k = trace of Abar:
-        self.trAbar = sp.sympify(0)
-        for k in range(3):
-            for j in range(3):
-                self.trAbar += self.gammabarUU[k][j] * self.AbarDD[j][k]
-
-        # Step 6.a.iv: Compute Abar_{ij,k}
+        # Step 6.a.iii: Compute Abar_{ij,k}
         self.AbarDD_dD = ixp.zerorank3()
         self.AbarDD_dupD = ixp.zerorank3()
         aDD_dD = ixp.declarerank3("aDD_dD", symmetry="sym01")

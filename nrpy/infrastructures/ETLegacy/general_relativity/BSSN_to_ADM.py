@@ -128,7 +128,7 @@ def register_CFunction_BSSN_to_ADM(
     schedule_poststep = (
         "MoL_PostStep",
         f"""
-schedule FUNC_NAME in MoL_PostStep after {thorn_name}_enforce_detgbar_equals_detghat before ADMBase_SetADMVars
+schedule FUNC_NAME in MoL_PostStep after {thorn_name}_enforce_detgbar_equals_detghat_trAzero before ADMBase_SetADMVars
 {{
   LANG: C
   READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,
@@ -147,7 +147,7 @@ schedule FUNC_NAME in MoL_PostStep after {thorn_name}_enforce_detgbar_equals_det
     schedule_pseudoevol = (
         "MoL_PseudoEvolution",
         f"""
-schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_enforce_detgbar_equals_detghat
+schedule FUNC_NAME in MoL_PseudoEvolution after {thorn_name}_enforce_detgbar_equals_detghat_trAzero
 {{
   LANG: C
   READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,

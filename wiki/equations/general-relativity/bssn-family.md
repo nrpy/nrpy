@@ -8,10 +8,9 @@
 The BSSN family is split into reusable symbolic quantities, evolution RHSs,
 gauge RHSs, and constraints. The modules build SymPy expressions with explicit
 indexed loops, store key outputs on objects or return values, and validate those
-outputs through the trusted-expression pipeline. The symbolic evolution keeps
-the off-constraint `alpha tr(Abar)` term, while applications may also project
-the conformal determinant and trace-free-curvature constraints at selected
-state-repair points.
+outputs through the trusted-expression pipeline. The symbolic evolution
+contract assumes the conformal determinant and trace-free-curvature constraints;
+applications must project them at each state-repair point they wire.
 
 ## Detail
 
@@ -28,33 +27,46 @@ names such as `cf_rhs`, `trK_rhs`, `lambda_rhsU0`, `a_rhsDD00`, and `h_rhsDD00`.
 
 ### Analytic determinant and trace constraints
 
-`BSSNQuantities` computes and exposes `trAbar`. `BSSNRHSs` retains the
-`alpha tr(Abar)` correction in the conformal-metric equation so backends that
-do not project the trace after every step still evolve the unconstrained state
-consistently. The term vanishes on a projected state. `BSSN_to_g4Christoffel` reuses
-`BSSN_to_ADM.KDD`, whose owner consumes the already constrained `AbarDD`
-without projecting a second private copy.
-
-Three backends provide a combined all-points projection for BSSN
-storage. Each first rescales `gammabarDD` to satisfy
-`det(gammabar)=det(gammahat)`, inverts that post-enforced metric, and then uses
-the same metric to remove the trace from `AbarDD`. Both corrected tensors are
-written from one loop. This is algebraic projection, not exponential damping,
-and is compatible with BSSN or fCCZ4 states using that storage. Scheduling is
-backend- and application-owned: BHaH and superB callers opt in, CarpetX emits
-combined-projection schedule entries, and ETLegacy uses the combined projector
-at initialization but retains its determinant-only repair during evolution to
-preserve the established Baikal evolution contract. Reviewed owner paths and collision examples
-do not establish an end-to-end lifecycle for the new fCCZ4 RHS, gauge, and
-`Theta_fCCZ4` storage.
+`BSSNQuantities` no longer computes or exposes `trAbar`. `BSSNRHSs` therefore
+uses the constrained conformal-metric equation with
+`gammabar^ij Abar_ij=0` analytically and contains no off-constraint
+`alpha tr(Abar)` correction. These symbolic classes perform no evolved-state
+projection; backend and application repair code owns any required projection.
 
 Claim evidence:
-- Claim: BSSN and fCCZ4 share algebraic determinant/trace constraints; the BSSN symbolic API retains `trAbar` and its off-constraint RHS correction; `BSSN_to_g4Christoffel` reuses `BSSN_to_ADM.KDD`; BHaH, ETLegacy, and CarpetX provide combined determinant/trace projection kernels whose trace uses the post-enforced metric, while ETLegacy limits that combined projection to initialization and uses determinant-only evolution repair.
-- Role: public/scientific contract
-- Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py), `BSSN_to_ADM`; [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py), `BSSN_to_g4Christoffel`; backend `register_CFunction_enforce_detgbar_equals_detghat_trAzero` implementations listed in Sources
-- Corroboration: none available; the cited symbolic owners and backend kernels are the deciding implementation evidence, while reviewed application paths establish only their own limited wiring
+- Claim: `BSSNQuantities` does not expose `trAbar`, and `BSSNRHSs` contains no constraint-proportional `alpha tr(Abar)` term; callers own algebraic projection of the evolved state.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`
+- Corroboration: [test_parse_BSSN.py](../../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py), `test_example_BSSN`
+- Validation: `inspected=pass; generated=not-applicable; built=not-applicable; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=fixed sampled trusted-expression and cross-representation comparisons; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=six BSSN RHS coordinate variants and nine BSSN quantity variants; date=08-26-2026`
+
+BHaH and ETLegacy provide one combined all-points projector for the determinant
+and trace constraints. The GeneralRFM branch explicitly forms the
+determinant-corrected metric, inverts it, and removes the resulting trace from
+`AbarDD`. Standard orthogonal reference metrics instead invert the reduced
+`H=I+h` matrix and use algebraic cancellation of the determinant-rescaling
+factor; the result is the equivalent trace removal relative to the corrected
+metric. The generated block loads all six `hDD` and six `aDD` components before
+its first store, computes six corrected metric and six corrected curvature
+outputs, then stores all twelve. For finite, nonsingular states where the
+rescaling and inverse are defined, this is algebraic projection to roundoff,
+not exponential damping.
+
+BHaH callers opt in. Its `two_blackholes_collide` example enables projection
+for initial data and calls the same combined projector after boundary handling
+in its Method of Lines hook. ETLegacy schedules its combined projector in
+`CCTK_INITIAL`, after evolved-variable boundary conditions in `MoL_PostStep`,
+and before constraints in `MoL_PseudoEvolution`. The inspected ETLegacy
+projector registration emits no determinant-only repair entry.
+
+Claim evidence:
+- Claim: BHaH and ETLegacy use a combined determinant/trace projector; the inspected BHaH collision caller applies it after boundary handling, while the inspected ETLegacy projector registration assigns the same combined projector to all three repair schedules and emits no determinant-only repair entry.
+- Role: descriptive behavior
+- Deciding authority: [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`; [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), Method of Lines registration; [ETLegacy algebraic constraint projection](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+- Corroboration: none available; BHaH and ETLegacy own separate backend behavior
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH, ETLegacy, CarpetX generated C; precision=exact symbolic off-diagonal determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian and SinhSpherical reference-metric precompute in all three backends, application scheduling inspected only; date=08-26-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy generated C plus BHaH source inspection; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=ETLegacy Cartesian, SinhSpherical reference-metric precompute, and GeneralRFM projector variants; BHaH Spherical collision wiring inspected only; date=08-26-2026`
 
 `BSSN_gauge_RHSs` handles lapse and shift choices separately from the main RHS
 class. It returns `alpha_rhs`, `vet_rhsU`, and `bet_rhsU`, validates supported
@@ -171,11 +183,10 @@ corresponding trusted files.
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`, `BSSN_constraints`
-- [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py) - `BSSN_to_ADM`, canonical constrained-state `KDD` reconstruction
-- [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py) - `BSSN_to_g4Christoffel`
 - [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
+- [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
+- [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - combined-projector registration and Method of Lines hook
 - [ETLegacy algebraic constraint projection](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
-- [CarpetX algebraic constraint projection](../../../nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
 - [BSSN_quantities_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py) - `trusted_dict`
 - [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py) - `trusted_dict`
