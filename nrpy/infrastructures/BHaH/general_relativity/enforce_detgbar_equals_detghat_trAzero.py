@@ -7,9 +7,10 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import List, Union, cast
+from typing import Dict, List, Union, cast
 
 import sympy as sp
+from mpmath import mpc, mpf  # type: ignore
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -20,6 +21,7 @@ import nrpy.helpers.parallelization.utilities as parallel_utils
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
+import nrpy.validate_expressions.validate_expressions as ve
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
@@ -33,7 +35,8 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     enable_rfm_precompute: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-) -> Union[None, pcg.NRPyEnv_type]:
+    validate_expressions: bool = False,
+) -> Union[None, Dict[str, Union[mpc, mpf]], pcg.NRPyEnv_type]:
     """
     Register combined determinant and trace-free conformal-tensor projection.
 
@@ -41,8 +44,9 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
+    :param validate_expressions: Whether to validate generated SymPy expressions against trusted values.
 
-    :return: None if in registration phase, else the updated NRPy environment.
+    :return: None in registration phase, processed expressions when validating, otherwise the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -130,16 +134,28 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
                 aprimeDD[i][j] = Bq.aDD[i][j] - sp.Rational(1, 3) * HDD[i][j] * trA
 
     access_gfs: List[str] = []
-    projected_exprs: List[sp.Expr] = []
+    projected_exprs_dict: Dict[str, sp.Expr] = {}
     for basename, expressions in (("hDD", hprimeDD), ("aDD", aprimeDD)):
         for i in range(3):
             for j in range(i, 3):
+                varname = f"{basename}{i}{j}"
                 access_gfs.append(
                     gri.BHaHGridFunction.access_gf(
-                        f"{basename}{i}{j}", 0, 0, 0, gf_array_name="in_gfs"
+                        varname, 0, 0, 0, gf_array_name="in_gfs"
                     )
                 )
-                projected_exprs.append(expressions[i][j])
+                projected_exprs_dict[varname] = expressions[i][j]
+
+    if validate_expressions:
+        validation_exprs_dict = {
+            varname: expr.subs(sp.Function("nrpyAbs"), sp.Abs)
+            for varname, expr in projected_exprs_dict.items()
+        }
+        return ve.process_dictionary_of_expressions(
+            validation_exprs_dict, fixed_mpfs_for_free_symbols=True
+        )
+
+    projected_exprs = list(projected_exprs_dict.values())
 
     # To evaluate the cube root, SIMD support requires e.g., SLEEF.
     #   Also need to be careful to not access memory out of bounds!
@@ -209,120 +225,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
 
 
 if __name__ == "__main__":
-    import nrpy.validate_expressions.validate_expressions as ve
-
-    validation_HDD = [
-        [sp.Integer(4), sp.Integer(1), sp.Rational(1, 2)],
-        [sp.Integer(1), sp.Integer(3), sp.Rational(1, 4)],
-        [sp.Rational(1, 2), sp.Rational(1, 4), sp.Integer(2)],
-    ]
-    validation_aDD = [
-        [sp.Integer(2), sp.Integer(3), sp.Integer(5)],
-        [sp.Integer(3), sp.Integer(7), sp.Integer(11)],
-        [sp.Integer(5), sp.Integer(11), sp.Integer(13)],
-    ]
-    validation_HUU, validation_detH = ixp.symm_matrix_inverter3x3(validation_HDD)
-    validation_q = validation_detH ** sp.Rational(-1, 3)
-    validation_HprimeDD = [
-        [validation_q * validation_HDD[i][j] for j in range(3)] for i in range(3)
-    ]
-    validation_trA = sum(
-        validation_HUU[i][j] * validation_aDD[i][j] for i in range(3) for j in range(3)
-    )
-    validation_HprimeUU, validation_detHprime = ixp.symm_matrix_inverter3x3(
-        validation_HprimeDD
-    )
-    validation_aprimeDD = [
-        [
-            validation_aDD[i][j]
-            - sp.Rational(1, 3) * validation_HDD[i][j] * validation_trA
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    validation_trAprime = sum(
-        validation_HprimeUU[i][j] * validation_aprimeDD[i][j]
-        for i in range(3)
-        for j in range(3)
-    )
-    ve.assert_equal(validation_detHprime, sp.sympify(1), suppress_message=True)
-    ve.assert_equal(validation_trAprime, sp.sympify(0), suppress_message=True)
-
-    validation_scaleD = [sp.Integer(2), sp.Integer(3), sp.Integer(5)]
-    validation_gammahatDD = [
-        [
-            sp.KroneckerDelta(i, j) * validation_scaleD[i] * validation_scaleD[j]
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    validation_gammabarDD = [
-        [
-            validation_scaleD[i] * validation_HDD[i][j] * validation_scaleD[j]
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    validation_AbarDD = [
-        [
-            validation_scaleD[i] * validation_aDD[i][j] * validation_scaleD[j]
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    _, validation_detgammahat = ixp.symm_matrix_inverter3x3(validation_gammahatDD)
-    _, validation_detgammabar = ixp.symm_matrix_inverter3x3(validation_gammabarDD)
-    validation_full_q = (
-        validation_detgammahat / validation_detgammabar
-    ) ** sp.Rational(1, 3)
-    validation_gammabarprimeDD = [
-        [validation_full_q * validation_gammabarDD[i][j] for j in range(3)]
-        for i in range(3)
-    ]
-    validation_gammabarprimeUU, _ = ixp.symm_matrix_inverter3x3(
-        validation_gammabarprimeDD
-    )
-    validation_full_trA = sum(
-        validation_gammabarprimeUU[i][j] * validation_AbarDD[i][j]
-        for i in range(3)
-        for j in range(3)
-    )
-    validation_full_hprimeDD = [
-        [
-            (validation_gammabarprimeDD[i][j] - validation_gammahatDD[i][j])
-            / (validation_scaleD[i] * validation_scaleD[j])
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    validation_full_aprimeDD = [
-        [
-            (
-                validation_AbarDD[i][j]
-                - sp.Rational(1, 3)
-                * validation_gammabarprimeDD[i][j]
-                * validation_full_trA
-            )
-            / (validation_scaleD[i] * validation_scaleD[j])
-            for j in range(3)
-        ]
-        for i in range(3)
-    ]
-    validation_reduced_hprimeDD = [
-        [validation_HprimeDD[i][j] - sp.KroneckerDelta(i, j) for j in range(3)]
-        for i in range(3)
-    ]
-    ve.assert_equal(
-        {
-            "hprimeDD": validation_full_hprimeDD,
-            "aprimeDD": validation_full_aprimeDD,
-        },
-        {
-            "hprimeDD": validation_reduced_hprimeDD,
-            "aprimeDD": validation_aprimeDD,
-        },
-        suppress_message=True,
-    )
+    import os
 
     par.set_parval_from_str("Infrastructure", "BHaH")
     par.set_parval_from_str("enable_parallel_codegen", False)
@@ -331,59 +234,17 @@ if __name__ == "__main__":
         ("SinhSpherical", True),
         ("GeneralRFM", True),
     ):
-        cfc.CFunction_dict.clear()
-        register_CFunction_enforce_detgbar_equals_detghat_trAzero(
-            validation_coord, validation_precompute, False, 1
+        results_dict = register_CFunction_enforce_detgbar_equals_detghat_trAzero(
+            validation_coord,
+            validation_precompute,
+            False,
+            1,
+            validate_expressions=True,
         )
-        validation_cfunc = next(iter(cfc.CFunction_dict.values()))
-        generated = (validation_cfunc.prefunc or "") + (validation_cfunc.body or "")
-        if validation_coord.startswith("GeneralRFM"):
-            for validation_i, validation_j in (
-                (0, 0),
-                (0, 1),
-                (0, 2),
-                (1, 1),
-                (1, 2),
-                (2, 2),
-            ):
-                if f"const REAL ghatDD{validation_i}{validation_j} =" not in generated:
-                    raise AssertionError(
-                        "GeneralRFM projection must read all six ghat components"
-                    )
-        elif (
-            "ghatDD" in generated
-            or "rfmstruct->" in generated
-            or any(f"const REAL xx{axis} =" in generated for axis in range(3))
-        ):
-            raise AssertionError(
-                "standard projection must not evaluate coordinate or reference-metric data"
-            )
-        if validation_precompute:
-            if "const rfm_struct *restrict rfmstruct" not in validation_cfunc.params:
-                raise AssertionError("precomputed-RFM function signature changed")
-        elif "const REAL *restrict x0" not in validation_cfunc.params:
-            raise AssertionError("analytic-RFM function signature changed")
-        if generated.count("Step 1 of 2") != 1 or generated.count("Step 2 of 2") != 1:
-            raise AssertionError(
-                "projection must contain one generated twelve-output block"
-            )
-        if generated.count("END LOOP: for i2 over") != 1:
-            raise AssertionError("projection must contain one all-points loop nest")
-        write_section = generated.split("Step 2 of 2", maxsplit=1)[1]
-        if write_section.count("in_gfs[IDX4(") != 12:
-            raise AssertionError("projection must store twelve outputs in one block")
-        first_store = generated.index("in_gfs[IDX4(", generated.index("Step 2 of 2"))
-        for validation_basename in ("aDD", "hDD"):
-            for validation_i, validation_j in (
-                (0, 0),
-                (0, 1),
-                (0, 2),
-                (1, 1),
-                (1, 2),
-                (2, 2),
-            ):
-                load = f"const REAL {validation_basename}{validation_i}{validation_j} ="
-                if load not in generated or generated.index(load) > first_store:
-                    raise AssertionError(
-                        "projection must load all raw inputs before stores"
-                    )
+        ve.compare_or_generate_trusted_results(
+            os.path.abspath(__file__),
+            os.getcwd(),
+            f"{os.path.splitext(os.path.basename(__file__))[0]}_{validation_coord}"
+            + ("_rfm_precompute" if validation_precompute else ""),
+            cast(Dict[str, Union[mpc, mpf]], results_dict),
+        )
