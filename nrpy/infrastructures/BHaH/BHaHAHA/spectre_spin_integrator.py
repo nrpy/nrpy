@@ -533,12 +533,6 @@ static int spectre_spin_check_finite_scratch_gfs(const REAL *restrict spectre_sp
 #include <stdint.h>
 #include <string.h>
 
-#ifndef PRIMME_VERSION_MAJOR
-#define BHAHAHA_PRIMME_USES_LEGACY_MATVEC 1
-#elif PRIMME_VERSION_MAJOR < 3
-#define BHAHAHA_PRIMME_USES_LEGACY_MATVEC 1
-#endif
-
 #define SPECTRE_SPIN_FD_RADIUS @FD_RADIUS@
 #define SPECTRE_SPIN_FD_WIDTH @FD_WIDTH@
 #define SPECTRE_SPIN_MAX_ROW_NNZ @MAX_ROW_NNZ@
@@ -1319,19 +1313,6 @@ static void spectre_spin_apply_reduced_operator(const spectre_spin_primme_ctx_st
   } // END LOOP: for block over PRIMME vectors
 } // END FUNCTION: spectre_spin_apply_reduced_operator
 
-#ifdef BHAHAHA_PRIMME_USES_LEGACY_MATVEC
-static void spectre_spin_primme_K_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
-  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->matrix;
-  spectre_spin_apply_reduced_operator(ctx, ctx->K, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
-  *err = 0;
-} // END FUNCTION: spectre_spin_primme_K_matvec
-
-static void spectre_spin_primme_M_matvec(void *x, void *y, int *blockSize, primme_params *primme, int *err) {
-  spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->massMatrix;
-  spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, (PRIMME_INT)ctx->nred, (double *)y, (PRIMME_INT)ctx->nred, *blockSize);
-  *err = 0;
-} // END FUNCTION: spectre_spin_primme_M_matvec
-#else
 static void spectre_spin_primme_K_matvec(void *x, PRIMME_INT *ldx, void *y, PRIMME_INT *ldy, int *blockSize, primme_params *primme,
                                          int *err) {
   spectre_spin_primme_ctx_struct *restrict ctx = (spectre_spin_primme_ctx_struct *)primme->matrix;
@@ -1345,7 +1326,6 @@ static void spectre_spin_primme_M_matvec(void *x, PRIMME_INT *ldx, void *y, PRIM
   spectre_spin_apply_reduced_operator(ctx, ctx->M, (const double *)x, *ldx, (double *)y, *ldy, *blockSize);
   *err = 0;
 } // END FUNCTION: spectre_spin_primme_M_matvec
-#endif
 
 static int spectre_spin_active_index(const int j1, const int j2, const int Ntheta) {
   return j1 + Ntheta * j2;
