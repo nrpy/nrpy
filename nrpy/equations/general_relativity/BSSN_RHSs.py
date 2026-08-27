@@ -88,7 +88,8 @@ class BSSNRHSs:
                     gammabar_rhsDD[i][j] += betaU[k] * gammabarDD_dupD[i][j][k] + betaU_dD[k][i] * gammabarDD[k][j] \
                                             + betaU_dD[k][j] * gammabarDD[i][k]
 
-        # Step 2.b.i: Import detgammabar from BSSN_quantities:
+        # Step 2.b.i: Import trAbar and detgammabar from BSSN_quantities:
+        trAbar = Bq.trAbar
         detgammabar = Bq.detgammabar
         detgammabar_dD = Bq.detgammabar_dD
 
@@ -98,10 +99,15 @@ class BSSNRHSs:
             Dbarbetacontraction += betaU_dD[k][k] + betaU[k] * detgammabar_dD[k] / (2 * detgammabar)
 
         # Step 2.b.ii: Second term of \partial_t \bar{\gamma}_{i j} right-hand side:
-        # -\frac{2}{3} \bar{\gamma}_{i j} \bar{D}_{k} \beta^{k}
+        # \frac{2}{3} \bar{\gamma}_{i j}
+        # \left(\alpha \bar{A}^{k}_{k} - \bar{D}_{k} \beta^{k}\right)
         for i in range(3):
             for j in range(3):
-                gammabar_rhsDD[i][j] += -sp.Rational(2, 3) * gammabarDD[i][j] * Dbarbetacontraction
+                gammabar_rhsDD[i][j] += (
+                    sp.Rational(2, 3)
+                    * gammabarDD[i][j]
+                    * (alpha * trAbar - Dbarbetacontraction)
+                )
 
         # Step 2.c: Third term of \partial_t \bar{\gamma}_{i j} right-hand side:
         # -2 \alpha \bar{A}_{ij}

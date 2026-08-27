@@ -1,15 +1,17 @@
 # GR Poststep Repairs
 
-> ETLegacy lapse flooring and combined conformal determinant/trace projection across initial and MoL lifecycle bins. · Status: confirmed · Last reconciled: 08-26-2026
+> ETLegacy lapse flooring, initial determinant/trace projection, and determinant-only MoL repair. · Status: confirmed · Last reconciled: 08-26-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
 
 This leaf owns ETLegacy GR repair kernels. Registration places the lapse floor
-in `MoL_PostStep` and emits combined-projection entries for `CCTK_INITIAL`,
-`MoL_PostStep`, and `MoL_PseudoEvolution`. Those entries restore
-`det(gammabar)=det(gammahat)` and `tr(Abar)=0` when executed. No generated
-thorn build, initial/recovery run, or restart validation was done.
+in `MoL_PostStep`, the combined determinant/trace projection in
+`CCTK_INITIAL`, and a determinant-only repair in `MoL_PostStep` and
+`MoL_PseudoEvolution`. The split preserves ETLegacy's established evolved
+solution while making freshly converted initial data trace-free. Generated
+Baikal and BaikalVacuum thorns were built and all five ET tests passed; restart
+validation was not done.
 
 These functions are repair kernels around the evolved state. They do not own
 the symbolic BSSN equations; see
@@ -23,7 +25,7 @@ evolution and constraint expressions.
 generated body defines `NRPYMAX` if needed, then loops over all points with
 SIMD disabled and assigns `alphaGF = NRPYMAX(alphaGF, lapse_floor)`. The
 registered schedule entry is in `MoL_PostStep` before
-`<thorn>_enforce_detgbar_equals_detghat_trAzero`, reads and writes `alphaGF`
+`<thorn>_enforce_detgbar_equals_detghat`, reads and writes `alphaGF`
 everywhere, and records `lapse_floor` as a code parameter used by the thorn.
 
 `register_CFunction_enforce_detgbar_equals_detghat_trAzero()` emits
@@ -38,19 +40,21 @@ tensors are formed does it write all twelve evolved components. Thus the
 trace projection uses the post-enforced conformal metric and cannot observe
 partially updated input.
 
-The combined projection has entries in `CCTK_INITIAL`, `MoL_PostStep`, and
-`MoL_PseudoEvolution`. Poststep it runs after the lapse floor; pseudo-evolution
-it runs after auxiliary BCs and before BSSN constraints.
-Schedule metadata reads and writes all twelve gridfunctions everywhere. SIMD
-remains disabled because the kernel uses a cube root and writes all points.
+The combined projection runs only in `CCTK_INITIAL`, after every registered
+ADM-to-BSSN producer. The same registration function also emits
+`<thorn>_enforce_detgbar_equals_detghat`, which rescales only the six `hDD`
+components. This determinant-only repair runs after evolved-variable boundary
+conditions in `MoL_PostStep` and before BSSN constraints in
+`MoL_PseudoEvolution`. BSSN-to-ADM consumers run after that repair. SIMD
+remains disabled because both kernels use a cube root and write all points.
 
 Claim evidence:
-- Claim: ETLegacy registers the combined projection in `CCTK_INITIAL`, `MoL_PostStep`, and `MoL_PseudoEvolution`, with emitted ordering after the named BC aliases and before pseudo-evolution constraints; source registration does not prove fresh-data, recovery, or restart execution.
+- Claim: ETLegacy registers the combined determinant/trace projection in `CCTK_INITIAL` and a determinant-only repair in `MoL_PostStep` and `MoL_PseudoEvolution`; exact ET 2024-06 beta generation, build, and five-test execution pass, while recovery and restart behavior remain untested.
 - Role: generated evidence
 - Deciding authority: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - Corroboration: [floor_the_lapse.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py), `register_CFunction_floor_the_lapse`
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy generated projection kernel and schedule metadata; precision=exact determinant/trace identities and generated-source structure; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=Cartesian and SinhSpherical reference-metric precompute kernel variants; date=08-26-2026`
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.12.1, ET 2024-06 beta; backend=ETLegacy generated Baikal, BaikalVacuum, and WaveToyNRPy thorns; precision=exact determinant/trace identities, generated-source structure, and ET trusted-output tolerances; GPU=not-run; restart=not-run; distributed=2 MPI processes; error_path=not-run; options=Cartesian ET tests plus Cartesian, SinhSpherical precompute, and GeneralRFM generator validation; date=08-26-2026`
 
 ## Sources
 

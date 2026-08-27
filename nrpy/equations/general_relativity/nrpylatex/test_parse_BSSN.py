@@ -64,7 +64,8 @@ def test_example_BSSN() -> bool:
             % replace "\bar{A}" -> "\mathrm{a}"
             % declare aDD --dim 3 --sym sym01
             % replace "\partial_t \bar{\gamma}" -> "\mathrm{h_rhs}"
-            \partial_t \bar{\gamma}_{ij} &= \mathcal{L}_\beta \bar{\gamma}_{ij} - \frac{2}{3} \bar{\gamma}_{ij} \bar{D}_k \beta^k - 2 \alpha \bar{A}_{ij} \\
+            \partial_t \bar{\gamma}_{ij} &= \mathcal{L}_\beta \bar{\gamma}_{ij} - \frac{2}{3} \bar{\gamma}_{ij} \bar{D}_k \beta^k
+                - 2 \alpha \bar{A}_{ij} + \frac{2}{3} \alpha \bar{\gamma}_{ij} \bar{\gamma}^{kl} \bar{A}_{kl} \\
 
             % declare cf trK phi --dim 3
             % replace "K" -> "\mathrm{trK}"

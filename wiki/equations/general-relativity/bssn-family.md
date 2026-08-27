@@ -8,9 +8,10 @@
 The BSSN family is split into reusable symbolic quantities, evolution RHSs,
 gauge RHSs, and constraints. The modules build SymPy expressions with explicit
 indexed loops, store key outputs on objects or return values, and validate those
-outputs through the trusted-expression pipeline. The symbolic evolution
-contract assumes the conformal determinant and trace-free-curvature constraints;
-applications must project them at each state-repair point they wire.
+outputs through the trusted-expression pipeline. The symbolic evolution keeps
+the off-constraint `alpha tr(Abar)` term, while applications may also project
+the conformal determinant and trace-free-curvature constraints at selected
+state-repair points.
 
 ## Detail
 
@@ -27,26 +28,28 @@ names such as `cf_rhs`, `trK_rhs`, `lambda_rhsU0`, `a_rhsDD00`, and `h_rhsDD00`.
 
 ### Analytic determinant and trace constraints
 
-`BSSNQuantities` no longer computes or exposes `trAbar`. `BSSNRHSs` therefore
-uses the constrained conformal-metric equation with
-`gammabar^ij Abar_ij=0` analytically and contains no off-constraint
-`alpha tr(Abar)` correction. `BSSN_to_g4Christoffel` reuses
+`BSSNQuantities` computes and exposes `trAbar`. `BSSNRHSs` retains the
+`alpha tr(Abar)` correction in the conformal-metric equation so backends that
+do not project the trace after every step still evolve the unconstrained state
+consistently. The term vanishes on a projected state. `BSSN_to_g4Christoffel` reuses
 `BSSN_to_ADM.KDD`, whose owner consumes the already constrained `AbarDD`
 without projecting a second private copy.
 
-Three backend kernels provide one combined all-points projection for BSSN
+Three backends provide a combined all-points projection for BSSN
 storage. Each first rescales `gammabarDD` to satisfy
 `det(gammabar)=det(gammahat)`, inverts that post-enforced metric, and then uses
 the same metric to remove the trace from `AbarDD`. Both corrected tensors are
 written from one loop. This is algebraic projection, not exponential damping,
 and is compatible with BSSN or fCCZ4 states using that storage. Scheduling is
-backend- and application-owned: BHaH and superB callers opt in, while ETLegacy
-and CarpetX emit schedule entries. Reviewed owner paths and collision examples
+backend- and application-owned: BHaH and superB callers opt in, CarpetX emits
+combined-projection schedule entries, and ETLegacy uses the combined projector
+at initialization but retains its determinant-only repair during evolution to
+preserve the established Baikal evolution contract. Reviewed owner paths and collision examples
 do not establish an end-to-end lifecycle for the new fCCZ4 RHS, gauge, and
 `Theta_fCCZ4` storage.
 
 Claim evidence:
-- Claim: BSSN and fCCZ4 share a constrained-state contract in which `trAbar` is absent from the symbolic quantity/RHS API; `BSSN_to_g4Christoffel` reuses `BSSN_to_ADM.KDD`, whose owner consumes constrained `AbarDD` without a private projection; BHaH, ETLegacy, and CarpetX provide combined determinant/trace projection kernels whose trace uses the post-enforced metric, but application lifecycle wiring is separate and the reviewed owner paths and collision examples do not establish end-to-end fCCZ4 evolution.
+- Claim: BSSN and fCCZ4 share algebraic determinant/trace constraints; the BSSN symbolic API retains `trAbar` and its off-constraint RHS correction; `BSSN_to_g4Christoffel` reuses `BSSN_to_ADM.KDD`; BHaH, ETLegacy, and CarpetX provide combined determinant/trace projection kernels whose trace uses the post-enforced metric, while ETLegacy limits that combined projection to initialization and uses determinant-only evolution repair.
 - Role: public/scientific contract
 - Deciding authority: [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py), `BSSNQuantities`; [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_to_ADM.py](../../../nrpy/equations/general_relativity/BSSN_to_ADM.py), `BSSN_to_ADM`; [BSSN_to_g4Christoffel.py](../../../nrpy/equations/general_relativity/BSSN_to_g4Christoffel.py), `BSSN_to_g4Christoffel`; backend `register_CFunction_enforce_detgbar_equals_detghat_trAzero` implementations listed in Sources
 - Corroboration: none available; the cited symbolic owners and backend kernels are the deciding implementation evidence, while reviewed application paths establish only their own limited wiring

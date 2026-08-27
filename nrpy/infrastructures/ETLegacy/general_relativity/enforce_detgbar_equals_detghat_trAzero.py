@@ -33,7 +33,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     OMP_collapse: int = 1,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register combined determinant and trace-free conformal-tensor projection.
+    Register the initial combined projection and legacy evolution repair.
 
     :param thorn_name: The Einstein Toolkit thorn name.
     :param CoordSystem: The coordinate system to be used.
@@ -52,12 +52,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     ]
     is_general_rfm = CoordSystem.startswith("GeneralRFM")
 
-    desc = r"""Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0."""
     name = f"{thorn_name}_enforce_detgbar_equals_detghat_trAzero"
-    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
-  DECLARE_CCTK_PARAMETERS;
-
-"""
 
     hprimeDD = ixp.zerorank2()
     aprimeDD = ixp.zerorank2()
@@ -124,10 +119,41 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     #   Exercise to the reader: prove that for any reasonable grid,
     #   SIMD loops over grid interiors never write data out of bounds
     #   and are threadsafe for any reasonable number of threads.
+    body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
+  DECLARE_CCTK_PARAMETERS;
+
+"""
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
             projected_exprs,
             access_gfs,
+            enable_simd=False,
+            automatically_read_gf_data_from_memory=True,
+            enable_fd_codegen=True,
+            enable_fd_functions=True,
+        ),
+        loop_region="all points",
+        enable_simd=False,
+        OMP_collapse=OMP_collapse,
+    )
+
+    determinant_name = f"{thorn_name}_enforce_detgbar_equals_detghat"
+    determinant_access_gfs: List[str] = []
+    determinant_exprs: List[sp.Expr] = []
+    for i in range(3):
+        for j in range(i, 3):
+            determinant_access_gfs.append(
+                gri.ETLegacyGridFunction.access_gf(gf_name=f"hDD{i}{j}")
+            )
+            determinant_exprs.append(hprimeDD[i][j])
+    determinant_body = f"""  DECLARE_CCTK_ARGUMENTS_{determinant_name};
+  DECLARE_CCTK_PARAMETERS;
+
+"""
+    determinant_body += lp.simple_loop(
+        loop_body=ccg.c_codegen(
+            determinant_exprs,
+            determinant_access_gfs,
             enable_simd=False,
             automatically_read_gf_data_from_memory=True,
             enable_fd_codegen=True,
@@ -163,15 +189,18 @@ schedule FUNC_NAME in CCTK_INITIAL after {initial_producers}
 }} "Project freshly initialized or restored BSSN/fCCZ4 state"
 """,
     )
+    determinant_reads = "hDD00GF, hDD01GF, hDD02GF, hDD11GF, hDD12GF, hDD22GF"
+    determinant_writes = """hDD00GF(everywhere), hDD01GF(everywhere), hDD02GF(everywhere),
+          hDD11GF(everywhere), hDD12GF(everywhere), hDD22GF(everywhere)"""
     schedule_poststep = (
         "MoL_PostStep",
         f"""
 schedule FUNC_NAME in MoL_PostStep after {thorn_name}_evol_ApplyBCs
 {{
   LANG: C
-  READS:  {reads}
-  WRITES: {writes}
-}} "Project every updated BSSN/fCCZ4 state before its next RHS"
+  READS:  {determinant_reads}
+  WRITES: {determinant_writes}
+}} "Restore the conformal-metric determinant after each update"
 """,
     )
     schedule_pseudoevolution = (
@@ -180,26 +209,33 @@ schedule FUNC_NAME in MoL_PostStep after {thorn_name}_evol_ApplyBCs
 schedule FUNC_NAME in MoL_PseudoEvolution before {thorn_name}_BSSN_constraints
 {{
   LANG: C
-  READS:  {reads}
-  WRITES: {writes}
-}} "Project BSSN/fCCZ4 state before pseudo-evolution consumers"
+  READS:  {determinant_reads}
+  WRITES: {determinant_writes}
+}} "Restore the conformal-metric determinant before pseudo-evolution consumers"
 """,
     )
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
         includes=define_standard_includes(),
-        desc=desc,
+        desc=r"""Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0.""",
         cfunc_type="void",
         name=name,
         params="CCTK_ARGUMENTS",
         body=body,
         ET_thorn_name=thorn_name,
-        ET_schedule_bins_entries=[
-            schedule_initial,
-            schedule_poststep,
-            schedule_pseudoevolution,
-        ],
+        ET_schedule_bins_entries=[schedule_initial],
+    )
+    cfc.register_CFunction(
+        subdirectory=thorn_name,
+        includes=define_standard_includes(),
+        desc=r"""Enforce det(gammabar) = det(gammahat).""",
+        cfunc_type="void",
+        name=determinant_name,
+        params="CCTK_ARGUMENTS",
+        body=determinant_body,
+        ET_thorn_name=thorn_name,
+        ET_schedule_bins_entries=[schedule_poststep, schedule_pseudoevolution],
     )
     return pcg.NRPyEnv()
 
@@ -369,12 +405,18 @@ if __name__ == "__main__":
             raise AssertionError(
                 "initial projection must follow each exact ADM-to-BSSN producer"
             )
-        poststep_schedule = dict(validation_schedules)["MoL_PostStep"]
+        determinant_function = cfc.CFunction_dict[
+            "Validation_enforce_detgbar_equals_detghat"
+        ]
+        determinant_schedules = determinant_function.ET_schedule_bins_entries
+        if determinant_schedules is None:
+            raise AssertionError("determinant-repair schedules must be registered")
+        poststep_schedule = dict(determinant_schedules)["MoL_PostStep"]
         if "after Validation_evol_ApplyBCs" not in poststep_schedule:
             raise AssertionError(
                 "poststep projection must follow evolved-variable boundary conditions"
             )
-        pseudoevolution_schedule = dict(validation_schedules)["MoL_PseudoEvolution"]
+        pseudoevolution_schedule = dict(determinant_schedules)["MoL_PseudoEvolution"]
         if (
             "before Validation_BSSN_constraints" not in pseudoevolution_schedule
             or "after Validation_aux_ApplyBCs" in pseudoevolution_schedule
@@ -391,6 +433,14 @@ if __name__ == "__main__":
         write_section = generated.split("Step 2 of 2", maxsplit=1)[1]
         if write_section.count("GF[CCTK_GFINDEX3D") != 12:
             raise AssertionError("projection must store twelve outputs in one block")
+        determinant_generated = determinant_function.body
+        determinant_write_section = determinant_generated.split(
+            "Step 2 of 2", maxsplit=1
+        )[1]
+        if determinant_write_section.count("GF[CCTK_GFINDEX3D") != 6:
+            raise AssertionError("evolution repair must store only six metric outputs")
+        if "const CCTK_REAL aDD" in determinant_generated:
+            raise AssertionError("evolution repair must not read or project aDD")
         first_store = generated.index(
             "GF[CCTK_GFINDEX3D", generated.index("Step 2 of 2")
         )
