@@ -23,9 +23,9 @@ class BSSN_to_g4Christoffel:
 
     This class reuses the existing BSSN-to-ADM reconstruction already present in
     NRPy, then assembles the missing time-derivative sector needed to build the
-    physical four-metric derivatives and Christoffel symbols. The K_{ij}
-    reconstruction in this class always projects out any residual conformal
-    trace from \bar{A}_{ij} so that the physical trace remains trK.
+    physical four-metric derivatives and Christoffel symbols. It reuses
+    ``BSSN_to_ADM.KDD``, whose owner consumes the analytically constrained
+    \bar{A}_{ij} without applying a separate conformal-trace projection.
 
     :param CoordSystem: Coordinate system to use.
     :param enable_rfm_precompute: Whether to enable reference-metric precomputation.
@@ -82,26 +82,8 @@ class BSSN_to_g4Christoffel:
         self.gammaUU = BtoA.gammaUU
         self.GammaUDD = BtoA.GammaUDD
 
-        # Step 1.f: Reconstruct K_{ij}, always enforcing the trace-free projection
-        #           so that the physical trace remains trK even if numerical error
-        #           introduces a small conformal trace in \bar{A}_{ij}.
-        self.KDD = ixp.zerorank2()
-        self.trAbar = sp.sympify(0)
-        for i in range(3):
-            for j in range(3):
-                self.trAbar += Bq.gammabarUU[i][j] * Bq.AbarDD[i][j]
-
-        self.AbarDD_for_KDD = ixp.zerorank2()
-        for i in range(3):
-            for j in range(3):
-                self.AbarDD_for_KDD[i][j] = (
-                    Bq.AbarDD[i][j]
-                    - sp.Rational(1, 3) * Bq.gammabarDD[i][j] * self.trAbar
-                )
-                self.KDD[i][j] = (
-                    self.AbarDD_for_KDD[i][j] / Bq.exp_m4phi
-                    + sp.Rational(1, 3) * self.gammaDD[i][j] * Bq.trK
-                )
+        # Step 1.f: Reuse K_{ij} reconstructed from the constrained BSSN state.
+        self.KDD = BtoA.KDD
 
         # Step 2.a: Construct the covariant shift \beta_i = \gamma_{ij} \beta^j.
         self.betaD = ixp.zerorank1()

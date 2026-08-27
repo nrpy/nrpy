@@ -30,6 +30,8 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
+from nrpy.infrastructures.ETLegacy.CodeParameters import read_CodeParameters
 from nrpy.infrastructures.ETLegacy.ETLegacy_include_header import (
     define_standard_includes,
 )
@@ -76,6 +78,60 @@ def register_CFunction_rhs_eval(
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
     :return: None if in registration phase, else the updated NRPy environment.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> vacuum_thorn = "DoctestBaikalVacuumRHS"
+    >>> matter_thorn = "DoctestBaikalRHS"
+    >>> cfunction_names = [
+    ...     f"{vacuum_thorn}_rhs_eval_order_4",
+    ...     f"{matter_thorn}_rhs_eval_order_4",
+    ... ]
+    >>> original_infrastructure = par.parval_from_str("Infrastructure")
+    >>> original_parallel_codegen = par.parval_from_str("enable_parallel_codegen")
+    >>> original_fd_order = par.parval_from_str("fd_order")
+    >>> original_c_codegen = ccg.c_codegen
+    >>> cfunctions = []
+    >>> try:
+    ...     par.set_parval_from_str("Infrastructure", "ETLegacy")
+    ...     par.set_parval_from_str("enable_parallel_codegen", False)
+    ...     ccg.c_codegen = lambda *_args, **_kwargs: ""
+    ...     with contextlib.redirect_stdout(io.StringIO()):
+    ...         for thorn_name, enable_t4munu in [
+    ...             (vacuum_thorn, False),
+    ...             (matter_thorn, True),
+    ...         ]:
+    ...             _ = register_CFunction_rhs_eval(
+    ...                 thorn_name=thorn_name,
+    ...                 CoordSystem="Cartesian",
+    ...                 enable_rfm_precompute=False,
+    ...                 enable_T4munu=enable_t4munu,
+    ...                 enable_simd=True,
+    ...                 fd_order=4,
+    ...                 LapseEvolutionOption="OnePlusLog",
+    ...                 ShiftEvolutionOption="GammaDriving2ndOrder_Covariant",
+    ...                 enable_KreissOliger_dissipation=True,
+    ...             )
+    ...     cfunctions = [cfc.CFunction_dict[name] for name in cfunction_names]
+    ... finally:
+    ...     ccg.c_codegen = original_c_codegen
+    ...     par.set_parval_from_str("Infrastructure", original_infrastructure)
+    ...     par.set_parval_from_str(
+    ...         "enable_parallel_codegen", original_parallel_codegen
+    ...     )
+    ...     par.set_parval_from_str("fd_order", original_fd_order)
+    ...     for name in cfunction_names:
+    ...         _ = cfc.CFunction_dict.pop(name, None)
+    >>> vacuum_pi_lookup = f'CCTK_ParameterGet("PI", "{vacuum_thorn}", NULL)'
+    >>> matter_pi_lookup = f'CCTK_ParameterGet("PI", "{matter_thorn}", NULL)'
+    >>> [
+    ...     vacuum_pi_lookup in cfunctions[0].body,
+    ...     "PI" in (cfunctions[0].ET_current_thorn_CodeParams_used or []),
+    ...     matter_pi_lookup in cfunctions[1].body,
+    ...     "PI" in (cfunctions[1].ET_current_thorn_CodeParams_used or []),
+    ... ]
+    [False, False, True, True]
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -94,12 +150,12 @@ def register_CFunction_rhs_eval(
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
     if enable_simd:
-        body += f"""
+        body += r"""
   const REAL_SIMD_ARRAY invdxx0 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(0));
   const REAL_SIMD_ARRAY invdxx1 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(1));
   const REAL_SIMD_ARRAY invdxx2 CCTK_ATTRIBUTE_UNUSED = ConstSIMD(1.0/CCTK_DELTA_SPACE(2));
-  const CCTK_REAL *param_PI CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("PI", "{thorn_name}", NULL);
-  const REAL_SIMD_ARRAY PI CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_PI);
+"""
+        body += rf"""
   const CCTK_REAL *param_eta CCTK_ATTRIBUTE_UNUSED = CCTK_ParameterGet("eta", "{thorn_name}", NULL);
   const REAL_SIMD_ARRAY eta CCTK_ATTRIBUTE_UNUSED = ConstSIMD(*param_eta);
 """
@@ -354,6 +410,9 @@ def register_CFunction_rhs_eval(
     for i in range(3):
         betaU[i] = vetU[i] * rfm.ReU[i]
 
+    expr_list = list(local_BSSN_RHSs_varname_to_expr_dict.values())
+    param_symbols, _ = get_params_commondata_symbols_from_expr_list(expr_list)
+
     # Perform validation of BSSN_RHSs against trusted version.
     if validate_expressions:
         results_dictionary = ve.process_dictionary_of_expressions(
@@ -370,9 +429,16 @@ def register_CFunction_rhs_eval(
             results_dictionary,
         )
 
+    if enable_simd:
+        body += read_CodeParameters(
+            [(thorn_name, symbol) for symbol in param_symbols],
+            enable_simd=True,
+            declare_invdxxs=False,
+        )
+
     body += lp.simple_loop(
         loop_body=ccg.c_codegen(
-            list(local_BSSN_RHSs_varname_to_expr_dict.values()),
+            expr_list,
             BSSN_RHSs_access_gf,
             enable_fd_codegen=True,
             enable_simd=enable_simd,
@@ -408,8 +474,7 @@ if(fd_order == {fd_order}) {{
             "C_CAHD",
             "CFL_FACTOR__ignore_repeats_Carpet_timeref_factors",
         ]
-    if thorn_name == "Baikal":
-        params += ["PI"]
+    params += param_symbols
 
     cfc.register_CFunction(
         subdirectory=thorn_name,
@@ -436,9 +501,12 @@ if(fd_order == {fd_order}) {{
 if __name__ == "__main__":
     Coord = "Cartesian"
     LapseEvolOption = "OnePlusLog"
-    ShiftEvolOption = "GammaDriving2ndOrder_Covariant"
-    for enable_T4munu in [True, False]:
-        for enable_improvements in [True, False]:
+    for ShiftEvolOption, enable_improvements, trusted_suffix in (
+        ("GammaDriving2ndOrder_Covariant", True, ""),
+        ("GammaDriving2ndOrder_Covariant", False, ""),
+        ("GammaDriving2ndOrder_NoCovariant", False, "_KOTrue"),
+    ):
+        for enable_T4munu in [True, False]:
             results_dict = register_CFunction_rhs_eval(
                 thorn_name="dummy_thorn_name",
                 CoordSystem=Coord,
@@ -455,11 +523,31 @@ if __name__ == "__main__":
                 validate_expressions=True,
                 return_validation_dict=True,
             )
+            trusted_basename = (
+                f"{os.path.splitext(os.path.basename(__file__))[0]}_"
+                f"{LapseEvolOption}_{ShiftEvolOption}_{Coord}_"
+                f"T4munu{enable_T4munu}{trusted_suffix}_"
+                f"improvements{enable_improvements}"
+            )
             ve.compare_or_generate_trusted_results(
                 os.path.abspath(__file__),
                 os.getcwd(),
                 # File basename. If this is set to "trusted_module_test1", then
                 #   trusted results_dict will be stored in tests/trusted_module_test1.py
-                f"{os.path.splitext(os.path.basename(__file__))[0]}_{LapseEvolOption}_{ShiftEvolOption}_{Coord}_T4munu{enable_T4munu}_improvements{enable_improvements}",
+                trusted_basename,
                 cast(Dict[str, Union[mpf, mpc]], results_dict),
             )
+
+    # Run registration doctests after trusted-expression validation because both
+    # paths populate shared symbolic caches and no later validation should observe
+    # doctest-specific state.
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

@@ -39,7 +39,7 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
     """
     Return (tot_pts_expr, count_loops_code, fill_loops_code) for DIAGNOSTICS_SETUP_2D.
 
-    Uses i0/i1/i2 variable names so IDX3P(...) works unchanged.
+    Uses i0/i1/i2 variable names to emit global 3D indices with IDX3GENERAL_64(...).
 
     :param cfg: Plane configuration dict with keys "fixed_dim", "fixed_val", and "loop_dims".
     :param plane: Plane selector used to choose field suffixes ("xy" or "yz").
@@ -75,7 +75,7 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
 
     # counting inner body
     count_inner = (
-        "const int idx3 = IDX3P(params, i0, i1, i2);\n"
+        "const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);\n"
         f"{owned_check} {{\n"
         "  num_diagnostics_chare++;\n"
         "}\n"
@@ -84,7 +84,7 @@ def _emit_setup_plane_code(cfg: Dict[str, Any], plane: str) -> Tuple[str, str, s
     # fill inner body (plane-specific field names)
     suf = "xy" if plane == "xy" else "yz"
     fill_inner = (
-        "const int idx3 = IDX3P(params, i0, i1, i2);\n"
+        "const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);\n"
         f"{owned_check} {{\n"
         "  const int localidx3 = globalidx3pt_to_localidx3pt(\n"
         "      idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,\n"

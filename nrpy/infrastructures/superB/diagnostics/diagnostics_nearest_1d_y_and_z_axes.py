@@ -38,7 +38,7 @@ def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
     Return a C code snippet that fills and counts axis-line sample points.
 
     Given a list of axis-line specifications, emit C loops that populate the
-    appropriate data_point_1d_struct array (y or z) with (axis coordinate, idx3, i0/i1/i2)
+    appropriate data_point_1d_struct array (y or z) with (axis coordinate, i0/i1/i2)
     entries and increment the corresponding counter.
 
     :param axis_char: Axis selector, "y" or "z".
@@ -76,11 +76,9 @@ def gen_fill(axis_char: str, lines: List[Dict[str, Any]]) -> str:
                 body_lines.append(f"  const int {i} = {fixed[i]};")
 
         body_lines += [
-            "  const int idx3 = IDX3P(params, i0, i1, i2);",
             "  REAL xCart[3], xOrig[3] = { xx[0][i0], xx[1][i1], xx[2][i2] };",
             "  xx_to_Cart(params, xOrig, xCart);",
             f"  {arr}[{cnt}].coord = xCart[{coord_idx}];",
-            f"  {arr}[{cnt}].idx3  = idx3;",
             # store the indices too (your downstream code expects these!)
             f"  {arr}[{cnt}].i0    = i0;",
             f"  {arr}[{cnt}].i1    = i1;",
@@ -104,7 +102,7 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
     mirrors the interpolation-based diagnostics API so it can serve as a drop-in replacement in
     calling code that loops over grids. The generated C code (a) selects axis-line samples according
     to the coordinate family implied by `CoordSystem`, (b) converts logical coordinates to Cartesian,
-    (c) buffers (axis_coord, idx3) pairs, (d) sorts by the physical axis coordinate, and (e) streams
+    (c) buffers (axis_coord, i0/i1/i2) tuples, (d) sorts by the physical axis coordinate, and (e) streams
     rows whose first column is the axis coordinate followed by selected diagnostic gridfunction values.
     Two persistent per-grid output files are produced per call, one for the y-axis and one for the z-axis.
     Each file begins with a one-line time comment and an axis-specific header. Sampling is performed at
@@ -138,7 +136,6 @@ def register_CFunction_diagnostics_nearest_1d_y_and_z_axes(
 // Data point for sorting by physical axis coordinate
 typedef struct {
   REAL coord; // physical y or z
-  int idx3;   // 3D index
   int i0;
   int i1;
   int i2;
@@ -181,12 +178,13 @@ static int compare_by_coord(const void *a, const void *b) {
  *      Spherical, Cylindrical, SymTP, Wedge, Spherical_Ring).
  *   2) Converts logical coordinates xx to Cartesian via xx_to_Cart and extracts y (xCart[1]) or
  *      z (xCart[2]) as the axis coordinate.
- *   3) Buffers (axis_coord, idx3) pairs, then sorts them in ascending order using qsort.
+ *   3) Buffers axis coordinates together with logical grid indices, then sorts them in ascending order using qsort.
  *   4) Chare (0,0,0) writes the single-line time comment and axis-specific header ("y" or "z");
  *    all chares stream their owned rows at precomputed file offsets.
  *
- * Gridfunction values are loaded from the flattened diagnostic array using IDX4Ppt with a 3D index
- * constructed by IDX3P. Sampling occurs at grid points only; no interpolation is performed.
+ * Gridfunction values are loaded from the flattened diagnostic array using IDX4Ppt with precomputed
+ * local 3D indices stored in diagnosticstruct. Sampling occurs at grid points only; no interpolation
+ * is performed.
  * On allocation or file-open failure, the routine prints an error message to stderr and terminates.
  * If a user-editable block is provided in the implementation, users may add custom logic such as
  * additional columns or filtering before rows are written.
@@ -295,7 +293,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_y[i].i0;
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
@@ -321,7 +319,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_y[i].i0;
         const int i1 = data_points_y[i].i1;
         const int i2 = data_points_y[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           int localidx3 = globalidx3pt_to_localidx3pt(
@@ -362,7 +360,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_z[i].i0;
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           num_diagnostics_chare++;
@@ -388,7 +386,7 @@ static int compare_by_coord(const void *a, const void *b) {
         const int i0 = data_points_z[i].i0;
         const int i1 = data_points_z[i].i1;
         const int i2 = data_points_z[i].i2;
-        const int idx3 = IDX3(i0, i1, i2);
+        const int64_t idx3 = IDX3GENERAL_64(i0, i1, i2, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare,
                                             commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) == idx3_this_chare) {{
           int localidx3 = globalidx3pt_to_localidx3pt(

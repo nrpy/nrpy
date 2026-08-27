@@ -4,7 +4,7 @@ from . import (
     BSSN_to_ADM,
     Ricci_eval,
     T4DD_to_T4UU,
-    enforce_detgammahat_constraint,
+    enforce_detgbar_equals_detghat_trAzero,
     floor_the_lapse,
     rhs_eval,
 )

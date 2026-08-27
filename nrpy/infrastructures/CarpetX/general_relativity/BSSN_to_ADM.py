@@ -124,7 +124,7 @@ def register_CFunction_BSSN_to_ADM(
     schedule = (
         "ODESolvers_PostStep",
         f"""
-schedule FUNC_NAME in ODESolvers_PostStep after {thorn_name}_enforce_detgammahat_constraint before ADMBaseX_SetADMVars
+schedule FUNC_NAME in ODESolvers_PostStep after {thorn_name}_enforce_detgbar_equals_detghat_trAzero before ADMBaseX_SetADMVars
 {{
   LANG: C
   READS:  aDD00GF, aDD01GF, aDD02GF, aDD11GF, aDD12GF, aDD22GF,

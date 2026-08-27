@@ -516,7 +516,7 @@ do { \
   /* Expand to the statement(s) you pass in */
   #define IFCUDARUN(...) do {{ __VA_ARGS__; }} while (0)
 #else
-  /* Compile away to nothing on non-CUDA builds */
+/* Compile away to nothing on non-CUDA builds */
   #define IFCUDARUN(...) do {{ (void)0; }} while (0)
 #endif
 """
