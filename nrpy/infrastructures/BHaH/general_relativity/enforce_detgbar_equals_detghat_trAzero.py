@@ -7,10 +7,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, List, Union, cast
-
-import sympy as sp
-from mpmath import mpc, mpf  # type: ignore
+from typing import Union, cast
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -18,11 +15,10 @@ import nrpy.finite_difference as fin
 import nrpy.grid as gri
 import nrpy.helpers.parallel_codegen as pcg
 import nrpy.helpers.parallelization.utilities as parallel_utils
-import nrpy.indexedexp as ixp
 import nrpy.params as par
-import nrpy.reference_metric as refmetric
-import nrpy.validate_expressions.validate_expressions as ve
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
+from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
+    BSSN_algebraic_constraints,
+)
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -35,8 +31,7 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     enable_rfm_precompute: bool,
     enable_fd_functions: bool,
     OMP_collapse: int,
-    validate_expressions: bool = False,
-) -> Union[None, Dict[str, Union[mpc, mpf]], pcg.NRPyEnv_type]:
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register combined determinant and trace-free conformal-tensor projection.
 
@@ -44,19 +39,113 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
     :param enable_fd_functions: Whether to enable finite difference functions.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
-    :param validate_expressions: Whether to validate generated SymPy expressions against trusted values.
 
-    :return: None in registration phase, processed expressions when validating, otherwise the updated NRPy environment.
+    :return: None in registration phase, otherwise the updated NRPy environment.
+
+    Doctests:
+    >>> par.set_parval_from_str("Infrastructure", "BHaH")
+    >>> par.set_parval_from_str("enable_parallel_codegen", False)
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> cfc.CFunction_dict.clear()
+    >>> import contextlib
+    >>> import io
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _ = register_CFunction_enforce_detgbar_equals_detghat_trAzero(
+    ...         "Spherical", False, False, 1
+    ...     )
+    >>> print(
+    ...     cfc.CFunction_dict[
+    ...         "enforce_detgbar_equals_detghat_trAzero__rfm__Spherical"
+    ...     ].full_function
+    ... )
+    #include "BHaH_defines.h"
+    <BLANKLINE>
+    /**
+     * Kernel: enforce_detgbar_equals_detghat_trAzero_host.
+     * Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0.
+     */
+    static void enforce_detgbar_equals_detghat_trAzero_host(const params_struct *restrict params, const REAL *restrict x0, const REAL *restrict x1,
+                                                            const REAL *restrict x2, REAL *restrict in_gfs, const REAL *restrict auxevol_gfs) {
+      MAYBE_UNUSED const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
+      MAYBE_UNUSED const int Nxx_plus_2NGHOSTS1 = params->Nxx_plus_2NGHOSTS1;
+      MAYBE_UNUSED const int Nxx_plus_2NGHOSTS2 = params->Nxx_plus_2NGHOSTS2;
+    <BLANKLINE>
+      MAYBE_UNUSED const REAL invdxx0 = params->invdxx0;
+      MAYBE_UNUSED const REAL invdxx1 = params->invdxx1;
+      MAYBE_UNUSED const REAL invdxx2 = params->invdxx2;
+    <BLANKLINE>
+    #pragma omp parallel for
+      for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
+        for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
+          for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
+    <BLANKLINE>
+            /*
+             * NRPy-Generated GF Access/FD Code, Step 1 of 2:
+             * Read gridfunction(s) from main memory and compute FD stencils as needed.
+             */
+            const REAL aDD00 = in_gfs[IDX4(ADD00GF, i0, i1, i2)];
+            const REAL aDD01 = in_gfs[IDX4(ADD01GF, i0, i1, i2)];
+            const REAL aDD02 = in_gfs[IDX4(ADD02GF, i0, i1, i2)];
+            const REAL aDD11 = in_gfs[IDX4(ADD11GF, i0, i1, i2)];
+            const REAL aDD12 = in_gfs[IDX4(ADD12GF, i0, i1, i2)];
+            const REAL aDD22 = in_gfs[IDX4(ADD22GF, i0, i1, i2)];
+            const REAL hDD00 = in_gfs[IDX4(HDD00GF, i0, i1, i2)];
+            const REAL hDD01 = in_gfs[IDX4(HDD01GF, i0, i1, i2)];
+            const REAL hDD02 = in_gfs[IDX4(HDD02GF, i0, i1, i2)];
+            const REAL hDD11 = in_gfs[IDX4(HDD11GF, i0, i1, i2)];
+            const REAL hDD12 = in_gfs[IDX4(HDD12GF, i0, i1, i2)];
+            const REAL hDD22 = in_gfs[IDX4(HDD22GF, i0, i1, i2)];
+    <BLANKLINE>
+            /*
+             * NRPy-Generated GF Access/FD Code, Step 2 of 2:
+             * Evaluate SymPy expressions and write to main memory.
+             */
+            const REAL FDPart3tmp0 = hDD00 + 1;
+            const REAL FDPart3tmp2 = hDD22 + 1;
+            const REAL FDPart3tmp4 = hDD11 + 1;
+            const REAL FDPart3tmp6 = FDPart3tmp0 * FDPart3tmp2 * FDPart3tmp4 - FDPart3tmp0 * ((hDD12) * (hDD12)) - FDPart3tmp2 * ((hDD01) * (hDD01)) -
+                                     FDPart3tmp4 * ((hDD02) * (hDD02)) + 2 * hDD01 * hDD02 * hDD12;
+            const REAL FDPart3tmp7 = (1.0 / cbrt(FDPart3tmp6));
+            const REAL FDPart3tmp8 = (1.0 / (FDPart3tmp6));
+            const REAL FDPart3tmp9 = 2 * FDPart3tmp8;
+            const REAL FDPart3tmp10 =
+                FDPart3tmp8 * aDD00 * (FDPart3tmp2 * FDPart3tmp4 - ((hDD12) * (hDD12))) +
+                FDPart3tmp8 * aDD11 * (FDPart3tmp0 * FDPart3tmp2 - ((hDD02) * (hDD02))) +
+                FDPart3tmp8 * aDD22 * (FDPart3tmp0 * FDPart3tmp4 - ((hDD01) * (hDD01))) + FDPart3tmp9 * aDD01 * (-FDPart3tmp2 * hDD01 + hDD02 * hDD12) +
+                FDPart3tmp9 * aDD02 * (-FDPart3tmp4 * hDD02 + hDD01 * hDD12) + FDPart3tmp9 * aDD12 * (-FDPart3tmp0 * hDD12 + hDD01 * hDD02);
+            const REAL FDPart3tmp11 = (1.0 / 3.0) * FDPart3tmp10;
+            in_gfs[IDX4(HDD00GF, i0, i1, i2)] = FDPart3tmp0 * FDPart3tmp7 - 1;
+            in_gfs[IDX4(HDD01GF, i0, i1, i2)] = FDPart3tmp7 * hDD01;
+            in_gfs[IDX4(HDD02GF, i0, i1, i2)] = FDPart3tmp7 * hDD02;
+            in_gfs[IDX4(HDD11GF, i0, i1, i2)] = FDPart3tmp4 * FDPart3tmp7 - 1;
+            in_gfs[IDX4(HDD12GF, i0, i1, i2)] = FDPart3tmp7 * hDD12;
+            in_gfs[IDX4(HDD22GF, i0, i1, i2)] = FDPart3tmp2 * FDPart3tmp7 - 1;
+            in_gfs[IDX4(ADD00GF, i0, i1, i2)] = -FDPart3tmp10 * ((1.0 / 3.0) * hDD00 + 1.0 / 3.0) + aDD00;
+            in_gfs[IDX4(ADD01GF, i0, i1, i2)] = -FDPart3tmp11 * hDD01 + aDD01;
+            in_gfs[IDX4(ADD02GF, i0, i1, i2)] = -FDPart3tmp11 * hDD02 + aDD02;
+            in_gfs[IDX4(ADD11GF, i0, i1, i2)] = -FDPart3tmp10 * ((1.0 / 3.0) * hDD11 + 1.0 / 3.0) + aDD11;
+            in_gfs[IDX4(ADD12GF, i0, i1, i2)] = -FDPart3tmp11 * hDD12 + aDD12;
+            in_gfs[IDX4(ADD22GF, i0, i1, i2)] = -FDPart3tmp10 * ((1.0 / 3.0) * hDD22 + 1.0 / 3.0) + aDD22;
+    <BLANKLINE>
+          } // END LOOP: for i0 over [0, Nxx_plus_2NGHOSTS0)
+        } // END LOOP: for i1 over [0, Nxx_plus_2NGHOSTS1)
+      } // END LOOP: for i2 over [0, Nxx_plus_2NGHOSTS2)
+    } // END FUNCTION: enforce_detgbar_equals_detghat_trAzero_host
+    <BLANKLINE>
+    /**
+     * Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0.
+     */
+    void enforce_detgbar_equals_detghat_trAzero__rfm__Spherical(const params_struct *restrict params, const REAL *restrict x0, const REAL *restrict x1,
+                                                                const REAL *restrict x2, REAL *restrict in_gfs, const REAL *restrict auxevol_gfs) {
+      enforce_detgbar_equals_detghat_trAzero_host(params, x0, x1, x2, in_gfs, auxevol_gfs);
+    } // END FUNCTION: enforce_detgbar_equals_detghat_trAzero__rfm__Spherical
+    <BLANKLINE>
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
 
     parallelization = par.parval_from_str("parallelization")
-    Bq = BSSN_quantities[
-        CoordSystem + ("_rfm_precompute" if enable_rfm_precompute else "")
-    ]
-    is_general_rfm = CoordSystem.startswith("GeneralRFM")
 
     includes = ["BHaH_defines.h"]
     desc = r"""Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0."""
@@ -84,78 +173,21 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
-    hprimeDD = ixp.zerorank2()
-    aprimeDD = ixp.zerorank2()
-    if is_general_rfm:
-        rfm = refmetric.reference_metric[
-            CoordSystem + "_rfm_precompute" if enable_rfm_precompute else CoordSystem
-        ]
-        _, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
-        nrpyAbs = sp.Function("nrpyAbs")
-        q = (nrpyAbs(rfm.detgammahat) / detgammabar) ** sp.Rational(1, 3)
-        gammabarprimeDD = ixp.zerorank2()
-        for i in range(3):
-            for j in range(3):
-                gammabarprimeDD[i][j] = q * Bq.gammabarDD[i][j]
-        gammabarprimeUU, _ = ixp.symm_matrix_inverter3x3(gammabarprimeDD)
-        trAbarprime = sp.sympify(0)
-        for i in range(3):
-            for j in range(3):
-                trAbarprime += gammabarprimeUU[i][j] * Bq.AbarDD[i][j]
-        for i in range(3):
-            for j in range(3):
-                hprimeDD[i][j] = (gammabarprimeDD[i][j] - rfm.ghatDD[i][j]) / rfm.ReDD[
-                    i
-                ][j]
-                aprimeDD[i][j] = (
-                    Bq.AbarDD[i][j]
-                    - sp.Rational(1, 3) * gammabarprimeDD[i][j] * trAbarprime
-                ) / rfm.ReDD[i][j]
-    else:
-        # Every standard RFM is orthogonal. With diagonal scale-factor matrix D,
-        # gammabar = D H D, gammahat = D I D, and Abar = D a D, where H = I+h.
-        # Thus det(gammabar)/det(gammahat) = det(H), so q = det(H)^(-1/3)
-        # and h' = q H - I. Also gammabar'^(-1) = q^(-1) D^(-1) H^(-1)
-        # D^(-1), hence tr(gammabar'^(-1) Abar) = q^(-1) (H^(-1):a).
-        # The q factors cancel in gammabar' tr/3, leaving a' = a-H(H^(-1):a)/3.
-        HDD = ixp.zerorank2()
-        for i in range(3):
-            for j in range(3):
-                HDD[i][j] = Bq.hDD[i][j] + sp.KroneckerDelta(i, j)
-        HUU, detH = ixp.symm_matrix_inverter3x3(HDD)
-        q = detH ** sp.Rational(-1, 3)
-        trA = sp.sympify(0)
-        for i in range(3):
-            for j in range(3):
-                trA += HUU[i][j] * Bq.aDD[i][j]
-        for i in range(3):
-            for j in range(3):
-                hprimeDD[i][j] = q * HDD[i][j] - sp.KroneckerDelta(i, j)
-                aprimeDD[i][j] = Bq.aDD[i][j] - sp.Rational(1, 3) * HDD[i][j] * trA
-
-    access_gfs: List[str] = []
-    projected_exprs_dict: Dict[str, sp.Expr] = {}
-    for basename, expressions in (("hDD", hprimeDD), ("aDD", aprimeDD)):
-        for i in range(3):
-            for j in range(i, 3):
-                varname = f"{basename}{i}{j}"
-                access_gfs.append(
-                    gri.BHaHGridFunction.access_gf(
-                        varname, 0, 0, 0, gf_array_name="in_gfs"
-                    )
-                )
-                projected_exprs_dict[varname] = expressions[i][j]
-
-    if validate_expressions:
-        validation_exprs_dict = {
-            varname: expr.subs(sp.Function("nrpyAbs"), sp.Abs)
-            for varname, expr in projected_exprs_dict.items()
-        }
-        return ve.process_dictionary_of_expressions(
-            validation_exprs_dict, fixed_mpfs_for_free_symbols=True
+    hprimeDD, aprimeDD = BSSN_algebraic_constraints(CoordSystem, enable_rfm_precompute)
+    access_gfs = [
+        gri.BHaHGridFunction.access_gf(
+            f"{basename}{i}{j}", 0, 0, 0, gf_array_name="in_gfs"
         )
-
-    projected_exprs = list(projected_exprs_dict.values())
+        for basename in ("hDD", "aDD")
+        for i in range(3)
+        for j in range(i, 3)
+    ]
+    projected_exprs = [
+        expressions[i][j]
+        for expressions in (hprimeDD, aprimeDD)
+        for i in range(3)
+        for j in range(i, 3)
+    ]
 
     # To evaluate the cube root, SIMD support requires e.g., SLEEF.
     #   Also need to be careful to not access memory out of bounds!
@@ -225,26 +257,12 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
 
 
 if __name__ == "__main__":
-    import os
+    import doctest
+    import sys
 
-    par.set_parval_from_str("Infrastructure", "BHaH")
-    par.set_parval_from_str("enable_parallel_codegen", False)
-    for validation_coord, validation_precompute in (
-        ("Cartesian", False),
-        ("SinhSpherical", True),
-        ("GeneralRFM", True),
-    ):
-        results_dict = register_CFunction_enforce_detgbar_equals_detghat_trAzero(
-            validation_coord,
-            validation_precompute,
-            False,
-            1,
-            validate_expressions=True,
-        )
-        ve.compare_or_generate_trusted_results(
-            os.path.abspath(__file__),
-            os.getcwd(),
-            f"{os.path.splitext(os.path.basename(__file__))[0]}_{validation_coord}"
-            + ("_rfm_precompute" if validation_precompute else ""),
-            cast(Dict[str, Union[mpc, mpf]], results_dict),
-        )
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
