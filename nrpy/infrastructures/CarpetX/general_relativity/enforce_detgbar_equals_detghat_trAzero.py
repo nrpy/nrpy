@@ -138,9 +138,14 @@ def register_CFunction_enforce_detgbar_equals_detghat_trAzero(
           aDD00GF(everywhere), aDD01GF(everywhere), aDD02GF(everywhere),
           aDD11GF(everywhere), aDD12GF(everywhere), aDD22GF(everywhere)"""
     writes = reads
-    initial_producers = " ".join(
+    initial_producer_names = [
         f"{thorn_name}_ADM_to_BSSN_order_{fd_order}" for fd_order in fd_orders
-    )
+    ]
+    # Cactus requires a parenthesized whitespace-separated list when an AFTER
+    # clause names multiple schedule items. A bare list fails CST parsing.
+    initial_producers = " ".join(initial_producer_names)
+    if len(initial_producer_names) > 1:
+        initial_producers = f"({initial_producers})"
     schedule_initial = (
         "CCTK_INITIAL",
         f"""
@@ -336,7 +341,7 @@ if __name__ == "__main__":
             raise AssertionError("projection schedules must be registered")
         initial_schedule = dict(validation_schedules)["CCTK_INITIAL"]
         if (
-            "after Validation_ADM_to_BSSN_order_2 Validation_ADM_to_BSSN_order_4"
+            "after (Validation_ADM_to_BSSN_order_2 Validation_ADM_to_BSSN_order_4)"
             not in initial_schedule
             or "Validation_evol_ApplyBCs" in initial_schedule
         ):
