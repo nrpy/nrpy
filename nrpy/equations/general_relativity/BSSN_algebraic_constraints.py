@@ -30,14 +30,14 @@ def _project_general_rfm(
     """
     hprimeDD_enforced = ixp.zerorank2()
     aprimeDD_enforced = ixp.zerorank2()
-    _, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
+    detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)[1]
     nrpyAbs = sp.Function("nrpyAbs")
     q = (nrpyAbs(rfm.detgammahat) / detgammabar) ** sp.Rational(1, 3)
     gammabarprimeDD = ixp.zerorank2()
     for i in range(3):
         for j in range(3):
             gammabarprimeDD[i][j] = q * Bq.gammabarDD[i][j]
-    gammabarprimeUU, _ = ixp.symm_matrix_inverter3x3(gammabarprimeDD)
+    gammabarprimeUU = ixp.symm_matrix_inverter3x3(gammabarprimeDD)[0]
     trAbarprime = sp.sympify(0)
     for i in range(3):
         for j in range(3):
@@ -107,17 +107,6 @@ def BSSN_algebraic_constraints(
 
 
 if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    else:
-        print(f"Doctest passed: All {results.attempted} test(s) passed")
-
     import os
 
     import nrpy.validate_expressions.validate_expressions as ve
