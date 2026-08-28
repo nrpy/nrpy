@@ -1,5 +1,5 @@
 """
-Generate C code for computing the RHS of the BSSN equations in curvilinear coordinates, using a reference-metric formalism.
+Generate C code for computing BSSN or fCCZ4 RHSs in curvilinear coordinates, using a reference-metric formalism.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -28,6 +28,8 @@ from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
+from nrpy.equations.general_relativity.fCCZ4_gauge_RHSs import fCCZ4_gauge_RHSs
+from nrpy.equations.general_relativity.fCCZ4_RHSs import fCCZ4_RHSs
 from nrpy.helpers.expression_utils import (
     generate_definition_header,
     get_params_commondata_symbols_from_expr_list,
@@ -52,9 +54,10 @@ def register_CFunction_rhs_eval(
     enable_SSL: bool = False,
     OMP_collapse: int = 1,
     validate_expressions: bool = False,
+    enable_fCCZ4: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
-    Register the right-hand side evaluation function for the BSSN equations.
+    Register the right-hand side evaluation function for BSSN or fCCZ4.
 
     :param CoordSystem: The coordinate system to be used.
     :param enable_rfm_precompute: Whether to enable reference metric precomputation.
@@ -72,6 +75,7 @@ def register_CFunction_rhs_eval(
     :param enable_SSL: Whether to enable slow-start lapse.
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
+    :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -91,7 +95,7 @@ def register_CFunction_rhs_eval(
                 else Path("intrinsics") / "simd_intrinsics.h"
             )
         ]
-    desc = r"""Set RHSs for the BSSN evolution equations."""
+    desc = r"""Set RHSs for the BSSN or fCCZ4 evolution equations."""
     cfunc_type = "void"
     name = "rhs_eval"
     arg_dict_cuda = {
@@ -119,30 +123,44 @@ def register_CFunction_rhs_eval(
     }
     params = ",".join([f"{v} {k}" for k, v in arg_dict_host.items()])
 
-    # Populate BSSN rhs variables
-    rhs = BSSN_RHSs[
+    rhs_cache_key = (
         CoordSystem
         + ("_rfm_precompute" if enable_rfm_precompute else "")
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
-    ]
-    alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
-        CoordSystem=CoordSystem,
-        enable_rfm_precompute=enable_rfm_precompute,
-        enable_T4munu=enable_T4munu,
-        LapseEvolutionOption=LapseEvolutionOption,
-        ShiftEvolutionOption=ShiftEvolutionOption,
     )
-    rhs.BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
-    for i in range(3):
-        rhs.BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
-        rhs.BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
+    if enable_fCCZ4:
+        fccz4_rhs = fCCZ4_RHSs[rhs_cache_key]
+        local_RHSs_varname_to_expr_dict = (
+            fccz4_rhs.fCCZ4_RHSs_varname_to_expr_dict.copy()
+        )
+        alpha_rhs, vet_rhsU, bet_rhsU = fCCZ4_gauge_RHSs(
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_T4munu=enable_T4munu,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+        )
+    else:
+        bssn_rhs = BSSN_RHSs[rhs_cache_key]
+        local_RHSs_varname_to_expr_dict = bssn_rhs.BSSN_RHSs_varname_to_expr_dict.copy()
+        alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
+            CoordSystem=CoordSystem,
+            enable_rfm_precompute=enable_rfm_precompute,
+            enable_T4munu=enable_T4munu,
+            LapseEvolutionOption=LapseEvolutionOption,
+            ShiftEvolutionOption=ShiftEvolutionOption,
+        )
 
-    # local_BSSN_RHSs_varname_to_expr_dict is modified below if e.g., we add KO terms;
-    #    DO NOT MODIFY rhs.BSSN_RHSs_varname_to_expr_dict!
-    local_BSSN_RHSs_varname_to_expr_dict = rhs.BSSN_RHSs_varname_to_expr_dict.copy()
-    local_BSSN_RHSs_varname_to_expr_dict = ODict(
-        sorted(local_BSSN_RHSs_varname_to_expr_dict.items())
+    # Keep cached nongauge RHS dictionaries immutable: gauge and optional KO,
+    # CAHD, and SSL terms belong only to this generated function.
+    local_RHSs_varname_to_expr_dict["alpha_rhs"] = alpha_rhs
+    for i in range(3):
+        local_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] = vet_rhsU[i]
+        local_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] = bet_rhsU[i]
+
+    local_RHSs_varname_to_expr_dict = ODict(
+        sorted(local_RHSs_varname_to_expr_dict.items())
     )
 
     # Define conformal factor W.
@@ -190,32 +208,38 @@ def register_CFunction_rhs_eval(
         lambdaU_dKOD = ixp.declarerank2("lambdaU_dKOD", symmetry="nosym")
         aDD_dKOD = ixp.declarerank3("aDD_dKOD", symmetry="sym01")
         hDD_dKOD = ixp.declarerank3("hDD_dKOD", symmetry="sym01")
+        if enable_fCCZ4:
+            Theta_fCCZ4_dKOD = ixp.declarerank1("Theta_fCCZ4_dKOD")
         for k in range(3):
-            local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] += (
+            local_RHSs_varname_to_expr_dict["alpha_rhs"] += (
                 diss_strength_gauge * alpha_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += (
+            local_RHSs_varname_to_expr_dict["cf_rhs"] += (
                 diss_strength_nongauge * cf_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-            local_BSSN_RHSs_varname_to_expr_dict["trK_rhs"] += (
+            local_RHSs_varname_to_expr_dict["trK_rhs"] += (
                 diss_strength_nongauge * trK_dKOD[k] * rfm.ReU[k]
             )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
+            if enable_fCCZ4:
+                local_RHSs_varname_to_expr_dict["Theta_fCCZ4_rhs"] += (
+                    diss_strength_nongauge * Theta_fCCZ4_dKOD[k] * rfm.ReU[k]
+                )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
             for i in range(3):
                 if "2ndOrder" in ShiftEvolutionOption:
-                    local_BSSN_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
+                    local_RHSs_varname_to_expr_dict[f"bet_rhsU{i}"] += (
                         diss_strength_gauge * betU_dKOD[i][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                local_BSSN_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
+                local_RHSs_varname_to_expr_dict[f"vet_rhsU{i}"] += (
                     diss_strength_gauge * vetU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                local_BSSN_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
+                local_RHSs_varname_to_expr_dict[f"lambda_rhsU{i}"] += (
                     diss_strength_nongauge * lambdaU_dKOD[i][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
                 for j in range(i, 3):
-                    local_BSSN_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
+                    local_RHSs_varname_to_expr_dict[f"a_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * aDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-                    local_BSSN_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
+                    local_RHSs_varname_to_expr_dict[f"h_rhsDD{i}{j}"] += (
                         diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                     )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
 
@@ -252,7 +276,7 @@ def register_CFunction_rhs_eval(
             raise ValueError(
                 "Error: only EvolvedConformalFactor_cf = (W or chi or phi) supported."
             )
-        local_BSSN_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
+        local_RHSs_varname_to_expr_dict["cf_rhs"] += CAHD_term
     # ^^^ END CAHD ^^^
 
     # vvv BEGIN SSL vvv
@@ -273,14 +297,14 @@ def register_CFunction_rhs_eval(
             commondata=True,
             add_to_parfile=True,
         )
-        local_BSSN_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
+        local_RHSs_varname_to_expr_dict["alpha_rhs"] -= (
             W * SSL_Gaussian_prefactor * (Bq.alpha - W)
         )
     # ^^^ END SSL ^^^
 
-    BSSN_RHSs_access_gf: List[str] = []
-    for var in local_BSSN_RHSs_varname_to_expr_dict.keys():
-        BSSN_RHSs_access_gf += [
+    RHSs_access_gf: List[str] = []
+    for var in local_RHSs_varname_to_expr_dict.keys():
+        RHSs_access_gf += [
             gri.BHaHGridFunction.access_gf(
                 var.replace("_rhs", ""),
                 0,
@@ -299,10 +323,10 @@ def register_CFunction_rhs_eval(
         # self.lambda_rhsU[i] = self.Lambdabar_rhsU[i] / rfm.ReU[i]
         betaU[i] = vetU[i] * rfm.ReU[i]
 
-    # Perform validation of BSSN_RHSs against trusted version.
+    # Perform validation of RHSs against trusted expressions.
     if validate_expressions:
         return ve.process_dictionary_of_expressions(
-            local_BSSN_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
+            local_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
         )
     # ve.compare_or_generate_trusted_results(
     #     os.path.abspath(__file__),
@@ -313,7 +337,7 @@ def register_CFunction_rhs_eval(
     #     cast(Dict[str, Union[mpf, mpc]], results_dict),
     # )
 
-    expr_list = list(local_BSSN_RHSs_varname_to_expr_dict.values())
+    expr_list = list(local_RHSs_varname_to_expr_dict.values())
 
     # Find symbols stored in params
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
@@ -336,7 +360,7 @@ def register_CFunction_rhs_eval(
     kernel_body = BHaH.simple_loop.simple_loop(
         loop_body=ccg.c_codegen(
             expr_list,
-            BSSN_RHSs_access_gf,
+            RHSs_access_gf,
             enable_fd_codegen=True,
             enable_simd=enable_intrinsics,
             upwind_control_vec=betaU,

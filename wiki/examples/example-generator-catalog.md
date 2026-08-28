@@ -28,10 +28,23 @@ labels below describe configured workflow/helper steps, not latest CI outcomes;
 `manual/source-supported` means this audit inspected sources but did not
 generate, build, or run the project.
 
+`blackhole_spectroscopy.py` keeps BSSN as the default and adds public
+`--fccz4` generation. The flag selects fCCZ4 RHS/gauge registration and
+fresh-data Theta initialization; it is not a claim of restart correctness or
+scientific validity.
+
+Claim evidence:
+- Claim: `python -m nrpy.examples.blackhole_spectroscopy` defaults to BSSN and accepts `--fccz4` to generate the opt-in fCCZ4 formulation; no restart or scientific-result guarantee follows.
+- Role: user-facing command and interface
+- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, and formulation-selecting registrations
+- Corroboration: [GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md), formulation-selection and initial-data claim
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, --fccz4 generation/build and t_final=0.1 startup through iteration 1; date=08-28-2026`
+
 | Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
 | --- | --- | --- | --- | --- | --- |
 | `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
-| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; runtime and CUDA are not GitHub-workflow tested | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `blackhole_spectroscopy.py` | `python -m nrpy.examples.blackhole_spectroscopy [--cuda] [--fccz4] [--floating_point_precision TYPE]` | Standalone BHaH binary-black-hole spectroscopy project, BSSN by default or opt-in fCCZ4 | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default BSSN/OpenMP build; isolated local BSSN/fCCZ4 OpenMP builds and one-step fCCZ4 startup; restart, scientific results, and CUDA remain untested here | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `carpet_baikal_thorns.py` | `python -m nrpy.examples.carpet_baikal_thorns` | ETLegacy/Carpet Baikal and BaikalVacuum thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and Baikal/BaikalVacuum regression testsuites | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpet_wavetoy_thorns.py` | `python -m nrpy.examples.carpet_wavetoy_thorns` | ETLegacy/Carpet WaveToyNRPy, IDWaveToyNRPy, and diagWaveToyNRPy thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and WaveToyNRPy regression testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | `python -m nrpy.examples.carpetx_baikal_thorns` | CarpetX BaikalX and BaikalVacuumX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |

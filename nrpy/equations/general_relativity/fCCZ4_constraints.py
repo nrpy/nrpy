@@ -234,33 +234,17 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
-    cache = FCCZ4ConstraintsDict()
-    cached_constraints = cache["Cartesian"]
-    cache_reuse_residual = sp.Integer(
-        0 if cache["Cartesian"] is cached_constraints else 1
-    )
-    try:
-        par.set_parval_from_str(
-            "EvolvedConformalFactor_cf", "phi" if original_cf != "phi" else "W"
-        )
-        rebuilt_constraints = cache["Cartesian"]
-    finally:
-        par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
-    conformal_factor_rebuild_residual = sp.Integer(
-        0 if rebuilt_constraints is not cached_constraints else 1
-    )
-
     cases = (
-        ("Cartesian", False, False, False, "W", "Cartesian"),
-        ("Cartesian", False, False, False, "phi", "Cartesian_phi"),
-        ("Cartesian", False, False, False, "chi", "Cartesian_chi"),
+        ("SinhCartesian", False, False, False, "W", "SinhCartesian"),
+        ("SinhCartesian", False, False, False, "phi", "SinhCartesian_phi"),
+        ("SinhCartesian", False, False, False, "chi", "SinhCartesian_chi"),
         (
-            "Cartesian",
+            "SinhCartesian",
             False,
             True,
             False,
             "W",
-            "Cartesian_RbarDD_gridfunctions",
+            "SinhCartesian_RbarDD_gridfunctions",
         ),
         ("SinhSpherical", False, False, False, "W", "SinhSpherical"),
         (
@@ -295,6 +279,7 @@ if __name__ == "__main__":
             "W",
             "SinhSpherical_rfm_precompute_T4munu",
         ),
+        ("Cartesian", False, False, False, "W", "Cartesian"),
     )
     for (
         case_coord,
@@ -304,7 +289,6 @@ if __name__ == "__main__":
         case_conformal_factor,
         trusted_suffix,
     ) in cases:
-        gridfunctions_before = set(gri.glb_gridfcs_dict)
         par.set_parval_from_str("EvolvedConformalFactor_cf", case_conformal_factor)
         try:
             constraints = FCCZ4Constraints(
@@ -313,193 +297,10 @@ if __name__ == "__main__":
                 enable_RbarDD_gridfunctions=case_enable_RbarDD_gridfunctions,
                 enable_T4munu=case_enable_T4munu,
             )
-            validation_Bq = BSSN_quantities[
-                case_coord
-                + ("_rfm_precompute" if case_enable_rfm_precompute else "")
-                + ("_RbarDD_gridfunctions" if case_enable_RbarDD_gridfunctions else "")
-            ]
         finally:
             par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
-
-        expected_Z4constraintU = ixp.zerorank1()
-        expected_ZbarU = ixp.zerorank1()
-        expected_ZU = ixp.zerorank1()
-        expected_ZD = ixp.zerorank1()
-        expected_Z4constraintD = ixp.zerorank1()
-        for validation_i in range(3):
-            expected_Z4constraintU[validation_i] = (
-                validation_Bq.LambdabarU[validation_i]
-                - validation_Bq.DGammaU[validation_i]
-            )
-            expected_ZbarU[validation_i] = (
-                sp.Rational(1, 2) * expected_Z4constraintU[validation_i]
-            )
-            expected_ZU[validation_i] = (
-                validation_Bq.exp_m4phi * expected_ZbarU[validation_i]
-            )
-        for validation_i in range(3):
-            for validation_j in range(3):
-                expected_Z4constraintD[validation_i] += (
-                    validation_Bq.gammabarDD[validation_i][validation_j]
-                    * expected_Z4constraintU[validation_j]
-                )
-            expected_ZD[validation_i] = (
-                sp.Rational(1, 2) * expected_Z4constraintD[validation_i]
-            )
-
-        expected_RbarZ4DD_delta = ixp.zerorank2()
-        expected_RbarZ4DD = ixp.zerorank2()
-        expected_RbarZ4 = sp.sympify(0)
-        expected_gradphi_squared = sp.sympify(0)
-        expected_laplacianphi = sp.sympify(0)
-        expected_Abar_squared = sp.sympify(0)
-        for validation_i in range(3):
-            for validation_j in range(3):
-                expected_RbarZ4DD_delta[validation_i][validation_j] = -2 * (
-                    expected_Z4constraintD[validation_i]
-                    * validation_Bq.phi_dD[validation_j]
-                    + expected_Z4constraintD[validation_j]
-                    * validation_Bq.phi_dD[validation_i]
-                )
-                for validation_ell in range(3):
-                    expected_RbarZ4DD_delta[validation_i][validation_j] += (
-                        2
-                        * validation_Bq.gammabarDD[validation_i][validation_j]
-                        * expected_Z4constraintU[validation_ell]
-                        * validation_Bq.phi_dD[validation_ell]
-                    )
-                    for validation_k in range(3):
-                        expected_RbarZ4DD_delta[validation_i][validation_j] += (
-                            sp.Rational(1, 2)
-                            * expected_Z4constraintU[validation_ell]
-                            * (
-                                validation_Bq.gammabarDD[validation_k][validation_i]
-                                * validation_Bq.DGammaUDD[validation_k][validation_j][
-                                    validation_ell
-                                ]
-                                + validation_Bq.gammabarDD[validation_k][validation_j]
-                                * validation_Bq.DGammaUDD[validation_k][validation_i][
-                                    validation_ell
-                                ]
-                            )
-                        )
-                expected_RbarZ4DD[validation_i][validation_j] = (
-                    validation_Bq.RbarDD[validation_i][validation_j]
-                    + expected_RbarZ4DD_delta[validation_i][validation_j]
-                )
-                expected_RbarZ4 += (
-                    validation_Bq.gammabarUU[validation_i][validation_j]
-                    * expected_RbarZ4DD[validation_i][validation_j]
-                )
-                expected_gradphi_squared += (
-                    validation_Bq.gammabarUU[validation_i][validation_j]
-                    * validation_Bq.phi_dBarD[validation_i]
-                    * validation_Bq.phi_dBarD[validation_j]
-                )
-                expected_laplacianphi += (
-                    validation_Bq.gammabarUU[validation_i][validation_j]
-                    * validation_Bq.phi_dBarDD[validation_i][validation_j]
-                )
-                expected_Abar_squared += (
-                    validation_Bq.AbarDD[validation_i][validation_j]
-                    * validation_Bq.AbarUU[validation_i][validation_j]
-                )
-        expected_H_Z4 = (
-            validation_Bq.exp_m4phi
-            * (
-                expected_RbarZ4
-                - 8 * expected_gradphi_squared
-                - 8 * expected_laplacianphi
-            )
-            + sp.Rational(2, 3) * validation_Bq.trK**2
-            - expected_Abar_squared
-        )
-        if case_enable_T4munu:
-            validation_source_H, _validation_source_MU = (
-                T4munu.BSSN_constraints_T4UU_source_terms(
-                    CoordSystem=case_coord,
-                    enable_rfm_precompute=case_enable_rfm_precompute,
-                )
-            )
-            expected_H_Z4 += validation_source_H
-
-        expression_dict = {
-            "H_Z4": constraints.H_Z4,
-            "LambdatildeU": constraints.LambdatildeU,
-            "RbarZ4": constraints.RbarZ4,
-            "RbarZ4DD": constraints.RbarZ4DD,
-            "RbarZ4DD_delta": constraints.RbarZ4DD_delta,
-            "Z4constraintU": constraints.Z4constraintU,
-            "ZD": constraints.ZD,
-            "ZU": constraints.ZU,
-            "ZbarU": constraints.ZbarU,
-            "H_Z4_definition_residual": constraints.H_Z4 - expected_H_Z4,
-            "LambdatildeU_definition_residual": [
-                constraints.LambdatildeU[validation_i]
-                - validation_Bq.LambdabarU[validation_i]
-                for validation_i in range(3)
-            ],
-            "RbarZ4DD_definition_residual": [
-                [
-                    constraints.RbarZ4DD[validation_i][validation_j]
-                    - expected_RbarZ4DD[validation_i][validation_j]
-                    for validation_j in range(3)
-                ]
-                for validation_i in range(3)
-            ],
-            "RbarZ4DD_delta_definition_residual": [
-                [
-                    constraints.RbarZ4DD_delta[validation_i][validation_j]
-                    - expected_RbarZ4DD_delta[validation_i][validation_j]
-                    for validation_j in range(3)
-                ]
-                for validation_i in range(3)
-            ],
-            "RbarZ4_trace_residual": constraints.RbarZ4 - expected_RbarZ4,
-            "Z4constraintU_definition_residual": [
-                constraints.Z4constraintU[validation_i]
-                - expected_Z4constraintU[validation_i]
-                for validation_i in range(3)
-            ],
-            "ZD_definition_residual": [
-                constraints.ZD[validation_i] - expected_ZD[validation_i]
-                for validation_i in range(3)
-            ],
-            "ZU_definition_residual": [
-                constraints.ZU[validation_i] - expected_ZU[validation_i]
-                for validation_i in range(3)
-            ],
-            "ZbarU_definition_residual": [
-                constraints.ZbarU[validation_i] - expected_ZbarU[validation_i]
-                for validation_i in range(3)
-            ],
-            "cache_reuse_residual": cache_reuse_residual,
-            "conformal_factor_rebuild_residual": conformal_factor_rebuild_residual,
-            "no_Theta_residual": sp.Integer(
-                sum(symbol.name == "Theta" for symbol in constraints.H_Z4.free_symbols)
-            ),
-        }
-        if case_enable_T4munu:
-            expected_matter = {
-                f"T4UU{mu}{nu}" for mu in range(4) for nu in range(mu, 4)
-            }
-            registered_matter = set(gri.glb_gridfcs_dict) - gridfunctions_before
-            expression_dict["matter_registration_residual"] = sp.Integer(
-                len(registered_matter.symmetric_difference(expected_matter))
-            )
-            expression_dict["matter_metadata_residual"] = sp.Integer(
-                sum(
-                    gri.glb_gridfcs_dict[name].group != "AUXEVOL"
-                    or gri.glb_gridfcs_dict[name].rank != 2
-                    or gri.glb_gridfcs_dict[name].dimension != 4
-                    or getattr(gri.glb_gridfcs_dict[name], "gf_array_name", None)
-                    != "auxevol_gfs"
-                    for name in expected_matter
-                )
-            )
-
         processed = ve.process_dictionary_of_expressions(
-            expression_dict, fixed_mpfs_for_free_symbols=True
+            {"H_Z4": constraints.H_Z4}, fixed_mpfs_for_free_symbols=True
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

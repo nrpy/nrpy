@@ -7,7 +7,7 @@
 
 BHaH GR wiring is a code-generation layer over the symbolic GR modules. It does
 not rederive the equations. It chooses coordinate systems and feature flags,
-pulls symbolic expressions from the BSSN, ADM, Psi4, and initial-data modules,
+pulls symbolic expressions from the BSSN or fCCZ4, ADM, Psi4, and initial-data modules,
 wraps them in BHaH loop/kernel infrastructure, and registers concrete
 CFunctions such as `rhs_eval`, `Ricci_eval`, `constraints_eval`,
 `initial_data`, `diagnostic_gfs_set`, and `psi4`.
@@ -20,10 +20,12 @@ and cleanup.
 
 ## Detail
 
-`register_CFunction_rhs_eval` generates the BSSN RHS CFunction. It pulls
-non-gauge RHS expressions from `BSSN_RHSs[...]`, gauge RHS expressions from
-`BSSN_gauge_RHSs`, and optional constraint damping terms from
-`BSSN_constraints[...]`. It builds a sorted local name-to-expression dictionary,
+`register_CFunction_rhs_eval(..., enable_fCCZ4=False)` generates the shared RHS
+CFunction and preserves BSSN as the public default. The opt-in branch pulls
+non-gauge expressions from `fCCZ4_RHSs[...]` and gauge expressions from
+`fCCZ4_gauge_RHSs`; the default branch keeps `BSSN_RHSs[...]` and
+`BSSN_gauge_RHSs`. Both branches copy the cached owner dictionary before adding
+gauge, dissipation, CAHD, or slow-start-lapse terms. It builds a sorted local name-to-expression dictionary,
 maps each RHS name to the matching `rhs_gfs` gridfunction with
 `BHaHGridFunction.access_gf`, and emits an interior `simple_loop` with finite
 difference codegen, optional SIMD/CUDA intrinsics, optional finite-difference
@@ -33,6 +35,14 @@ signature changes with `enable_rfm_precompute`: it receives either
 `T4munu`, Kreiss-Oliger dissipation, curvature-aware KO, Hamiltonian-constraint
 damping, and slow-start lapse through code-generation flags and commondata
 parameters.
+
+Claim evidence:
+- Claim: `register_CFunction_rhs_eval` defaults to BSSN and accepts `enable_fCCZ4=True` to select the fCCZ4 non-gauge and gauge owners, while preserving the same generated CFunction boundary and applying optional local terms to a copied expression dictionary.
+- Role: public/scientific contract
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
+- Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation-selecting call
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=default BSSN generation/build, enable_fCCZ4=True generation/build and one-step startup; date=08-28-2026`
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
 `BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs`. It always uses
@@ -65,22 +75,27 @@ coordinate arrays according to `enable_rfm_precompute`, plus read-only
 `auxevol_gfs`.
 
 `register_CFunction_initial_data(..., enable_conformal_projection=True)` adds
-projection after its checkpoint branch and after fresh-data boundary handling;
-the option defaults to `False`. The inspected collision example enables it and
-explicitly places the same call in its caller-supplied Method of Lines
-`post_rhs_string`.
-Neither initial-data registration nor Method of Lines automatically enables
-projection for every caller. The inspected collision example uses BSSN owners,
-not the fCCZ4 RHS, gauge, or `Theta_fCCZ4` storage; this review does not
-establish repository-wide absence.
+projection after checkpoint boundary/interpatch repair and after fresh-data
+boundary handling; the option defaults to `False`. Its independent
+`enable_fCCZ4=False` option also preserves existing callers. When enabled, the
+ADM converter writes `Theta_fCCZ4=0` during fresh conversion. The checkpoint
+branch runs before that converter and returns after repair/projection, so loaded
+Theta storage is not replaced by fresh-data initialization.
+
+The spectroscopy generator enables projection for both its default BSSN and
+opt-in fCCZ4 paths and places the same combined projector in its caller-supplied
+Method of Lines `post_rhs_string`. Separately, the collision example enables
+the same two projection hooks but remains explicitly BSSN-specific. Neither
+initial-data registration nor Method of Lines enables projection for every
+caller.
 
 Claim evidence:
-- Claim: BHaH exposes opt-in initial-data conformal projection with default `False`; the inspected collision example enables it and adds projection through a caller-supplied Method of Lines hook while using BSSN, not the new fCCZ4 evolution owners; repository-wide integration absence was not established.
+- Claim: BHaH preserves default-disabled `enable_conformal_projection` and `enable_fCCZ4` initial-data options; fresh fCCZ4 conversion initializes `Theta_fCCZ4` only after the checkpoint branch has declined to return, while checkpoint data are repaired/projected without fresh Theta overwrite; spectroscopy shares initial and post-RHS projection across BSSN and opt-in fCCZ4, while the separate collision example keeps its BSSN-specific projection wiring.
 - Role: public/scientific contract
-- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), initial-data and Method of Lines registrations
+- Deciding authority: [initial_data.py](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation and projection registrations; [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), BSSN initial-data and Method of Lines registrations
 - Corroboration: [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH source registration; precision=not-applicable; GPU=not-run; restart=source-path-inspected only; distributed=not-run; error_path=not-run; options=initial-data opt-in and representative BSSN Method of Lines call site inspected; date=08-26-2026`
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP source registration; precision=double; GPU=not-run; restart=source-path-inspected only, no restart run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and one-step startup, spectroscopy shared projection, collision path inspection only; date=08-28-2026`
 
 `register_CFunction_initial_data` is the application-level initial-data
 assembler. For built-in exact data it instantiates `InitialData_Cartesian` or
@@ -104,8 +119,9 @@ spherical, Cartesian, or GeneralRFM basis to Cartesian. `Cfunction_ADM_Cart_to_B
 converts Cartesian ADM data to Cartesian BSSN fields. `Cfunction_BSSN_Cart_to_rescaled_BSSN_rfm`
 transforms those BSSN tensors/vectors to the destination reference-metric basis
 and applies BSSN rescalings. `build_initial_data_conversion_loop` writes
-`alpha`, `cf`, `trK`, `hDD`, `aDD`, `vetU`, `betU`, and optional `T4UU` into
-MoL gridfunction arrays. `build_lambdaU_zeroing_block` initializes `lambdaU`,
+`alpha`, `cf`, `trK`, `hDD`, `aDD`, `vetU`, `betU`, optional `T4UU`, and
+opt-in fresh-data `Theta_fCCZ4` into MoL gridfunction arrays.
+`build_lambdaU_zeroing_block` initializes `lambdaU`,
 `build_apply_inner_bcs_block` applies parity-sensitive inner boundary
 conditions, and `Cfunction_initial_data_lambdaU_grid_interior` computes
 `lambdaU` by finite differencing the initialized conformal metric.
@@ -216,6 +232,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [psi4_spinweightm2_decomposition.py](../../../nrpy/infrastructures/BHaH/general_relativity/psi4_spinweightm2_decomposition.py) - `register_CFunction_psi4_spinweightm2_decomposition`, `lowlevel_decompose_psi4_into_swm2_modes`
 - [spin_weight_minus2_spherical_harmonics.py](../../../nrpy/infrastructures/BHaH/special_functions/spin_weight_minus2_spherical_harmonics.py) - `register_CFunction_spin_weight_minus2_sph_harmonics`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval`, `BHaH.general_relativity.basis_transforms.register_all.register_CFunctions`
+- [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `--fccz4`, formulation-selecting RHS/initial-data registration, shared projection hooks
 - [groovy_TOV_BSSN.py](../../../nrpy/examples/groovy_TOV_BSSN.py) - `BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp`, `BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`
 

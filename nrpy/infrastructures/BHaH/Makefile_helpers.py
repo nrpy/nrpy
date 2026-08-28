@@ -231,16 +231,11 @@ PIC_CFLAGS := {pic_cflags}
 PIC_NVCCFLAGS := {pic_nvccflags}"""
     else:
         openmp_block = f"""OPENMP ?= {openmp_default}
-OPENMP_FLAG := -fopenmp
 
 ifeq ($(OPENMP),1)
-OPENMP_SUPPORTED := $(shell printf '%s\\n' '\\#include <omp.h>' 'int main(void) {{ return omp_get_max_threads() < 1; }}' | $(CC) $(ALL_CPPFLAGS) $(OPENMP_FLAG) -x c - -o /dev/null >/dev/null 2>&1 && echo YES || echo NO)
-endif
-
-ifeq ($(OPENMP_SUPPORTED),YES)
-OMP_CFLAGS := $(OPENMP_FLAG)
-OMP_CXXFLAGS := $(OPENMP_FLAG)
-OMP_LDFLAGS := $(OPENMP_FLAG)
+OMP_CFLAGS := -fopenmp
+OMP_CXXFLAGS := -fopenmp
+OMP_LDFLAGS := -fopenmp
 else
 OMP_CFLAGS := -Wno-unknown-pragmas
 OMP_CXXFLAGS := -Wno-unknown-pragmas
@@ -309,7 +304,8 @@ endef
 """
         object_order_only_rule = "$(OBJECTS): | additional-projects\n"
         recursive_clean = "\n" + "\n".join(
-            f"\t+$(MAKE) -C {directory} clean" for directory in addl_dirs_to_make
+            f"\t+@$(MAKE) --no-print-directory -s -C {directory} clean"
+            for directory in addl_dirs_to_make
         )
 
     target_prerequisites = f"$(OBJECTS){additional_projects_prerequisite}"
@@ -390,10 +386,12 @@ $(OBJECTS): Makefile
 
 {valgrind_rule}
 
-# Remove only files owned by this generated build.
+# Remove generated build products and runtime output through depth two.
 clean:
-\t$(RM) $(OBJECTS) {exec_or_library_name}
-\t$(RM) -r $(DEPDIR){recursive_clean}
+\t@$(RM) {exec_or_library_name}
+\t@$(RM) -r $(DEPDIR)
+\t@$(RM) *.o */*.o */*/*.o
+\t@$(RM) *.txt */*.txt */*/*.txt *.gp */*.gp */*/*.gp *.dat */*.dat */*/*.dat *.out */*.out */*/*.out *.avi */*.avi */*/*.avi *.png */*.png */*/*.png *.bin */*.bin */*/*.bin{recursive_clean}
 
 -include $(DEPFILES)
 """
@@ -475,7 +473,17 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert '\t@mkdir -p $(dir $(DEPDIR)/$(@:.o=.d))' in content
         ...     assert 'PROJECT_CPPFLAGS := -I.' in content
         ...     assert 'ALL_CPPFLAGS = $(CPPFLAGS) $(PROJECT_CPPFLAGS)' in content
-        ...     assert f"{chr(92)}#include <omp.h>" in content
+        ...     assert 'OPENMP ?= 1' in content
+        ...     assert 'ifeq ($(OPENMP),1)' in content
+        ...     assert 'OMP_CFLAGS := -fopenmp' in content
+        ...     assert 'OMP_CXXFLAGS := -fopenmp' in content
+        ...     assert 'OMP_LDFLAGS := -fopenmp' in content
+        ...     assert 'OMP_CFLAGS := -Wno-unknown-pragmas' in content
+        ...     assert 'OMP_CXXFLAGS := -Wno-unknown-pragmas' in content
+        ...     assert 'OMP_LDFLAGS :=\nendif' in content
+        ...     assert 'OPENMP_FLAG' not in content
+        ...     assert 'OPENMP_SUPPORTED' not in content
+        ...     assert '$(shell' not in content
         ...     assert '$(CC) $(ALL_CPPFLAGS) $(ALL_CFLAGS) $(DEPFLAGS) -c $< -o $@' in content
         ...     assert '$(LINKER) $(ALL_LDFLAGS) -o $@ $(OBJECTS) $(ALL_LDLIBS)' in content
         ...     assert '-include $(DEPFILES)' in content
@@ -485,11 +493,19 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert 'project_name: $(OBJECTS) additional-projects' in content
         ...     assert '\t+$(MAKE) -C support' in content
         ...     makefile_lines = content.splitlines()
-        ...     clean_recipe = makefile_lines[makefile_lines.index('clean:') + 1]
-        ...     assert clean_recipe == '\t$(RM) $(OBJECTS) project_name'
-        ...     assert '\t$(RM) -r $(DEPDIR)' in content
-        ...     assert '\t+$(MAKE) -C support clean' in content
-        ...     assert '*.out' not in content
+        ...     clean_index = makefile_lines.index('clean:')
+        ...     assert makefile_lines[clean_index + 1:clean_index + 6] == [
+        ...         '\t@$(RM) project_name',
+        ...         '\t@$(RM) -r $(DEPDIR)',
+        ...         '\t@$(RM) *.o */*.o */*/*.o',
+        ...         '\t@$(RM) *.txt */*.txt */*/*.txt *.gp */*.gp */*/*.gp *.dat */*.dat */*/*.dat *.out */*.out */*/*.out *.avi */*.avi */*/*.avi *.png */*.png */*/*.png *.bin */*.bin */*/*.bin',
+        ...         '\t+@$(MAKE) --no-print-directory -s -C support clean',
+        ...     ]
+        ...     clean_section = '\n'.join(makefile_lines[clean_index:])
+        ...     assert '$(OBJECTS)' not in clean_section
+        ...     assert 'find ' not in clean_section
+        ...     assert '$(wildcard' not in clean_section
+        ...     assert '.par' not in clean_section
         ...     cuda_path = test_path / 'cuda'
         ...     output_CFunctions_function_prototypes_and_construct_Makefile(
         ...         str(cuda_path),

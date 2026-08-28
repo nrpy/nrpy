@@ -93,10 +93,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/fCCZ4_RHSs.py` | living |
 | `nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py` | living |
-| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian_RbarDD_gridfunctions.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py` | living |
-| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_NonAdvectingGammaDriving_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py` | living |
 | `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py` | living |
@@ -104,6 +104,10 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/main_c.py` | living |
 | `nrpy/infrastructures/BHaH/bhah_lib.py` | living |
 | `nrpy/infrastructures/BHaH/Makefile_helpers.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/initial_data.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/BHaH/simple_loop.py` | living |
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |

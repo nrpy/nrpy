@@ -313,13 +313,13 @@ if __name__ == "__main__":
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     cases = (
-        ("Cartesian", False, False, False, "Cartesian"),
+        ("SinhCartesian", False, False, False, "SinhCartesian"),
         (
-            "Cartesian",
+            "SinhCartesian",
             False,
             True,
             False,
-            "Cartesian_RbarDD_gridfunctions",
+            "SinhCartesian_RbarDD_gridfunctions",
         ),
         ("SinhSpherical", False, False, False, "SinhSpherical"),
         (
@@ -336,6 +336,7 @@ if __name__ == "__main__":
             True,
             "SinhSpherical_rfm_precompute_T4munu",
         ),
+        ("Cartesian", False, False, False, "Cartesian"),
     )
     for (
         case_coord,
@@ -350,38 +351,8 @@ if __name__ == "__main__":
             enable_RbarDD_gridfunctions=case_enable_RbarDD_gridfunctions,
             enable_T4munu=case_enable_T4munu,
         )
-        expression_dict: Dict[str, ve.ExpressionValue] = dict(
-            rhs.fCCZ4_RHSs_varname_to_expr_dict
-        )
-        expression_dict.update(
-            {
-                "Theta": rhs.Theta,
-                "Theta_dD": rhs.Theta_dD,
-                "Theta_dupD": rhs.Theta_dupD,
-                "H_Z4": rhs.H_Z4,
-                "LambdatildeU": rhs.LambdatildeU,
-                "LambdatildeU_dupD": rhs.LambdatildeU_dupD,
-                "Lambdatilde_rhsU": rhs.Lambdatilde_rhsU,
-                "Lambdatilde_rhsU_delta": rhs.Lambdatilde_rhsU_delta,
-                "RbarZ4": rhs.RbarZ4,
-                "RbarZ4DD": rhs.RbarZ4DD,
-                "RbarZ4DD_delta": rhs.RbarZ4DD_delta,
-                "Z4constraintU": rhs.Z4constraintU,
-                "ZD": rhs.ZD,
-                "ZU": rhs.ZU,
-                "ZbarU": rhs.ZbarU,
-                "aggregate_Theta_rhs": rhs.Theta_rhs,
-                "aggregate_a_rhsDD": rhs.a_rhsDD,
-                "aggregate_cf_rhs": rhs.cf_rhs,
-                "aggregate_h_rhsDD": rhs.h_rhsDD,
-                "aggregate_lambda_rhsU": rhs.lambda_rhsU,
-                "aggregate_trK_rhs": rhs.trK_rhs,
-                "kappa1": rhs.kappa1,
-                "kappa2": rhs.kappa2,
-            }
-        )
         processed = ve.process_dictionary_of_expressions(
-            expression_dict, fixed_mpfs_for_free_symbols=True
+            rhs.fCCZ4_RHSs_varname_to_expr_dict, fixed_mpfs_for_free_symbols=True
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

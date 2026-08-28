@@ -34,6 +34,11 @@ parser.add_argument(
     help="Use CUDA parallelization.",
 )
 parser.add_argument(
+    "--fccz4",
+    action="store_true",
+    help="Use fCCZ4 instead of BSSN evolution equations.",
+)
+parser.add_argument(
     "--floating_point_precision",
     type=str,
     help="Floating point precision (e.g. float, double).",
@@ -43,6 +48,7 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
+enable_fCCZ4 = args.fccz4
 # Default to openmp; override with cuda if --cuda is set
 parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
@@ -221,6 +227,7 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_checkpointing=True,
     enable_conformal_projection=True,
+    enable_fCCZ4=enable_fCCZ4,
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -271,6 +278,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
+    enable_fCCZ4=enable_fCCZ4,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:

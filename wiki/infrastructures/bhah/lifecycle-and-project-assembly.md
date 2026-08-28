@@ -86,47 +86,56 @@ prerequisites. The C, C++, and CUDA compile rules also use `-MMD`, `-MP`,
 Make runs. After a successful compilation, those files track the active
 non-system direct, transitive, and conditional includes seen by the compiler,
 so changing one rebuilds the affected objects. System headers and inactive
-conditional branches are not recorded. `clean` removes registered objects, the
-final target, and `.deps/`, then delegates cleanup to additional generated
-projects; it does not use broad scientific-output extension globs.
+conditional branches are not recorded.
 
-Targeted local temp-directory validation generated and built minimal CPU C and
-CUDA projects. In both cases `.deps/main.d` existed, no dependency file appeared
-at the project root, and the dependency file named the registered `project.h`
-and its transitive `nested.h`. Touching `nested.h` made `make -q` return 1, a
-following `make` rebuilt the target, and `make clean` removed `.deps/`. No
-generated executable was run. These commands had no explicit timeout and left
-no registered generated evidence, so this observed slice is nonprecedential
-and is not bounded validation.
+Generated `clean` is quiet and bounded. It removes the exact final target and
+root `.deps/`, all `.o` files at depths zero through two, and all `.txt`, `.gp`,
+`.dat`, `.out`, `.avi`, `.png`, and `.bin` files at those same depths. It then
+invokes each registered subproject's `clean` with silent, no-directory-printing
+Make flags. It preserves `.par`, unrelated suffixes, and accepted suffixes at
+depth three or deeper. Cleanup uses explicit globs rather than `find`, recursive
+wildcards, a filename manifest, or source-discovery logic.
+
+Bounded isolated validation generated and built the default-BSSN and fCCZ4
+spectroscopy projects with direct `OPENMP=1`. On the fCCZ4 tree, a seeded
+`make clean` produced no standard output or error, invoked a child cleanup,
+removed the target, root `.deps/`, objects and all seven runtime suffixes at
+depths zero through two, and preserved `.par`, unrelated suffixes, and the same
+accepted suffixes at depth three. This cleanup check did not exercise every
+Makefile target or backend.
 
 Claim evidence:
-- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/` to rebuild affected objects after active non-system direct, transitive, or conditional headers change; targeted minimal CPU C and CUDA builds placed dependency output at `.deps/main.d` rather than the project root, recorded `project.h` and transitive `nested.h`, rebuilt after `nested.h` changed, and removed `.deps/` through `clean`.
+- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` silently removes the exact target, root dependency directory, object files and seven runtime suffix families only at depths zero through two, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, and depth-three-or-deeper files.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; validation artifacts were temporary and were not registered
-- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, NVCC/CUDA 13.2 build cuda_13.2.r13.2/compiler.37953736_0, GNU Make 4.3; backend=CPU C and CUDA; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=CPU (CC=gcc, src_code_file_ext=c, compiler_opt_option=default, use_openmp=False), CUDA (CC=nvcc, src_code_file_ext=cu, compiler_opt_option=nvcc, use_openmp=False); date=07-23-2026`
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded bounded clean contract; date=08-28-2026`
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
 NVCC unless the command line overrides `CC`. Preprocessor, C, C++, CUDA,
-link-driver, and library options remain in separate composed variables. CPU
-OpenMP detection, when `OPENMP=1`, compiles and links a program that calls the
-runtime. The linker is selected from the live source records: host C++ sources
+link-driver, and library options remain in separate composed variables. On CPU,
+`OPENMP=1` directly adds `-fopenmp` to C, C++, and link flags; an unsupported
+compiler or linker fails normally. `OPENMP=0` explicitly omits the link flag and
+uses unknown-pragma warning suppression for C and C++. No capability probe or
+fallback is emitted. The linker is selected from live source records: host C++ sources
 select `CXX`, ordinary CPU C sources select `CC`, and CUDA projects select
 NVCC. Additional generated projects are rechecked before dependent object
 builds and the final link. Static archives are removed before recreation so
 deleted object members cannot survive. These enabled-OpenMP, host-C++,
-additional-project, shared-library, and static-archive behaviors were inspected
-but were not rerun after the final source-record and linker revision.
+additional-project, shared-library, and static-archive behaviors were inspected.
+The direct enabled-OpenMP executable path was also exercised by both isolated
+spectroscopy builds; `OPENMP=0`, host-C++, CUDA, shared-library, and archive
+variants were not rerun for this change.
 
 Claim evidence:
-- Claim: Source inspection shows that generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles, compile and link the CPU OpenMP probe when `OPENMP=1`, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members; these behaviors were not rerun after the final source-record and linker revision.
+- Claim: Generated BHaH Makefiles preserve CPU origin-aware compiler selection and CUDA command-line `CC` overrides, separate build-flag roles, apply direct CPU `-fopenmp` compile/link flags for `OPENMP=1` with no probe or fallback, retain explicit `OPENMP=0` opt-out behavior, choose the linker from live source records, recheck additional projects before dependent builds, and recreate static archives without stale members.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; emitted-Makefile assertions live in the same owner module
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=not-run; date=07-23-2026`
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 direct-flag builds, OPENMP=0 source inspection only; date=08-28-2026`
 
 The generated `make valgrind` target is executable-oriented. For a CPU
 executable it cleans, rebuilds with the debug C flags and `OPENMP=0`, then runs
