@@ -1,5 +1,7 @@
 """
-Generates function to compute the constraints H, MU, and MSQUARED.
+Generate BSSN constraint diagnostics.
+
+Compute H, MU, M, and the conformal connection constraint magnitude.
 
 Authors: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -9,6 +11,8 @@ Authors: Zachariah B. Etienne
 from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import List, Union, cast
+
+import sympy as sp
 
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
@@ -109,7 +113,7 @@ def register_CFunction_BSSN_constraints(
     includes = define_standard_includes()
     if enable_simd:
         includes += ["./simd/simd_intrinsics.h"]
-    desc = r"""Evaluate BSSN constraints."""
+    desc = r"""Evaluate Hamiltonian, momentum, and conformal connection constraints."""
     name = f"{thorn_name}_BSSN_constraints_order_{fd_order}"
     body = f"""  DECLARE_CCTK_ARGUMENTS_{name};
 """
@@ -142,8 +146,13 @@ def register_CFunction_BSSN_constraints(
             gri.ETLegacyGridFunction.access_gf(gf_name="MU" + str(index))
         ]
 
-    list_of_output_exprs += [Bcon.Msquared]
-    Constraints_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name="MSQUARED")]
+    list_of_output_exprs += [sp.sqrt(Bcon.Msquared)]
+    Constraints_access_gfs += [gri.ETLegacyGridFunction.access_gf(gf_name="M")]
+
+    list_of_output_exprs += [Bcon.LambdaConstraintMagnitude]
+    Constraints_access_gfs += [
+        gri.ETLegacyGridFunction.access_gf(gf_name="LAMBDA_CONSTRAINT")
+    ]
 
     param_symbols, _ = get_params_commondata_symbols_from_expr_list(
         list_of_output_exprs
@@ -183,7 +192,7 @@ if(fd_order == {fd_order}) {{
             T4UU00GF, T4UU01GF, T4UU02GF, T4UU03GF"""
     schedule += f"""
     WRITES: aux_variables
-  }} "Compute BSSN (Hamiltonian and momentum) constraints, at finite-differencing order {fd_order}"
+  }} "Compute BSSN Hamiltonian, momentum, and conformal connection constraints, at finite-differencing order {fd_order}"
 }}
 """
 

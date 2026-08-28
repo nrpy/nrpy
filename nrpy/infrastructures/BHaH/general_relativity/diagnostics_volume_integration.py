@@ -182,7 +182,7 @@ def register_CFunction_diagnostics_volume_integration() -> (
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
       recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
-      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MGF, .is_squared = 1};
       recipes[NUM_RECIPES].integrands[2] = (diags_integration_integrand_spec_t){.gf_index = DIAG_LAMBDA_CONSTRAINTGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 3;
 
@@ -200,7 +200,7 @@ def register_CFunction_diagnostics_volume_integration() -> (
 
       // Important: is_squared=1 enables computation of L2 norm & RMS; RMS_f = sqrt(int f^2 dV / int dV)
       recipes[NUM_RECIPES].integrands[0] = (diags_integration_integrand_spec_t){.gf_index = DIAG_HAMILTONIANGF, .is_squared = 1};
-      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MSQUAREDGF, .is_squared = 1};
+      recipes[NUM_RECIPES].integrands[1] = (diags_integration_integrand_spec_t){.gf_index = DIAG_MGF, .is_squared = 1};
       recipes[NUM_RECIPES].integrands[2] = (diags_integration_integrand_spec_t){.gf_index = DIAG_LAMBDA_CONSTRAINTGF, .is_squared = 1};
       recipes[NUM_RECIPES].num_integrands = 3;
 

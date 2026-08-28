@@ -58,15 +58,21 @@ class BSSNconstraints:
             + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         ]
 
-        # Step 1.c: Register H and MU gridfunctions for
-        #           Hamiltonian & momentum constraints,
-        #           respectively.
+        # Step 1.c: Register scalar constraint diagnostics and, when requested,
+        #           the momentum-constraint components.
         if "H" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions(
                 "H", group="AUX", gf_array_name="diagnostic_output_gfs"
             )
+        if "M" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions(
-                "MSQUARED", group="AUX", gf_array_name="diagnostic_output_gfs"
+                "M", group="AUX", gf_array_name="diagnostic_output_gfs"
+            )
+        if "LAMBDA_CONSTRAINT" not in gri.glb_gridfcs_dict:
+            _ = gri.register_gridfunctions(
+                "LAMBDA_CONSTRAINT",
+                group="AUX",
+                gf_array_name="diagnostic_output_gfs",
             )
         if register_MU_gridfunctions and "MU0" not in gri.glb_gridfcs_dict:
             _ = gri.register_gridfunctions_for_single_rank1(

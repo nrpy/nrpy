@@ -10,6 +10,8 @@ from inspect import currentframe as cfr
 from types import FrameType as FT
 from typing import Union, cast
 
+import sympy as sp
+
 import nrpy.c_codegen as ccg
 import nrpy.c_function as cfc
 import nrpy.finite_difference as fin
@@ -49,7 +51,7 @@ def register_CFunction_constraints_eval(
     ...     return ""
     >>> fake_constraints = SimpleNamespace(
     ...     H=object(),
-    ...     Msquared=object(),
+    ...     Msquared=sp.Symbol("Msquared", nonnegative=True),
     ...     LambdaConstraintMagnitude=object(),
     ... )
     >>> try:
@@ -68,12 +70,12 @@ def register_CFunction_constraints_eval(
     ...     cfc.CFunction_dict.update(original_cfunctions)
     >>> captured["expressions"] == [
     ...     fake_constraints.H,
-    ...     fake_constraints.Msquared,
+    ...     sp.sqrt(fake_constraints.Msquared),
     ...     fake_constraints.LambdaConstraintMagnitude,
     ... ]
     True
     >>> captured["outputs"]
-    ['diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_LAMBDA_CONSTRAINTGF, i0, i1, i2)]']
+    ['diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_MGF, i0, i1, i2)]', 'diagnostic_gfs[IDX4(DIAG_LAMBDA_CONSTRAINTGF, i0, i1, i2)]']
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
@@ -97,12 +99,12 @@ def register_CFunction_constraints_eval(
         + "_rfm_precompute_RbarDD_gridfunctions"
         + ("_T4munu" if enable_T4munu else "")
     ]
-    expr_list = [Bcon.H, Bcon.Msquared, Bcon.LambdaConstraintMagnitude]
+    expr_list = [Bcon.H, sp.sqrt(Bcon.Msquared), Bcon.LambdaConstraintMagnitude]
     loop_body = ccg.c_codegen(
         expr_list,
         [
             "diagnostic_gfs[IDX4(DIAG_HAMILTONIANGF, i0, i1, i2)]",
-            "diagnostic_gfs[IDX4(DIAG_MSQUAREDGF, i0, i1, i2)]",
+            "diagnostic_gfs[IDX4(DIAG_MGF, i0, i1, i2)]",
             "diagnostic_gfs[IDX4(DIAG_LAMBDA_CONSTRAINTGF, i0, i1, i2)]",
         ],
         enable_fd_codegen=True,

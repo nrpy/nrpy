@@ -79,7 +79,11 @@ def register_CFunction_diagnostic_gfs_set(
     gri.register_gridfunctions(
         names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(
+        names="DIAG_M",
+        desc_list=["Momentum_constraint_magnitude"],
+        group="DIAG",
+    )
     gri.register_gridfunctions(
         names="DIAG_LAMBDA_CONSTRAINT",
         desc_list=["Covariant_conformal_connection_constraint_magnitude"],
@@ -189,7 +193,7 @@ def register_CFunction_diagnostic_gfs_set(
     {
       // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
       // Apply inner bcs to constraints needed to do interpolation correctly
-      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
       const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
       apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
                                         inner_bc_apply_gfs);
