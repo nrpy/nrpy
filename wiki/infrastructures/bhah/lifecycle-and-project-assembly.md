@@ -88,29 +88,33 @@ non-system direct, transitive, and conditional includes seen by the compiler,
 so changing one rebuilds the affected objects. System headers and inactive
 conditional branches are not recorded.
 
-Generated `clean` is quiet and bounded. It removes the exact final target and
-root `.deps/`, all `.o` files at depths zero through two, and all `.txt`, `.gp`,
-`.dat`, `.out`, `.avi`, `.png`, and `.bin` files at those same depths. It then
-invokes each registered subproject's `clean` with silent, no-directory-printing
-Make flags. It preserves `.par`, unrelated suffixes, and accepted suffixes at
-depth three or deeper. Cleanup uses explicit globs rather than `find`, recursive
-wildcards, a filename manifest, or source-discovery logic.
+Generated `clean` is visible and bounded. Its one root cleanup recipe is not
+silenced, so Make prints one expanded `rm` command. That command removes the
+exact final target and root `.deps/`; `.o` and `.d` files at depths zero through
+two; and root `.txt`, `.gp`, `.dat`, `.out`, `.avi`, `.png`, and `.bin` files.
+It then invokes each registered subproject's `clean` with silent,
+no-directory-printing Make flags. It preserves `.par`, unrelated suffixes,
+runtime-suffix files below the root, and `.o`/`.d` files at depth three or
+deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a
+filename manifest, or source-discovery logic.
 
 Bounded isolated validation generated and built the default-BSSN and fCCZ4
-spectroscopy projects with direct `OPENMP=1`. On the fCCZ4 tree, a seeded
-`make clean` produced no standard output or error, invoked a child cleanup,
-removed the target, root `.deps/`, objects and all seven runtime suffixes at
-depths zero through two, and preserved `.par`, unrelated suffixes, and the same
-accepted suffixes at depth three. This cleanup check did not exercise every
-Makefile target or backend.
+spectroscopy projects with direct `OPENMP=1`. A separate seeded generated
+parent/child Makefile fixture exercised the current cleanup recipe: `make clean`
+printed one expanded root `rm` command to standard output, produced no standard
+error, invoked a silent child cleanup, removed the target, root `.deps/`,
+`.o`/`.d` files through depth two, and all seven runtime suffixes at the root.
+It preserved `.par`, unrelated suffixes, nested runtime files, and depth-three
+`.o`/`.d` files. This cleanup check did not exercise every Makefile target or
+backend.
 
 Claim evidence:
-- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` silently removes the exact target, root dependency directory, object files and seven runtime suffix families only at depths zero through two, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, and depth-three-or-deeper files.
+- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; generated `clean` prints one root `rm` command while removing the exact target, root dependency directory, `.o`/`.d` files only through depth two, and seven runtime suffix families only at the project root, delegates silent cleanup to registered subprojects, and preserves `.par`, unrelated suffixes, nested runtime files, and depth-three-or-deeper `.o`/`.d` files.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
 - Corroboration: none available; validation artifacts were temporary and were not registered
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded bounded clean contract; date=08-28-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=generated GNU Make; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default BSSN and fCCZ4 OPENMP=1 builds plus seeded single-line bounded clean contract; date=08-28-2026`
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select

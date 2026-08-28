@@ -386,12 +386,9 @@ $(OBJECTS): Makefile
 
 {valgrind_rule}
 
-# Remove generated build products and runtime output through depth two.
+# Remove nested build products and root runtime output.
 clean:
-\t@$(RM) {exec_or_library_name}
-\t@$(RM) -r $(DEPDIR)
-\t@$(RM) *.o */*.o */*/*.o
-\t@$(RM) *.txt */*.txt */*/*.txt *.gp */*.gp */*/*.gp *.dat */*.dat */*/*.dat *.out */*.out */*/*.out *.avi */*.avi */*/*.avi *.png */*.png */*/*.png *.bin */*.bin */*/*.bin{recursive_clean}
+\t$(RM) -r {exec_or_library_name} $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.avi *.png *.bin{recursive_clean}
 
 -include $(DEPFILES)
 """
@@ -494,11 +491,8 @@ def output_CFunctions_function_prototypes_and_construct_Makefile(
         ...     assert '\t+$(MAKE) -C support' in content
         ...     makefile_lines = content.splitlines()
         ...     clean_index = makefile_lines.index('clean:')
-        ...     assert makefile_lines[clean_index + 1:clean_index + 6] == [
-        ...         '\t@$(RM) project_name',
-        ...         '\t@$(RM) -r $(DEPDIR)',
-        ...         '\t@$(RM) *.o */*.o */*/*.o',
-        ...         '\t@$(RM) *.txt */*.txt */*/*.txt *.gp */*.gp */*/*.gp *.dat */*.dat */*/*.dat *.out */*.out */*/*.out *.avi */*.avi */*/*.avi *.png */*.png */*/*.png *.bin */*.bin */*/*.bin',
+        ...     assert makefile_lines[clean_index + 1:clean_index + 3] == [
+        ...         '\t$(RM) -r project_name $(DEPDIR) *.o */*.o */*/*.o *.d */*.d */*/*.d *.txt *.gp *.dat *.out *.avi *.png *.bin',
         ...         '\t+@$(MAKE) --no-print-directory -s -C support clean',
         ...     ]
         ...     clean_section = '\n'.join(makefile_lines[clean_index:])
