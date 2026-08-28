@@ -1,6 +1,6 @@
 # ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation
 
-> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-18-2026
+> ETLegacy registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -15,7 +15,8 @@ trusted-value mechanics stay with
 schedules it before the BSSN RHS kernel. `register_CFunction_rhs_eval()` emits
 the evolved RHS kernel, including gauge RHSs and optional improvement terms.
 `register_CFunction_BSSN_constraints()` emits Hamiltonian, momentum, and
-`MSQUARED` diagnostic output in `MoL_PseudoEvolution`.
+conformal connection diagnostics in `MoL_PseudoEvolution`, including scalar
+momentum and Lambda-constraint magnitudes.
 
 ## Detail
 
@@ -91,12 +92,22 @@ above are appended to that manual metadata list.
 
 `register_CFunction_BSSN_constraints()` emits the diagnostic constraints
 kernel. It selects `BSSN_constraints` with optional reference-metric precompute
-and T4munu suffixes, outputs `H`, `MU0`, `MU1`, `MU2`, and `MSQUARED`, and runs
-finite-difference codegen with finite-difference helper functions and Golden
-Kernels in an interior `simple_loop`. Its schedule is guarded by the requested
+and T4munu suffixes, outputs `H`, `MU0`, `MU1`, `MU2`,
+`M = sqrt(gamma_ij M^i M^j)`, and
+`LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, and runs finite-difference
+codegen with finite-difference helper functions and Golden Kernels in an
+interior `simple_loop`. Its schedule is guarded by the requested
 finite-difference order and places `<thorn>_BSSN_constraints` in
 `MoL_PseudoEvolution`, reading BSSN state and optional T4munu gridfunctions and
 writing `aux_variables`.
+
+Claim evidence:
+- Claim: ETLegacy `register_CFunction_BSSN_constraints` writes `H`, `MU0` through `MU2`, `M = sqrt(BSSNconstraints.Msquared)`, and `LAMBDA_CONSTRAINT = BSSNconstraints.LambdaConstraintMagnitude` to auxiliary gridfunctions.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py), `construct_interface_ccl`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=ETLegacy registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, T4munu False/True, SIMD registration exercised; date=08-28-2026`
 
 All three generated kernels replace the finite-difference helper prefunc text
 `NO_INLINE` with `CCTK_ATTRIBUTE_NOINLINE` before registration. The local

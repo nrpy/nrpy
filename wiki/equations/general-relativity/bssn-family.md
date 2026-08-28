@@ -1,6 +1,6 @@
 # BSSN Family
 
-> Map the main BSSN equation modules, analytic algebraic constraints, and validation expectations. · Status: confirmed · Last reconciled: 08-26-2026
+> Map the main BSSN equation modules, analytic algebraic constraints, and validation expectations. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -115,10 +115,24 @@ Claim evidence:
 - Corroboration: none available; the papers define the scientific relations, while current NRPy option mapping is covered by the descriptive claim above
 
 `BSSNconstraints` constructs Hamiltonian, momentum, and covariant conformal
-connection constraint expressions. It registers diagnostic gridfunctions for
-`H` and `MSQUARED`, optionally registers `MU`, and stores `H`, `MU`,
-`Msquared`, and rescaled `mU` outputs. Its covariant conformal connection
-constraint vector is `LambdaConstraintU = LambdabarU - DGammaU`.
+connection constraint expressions. It unconditionally registers scalar
+diagnostic gridfunctions `H`, `M`, and `LAMBDA_CONSTRAINT`, optionally
+registers the `MU` components, and stores `H`, `MU`, the internal contraction
+`Msquared`, and rescaled `mU`. The internal contraction is the physical norm
+square `gamma_ij M^i M^j`, implemented as the conformal-metric contraction
+divided by `exp_m4phi`; infrastructure producers export `M` as
+`sqrt(Msquared)`.
+
+Claim evidence:
+- Claim: `BSSNconstraints` registers scalar diagnostic storage named `H`, `M`, and `LAMBDA_CONSTRAINT`; its internal `Msquared` is `gamma_ij M^i M^j` with `gamma_ij = gammabar_ij / exp_m4phi`, and the BHaH, ETLegacy, and CarpetX constraint producers export `M = sqrt(Msquared)` rather than the internal square.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`; [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` physical-ADM-norm doctest; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), existing code-generation doctest
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction plus BHaH, ETLegacy, and CarpetX registration; precision=symbolic comparison and 30-significant-digit deterministic trusted sampling; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=W, chi, and phi physical-norm checks plus six trusted coordinate variants; date=08-28-2026`
+
+Its covariant conformal connection constraint vector is
+`LambdaConstraintU = LambdabarU - DGammaU`.
 
 Claim evidence:
 - Claim: `BSSNconstraints.LambdaConstraintU` represents the covariant conformal connection constraint vector: evolved `LambdabarU` minus `DGammaU`, where `DGammaU` contracts the conformal/reference connection difference with the inverse conformal metric.
@@ -136,7 +150,7 @@ Claim evidence:
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
 - Corroboration: [BSSN_constraints_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py), `trusted_dict`; [BSSN_constraints_Spherical.py](../../../nrpy/equations/general_relativity/tests/BSSN_constraints_Spherical.py), `trusted_dict`
 - Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants; date=07-28-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants; date=08-28-2026`
 
 Representative trusted files pin the core RHS, quantity, and constraint
 dictionaries. Gauge validation is driven by the supported lapse and shift option
@@ -183,6 +197,9 @@ corresponding trusted files.
 - [BSSN_quantities.py](../../../nrpy/equations/general_relativity/BSSN_quantities.py) - `BSSNQuantities`, `BSSN_quantities`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`, `BSSN_constraints`
+- [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
+- [ETLegacy BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
+- [CarpetX BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
 - [BHaH algebraic constraint projection](../../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `register_CFunction_enforce_detgbar_equals_detghat_trAzero`
 - [BHaH initial data](../../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - `register_CFunction_initial_data`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - combined-projector registration and Method of Lines hook

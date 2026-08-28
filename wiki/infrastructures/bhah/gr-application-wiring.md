@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 08-26-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 08-28-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -57,13 +57,21 @@ host-side diagnostic Ricci data as `Ricci_eval_host`.
 momentum, and conformal connection-constraint evaluator. It temporarily forces
 OpenMP, reads
 `BSSN_constraints[CoordSystem + "_rfm_precompute_RbarDD_gridfunctions" +
-optional "_T4munu"]`, writes `DIAG_HAMILTONIANGF`, `DIAG_MSQUAREDGF`, and the
-covariant conformal connection-constraint magnitude to
-`DIAG_LAMBDA_CONSTRAINTGF`, and places the function in the `diagnostics/`
-subdirectory. When the original parallelization is CUDA, generated references
-to `RBARDD` and optional `T4UU` auxiliary gridfunctions are rewritten to
-diagnostic channels so host-side constraint evaluation consumes the diagnostic
-buffer filled for output.
+optional "_T4munu"]`, writes `H`, the physical momentum-constraint magnitude
+`sqrt(gamma_ij M^i M^j)`, and the conformal connection-constraint magnitude to
+`DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF`, respectively,
+and places the function in the `diagnostics/` subdirectory. When the original
+parallelization is CUDA, generated references to `RBARDD` and optional `T4UU`
+auxiliary gridfunctions are rewritten to diagnostic channels so host-side
+constraint evaluation consumes the diagnostic buffer filled for output.
+
+Claim evidence:
+- Claim: BHaH `register_CFunction_constraints_eval` writes Hamiltonian, `sqrt(BSSNconstraints.Msquared)`, and `BSSNconstraints.LambdaConstraintMagnitude` to `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF`; CUDA host-side generation retains the diagnostic-buffer input rewrites.
+- Role: descriptive behavior
+- Deciding authority: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
+- Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=BHaH OpenMP registration with CUDA rewrite path inspected; precision=symbolic code generation; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian registration contract plus source inspection of optional T4munu and CUDA rewrites; date=08-28-2026`
 
 `register_CFunction_enforce_detgbar_equals_detghat_trAzero` emits the combined
 algebraic-constraint CFunction. In one all-points loop it loads all independent

@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 07-28-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 08-28-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -50,15 +50,22 @@ header contains one enum token per diagnostic gridfunction, a
 initializer handling through `DIAG_INIT`.
 
 `diagnostic_gfs_set` is the normal GR producer for diagnostic channels. It
-registers `DIAG_HAMILTONIAN`, `DIAG_MSQUARED`, `DIAG_LAPSE`, `DIAG_W`,
+registers `DIAG_HAMILTONIAN`, `DIAG_M`, `DIAG_LAPSE`, `DIAG_W`,
 `DIAG_GRIDINDEX`, `DIAG_RBARDD`, `DIAG_LAMBDA_CONSTRAINT`, optional
 `DIAG_T4UU`, and optional `DIAG_PSI4_RE/IM`. At runtime it loops over grids,
 calls `Ricci_eval` or `Ricci_eval_host`, calls `constraints_eval`, optionally
 calls `psi4`, applies inner boundary conditions to interpolation-sensitive
 diagnostic channels, and copies lapse, conformal factor, and grid index into
-`diagnostic_gfs`. The Lambda-constraint channel is added to the default volume
-recipes; it is not added to the default nearest selections or the interpolation
-inner-boundary list.
+`diagnostic_gfs`. The interpolation inner-boundary list includes Hamiltonian,
+momentum magnitude, and Lambda-constraint magnitude.
+
+Claim evidence:
+- Claim: The generic BHaH diagnostic producer registers `DIAG_M` and `DIAG_LAMBDA_CONSTRAINT` and applies interpolation inner boundary conditions to Hamiltonian, momentum-magnitude, and Lambda-magnitude channels.
+- Role: descriptive behavior
+- Deciding authority: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostic_gfs_set`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic and Kasner diagnostic registration, interpolation enabled; date=08-28-2026`
 
 Nearest diagnostics are a dispatcher plus three helper samplers. Users select
 `which_gfs_0d`, `which_gfs_1d`, and `which_gfs_2d` in the generated
@@ -72,7 +79,18 @@ y- and z-axis lines, converts native coordinates through `xx_to_Cart`, sorts by
 physical axis coordinate, and writes per-time files `out1d-y-*` and `out1d-z-*`.
 The 2D helper samples nearest xy and yz planes, including multi-slice cases
 such as opposite phi quadrants, and writes per-time `out2d-xy-*` and
-`out2d-yz-*` files.
+`out2d-yz-*` files. The generic BHaH dispatcher and GRoovy's default-enabled
+constraint branch select Hamiltonian, momentum magnitude, and Lambda-constraint
+magnitude for every 0D, 1D, and 2D output. The Kasner dispatcher prepends those
+same three constraints to its Kasner-specific fields.
+
+Claim evidence:
+- Claim: Generic BHaH and Kasner nearest dispatchers include `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` in each 0D, 1D, and 2D default selection; GRoovy includes the same three when its default-true `include_constraint_diagnostics` option is enabled, and Kasner retains its additional fields.
+- Role: descriptive behavior
+- Deciding authority: [generic diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py), `register_CFunction_diagnostics_nearest`
+- Corroboration: [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH and GRoovy C registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=generic, GRoovy constraint diagnostics enabled, and Kasner 0D/1D/2D selections; date=08-28-2026`
 
 `diagnostics_nearest_common.h` supplies the shared text-output contract: time
 comments use `# [time] = ...`, headers list coordinate columns plus diagnostic
@@ -84,21 +102,27 @@ Volume diagnostics use `diagnostics_volume_integration()` and the copied
 `diagnostics_volume_integration_helpers.h`. The generated routine builds a
 small recipe array with user-editable spherical include/exclude rules and
 integrand specs. It then calls `diags_integration_execute_recipes` with
-`gridfuncs_diags`; the default examples integrate `H^2`, the legacy momentum
-fourth moment `(M_i M^i)^2`, and the conformal connection-constraint contraction
-`\bar{\gamma}_{ij} C^i C^j` over the whole domain and outside a radius.
-`DIAG_MSQUAREDGF` already stores `M_i M^i`, so its `is_squared=1` recipe is not
-directly comparable to the second moments in the other two columns. By
-contrast, `DIAG_LAMBDA_CONSTRAINTGF` stores the magnitude; squaring it once
-yields the connection constraint's conformal-metric contraction for the RMS
-numerator. Supplying `LambdaConstraintSquared` with `is_squared=1` would instead
-produce a fourth moment. The
+`gridfuncs_diags`; the default examples integrate `H^2`, the momentum second
+moment `M^2 = gamma_ij M^i M^j`, and the conformal connection-constraint
+contraction `\bar{\gamma}_{ij} C^i C^j` over the whole domain and outside a
+radius. `DIAG_MGF` and `DIAG_LAMBDA_CONSTRAINTGF` store magnitudes, so
+`is_squared=1` squares each exactly once for its L2/RMS numerator. Supplying
+either already-squared contraction with `is_squared=1` would instead produce a
+fourth moment. The
 coordinate-specialized `sqrt_detgammahat_d3xx_volume_element` helper evaluates
 `sqrt(detgammahat) * abs(dxx0 * dxx1 * dxx2)` by reference for ordinary
 reference metrics, so this is conformal/reference volume rather than physical
 proper volume. For `GeneralRFM` it is intentionally inert because the active
 integration path reads the `DETGAMMAHATGF`-backed volume element from the
 helper header.
+
+Claim evidence:
+- Claim: The two default BHaH GR volume recipes use `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` with `is_squared=1`, so their reported L2/RMS numerators contain `H^2`, `gamma_ij M^i M^j`, and `gammabar_ij C^i C^j`, not a momentum fourth moment.
+- Role: descriptive behavior
+- Deciding authority: [diagnostics_volume_integration.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_volume_integration.py), `register_CFunction_diagnostics_volume_integration`; [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
+- Corroboration: [diagnostics_volume_integration_helpers.h](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_volume_integration_helpers.h), `diags_integration_execute_recipes`; [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=BHaH OpenMP registration; precision=generated REAL arithmetic, runtime precision not exercised; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=whole-domain and outside-radius default GR recipes; date=08-28-2026`
 
 Raytracing output is an optional diagnostics-side stage-1 export.
 `output_raytracing_data` writes a time-stamped binary stage-1 payload through a
@@ -219,7 +243,10 @@ variants, GPU execution, or runtime results.
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics.py) - `register_all_diagnostics`, `_register_CFunction_diagnostics`
 - [diagnostic_gfs_h_create.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostic_gfs_h_create.py) - `diagnostics_gfs_h_create`
 - [diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py) - `register_CFunction_diagnostic_gfs_set`
+- [constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
 - [diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
+- [GRoovy diagnostics_nearest.py](../../../nrpy/infrastructures/BHaH/GRoovy/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
+- [Kasner diagnostics.py](../../../nrpy/infrastructures/BHaH/general_relativity/Kasner/diagnostics.py) - `register_CFunction_diagnostic_gfs_set`, `register_CFunction_diagnostics_nearest`
 - [diagnostics_nearest_grid_center.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_grid_center.py) - `register_CFunction_diagnostics_nearest_grid_center`
 - [diagnostics_nearest_1d_y_and_z_axes.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_1d_y_and_z_axes.py) - `register_CFunction_diagnostics_nearest_1d_y_and_z_axes`, `bhah_axis_configs`
 - [diagnostics_nearest_2d_xy_and_yz_planes.py](../../../nrpy/infrastructures/BHaH/diagnostics/diagnostics_nearest_2d_xy_and_yz_planes.py) - `register_CFunction_diagnostics_nearest_2d_xy_and_yz_planes`, `bhah_plane_configs`

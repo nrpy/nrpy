@@ -1,6 +1,6 @@
 # Fully Covariant Conformal Z4
 
-> Define the three-dimensional reference-metric fCCZ4 equations implemented by NRPy, including algebraic constraints, gauge, and validation boundaries. · Status: confirmed · Last reconciled: 08-27-2026
+> Define the three-dimensional reference-metric fCCZ4 equations implemented by NRPy, including algebraic constraints, gauge, and validation boundaries. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [General Relativity](index.md)
 
 ## Summary
@@ -513,9 +513,9 @@ Claim evidence:
 Ricci, and Hamiltonian aggregates through the parameter-aware module cache
 `fCCZ4_constraints`. Beyond reused base BSSN gridfunctions, enabling matter
 incrementally registers the required symmetric `T4UU` AUXEVOL inputs as its
-only additional gridfunctions; it does not register `H`, `MSQUARED`, `Theta`,
-or other diagnostic outputs. The reused matter helper also registers or reuses
-the `PI` CodeParameter.
+only additional gridfunctions; it does not register `H`, `M`,
+`LAMBDA_CONSTRAINT`, `Theta`, or other diagnostic outputs. The reused matter
+helper also registers or reuses the `PI` CodeParameter.
 
 Claim evidence:
 - Claim: `FCCZ4Constraints` exposes the connection constraint, spatial Z4 vectors, Z4 Ricci tensor/scalar, and `H_Z4` through the parameter-aware `fCCZ4_constraints` cache; beyond reused base BSSN gridfunctions, enabling matter incrementally registers required symmetric `T4UU` AUXEVOL inputs as its only additional gridfunctions and no diagnostic outputs, while the reused matter helper registers or reuses the `PI` CodeParameter.
