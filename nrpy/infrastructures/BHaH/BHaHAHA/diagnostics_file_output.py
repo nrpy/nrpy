@@ -37,7 +37,8 @@ Operations performed:
 2. Opens/creates the diagnostics file in append mode.
 3. Writes headers during the first simulation iteration (i.e., when file is new).
 4. Outputs diagnostic metrics, including geometric properties and spin magnitudes.
-5. Writes horizon surface data in a separate file, in a gnuplot-compatible format.
+5. Appends approximate Killing vector (AKV) diagnostics and solver status.
+6. Writes horizon surface data in a separate file, in a gnuplot-compatible format.
 
 @param[in] diags                 Pointer to the BHaHAHA data structure containing diagnostic info.
 @param[in] bhahaha_params_and_data Pointer to the BHaHAHA data structure containing horizon parameters and data.
@@ -105,6 +106,38 @@ Operations performed:
     fprintf(fileptr, "# column 19 = Spin y-component (based on xy/xz)\n");
     fprintf(fileptr, "# column 20 = Spin z-component (based on xz/xy)\n");
     fprintf(fileptr, "# column 21 = Spin z-component (based on yz/xy)\n");
+    fprintf(fileptr, "# column 22 = AKV status\n");
+    fprintf(fileptr, "# column 23 = AKV method used\n");
+    fprintf(fileptr, "# column 24 = AKV quality flag\n");
+    fprintf(fileptr, "# column 25 = AKV eigengap lambda4/lambda3 proxy\n");
+    fprintf(fileptr, "# column 26 = AKV lambda[0]\n");
+    fprintf(fileptr, "# column 27 = AKV lambda[1]\n");
+    fprintf(fileptr, "# column 28 = AKV lambda[2]\n");
+    fprintf(fileptr, "# column 29 = AKV J[0]\n");
+    fprintf(fileptr, "# column 30 = AKV J[1]\n");
+    fprintf(fileptr, "# column 31 = AKV J[2]\n");
+    fprintf(fileptr, "# column 32 = AKV a[0]\n");
+    fprintf(fileptr, "# column 33 = AKV a[1]\n");
+    fprintf(fileptr, "# column 34 = AKV a[2]\n");
+    fprintf(fileptr, "# column 35 = AKV spin_vec[0]\n");
+    fprintf(fileptr, "# column 36 = AKV spin_vec[1]\n");
+    fprintf(fileptr, "# column 37 = AKV spin_vec[2]\n");
+    fprintf(fileptr, "# column 38 = AKV eig_resid[0]\n");
+    fprintf(fileptr, "# column 39 = AKV eig_resid[1]\n");
+    fprintf(fileptr, "# column 40 = AKV eig_resid[2]\n");
+    fprintf(fileptr, "# column 41 = AKV J_ref convention\n");
+    fprintf(fileptr, "# column 42 = AKV previous-slice alignment applied\n");
+    fprintf(fileptr, "# column 43 = AKV trace scale for B\n");
+    fprintf(fileptr, "# column 44 = AKV trace scale for K\n");
+    fprintf(fileptr, "# column 45 = AKV previous overlap[0][0]\n");
+    fprintf(fileptr, "# column 46 = AKV previous overlap[0][1]\n");
+    fprintf(fileptr, "# column 47 = AKV previous overlap[0][2]\n");
+    fprintf(fileptr, "# column 48 = AKV previous overlap[1][0]\n");
+    fprintf(fileptr, "# column 49 = AKV previous overlap[1][1]\n");
+    fprintf(fileptr, "# column 50 = AKV previous overlap[1][2]\n");
+    fprintf(fileptr, "# column 51 = AKV previous overlap[2][0]\n");
+    fprintf(fileptr, "# column 52 = AKV previous overlap[2][1]\n");
+    fprintf(fileptr, "# column 53 = AKV previous overlap[2][2]\n");
     fflush(fileptr);
   } // END IF: file size zero -> need to write header
 
@@ -122,7 +155,10 @@ Operations performed:
   // Output diagnostic metrics to the diagnostics file.
   fprintf(fileptr,
           "%d\t%.3f\t%f\t%f\t%f\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
-          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
+          "%#.10g\t%.15e\t%.15e\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
+          "%d\t%d\t%d\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t"
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%d\t%d\t%#.10g\t%#.10g\t"
+          "%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\t%#.10g\n",
           bhahaha_params_and_data->iteration_external_input, // (1) iteration
           bhahaha_params_and_data->time_external_input,      // (2) time
           bhahaha_params_and_data->x_center_m1,              // (3) centroid x
@@ -143,7 +179,39 @@ Operations performed:
           a_y_yz_over_xz_spin,                               // (18) Spin y (yz/xz)
           a_y_xy_over_xz_spin,                               // (19) Spin y (xy/xz)
           a_z_xz_over_xy_spin,                               // (20) Spin z (xz/xy)
-          a_z_yz_over_xy_spin                                // (21) Spin z (yz/xy)
+          a_z_yz_over_xy_spin,                               // (21) Spin z (yz/xy)
+          diags->akv_status,                                 // (22) AKV status
+          diags->akv_method_used,                            // (23) AKV method used
+          diags->akv_quality_flag,                           // (24) AKV quality flag
+          diags->akv_eig_gap_43,                             // (25) AKV eigengap proxy
+          diags->akv_lambda[0],                              // (26) AKV lambda[0]
+          diags->akv_lambda[1],                              // (27) AKV lambda[1]
+          diags->akv_lambda[2],                              // (28) AKV lambda[2]
+          diags->akv_J[0],                                   // (29) AKV J[0]
+          diags->akv_J[1],                                   // (30) AKV J[1]
+          diags->akv_J[2],                                   // (31) AKV J[2]
+          diags->akv_a[0],                                   // (32) AKV a[0]
+          diags->akv_a[1],                                   // (33) AKV a[1]
+          diags->akv_a[2],                                   // (34) AKV a[2]
+          diags->akv_spin_vec[0],                            // (35) AKV spin_vec[0]
+          diags->akv_spin_vec[1],                            // (36) AKV spin_vec[1]
+          diags->akv_spin_vec[2],                            // (37) AKV spin_vec[2]
+          diags->akv_eig_resid[0],                           // (38) AKV eig_resid[0]
+          diags->akv_eig_resid[1],                           // (39) AKV eig_resid[1]
+          diags->akv_eig_resid[2],                           // (40) AKV eig_resid[2]
+          diags->akv_J_ref_convention,                       // (41) AKV J_ref convention
+          diags->akv_prev_alignment_applied,                 // (42) AKV previous-slice alignment applied
+          diags->akv_trace_scale_B,                          // (43) AKV trace scale for B
+          diags->akv_trace_scale_K,                          // (44) AKV trace scale for K
+          diags->akv_prev_overlap[0][0],                     // (45) AKV previous overlap[0][0]
+          diags->akv_prev_overlap[0][1],                     // (46) AKV previous overlap[0][1]
+          diags->akv_prev_overlap[0][2],                     // (47) AKV previous overlap[0][2]
+          diags->akv_prev_overlap[1][0],                     // (48) AKV previous overlap[1][0]
+          diags->akv_prev_overlap[1][1],                     // (49) AKV previous overlap[1][1]
+          diags->akv_prev_overlap[1][2],                     // (50) AKV previous overlap[1][2]
+          diags->akv_prev_overlap[2][0],                     // (51) AKV previous overlap[2][0]
+          diags->akv_prev_overlap[2][1],                     // (52) AKV previous overlap[2][1]
+          diags->akv_prev_overlap[2][2]                      // (53) AKV previous overlap[2][2]
   );
 
   fflush(fileptr);

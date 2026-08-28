@@ -152,6 +152,11 @@ typedef struct {
   //    m1 = "minus 1" = most recent found; m2 = next-to-most-recent found; etc.
   // EXTERNAL NR CODE MUST ALLOCATE: max(Ntheta) x max(Nphi) doubles for each of these, but does not set them!
   REAL *prev_horizon_m1, *prev_horizon_m2, *prev_horizon_m3;
+  // Previous AKV gridpoint eigenmodes from the most recent successful solve, used for
+  // temporal alignment of near-degenerate rotational modes. Managed internally by BHaHAHA.
+  REAL *prev_akv_gp_z0_m1, *prev_akv_gp_z1_m1, *prev_akv_gp_z2_m1;
+  int prev_akv_gp_Ntheta_m1, prev_akv_gp_Nphi_m1;
+  int prev_akv_gp_valid_m1;
 
   // DO NOT TOUCH: Persistent quantities set by BHaHAHA.
   // External NR code times at which previous horizons were found.
@@ -163,6 +168,10 @@ typedef struct {
   REAL y_center_m1, y_center_m2, y_center_m3;
   REAL z_center_m1, z_center_m2, z_center_m3;
 } bhahaha_params_and_data_struct;
+
+// Approximate Killing Vector (AKV) reference-spin conventions used for a_i normalization.
+#define BHAHAHA_AKV_JREF_CONVENTION_UNKNOWN 0
+#define BHAHAHA_AKV_JREF_CONVENTION_NORM_J123 1
 
 //===============================================
 // C struct: bhahaha_diagnostics_struct
@@ -208,6 +217,26 @@ typedef struct {
   REAL spin_a_y_from_xy_over_xz_prop_circumfs;
   REAL spin_a_z_from_xz_over_xy_prop_circumfs;
   REAL spin_a_z_from_yz_over_xy_prop_circumfs;
+
+  //==========================
+  // Approximate Killing Vector (AKV) spin diagnostics
+  // akv_status = 0 indicates success. Nonzero values match the AKV solver status codes.
+  //==========================
+  int akv_status;
+  REAL akv_lambda[3];
+  REAL akv_J[3];
+  REAL akv_a[3];
+  REAL akv_spin_vec[3];
+  REAL akv_eig_resid[3];
+  REAL akv_eig_gap_43;
+  int akv_quality_flag;
+  int akv_method_used;
+  int akv_J_ref_convention;
+  int akv_prev_alignment_applied;
+  REAL akv_trace_scale_B;
+  REAL akv_trace_scale_K;
+  REAL akv_prev_overlap[3][3];
+  REAL akv_l1_evecs[3][3];
 
   //==========================
   // Used in general circumference ratio calculation

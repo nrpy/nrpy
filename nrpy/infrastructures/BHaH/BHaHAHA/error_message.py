@@ -21,6 +21,8 @@ error_code_msg_tuples_list += [("FIND_HORIZON_MAX_ITERATIONS_EXCEEDED",
                                 "bah_find_horizon(): maximum iterations exceeded. Set verbosity to 2, or increase max_iterations.")]
 error_code_msg_tuples_list += [("FIND_HORIZON_HORIZON_TOO_SMALL",
                                 "bah_find_horizon(): Horizon radius < 3 * dr of BHaHAHA input grid. Set verbosity to 2, and/or try a smaller/higher-resolution grid.")]
+error_code_msg_tuples_list += [("FIND_HORIZON_AKV_CACHE_MALLOC_ERROR",
+                                "bah_find_horizon(): Failed to allocate internal AKV previous-mode cache buffers.")]
 error_code_msg_tuples_list += [
     ("BCSTRUCT_EIGENCOORD_FAILURE", "bah_bcstruct_set_up(): problem setting up Eigen-coordinates.")]
 error_code_msg_tuples_list += [

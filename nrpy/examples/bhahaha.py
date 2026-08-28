@@ -113,6 +113,7 @@ BHaH.BHaHAHA.cfl_limited_timestep_based_on_h_equals_r.register_CFunction_cfl_lim
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem=CoordSystem)
 
 BHaH.BHaHAHA.diagnostics.register_CFunction_diagnostics()
+BHaH.BHaHAHA.diagnostics_approx_killing_vector_spin.register_CFunction_diagnostics_approx_killing_vector_spin()
 BHaH.BHaHAHA.diagnostics_area_centroid_and_Theta_norms.register_CFunction_diagnostics_area_centroid_and_Theta_norms()
 BHaH.BHaHAHA.diagnostics_file_output.register_CFunction_diagnostics_file_output()
 BHaH.BHaHAHA.diagnostics_integration_weights.register_CFunction_diagnostics_integration_weights()
@@ -260,7 +261,7 @@ if use_cpp:
         "#endif\n\n"
         "#define restrict __restrict__\n\n"
     )
-    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n" "}\n" "#endif"
+    cpp_compatibility_epilogue = "\n#ifdef __cplusplus\n}\n#endif"
     BHaHAHA_h = cpp_compatibility_preamble + BHaHAHA_h + cpp_compatibility_epilogue
 
     # Convert fixed-size parameter to pointer
