@@ -1,6 +1,6 @@
 # Lifecycle And Project Assembly
 
-> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 07-23-2026
+> Explain how BHaH standalone applications register runtime functions, assemble generated projects, and split executable and library entrypoints. · Status: confirmed · Last reconciled: 08-14-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -72,11 +72,14 @@ directories and libraries, and emits a Makefile whose target is either an
 executable, a shared library, or a static archive. Executable builds may recurse
 into additional generated subdirectories before the final link.
 
-The generated Makefile represents each registered C-function source exactly
-once in an explicit `ADD_SOURCE` record. That record pairs the source path with
-each registered include that resolves inside the generated project at
-generation time; `SOURCES`, `OBJECTS`, and `DEPFILES` are then derived from the
-records without `find` or wildcard source discovery. A deliberate hand edit
+The generated Makefile represents each canonical source exactly once in an
+explicit `ADD_SOURCE` record. The canonical inventory contains the sorted
+registered C-function sources followed, in caller-supplied order, by optional
+typed additional source records. Registered-source records pair the source path
+with each registered include that resolves inside the generated project at
+generation time; additional records carry their explicitly supplied direct
+headers. `SOURCES`, `OBJECTS`, and `DEPFILES` are then derived from the combined
+inventory without `find` or wildcard source discovery. A deliberate hand edit
 therefore adds or removes a source in one record, but the Makefile remains
 generated output and regeneration replaces such edits.
 
@@ -86,9 +89,13 @@ prerequisites. The C, C++, and CUDA compile rules also use `-MMD`, `-MP`,
 Make runs. After a successful compilation, those files track the active
 non-system direct, transitive, and conditional includes seen by the compiler,
 so changing one rebuilds the affected objects. System headers and inactive
-conditional branches are not recorded. `clean` removes registered objects, the
-final target, and `.deps/`, then delegates cleanup to additional generated
-projects; it does not use broad scientific-output extension globs.
+conditional branches are not recorded. A typed Makefile extension may also
+declare named targets with structured prerequisites and recipe command bodies;
+the helper renders recipe indentation, adds declared phony targets to
+`.PHONY`, and rejects collisions with canonical targets or another extension
+target. `clean` removes canonical objects, the final target, `.deps/`, and any
+extension-declared build artifacts, then delegates cleanup to additional
+generated projects; it does not use broad scientific-output extension globs.
 
 Targeted local temp-directory validation generated and built minimal CPU C and
 CUDA projects. In both cases `.deps/main.d` existed, no dependency file appeared
@@ -100,12 +107,12 @@ no registered generated evidence, so this observed slice is nonprecedential
 and is not bounded validation.
 
 Claim evidence:
-- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per registered C-function source, derive object and dependency inventories without source-discovery commands, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/` to rebuild affected objects after active non-system direct, transitive, or conditional headers change; targeted minimal CPU C and CUDA builds placed dependency output at `.deps/main.d` rather than the project root, recorded `project.h` and transitive `nested.h`, rebuilt after `nested.h` changed, and removed `.deps/` through `clean`.
+- Claim: Generated BHaH Makefiles use one explicit `ADD_SOURCE` record per canonical source, combine registered sources with ordered typed additional source records before deriving `SOURCES`, `OBJECTS`, and `DEPFILES`, render typed custom targets and owned cleanup artifacts, make resolved registered project-local headers immediate prerequisites, and use compiler dependency files under `.deps/`; targeted minimal CPU C and CUDA builds covered dependency behavior, while an isolated OpenMP-disabled BHaHAHA static-library build included its typed PRIMME sources through `$(OBJECTS)`, linked its typed `linkcheck` target, and removed canonical plus declared artifacts through `clean`.
 - Role: descriptive behavior
 - Deciding authority: [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py), `_generate_c_files_and_header`, `_construct_makefile_content`, and `output_CFunctions_function_prototypes_and_construct_Makefile`
-- Corroboration: none available; validation artifacts were temporary and were not registered
+- Corroboration: [bhahaha.py](../../../nrpy/examples/bhahaha.py), `akv_makefile_extension`, supplies a production typed extension; validation artifacts were temporary and were not registered
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, NVCC/CUDA 13.2 build cuda_13.2.r13.2/compiler.37953736_0, GNU Make 4.3; backend=CPU C and CUDA; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-applicable; options=CPU (CC=gcc, src_code_file_ext=c, compiler_opt_option=default, use_openmp=False), CUDA (CC=nvcc, src_code_file_ext=cu, compiler_opt_option=nvcc, use_openmp=False); date=07-23-2026`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=GCC 13.3.0, GNU Make 4.3, Python 3.13.7, plus the prior NVCC/CUDA 13.2 dependency slice; backend=CPU C, BHaHAHA static library, and prior CUDA dependency validation; precision=double for BHaHAHA; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=typed source/target collision validation inspected but not run; options=BHaHAHA (serial codegen in an isolated copy, OPENMP=0), prior CPU (CC=gcc, src_code_file_ext=c, use_openmp=False), prior CUDA (CC=nvcc, src_code_file_ext=cu, use_openmp=False); date=08-14-2026`
 
 Compiler selection replaces GNU Make's built-in `cc` only when that default is
 active, preserving environment and command-line choices; CUDA Makefiles select
@@ -184,6 +191,7 @@ frozen evidence.
 - [main_c.py](../../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
 - [bhah_lib.py](../../../nrpy/infrastructures/BHaH/bhah_lib.py) - `register_CFunctions_bhah_lib`, `BHaH_struct`
 - [manga_bhah_lib.py](../../../nrpy/examples/manga_bhah_lib.py) - commented parser registration, `exec_or_library_name="libbhah_lib"`, `create_lib=True`, final build/run/parfile prints
+- [bhahaha.py](../../../nrpy/examples/bhahaha.py) - `akv_primme_c_sources`, `akv_makefile_extension`, static-library Makefile call
 - [Makefile_helpers.py](../../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `output_CFunctions_function_prototypes_and_construct_Makefile`, `compile_Makefile`
 - [griddata_commondata.py](../../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`, `register_CFunction_griddata_free`
 

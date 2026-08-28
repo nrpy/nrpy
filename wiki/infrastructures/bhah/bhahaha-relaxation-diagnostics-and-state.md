@@ -1,6 +1,6 @@
 # BHaHAHA Relaxation, Diagnostics, And State
 
-> Explain the single-horizon relaxation loop, persistent horizon state, BBH common-horizon state, diagnostics, file output, and cleanup paths. · Status: confirmed · Last reconciled: 06-30-2026
+> Explain the single-horizon relaxation loop, persistent horizon state, BBH common-horizon state, diagnostics, file output, and cleanup paths. · Status: confirmed · Last reconciled: 08-10-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -117,6 +117,34 @@ registered `bah_diagnostics_proper_circumferences_general` computes polar and
 equatorial proper circumferences for a supplied spin axis and stores the
 general-axis ratio-based spin estimate when that routine is invoked.
 
+When the existing SpECTRE-spin path is enabled, final diagnostics also run one
+shared three-mode AKV eigensolve and integration. The established
+`spin_chi_{x,y,z}_spectre` vector keeps the separate-Kerr three-mode magnitude,
+and `spin_chi_{x,y,z}_gram_matrix` keeps the direct Gram-corrected magnitude.
+The appended `spin_chi_{x,y,z}_akv_poles` vector instead uses the signed
+`ZOU[0] / (8*pi)` integral of strict lowest-eigenvalue `zU0`, directed from its
+refined minimum pole to its refined maximum pole, and divided by a
+Christodoulou mass formed from that same lowest-mode integral. The full vector
+is invariant under a sign flip of `zU0`; its three-dimensional direction is
+background-coordinate dependent, and at zero spin no normalized physical
+direction is defined.
+
+The AKV-pole fields are reset to `BHAHAHA_DIAGNOSTIC_UNAVAILABLE` at the start
+of every spin call. A full eigensolve or integration error marks all three AKV
+comparison vectors unavailable under the existing return-code path. A pole-fit
+failure returns success for the shared solve, preserves the SpECTRE-style and
+Gram-matrix vectors, and leaves only `spin_chi_{x,y,z}_akv_poles` unavailable.
+Console output reports that vector as `#spin_chi_akv_poles`, with its own `N/A`
+availability test independent of the other two vectors.
+
+Claim evidence:
+- Claim: The enabled final-diagnostic path exposes three AKV-based dimensionless spin vectors, and a lowest-shear pole-localization failure makes only `spin_chi_{x,y,z}_akv_poles` unavailable while the shared solve and the two existing vectors survive.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py` `diagnostics_spectre_spin`; `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics.py` `diagnostics`
+- Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` `bhahaha_diagnostics_struct`, `bah_initialize_diagnostics_struct`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=not-run; date=08-10-2026`
+
 On a successful final-resolution solve, `find_horizon` shifts the previous
 surface arrays so the new surface becomes `prev_horizon_m1`, marks final
 diagnostics, and calls `bah_diagnostics` once with cadence forced to every
@@ -129,9 +157,23 @@ the centroid-relative min/max diagnostics.
 used after a successful orchestrator solve. It appends one row to
 `BHaHAHA_diagnostics.ah%d.gp`, writing iteration, time, centroid,
 centroid-relative radii, coordinate-plane circumferences, area, irreducible
-mass, Theta norms, and ratio-based spin estimates. It also writes a
+mass, Theta norms, ratio-based spin estimates, and the two existing AKV-based
+vectors in unchanged columns 1--27. Columns 28, 29, and 30 append the x, y,
+and z components of the lowest-shear AKV-pole vector. Unavailable pole
+components are written as `NaN`. Because the diagnostics file is append-only,
+an existing file retains its original header; checking the 30-column schema
+requires a fresh output file. The writer does not migrate or rewrite an older
+header. It also writes a
 gnuplot-compatible surface file `h.t%07d.ah%d.gp` containing Cartesian horizon
 surface points from `prev_horizon_m1`.
+
+Claim evidence:
+- Claim: Fresh BHaHAHA diagnostics files append the lowest-shear AKV-pole x, y, and z components as columns 28--30 without changing columns 1--27, write unavailable components as `NaN`, and do not rewrite headers in existing append-only files.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_file_output.py` `diagnostics_file_output`
+- Corroboration: `nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h` `bhahaha_diagnostics_struct`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=not-run; precision=not-run; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=not-run; date=08-10-2026`
 
 Cleanup is split by layer. Inside `find_horizon`,
 `free_all_but_external_input_gfs` frees each per-resolution evolution grid,
@@ -156,6 +198,8 @@ per-horizon solve and uses
 - [rhs_eval_KO_apply.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/rhs_eval_KO_apply.py) - `register_CFunction_rhs_eval`, `register_CFunction_KO_apply`
 - [over_relaxation.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/over_relaxation.py) - `register_CFunction_over_relaxation`, `over_relaxation`
 - [diagnostics.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics.py) - `register_CFunction_diagnostics`, `diagnostics`
+- [spectre_spin_integrator.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/spectre_spin_integrator.py) - `register_CFunction_diagnostics_spectre_spin`, `diagnostics_spectre_spin`
+- [BHaHAHA_header.h](../../../nrpy/infrastructures/BHaH/BHaHAHA/BHaHAHA_header.h) - `bhahaha_diagnostics_struct`, `bah_initialize_diagnostics_struct`
 - [diagnostics_area_centroid_and_Theta_norms.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_area_centroid_and_Theta_norms.py) - `register_CFunction_diagnostics_area_centroid_and_Theta_norms`, `diagnostics_area_centroid_and_Theta_norms`
 - [diagnostics_min_max_mean_radii_wrt_centroid.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_min_max_mean_radii_wrt_centroid.py) - `register_CFunction_diagnostics_min_max_mean_radii_wrt_centroid`, `diagnostics_min_max_mean_radii_wrt_centroid`
 - [diagnostics_proper_circumferences.py](../../../nrpy/infrastructures/BHaH/BHaHAHA/diagnostics_proper_circumferences.py) - `register_CFunction_diagnostics_proper_circumferences`, `diagnostics_proper_circumferences`
@@ -165,8 +209,8 @@ per-horizon solve and uses
 
 ## See Also
 
-- [BHaH](index.md)
-- [BHaHAHA Horizon Runtime](bhahaha-horizon-runtime.md)
-- [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)
-- [GR Application Wiring](gr-application-wiring.md)
-- [Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)
+- Parent: [BHaH](index.md)
+- See also: [BHaHAHA Horizon Runtime](bhahaha-horizon-runtime.md)
+- See also: [Diagnostics Output And Checkpointing](diagnostics-output-and-checkpointing.md)
+- See also: [GR Application Wiring](gr-application-wiring.md)
+- Depends on: [Horizon Diagnostics](../../equations/general-relativity/horizon-diagnostics.md)
