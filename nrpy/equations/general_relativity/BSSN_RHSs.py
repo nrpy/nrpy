@@ -32,6 +32,7 @@ class BSSNRHSs:
         enable_rfm_precompute: bool = False,
         enable_RbarDD_gridfunctions: bool = False,
         enable_T4munu: bool = False,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
     ):
         """
         Initialize and set up all BSSN quantities, storing them within the class object.
@@ -40,6 +41,7 @@ class BSSNRHSs:
         :param enable_rfm_precompute: Whether to enable reference-metric precomputation, defaults to False.
         :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions, defaults to False.
         :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
+        :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
 
         :raises ValueError: If EvolvedConformalFactor_cf parameter is set to an unsupported value.
         """
@@ -282,6 +284,15 @@ class BSSNRHSs:
         for i in range(3):
             self.Lambdabar_rhsU[i] += sp.Rational(2, 3) * DGammaU[i] * Dbarbetacontraction  # Term 3
 
+        if enable_YBS_Gamma_constraint_adjustment:
+            YBS_chi = sp.symbols("YBS_chi", real=True)
+            for i in range(3):
+                self.Lambdabar_rhsU[i] += (
+                    -YBS_chi
+                    * (LambdabarU[i] - DGammaU[i])
+                    * Dbarbetacontraction
+                )
+
         # Step 6.d: Term 4 of \partial_t \bar{\Lambda}^i:
         #           \frac{1}{3} \bar{D}^{i} \bar{D}_{j} \beta^{j}
         detgammabar_dDD = Bq.detgammabar_dDD  # From Bq.detgammabar_and_derivs()
@@ -377,6 +388,10 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
         """Initialize an empty cache and its construction-parameter metadata."""
         super().__init__()
         self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
+        self._YBS_Gamma_constraint_adjustment_cache: Dict[str, BSSNRHSs] = {}
+        self._YBS_Gamma_constraint_adjustment_construction_parameters: Dict[
+            str, Tuple[str, bool]
+        ] = {}
 
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
         """
@@ -449,13 +464,39 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
         ... )
         (True, True, True, True)
         """
+        return self.get_rhs(CoordSystem_in)
+
+    def get_rhs(
+        self,
+        CoordSystem_in: str,
+        *,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
+    ) -> BSSNRHSs:
+        """
+        Return cached RHSs for an unchanged coordinate/options key and YBS choice.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS
+            Gamma-constraint adjustment.
+        :return: Cached or newly built BSSN right-hand sides.
+        """
         construction_parameters = (
             par.parval_from_str("EvolvedConformalFactor_cf"),
             par.parval_from_str("detgbarOverdetghat_equals_one"),
         )
+        cache = (
+            self._YBS_Gamma_constraint_adjustment_cache
+            if enable_YBS_Gamma_constraint_adjustment
+            else self
+        )
+        cache_construction_parameters = (
+            self._YBS_Gamma_constraint_adjustment_construction_parameters
+            if enable_YBS_Gamma_constraint_adjustment
+            else self._construction_parameters
+        )
         if (
-            CoordSystem_in not in self
-            or self._construction_parameters.get(CoordSystem_in)
+            CoordSystem_in not in cache
+            or cache_construction_parameters.get(CoordSystem_in)
             != construction_parameters
         ):
             # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
@@ -469,16 +510,19 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
             enable_T4munu = "_T4munu" in CoordSystem_in
 
             print(f"Setting up BSSN_RHSs[{CoordSystem_in}]...")
-            self.__setitem__(
-                CoordSystem_in,
-                BSSNRHSs(
-                    CoordSystem,
-                    enable_T4munu=enable_T4munu,
-                    enable_rfm_precompute=enable_rfm_precompute,
-                    enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
-                ),
+            rhs = BSSNRHSs(
+                CoordSystem,
+                enable_T4munu=enable_T4munu,
+                enable_rfm_precompute=enable_rfm_precompute,
+                enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
             )
-        return dict.__getitem__(self, CoordSystem_in)
+            if enable_YBS_Gamma_constraint_adjustment:
+                cache[CoordSystem_in] = rhs
+                cache_construction_parameters[CoordSystem_in] = construction_parameters
+            else:
+                self.__setitem__(CoordSystem_in, rhs)
+        return dict.__getitem__(cache, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: BSSNRHSs) -> None:
         dict.__setitem__(self, CoordSystem, value)
@@ -490,11 +534,17 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
         self._construction_parameters.pop(CoordSystem, None)
+        self._YBS_Gamma_constraint_adjustment_cache.pop(CoordSystem, None)
+        self._YBS_Gamma_constraint_adjustment_construction_parameters.pop(
+            CoordSystem, None
+        )
 
     def clear(self) -> None:
         """Remove all cached right-hand sides and construction metadata."""
         dict.clear(self)
         self._construction_parameters.clear()
+        self._YBS_Gamma_constraint_adjustment_cache.clear()
+        self._YBS_Gamma_constraint_adjustment_construction_parameters.clear()
 
 
 BSSN_RHSs = BSSNRHSs_dict()

@@ -46,6 +46,7 @@ class FCCZ4RHSs:
         enable_rfm_precompute: bool = False,
         enable_RbarDD_gridfunctions: bool = False,
         enable_T4munu: bool = False,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
     ) -> None:
         """
         Build fCCZ4 expressions for one reference-metric configuration.
@@ -56,6 +57,8 @@ class FCCZ4RHSs:
             Ricci components, with ``lambdaU`` interpreted as
             ``LambdatildeU``, from auxiliary gridfunctions.
         :param enable_T4munu: Include stress-energy source terms.
+        :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS
+            connection-constraint adjustment.
         :raises ValueError: If existing ``Theta_fCCZ4`` storage is not evolved
             state or, for BHaH, is not backed by ``in_gfs``.
 
@@ -77,7 +80,12 @@ class FCCZ4RHSs:
             + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         )
         Bq = BSSN_quantities[suffix]
-        Brhs = BSSN_RHSs[suffix + ("_T4munu" if enable_T4munu else "")]
+        Brhs = BSSN_RHSs.get_rhs(
+            suffix + ("_T4munu" if enable_T4munu else ""),
+            enable_YBS_Gamma_constraint_adjustment=(
+                enable_YBS_Gamma_constraint_adjustment
+            ),
+        )
 
         # Register damping coefficients only while constructing equations.  In
         # the 2020 convention kappa1 has inverse-length units; kappa2 is
@@ -230,6 +238,10 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         """Initialize empty expression cache and parameter metadata."""
         super().__init__()
         self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
+        self._YBS_Gamma_constraint_adjustment_cache: Dict[str, FCCZ4RHSs] = {}
+        self._YBS_Gamma_constraint_adjustment_construction_parameters: Dict[
+            str, Tuple[str, bool]
+        ] = {}
 
     def __getitem__(self, CoordSystem_in: str) -> FCCZ4RHSs:
         """
@@ -239,13 +251,39 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         :return: Cached or newly built fCCZ4 expressions.
 
         """
+        return self.get_rhs(CoordSystem_in)
+
+    def get_rhs(
+        self,
+        CoordSystem_in: str,
+        *,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
+    ) -> FCCZ4RHSs:
+        """
+        Return cached expressions for an unchanged key and YBS choice.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS
+            connection-constraint adjustment.
+        :return: Cached or newly built fCCZ4 expressions.
+        """
         construction_parameters = (
             par.parval_from_str("EvolvedConformalFactor_cf"),
             par.parval_from_str("detgbarOverdetghat_equals_one"),
         )
+        cache = (
+            self._YBS_Gamma_constraint_adjustment_cache
+            if enable_YBS_Gamma_constraint_adjustment
+            else self
+        )
+        cache_construction_parameters = (
+            self._YBS_Gamma_constraint_adjustment_construction_parameters
+            if enable_YBS_Gamma_constraint_adjustment
+            else self._construction_parameters
+        )
         if (
-            CoordSystem_in not in self
-            or self._construction_parameters.get(CoordSystem_in)
+            CoordSystem_in not in cache
+            or cache_construction_parameters.get(CoordSystem_in)
             != construction_parameters
         ):
             CoordSystem = (
@@ -254,18 +292,25 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
                 .replace("_T4munu", "")
             )
             print(f"Setting up fCCZ4_RHSs[{CoordSystem_in}]...")
-            self.__setitem__(
-                CoordSystem_in,
-                FCCZ4RHSs(
-                    CoordSystem=CoordSystem,
-                    enable_rfm_precompute="_rfm_precompute" in CoordSystem_in,
-                    enable_RbarDD_gridfunctions=(
-                        "_RbarDD_gridfunctions" in CoordSystem_in
-                    ),
-                    enable_T4munu="_T4munu" in CoordSystem_in,
+            rhs = FCCZ4RHSs(
+                CoordSystem=CoordSystem,
+                enable_rfm_precompute="_rfm_precompute" in CoordSystem_in,
+                enable_RbarDD_gridfunctions=(
+                    "_RbarDD_gridfunctions" in CoordSystem_in
+                ),
+                enable_T4munu="_T4munu" in CoordSystem_in,
+                enable_YBS_Gamma_constraint_adjustment=(
+                    enable_YBS_Gamma_constraint_adjustment
                 ),
             )
-        return dict.__getitem__(self, CoordSystem_in)
+            if enable_YBS_Gamma_constraint_adjustment:
+                cache[CoordSystem_in] = rhs
+                cache_construction_parameters[CoordSystem_in] = (
+                    construction_parameters
+                )
+            else:
+                self.__setitem__(CoordSystem_in, rhs)
+        return dict.__getitem__(cache, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: FCCZ4RHSs) -> None:
         """
@@ -288,11 +333,17 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
         """
         dict.__delitem__(self, CoordSystem)
         self._construction_parameters.pop(CoordSystem, None)
+        self._YBS_Gamma_constraint_adjustment_cache.pop(CoordSystem, None)
+        self._YBS_Gamma_constraint_adjustment_construction_parameters.pop(
+            CoordSystem, None
+        )
 
     def clear(self) -> None:
         """Remove all cached expressions and construction metadata."""
         dict.clear(self)
         self._construction_parameters.clear()
+        self._YBS_Gamma_constraint_adjustment_cache.clear()
+        self._YBS_Gamma_constraint_adjustment_construction_parameters.clear()
 
 
 fCCZ4_RHSs = FCCZ4RHSsDict()

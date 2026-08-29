@@ -49,6 +49,7 @@ args = parser.parse_args()
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
 enable_fCCZ4 = args.fccz4
+enable_YBS_Gamma_constraint_adjustment = False
 # Default to openmp; override with cuda if --cuda is set
 parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
@@ -279,6 +280,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
     enable_fCCZ4=enable_fCCZ4,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:

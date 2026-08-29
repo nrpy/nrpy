@@ -123,6 +123,7 @@ enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no 
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
+enable_YBS_Gamma_constraint_adjustment = False
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
@@ -233,6 +234,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     enable_CAKO=enable_CAKO,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:

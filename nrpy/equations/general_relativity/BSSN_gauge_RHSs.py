@@ -36,6 +36,7 @@ def BSSN_gauge_RHSs(
     enable_T4munu: bool = False,
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
+    enable_YBS_Gamma_constraint_adjustment: bool = False,
 ) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
     """
     Core gauge evolution equation right-hand-side expression generation function.
@@ -45,6 +46,7 @@ def BSSN_gauge_RHSs(
     :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
     :param LapseEvolutionOption: Specifies the lapse condition to use.
     :param ShiftEvolutionOption: Specifies the shift condition to use.
+    :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
 
     :return: Returns a tuple of sympy expressions for the right-hand-side of the gauge evolution equations.
 
@@ -100,11 +102,12 @@ def BSSN_gauge_RHSs(
     #    if they haven't already been declared. Note that enable_RbarDD_gridfunctions isn't relevant, as
     #    no gauge condition (to date) needs RbarDD. However, the Gamma-driving shift does need the RHS
     #    of LambdabarU, which contains T4munu source terms.
-    Brhs = BSSN_RHSs[
+    Brhs = BSSN_RHSs.get_rhs(
         CoordSystem
         + ("_rfm_precompute" if enable_rfm_precompute else "")
-        + ("_T4munu" if enable_T4munu else "")
-    ]
+        + ("_T4munu" if enable_T4munu else ""),
+        enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+    )
 
     ########################################
     # Step 2: Lapse conditions

@@ -140,6 +140,71 @@ Claim evidence:
 - Deciding authority: [Brown, *Covariant formulations of BSSN and the standard gauge*, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2), Eqs. (12a), (12b), and (15)
 - Corroboration: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints_dict.__getitem__` doctest
 
+### Opt-in YBS Gamma-constraint adjustment
+
+`BSSNRHSs(..., enable_YBS_Gamma_constraint_adjustment=True)` adds
+
+```text
+-YBS_chi * (LambdabarU[i] - DGammaU[i]) * Dbarbetacontraction
+```
+
+to the unrescaled conformal-connection RHS, where
+`Dbarbetacontraction = Dbar_j beta^j` and the parenthesized factor is the
+Lambda constraint `C^i`. This is the incremental term for NRPy's existing
+equation, not the full paper coefficient: the existing RHS already contains
+`+(2/3) DGammaU[i] * Dbarbetacontraction`, which supplies the paper's baseline
+`-(2/3) C^i Dbar_j beta^j` contribution when the connection equation is
+rewritten in terms of `C^i`. The full Yo-Baumgarte-Shapiro coefficient is
+`-(YBS_chi + 2/3) C^i Dbar_j beta^j`; adding that full expression again would
+double-count the baseline. Yo-Lin-Cao write the same coefficient as
+`-(2/3)(xi + 1)`, so NRPy's incremental parameter satisfies
+`YBS_chi = 2*xi/3`. Their usual `xi=1` choice therefore maps to the
+mathematical value `YBS_chi = 2/3`; the runtime default uses the numeric
+approximation `2.0 / 3.0`.
+
+The equation layer uses a plain real SymPy symbol for `YBS_chi`; constructing
+enabled symbolic RHSs does not register a global `CodeParameter`. The BHaH
+`register_CFunction_rhs_eval` owner registers `YBS_chi` only when the option is
+enabled, for either formulation, as a runtime `REAL`, using the
+parser-compatible numeric default `2.0 / 3.0`, with `commondata=True` and
+`add_to_parfile=True`; there is no Python coefficient argument.
+`BSSNRHSs_dict.get_rhs` receives the Boolean
+separately from the unchanged coordinate/options string and keeps enabled
+expressions in a separate internal cache. With the option false, neither the
+term nor BHaH parameter registration is present, and the existing base cache
+is used.
+
+`BSSN_gauge_RHSs` forwards the Boolean to the shared BSSN RHS cache. The
+derivative-based shift choices `GammaDriving2ndOrder_NoCovariant`,
+`GammaDriving2ndOrder_Covariant`,
+`GammaDriving2ndOrder_Covariant__Hatted`, and `NonAdvectingGammaDriving`
+therefore consume the adjusted Lambda RHS. `Frozen` and both first-order
+covariant variants do not consume that RHS and remain unchanged.
+
+With `Theta = Dbar_j beta^j`, the corresponding constraint propagation has
+the lower-order addition `-YBS_chi*Theta*C^i`:
+
+```text
+partial_t C^i = beta^j partial_j C^i - C^j partial_j beta^i
+                + 2 alpha exp(4 phi) M^i - YBS_chi Theta C^i.
+```
+
+This term attenuates its isolated local factor only where
+`YBS_chi*Theta > 0`; it amplifies where that product is negative and is neutral
+where it vanishes. Shift shear and the momentum-constraint source can dominate,
+so a globally positive `YBS_chi` is not a uniform damping guarantee when
+`Theta` changes sign. Because the addition is lower order, it does not change
+the current second-order system's principal symbol or high-frequency
+characteristic speeds; it can still change finite-frequency growth.
+
+Claim evidence:
+- Claim: the opt-in implementation adds only `-YBS_chi*C^i*Theta`, maps the full-paper parameters by `YBS_chi=2*xi/3`, and provides conditional rather than uniform attenuation with the displayed lower-order propagation term.
+- Role: public/scientific contract
+- Deciding authority: [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
+- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=SymPy expression construction inspected only; precision=exact rational source default; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=enabled and default-disabled source branches; date=08-28-2026`
+
 For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
 contraction `LambdaConstraintSquared` and its plain square root
 `LambdaConstraintMagnitude`.
@@ -189,6 +254,8 @@ corresponding trusted files.
 ## Sources
 
 - [Brown, arXiv:0902.3652v2](https://arxiv.org/pdf/0902.3652v2) - Eqs. (12a), (12b), and (15); published as [Phys. Rev. D 79, 104029](https://doi.org/10.1103/PhysRevD.79.104029) (secondary metadata)
+- [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2) - Eq. (45), adjusted Gamma-constraint coefficient
+- [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2) - Eq. (47), `xi` parameterization of the adjusted coefficient
 - [Baumgarte and de Oliveira, arXiv:2201.08857v1](https://arxiv.org/pdf/2201.08857v1) - Eq. (1), Bona-Masso slicing and the `f(alpha)=1` harmonic specialization
 - [Baumgarte and Shapiro, arXiv:gr-qc/9810065v1](https://arxiv.org/pdf/gr-qc/9810065v1) - Eqs. (30)-(32), zero-shift harmonic slicing and its integrated lapse relation
 - [Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024v1](https://arxiv.org/pdf/gr-qc/9902024v1) - p. 2, zero-shift harmonic-slicing relation

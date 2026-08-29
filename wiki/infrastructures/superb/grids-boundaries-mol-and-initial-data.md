@@ -1,6 +1,6 @@
 # Grids, Boundaries, MoL, And Initial Data
 
-> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-26-2026
+> Chare-local grid setup, boundary exchange, Method of Lines phases, initial-data staging, and NRPyElliptic integration hooks in superB. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -109,6 +109,22 @@ so this lifecycle exists only for callers that opt in and supply the Method of
 Lines hook. The checked collision example uses BSSN owners and does not wire
 fCCZ4 RHSs, gauge RHSs, or `Theta_fCCZ4`.
 
+Both checked superB black-hole examples explicitly set
+`enable_YBS_Gamma_constraint_adjustment = False` and forward it to the shared
+BHaH `register_CFunction_rhs_eval`. superB owns no separate YBS RHS fork:
+changing that source constant routes through the BHaH registrar to the BSSN
+RHS and gauge owners, while the enabled-only runtime `YBS_chi` parameter uses
+the reused BHaH CodeParameters flow. Neither example exposes a command-line
+switch for the code-generation choice.
+
+Claim evidence:
+- Claim: both superB black-hole generators keep the YBS adjustment explicitly default-disabled and forward the option to the shared BHaH RHS registrar; superB does not own a separate equation fork.
+- Role: descriptive behavior
+- Deciding authority: [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `enable_YBS_Gamma_constraint_adjustment` forwarding
+- Corroboration: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=superB/BHaH source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=both default-disabled superB black-hole call sites; date=08-28-2026`
+
 Claim evidence:
 - Claim: superB initial-data projection is opt-in with default `False`; the checked collision example enables it and explicitly provides a Method of Lines post-RHS projection hook while using BSSN, not the new fCCZ4 evolution owners.
 - Role: public/scientific contract
@@ -156,6 +172,7 @@ run was performed during this KB audit.
 - [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `cahdprefactor_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
 - [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - opt-in conformal projection in initial-data and Method of Lines registration
+- [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - shared BHaH BSSN/fCCZ4 and YBS option boundary used by superB
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `IDX3_OF_CHARE`, `MAP_LOCAL_TO_GLOBAL_IDX0`, `MAP_GLOBAL_TO_LOCAL_IDX0`, `globalidx3pt_to_chareidx3`, `globalidx3pt_to_localidx3pt`, `MOL_PRE_RK_UPDATE`, `INITIALDATA_BIN_ONE`, `nonlocalinnerbc_struct`
 - [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
 

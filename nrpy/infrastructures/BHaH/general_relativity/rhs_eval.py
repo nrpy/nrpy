@@ -55,6 +55,7 @@ def register_CFunction_rhs_eval(
     OMP_collapse: int = 1,
     validate_expressions: bool = False,
     enable_fCCZ4: bool = False,
+    enable_YBS_Gamma_constraint_adjustment: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -76,6 +77,7 @@ def register_CFunction_rhs_eval(
     :param OMP_collapse: Degree of OpenMP loop collapsing.
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
     :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
+    :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -129,8 +131,22 @@ def register_CFunction_rhs_eval(
         + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
         + ("_T4munu" if enable_T4munu else "")
     )
+    if enable_YBS_Gamma_constraint_adjustment:
+        par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "YBS_chi",
+            2.0 / 3.0,
+            commondata=True,
+            add_to_parfile=True,
+        )
     if enable_fCCZ4:
-        fccz4_rhs = fCCZ4_RHSs[rhs_cache_key]
+        fccz4_rhs = fCCZ4_RHSs.get_rhs(
+            rhs_cache_key,
+            enable_YBS_Gamma_constraint_adjustment=(
+                enable_YBS_Gamma_constraint_adjustment
+            ),
+        )
         local_RHSs_varname_to_expr_dict = (
             fccz4_rhs.fCCZ4_RHSs_varname_to_expr_dict.copy()
         )
@@ -140,9 +156,15 @@ def register_CFunction_rhs_eval(
             enable_T4munu=enable_T4munu,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_YBS_Gamma_constraint_adjustment=(
+                enable_YBS_Gamma_constraint_adjustment
+            ),
         )
     else:
-        bssn_rhs = BSSN_RHSs[rhs_cache_key]
+        bssn_rhs = BSSN_RHSs.get_rhs(
+            rhs_cache_key,
+            enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+        )
         local_RHSs_varname_to_expr_dict = bssn_rhs.BSSN_RHSs_varname_to_expr_dict.copy()
         alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
             CoordSystem=CoordSystem,
@@ -150,6 +172,7 @@ def register_CFunction_rhs_eval(
             enable_T4munu=enable_T4munu,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
+            enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
         )
 
     # Keep cached nongauge RHS dictionaries immutable: gauge and optional KO,

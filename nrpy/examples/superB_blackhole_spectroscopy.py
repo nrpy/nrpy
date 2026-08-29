@@ -67,6 +67,7 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
+enable_YBS_Gamma_constraint_adjustment = False
 enable_BHaHAHA = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -281,6 +282,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:

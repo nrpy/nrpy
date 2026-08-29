@@ -413,6 +413,27 @@ The connection RHS adds `deltaLambda^i` before vector rescaling.
 When matter is enabled, the base BSSN source terms and the canonical `H_Z4`
 matter term use the established `T4munu` source helpers.
 
+With `enable_YBS_Gamma_constraint_adjustment=True`, `FCCZ4RHSs` requests the
+already adjusted BSSN base instead of defining another symbolic term. Because
+the reused connection slot stores `LambdatildeU`, the shared addition becomes
+
+```text
+-YBS_chi * (LambdatildeU[i] - DGammaU[i]) * Dbar_j beta^j,
+```
+
+which is `-YBS_chi*C^i*Dbar_j beta^j` for the fCCZ4 connection constraint;
+`Dbar_j beta^j = Dhat_j beta^j` under the determinant constraint used here.
+The fCCZ4 correction does not repeat it. The Boolean selects a separate
+internal fCCZ4 cache while leaving the coordinate/options string unchanged.
+
+Claim evidence:
+- Claim: enabling the YBS option selects the adjusted shared BSSN connection base exactly once for fCCZ4, where the evolved connection slot turns the addition into `-YBS_chi*C^i*Dbar_j beta^j`; the option does not alter coordinate/options strings.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs.__init__` and `BSSNRHSs_dict.get_rhs`; [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
+- Corroboration: [fCCZ4_constraints.py](../../../nrpy/equations/general_relativity/fCCZ4_constraints.py), `FCCZ4Constraints.__init__`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=SymPy expression construction inspected only; precision=exact symbolic source; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=default-disabled and enabled source branches; date=08-28-2026`
+
 Claim evidence:
 - Claim: `FCCZ4Constraints` constructs the fCCZ4-only connection, Z4 Ricci, and `H_Z4` aggregates; `FCCZ4ConstraintsDict` and `fCCZ4_constraints` cache them; `FCCZ4RHSs` retrieves option-matched cached BSSN and fCCZ4 constraint objects, copies mutable aggregates without mutation, applies the displayed corrections at reference-rescaled output boundaries, and delegates enabled matter sources to the established `T4munu` helpers.
 - Role: descriptive behavior
@@ -459,6 +480,19 @@ fCCZ4 additions are `4 alpha Theta` for `OnePlusLog` and
 `3 deltaLambda^i/4` in the driver RHS for all three second-order drivers and
 the nonadvecting driver, before standard vector rescaling. The two first-order
 drivers and the other three lapse choices receive no local fCCZ4 addition.
+
+The YBS Boolean is forwarded through both the BSSN gauge base and the matching
+fCCZ4 RHS cache. The three second-order drivers plus the nonadvecting driver
+therefore consume the adjusted full fCCZ4 connection RHS exactly once;
+`Frozen` and both first-order drivers remain unchanged.
+
+Claim evidence:
+- Claim: fCCZ4 gauge forwarding gives the YBS connection addition exactly once to the three second-order and nonadvecting shift drivers, while `Frozen` and both first-order drivers receive none.
+- Role: descriptive behavior
+- Deciding authority: [fCCZ4_gauge_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py), `fCCZ4_gauge_RHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
+- Corroboration: [fCCZ4_RHSs.py](../../../nrpy/equations/general_relativity/fCCZ4_RHSs.py), `FCCZ4RHSs.__init__` and `FCCZ4RHSsDict.get_rhs`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=SymPy expression composition inspected only; precision=exact symbolic source; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=seven shift source branches with YBS enabled and disabled; date=08-28-2026`
 
 Claim evidence:
 - Claim: `fCCZ4_gauge_RHSs` accepts the exact four lapse and seven shift names listed above, defaults to `OnePlusLog` with `GammaDriving2ndOrder_Covariant__Hatted`, reuses the BSSN default `eta=2`, and applies the listed fCCZ4 additions only to `OnePlusLog` and the three second-order plus nonadvecting driver RHSs.

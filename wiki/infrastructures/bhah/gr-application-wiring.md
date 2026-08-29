@@ -20,9 +20,10 @@ and cleanup.
 
 ## Detail
 
-`register_CFunction_rhs_eval(..., enable_fCCZ4=False)` generates the shared RHS
-CFunction and preserves BSSN as the public default. The opt-in branch pulls
-non-gauge expressions from `fCCZ4_RHSs[...]` and gauge expressions from
+`register_CFunction_rhs_eval(..., enable_fCCZ4=False,
+enable_YBS_Gamma_constraint_adjustment=False)` generates the shared RHS
+CFunction and preserves BSSN as the public default. The fCCZ4 opt-in branch pulls
+non-gauge expressions from `fCCZ4_RHSs.get_rhs(...)` and gauge expressions from
 `fCCZ4_gauge_RHSs`; the default branch keeps `BSSN_RHSs[...]` and
 `BSSN_gauge_RHSs`. Both branches copy the cached owner dictionary before adding
 gauge, dissipation, CAHD, or slow-start-lapse terms. It builds a sorted local name-to-expression dictionary,
@@ -36,6 +37,18 @@ signature changes with `enable_rfm_precompute`: it receives either
 damping, and slow-start lapse through code-generation flags and commondata
 parameters.
 
+The YBS option applies to either formulation. When enabled, the registrar
+leaves the coordinate/options cache string unchanged, registers the runtime
+`YBS_chi` parameter after the parallel-registration guard, and forwards the
+Boolean to the selected nongauge and gauge owners. BSSN defines the symbolic
+addition once; fCCZ4 reuses that adjusted base, with the connection slot
+interpreted as `LambdatildeU`. Each formulation keeps enabled expressions in a
+separate internal cache without encoding the Boolean in the coordinate name.
+The equation layer uses a plain real SymPy symbol, while this BHaH registrar
+owns the conditional runtime parameter. The standalone and superB black-hole
+generators expose no command-line switch for this option: each declares an
+explicit false source constant and forwards it to this shared registrar.
+
 Claim evidence:
 - Claim: `register_CFunction_rhs_eval` defaults to BSSN and accepts `enable_fCCZ4=True` to select the fCCZ4 non-gauge and gauge owners, while preserving the same generated CFunction boundary and applying optional local terms to a copied expression dictionary.
 - Role: public/scientific contract
@@ -43,6 +56,14 @@ Claim evidence:
 - Corroboration: [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), formulation-selecting call
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
 - Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=default BSSN generation/build, enable_fCCZ4=True generation/build and one-step startup; date=08-28-2026`
+
+Claim evidence:
+- Claim: the shared registrar conditionally owns the runtime YBS parameter and forwards the opt-in flag to the selected BSSN or fCCZ4 equation and gauge owners; the four black-hole generators keep it explicitly false by default and share this registrar.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`
+- Corroboration: [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py), [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py), [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py), and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), forwarded `enable_YBS_Gamma_constraint_adjustment` constants
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=BHaH and superB source wiring inspected only; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=default-disabled callers plus enabled BSSN and fCCZ4 source branches; date=08-28-2026`
 
 `register_CFunction_Ricci_eval` emits `Ricci_eval` from
 `BSSN_quantities[CoordSystem + "_rfm_precompute"].Ricci_exprs`. It always uses
@@ -241,6 +262,8 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [spin_weight_minus2_spherical_harmonics.py](../../../nrpy/infrastructures/BHaH/special_functions/spin_weight_minus2_spherical_harmonics.py) - `register_CFunction_spin_weight_minus2_sph_harmonics`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval`, `BHaH.general_relativity.basis_transforms.register_all.register_CFunctions`
 - [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `--fccz4`, formulation-selecting RHS/initial-data registration, shared projection hooks
+- [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - explicit default-disabled YBS flag forwarded to shared RHS registration
+- [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - explicit default-disabled YBS flag forwarded to shared RHS registration
 - [groovy_TOV_BSSN.py](../../../nrpy/examples/groovy_TOV_BSSN.py) - `BHaH.general_relativity.TOVola.TOVola_interp.register_CFunction_TOVola_interp`, `BHaH.general_relativity.ADM_Initial_Data_Reader__BSSN_Converter.register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`
 
