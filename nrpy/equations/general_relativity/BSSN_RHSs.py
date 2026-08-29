@@ -285,7 +285,7 @@ class BSSNRHSs:
             self.Lambdabar_rhsU[i] += sp.Rational(2, 3) * DGammaU[i] * Dbarbetacontraction  # Term 3
 
         if enable_YBS_Gamma_constraint_adjustment:
-            YBS_chi = sp.symbols("YBS_chi", real=True)
+            YBS_chi = sp.Symbol("YBS_chi", real=True)
             for i in range(3):
                 self.Lambdabar_rhsU[i] += (
                     -YBS_chi
@@ -521,7 +521,7 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
                 cache[CoordSystem_in] = rhs
                 cache_construction_parameters[CoordSystem_in] = construction_parameters
             else:
-                self.__setitem__(CoordSystem_in, rhs)
+                self[CoordSystem_in] = rhs
         return dict.__getitem__(cache, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: BSSNRHSs) -> None:
