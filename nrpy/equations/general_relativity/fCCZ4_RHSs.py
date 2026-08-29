@@ -295,9 +295,7 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
             rhs = FCCZ4RHSs(
                 CoordSystem=CoordSystem,
                 enable_rfm_precompute="_rfm_precompute" in CoordSystem_in,
-                enable_RbarDD_gridfunctions=(
-                    "_RbarDD_gridfunctions" in CoordSystem_in
-                ),
+                enable_RbarDD_gridfunctions=("_RbarDD_gridfunctions" in CoordSystem_in),
                 enable_T4munu="_T4munu" in CoordSystem_in,
                 enable_YBS_Gamma_constraint_adjustment=(
                     enable_YBS_Gamma_constraint_adjustment
@@ -305,9 +303,7 @@ class FCCZ4RHSsDict(Dict[str, FCCZ4RHSs]):
             )
             if enable_YBS_Gamma_constraint_adjustment:
                 cache[CoordSystem_in] = rhs
-                cache_construction_parameters[CoordSystem_in] = (
-                    construction_parameters
-                )
+                cache_construction_parameters[CoordSystem_in] = construction_parameters
             else:
                 self.__setitem__(CoordSystem_in, rhs)
         return dict.__getitem__(cache, CoordSystem_in)
