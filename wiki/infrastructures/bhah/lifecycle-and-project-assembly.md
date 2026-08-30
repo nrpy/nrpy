@@ -91,8 +91,8 @@ conditional branches are not recorded.
 Generated `clean` is visible and bounded. Its one root cleanup recipe is not
 silenced, so Make prints one expanded `rm` command. That command removes the
 exact final target and root `.deps/`; `.o` and `.d` files at depths zero through
-two; and root `.txt`, `.gp`, `.dat`, `.out`, `.avi`, `.png`, and `.bin` files.
-It then invokes each registered subproject's `clean` with silent,
+two; and root `.txt`, `.gp`, `.dat`, `.out`, `.log`, `.avi`, `.png`, and `.bin`
+files. It then invokes each registered subproject's `clean` with silent,
 no-directory-printing Make flags. It preserves `.par`, unrelated suffixes,
 runtime-suffix files below the root, and `.o`/`.d` files at depth three or
 deeper. Cleanup uses explicit globs rather than `find`, recursive wildcards, a
