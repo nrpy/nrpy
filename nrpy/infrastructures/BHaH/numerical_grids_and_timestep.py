@@ -10,7 +10,7 @@ Author: Zachariah B. Etienne
 
 from inspect import currentframe as cfr
 from types import FrameType as FT
-from typing import Dict, List, Set, Tuple, Union, cast
+from typing import Dict, List, Optional, Set, Tuple, Union, cast
 
 import sympy as sp
 
@@ -317,6 +317,32 @@ def register_CFunction_ds_min_radial_like_dirns_single_pt(
     )
 
 
+def ds_min_single_pt_exprs(CoordSystem: str) -> Optional[List[sp.Expr]]:
+    """
+    Return physical grid-spacing expressions along all three coordinate lines.
+
+    :param CoordSystem: The coordinate system of the numerical grid.
+
+    :return: The three spacing expressions, or None for an unsupported
+        non-fisheye GeneralRFM coordinate system.
+    """
+    if CoordSystem.startswith("GeneralRFM") and not CoordSystem.startswith(
+        "GeneralRFM_fisheyeN"
+    ):
+        return None
+    rfm = refmetric.reference_metric[CoordSystem]
+    dxx = sp.symbols("dxx0 dxx1 dxx2", real=True)
+    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
+        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
+        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
+        # GeneralRFM fisheye coordinates are generally nonorthogonal. Measuring
+        # each coordinate-line tangent therefore uses sqrt(|ghat_ii|) dxx_i.
+        return [
+            sp.sqrt(sp.Abs(fisheye.ghatDD[i][i])) * sp.Abs(dxx[i]) for i in range(3)
+        ]
+    return [sp.Abs(rfm.scalefactor_orthog[i] * dxx[i]) for i in range(3)]
+
+
 def register_CFunction_ds_min_single_pt(
     CoordSystem: str,
 ) -> None:
@@ -358,20 +384,8 @@ def register_CFunction_ds_min_single_pt(
     cfunc_type = "void"
     name = "ds_min_single_pt"
     params = "const params_struct *restrict params, const REAL xx0, const REAL xx1, const REAL xx2, REAL *restrict ds_min"
-    rfm = refmetric.reference_metric[CoordSystem]
-    # These are set in CodeParameters.h
-    dxx0, dxx1, dxx2 = sp.symbols("dxx0 dxx1 dxx2", real=True)
-    if CoordSystem.startswith("GeneralRFM_fisheyeN"):
-        num_transitions = int(CoordSystem.replace("GeneralRFM_fisheyeN", ""))
-        fisheye = generalrfm_fisheye.build_fisheye(num_transitions)
-        # For fisheye GeneralRFM (generally non-orthogonal), this function still
-        # follows its contract: examine the three coordinate directions at a point.
-        expr_list = [
-            sp.sqrt(sp.Abs(fisheye.ghatDD[0][0])) * sp.Abs(dxx0),
-            sp.sqrt(sp.Abs(fisheye.ghatDD[1][1])) * sp.Abs(dxx1),
-            sp.sqrt(sp.Abs(fisheye.ghatDD[2][2])) * sp.Abs(dxx2),
-        ]
-    elif CoordSystem.startswith("GeneralRFM"):
+    expr_list = ds_min_single_pt_exprs(CoordSystem)
+    if expr_list is None:
         body = (
             f'fprintf(stderr, "ERROR in {name}__rfm__{CoordSystem}: ds_min for non-fisheye GeneralRFM is not yet supported.\\n");\n'
             "exit(1);\n"
@@ -387,12 +401,6 @@ def register_CFunction_ds_min_single_pt(
             body=body,
         )
         return
-    else:
-        expr_list = [
-            sp.Abs(rfm.scalefactor_orthog[0] * dxx0),
-            sp.Abs(rfm.scalefactor_orthog[1] * dxx1),
-            sp.Abs(rfm.scalefactor_orthog[2] * dxx2),
-        ]
     body = ccg.c_codegen(
         expr_list,
         ["const REAL ds0", "const REAL ds1", "const REAL ds2"],

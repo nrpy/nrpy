@@ -201,9 +201,9 @@ Claim evidence:
 - Claim: the opt-in implementation adds only `-YBS_chi*C^i*Theta`, maps the full-paper parameters by `YBS_chi=2*xi/3`, and provides conditional rather than uniform attenuation with the displayed lower-order propagation term.
 - Role: public/scientific contract
 - Deciding authority: [Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066v2](https://arxiv.org/pdf/gr-qc/0209066v2), Eq. (45); [Yo, Lin, and Cao, arXiv:1205.5111v2](https://arxiv.org/pdf/1205.5111v2), Eq. (47)
-- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`
-- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=not-applicable; tool_version=not-applicable; backend=SymPy expression construction inspected only; precision=exact rational source default; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=enabled and default-disabled source branches; date=08-28-2026`
+- Corroboration: [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py), `BSSNRHSs`; [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py), `BSSN_gauge_RHSs`; [BSSN_RHSs_Cartesian.py](../../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py), representative jointly enabled `trusted_dict`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction; precision=exact source plus 30-significant-digit deterministic trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=both YBS Gamma and YBS-MOM enabled jointly in all six BSSN RHS coordinate cases, with public defaults disabled; date=08-30-2026`
 
 For local diagnostics, `BSSNconstraints` also stores the direct conformal-metric
 contraction `LambdaConstraintSquared` and its plain square root
@@ -218,7 +218,10 @@ Claim evidence:
 - Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=SymPy expression construction and BHaH OpenMP C generation; precision=symbolic construction and 30-decimal-digit trusted sampling; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian and Spherical symbolic checks through the owner doctest plus six trusted-expression coordinate variants; date=08-28-2026`
 
 Representative trusted files pin the core RHS, quantity, and constraint
-dictionaries. Gauge validation is driven by the supported lapse and shift option
+dictionaries. All six BSSN RHS trusted cases jointly enable YBS Gamma and
+YBS-MOM, so they pin the changed `a_rhsDD` expressions and every other output
+already present in those dictionaries without separate option-combination files.
+Gauge validation is driven by the supported lapse and shift option
 names in `BSSN_gauge_RHSs`, while coordinate and reference-metric variants stay
 validation evidence rather than new page scope.
 
@@ -282,6 +285,7 @@ corresponding trusted files.
 
 - [General Relativity](index.md)
 - [Equations](../index.md)
+- [YBS-MOM Timestep-Scaled Momentum Adjustment](ybs-momentum-damping.md)
 - [Fully Covariant Conformal Z4](fccz4.md)
 - [Metric Conversions And Matter](metric-conversions-and-matter.md)
 - [Initial Data](initial-data.md)

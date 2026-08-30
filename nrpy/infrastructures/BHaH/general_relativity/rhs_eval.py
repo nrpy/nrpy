@@ -56,6 +56,7 @@ def register_CFunction_rhs_eval(
     validate_expressions: bool = False,
     enable_fCCZ4: bool = False,
     enable_YBS_Gamma_constraint_adjustment: bool = False,
+    enable_YBS_momentum_constraint_adjustment: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -78,6 +79,8 @@ def register_CFunction_rhs_eval(
     :param validate_expressions: Whether to validate generated sympy expressions against trusted values.
     :param enable_fCCZ4: Use fCCZ4 instead of BSSN evolution equations.
     :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
+    :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
+        Yo--Lin--Cao momentum-constraint adjustment.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -140,11 +143,30 @@ def register_CFunction_rhs_eval(
             commondata=True,
             add_to_parfile=True,
         )
+    if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
+        if "dsmin" not in gri.glb_gridfcs_dict:
+            _ = gri.register_gridfunctions(
+                "dsmin",
+                group="AUXEVOL",
+                gf_array_name="auxevol_gfs",
+            )
+    if enable_YBS_momentum_constraint_adjustment:
+        par.register_CodeParameter(
+            "REAL",
+            __name__,
+            "C_YBS_mom",
+            1.0,
+            commondata=True,
+            add_to_parfile=True,
+        )
     if enable_fCCZ4:
         fccz4_rhs = fCCZ4_RHSs.get_rhs(
             rhs_cache_key,
             enable_YBS_Gamma_constraint_adjustment=(
                 enable_YBS_Gamma_constraint_adjustment
+            ),
+            enable_YBS_momentum_constraint_adjustment=(
+                enable_YBS_momentum_constraint_adjustment
             ),
         )
         local_RHSs_varname_to_expr_dict = (
@@ -164,6 +186,7 @@ def register_CFunction_rhs_eval(
         bssn_rhs = BSSN_RHSs.get_rhs(
             rhs_cache_key,
             enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+            enable_YBS_momentum_constraint_adjustment=enable_YBS_momentum_constraint_adjustment,
         )
         local_RHSs_varname_to_expr_dict = bssn_rhs.BSSN_RHSs_varname_to_expr_dict.copy()
         alpha_rhs, vet_rhsU, bet_rhsU = BSSN_gauge_RHSs(
@@ -274,19 +297,17 @@ def register_CFunction_rhs_eval(
             + ("_RbarDD_gridfunctions" if enable_RbarDD_gridfunctions else "")
             + ("_T4munu" if enable_T4munu else "")
         ]
-        if "cahdprefactor" not in gri.glb_gridfcs_dict:
-            _ = gri.register_gridfunctions(
-                "cahdprefactor",
-                group="AUXEVOL",
-                gf_array_name="auxevol_gfs",
-            )
-        _C_CAHD = par.register_CodeParameter(
+        C_CAHD = par.register_CodeParameter(
             "REAL", __name__, "C_CAHD", 0.15, commondata=True, add_to_parfile=True
         )
-        # Initialize CAHD_term assuming phi is the evolved conformal factor. CFL_FACTOR is defined in MoL.
-        # CAHD_term = -C_CAHD * (sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")) * Bcon.H
-        # -> cahdprefactor = C_CAHD * sp.symbols("CFL_FACTOR") * sp.symbols("dsmin")
-        CAHD_term = -1 * sp.symbols("cahdprefactor") * Bcon.H
+        # Initialize CAHD_term assuming phi is the evolved conformal factor.
+        # CFL_FACTOR is defined in MoL; dsmin stores raw physical grid spacing.
+        CAHD_term = (
+            -C_CAHD
+            * sp.Symbol("CFL_FACTOR", real=True)
+            * sp.Symbol("dsmin", real=True)
+            * Bcon.H
+        )
         if EvolvedConformalFactor_cf == "phi":
             pass  # CAHD_term already assumes phi is the evolved conformal factor.
         elif EvolvedConformalFactor_cf == "W":
@@ -366,6 +387,11 @@ def register_CFunction_rhs_eval(
     param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
         expr_list, exclude=[f"xx{j}" for j in range(3)]
     )
+    if (
+        enable_CAHD or enable_YBS_momentum_constraint_adjustment
+    ) and "CFL_FACTOR" not in commondata_symbols:
+        commondata_symbols.append("CFL_FACTOR")
+        commondata_symbols.sort()
 
     arg_dict_cuda = {
         **arg_dict_cuda,
@@ -482,6 +508,8 @@ if __name__ == "__main__":
                     enable_CAKO=enable_Improvements,
                     enable_CAHD=enable_Improvements,
                     enable_SSL=enable_Improvements,
+                    enable_YBS_Gamma_constraint_adjustment=True,
+                    enable_YBS_momentum_constraint_adjustment=True,
                     validate_expressions=True,
                 )
                 ve.compare_or_generate_trusted_results(

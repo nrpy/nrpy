@@ -139,7 +139,7 @@ standard flow it runs after `INITIALDATA_BIN_TWO` and its outer-extrapolated
 plus inner BC application; in the NRPyElliptic flow it runs after the single
 `initial_data` call and before `send_wavespeed_at_outer_boundary(grid)`
 broadcasts the selected outer-boundary wavespeed. Current examples use this
-hook for CAHD prefactor setup and for setting NRPyElliptic auxiliary-evolution
+hook for shared raw `dsmin` setup used by CAHD and for setting NRPyElliptic auxiliary-evolution
 gridfunctions to constants.
 
 NRPyElliptic projects use a narrower superB integration path. The example
@@ -169,7 +169,7 @@ run was performed during this KB audit.
 - [MoL.py](../../../nrpy/infrastructures/superB/MoL.py) - `register_CFunctions`, `register_CFunction_MoL_step_forward_in_time`, `generate_rhs_output_exprs`, `generate_post_rhs_output_list`, `register_CFunction_MoL_sync_data_defines`
 - [initial_data.py](../../../nrpy/infrastructures/superB/initial_data.py) - `register_CFunction_initial_data`, `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_mol_step_forward_code`, `generate_send_neighbor_data_code`, `generate_process_ghost_code`, `generate_send_nonlocalinnerbc_data_code`, `generate_process_nonlocalinnerbc_code`, `output_timestepping_h_cpp_ci_register_CFunctions`
-- [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `cahdprefactor_auxevol_gridfunction`
+- [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py) - `post_non_y_n_auxevol_mallocs`, `dsmin_auxevol_gridfunction`
 - [superB_nrpyelliptic_conformally_flat.py](../../../nrpy/examples/superB_nrpyelliptic_conformally_flat.py) - `post_MoL_step_forward_in_time`, `rhs_string`, `register_CFunction_residual_H_compute_all_points`, `register_CFunction_stop_conditions_check`
 - [superB_two_blackholes_collide.py](../../../nrpy/examples/superB_two_blackholes_collide.py) - opt-in conformal projection in initial-data and Method of Lines registration
 - [rhs_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py) - shared BHaH BSSN/fCCZ4 and YBS option boundary used by superB

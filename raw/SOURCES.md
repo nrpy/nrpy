@@ -25,6 +25,7 @@
 | --- | --- | --- | --- |
 | `raw/source-docs/original-agents.md` | Previous root agent instructions, preserved byte-for-byte before replacing `AGENTS.md`. Its root style-guide reference is superseded; see the source map row for current routing. | frozen | ingested |
 | `raw/source-docs/kb-instructions.md` | KB schema and governance source moved from the repository root. | frozen | ingested |
+| `raw/source-docs/ybs-momentum-damping-spec.md` | Superseded commissioned YBS-MOM auxiliary-relaxation proposal preserved as historical input. See CONTR-0007 and the current YBS-MOM page for governing behavior. | frozen | ingested |
 
 ## Cited Code And Config Sources
 
@@ -107,6 +108,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py` | living |
 | `nrpy/infrastructures/BHaH/general_relativity/initial_data.py` | living |
 | `nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py` | living |
 | `nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/BHaH/simple_loop.py` | living |
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
@@ -363,7 +365,8 @@ aggregate rows and `wiki/source-map.md`.
 | `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | 07-27-2026 | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
 | `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | 07-28-2026 | ingested | Deciding source for the covariant conformal connection constraint in Eqs. (12a), (12b), and (15); it does not prescribe the local conformal-metric norm diagnostic. |
 | `https://arxiv.org/pdf/gr-qc/0209066v2` | Version-pinned v2 PDF for Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066. | frozen | 08-28-2026 | ingested | Deciding source for the full Gamma-constraint adjustment coefficient in Eq. (45); current NRPy already owns the baseline `2/3` contribution and therefore adds only the incremental `chi` term. |
-| `https://arxiv.org/pdf/1205.5111v2` | Version-pinned v2 PDF for Yo, Lin, and Cao, arXiv:1205.5111. | frozen | 08-28-2026 | ingested | Deciding source for the Eq. (47) `xi` parameterization; comparison with the earlier full coefficient gives NRPy's incremental mapping `chi=2*xi/3`. |
+| `https://arxiv.org/pdf/1205.5111v2` | Version-pinned v2 PDF for Yo, Lin, and Cao, arXiv:1205.5111. | frozen | 08-28-2026 | ingested | Deciding source for the Eq. (47) `xi` parameterization and Eq. (56) direct covariant STF momentum-gradient adjustment; comparison with the earlier full Gamma coefficient gives NRPy's incremental mapping `chi=2*xi/3`. |
+| `https://doi.org/10.1103/PhysRevD.110.064045` | Published article for Etienne, Phys. Rev. D 110, 064045 (2024). | frozen | 08-30-2026 | ingested | Deciding source for the CAHD level-local CFL/grid-spacing scaling pattern transferred to YBS-MOM; CAHD itself remains parabolic. |
 | `https://arxiv.org/pdf/1106.2254v2` | Version-pinned v2 PDF for Alic et al., arXiv:1106.2254. | frozen | 08-25-2026 | ingested | Corroborating source for covariant CCZ4, the `kappa3=1` covariance choice, the one-stretch Cartesian connection composition, and the exact advective 1+log formula in Eq. (20). |
 | `https://arxiv.org/pdf/1403.3653v1` | Version-pinned v1 PDF for Sanchis-Gual et al., arXiv:1403.3653. | frozen | 08-25-2026 | ingested | Corroborating source for reference-metric fCCZ4 variables, constraints, gauge equations, reduction to BSSN, and one connection stretch. Its general display retains a geometric divergence coefficient while spherical Eq. (3.14) contains the compatible Z4 divergence promotion, so the two are not an unqualified full off-constraint cross-check. |
 | `https://arxiv.org/pdf/2002.06225v2` | Version-pinned v2 PDF for Mewes et al., arXiv:2002.06225. | frozen | 08-25-2026 | ingested | Principal scientific specification for NRPy's three-dimensional reference-metric fCCZ4 variables, Ricci tensor, evolution equations, gauge, and matter projections in Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). Its printed connection shift bracket contains an apparent convention error under its own full-Lie time-operator definition; NRPy documents and corrects the duplicated constraint-vector stretch. |

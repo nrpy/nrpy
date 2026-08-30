@@ -271,7 +271,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -474,8 +474,8 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = r"""for (int grid = 0; grid < commondata.NUMGRIDS; grid++)
-  cahdprefactor_auxevol_gridfunction(
-      &commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,
+  dsmin_auxevol_gridfunction(
+      &griddata_chare[grid].params, griddata_chare[grid].xx,
       griddata_chare[grid].gridfuncs.auxevol_gfs);
 """
 
