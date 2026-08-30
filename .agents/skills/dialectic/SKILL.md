@@ -1,6 +1,6 @@
 ---
 name: dialectic
-description: Use two fresh-context independent agents to create or improve files, cross-critique complete drafts, synthesize and validate one candidate, and install it only after unanimous approval. Invoke for “engage dialectic,” “use dialectic,” “run dialectic,” two-agent consensus editing, or paired independent review. In NRPy, KB work uses the review-only workflow defined below.
+description: Two fresh-context independent agents create/improve files; cross-critique complete drafts; synthesize and validate one candidate; install only after unanimous approval. Invoke for “engage dialectic,” “use dialectic,” “run dialectic,” two-agent consensus editing, or paired independent review. NRPy KB work uses review-only workflow below.
 ---
 
 # Dialectic

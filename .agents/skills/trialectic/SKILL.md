@@ -1,6 +1,6 @@
 ---
 name: trialectic
-description: Use three fresh-context independent agents to create or improve files, cross-critique complete drafts, synthesize and validate one candidate, and install it only after unanimous approval. Invoke for “engage tri,” “use tri,” “run tri,” “trialectic,” three-agent consensus editing, or rigorous independent review. In NRPy, KB work uses the review-only workflow defined below.
+description: Three fresh-context independent agents create/improve files; cross-critique complete drafts; synthesize and validate one candidate; install only after unanimous approval. Invoke for “engage tri,” “use tri,” “run tri,” “trialectic,” three-agent consensus editing, or rigorous independent review. NRPy KB work uses review-only workflow below.
 ---
 
 # Trialectic
