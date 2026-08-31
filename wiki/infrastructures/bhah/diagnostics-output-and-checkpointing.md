@@ -1,6 +1,6 @@
 # Diagnostics Output And Checkpointing
 
-> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 08-28-2026
+> Explain BHaH diagnostics scheduling, temporary diagnostic buffers, raytracing export, progress output, and checkpoint/restart files. Status: confirmed. Last reconciled: 08-31-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -166,15 +166,9 @@ owned interiors, buffer-zone points, and outer-boundary points; otherwise every
 point is selected. MoL intermediate-stage storage is freed before compacting and
 reallocated after the grid payload is written.
 
-Current `BHaH` package aggregation and updated checkpoint-using examples use
-the split owners. The tracked `checkpointing.py` nevertheless remains directly
-importable and still defines its own older reader, writer, and combined
-`register_CFunctions` wrapper; that old writer independently registers another
-`checkpoint_every` owner. The module is not a forwarding or deprecation shim,
-and its reader lacks the split reader's checks described below. Explicit legacy
-submodule imports can therefore still reach a duplicate, less-hardened
-implementation; no equivalence, compatibility, or current-canonical guarantee
-applies to that direct-import path.
+The `BHaH` package aggregation and checkpoint-using examples use the split
+owners. The superseded combined `checkpointing.py` module has been removed, so
+the package exposes no duplicate legacy checkpoint registrar.
 
 `read_checkpoint()` returns `0` when the named checkpoint file does not exist.
 After reading `commondata`, it requires `NUMGRIDS` in `1..MAXNUMGRIDS`. With
@@ -220,12 +214,12 @@ them from the checkpoint, preserving horizon-history data without reusing old
 process pointer values.
 
 Claim evidence:
-- Claim: Package aggregation and updated examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every` for that path; split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee; direct import of retained `checkpointing.py` still reaches an older duplicate whose writer independently registers `checkpoint_every` and which has no forwarding, deprecation, equivalence, compatibility, or current-canonical guarantee.
+- Claim: Package aggregation and checkpoint-using examples use separate checkpoint reader/writer registrars, with split writer owning `checkpoint_every`; no duplicate legacy checkpoint registrar remains in the package. Split reader requires valid `NUMGRIDS`, BHaHAHA capacities and finest-resolution index, positive overflow-safe dimensions/products, representable evolved-gridfunction and allocation counts, bounded strictly increasing serialized point indices, checked ordinary host allocations, zero-count-safe reads, and `size_t` scatter offsets, while split writer provides no matching BHaHAHA validation-order, capacity, or overflow guarantee.
 - Role: descriptive behavior
-- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/checkpointing.py::register_CFunctions`
-- Corroboration: `nrpy/infrastructures/BHaH/__init__.py` package import list and representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, direct-import, or restart paths
+- Deciding authority: registered primary code `nrpy/infrastructures/BHaH/read_checkpoint.py::register_CFunction_read_checkpoint`, `nrpy/infrastructures/BHaH/write_checkpoint.py::register_CFunction_write_checkpoint`, and `nrpy/infrastructures/BHaH/__init__.py` package import list
+- Corroboration: representative `nrpy/examples/blackhole_spectroscopy.py` split registrar calls; no independent registered test exercises malformed-input, allocation-failure, or restart paths
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
-- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=07-20-2026`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, clang-format 22.1.8; backend=OpenMP C and CUDA source; precision=not-applicable; GPU=not-run; restart=not-run; distributed=not-applicable; error_path=not-run; options=default reader source baselines plus BHaHAHA reader source inspection; date=08-31-2026`
 
 Validation here is source-inspection scoped. Current Ubuntu/macOS codegen jobs
 generate and build default BHaH examples without running a write/restart/read
@@ -260,7 +254,6 @@ variants, GPU execution, or runtime results.
 - [BHaH package initializer](../../../nrpy/infrastructures/BHaH/__init__.py) - package import list for `read_checkpoint` and `write_checkpoint`
 - [read_checkpoint.py](../../../nrpy/infrastructures/BHaH/read_checkpoint.py) - `register_CFunction_read_checkpoint`
 - [write_checkpoint.py](../../../nrpy/infrastructures/BHaH/write_checkpoint.py) - `register_CFunction_write_checkpoint`
-- [checkpointing.py](../../../nrpy/infrastructures/BHaH/checkpointing.py) - retained `register_CFunction_read_checkpoint`, `register_CFunction_write_checkpoint`, `register_CFunctions`
 - [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
 - [two_blackholes_collide.py](../../../nrpy/examples/two_blackholes_collide.py) - `BHaH.diagnostics.diagnostic_gfs_h_create.diagnostics_gfs_h_create`, `BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator`
 - [SOURCES.md](../../../raw/SOURCES.md) - `infrastructure-modules-and-embedded-headers`
