@@ -103,7 +103,7 @@ calculations, norm evaluations, and detailed final iteration analyses.
       const int Nxx_plus_2NGHOSTS2 = griddata[0].params.Nxx_plus_2NGHOSTS2;
 
       // Perform interpolation on the source grid using radial spokes.
-      commondata->error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+      bah_interpolation_1d_radial_spokes_on_3d_src_grid(
           &griddata[0].params, commondata, &griddata[0].gridfuncs.y_n_gfs[IDX4(HHGF, 0, 0, 0)], griddata[0].gridfuncs.auxevol_gfs);
 
       // Exit diagnostics if interpolation fails.

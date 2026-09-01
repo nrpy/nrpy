@@ -293,11 +293,10 @@ Computes proper circumferences along the equator and polar directions for appare
 
     // Interpolate sqrt(q_{phi phi}) values onto the equator points to compute the circumference;
     //   note that sqrt(q_{phi phi}) is stored in metric_data_gfs[IDX4(1,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(1, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return commondata->error_flag;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;
@@ -333,11 +332,10 @@ Computes proper circumferences along the equator and polar directions for appare
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (xz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return commondata->error_flag;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;
@@ -373,11 +371,10 @@ Computes proper circumferences along the equator and polar directions for appare
 
     // Interpolate sqrt(q_{theta theta}) values onto the polar (yz-plane) points to compute the circumference;
     //   note that sqrt(q_{theta theta}) is stored in metric_data_gfs[IDX4(0,...)]
-    const int error =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
-                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference);
-    if (error != BHAHAHA_SUCCESS)
-      return error;
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, dxx1, dxx2, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, griddata[grid].xx,
+                                                       &metric_data_gfs[IDX4pt(0, 0)], N_angle, dst_pts, circumference, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS)
+      return commondata->error_flag;
 
     // Retrieve integration weights for numerical integration over the sampled points.
     const REAL *restrict weights;

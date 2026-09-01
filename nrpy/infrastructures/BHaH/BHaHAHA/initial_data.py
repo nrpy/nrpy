@@ -47,7 +47,7 @@ def register_CFunction_initial_data() -> None:
     bah_interpolation_2d_general__uniform_src_grid(NGHOSTS, commondata->coarse_horizon_dxx1, commondata->coarse_horizon_dxx2,
                                                    commondata->coarse_horizon_Nxx_plus_2NGHOSTS1, commondata->coarse_horizon_Nxx_plus_2NGHOSTS2,
                                                    commondata->coarse_horizon_r_theta_phi, commondata->coarse_horizon, num_dst_pts, dst_pts,
-                                                   coarse_to_fine);
+                                                   coarse_to_fine, &commondata->error_flag);
     free(dst_pts);
     free(commondata->coarse_horizon);
     for (int ii = 0; ii < 3; ii++)

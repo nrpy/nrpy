@@ -50,12 +50,48 @@ def register_CFunction_interpolation_2d_general__uniform_src_grid(
 #ifndef REAL
 #define REAL double
 #endif
-#define DEBUG
+//#define DEBUG
 
 #ifdef STANDALONE
 // Remove the bah_ prefix if compiling as a standalone code, as this function goes by other names in other codes.
 #define bah_interpolation_2d_general__uniform_src_grid interpolation_2d_general__uniform_src_grid
 #endif
+
+// LOOP_OMP: Similar to LOOP_REGION but inserts an OpenMP pragma (via __OMP_PRAGMA__) for parallelization.
+#define LOOP_OMP(__OMP_PRAGMA__, i0, i0min, i0max, i1, i1min, i1max, i2, i2min, i2max)                                                               \
+  _Pragma(__OMP_PRAGMA__) for (int(i2) = (i2min); (i2) < (i2max); (i2)++) for (int(i1) = (i1min); (i1) < (i1max);                                    \
+                                                                               (i1)++) for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+
+
+// CUDA_3D_LOOP: Similar to LOOP_OMP, in practice, but different in structure, uses threads of a 1D CUDA block structure to evaluate a 3D "loop"
+#define CUDA_3D_LOOP(i0, i0_min, i0_max, i1, i1_min, i1_max, i2, i2_min, i2_max) \
+  for (int j = 0; j < ( (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min) )/(blockDim.x*gridDim.x) + 1; j++) { \
+    int threadIndex = (blockIdx.x * blockDim.x + threadIdx.x) + j*blockDim.x*gridDim.x;\
+    if (threadIndex < (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min)) { \
+            int i0 = threadIndex / ((i2_max - i2_min)*(i1_max-i1_min)); \
+            int i1 = (threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0)/ (i2_max-i2_min); \
+            int i2 = threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0 - (i2_max-i2_min)*i1; \
+            i0 += i0_min; \
+            i1 += i1_min; \
+            i2 += i2_min;
+
+#define END_CUDA_3D_LOOP }}
+
+
+// PARALLEL_LOOP: Calls either LOOP_OMP(omp parallel for", ...) or CUDA_3D LOOP chosen at compile time. Because of the slightly more complex nature of the bracketing for CUDA_3D_LOOPs, it MUST be paired with an END_PARALLEL_LOOP macro.
+#ifdef __CUDACC__
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    CUDA_3D_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)
+  #define END_PARALLEL_LOOP END_CUDA_3D_LOOP
+#else
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    LOOP_OMP("omp parallel for",(macro_i0), (macro_i0min), (macro_i0max), (macro_i1), (macro_i1min), (macro_i1max), (macro_i2), (macro_i2min), (macro_i2max)) {
+  #define END_PARALLEL_LOOP }
+#endif
+
+#define PARALLEL_1D_LOOP(macro_i0, macro_i0_min, macro_i0_max) \
+   PARALLEL_LOOP((macro_i0), (macro_i0_min), (macro_i0_max), macro_i1, 0, 1, macro_i2, 0, 1)
+#define END_PARALLEL_1D_LOOP END_PARALLEL_LOOP
 
 // In case this code is compiled as C++:
 #ifdef __cplusplus
@@ -98,13 +134,23 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
 - Assumes that the source and destination grids are uniform in theta and phi directions.
 - Ensures that destination points lie within the bounds of the source grid to prevent memory access violations.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "interpolation_2d_general__uniform_src_grid"
     params = """const int n_interp_ghosts, const REAL src_dxx1, const REAL src_dxx2,
                 const int src_Nxx_plus_2NGHOSTS1, const int src_Nxx_plus_2NGHOSTS2,
                 REAL *restrict src_r_theta_phi[3], const REAL *restrict src_gf, const int num_dst_pts,
-                const REAL dst_pts[][2], REAL *restrict dst_data"""
+                const REAL dst_pts[][2], REAL *restrict dst_data, int *error_flag"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__device__
+#endif
+"""
     body = r"""
+  #ifdef __CUDACC__
+  // Set up shared memory
+  extern __shared__ REAL s[];
+  #endif
+
   // Define the interpolation order based on the number of ghost zones.
   const int INTERP_ORDER = (2 * n_interp_ghosts + 1); // Interpolation order corresponds to the number of points in the stencil per dimension.
 
@@ -116,26 +162,41 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
   const REAL src_invdxx12_INTERP_ORDERm1 = pow(src_dxx1 * src_dxx2, -(INTERP_ORDER - 1));
 
   // Validate input pointers to prevent segmentation faults.
-  if (src_r_theta_phi[1] == NULL || src_r_theta_phi[2] == NULL || src_gf == NULL || dst_data == NULL)
-    return INTERP2D_GENERAL_NULL_PTRS; // Exit if any required pointer is NULL.
+  if (src_r_theta_phi[1] == NULL || src_r_theta_phi[2] == NULL || src_gf == NULL || dst_data == NULL) {
+#ifdef __CUDACC__
+    bhahaha_gpu_set_error(error_flag, INTERP2D_GENERAL_NULL_PTRS);
+#else
+    *error_flag = INTERP2D_GENERAL_NULL_PTRS;
+#endif
+    return; // Exit if any required pointer is NULL.
+  }
 
   // Ensure that the interpolation order does not exceed the grid dimensions in either direction.
-  if (INTERP_ORDER > src_Nxx_plus_2NGHOSTS1 || INTERP_ORDER > src_Nxx_plus_2NGHOSTS2)
-    return INTERP2D_GENERAL_INTERP_ORDER_GT_NXX_PLUS_2NGHOSTS12; // Exit if interpolation order is too high.
+  if (INTERP_ORDER > src_Nxx_plus_2NGHOSTS1 || INTERP_ORDER > src_Nxx_plus_2NGHOSTS2) {
+#ifdef __CUDACC__
+    bhahaha_gpu_set_error(error_flag, INTERP2D_GENERAL_INTERP_ORDER_GT_NXX_PLUS_2NGHOSTS12);
+#else
+    *error_flag = INTERP2D_GENERAL_INTERP_ORDER_GT_NXX_PLUS_2NGHOSTS12;
+#endif
+    return; // Exit if interpolation order is too high.
+  }
 
   // Precompute inverse denominators for Lagrange interpolation coefficients to reduce redundant calculations.
+#ifdef __CUDACC__
+  REAL *inv_denom = &s[0];
+  if (threadIdx.x == 0)
+    compute_inv_denom(INTERP_ORDER, inv_denom);
+  __syncthreads();
+#else
   REAL inv_denom[INTERP_ORDER];
   compute_inv_denom(INTERP_ORDER, inv_denom);
+#endif
 
   // Define the minimum coordinate values including ghost zones for both theta and phi.
   const REAL xxmin_incl_ghosts1 = src_r_theta_phi[1][0];
   const REAL xxmin_incl_ghosts2 = src_r_theta_phi[2][0];
 
-  // Initialize the error flag to track any interpolation issues.
-  int error_flag = BHAHAHA_SUCCESS;
-
-#pragma omp parallel for
-  for (int dst_pt = 0; dst_pt < num_dst_pts; dst_pt++) {
+  PARALLEL_1D_LOOP(dst_pt, 0, num_dst_pts) {
     const REAL theta_dst = dst_pts[dst_pt][0]; // Destination point's theta coordinate.
     const REAL phi_dst = dst_pts[dst_pt][1];   // Destination point's phi coordinate.
 
@@ -159,66 +220,96 @@ to a set of arbitrary destination points using Lagrange interpolation of a speci
                 idx_center_ph - n_interp_ghosts, idx_center_ph + n_interp_ghosts);
         fprintf(stderr, "Ensure that the destination point is within grid bounds or adjust the interpolation stencil.\n");
 #endif // DEBUG
-#pragma omp critical
         {
-          error_flag = INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS; // Set error flag if stencil is out of bounds.
+#ifdef __CUDACC__
+          bhahaha_gpu_set_error(error_flag, INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS);
+#else
+          *error_flag = INTERP2D_GENERAL_HORIZON_OUT_OF_BOUNDS; // Set error flag if stencil is out of bounds.
+#endif
         }
-        continue; // Skip interpolation for this destination point to prevent invalid memory access.
-      } // END IF: theta/phi stencil exceeded source-grid bounds
+#ifndef __CUDACC__
+      continue; // Skip interpolation for this destination point to prevent invalid memory access.
+#endif
+      } // END IF: Check stencil boundaries.
 
       // Additional sanity checks to ensure central index is correctly positioned.
 #ifdef DEBUG
-      const REAL TOLERANCE = 1e-13; // Tolerance to account for floating-point precision.
-      if (fabs(src_r_theta_phi[1][idx_center_th] - theta_dst) > src_dxx1 * (0.5 + TOLERANCE)) {
-        fprintf(stderr, "ERROR: theta center index too far from destination point! %.15e > %.15e\n",
-                fabs(src_r_theta_phi[1][idx_center_th] - theta_dst), src_dxx1 * (0.5 + TOLERANCE));
-      }
-      if (fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst) > src_dxx2 * (0.5 + TOLERANCE)) {
-        fprintf(stderr, "ERROR: phi center index too far from destination point! %.15e > %.15e\n", fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst),
-                src_dxx2 * (0.5 + TOLERANCE));
-      } // END IF: Central index is properly centered
+    if (*error_flag == BHAHAHA_SUCCESS) {
+        const REAL TOLERANCE = 1e-13; // Tolerance to account for floating-point precision.
+        if (fabs(src_r_theta_phi[1][idx_center_th] - theta_dst) > src_dxx1 * (0.5 + TOLERANCE)) {
+          fprintf(stderr, "ERROR: theta center index too far from destination point! %.15e > %.15e\n",
+                  fabs(src_r_theta_phi[1][idx_center_th] - theta_dst), src_dxx1 * (0.5 + TOLERANCE));
+        }
+        if (fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst) > src_dxx2 * (0.5 + TOLERANCE)) {
+          fprintf(stderr, "ERROR: phi center index too far from destination point! %.15e > %.15e\n", fabs(src_r_theta_phi[2][idx_center_ph] - phi_dst),
+                  src_dxx2 * (0.5 + TOLERANCE));
+        } // END IF: Central index is properly centered
+      } //END IF: Sanity checks after bound checks
 #endif // DEBUG
-    } // END BLOCK: theta/phi stencil bounds and center-index sanity checks
+    } // END SANITY CHECKS: Ensure stencil is valid and central index is correct.
 
-    // Calculate the starting indices for the interpolation stencil in theta and phi directions.
-    const int base_idx_th = idx_center_th - n_interp_ghosts;
-    const int base_idx_ph = idx_center_ph - n_interp_ghosts;
-
-    // Step 1: Precompute differences between destination theta and source grid theta points within the stencil.
-    REAL diffs_th[INTERP_ORDER], diffs_ph[INTERP_ORDER];
-    compute_diffs_xi(INTERP_ORDER, theta_dst, &src_r_theta_phi[1][base_idx_th], diffs_th);
-    compute_diffs_xi(INTERP_ORDER, phi_dst, &src_r_theta_phi[2][base_idx_ph], diffs_ph);
-
-    // Step 2: Precompute combined Lagrange coefficients to reduce computations
-    REAL lagrange_basis_coeffs_th[INTERP_ORDER], lagrange_basis_coeffs_ph[INTERP_ORDER];
-    compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_th, lagrange_basis_coeffs_th);
-    compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_ph, lagrange_basis_coeffs_ph);
-    REAL coeff_2d[INTERP_ORDER][INTERP_ORDER];
-    for (int iph = 0; iph < INTERP_ORDER; iph++) {
-      const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
-      for (int ith = 0; ith < INTERP_ORDER; ith++) {
-        coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
-      } // END LOOP: for ith over theta stencil
-    } // END LOOP: for iph over phi stencil
-
-    // Define a macro to calculate the flattened index for accessing the source grid function.
+    // Skip interpolation for this destination point to prevent invalid memory access.
+    if (*error_flag == BHAHAHA_SUCCESS) {
+      // Calculate the starting indices for the interpolation stencil in theta and phi directions.
+      const int base_idx_th = idx_center_th - n_interp_ghosts;
+      const int base_idx_ph = idx_center_ph - n_interp_ghosts;
+  
+      // Step 1: Precompute differences between destination theta and source grid theta points within the stencil.
+#ifdef __CUDACC__
+      REAL *diffs_th = &s[INTERP_ORDER + (0*blockDim.x + threadIdx.x)*INTERP_ORDER]; 
+      REAL *diffs_ph = &s[INTERP_ORDER + (1*blockDim.x + threadIdx.x)*INTERP_ORDER];
+#else
+      REAL diffs_th[INTERP_ORDER], diffs_ph[INTERP_ORDER];
+#endif
+      compute_diffs_xi(INTERP_ORDER, theta_dst, &src_r_theta_phi[1][base_idx_th], diffs_th);
+      compute_diffs_xi(INTERP_ORDER, phi_dst, &src_r_theta_phi[2][base_idx_ph], diffs_ph);
+  
+      // Step 2: Precompute combined Lagrange coefficients to reduce computations
+#ifdef __CUDACC__
+      REAL *lagrange_basis_coeffs_th = &s[INTERP_ORDER + (2*blockDim.x + threadIdx.x)*INTERP_ORDER];
+      REAL *lagrange_basis_coeffs_ph = &s[INTERP_ORDER + (3*blockDim.x + threadIdx.x)*INTERP_ORDER];
+#else
+      REAL lagrange_basis_coeffs_th[INTERP_ORDER], lagrange_basis_coeffs_ph[INTERP_ORDER];
+#endif
+      compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_th, lagrange_basis_coeffs_th);
+      compute_lagrange_basis_coeffs_xi(INTERP_ORDER, inv_denom, diffs_ph, lagrange_basis_coeffs_ph);
+#ifdef __CUDACC__
+      REAL *coeff_2d = &s[INTERP_ORDER + (4*blockDim.x)*INTERP_ORDER + threadIdx.x*INTERP_ORDER*INTERP_ORDER];
+#else
+      REAL coeff_2d[INTERP_ORDER][INTERP_ORDER];
+#endif
+      for (int iph = 0; iph < INTERP_ORDER; iph++) {
+        const REAL coeff_ph_i = lagrange_basis_coeffs_ph[iph];
+        for (int ith = 0; ith < INTERP_ORDER; ith++) {
+#ifdef __CUDACC__
+          coeff_2d[INTERP_ORDER*iph + ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
+#else
+          coeff_2d[iph][ith] = coeff_ph_i * lagrange_basis_coeffs_th[ith];
+#endif
+        } // END LOOP over theta
+      } // END LOOP over phi
+  
+      // Define a macro to calculate the flattened index for accessing the source grid function.
 #define SRC_IDX2(j, k) ((j) + src_Nxx_plus_2NGHOSTS1 * (k))
-      // Step 3: Perform the 1D Lagrange interpolation along the radial direction.
-    REAL sum = 0.0;
-
-    for (int iph = 0; iph < INTERP_ORDER; iph++) {
-      const int idx_ph = base_idx_ph + iph;
-      const int base_offset = base_idx_th + src_Nxx_plus_2NGHOSTS1 * idx_ph;
-
-      sum += sum_lagrange_x0_simd(INTERP_ORDER, &src_gf[base_offset], &coeff_2d[iph][0]);
-    } // END LOOP: for iph over phi direction
-
-    // Store the interpolated value for this grid function and destination point.
-    dst_data[dst_pt] = sum * src_invdxx12_INTERP_ORDERm1;
-
-  } // END LOOP: for dst_pt over destination points
-
-  return error_flag; // Return the status of the interpolation process.
+        // Step 3: Perform the 1D Lagrange interpolation along the radial direction.
+      REAL sum = 0.0;
+  
+      for (int iph = 0; iph < INTERP_ORDER; iph++) {
+        const int idx_ph = base_idx_ph + iph;
+        const int base_offset = base_idx_th + src_Nxx_plus_2NGHOSTS1 * idx_ph;
+  
+#ifdef __CUDACC__
+        sum += sum_lagrange_x0_simd(INTERP_ORDER, &src_gf[base_offset], &coeff_2d[iph*INTERP_ORDER]);
+#else
+        sum += sum_lagrange_x0_simd(INTERP_ORDER, &src_gf[base_offset], &coeff_2d[iph][0]);
+#endif
+      } // END LOOP phi direction
+  
+      // Store the interpolated value for this grid function and destination point.
+      dst_data[dst_pt] = sum * src_invdxx12_INTERP_ORDERm1;
+    
+    } //END IF: Successfully interpolated points. 
+  } END_PARALLEL_1D_LOOP // END LOOP: Interpolate all destination points.
 """
     postfunc = r"""
 #pragma GCC reset_options // Reset compiler optimizations after the function.
@@ -477,6 +568,7 @@ cleanup:
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
         postfunc=postfunc,
     )

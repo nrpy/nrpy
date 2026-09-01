@@ -508,12 +508,11 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
 
   {
     // Interpolate precomputed equator integrand f_eq onto the alpha-midpoints.
-    int err =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
-                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_feq, N_angle, dst_pts, integrand);
-    if (err != BHAHAHA_SUCCESS) {
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
+                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_feq, N_angle, dst_pts, integrand, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
-      return err;
+      return commondata->error_flag;
     } // END IF: equatorial-integrand interpolation failed
   } // END BLOCK: interpolate equatorial integrand onto great-circle samples
 
@@ -535,12 +534,11 @@ Precomputation strategy on the (theta,phi) grid at fixed i0=NGHOSTS:
 
   {
     // Interpolate precomputed polar integrand f_pol onto the alpha-midpoints.
-    int err =
-        bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
-                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_fpol, N_angle, dst_pts, integrand);
-    if (err != BHAHAHA_SUCCESS) {
+    bah_interpolation_2d_general__uniform_src_grid(NinterpGHOSTS, griddata[grid].params.dxx1, griddata[grid].params.dxx2, Nxx_plus_2NGHOSTS1,
+                                                       Nxx_plus_2NGHOSTS2, (REAL *restrict *)(*coords), src_fpol, N_angle, dst_pts, integrand, &commondata->error_flag);
+    if (commondata->error_flag != BHAHAHA_SUCCESS) {
       free(metric_data_gfs);
-      return err;
+      return commondata->error_flag;
     } // END IF: polar-integrand interpolation failed
   } // END BLOCK: interpolate polar integrand onto great-circle samples
 

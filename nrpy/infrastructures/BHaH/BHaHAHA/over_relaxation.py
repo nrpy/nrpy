@@ -69,7 +69,7 @@ by enforcing partial_t h = 0.
   // Attempt over-relaxation every relax_every_nn iterations, provided t_p is valid.
   if (commondata->nn >= 3 * relax_every_nn && commondata->nn % relax_every_nn == 0 && commondata->time_of_h_p != 0) {
     // Interpolate data on the source grid using radial spokes for extrapolation.
-    commondata->error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+    bah_interpolation_1d_radial_spokes_on_3d_src_grid(
         &griddata[0].params, commondata, &griddata[0].gridfuncs.y_n_gfs[IDX4pt(HHGF, 0)], griddata[0].gridfuncs.auxevol_gfs);
 
     // Compute horizon diagnostics (area, centroid, and Theta norms).
@@ -93,7 +93,7 @@ by enforcing partial_t h = 0.
       } // END LOOP: for i0/i1/i2 over overstep gridpoints
 
       // Recompute diagnostics after applying the overstep.
-      commondata->error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+      bah_interpolation_1d_radial_spokes_on_3d_src_grid(
           &griddata[0].params, commondata, &griddata[0].gridfuncs.y_n_gfs[IDX4pt(HHGF, 0)], griddata[0].gridfuncs.auxevol_gfs);
 
       if (commondata->error_flag == 0) {
@@ -137,7 +137,7 @@ by enforcing partial_t h = 0.
     // Since over-relaxation was successful, we need to update the surface on which the metric
     //    is interpolated, and the CFL-limited timestep.
     // Interpolate metric to over-relaxed surface.
-    commondata->error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+    bah_interpolation_1d_radial_spokes_on_3d_src_grid(
         &griddata[0].params, commondata, &griddata[grid].gridfuncs.y_n_gfs[IDX4pt(HHGF, 0)], griddata[0].gridfuncs.auxevol_gfs);
     // Update the timestep based on the CFL condition on the current surface.
     bah_cfl_limited_timestep_based_on_h_equals_r(commondata, griddata);

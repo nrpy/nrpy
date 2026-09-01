@@ -365,6 +365,22 @@ def _register_grid_defines(enable_rfm_precompute: bool) -> None:
   for (int(i2) = (i2min); (i2) < (i2max); (i2)++)                                                                                                    \
     for (int(i1) = (i1min); (i1) < (i1max); (i1)++)                                                                                                  \
       for (int(i0) = (i0min); (i0) < (i0max); (i0)++)
+
+// CUDA_3D_LOOP: Similar to LOOP_OMP, in practice, but different in structure, uses threads of a 1D CUDA block structure to evaluate a 3D "loop"
+#define CUDA_3D_LOOP(i0, i0_min, i0_max, i1, i1_min, i1_max, i2, i2_min, i2_max) \
+  for (int j = 0; j < ( (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min) )/(blockDim.x*gridDim.x) + 1; j++) { \
+    int threadIndex = (blockIdx.x * blockDim.x + threadIdx.x) + j*blockDim.x*gridDim.x;\
+    if (threadIndex < (i0_max - i0_min)*(i1_max-i1_min)*(i2_max - i2_min)) { \
+            int i0 = threadIndex / ((i2_max - i2_min)*(i1_max-i1_min)); \
+            int i1 = (threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0)/ (i2_max-i2_min); \
+            int i2 = threadIndex - ((i2_max - i2_min)*(i1_max-i1_min))*i0 - (i2_max-i2_min)*i1; \
+            i0 += i0_min; \
+            i1 += i1_min; \
+            i2 += i2_min;
+
+#define END_CUDA_3D_LOOP }}
+
+
 // LOOP_BREAKOUT: Forces an exit from the nested loops by setting the loop indices to their maximum values and executing a break.
 #define LOOP_BREAKOUT(i0, i1, i2, i0max, i1max, i2max)                                                                                               \
   {                                                                                                                                                  \
@@ -373,6 +389,26 @@ def _register_grid_defines(enable_rfm_precompute: bool) -> None:
     i2 = (i2max);                                                                                                                                    \
     break;                                                                                                                                           \
   }
+
+// PARALLEL_LOOP: Calls either LOOP_OMP(omp parallel for", ...) or CUDA_3D LOOP chosen at compile time. Because of the slightly more complex nature of the bracketing for CUDA_3D_LOOPs, it MUST be paired with an END_PARALLEL_LOOP macro.
+#ifdef __CUDACC__
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    CUDA_3D_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)
+  #define END_PARALLEL_LOOP END_CUDA_3D_LOOP
+#else
+  #define PARALLEL_LOOP(macro_i0, macro_i0min, macro_i0max, macro_i1, macro_i1min, macro_i1max, macro_i2, macro_i2min, macro_i2max)\
+    LOOP_OMP("omp parallel for",(macro_i0), (macro_i0min), (macro_i0max), (macro_i1), (macro_i1min), (macro_i1max), (macro_i2), (macro_i2min), (macro_i2max)) {
+  #define END_PARALLEL_LOOP }
+#endif
+
+#define PARALLEL_2D_LOOP(macro_i1, macro_i1_min, macro_i1_max, macro_i2, macro_i2_min, macro_i2_max) \
+   PARALLEL_LOOP(macro_i0, 0, 1, (macro_i1), (macro_i1_min), (macro_i1_max), (macro_i2), (macro_i2_min), (macro_i2_max))
+#define END_PARALLEL_2D_LOOP END_PARALLEL_LOOP
+
+#define PARALLEL_1D_LOOP(macro_i0, macro_i0_min, macro_i0_max) \
+   PARALLEL_LOOP((macro_i0), (macro_i0_min), (macro_i0_max), macro_i1, 0, 1, macro_i2, 0, 1)
+#define END_PARALLEL_1D_LOOP END_PARALLEL_LOOP
+
 // IS_IN_GRID_INTERIOR: Checks whether the provided 3D index array (i0i1i2) lies within the grid interior,
 // defined as the region excluding NG ghost cells on each boundary.
 #define IS_IN_GRID_INTERIOR(i0i1i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx_plus_2NGHOSTS2, NG)                                                  \

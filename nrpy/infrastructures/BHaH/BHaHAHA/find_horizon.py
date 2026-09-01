@@ -212,7 +212,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
       // Step 5.a: Interpolate metric to current best surface. This is done at the start of each
       //           timestep instead of at each RK substep for efficiency reasons.
-      commondata.error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+      bah_interpolation_1d_radial_spokes_on_3d_src_grid(
           &griddata[0].params, &commondata, &griddata[grid].gridfuncs.y_n_gfs[IDX4pt(HHGF, 0)], griddata[0].gridfuncs.auxevol_gfs);
       if (commondata.error_flag != BHAHAHA_SUCCESS)
         break;
@@ -229,7 +229,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
       // Step 5.d: Time-varying eta prescription -- reduce eta with residual
       if (bhahaha_params_and_data->enable_eta_varying_alg_for_precision_common_horizon && commondata.nn % 10000 == 0) {
-        commondata.error_flag = bah_interpolation_1d_radial_spokes_on_3d_src_grid(
+        bah_interpolation_1d_radial_spokes_on_3d_src_grid(
             &griddata[0].params, &commondata, &griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, 0, 0, 0)], griddata[0].gridfuncs.auxevol_gfs);
         bah_diagnostics_area_centroid_and_Theta_norms(&commondata, griddata);
         REAL eta_min_times_M = 0.15;

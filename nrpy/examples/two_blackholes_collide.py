@@ -80,7 +80,7 @@ ShiftEvolutionOption = "GammaDriving2ndOrder_Covariant"
 GammaDriving_eta = 1.0
 grid_physical_size = 7.5
 diagnostics_output_every = 0.25
-t_final = 1.0 * grid_physical_size
+t_final = .01 #1.0 * grid_physical_size
 enable_raytracing_data_output = args.raytracing_outputs
 Nxx_dict = {
     "Spherical": [72, 12, 2],
@@ -331,6 +331,7 @@ BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()
 #         and create a Makefile for this project.
 #         Project is output to project/[project_name]/
 par.adjust_CodeParam_default("t_final", t_final)
+par.adjust_CodeParam_default("bah_verbosity_level", 1)
 if CoordSystem == "SinhSpherical":
     par.adjust_CodeParam_default("SINHW", 0.4)
 par.adjust_CodeParam_default("eta", GammaDriving_eta)
