@@ -160,8 +160,10 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    # The projected-remnant refresh owns this state bit; downstream NQC code
-    # consumes it only after special-coefficient setup completes.
+    # Central registration for the shared projected-attachment flag. Downstream
+    # register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
+    # and register_CFunction_SEBOBv2_NQC_corrections() depend on this function
+    # having been called.
     par.register_CodeParameters(
         "bool",
         __name__,
@@ -285,8 +287,8 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=True,
         descriptions=[
             "Mass ratio convention is m_greater/m_lesser.",
-            "Initial aligned-spin projection for body 1; projected attachment refreshes it at t_attach.",
-            "Initial aligned-spin projection for body 2; projected attachment refreshes it at t_attach.",
+            "Initial aligned-spin projection for body 1; updated at attachment when projected attachment is active.",
+            "Initial aligned-spin projection for body 2; updated at attachment when projected attachment is active.",
             "Dimensionless precessing spin x-component for body 1.",
             "Dimensionless precessing spin y-component for body 1.",
             "Dimensionless precessing spin z-component for body 1.",

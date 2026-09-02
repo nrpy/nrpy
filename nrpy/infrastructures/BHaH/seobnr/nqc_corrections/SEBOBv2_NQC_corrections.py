@@ -132,13 +132,14 @@ if (commondata->projected_attachment_active) {
       if (abs_dt < min_abs_dt) {
         min_abs_dt = abs_dt;
         peak_idx = i;
-      } // END IF: projected attachment sample is closer to t_peak
-    } // END LOOP: for i over fine-dynamics samples nearest to projected attachment
+      } // END IF: sample closer to t_peak
+    } // END LOOP: for i over attachment candidates
   } // END ELSE: projected attachment is endpoint-safe
-} else {
+} // END IF: projected_attachment_active
+else {
   if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
     commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-  } // END IF: scalar r_ISCO lies below the final fine-dynamics radius
+  } // END IF: scalar r_ISCO endpoint fallback
   else{
     const REAL dt_ISCO = 0.001;
     const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
@@ -174,7 +175,7 @@ if (commondata->projected_attachment_active) {
     gsl_spline_free(spline_r);
     free(t_zoom);
     free(minus_r_zoom);
-  } // END ELSE: scalar r_ISCO lies within the fine-dynamics radius range
+  } // END ELSE: scalar r_ISCO spline search
 
   t_peak = commondata->t_ISCO - commondata->Delta_t;
   // if t_peak > the last point of the ODE trajectory,
@@ -184,7 +185,7 @@ if (commondata->projected_attachment_active) {
   if (t_peak >= times[commondata->nsteps_fine - 1]){
     t_peak = times[commondata->nsteps_fine - 2];
     peak_idx = commondata->nsteps_fine - 2;
-  } // END IF: scalar NQC t_peak reaches fine-dynamics endpoint
+  } // END IF: scalar t_peak endpoint fallback
   else{
     peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
   }

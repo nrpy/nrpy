@@ -213,7 +213,7 @@ if (use_projected_attachment) {
   if (commondata->nsteps_low < 2 || commondata->nsteps_fine < 2) {
     fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), insufficient dynamics samples for projected attachment inputs\\n");
     exit(1);
-  } // END IF: insufficient dynamics samples for projected attachment inputs
+  } // END IF: insufficient projected dynamics samples
   if (commondata->chi1_lnhat.spline == NULL || commondata->chi1_lnhat.acc == NULL ||
       commondata->chi2_lnhat.spline == NULL || commondata->chi2_lnhat.acc == NULL ||
       commondata->chi1_x_spline.spline == NULL || commondata->chi1_x_spline.acc == NULL ||
@@ -251,26 +251,26 @@ if (use_projected_attachment) {
     if (r_low_i <= 0.0) {
       fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), nonpositive low-dynamics radius in projected attachment inputs\\n");
       exit(1);
-    } // END IF: low-dynamics projected attachment radius is nonpositive
+    } // END IF: nonpositive low-dynamics attachment radius
     u_rlow[i] = 1.0 / r_low_i;
     t_rlow[i] = commondata->dynamics_low[IDX(i,TIME)];
     times_combined[i] = t_rlow[i];
     Omega_combined[i] = commondata->dynamics_low[IDX(i,OMEGA)];
-  } // END LOOP: for i over low-dynamics projected attachment samples
+  } // END LOOP: for i over low-dynamics samples
   for (i = 0; i < commondata->nsteps_fine; i++){
     const size_t dst_idx = commondata->nsteps_low + i;
     times_combined[dst_idx] = times[i];
     Omega_combined[dst_idx] = Omega[i];
-  } // END LOOP: for i over fine-dynamics projected attachment samples
+  } // END LOOP: for i over fine-dynamics samples
   REAL u_r10M = 0.1;
   if (u_r10M < u_rlow[0]) {
     fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies before the low-dynamics projected-spin reference domain; using first available low-dynamics point\\n");
     u_r10M = u_rlow[0];
-  } // END IF: r=10M lies before projected-spin reference domain
+  } // END IF: r=10M before reference domain
   if (u_r10M > u_rlow[commondata->nsteps_low - 1]) {
     fprintf(stderr,"Warning: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), r=10M lies after the low-dynamics projected-spin reference domain; using last available low-dynamics point\\n");
     u_r10M = u_rlow[commondata->nsteps_low - 1];
-  } // END IF: r=10M lies after projected-spin reference domain
+  } // END IF: r=10M after reference domain
 
   gsl_interp_accel *restrict acc_t_of_u = gsl_interp_accel_alloc();
   if (acc_t_of_u == NULL) {
@@ -532,7 +532,7 @@ gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
     }
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
 
-// Step 2: Find t_ISCO with the projected-spin r_ISCO.
+// Step 2: Determine t_ISCO.
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
@@ -543,7 +543,7 @@ else{
   if (N_zoom == 0) {
     fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), fine dynamics time interval is too short for t_ISCO search\n");
     exit(1);
-  } // END IF: fine-dynamics interval is too short for t_ISCO search
+  } // END IF: interval too short for t_ISCO
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (t_zoom == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\n");
@@ -567,8 +567,9 @@ else{
         min_abs_r_gap = abs_r_gap;
         ISCO_zoom_idx = (size_t)i;
       }
-    } // END LOOP: for i over fine-grid projected r_ISCO search samples
-  } else
+    } // END LOOP: for i over r_ISCO candidates
+  } // END IF: use_projected_attachment
+  else
     ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1); // END ELSE: legacy scalar aligned-spin r_ISCO search
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
@@ -618,7 +619,7 @@ if (use_projected_attachment) {
   omega_attach = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_attach));
   commondata->chi1 = gsl_spline_eval(commondata->chi1_lnhat.spline, omega_attach, commondata->chi1_lnhat.acc);
   commondata->chi2 = gsl_spline_eval(commondata->chi2_lnhat.spline, omega_attach, commondata->chi2_lnhat.acc);
-} // END IF: projected-spin waveform inputs use attachment-time spin projections
+} // END IF: attachment-time spin projections applied
 
 REAL dynamics_22[NUMVARS];
 REAL dynamics_55[NUMVARS];
