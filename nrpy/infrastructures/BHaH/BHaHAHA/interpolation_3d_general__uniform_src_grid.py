@@ -45,10 +45,15 @@ def register_CFunction_interpolation_3d_general__uniform_src_grid(
         package="nrpy.infrastructures.BHaH.interpolation",
         filenames_list=["interpolation_lagrange_uniform.h"],
         project_dir=project_dir,
-        subdirectory="./",
+        subdirectory="interpolation",
     )
 
-    includes = ["stdio.h", "stdlib.h", "math.h", "interpolation_lagrange_uniform.h"]
+    includes = [
+        "stdio.h",
+        "stdlib.h",
+        "math.h",
+        "interpolation/interpolation_lagrange_uniform.h",
+    ]
 
     prefunc = """
 #ifndef REAL

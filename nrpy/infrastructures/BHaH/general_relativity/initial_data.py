@@ -26,12 +26,15 @@ def register_CFunction_initial_data(
     IDCoordSystem: str,
     ID_persist_struct_str: str,
     set_of_CoordSystems: Set[str],
+    enable_rfm_precompute: bool,
     enable_checkpointing: bool = False,
     populate_ID_persist_struct_str: str = "",
     free_ID_persist_struct_str: str = "",
     enable_T4munu: bool = False,
     post_ADM_Cart_to_BSSN_Cart_hook_str: str = "",
     spin_alignment_vector_params: Optional[Tuple[str, str, str]] = None,
+    enable_conformal_projection: bool = False,
+    enable_fCCZ4: bool = False,
 ) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register C functions for converting ADM initial data to BSSN variables and applying boundary conditions.
@@ -44,6 +47,8 @@ def register_CFunction_initial_data(
     :param set_of_CoordSystems: Set of coordinate systems for ADM->BSSN converters.
     :param IDtype: The type of initial data.
     :param IDCoordSystem: The native coordinate system of the initial data.
+    :param enable_rfm_precompute: Whether reference-metric quantities are
+        passed through ``rfmstruct`` instead of coordinate arrays.
     :param enable_checkpointing: Attempt to read from a checkpoint file before generating initial data.
     :param ID_persist_struct_str: A string representing the persistent structure for the initial data.
     :param populate_ID_persist_struct_str: Optional string to populate the persistent structure for initial data.
@@ -56,6 +61,10 @@ def register_CFunction_initial_data(
         parameter names. Defaults to ``("chi_x", "chi_y", "chi_z")`` for
         UIUCBlackHole. When set, the aligned UIUC scalar ``chi`` is derived from
         these components and ADM data are sampled in the aligned frame.
+    :param enable_conformal_projection: Apply the determinant and Abar-trace
+        projection after checkpoint/interpatch or fresh-data boundary handling.
+    :param enable_fCCZ4: Initialize fCCZ4's additional evolved Theta field for
+        fresh initial data.
 
     :raises ValueError: If ``set_of_CoordSystems`` is empty, if
         ``spin_alignment_vector_params`` is set for an ID type other than
@@ -175,6 +184,7 @@ components after parsing and before initial-data setup.
         enable_T4munu=enable_T4munu,
         post_ADM_Cart_to_BSSN_Cart_hook_str=post_ADM_Cart_to_BSSN_Cart_hook_str,
         spin_alignment_vector_params=spin_alignment_vector_params,
+        enable_fCCZ4=enable_fCCZ4,
     )
     for coord in sorted(coord_systems_to_register):
         if coord.startswith("GeneralRFM"):
@@ -196,6 +206,11 @@ components after parsing and before initial-data setup.
         else ""
     )
     host_griddata = "griddata_host" if parallelization in ["cuda"] else "griddata"
+    projector_reference_metric_args = (
+        "griddata[grid].rfmstruct"
+        if enable_rfm_precompute
+        else "griddata[grid].xx[0], griddata[grid].xx[1], griddata[grid].xx[2]"
+    )
     if enable_checkpointing:
         checkpoint_read_call = (
             "read_checkpoint(commondata, griddata_host, griddata)"
@@ -216,6 +231,15 @@ if( CHECKPOINT_READ_CALL ) {
   if (commondata->num_src_dst_pairs > 0)
     interpatch_interpolation_evol_gfs_driver(commondata, griddata);
 """
+        if enable_conformal_projection:
+            restart_body += """
+  for (int grid = 0; grid < commondata->NUMGRIDS; grid++) {
+    enforce_detgbar_equals_detghat_trAzero(
+        &griddata[grid].params, PROJECTION_RFM_ARGS,
+        griddata[grid].gridfuncs.y_n_gfs,
+        griddata[grid].gridfuncs.auxevol_gfs);
+  } // END LOOP: for grid over all grids
+""".replace("PROJECTION_RFM_ARGS", projector_reference_metric_args)
         restart_body += """  return;
 }
 """
@@ -250,8 +274,15 @@ for(int grid=0; grid<commondata->NUMGRIDS; grid++) {
     )
     body += """
   apply_bcs_outerextrap_and_inner(commondata, params, &griddata[grid].bcstruct, griddata[grid].gridfuncs.y_n_gfs);
-}
 """
+    if enable_conformal_projection:
+        body += """
+  enforce_detgbar_equals_detghat_trAzero(
+      params, PROJECTION_RFM_ARGS,
+      griddata[grid].gridfuncs.y_n_gfs,
+      griddata[grid].gridfuncs.auxevol_gfs);
+""".replace("PROJECTION_RFM_ARGS", projector_reference_metric_args)
+    body += "}\n"
     if free_ID_persist_struct_str:
         body += free_ID_persist_struct_str
 

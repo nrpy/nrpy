@@ -1,6 +1,6 @@
 # Overview
 
-> Map the NRPy project shape from symbolic source to generated artifacts. · Status: confirmed · Last reconciled: 06-29-2026
+> Map the NRPy project shape from symbolic source to generated artifacts. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -13,7 +13,7 @@ The repository is organized around generators rather than handwritten end-user e
 
 The top-level flow is: choose or write an example generator, assemble symbolic expressions and C functions, select an infrastructure target, then emit a project under a generated-output location such as `project/<name>/`. BHaH is the standalone application infrastructure and is the closest public path to single-patch BH@H numerical relativity workflows. ETLegacy and CarpetX produce Einstein Toolkit thorns, `superB` produces Charm++-based projects, and SEBOB/JAX workflows cover compact-object and Python/JAX project generation.
 
-Packaging metadata presents the same identity: the installable package is named `nrpy`, describes itself as Python/SymPy symbolic code generation for numerical relativity and relativistic astrophysics, reads runtime requirements from `requirements.txt`, and includes package header data needed by generated projects.
+Packaging metadata presents the same identity: the installable package is named `nrpy`, describes itself as Python/SymPy symbolic code generation for numerical relativity and relativistic astrophysics, and reads runtime requirements from `requirements.txt`. During setup, `get_nrpy_version()` reads the first `version = ...` entry from `nrpy/release.txt` and raises if none exists. `discover_header_package_data()` assigns checked-in non-test `*.h` files to their nearest Python package, and setup explicitly adds `nrpy/py.typed` to package data. `release.txt` is a setup-time version input; this configuration does not explicitly add it to installed package data.
 
 ## Sources
 
@@ -22,7 +22,7 @@ Packaging metadata presents the same identity: the installable package is named 
 
 ## See Also
 
-- [Architecture](index.md)
-- [Build And Run](build-and-run.md)
-- [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md)
-- [Generated Output Boundaries](generated-output-boundaries.md)
+- Parent: [Architecture](index.md)
+- See also: [Build And Run](build-and-run.md)
+- See also: [Symbolic Codegen Lifecycle](symbolic-codegen-lifecycle.md)
+- Depends on: [Generated Output Boundaries](generated-output-boundaries.md)

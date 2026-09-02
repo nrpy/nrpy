@@ -78,7 +78,9 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_checkpointing=True,
+    enable_conformal_projection=True,
     ID_persist_struct_str=BHaH.general_relativity.TOVola.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 TOVola_solve(commondata, &ID_persist);
@@ -126,6 +128,12 @@ BHaH.general_relativity.constraints_eval.register_CFunction_constraints_eval(
     enable_fd_functions=enable_fd_functions,
     OMP_collapse=OMP_collapse,
 )
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
+    CoordSystem=CoordSystem,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_fd_functions=enable_fd_functions,
+    OMP_collapse=OMP_collapse,
+)
 
 if __name__ == "__main__":
     pcg.do_parallel_codegen()
@@ -146,14 +154,17 @@ rhs_string = ""
 BHaH.MoLtimestepping.register_all.register_CFunctions(
     MoL_method="RK4",
     rhs_string=rhs_string,
-    post_rhs_string="",
+    post_rhs_string="enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
 
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()

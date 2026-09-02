@@ -53,32 +53,6 @@ def register_CFunction_SEOBNRv5_coprecessing_angles(
     >>> _ = register_CFunction_SEOBNRv5_coprecessing_angles()
     >>> generated_str = clang_format(cfc.CFunction_dict["SEOBNRv5_coprecessing_angles"].full_function)
     >>> _ = validate_strings(generated_str, "SEOBNRv5_coprecessing_angles__openmp", file_ext="c")
-    >>> "notaknot_spline_second_derivatives" in generated_str
-    True
-    >>> "quat_sqrt_unit" in generated_str
-    True
-    >>> "quat_exp_z" in generated_str and "halfgamma" in generated_str
-    True
-    >>> "compute_py_style_coprecessing_rotator" in generated_str
-    True
-    >>> "rotation_max_dt_M" in generated_str
-    False
-    >>> "ceil(fabs(interval_dt) / rotation_max_dt_M)" in generated_str
-    False
-    >>> "q_total = quat_normalize(q_pre_arr[i]);" in generated_str
-    True
-    >>> "write_coprecessing_rotator_grid_variant_diagnostics" in generated_str
-    False
-    >>> "q_total = quat_multiply(q_pre, q_shift)" in generated_str
-    False
-    >>> "const quat_t q_shift =" in generated_str
-    False
-    >>> 'fopen("coprecessing_angles_debug.txt", "w")' in generated_str
-    False
-    >>> 'fopen("coprecessing_rotator_diagnostics.txt", "w")' in generated_str
-    False
-    >>> 'attach_inputs' in generated_str
-    False
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())

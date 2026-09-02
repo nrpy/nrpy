@@ -1,6 +1,6 @@
 # Thorn Assembly And CCL Files
 
-> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 07-06-2026
+> Explain how ETLegacy writes Cactus CCL files, `make.code.defn`, and thorn-local C sources from registered generator state. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
@@ -68,6 +68,14 @@ C-source handoff. It filters `CFunction_dict` values by comparing each
 corresponding `SRCS` list. This is the point where registry objects become
 thorn-local C files and Cactus build metadata.
 
+Validation scope is narrower than general Einstein Toolkit support. The
+configured `einsteintoolkit-validation` job generates the ETLegacy Carpet
+WaveToy and Baikal thorns, links them into the pinned ET environment, builds
+that toolkit, and requests three testsuites. This workflow configuration proves
+the job shape, not its latest success, and does not establish arbitrary thorn,
+platform, GPU, or restart behavior. No generator, ET build, or testsuite was run
+during this KB audit.
+
 ## Sources
 
 - [interface_ccl.py](../../../nrpy/infrastructures/ETLegacy/interface_ccl.py) - `construct_interface_ccl`
@@ -76,7 +84,8 @@ thorn-local C files and Cactus build metadata.
 - [schedule_ccl.py](../../../nrpy/infrastructures/ETLegacy/schedule_ccl.py) - `ScheduleCCL`, `construct_schedule_ccl`
 - [make_code_defn.py](../../../nrpy/infrastructures/ETLegacy/make_code_defn.py) - `output_CFunctions_and_construct_make_code_defn`
 - [c_function.py](../../../nrpy/c_function.py) - `CFunction`, `CFunction_dict`, `full_function`, `ET_schedule_bins_entries`, `ET_current_thorn_CodeParams_used`
-- [Cactus Users Guide chapter C1.2](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - Cactus thorn and CCL file terminology
+- [main.yml](../../../.github/workflows/main.yml) - `einsteintoolkit-validation`
+- [Cactus Users Guide chapter C1](https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html) - `C1.1.1 Thorns`, `C1.2 Anatomy of a Thorn`, `make.code.defn based thorn building`; accessed 07-12-2026
 
 ## See Also
 

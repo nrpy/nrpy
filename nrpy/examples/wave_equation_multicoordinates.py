@@ -199,7 +199,8 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
@@ -223,14 +224,6 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     fin_NGHOSTS_add_one_for_upwinding_or_KO=enable_KreissOliger_dissipation,
     DOUBLE_means="double" if fp_type == "float" else "REAL",
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
-    supplemental_defines_dict=(
-        {
-            "C++/CUDA safe restrict": "#define restrict __restrict__",
-            "GPU Header": f'#include "{gpu_defines_filename}"',
-        }
-        if parallelization == "cuda"
-        else {}
-    ),
 )
 
 BHaH.main_c.register_CFunction_main_c(
@@ -246,15 +239,15 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
     enable_rfm_precompute=enable_rfm_precompute, enable_CurviBCs=True
 )
 
-if enable_intrinsics:
-    copy_files(
-        package="nrpy.helpers",
-        filenames_list=[
-            f"{'cuda' if parallelization == 'cuda' else 'simd'}_intrinsics.h"
-        ],
-        project_dir=project_dir,
-        subdirectory="intrinsics",
-    )
+intrinsics_file_list = ["simd_intrinsics.h"]
+if parallelization == "cuda":
+    intrinsics_file_list.append("cuda_intrinsics.h")
+copy_files(
+    package="nrpy.helpers",
+    filenames_list=intrinsics_file_list,
+    project_dir=project_dir,
+    subdirectory="intrinsics",
+)
 
 BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile(
     project_dir=project_dir,

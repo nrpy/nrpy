@@ -1,6 +1,6 @@
 # Diagnostics And Observables
 
-> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 07-07-2026
+> Explain superB diagnostics dispatch, nearest-output helpers, CkIO output paths, and reduction-backed observables. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [superB](index.md)
 
 ## Summary
@@ -10,8 +10,9 @@ the `Timestepping` chare's scheduled output block, nearest-point sampling
 helpers, output-only CkIO sessions for 1D/2D nearest files, direct `FILE *`
 center output, and reduction-backed volume-integral reporting. The diagnostic
 gridfunctions sampled by this machinery are chosen by the project variant: the
-GR nearest dispatcher samples Hamiltonian and `MSQUARED` diagnostics, while the
-NRPyElliptic nearest dispatcher samples residual and `uu` diagnostics.
+GR nearest dispatcher samples Hamiltonian, momentum-magnitude, and
+Lambda-constraint-magnitude diagnostics, while the NRPyElliptic nearest
+dispatcher samples residual and `uu` diagnostics.
 
 ## Detail
 
@@ -97,7 +98,10 @@ Volume diagnostics use Charm++ reductions rather than CkIO row writes.
 `diagnostics_ckio` checks for `DIAGNOSTICS_VOLUME` before calling the generated
 `diagnostics()` row dispatcher, so volume output goes directly to
 `contribute_localsums_for_diagnostic_volume_integ`. Each chare evaluates the
-default integration recipes against `diagnostic_gfs`, flattens one
+default integration recipes against `diagnostic_gfs`. GR projects use
+Hamiltonian, momentum-magnitude, and Lambda-magnitude integrands with
+`is_squared=1` for both the whole-domain and outside-radius recipes;
+NRPyElliptic projects retain their residual-only recipes. Each chare flattens one
 `std::vector<double>` per contribution in recipe order, and stores each recipe
 as selected volume followed by that recipe's integrands. It contributes the
 flattened vector with `CkReduction::sum_double`. The callback is constructed as
@@ -112,16 +116,41 @@ recipe results, writes `out3d-integrals-conv_factor...` files from the root
 chare, and for NRPyElliptic updates `commondata.log10_current_residual` from
 the residual RMS for the named `sphere_R_80` recipe.
 
+Claim evidence:
+- Claim: superB GR volume reductions define both default recipes with `DIAG_HAMILTONIANGF`, `DIAG_MGF`, and `DIAG_LAMBDA_CONSTRAINTGF` as squared integrands, while NRPyElliptic keeps one residual integrand per recipe.
+- Role: descriptive behavior
+- Deciding authority: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), `output_timestepping_h` and `diags_integration_build_default_recipes`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
+- Corroboration: [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ header generation; precision=generated double reductions, runtime values not exercised; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic recipe branches; date=08-28-2026`
+
 The GR and NRPyElliptic nearest diagnostic variants share the same orchestration
 and helper calls; they differ in the diagnostic gridfunctions selected in their
-`USER-EDIT` blocks. The GR dispatcher samples `DIAG_HAMILTONIANGF` and
-`DIAG_MSQUAREDGF` for 0D, 1D, and 2D nearest outputs. The NRPyElliptic
-dispatcher samples `DIAG_RESIDUALGF` and `DIAG_UUGF` for the same output
-dimensions. This page treats those as superB output choices and leaves the
-equation definitions behind those gridfunctions to the equation pages.
+`USER-EDIT` blocks. The GR dispatcher samples `DIAG_HAMILTONIANGF`, `DIAG_MGF`,
+and `DIAG_LAMBDA_CONSTRAINTGF` for 0D, 1D, and 2D nearest outputs. The
+NRPyElliptic dispatcher samples `DIAG_RESIDUALGF` and `DIAG_UUGF` for the same
+output dimensions. This page treats those as superB output choices and leaves
+the equation definitions behind those gridfunctions to the equation pages.
+
+Claim evidence:
+- Claim: The superB GR nearest dispatcher selects Hamiltonian, momentum magnitude, and Lambda-constraint magnitude for all 0D, 1D, and 2D outputs, while the NRPyElliptic dispatcher remains residual-and-`uu` only.
+- Role: descriptive behavior
+- Deciding authority: [GR diagnostics_nearest.py](../../../nrpy/infrastructures/superB/general_relativity/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [NRPyElliptic diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py), `register_CFunction_diagnostics_nearest`; [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py), `register_CFunction_constraints_eval`
+- Corroboration: [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py), generated diagnostic dispatch; [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py), `register_CFunction_diagnostic_gfs_set`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=superB Charm++ registration; precision=not-applicable; GPU=not-run; restart=not-applicable; distributed=not-run; error_path=not-run; options=GR and NRPyElliptic 0D/1D/2D selections; date=08-28-2026`
+
+Current configured CI builds all three superB projects but runs only the
+collision executable. It does not inspect CkIO files, volume-reduction values,
+NRPyElliptic residual stopping, checkpoint/restart, or error paths. Those
+runtime outcomes are `not-run` in this KB audit; prose above describes local
+generator control flow plus Charm++ 8.0.0 API contracts, not observed output.
 
 ## Sources
 
+- [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`
+- [BHaH constraints_eval.py](../../../nrpy/infrastructures/BHaH/general_relativity/constraints_eval.py) - `register_CFunction_constraints_eval`
+- [BHaH diagnostic_gfs_set.py](../../../nrpy/infrastructures/BHaH/general_relativity/diagnostic_gfs_set.py) - `register_CFunction_diagnostic_gfs_set`
 - [diagnostics.py](../../../nrpy/infrastructures/superB/diagnostics/diagnostics.py) - `register_all_diagnostics`, `_register_CFunction_diagnostics`
 - [diagnostics_nearest_grid_center.py](../../../nrpy/infrastructures/superB/diagnostics/diagnostics_nearest_grid_center.py) - `get_center_index_exprs_for_coordsystem`, `register_CFunction_diagnostics_nearest_grid_center`
 - [diagnostics_nearest_1d_y_and_z_axes.py](../../../nrpy/infrastructures/superB/diagnostics/diagnostics_nearest_1d_y_and_z_axes.py) - `register_CFunction_diagnostics_nearest_1d_y_and_z_axes`
@@ -130,12 +159,14 @@ equation definitions behind those gridfunctions to the equation pages.
 - [nrpyelliptic/diagnostics_nearest.py](../../../nrpy/infrastructures/superB/nrpyelliptic/diagnostics_nearest.py) - `register_CFunction_diagnostics_nearest`
 - [timestepping_chare.py](../../../nrpy/infrastructures/superB/timestepping_chare.py) - `generate_diagnostics_code`, `diagnostics_ckio`, `contribute_localsums_for_diagnostic_volume_integ`, `report_sums_for_volume`
 - [superB.h](../../../nrpy/infrastructures/superB/superB/superB.h) - `diagnostic_struct`, `DIAGNOSTICS_*`
-- [Charm++ libraries manual](https://github.com/charmplusplus/charm/blob/main/doc/libraries/manual.rst) - `CkIO`, `Using CkIO`, `Parallel Output API`
-- [Charm++ language manual](https://github.com/charmplusplus/charm/blob/main/doc/charm%2B%2B/manual.rst) - `Reductions on Chare Arrays`, `Built-in Reduction Types`
+- [main.yml](../../../.github/workflows/main.yml) - `charmpp-validation`
+- [Charm++ 8.0.0 libraries manual](https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html) - `CkIO`, `Using CkIO`, `Parallel Output API`; accessed 07-12-2026
+- [Charm++ 8.0.0 language manual](https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html) - `Reductions on Chare Arrays`, `Built-in Reduction Types`; accessed 07-12-2026
 
 ## See Also
 
 - [superB](index.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - [Chare Entrypoints And Runtime](chare-entrypoints-and-runtime.md)
 - [GR, BHaHAHA, Psi4, And Interpolation](gr-bhahaha-psi4-and-interpolation.md)
 - [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)

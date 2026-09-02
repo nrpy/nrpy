@@ -34,6 +34,11 @@ parser.add_argument(
     help="Use CUDA parallelization.",
 )
 parser.add_argument(
+    "--fccz4",
+    action="store_true",
+    help="Use fCCZ4 instead of BSSN evolution equations.",
+)
+parser.add_argument(
     "--floating_point_precision",
     type=str,
     help="Floating point precision (e.g. float, double).",
@@ -43,6 +48,9 @@ args = parser.parse_args()
 
 # Code-generation-time parameters:
 fp_type = args.floating_point_precision.lower()
+enable_fCCZ4 = args.fccz4
+enable_YBS_Gamma_constraint_adjustment = False
+enable_YBS_momentum_constraint_adjustment = False
 # Default to openmp; override with cuda if --cuda is set
 parallelization = "cuda" if args.cuda else "openmp"
 if parallelization not in ["openmp", "cuda"]:
@@ -218,7 +226,10 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_checkpointing=True,
+    enable_conformal_projection=True,
+    enable_fCCZ4=enable_fCCZ4,
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -269,10 +280,15 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
+    enable_fCCZ4=enable_fCCZ4,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+    enable_YBS_momentum_constraint_adjustment=(
+        enable_YBS_momentum_constraint_adjustment
+    ),
     OMP_collapse=OMP_collapse,
 )
-if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -291,7 +307,7 @@ if separate_Ricci_and_BSSN_RHS:
             host_only_version=True,
         )
 
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -361,13 +377,16 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+  enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint(enable_bhahaha=enable_bhahaha)
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every,
     enable_bhahaha=enable_bhahaha,
 )
@@ -479,9 +498,9 @@ BHaH.BHaH_defines_h.output_BHaH_defines_h(
     restrict_pointer_type="*" if parallelization == "cuda" else "*restrict",
 )
 post_non_y_n_auxevol_mallocs = ""
-if enable_CAHD:
+if enable_CAHD or enable_YBS_momentum_constraint_adjustment:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    cahdprefactor_auxevol_gridfunction(&commondata, &griddata[grid].params, griddata[grid].xx,  griddata[grid].gridfuncs.auxevol_gfs);
+    dsmin_auxevol_gridfunction(&griddata[grid].params, griddata[grid].xx, griddata[grid].gridfuncs.auxevol_gfs);
 }\n""".replace(
         "griddata", "griddata_device" if parallelization == "cuda" else "griddata"
     )

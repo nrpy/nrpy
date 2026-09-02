@@ -1,6 +1,6 @@
 # CarpetX GR BSSN RHS, Ricci, Constraints, And Validation
 
-> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 07-06-2026
+> CarpetX registration path for generated BSSN Ricci, RHS, constraints, and RHS trusted-expression evidence. · Status: confirmed · Last reconciled: 08-28-2026
 > Up: [CarpetX](index.md)
 
 ## Summary
@@ -16,7 +16,9 @@ trusted-value mechanics stay with
 it before the BSSN RHS kernel in `ODESolvers_RHS`. `register_CFunction_rhs_eval()`
 emits the evolved RHS kernel with gauge RHSs and optional matter, dissipation,
 and improvement terms. `register_CFunction_BSSN_constraints()` emits
-Hamiltonian, momentum, and `MSQUARED` diagnostics in `ODESolvers_PostStep`.
+Hamiltonian, momentum, and conformal connection diagnostics in
+`ODESolvers_PostStep`, including scalar momentum and Lambda-constraint
+magnitudes.
 
 ## Detail
 
@@ -91,16 +93,25 @@ passes `*noSIMD_SSL_Gaussian_prefactor` to `ConstSIMD()`.
 
 `register_CFunction_BSSN_constraints()` selects `BSSN_constraints` with optional
 reference-metric precompute and `T4munu` suffixes, computes `H`, `MU0`, `MU1`,
-`MU2`, and `MSQUARED`, and writes them through CarpetX auxiliary gridfunction
-accesses. Its generated body uses the same finite-difference helper functions,
-Golden Kernels, and `CCTK_ATTRIBUTE_NOINLINE` helper rewrite. As with Ricci and
-RHS, SIMD-specific declarations begin when requested, but the downstream
-CarpetX `simple_loop(enable_simd=True)` call raises `ValueError`, so this
-registration path does not currently emit a usable SIMD CarpetX loop kernel.
-Its schedule is guarded by
+`MU2`, `M = sqrt(gamma_ij M^i M^j)`, and
+`LAMBDA_CONSTRAINT = sqrt(gammabar_ij C^i C^j)`, and writes them through
+CarpetX auxiliary gridfunction accesses. Its generated body uses the same
+finite-difference helper functions, Golden Kernels, and
+`CCTK_ATTRIBUTE_NOINLINE` helper rewrite. As with Ricci and RHS, SIMD-specific
+declarations begin when requested, but the downstream CarpetX
+`simple_loop(enable_simd=True)` call raises `ValueError`, so this registration
+path does not currently emit a usable SIMD CarpetX loop kernel. Its schedule is guarded by
 `fd_order` and places `<thorn>_BSSN_constraints` in `ODESolvers_PostStep`,
 reading BSSN state and optional stress-energy fields, writing `aux_variables`,
 and syncing `aux_variables`.
+
+Claim evidence:
+- Claim: CarpetX `register_CFunction_BSSN_constraints` writes `H`, `MU0` through `MU2`, `M = sqrt(BSSNconstraints.Msquared)`, and `LAMBDA_CONSTRAINT = BSSNconstraints.LambdaConstraintMagnitude` to auxiliary gridfunctions.
+- Role: descriptive behavior
+- Deciding authority: [BSSN_constraints.py](../../../nrpy/infrastructures/CarpetX/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [core BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), `BSSNconstraints.__init__`; [interface_ccl.py](../../../nrpy/infrastructures/CarpetX/interface_ccl.py), `construct_interface_ccl`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0; backend=CarpetX registration; precision=symbolic code generation; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, scalar registration; SIMD limitation retained and inspected; date=08-28-2026`
 
 RHS trusted-expression validation belongs here because `rhs_eval.py` validates
 the CarpetX-specific assembled RHS dictionary after CarpetX option handling and
@@ -117,16 +128,9 @@ all-improvements states; because it performs the trusted comparison outside
 `register_CFunction_rhs_eval()`, those basenames omit the `KO...` segment and
 use the local `enable_improvements` loop variable.
 
-Trusted RHS evidence currently consists of these CarpetX `trusted_dict` files.
-They are validation evidence, not prose authority, and their numeric contents
-are not summarized here:
-
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsTrue.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py`
-- `rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py`
+CarpetX has six backend-local RHS trusted baselines: four covariant cases span
+both `T4munu` states and both improvements states, while two noncovariant
+KO-enabled cases span both `T4munu` states with improvements disabled.
 
 ## Sources
 
@@ -145,9 +149,9 @@ are not summarized here:
 - [CarpetX](index.md)
 - [Code Parameters, Includes, And Loops](code-parameters-includes-and-loops.md)
 - [GR ADM/BSSN And Matter Coupling](gr-adm-bssn-and-matter-coupling.md)
-- [BSSN Family](../../equations/general-relativity/bssn-family.md)
+- Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - [Trusted Expression Pipeline](../../equations/trusted-expression-pipeline.md)
 - [C Codegen](../../core/c-codegen.md)
 - [Finite Difference](../../core/finite-difference.md)
 - [Reference Metrics](../../core/reference-metrics.md)
-- [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md)
+- Contrasts with: [ETLegacy GR BSSN RHS, Ricci, Constraints, And Validation](../etlegacy/gr-bssn-rhs-ricci-constraints-and-validation.md)

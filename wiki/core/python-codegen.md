@@ -1,6 +1,6 @@
 # Python Codegen
 
-> Core route for turning SymPy expressions into JAX-compatible Python assignment text. · Status: confirmed · Last reconciled: 06-30-2026
+> Core route for turning SymPy expressions into JAX-compatible Python assignment text. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -21,12 +21,17 @@ With `enable_cse=False`, each expression is emitted independently. If `postproc_
 
 With `enable_cse=True`, `py_codegen()` collects the expressions and output names, then calls SymPy CSE with numbered temporaries from `cse_varprefix + "tmp"` and the configured `cse_sorting` order. For SymPy versions before 1.3, the implementation prints a warning and uses the raw `sp.cse()` result. For SymPy 1.3 and newer, it passes the `sp.cse()` result through `cse_postprocess()`. CSE temporaries and final reduced expressions both receive optional `apply_substitution_dict()` processing, are expanded with `sp.expand()`, and are emitted through `printer.doprint()`.
 
+Unlike `c_codegen()`, this path does not run `sort_cse_output_deterministically()` when `cse_sorting="none"`. That option requests SymPy's unsorted CSE path; this page makes no deterministic-output guarantee for it.
+
 This page owns the public `py_codegen()` and `PyCodeGen` contract. Helper pages own CSE helper and printer internals; JAX infrastructure pages own generated package assembly.
+
+Import these APIs from `nrpy.py_codegen`. The empty `nrpy/__init__.py` does not re-export them.
 
 ## Sources
 
 - [nrpy/py_codegen.py](../../nrpy/py_codegen.py) - `PyCodeGen`, `py_codegen`, `printer`
 - [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `apply_substitution_dict`
+- [nrpy/__init__.py](../../nrpy/__init__.py) - empty package initializer; no Python-codegen re-exports
 
 ## See Also
 

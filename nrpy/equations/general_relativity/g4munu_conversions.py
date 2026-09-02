@@ -145,6 +145,14 @@ def g4DD_to_ADM(
 
     :param g4DD: The input 4-metric tensor (g_{mu nu}) represented as a 4x4 matrix.
     :return: Tuple containing (gamma_{ij}), (alpha), and (beta^i) in the same order.
+
+    Doctests:
+    >>> gammaDD = sp.Matrix([[2, 1, 0], [1, 3, 1], [0, 1, 2]]).tolist()
+    >>> betaU = [sp.Integer(1), sp.Integer(2), sp.Integer(3)]
+    >>> alpha = sp.Integer(4)
+    >>> g4DD = ADM_to_g4DD(gammaDD, betaU, alpha)
+    >>> g4DD_to_ADM(g4DD) == (gammaDD, alpha, betaU)
+    True
     """
     # Step 1: Declare g4DD as a 4-metric tensor:
     g4DD_is_input_into_this_function = True
@@ -156,7 +164,7 @@ def g4DD_to_ADM(
     betaD = ixp.zerorank1()
     gammaDD = ixp.zerorank2()
     for i in range(3):
-        betaD[i] = g4DD[0][i]
+        betaD[i] = g4DD[0][i + 1]
         for j in range(3):
             gammaDD[i][j] = g4DD[i + 1][j + 1]
 

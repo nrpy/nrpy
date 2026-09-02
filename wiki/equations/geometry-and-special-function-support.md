@@ -1,6 +1,6 @@
 # Geometry And Special-Function Support
 
-> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 07-02-2026
+> Map equation-tree helpers for basis transforms, GeneralRFM fisheye maps, rotations, and spin-weighted spherical harmonics. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Equations](index.md)
 
 ## Summary
@@ -18,8 +18,10 @@ and applies its stored Jacobians. It transforms contravariant vectors,
 covariant vectors, rank-2 covariant tensors, and time-independent four-tensors
 between the reference-metric basis and Cartesian or spherical bases. The lazy
 `basis_transforms` dictionary constructs one `BasisTransforms` object per
-coordinate system, and the module validation emits trusted dictionaries for
-each supported coordinate system.
+coordinate system. Its script validation emits one trusted dictionary for every
+entry currently in `reference_metric.supported_CoordSystems`; this is sampled
+expression coverage for those transforms, not a round-trip or generated-code
+runtime proof.
 
 `GeneralRFMFisheye` builds an N-transition radial fisheye map from raw
 Cartesian coordinates `xx[i]` to physical Cartesian coordinates. It registers
@@ -27,7 +29,9 @@ the plateau, transition-center, width, and global-scale code parameters,
 stores `xx_to_CartU` and `dCart_dxxUD`, and constructs the induced flat
 reference metric `ghatDD` plus first and second derivatives in the raw
 coordinates. `build_fisheye` is the public constructor wrapper, and trusted
-files cover the N=1 and N=2 variants.
+files cover only the N=1 and N=2 variants. The class accepts any integer
+`num_transitions >= 1`; larger N is implemented but not covered by those two
+trusted files.
 
 `SO3Expressions` stores symbolic matrix-rotation expressions used by equation
 validation and by the generated BHaH SO(3) helper layer. Its helpers build a
@@ -49,8 +53,17 @@ and does not generate a sibling trusted dictionary.
 spin-weighted spherical harmonics. It registers `M_PI` for generated C contexts,
 builds the finite sum with a Mathematica-compatible cotangent option or a
 C-code-friendly tangent reciprocal, and returns the cached-simplified SymPy
-expression. Its validation runs doctests and then generates trusted values for
-representative `s=-2` harmonics.
+expression. The function does not explicitly validate the mathematical index
+conditions on `s`, `l`, and `m`; callers receive whatever SymPy construction or
+error follows from supplied values. Its script validation samples only `s=-2`,
+`l=2..8`, and `m=-l..l-1` because the current loop is
+`range(-l, +l)`. The `m=+l` member for every tested `l`, other spin weights, and
+the Mathematica-code branch have no trusted-value coverage in that entry point.
+
+All trusted dictionaries named here compare deterministic sampled numerical
+values. They do not establish formal identities, generated-code builds,
+runtime behavior, or numerical accuracy; use [Trusted Expression
+Pipeline](trusted-expression-pipeline.md) for that boundary.
 
 ## Sources
 
@@ -68,7 +81,6 @@ representative `s=-2` harmonics.
 - [spin_weighted_spherical_harmonics.py](../../nrpy/equations/special_functions/tests/spin_weighted_spherical_harmonics.py) - `trusted_dict`
 - [Goldberg formula reference](https://web2.ph.utexas.edu/~gsudama/pub/1967_008.pdf) - mathematical background for spin-weighted spherical harmonics
 - [Spin-weighted functions with quaternions](https://pubs.aip.org/aip/jmp/article/57/9/092504/648118/How-should-spin-weighted-spherical-functions-be) - mathematical background
-- [SO(3) rotation background](https://rotations.berkeley.edu/geodesics-of-the-rotation-group-so3/) - mathematical background
 
 ## See Also
 

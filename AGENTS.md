@@ -4,6 +4,9 @@ This repository carries a plain-markdown knowledge base for NRPy. Start here,
 follow a few links, and synthesize from the compiled pages instead of grepping
 the whole tree first.
 
+Central Engineering Policy: Prefer the simplest sufficient implementation;
+reject abstractions without demonstrated need.
+
 ## Router
 
 | Go to | Use it for |
@@ -13,7 +16,7 @@ the whole tree first.
 | [Equations](wiki/equations/index.md) | Symbolic equation families, GR and SEOBNR routes, support helpers, and trusted expression validation. |
 | [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, and JAX. |
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
-| [Validation](wiki/validation/index.md) | Static analysis and generated-project CI. |
+| [Validation](wiki/validation/index.md) | Test and oracle policy, static analysis, expression validation, and generated-project CI. |
 | [Glossary](wiki/glossary.md) | Canonical terms. |
 | [Catalog](wiki/catalog.md) | Global page inventory and query-routing terms. |
 | [Workflows](wiki/workflows.md) | KB ingest, query, and maintenance procedures. |
@@ -28,15 +31,12 @@ the whole tree first.
 
 | Task | Read first |
 | --- | --- |
-| Build or run NRPy | [Build And Run](wiki/architecture/build-and-run.md) |
-| Understand symbolic-to-C generation | [Symbolic Codegen Lifecycle](wiki/architecture/symbolic-codegen-lifecycle.md) |
-| Understand generated outputs | [Generated Output Boundaries](wiki/architecture/generated-output-boundaries.md) |
-| Check style and static-analysis rules | [Contribution Style And Static Analysis](wiki/architecture/contribution-style-and-static-analysis.md) |
+| Build, run, inspect code generation, generated outputs, or contribution rules | [Architecture](wiki/architecture/index.md) |
 | Find `CFunction`, `c_codegen`, parameters, or gridfunctions | [Core APIs](wiki/core/index.md) |
 | Change equation modules or expression validation | [Equations](wiki/equations/index.md) |
-| Work on BHaH generation | [BHaH](wiki/infrastructures/bhah/index.md) |
-| Run the first example | [First Wave Equation Run](wiki/examples/first-wave-equation-run.md) |
-| Inspect CI coverage | [Generated Project CI](wiki/validation/generated-project-ci.md) |
+| Work on BHaH, ETLegacy, CarpetX, superB, or JAX generation | [Infrastructures](wiki/infrastructures/index.md) |
+| Run or compare example generators | [Examples](wiki/examples/index.md) |
+| Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
 
 ## Source-Tracking And Date Policy
@@ -57,3 +57,23 @@ status, [Source Map](wiki/source-map.md) rows, and affected compiled pages —
 not by stored fingerprints.
 
 Rules for maintaining this KB live in [wiki/SCHEMA.md](wiki/SCHEMA.md).
+
+## Protected Workflow File
+
+Do not modify `.github/workflows/main.yml` unless the user explicitly
+authorizes changing that exact file in the current request. General requests
+to implement a plan, add tests, improve validation, or add CI coverage do not
+grant this permission. When a change would otherwise require editing this
+file, leave it unchanged and report the required workflow change to the user.
+
+## KB Checker And Coordination Scope
+
+`python tools/kb_lint.py` is the canonical deterministic KB structure check.
+`--all` is a compatibility alias with identical coverage, not a stronger mode.
+
+Commissioned root-level planning and task Markdown files that follow the
+[Coordination Artifacts](wiki/SCHEMA.md#coordination-artifacts) naming grammar
+are coordination artifacts. They may remain untracked and are exempt from KB
+routing/catalog checks. A matching name alone does not establish that a file
+was commissioned. Never file, stage, move, or delete a coordination artifact as
+KB content unless the user directs that action.

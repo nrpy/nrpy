@@ -1,14 +1,15 @@
 # ETLegacy Code Parameters, Includes, And Loops
 
-> ETLegacy-local helpers for Cactus parameter reads, standard includes, and generated grid loops. · Status: confirmed · Last reconciled: 06-30-2026
+> ETLegacy-local helpers for Cactus parameter reads, standard includes, and generated grid loops. · Status: confirmed · Last reconciled: 08-18-2026
 > Up: [ETLegacy](index.md)
 
 ## Summary
 
-ETLegacy generated C functions use small infrastructure-local helpers for three
-recurring code fragments: reading Cactus runtime parameters, attaching standard
-Cactus headers, and wrapping kernel bodies in Cactus grid loops. These helpers
-stay ETLegacy-specific: generic symbolic expression emission belongs to
+ETLegacy generated C functions use small infrastructure-local helpers for
+reading Cactus runtime parameters, handing expression-derived parameters to
+generated kernels, attaching standard Cactus headers, and wrapping kernel
+bodies in Cactus grid loops. These helpers stay ETLegacy-specific: generic
+symbolic expression emission belongs to
 [C Codegen](../../core/c-codegen.md), CodeParameter registration belongs to
 [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md),
 SIMD mechanics belong to
@@ -44,6 +45,27 @@ to registered code parameters and Cactus thorn/module parameter namespaces,
 while leaving the core CodeParameter object model documented in
 [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md).
 
+The BSSN RHS and constraint registrations pass their final expression lists to
+`get_params_commondata_symbols_from_expr_list()` and use only its
+non-commondata parameter result. In SIMD mode, that list is converted to
+current-thorn `(thorn, parameter)` tuples for `read_CodeParameters()`; in
+scalar mode, the generated function instead uses `DECLARE_CCTK_PARAMETERS`.
+The same non-commondata list is passed into current-thorn CFunction parameter
+metadata, with the RHS retaining its separate manually assembled metadata for
+parameters used outside the final expression list.
+
+No parameter name or matter flag is special-cased in this handoff. `PI` appears
+only when the selected T4munu expressions contain the registered,
+non-commondata `PI` CodeParameter; vacuum expressions do not contribute it.
+
+Claim evidence:
+- Claim: ETLegacy BSSN RHS and constraint registrations derive non-commondata CodeParameters from their final expressions, use that same list for current-thorn metadata and SIMD `read_CodeParameters()` declarations, use `DECLARE_CCTK_PARAMETERS` in scalar mode, and do not select `PI` by parameter name or matter flag.
+- Role: descriptive behavior
+- Deciding authority: [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py), `register_CFunction_rhs_eval`; [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py), `register_CFunction_BSSN_constraints`
+- Corroboration: [expression_utils.py](../../../nrpy/helpers/expression_utils.py), `get_params_commondata_symbols_from_expr_list`; [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py), `read_CodeParameters`
+- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3; backend=ETLegacy; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=Cartesian, fd_order 4, RHS KO enabled, reference-metric precompute disabled, T4munu False/True, SIMD False/True; date=08-18-2026`
+
 `define_standard_includes()` centralizes the default include list for
 NRPy-generated ETLegacy C functions. It returns `math.h`, `cctk.h`,
 `cctk_Arguments.h`, and `cctk_Parameters.h`, so ETLegacy kernels can request
@@ -68,6 +90,9 @@ outer `i2` and `i1` loops keep unit stride.
 ## Sources
 
 - [CodeParameters.py](../../../nrpy/infrastructures/ETLegacy/CodeParameters.py) - `read_CodeParameters`
+- [expression_utils.py](../../../nrpy/helpers/expression_utils.py) - `get_params_commondata_symbols_from_expr_list`
+- [rhs_eval.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/rhs_eval.py) - `register_CFunction_rhs_eval`
+- [BSSN_constraints.py](../../../nrpy/infrastructures/ETLegacy/general_relativity/BSSN_constraints.py) - `register_CFunction_BSSN_constraints`
 - [ETLegacy_include_header.py](../../../nrpy/infrastructures/ETLegacy/ETLegacy_include_header.py) - `define_standard_includes`
 - [simple_loop.py](../../../nrpy/infrastructures/ETLegacy/simple_loop.py) - `simple_loop`
 - [params.py](../../../nrpy/params.py) - `CodeParameter`, `glb_code_params_dict`
@@ -80,5 +105,6 @@ outer `i2` and `i1` loops keep unit stride.
 - [MoL, Boundaries, Symmetry, And RHS Initialization](mol-boundaries-symmetry-and-rhs-initialization.md)
 - [C Codegen](../../core/c-codegen.md)
 - [Gridfunctions And Parameters](../../core/gridfunctions-and-parameters.md)
+- Depends on: [Symbolic Expression Utilities](../../core/helpers/symbolic-expression-utilities.md)
 - [SIMD And Intrinsic Support](../../core/helpers/simd-and-intrinsic-support.md)
 - [Loop Kernel And Device Helpers](../../core/helpers/loop-kernel-and-device-helpers.md)

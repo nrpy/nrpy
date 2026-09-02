@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-06-2026
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-19-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -13,6 +13,12 @@ evolution, `blackhole_spectroscopy.py` for a TwoPunctures-backed binary with
 checkpointing and Psi4 diagnostics, `spinning_blackhole.py` for a single
 spinning UIUC black hole, and `kasner_exact_evolution.py` for a vacuum Kasner
 benchmark.
+
+Each generator deletes and recreates its fixed project directory. Configured
+GitHub codegen generates and builds the default OpenMP path for the first three,
+but omits Kasner and runs no executable. The local helper configures OpenMP and
+CUDA builds for the first three, omits Kasner, and also runs no executable or
+scientific check. Preserve output before reruns; runtime remains manual here.
 
 ## Detail
 
@@ -37,7 +43,20 @@ and frees the TwoPunctures derivative storage afterward. It uses
 separate Ricci, outgoing radiation boundaries, checkpointing every `2.0` by
 default, Psi4 and spin-weight minus-two spherical-harmonic diagnostics, and GSL
 Makefile flags through `gsl-config`. Its source-backed generation flags are
-`--cuda` and `--floating_point_precision`.
+`--cuda`, `--fccz4`, and `--floating_point_precision`. BSSN remains the
+default. `--fccz4` selects fCCZ4 RHS/gauge registration and zeroes
+`Theta_fCCZ4` only while fresh ADM data are converted; checkpoint loading is
+attempted first and returns without that zeroing. Both choices use the same
+combined determinant/trace projection after initial-data boundary handling and
+in the Method of Lines post-RHS hook.
+
+Claim evidence:
+- Claim: `blackhole_spectroscopy.py` defaults to BSSN and accepts `--fccz4`; that flag selects fCCZ4 RHS/gauge registration and fresh-data-only Theta zeroing after the checkpoint branch, while both formulations use the same initial-data and post-RHS conformal projection; this source ordering does not prove restart correctness or scientific validity.
+- Role: public/scientific contract
+- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, initial-data/RHS/Method of Lines registrations
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py), `register_CFunction_initial_data_reader__convert_ADM_Sph_or_Cart_to_BSSN`; [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py), combined projector
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, opt-in fCCZ4 generation/build and t_final=0.1 startup through iteration 1; date=08-28-2026`
 
 `python -m nrpy.examples.spinning_blackhole` generates
 `project/spinning_blackhole/`. It evolves `IDtype = "UIUCBlackHole"` in
@@ -89,7 +108,10 @@ generator that horizon-enabled black-hole examples call.
 ## Sources
 
 - [two_blackholes_collide.py](../../nrpy/examples/two_blackholes_collide.py) - `project_name`, `CoordSystem`, `IDtype`, `--raytracing-outputs`, `enable_bhahaha`
-- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.checkpointing.register_CFunctions`
+- [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py) - `project_name`, `IDtype`, `BHaH.general_relativity.TwoPunctures.TwoPunctures_lib.register_C_functions`, `enable_psi4_diagnostics`, `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`
+- [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py) - checkpoint-first `register_CFunction_initial_data`
+- [ADM_Initial_Data_Reader__BSSN_Converter.py](../../nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py) - fresh-data `Theta_fCCZ4` initialization
+- [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - shared determinant/trace projector
 - [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`
 

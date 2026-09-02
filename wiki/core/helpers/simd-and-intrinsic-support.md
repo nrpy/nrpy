@@ -1,6 +1,6 @@
 # SIMD And Intrinsic Support
 
-> Helper route for symbolic SIMD rewrites and handwritten intrinsic macro headers. · Status: confirmed · Last reconciled: 06-29-2026
+> Helper route for symbolic SIMD rewrites and handwritten intrinsic macro headers. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Helper APIs](index.md)
 
 ## Summary
@@ -27,8 +27,8 @@ Generated projects may contain copied versions of these headers, but those copie
 - [nrpy/helpers/simd_intrinsics.h](../../../nrpy/helpers/simd_intrinsics.h) - `REAL_SIMD_ARRAY`, `SIMD_WIDTH`, `UPWIND_ALG`, `FusedMulAddSIMD`, `HorizAddSIMD`
 - [nrpy/helpers/cuda_intrinsics.h](../../../nrpy/helpers/cuda_intrinsics.h) - `REAL_CUDA_ARRAY`, `CUDA_WIDTH`, `UPWIND_ALG`, `FusedMulAddCUDA`, `ReadCUDA`
 - [nrpy/c_codegen.py](../../../nrpy/c_codegen.py) - `CCodeGen`, `c_codegen`, `gridfunction_management_and_FD_codegen`
-- [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) - SSE, AVX, AVX512, and intrinsic-family terminology
-- [NVIDIA CUDA C++ Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/index.html) - CUDA C++ terminology
+- [Intel Intrinsics Guide](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) - SSE, AVX, AVX512, and intrinsic-family terminology; accessed 07-12-2026
+- [NVIDIA CUDA Programming Guide](https://docs.nvidia.com/cuda/cuda-programming-guide/index.html) - CUDA programming-model terminology; version 13.3 page accessed 07-12-2026
 
 ## See Also
 

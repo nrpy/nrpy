@@ -147,6 +147,8 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_conformal_projection=True,
     ID_persist_struct_str="",
     populate_ID_persist_struct_str=kasner_param_guard,
 )
@@ -212,7 +214,7 @@ if parallelization == "cuda":
         OMP_collapse=OMP_collapse,
         host_only_version=True,
     )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -252,7 +254,7 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     rational_const_alias=(
@@ -261,7 +263,9 @@ enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol
 )
 
 par.adjust_CodeParam_default("t_final", t_final)
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.rfm_wrapper_functions.register_CFunctions_CoordSystem_wrapper_funcs()

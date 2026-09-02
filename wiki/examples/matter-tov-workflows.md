@@ -1,6 +1,6 @@
 # Matter TOV Workflows
 
-> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 07-06-2026
+> Route neutron-star, static-fluid, GRoovy, and MANGA-adjacent TOV workflows. · Status: confirmed · Last reconciled: 08-25-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -50,15 +50,21 @@ make
 ```
 
 Its expected validation milestone is generation plus `make` and `make clean`;
-Ubuntu and macOS CI both install GSL and exercise that path. Runtime defaults
+configured Ubuntu and macOS CI both install GSL and exercise that build path,
+but do not run the executable or check constraints. Runtime defaults
 include `t_final = 1.0e-10`, so this is an initial-data and constraints-oriented
 workflow rather than a long evolution.
+
+The local helper also passes `--cuda` to this generator, but
+`tovola_neutron_star.py` has no argument parser and hardcodes no CUDA path; the
+extra token is ignored. That helper cell is another ordinary C build, not CUDA
+evidence.
 
 `hydro_without_hydro` writes `project/hydro_without_hydro/`. It defaults to
 OpenMP and `double`, accepts `--cuda` to generate CUDA source and use `nvcc`,
 and accepts `--floating_point_precision`. Its default coordinate and ID choices
 are `CoordSystem = "Spherical"` and `IDtype = "TOVola_interp"` with spherical
-TOV initial-data coordinates. It uses `HarmonicSlicing`, frozen shift, RK4,
+TOV initial-data coordinates. It uses `BHSHarmonicSlicing`, frozen shift, RK4,
 fourth-order finite differences, outgoing radiation boundaries, checkpointing
 every `2.0`, and `t_final = 7.5` from `grid_physical_size`.
 
@@ -75,9 +81,10 @@ make
 ./hydro_without_hydro
 ```
 
-CI validates the default OpenMP path on Ubuntu and macOS by generating the
+Configured CI checks the default OpenMP path on Ubuntu and macOS by generating the
 project, building it, and running `make clean`. CUDA is a source-supported
-option from the example, but the checked-in CI evidence covers the default path.
+option from the example; the local helper configures a CUDA build, while no
+configured route runs either executable or checks results.
 
 `groovy_TOV_BSSN.py` writes `project/groovy_TOV_BSSN__Spherical/` by default.
 It sets `CoordSystem = "Spherical"`, `IDType = "TOV"`, evolving spacetime on,
@@ -113,10 +120,17 @@ make
 ./groovy_TOV_BSSN__Spherical
 ```
 
-This source-managed GRHayL clone means the generator itself needs network access
-unless the dependency is already provided in the expected generated-project
-layout. Unlike `tovola_neutron_star` and `hydro_without_hydro`, no checked-in CI
-step in the inspected workflow builds `groovy_TOV_BSSN.py`.
+This source-managed GRHayL clone means the module command itself needs Git,
+network access, GRHayL configure prerequisites, and a working C build toolchain.
+The generator deletes its project directory and then unconditionally runs
+`git clone https://github.com/GRHayL/GRHayL.git` without selecting a branch,
+tag, or commit; it immediately executes that checkout's `configure`, `make`,
+and `make install`. Results therefore depend on the remote default branch at
+run time. Treat this as unpinned remote-code execution: run it only when that
+repository state is trusted, and record the resolved GRHayL commit with any
+scientific result. The generator exposes no offline/preprovided-dependency
+switch. Unlike `tovola_neutron_star` and `hydro_without_hydro`, no checked-in
+CI or local-helper step invokes `groovy_TOV_BSSN.py`.
 
 `manga_bhah_lib.py` writes `project/bhah_lib/` and must be read as library
 generation. It sets `project_name = "bhah_lib"`, uses spherical coordinates,
@@ -138,13 +152,16 @@ cd project/bhah_lib
 make
 ```
 
-The source's final print still says to run `./bhah_lib`, but the Makefile call
-is explicitly a library build. Treat that print as stale generic messaging for
-this example; this open stale claim is tracked in the
-[Contradictions](../contradictions.md) register. The checked-in CI workflows contain commented-out Ubuntu and macOS
-commands for `python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib &&
-make && make clean)`, so source and workflow evidence support generation intent
-and a disabled/commented CI status, not active CI coverage.
+The source's final messages say to run `./bhah_lib` and find `bhah_lib.par`, but
+the Makefile call explicitly creates a library, command-line parser registration
+is commented out, and no default-parfile writer is called. No executable or
+generated parfile is source-backed for this workflow; treat both prints as stale
+generic messaging. Claim status: stale; contradiction: CONTR-0001. See
+[CONTR-0001](../contradictions.md#contr-0001). The checked-in CI workflows
+contain commented-out Ubuntu and macOS commands for generating
+`manga_bhah_lib` and building `project/bhah_lib`. Source and workflow evidence
+therefore support generation intent and a disabled/commented CI status, not
+active CI coverage.
 
 Across these examples, GSL is the common external C build dependency because
 their generated Makefiles add `$(shell gsl-config --cflags)` and
@@ -157,7 +174,7 @@ separate from executable run instructions.
 
 - [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `project_name`, `CoordSystem`, `IDtype`, `IDCoordSystem`
 - [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `register_CFunction_TOVola_interp`, `register_CFunction_TOVola_solve`, `register_CFunction_initial_data`
-- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `register_CFunctions`, `register_CFunctions_function_prototypes_and_construct_Makefile`
+- [tovola_neutron_star.py](../../nrpy/examples/tovola_neutron_star.py) - `BHaH.read_checkpoint.register_CFunction_read_checkpoint`, `BHaH.write_checkpoint.register_CFunction_write_checkpoint`, `BHaH.Makefile_helpers.output_CFunctions_function_prototypes_and_construct_Makefile`
 - [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `parser`, `parallelization`, `project_name`, `CoordSystem`, `IDtype`
 - [hydro_without_hydro.py](../../nrpy/examples/hydro_without_hydro.py) - `enable_T4munu`, `rhs_string`, `output_CFunctions_function_prototypes_and_construct_Makefile`
 - [groovy_TOV_BSSN.py](../../nrpy/examples/groovy_TOV_BSSN.py) - `project_name`, `IDType`, `grhayl_setup_str`
@@ -166,7 +183,7 @@ separate from executable run instructions.
 - [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `project_name`, `set_of_CoordSystems`, `IDtype`
 - [manga_bhah_lib.py](../../nrpy/examples/manga_bhah_lib.py) - `register_CFunctions_bhah_lib`, `create_lib=True`
 - [.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `codegen-mac`
-- [README.md](../../README.md) - `Prerequisites by Workflow`
+- [README.md](../../README.md) - `Prerequisites by Workflow`; official GSL [Using the Library](https://www.gnu.org/software/gsl/doc/html/usage.html) - `Compiling and Linking`
 
 ## See Also
 

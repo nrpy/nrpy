@@ -1,6 +1,6 @@
 # Generated Backend Comparison
 
-> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 07-06-2026
+> Compare generated backend families by output shape, build path, validation route, and artifact boundary. · Status: provisional · Last reconciled: 07-12-2026
 > Up: [Syntheses](index.md)
 
 ## Summary
@@ -35,13 +35,14 @@ requirements, and ODESolvers-oriented schedules. JAX is the outlier: it
 consumes Python-function registries and writes a Python package rather than a
 C/C++ build product.
 
-Validation is uneven by backend. Standalone C examples and superB have build
-or run coverage in generated-project CI; ETLegacy has Einstein Toolkit build/test
+Validation is uneven by backend. Selected standalone C examples and superB have
+configured build or run coverage in generated-project CI; ETLegacy has configured Einstein Toolkit build/test
 coverage, while CarpetX currently has trusted-expression checks and source-level
 assembly documentation but no cited `carpetx_*` CI build/test route in this page;
 JAX currently has generation coverage and a narrow implemented SEOBNRv5
 coefficient surface. Treat broad runtime claims for JAX and any backend option
-not covered by the cited validation pages as provisional.
+not covered by the cited validation pages as provisional. Workflow configuration
+proves configured job shape, never latest successful execution.
 
 ## Sources
 

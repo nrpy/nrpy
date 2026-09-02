@@ -138,7 +138,16 @@ def register_CFunction_diagnostic_gfs_set(
     gri.register_gridfunctions(
         names="DIAG_HAMILTONIAN", desc="H_constraint", group="DIAG"
     )
-    gri.register_gridfunctions(names="DIAG_MSQUARED", desc="M^2", group="DIAG")
+    gri.register_gridfunctions(
+        names="DIAG_M",
+        desc_list=["Momentum_constraint_magnitude"],
+        group="DIAG",
+    )
+    gri.register_gridfunctions(
+        names="DIAG_LAMBDA_CONSTRAINT",
+        desc_list=["Covariant_conformal_connection_constraint_magnitude"],
+        group="DIAG",
+    )
     gri.register_gridfunctions(names="DIAG_LAPSE", desc="Lapse", group="DIAG")
     gri.register_gridfunctions(names="DIAG_W", desc="Conformal_factor_W", group="DIAG")
     gri.register_gridfunctions(names="DIAG_GRIDINDEX", desc="GridIndex", group="DIAG")
@@ -195,7 +204,7 @@ def register_CFunction_diagnostic_gfs_set(
     {
       // NOTE: Inner boundary conditions must be set before any interpolations are performed, whether for psi4 decomp. or interp diags.
       // Apply inner bcs to constraints needed to do interpolation correctly
-      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+      const int inner_bc_apply_gfs[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
       const int num_inner_bc_apply_gfs = (int)(sizeof(inner_bc_apply_gfs) / sizeof(inner_bc_apply_gfs[0]));
       apply_bcs_inner_only_specific_gfs(commondata, params, &griddata[grid].bcstruct, diagnostic_gfs[grid], num_inner_bc_apply_gfs, diag_gf_parities,
                                         inner_bc_apply_gfs);
@@ -414,7 +423,7 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
 
   // 0D diagnostics: nearest point to the grid center.
   const int which_gfs_0d[] = {
-      DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
+      DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
       DIAG_ADDZZGF, DIAG_TRKGF, DIAG_HDDXXGF, DIAG_HDDXYGF, DIAG_HDDXZGF, DIAG_HDDYYGF, DIAG_HDDYZGF, DIAG_HDDZZGF,
       DIAG_EXACT_ADDXXGF, DIAG_EXACT_ADDXYGF, DIAG_EXACT_ADDXZGF, DIAG_EXACT_ADDYYGF, DIAG_EXACT_ADDYZGF,
       DIAG_EXACT_ADDZZGF, DIAG_EXACT_WGF, DIAG_EXACT_TRKGF, DIAG_EXACT_HDDXXGF, DIAG_EXACT_HDDXYGF, DIAG_EXACT_HDDXZGF,
@@ -423,7 +432,7 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
 
   // 1D diagnostics: nearest lines to the y and z axes.
   const int which_gfs_1d[] = {
-      DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
+      DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
       DIAG_ADDZZGF, DIAG_TRKGF, DIAG_HDDXXGF, DIAG_HDDXYGF, DIAG_HDDXZGF, DIAG_HDDYYGF, DIAG_HDDYZGF, DIAG_HDDZZGF,
       DIAG_EXACT_ADDXXGF, DIAG_EXACT_ADDXYGF, DIAG_EXACT_ADDXZGF, DIAG_EXACT_ADDYYGF, DIAG_EXACT_ADDYZGF,
       DIAG_EXACT_ADDZZGF, DIAG_EXACT_WGF, DIAG_EXACT_TRKGF, DIAG_EXACT_HDDXXGF, DIAG_EXACT_HDDXYGF, DIAG_EXACT_HDDXZGF,
@@ -432,7 +441,7 @@ def register_CFunction_diagnostics_nearest() -> Union[None, pcg.NRPyEnv_type]:
 
   // 2D diagnostics: nearest planes to the xy and yz coordinate planes.
   const int which_gfs_2d[] = {
-      DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
+      DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF, DIAG_ADDXXGF, DIAG_ADDXYGF, DIAG_ADDXZGF, DIAG_ADDYYGF, DIAG_ADDYZGF,
       DIAG_ADDZZGF, DIAG_TRKGF, DIAG_HDDXXGF, DIAG_HDDXYGF, DIAG_HDDXZGF, DIAG_HDDYYGF, DIAG_HDDYZGF, DIAG_HDDZZGF,
       DIAG_EXACT_ADDXXGF, DIAG_EXACT_ADDXYGF, DIAG_EXACT_ADDXZGF, DIAG_EXACT_ADDYYGF, DIAG_EXACT_ADDYZGF,
       DIAG_EXACT_ADDZZGF, DIAG_EXACT_WGF, DIAG_EXACT_TRKGF, DIAG_EXACT_HDDXXGF, DIAG_EXACT_HDDXYGF, DIAG_EXACT_HDDXZGF,

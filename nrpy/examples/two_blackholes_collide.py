@@ -123,6 +123,7 @@ enable_intrinsics = True  # WIP: Will remove; for ease of maintenance we are no 
 enable_fd_functions = True
 enable_KreissOliger_dissipation = False
 enable_CAKO = True
+enable_YBS_Gamma_constraint_adjustment = False
 boundary_conditions_desc = "outgoing radiation"
 
 set_of_CoordSystems = {CoordSystem}
@@ -201,6 +202,8 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
+    enable_conformal_projection=True,
     ID_persist_struct_str="",
 )
 
@@ -231,6 +234,7 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     ShiftEvolutionOption=ShiftEvolutionOption,
     enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
     enable_CAKO=enable_CAKO,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if separate_Ricci_and_BSSN_RHS:
@@ -248,7 +252,7 @@ if separate_Ricci_and_BSSN_RHS:
             OMP_collapse=OMP_collapse,
             host_only_version=True,
         )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -304,14 +308,16 @@ BHaH.MoLtimestepping.register_all.register_CFunctions(
     rhs_string=rhs_string,
     post_rhs_string="""if (strncmp(commondata->outer_bc_type, "extrapolation", 50) == 0)
   apply_bcs_outerextrap_and_inner(commondata, params, bcstruct, RK_OUTPUT_GFS);
-  enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+  enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     rational_const_alias=(
         "static constexpr" if parallelization == "cuda" else "static const"
     ),
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
 BHaH.general_relativity.basis_transforms.register_all.register_CFunctions(

@@ -1,25 +1,32 @@
 # Python Coding Style
 
-> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-06-2026
+> Python formatting, naming, imports, docstrings, type hints, comments, and module-shape rules. · Status: provisional · Last reconciled: 07-20-2026
 > Up: [Architecture](index.md)
 
 ## Summary
 
-Python source follows Black formatting, isort import grouping, canonical NRPy
+New or modified Python source should follow Black formatting, isort import grouping, canonical NRPy
 module aliases, Sphinx/reStructuredText docstrings, explicit return type
 annotations, and conservative helper-function use. `__init__.py` files and
 generated trusted-value files are special cases: both omit module docstrings,
 and `__init__.py` files stay as bare explicit import aggregators.
 
+This leaf records contributor rules, not a claim that every legacy source file
+already conforms. Existing untouched compatibility shims are factual and
+nonprecedential; do not add or expand them. Interface changes follow the
+current-commit consistency policy in [Contribution Style And Static
+Analysis](contribution-style-and-static-analysis.md).
+
 ## Detail
 
 ### Formatting And Artifacts
 
-Python uses 4-space indentation and lets Black decide line wrapping. Run Black before committing Python changes, then run
-`./.github/single_file_static_analysis.sh <path-to-file.py>` for each modified
-Python file. Do not add binary files, images, archives, compiled artifacts, or
-other non-text assets in ordinary pull requests; redesign the change as text or
-discuss a maintainer exception.
+Python uses 4-space indentation and lets Black decide line wrapping. Modified
+handwritten files follow [Static Analysis](../validation/static-analysis.md),
+which owns all static-analysis mechanics and applicability. Do not add binary
+files, images, archives,
+compiled artifacts, or other non-text assets in ordinary pull requests;
+redesign the change as text or discuss a maintainer exception.
 
 ### Naming And Imports
 
@@ -37,10 +44,12 @@ gri`, `nrpy.reference_metric as refmetric`, `nrpy.c_function as cfc`,
 
 ### `__init__.py` Files
 
-Every `__init__.py` is a bare import aggregation file. It has no module-level
-docstring, no comments, and no executable code beyond explicit relative imports
-such as `from . import module` or `from .module import symbol`. Keep the
-namespace flat and explicit.
+New or modified `__init__.py` files should be bare import aggregation files.
+They should have no module-level docstring or comments and no executable code
+beyond explicit relative imports such as `from . import module` or
+`from .module import symbol`. Keep the namespace flat and explicit. The current
+`nrpy/infrastructures/BHaH/fisheye/__init__.py` is a legacy exception because it
+assigns `__all__`; verify package consumers before changing that file.
 
 ### Docstrings And Module Headers
 
@@ -61,7 +70,9 @@ dictionaries omit module docstrings.
 Use `Author:` for one author and `Authors:` for more than one; those are the
 only allowed metadata keys. Avoid nonstandard keys such as `Email:` or
 `Contributor:`, a singular `Author:` with multiple names, and mixed metadata
-styles in one file. Do not add authors not already present in the file.
+styles in one file. Legitimate authorship credit may be added when a contributor
+makes a substantive change; review it for formatting, consistency, and accuracy,
+not merely for absence from the previous author list.
 
 ### Python String Literals
 
@@ -108,16 +119,19 @@ lowercase form in new code.
 
 ### Main Blocks, Doctests, And Organization
 
-Runnable non-test, non-`__init__.py` modules under `nrpy/equations/` and its
-subdirectories should start their `if __name__ == "__main__":` block with the
-standard doctest runner: import `doctest` and `sys`, run `doctest.testmod()`,
-print a pass/fail message, and exit with status `1` on failure. The same
-pattern is strongly encouraged for runnable `nrpy/infrastructures/*/*.py`
-modules and recommended elsewhere when useful.
+Runnable non-test, non-`__init__.py` equation modules start their
+`if __name__ == "__main__":` block with the canonical failure runner: import
+`doctest` and `sys`, run `doctest.testmod()`, print a pass/fail message, and exit
+with status `1` on failure. Runnable infrastructure modules should use the same
+shape. A runner is useful only when doctest prompts exist or meaningful subsequent
+owner validation runs. Empty or placeholder runners and wrappers duplicating an
+owner doctest are not coverage. [Code Test Policy](../validation/code-test-policy.md)
+owns placement, meaningfulness, framework, and validation-layer rules.
 
 In equation modules, symbolic validation and trusted-results generation may
 follow the doctest-runner prefix inside the same main block. Imports used only
-by that block belong inside it. Outside `nrpy/infrastructures/*/*.py`, doctests
+by that block belong inside it; other test-only imports stay inside doctests or
+the `__main__` scope. Outside `nrpy/infrastructures/*/*.py`, doctests
 that invoke Python-driven C/C++ generation are discouraged unless they provide
 signal that cheaper symbolic or structural checks cannot provide.
 
@@ -134,6 +148,7 @@ string manipulation or local tidiness; inline them at the point of use.
 
 ## Sources
 
+- [coding_style.md](../../coding_style.md) - `## Python Coding Style`, `### Module Docstring Format`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `## Python Style`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### Python String Literals`, `### Module Docstrings`, `### Type Hints`, `### Comments`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `### if __name__ == "__main__":`, `### General Python Organization`, `## Quick Reference`
@@ -142,5 +157,7 @@ string manipulation or local tidiness; inline them at the point of use.
 
 - Parent: [Architecture](index.md)
 - Validated by: [Static Analysis](../validation/static-analysis.md)
-- See also: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Depends on: [Contribution Style And Static Analysis](contribution-style-and-static-analysis.md)
 - See also: [C And Embedded C Style](c-and-embedded-c-style.md)

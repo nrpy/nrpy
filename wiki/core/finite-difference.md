@@ -1,6 +1,6 @@
 # Finite Difference
 
-> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 06-30-2026
+> Core route for finite-difference operators in generated C kernels. · Status: confirmed · Last reconciled: 07-12-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -13,7 +13,9 @@ Finite-difference order is an NRPy parameter registered as `finite_difference::f
 
 Operator support is string-driven. Centered first derivatives use the first-derivative row; unmixed second derivatives use the second-derivative row when the final two directions match; mixed second derivatives use products of first-derivative rows when the two final directions differ. `dKOD` bumps `fd_order` by two and uses the last matrix row with Kreiss-Oliger scaling. `dupD` and `ddnD` shift by one grid point, while `dfullupD` and `dfulldnD` shift by half the finite-difference order. Strings containing `DDD` are rejected because this implementation supports derivatives only through second order.
 
-The codegen pipeline starts from expression free symbols. `symbol_is_gridfunction_Cparameter_or_other()` classifies a symbol as `gridfunction`, `Cparameter`, or `other` by checking `gri.glb_gridfcs_dict` and `par.glb_code_params_dict`; it raises if the same name is registered both ways. `extract_list_of_deriv_var_strings_from_sympyexpr_list()` treats registered gridfunctions and registered C parameters as known quantities, collects derivative-like `other` symbols containing `_dD`, `_dKOD`, `_dupD`, or `_ddnD`, removes duplicates, and returns a deterministic SymPy sort. When an upwind control vector is supplied, each `_dupD` also adds the corresponding `_ddnD` variable needed by the upwind algorithm.
+The codegen pipeline starts from expression free symbols. `symbol_is_gridfunction_Cparameter_or_other()` classifies a symbol as `gridfunction`, `Cparameter`, or `other` by checking `gri.glb_gridfcs_dict` and `par.glb_code_params_dict`; it raises if the same name is registered both ways. `extract_list_of_deriv_var_strings_from_sympyexpr_list()` treats registered gridfunctions and registered C parameters as known quantities, collects derivative-like `other` symbols containing `_dD`, `_dKOD`, `_dupD`, or `_ddnD`, removes duplicates, and returns a deterministic SymPy sort.
+
+The helper's current `_ddnD` expansion condition is broader than the parameter name suggests: whenever `upwind_control_vec` is not a Python `str`, each `_dupD` also adds the corresponding `_ddnD`. Thus `sp.Symbol("unset")` triggers expansion, while the literal string `"unset"` does not. `c_codegen()` currently passes `sp.Symbol("unset")` to this extraction helper independently of the caller's `CCodeGen.upwind_control_vec`; only a later list-valued control vector activates final upwind selection.
 
 `extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars()` parses derivative names into base gridfunction names and derivative operators. It enforces the naming contract that the number of final numeric suffix digits equals the total number of `U` and `D` characters in the symbol name. It then finds the last underscore, counts contiguous rank markers before it, counts derivative `D` markers after it, and splits names such as `hDD_dDD0112` into the base gridfunction component and operator suffix expected by the finite-difference routines.
 

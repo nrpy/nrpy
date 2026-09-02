@@ -8,7 +8,6 @@ from . import (
     Makefile_helpers,
     MoLtimestepping,
     bhah_lib,
-    checkpointing,
     cmdline_input_and_parfiles,
     diagnostics,
     fisheye,
@@ -20,6 +19,7 @@ from . import (
     nrpyelliptic,
     numerical_grids_and_timestep,
     parallelization,
+    read_checkpoint,
     rfm_precompute,
     rfm_wrapper_functions,
     rotation,
@@ -27,5 +27,6 @@ from . import (
     simple_loop,
     special_functions,
     wave_equation,
+    write_checkpoint,
     xx_tofrom_Cart,
 )

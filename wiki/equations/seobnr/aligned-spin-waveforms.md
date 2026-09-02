@@ -1,6 +1,6 @@
 # Aligned-Spin Waveforms
 
-> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 06-29-2026
+> Map SEOBNRv5 aligned-spin factorized modes, flux, strain, and merger attachment quantities. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -10,6 +10,12 @@ ingredients, flux construction, strain-mode construction, and the native
 `(l=2,m=2)` merger-ringdown attachment quantities. It depends on conservative
 Hamiltonian outputs and calibration/remnant quantities but does not own those
 fits.
+
+These are current symbolic ingredients associated with the quasi-circular,
+spinning, nonprecessing binary-black-hole SEOBNRv5HM model. The relationship to
+the unversioned current-latest paper page is unaudited model background;
+model-wide calibration and accuracy claims neither decide this transcription's
+contract nor validate every generated consumer.
 
 ## Detail
 
@@ -48,6 +54,15 @@ state and flattens the mode dictionaries into keys such as `rho(2 , 2)`,
 class `__dict__`, including the attachment keys and the final `h` and `phi`
 expressions.
 
+The waveform trusted entry point constructs
+`SEOBNRv5_aligned_spin_waveform_quantities()` with
+`apply_special_amplitude_coefficients=False`. It does not call `flux()` or
+`strain()`, so their returned assembled flux and `hlms` dictionaries are not
+direct trusted keys. The enabled special-coefficient branch is also absent from
+that trusted variant. Trusted matching here proves only sampled values for the
+exported default object state; it does not reproduce paper-level calibration,
+build generated code, integrate dynamics, or measure waveform accuracy.
+
 ## Sources
 
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_waveform_quantities.py) - `SEOBNRv5_aligned_spin_waveform_quantities`
@@ -55,6 +70,7 @@ expressions.
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_merger_quantities.py) - `SEOBNRv5_aligned_spin_merger_quantities`
 - [SEOBNRv5_aligned_spin_waveform_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_waveform_quantities.py) - `trusted_dict`
 - [SEOBNRv5_aligned_spin_merger_quantities.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_merger_quantities.py) - `trusted_dict`
+- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin waveform/calibration claims are not yet audited to a pinned revision
 
 ## See Also
 

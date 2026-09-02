@@ -36,6 +36,7 @@ def BSSN_gauge_RHSs(
     enable_T4munu: bool = False,
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant",
+    enable_YBS_Gamma_constraint_adjustment: bool = False,
 ) -> Tuple[sp.Expr, List[sp.Expr], List[sp.Expr]]:
     """
     Core gauge evolution equation right-hand-side expression generation function.
@@ -45,10 +46,42 @@ def BSSN_gauge_RHSs(
     :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
     :param LapseEvolutionOption: Specifies the lapse condition to use.
     :param ShiftEvolutionOption: Specifies the shift condition to use.
+    :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
 
     :return: Returns a tuple of sympy expressions for the right-hand-side of the gauge evolution equations.
 
     :raises ValueError: If LapseEvolutionOption or ShiftEvolutionOption parameters are set to unsupported values.
+
+    Doctests:
+    >>> import contextlib
+    >>> import io
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     bq = BSSN_quantities["Cartesian"]
+    >>> original_BU = bq.BU.copy()
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _ = BSSN_gauge_RHSs(ShiftEvolutionOption="Frozen")
+    >>> BU_is_unchanged = bq.BU == original_BU
+    >>> bq.BU[:] = original_BU
+    >>> BU_is_unchanged
+    True
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     bhs_alpha_rhs, _, _ = BSSN_gauge_RHSs(
+    ...         LapseEvolutionOption="BHSHarmonicSlicing",
+    ...         ShiftEvolutionOption="Frozen",
+    ...     )
+    >>> isinstance(bhs_alpha_rhs, sp.Expr)
+    True
+    >>> old_name_rejected = False
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     try:
+    ...         _ = BSSN_gauge_RHSs(
+    ...             LapseEvolutionOption="HarmonicSlicing",
+    ...             ShiftEvolutionOption="Frozen",
+    ...         )
+    ...     except ValueError as error:
+    ...         old_name_rejected = "not supported" in str(error)
+    >>> old_name_rejected
+    True
     """
     # Step 1.b: Given the chosen coordinate system, set up
     #           corresponding reference metric and needed
@@ -69,11 +102,12 @@ def BSSN_gauge_RHSs(
     #    if they haven't already been declared. Note that enable_RbarDD_gridfunctions isn't relevant, as
     #    no gauge condition (to date) needs RbarDD. However, the Gamma-driving shift does need the RHS
     #    of LambdabarU, which contains T4munu source terms.
-    Brhs = BSSN_RHSs[
+    Brhs = BSSN_RHSs.get_rhs(
         CoordSystem
         + ("_rfm_precompute" if enable_rfm_precompute else "")
-        + ("_T4munu" if enable_T4munu else "")
-    ]
+        + ("_T4munu" if enable_T4munu else ""),
+        enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+    )
 
     ########################################
     # Step 2: Lapse conditions
@@ -94,15 +128,27 @@ def BSSN_gauge_RHSs(
         for i in range(3):
             alpha_rhs += betaU[i] * alpha_dupD[i]
 
-    # Step 2.b: Implement the harmonic slicing lapse condition
-    elif LapseEvolutionOption == "HarmonicSlicing":
+    # Step 2.b: exp(6*phi)-tracking behavior, exposed as BHSHarmonicSlicing:
+    # partial_t(alpha) = partial_t(exp(6*phi)), using
+    # the total Brhs.cf_rhs. This preserves alpha-exp(6*phi), whereas general
+    # harmonic slicing preserves alpha*exp(-6*phi) at zero shift. In that
+    # zero-shift case, the two RHSs agree for alpha=exp(6*phi); see
+    # https://arxiv.org/pdf/gr-qc/9810065v1, Eqs. (30)-(32), where C(x)=1 is
+    # chosen. Thus W=exp(-2*phi) gives alpha_rhs=-3*W**(-4)*W_rhs, while evolved
+    # phi gives alpha_rhs=6*exp(6*phi)*phi_rhs. See the legacy derivation:
+    # zachetienne/nrpytutorial@a32e120f5642bee00e32e9e04dd8cb4c58ae661c,
+    # Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb, Step 2.b.
+    # The documented R0=M StaticTrumpet staticity pairing instead uses the
+    # separate OnePlusLogAlt condition below; see
+    # https://arxiv.org/pdf/1712.07658v2, Eqs. (67) and (69).
+    elif LapseEvolutionOption == "BHSHarmonicSlicing":
         if EvolvedConformalFactor_cf == "W":
             alpha_rhs = -3 * cf ** (-4) * Brhs.cf_rhs
         elif EvolvedConformalFactor_cf == "phi":
             alpha_rhs = 6 * sp.exp(6 * cf) * Brhs.cf_rhs
         else:
             raise ValueError(
-                "LapseEvolutionOption==HarmonicSlicing unsupported for EvolvedConformalFactor_cf!=(W or phi)"
+                "LapseEvolutionOption==BHSHarmonicSlicing unsupported for EvolvedConformalFactor_cf!=(W or phi)"
             )
 
     # Step 2.c: Frozen lapse
@@ -148,15 +194,6 @@ def BSSN_gauge_RHSs(
     # Define needed quantities
     beta_rhsU = ixp.zerorank1()
     B_rhsU = ixp.zerorank1()
-
-    # In the case of Frozen shift condition, we
-    #    explicitly set the betaU and BU RHS's to zero
-    #    instead of relying on the ixp.zerorank1()'s above,
-    #    for safety.
-    if ShiftEvolutionOption == "Frozen":
-        for i in range(3):
-            beta_rhsU[i] = sp.sympify(0)
-            BU[i] = sp.sympify(0)
 
     if ShiftEvolutionOption == "GammaDriving2ndOrder_NoCovariant":
         # Step 3.a.i: Compute right-hand side of beta^i
@@ -344,7 +381,12 @@ if __name__ == "__main__":
     else:
         print(f"Doctest passed: All {results.attempted} test(s) passed")
 
-    for LapseEvolOption in ["OnePlusLog", "HarmonicSlicing", "Frozen", "OnePlusLogAlt"]:
+    for LapseEvolOption in [
+        "OnePlusLog",
+        "BHSHarmonicSlicing",
+        "Frozen",
+        "OnePlusLogAlt",
+    ]:
         for ShiftEvolOption in [
             "Frozen",
             "GammaDriving2ndOrder_NoCovariant",

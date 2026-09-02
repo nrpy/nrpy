@@ -1,6 +1,6 @@
 # Reference Metrics
 
-> Core route for coordinate-system reference metrics and precompute support. · Status: confirmed · Last reconciled: 06-30-2026
+> Core route for coordinate-system reference metrics and precompute support. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -23,6 +23,21 @@ Supported coordinate systems are `Spherical`, `SinhSpherical`, `SinhSphericalv2n
 
 `GeneralRFM` behavior is distinct from diagonal coordinate families. `general_rfm_like()` sets neutral bounds and identity Cartesian labels by default, marks the analytic inverse map as unavailable with `nan` sentinels, stores provider metadata, and recognizes the `GeneralRFM_fisheyeN*` pattern by building a fisheye provider. For GeneralRFM systems, `ghatDD`, `ghatDDdD`, and `ghatDDdDD` are registered as `AUXEVOL` gridfunctions, rescaling factors are set to one, and derived quantities such as `ghatUU`, `detgammahat`, determinant derivatives, and `Gammahat*` are computed algebraically from those gridfunctions.
 
+The `GeneralRFM_fisheyeN2` trusted dictionary contains three intentional NaN
+sentinels, at `Cart_to_xx_0` through `Cart_to_xx_2`, for that unavailable
+analytic inverse map. Trusted comparison accepts them only when the computed
+values contain matching NaN components. A finite value at one of those keys, or
+a computed NaN at a finite trusted key, is a validation failure; NaN is not a
+blanket wildcard.
+
+Claim evidence:
+- Claim: The `GeneralRFM_fisheyeN2` trusted dictionary contains exactly three intentional NaN inverse-map sentinels, and validation accepts them only against matching NaN components.
+- Role: descriptive behavior
+- Deciding authority: [reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py), `trusted_dict`, and [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py), `compare_against_trusted` and `_nonfinite_values_match`
+- Corroboration: [reference_metric.py](../../nrpy/reference_metric.py), `general_rfm_like`, assigns unavailable analytic inverse-map entries to `nan`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=pass; result_checked=pass`
+- Dimensions: `platform=Linux; tool_version=Python 3.12.3, SymPy 1.14.0, mpmath 1.3.0; backend=not-applicable; precision=30 decimal digits; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=pass; options=full reference_metric validation including both trusted-NaN mismatch doctests; date=07-13-2026`
+
 When precompute is enabled for non-`GeneralRFM` systems, hatted quantities are first expressed through generic function forms such as `f0_of_xx0_funcform`. The replacement pass rewrites functions and derivatives into rigid NRPy variable names such as base function names plus `__D...` derivative suffixes, folds derivatives that evaluate to coordinate-independent values, and skips creating a separate precompute object for `GeneralRFM`.
 
 `register_pi()` and `register_sqrt1_2()` provide special constants as CodeParameters named `PI` and `SQRT1_2`, with values emitted into generated CodeParameters headers and excluded from parfiles.
@@ -36,6 +51,7 @@ In the module `__main__` validation path, doctests run first. Then every entry i
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `Sinhv1`, `Sinhv2`, `cartesian_like`, `spherical_like`, `spherical_wedge_like`, `prolate_spheroidal_like`, `cylindrical_like`, `general_rfm_like`
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `register_pi`, `register_sqrt1_2`
 - [nrpy/reference_metric.py](../../nrpy/reference_metric.py) - `__main__` validation loop and `SinhSymTP` `check_zero` inverse check
+- [nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py](../../nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py) - `trusted_dict`
 
 ## See Also
 

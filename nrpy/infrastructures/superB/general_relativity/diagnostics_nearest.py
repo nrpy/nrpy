@@ -115,13 +115,13 @@ def register_CFunction_diagnostics_nearest(
   // --- USER-EDIT: Select diagnostic gridfunctions to sample (applies to all grids) ---
 
   // 0D diagnostics: nearest point to the grid center.
-  const int which_gfs_0d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_0d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // 1D diagnostics: nearest lines to the y and z axes.
-  const int which_gfs_1d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_1d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // 2D diagnostics: nearest planes to the xy and yz coordinate planes.
-  const int which_gfs_2d[] = {DIAG_HAMILTONIANGF, DIAG_MSQUAREDGF};
+  const int which_gfs_2d[] = {DIAG_HAMILTONIANGF, DIAG_MGF, DIAG_LAMBDA_CONSTRAINTGF};
 
   // --- END USER-EDIT ---
 
@@ -171,7 +171,7 @@ def register_CFunction_diagnostics_nearest(
         const int i2_center = {i2_center_expr};
 """
     body += r"""
-        const int idx3 = IDX3(i0_center, i1_center, i2_center);
+        const int64_t idx3 = IDX3GENERAL_64(i0_center, i1_center, i2_center, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1);
 
         if (globalidx3pt_to_chareidx3(idx3, params->Nxx_plus_2NGHOSTS0, params->Nxx_plus_2NGHOSTS1, params_chare->Nxx0, params_chare->Nxx1,
                                             params_chare->Nxx2, commondata->Nchare0, commondata->Nchare1, commondata->Nchare2) ==

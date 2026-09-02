@@ -11,7 +11,7 @@ Author: Zachariah B. Etienne
 from collections import OrderedDict
 
 # Step 1.a: import all needed modules from NRPy:
-from typing import Dict
+from typing import Dict, Tuple
 
 import sympy as sp  # SymPy: The Python computer algebra package upon which NRPy depends
 
@@ -32,6 +32,8 @@ class BSSNRHSs:
         enable_rfm_precompute: bool = False,
         enable_RbarDD_gridfunctions: bool = False,
         enable_T4munu: bool = False,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
+        enable_YBS_momentum_constraint_adjustment: bool = False,
     ):
         """
         Initialize and set up all BSSN quantities, storing them within the class object.
@@ -40,6 +42,9 @@ class BSSNRHSs:
         :param enable_rfm_precompute: Whether to enable reference-metric precomputation, defaults to False.
         :param enable_RbarDD_gridfunctions: Whether to enable RbarDD gridfunctions, defaults to False.
         :param enable_T4munu: Whether to enable T4munu (stress-energy terms), defaults to False.
+        :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS Gamma-constraint adjustment.
+        :param enable_YBS_momentum_constraint_adjustment: Whether to enable the
+            Yo--Lin--Cao momentum-constraint adjustment.
 
         :raises ValueError: If EvolvedConformalFactor_cf parameter is set to an unsupported value.
         """
@@ -88,11 +93,7 @@ class BSSNRHSs:
                     gammabar_rhsDD[i][j] += betaU[k] * gammabarDD_dupD[i][j][k] + betaU_dD[k][i] * gammabarDD[k][j] \
                                             + betaU_dD[k][j] * gammabarDD[i][k]
 
-        # Step 2.b.i: First import \bar{A}_{ij}'s contraction trAbar = \bar{A}^k_k
-        #           from BSSN_quantities
-        trAbar = Bq.trAbar
-
-        # Step 2.b.ii: Import detgammabar from BSSN_quantities:
+        # Step 2.b.i: Import detgammabar from BSSN_quantities:
         detgammabar = Bq.detgammabar
         detgammabar_dD = Bq.detgammabar_dD
 
@@ -101,11 +102,11 @@ class BSSNRHSs:
         for k in range(3):
             Dbarbetacontraction += betaU_dD[k][k] + betaU[k] * detgammabar_dD[k] / (2 * detgammabar)
 
-        # Step 2.b.iii: Second term of \partial_t \bar{\gamma}_{i j} right-hand side:
-        # \frac{2}{3} \bar{\gamma}_{i j} \left (\alpha \bar{A}_{k}^{k} - \bar{D}_{k} \beta^{k}\right )
+        # Step 2.b.ii: Second term of \partial_t \bar{\gamma}_{i j} right-hand side:
+        # -\frac{2}{3} \bar{\gamma}_{i j} \bar{D}_{k} \beta^{k}
         for i in range(3):
             for j in range(3):
-                gammabar_rhsDD[i][j] += sp.Rational(2, 3) * gammabarDD[i][j] * (alpha * trAbar - Dbarbetacontraction)
+                gammabar_rhsDD[i][j] += -sp.Rational(2, 3) * gammabarDD[i][j] * Dbarbetacontraction
 
         # Step 2.c: Third term of \partial_t \bar{\gamma}_{i j} right-hand side:
         # -2 \alpha \bar{A}_{ij}
@@ -117,7 +118,7 @@ class BSSNRHSs:
         # \beta^k \partial_k \bar{A}_{ij} + \partial_i \beta^k \bar{A}_{kj} + \partial_j \beta^k \bar{A}_{ik}
 
         # First define AbarDD_dupD:
-        AbarDD_dupD = Bq.AbarDD_dupD # From Bq.AbarUU_AbarUD_trAbar_AbarDD_dD()
+        AbarDD_dupD = Bq.AbarDD_dupD
 
         Abar_rhsDD = ixp.zerorank2()
         for i in range(3):
@@ -129,7 +130,7 @@ class BSSNRHSs:
         # Step 3.b: Second term of \partial_t \bar{A}_{i j}:
         # - (2/3) \bar{A}_{i j} \bar{D}_{k} \beta^{k} - 2 \alpha \bar{A}_{i k} {\bar{A}^{k}}_{j} + \alpha \bar{A}_{i j} K
         gammabarUU = Bq.gammabarUU  # From Bq.gammabar__inverse_and_derivs()
-        AbarUD = Bq.AbarUD  # From Bq.AbarUU_AbarUD_trAbar()
+        AbarUD = Bq.AbarUD
         for i in range(3):
             for j in range(3):
                 Abar_rhsDD[i][j] += -sp.Rational(2, 3) * AbarDD[i][j] * Dbarbetacontraction + alpha * AbarDD[i][j] * trK
@@ -286,6 +287,15 @@ class BSSNRHSs:
         for i in range(3):
             self.Lambdabar_rhsU[i] += sp.Rational(2, 3) * DGammaU[i] * Dbarbetacontraction  # Term 3
 
+        if enable_YBS_Gamma_constraint_adjustment:
+            YBS_chi = sp.Symbol("YBS_chi", real=True)
+            for i in range(3):
+                self.Lambdabar_rhsU[i] += (
+                    -YBS_chi
+                    * (LambdabarU[i] - DGammaU[i])
+                    * Dbarbetacontraction
+                )
+
         # Step 6.d: Term 4 of \partial_t \bar{\Lambda}^i:
         #           \frac{1}{3} \bar{D}^{i} \bar{D}_{j} \beta^{j}
         detgammabar_dDD = Bq.detgammabar_dDD  # From Bq.detgammabar_and_derivs()
@@ -344,6 +354,187 @@ class BSSNRHSs:
                 for j in range(3):
                     Abar_rhsDD[i][j] += sourceterm_Abar_rhsDD[i][j]
 
+        if enable_YBS_momentum_constraint_adjustment:
+            # Lower-index vacuum momentum residual:
+            # M_i = Dbar_j Abar^j_i + 6 Abar^j_i phi_,j - 2 K_,i / 3.
+            AbarDD_dD = Bq.AbarDD_dD
+            DbarAbarDDD = ixp.zerorank3()
+            self.MD = ixp.zerorank1()
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        DbarAbarDDD[j][k][i] = AbarDD_dD[k][i][j]
+                        for l in range(3):
+                            DbarAbarDDD[j][k][i] -= (
+                                GammabarUDD[l][j][k] * AbarDD[l][i]
+                                + GammabarUDD[l][j][i] * AbarDD[k][l]
+                            )
+                        self.MD[i] += gammabarUU[j][k] * (
+                            DbarAbarDDD[j][k][i]
+                            + 6 * AbarDD[k][i] * phi_dD[j]
+                        )
+                self.MD[i] -= sp.Rational(2, 3) * trK_dD[i]
+            if enable_T4munu:
+                T4UU = ixp.declarerank2("T4UU", symmetry="sym01", dimension=4)
+                PI = par.glb_code_params_dict["PI"].symbol
+                for i in range(3):
+                    for j in range(3):
+                        self.MD[i] -= (
+                            8
+                            * PI
+                            * alpha
+                            * gammabarDD[i][j]
+                            * (T4UU[0][j + 1] + betaU[j] * T4UU[0][0])
+                            / exp_m4phi
+                        )
+
+            # Build the first partial derivative of M_i from already-owned
+            # BSSN tensors and the one newly required second derivative of aDD.
+            gammabarDD_dD = Bq.gammabarDD_dD
+            gammabarDD_dDD = Bq.gammabarDD_dDD
+            phi_dDD = Bq.phi_dDD
+            aDD = ixp.declarerank2("aDD", symmetry="sym01")
+            aDD_dD = ixp.declarerank3("aDD_dD", symmetry="sym01")
+            aDD_dDD = ixp.declarerank4("aDD_dDD", symmetry="sym01_sym23")
+            trK_dDD = ixp.declarerank2("trK_dDD", symmetry="sym01")
+            AbarDD_dDD = ixp.zerorank4()
+            gammabarUU_dD = ixp.zerorank3()
+            GammabarUDDdD = ixp.zerorank4()
+            for i in range(3):
+                for j in range(3):
+                    for m in range(3):
+                        for n in range(3):
+                            AbarDD_dDD[i][j][m][n] = (
+                                aDD_dDD[i][j][m][n] * rfm.ReDD[i][j]
+                                + aDD_dD[i][j][m] * rfm.ReDDdD[i][j][n]
+                                + aDD_dD[i][j][n] * rfm.ReDDdD[i][j][m]
+                                + aDD[i][j] * rfm.ReDDdDD[i][j][m][n]
+                            )
+            # Complete inverse-metric derivatives without assuming diagonal gbar.
+            for i in range(3):
+                for j in range(3):
+                    for m in range(3):
+                        gammabarUU_dD[i][j][m] = sp.sympify(0)
+                        for k in range(3):
+                            for l in range(3):
+                                gammabarUU_dD[i][j][m] -= (
+                                    gammabarUU[i][k]
+                                    * gammabarUU[j][l]
+                                    * gammabarDD_dD[k][l][m]
+                                )
+            for i in range(3):
+                for j in range(3):
+                    for k in range(3):
+                        for m in range(3):
+                            for l in range(3):
+                                GammabarUDDdD[i][j][k][m] += sp.Rational(1, 2) * (
+                                    gammabarUU_dD[i][l][m]
+                                    * (
+                                        gammabarDD_dD[l][j][k]
+                                        + gammabarDD_dD[l][k][j]
+                                        - gammabarDD_dD[j][k][l]
+                                    )
+                                    + gammabarUU[i][l]
+                                    * (
+                                        gammabarDD_dDD[l][j][k][m]
+                                        + gammabarDD_dDD[l][k][j][m]
+                                        - gammabarDD_dDD[j][k][l][m]
+                                    )
+                                )
+
+            MD_dD = ixp.zerorank2()
+            for i in range(3):
+                for m in range(3):
+                    MD_dD[i][m] = -sp.Rational(2, 3) * trK_dDD[i][m]
+                    for j in range(3):
+                        for k in range(3):
+                            DbarAbar_dD = AbarDD_dDD[k][i][j][m]
+                            for l in range(3):
+                                DbarAbar_dD -= (
+                                    GammabarUDDdD[l][j][k][m] * AbarDD[l][i]
+                                    + GammabarUDD[l][j][k] * AbarDD_dD[l][i][m]
+                                    + GammabarUDDdD[l][j][i][m] * AbarDD[k][l]
+                                    + GammabarUDD[l][j][i] * AbarDD_dD[k][l][m]
+                                )
+                            MD_dD[i][m] += (
+                                gammabarUU_dD[j][k][m]
+                                * (
+                                    DbarAbarDDD[j][k][i]
+                                    + 6 * AbarDD[k][i] * phi_dD[j]
+                                )
+                                + gammabarUU[j][k]
+                                * (
+                                    DbarAbar_dD
+                                    + 6 * AbarDD_dD[k][i][m] * phi_dD[j]
+                                    + 6 * AbarDD[k][i] * phi_dDD[j][m]
+                                )
+                            )
+            if enable_T4munu:
+                T4UU_dD = ixp.declarerank3(
+                    "T4UU_dD", symmetry="sym01", dimension=4
+                )
+                for i in range(3):
+                    for m in range(3):
+                        for j in range(3):
+                            momentum_density = (
+                                T4UU[0][j + 1] + betaU[j] * T4UU[0][0]
+                            )
+                            MD_dD[i][m] -= 8 * PI * (
+                                alpha_dD[m]
+                                * gammabarDD[i][j]
+                                * momentum_density
+                                / exp_m4phi
+                                + alpha
+                                * (
+                                    gammabarDD_dD[i][j][m]
+                                    + 4 * gammabarDD[i][j] * phi_dD[m]
+                                )
+                                * momentum_density
+                                / exp_m4phi
+                                + alpha
+                                * gammabarDD[i][j]
+                                * (
+                                    T4UU_dD[0][j + 1][m]
+                                    + betaU_dD[j][m] * T4UU[0][0]
+                                    + betaU[j] * T4UU_dD[0][0][m]
+                                )
+                                / exp_m4phi
+                            )
+
+            # DbarMD[i][j] = \bar D_i M_j: first index is the derivative.
+            self.DbarMD = ixp.zerorank2()
+            for i in range(3):
+                for j in range(3):
+                    self.DbarMD[i][j] = MD_dD[j][i]
+                    for k in range(3):
+                        self.DbarMD[i][j] -= GammabarUDD[k][i][j] * self.MD[k]
+
+            DbarM_contraction = sp.sympify(0)
+            for k in range(3):
+                for l in range(3):
+                    DbarM_contraction += (
+                        gammabarUU[k][l] * self.DbarMD[k][l]
+                    )
+
+            self.DbarM_STFDD = ixp.zerorank2()
+            for i in range(3):
+                for j in range(3):
+                    self.DbarM_STFDD[i][j] = (
+                        sp.Rational(1, 2)
+                        * (self.DbarMD[i][j] + self.DbarMD[j][i])
+                        - sp.Rational(1, 3)
+                        * gammabarDD[i][j]
+                        * DbarM_contraction
+                    )
+
+            dsmin = sp.Symbol("dsmin", real=True)
+            C_YBS_mom = sp.Symbol("C_YBS_mom", real=True)
+            CFL_FACTOR = sp.Symbol("CFL_FACTOR", real=True)
+            ell_M = C_YBS_mom * CFL_FACTOR * dsmin
+            for i in range(3):
+                for j in range(3):
+                    Abar_rhsDD[i][j] += ell_M * self.DbarM_STFDD[i][j]
+
 
         # Step 8: Rescale the RHS quantities so that the evolved
         #         variables are smooth across coord singularities
@@ -377,8 +568,128 @@ class BSSNRHSs:
 class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
     """Custom dictionary for storing BSSNRHSs objects."""
 
+    def __init__(self) -> None:
+        """Initialize an empty cache and its construction-parameter metadata."""
+        super().__init__()
+        self._construction_parameters: Dict[str, Tuple[str, bool]] = {}
+        self._YBS_adjustment_cache: Dict[Tuple[str, bool, bool], BSSNRHSs] = {}
+        self._YBS_adjustment_construction_parameters: Dict[
+            Tuple[str, bool, bool], Tuple[str, bool]
+        ] = {}
+
     def __getitem__(self, CoordSystem_in: str) -> BSSNRHSs:
-        if CoordSystem_in not in self:
+        """
+        Return RHSs built for the current expression-affecting parameters.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :return: Cached or newly built BSSN right-hand sides.
+
+        Doctests:
+        >>> import contextlib
+        >>> import io
+        >>> original_cf = par.parval_from_str("EvolvedConformalFactor_cf")
+        >>> original_gridfunctions = gri.glb_gridfcs_dict.copy()
+        >>> original_parameters = par.glb_params_dict.copy()
+        >>> original_code_parameters = par.glb_code_params_dict.copy()
+        >>> original_reference_metrics = refmetric.reference_metric.copy()
+        >>> original_quantities = dict(BSSN_quantities)
+        >>> original_quantity_parameters = (
+        ...     BSSN_quantities._construction_parameters.copy()
+        ... )
+        >>> cache = BSSNRHSs_dict()
+        >>> objects = []
+        >>> invalid_cf_raised = False
+        >>> try:
+        ...     with contextlib.redirect_stdout(io.StringIO()):
+        ...         for cf_choice in ("W", "phi"):
+        ...             par.set_parval_from_str(
+        ...                 "EvolvedConformalFactor_cf", cf_choice
+        ...             )
+        ...             objects.append(cache["Cartesian"])
+        ...         same_parameters_reused = cache["Cartesian"] is objects[-1]
+        ...         par.set_parval_from_str("EvolvedConformalFactor_cf", "invalid")
+        ...         try:
+        ...             _ = cache["Cartesian"]
+        ...         except ValueError:
+        ...             invalid_cf_raised = True
+        ... finally:
+        ...     par.set_parval_from_str("EvolvedConformalFactor_cf", original_cf)
+        ...     dict.clear(BSSN_quantities)
+        ...     dict.update(BSSN_quantities, original_quantities)
+        ...     BSSN_quantities._construction_parameters.clear()
+        ...     BSSN_quantities._construction_parameters.update(
+        ...         original_quantity_parameters
+        ...     )
+        ...     gri.glb_gridfcs_dict.clear()
+        ...     gri.glb_gridfcs_dict.update(original_gridfunctions)
+        ...     par.glb_params_dict.clear()
+        ...     par.glb_params_dict.update(original_parameters)
+        ...     par.glb_code_params_dict.clear()
+        ...     par.glb_code_params_dict.update(original_code_parameters)
+        ...     refmetric.reference_metric.clear()
+        ...     refmetric.reference_metric.update(original_reference_metrics)
+        >>> symbols = [
+        ...     {symbol.name: symbol for symbol in obj.cf_rhs.free_symbols}
+        ...     for obj in objects
+        ... ]
+        >>> coefficients_match = [
+        ...     symbols[0]["alpha"] * symbols[0]["cf"] / 3,
+        ...     -symbols[1]["alpha"] / 6,
+        ... ] == [
+        ...     sp.diff(obj.cf_rhs, obj_symbols["trK"])
+        ...     for obj, obj_symbols in zip(objects, symbols)
+        ... ]
+        >>> objects_rebuilt = objects[0] is not objects[1]
+        >>> (
+        ...     coefficients_match,
+        ...     objects_rebuilt,
+        ...     same_parameters_reused,
+        ...     invalid_cf_raised,
+        ... )
+        (True, True, True, True)
+        """
+        return self.get_rhs(CoordSystem_in)
+
+    def get_rhs(
+        self,
+        CoordSystem_in: str,
+        *,
+        enable_YBS_Gamma_constraint_adjustment: bool = False,
+        enable_YBS_momentum_constraint_adjustment: bool = False,
+    ) -> BSSNRHSs:
+        """
+        Return cached RHSs for an unchanged coordinate/options key and YBS choice.
+
+        :param CoordSystem_in: Coordinate-system and option cache key.
+        :param enable_YBS_Gamma_constraint_adjustment: Whether to enable the YBS
+            Gamma-constraint adjustment.
+        :param enable_YBS_momentum_constraint_adjustment: Whether to enable the
+            Yo--Lin--Cao momentum-constraint adjustment.
+        :return: Cached or newly built BSSN right-hand sides.
+        """
+        construction_parameters = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
+        adjustment_key = (
+            CoordSystem_in,
+            enable_YBS_Gamma_constraint_adjustment,
+            enable_YBS_momentum_constraint_adjustment,
+        )
+        adjustments_enabled = (
+            enable_YBS_Gamma_constraint_adjustment
+            or enable_YBS_momentum_constraint_adjustment
+        )
+        rebuild = (
+            adjustment_key not in self._YBS_adjustment_cache
+            or self._YBS_adjustment_construction_parameters.get(adjustment_key)
+            != construction_parameters
+            if adjustments_enabled
+            else CoordSystem_in not in self
+            or self._construction_parameters.get(CoordSystem_in)
+            != construction_parameters
+        )
+        if rebuild:
             # In case e.g., [CoordSystem]_rfm_precompute_T4munu or [CoordSystem]_rfm_precompute are passed:
             CoordSystem = (
                 CoordSystem_in.replace("_rfm_precompute", "")
@@ -390,22 +701,49 @@ class BSSNRHSs_dict(Dict[str, BSSNRHSs]):
             enable_T4munu = "_T4munu" in CoordSystem_in
 
             print(f"Setting up BSSN_RHSs[{CoordSystem_in}]...")
-            self.__setitem__(
-                CoordSystem_in,
-                BSSNRHSs(
-                    CoordSystem,
-                    enable_T4munu=enable_T4munu,
-                    enable_rfm_precompute=enable_rfm_precompute,
-                    enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
-                ),
+            rhs = BSSNRHSs(
+                CoordSystem,
+                enable_T4munu=enable_T4munu,
+                enable_rfm_precompute=enable_rfm_precompute,
+                enable_RbarDD_gridfunctions=enable_RbarDD_gridfunctions,
+                enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
+                enable_YBS_momentum_constraint_adjustment=enable_YBS_momentum_constraint_adjustment,
             )
+            if adjustments_enabled:
+                self._YBS_adjustment_cache[adjustment_key] = rhs
+                self._YBS_adjustment_construction_parameters[adjustment_key] = (
+                    construction_parameters
+                )
+            else:
+                self[CoordSystem_in] = rhs
+        if adjustments_enabled:
+            return self._YBS_adjustment_cache[adjustment_key]
         return dict.__getitem__(self, CoordSystem_in)
 
     def __setitem__(self, CoordSystem: str, value: BSSNRHSs) -> None:
         dict.__setitem__(self, CoordSystem, value)
+        self._construction_parameters[CoordSystem] = (
+            par.parval_from_str("EvolvedConformalFactor_cf"),
+            par.parval_from_str("detgbarOverdetghat_equals_one"),
+        )
 
     def __delitem__(self, CoordSystem: str) -> None:
         dict.__delitem__(self, CoordSystem)
+        self._construction_parameters.pop(CoordSystem, None)
+        for key in (
+            (CoordSystem, False, True),
+            (CoordSystem, True, False),
+            (CoordSystem, True, True),
+        ):
+            self._YBS_adjustment_cache.pop(key, None)
+            self._YBS_adjustment_construction_parameters.pop(key, None)
+
+    def clear(self) -> None:
+        """Remove all cached right-hand sides and construction metadata."""
+        dict.clear(self)
+        self._construction_parameters.clear()
+        self._YBS_adjustment_cache.clear()
+        self._YBS_adjustment_construction_parameters.clear()
 
 
 BSSN_RHSs = BSSNRHSs_dict()
@@ -433,7 +771,11 @@ if __name__ == "__main__":
         "SinhCylindrical",
         "SinhSymTP",
     ]:
-        brhs = BSSN_RHSs[Coord + "_T4munu"]
+        brhs = BSSN_RHSs.get_rhs(
+            Coord + "_T4munu",
+            enable_YBS_Gamma_constraint_adjustment=True,
+            enable_YBS_momentum_constraint_adjustment=True,
+        )
         results_dict = ve.process_dictionary_of_expressions(
             brhs.__dict__, fixed_mpfs_for_free_symbols=True
         )

@@ -1,44 +1,38 @@
 # Trusted Expression Pipeline
 
-> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-05-2026
+> Explain how symbolic equation outputs become trusted numerical validation files. · Status: confirmed · Last reconciled: 07-20-2026
 > Up: [Equations](index.md)
 
 ## Summary
 
-Equation modules validate symbolic expressions by building a results dictionary,
-converting it to deterministic high-precision numerical values, and comparing
-or generating a sibling trusted file under `tests/`. The same mechanics cover
-BSSN, GR conversions and diagnostics, GRHD, wave, elliptic, TOV, SEOBNR/BOB,
-and most geometry-support helpers. Quaternion tensor rotation is a confirmed
-doctest-only exception.
+When exact or semantic invariants are impractical, equation modules can sample
+symbolic expressions at a deterministic high-precision point and compare those
+values with a sibling trusted file under `tests/`. This can detect expression
+drift under sampled conditions; it is not a formal symbolic-equality proof. The
+same flow covers BSSN, GR conversions and diagnostics, GRHD, wave, elliptic,
+TOV, SEOBNR/BOB, and most geometry-support helpers. Quaternion tensor rotation
+is a confirmed doctest-only exception.
 
 ## Detail
 
-The common equation-module flow is:
+Prefer an exact analytic, symbolic, or semantic invariant. When sampled
+regression is appropriate, the common equation-module flow is:
 
-1. Build a dictionary from object state or explicit expression names.
+1. Build a dictionary with stable descriptive keys from object state or
+   explicit expression names.
 2. Call `process_dictionary_of_expressions(...)`, usually with
    `fixed_mpfs_for_free_symbols=True`.
 3. Call `compare_or_generate_trusted_results(...)` with the owning module path,
    working directory, trusted-file basename, and processed results.
 
-`process_dictionary_of_expressions` sorts dictionary items, ignores keys
-containing `funcform`, flattens tensor lists, and converts every SymPy expression
-to an `mpf` or `mpc` result. `compare_or_generate_trusted_results` derives the
-owning module's `tests/<trusted_file_basename>.py` path. If the file exists, it
-loads `trusted_dict` and compares expression count and values; if it does not
-exist, it writes a new trusted dictionary.
-
-`output_trusted` writes only the needed `mpmath` imports plus `trusted_dict`, and
-formats the file with Black. `compare_against_trusted` raises on missing keys or
-value mismatch and tells maintainers to delete the stale trusted file and rerun
-the owning module only when the new result is trusted.
-
-Trusted-value files under `*/tests/*.py` are treated specially. They should
-contain only generated `mpf` or `mpc` data, no module docstrings, no functions,
-and no classes. The preserved agent rules say not to hand-edit trusted values;
-regenerate them from the owning module and explain the reason in the commit
-message.
+This flow is sampled numerical regression, not a symbolic identity proof.
+[Expression Validation
+Helpers](../validation/expression-validation-helpers.md) owns substitution,
+conversion, structure and collision handling, tolerances, non-finite behavior,
+and trusted-file mechanics. [Test Oracles And Safe
+Updates](../validation/test-oracles-and-safe-updates.md) owns store admission
+and safe regeneration; [Code Test Policy](../validation/code-test-policy.md)
+owns test placement and meaningfulness.
 
 Family pages own the implementation-specific validation inventory. In compact
 form, current coverage includes BSSN quantities/RHSs/constraints, ADM/BSSN and
@@ -48,13 +42,13 @@ wave RHSs and initial data, conformally flat elliptic RHS/source terms, TOV ODE
 RHSs, SEOBNRv5/BOB dynamics and waveform quantities, basis transforms,
 GeneralRFM fisheye maps, SO(3) rotations, and spin-weighted spherical
 harmonics. The owning leaves link to representative trusted files and stable
-symbols; this page owns only the common processing and comparison mechanics.
+symbols; this page owns the common caller flow and family inventory.
 
 ## Sources
 
 - [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
-- [validate_expressions.py](../../nrpy/validate_expressions/validate_expressions.py) - `output_trusted`, `compare_against_trusted`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - `Required Checks`, `Expression Validation`
+- [test_parse_BSSN.py](../../nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py) - `test_example_BSSN`
 - [BSSN_RHSs.py](../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`, `BSSN_RHSs`
 - [BSSN_RHSs_Cartesian.py](../../nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py) - `trusted_dict`
 - [GRHD_equations.py](../../nrpy/equations/grhd/GRHD_equations.py) - `GRHD_Equations`, `construct_all_equations`
@@ -67,6 +61,8 @@ symbols; this page owns only the common processing and comparison mechanics.
 
 - Parent: [Equations](index.md)
 - Validated by: [Expression Validation Helpers](../validation/expression-validation-helpers.md)
+- Depends on: [Test Oracles And Safe Updates](../validation/test-oracles-and-safe-updates.md)
+- Depends on: [Code Test Policy](../validation/code-test-policy.md)
 - Example: [BSSN Family](general-relativity/bssn-family.md)
 - Example: [GRHD](grhd.md)
 - Example: [Wave Equation](wave-equation.md)

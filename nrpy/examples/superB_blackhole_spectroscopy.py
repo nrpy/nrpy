@@ -67,6 +67,7 @@ enable_KreissOliger_dissipation = True
 enable_CAKO = True
 enable_CAHD = False
 enable_SSL = True
+enable_YBS_Gamma_constraint_adjustment = False
 enable_BHaHAHA = True
 KreissOliger_strength_gauge = 0.99
 KreissOliger_strength_nongauge = 0.3
@@ -224,7 +225,9 @@ superB.initial_data.register_CFunction_initial_data(
     IDtype=IDtype,
     IDCoordSystem=IDCoordSystem,
     set_of_CoordSystems=set_of_CoordSystems,
+    enable_rfm_precompute=enable_rfm_precompute,
     enable_checkpointing=False,
+    enable_conformal_projection=True,
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
@@ -279,10 +282,11 @@ BHaH.general_relativity.rhs_eval.register_CFunction_rhs_eval(
     enable_CAKO=enable_CAKO,
     enable_CAHD=enable_CAHD,
     enable_SSL=enable_SSL,
+    enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,
     OMP_collapse=OMP_collapse,
 )
 if enable_CAHD:
-    BHaH.general_relativity.cahdprefactor_gf.register_CFunction_cahdprefactor_auxevol_gridfunction(
+    BHaH.general_relativity.dsmin_gf.register_CFunction_dsmin_auxevol_gridfunction(
         {CoordSystem}
     )
 if separate_Ricci_and_BSSN_RHS:
@@ -292,7 +296,7 @@ if separate_Ricci_and_BSSN_RHS:
         enable_fd_functions=enable_fd_functions,
         OMP_collapse=OMP_collapse,
     )
-BHaH.general_relativity.enforce_detgammabar_equals_detgammahat.register_CFunction_enforce_detgammabar_equals_detgammahat(
+BHaH.general_relativity.enforce_detgbar_equals_detghat_trAzero.register_CFunction_enforce_detgbar_equals_detghat_trAzero(
     CoordSystem=CoordSystem,
     enable_rfm_precompute=enable_rfm_precompute,
     enable_fd_functions=enable_fd_functions,
@@ -336,9 +340,6 @@ superB.numerical_grids.register_CFunctions(
     enable_rfm_precompute=enable_rfm_precompute,
     enable_CurviBCs=True,
 )
-superB.chare_communication_maps.chare_comm_register_C_functions(
-    set_of_CoordSystems={CoordSystem}
-)
 superB.CurviBoundaryConditions.CurviBoundaryConditions_register_C_functions(
     set_of_CoordSystems={CoordSystem},
     radiation_BC_fd_order=radiation_BC_fd_order,
@@ -375,14 +376,17 @@ superB.MoL.register_CFunctions(
     MoL_method=MoL_method,
     rhs_string=rhs_string,
     post_rhs_bcs_str=post_rhs_bcs_str,
-    post_rhs_string="""enforce_detgammabar_equals_detgammahat(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
+    post_rhs_string="""enforce_detgbar_equals_detghat_trAzero(params, rfmstruct, RK_OUTPUT_GFS, auxevol_gfs);""",
     enable_rfm_precompute=enable_rfm_precompute,
     enable_curviBCs=True,
     enable_psi4=enable_psi4,
 )
-BHaH.xx_tofrom_Cart.register_CFunction__Cart_to_xx_and_nearest_i0i1i2(CoordSystem)
+BHaH.xx_tofrom_Cart.register_CFunction_Cart_to_xx_and_nearest_i0i1i2_assume_valid(
+    CoordSystem
+)
 BHaH.xx_tofrom_Cart.register_CFunction_xx_to_Cart(CoordSystem)
-BHaH.checkpointing.register_CFunctions(
+BHaH.read_checkpoint.register_CFunction_read_checkpoint()
+BHaH.write_checkpoint.register_CFunction_write_checkpoint(
     default_checkpoint_every=default_checkpoint_every
 )
 BHaH.diagnostics.progress_indicator.register_CFunction_progress_indicator()
@@ -485,7 +489,7 @@ BHaH.griddata_commondata.register_CFunction_griddata_free(
 post_non_y_n_auxevol_mallocs = ""
 if enable_CAHD:
     post_non_y_n_auxevol_mallocs = """for(int grid=0; grid<commondata.NUMGRIDS; grid++) {
-    cahdprefactor_auxevol_gridfunction(&commondata, &griddata_chare[grid].params, griddata_chare[grid].xx,  griddata_chare[grid].gridfuncs.auxevol_gfs);
+    dsmin_auxevol_gridfunction(&griddata_chare[grid].params, griddata_chare[grid].xx, griddata_chare[grid].gridfuncs.auxevol_gfs);
 }\n"""
 
 superB.timestepping_chare.output_timestepping_h_cpp_ci_register_CFunctions(

@@ -4,7 +4,7 @@
 > under `raw/source-docs/` so `AGENTS.md` is the only root KB document. Code,
 > config, fixtures, selected logs, and build inputs stay in place. Status is
 > `frozen` when a source is meant not to change and `living` when drift must
-> trigger re-ingest. Last audited: 07-07-2026.
+> trigger re-ingest. Last audited: 07-20-2026.
 
 ## Aggregate Sources
 
@@ -13,7 +13,7 @@
 | `core-top-level-package-modules` | Core top-level package modules from `find nrpy -maxdepth 1 -type f \( -name '*.py' -o -name '*.txt' -o -name 'py.typed' \)`, 12 files. | living | partial |
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
-| `equation-modules-and-trusted-values` | Equation modules and generated trusted-value files from `nrpy/equations`, 311 files. | living | partial |
+| `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`: 339 Python files and `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`, 340 files total. | living | partial |
 | `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 365 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
@@ -25,6 +25,7 @@
 | --- | --- | --- | --- |
 | `raw/source-docs/original-agents.md` | Previous root agent instructions, preserved byte-for-byte before replacing `AGENTS.md`. Its root style-guide reference is superseded; see the source map row for current routing. | frozen | ingested |
 | `raw/source-docs/kb-instructions.md` | KB schema and governance source moved from the repository root. | frozen | ingested |
+| `raw/source-docs/ybs-momentum-damping-spec.md` | Superseded commissioned YBS-MOM auxiliary-relaxation proposal preserved as historical input. See CONTR-0007 and the current YBS-MOM page for governing behavior. | frozen | ingested |
 
 ## Cited Code And Config Sources
 
@@ -49,6 +50,8 @@ aggregate rows and `wiki/source-map.md`.
 | `.github/workflows/main.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
+| `bin/nrpyinline.py` | living |
+| `coding_style.md` | living |
 | `nrpy/c_codegen.py` | living |
 | `nrpy/py_codegen.py` | living |
 | `nrpy/py_function.py` | living |
@@ -83,15 +86,37 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/BSSN_quantities.py` | living |
 | `nrpy/equations/general_relativity/BSSN_gauge_RHSs.py` | living |
 | `nrpy/equations/general_relativity/BSSN_constraints.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_constraints.py` | living |
+| `nrpy/equations/general_relativity/nrpylatex/test_parse_BSSN.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_RHSs_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_quantities_Cartesian.py` | living |
 | `nrpy/equations/general_relativity/tests/BSSN_constraints_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_RHSs.py` | living |
+| `nrpy/equations/general_relativity/fCCZ4_gauge_RHSs.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhCartesian_RbarDD_gridfunctions.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_rfm_precompute_T4munu.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_SinhSpherical_rfm_precompute_T4munu.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_OnePlusLog_GammaDriving2ndOrder_Covariant__Hatted_Cartesian.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_constraints_SinhSpherical_phi.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_RHSs_SinhSpherical_RbarDD_gridfunctions.py` | living |
+| `nrpy/equations/general_relativity/tests/fCCZ4_gauge_RHSs_Frozen_Frozen_SinhSpherical.py` | living |
+| `nrpy/infrastructures/BHaH/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/main_c.py` | living |
 | `nrpy/infrastructures/BHaH/bhah_lib.py` | living |
+| `nrpy/infrastructures/BHaH/Makefile_helpers.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/initial_data.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/BHaH/simple_loop.py` | living |
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living |
+| `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
+| `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/__init__.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/register_all.py` | living |
 | `nrpy/infrastructures/BHaH/rotation/so3_apply_R_to_vector.py` | living |
@@ -129,7 +154,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/ETLegacy/general_relativity/T4DD_to_T4UU.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/RegisterSlicing.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/floor_the_lapse.py` | living |
-| `nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgammahat_constraint.py` | living |
+| `nrpy/infrastructures/ETLegacy/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsFalse.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuFalse_improvementsTrue.py` | living |
 | `nrpy/infrastructures/ETLegacy/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living |
@@ -153,7 +178,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/CarpetX/general_relativity/BSSN_to_ADM.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/T4DD_to_T4UU.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/floor_the_lapse.py` | living |
-| `nrpy/infrastructures/CarpetX/general_relativity/enforce_detgammahat_constraint.py` | living |
+| `nrpy/infrastructures/CarpetX/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuFalse_KOTrue_improvementsFalse.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_Covariant_Cartesian_T4munuTrue_improvementsFalse.py` | living |
 | `nrpy/infrastructures/CarpetX/general_relativity/tests/rhs_eval_OnePlusLog_GammaDriving2ndOrder_NoCovariant_Cartesian_T4munuTrue_KOTrue_improvementsFalse.py` | living |
@@ -272,8 +297,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/equations/general_relativity/tests/T4munu.py` | living |
 | `nrpy/equations/general_relativity/tests/g4munu_conversions.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_leave_symbolic_Spherical.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_SinhSpherical_rfm_precompute.py` | living |
-| `nrpy/equations/general_relativity/tests/psi4_quasiKinnersley_Spherical.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_SinhSpherical_rfm_precompute.py` | living |
+| `nrpy/equations/general_relativity/tests/psi4_BCL_arXiv_gr_qc_0104063v3_Eq_5p6_tetrad_Spherical.py` | living |
 | `nrpy/equations/general_relativity/tests/psi4_tetrads_Spherical.py` | living |
 | `nrpy/equations/generalrfm/fisheye.py` | living |
 | `nrpy/equations/generalrfm/tests/fisheye_N1.py` | living |
@@ -336,70 +361,95 @@ aggregate rows and `wiki/source-map.md`.
 | Source | Provenance | Status | Accessed | Ingest | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md` | Andrej Karpathy gist raw note, `LLM Wiki`, pinned to revision `ac46de1ad27f92b28ac95459c782c07f6b8c964a`. | frozen | 06-30-2026 | partial | Background approach source for persistent LLM-maintained wiki governance: raw/wiki/schema layers and ingest/query/lint workflows. |
-| `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 06-29-2026 | partial | NRPyElliptic background for hyperbolic relaxation and conformally flat binary-puncture initial data. |
-| `https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html` | Intel Intrinsics Guide landing page. | living | 06-29-2026 | partial | SSE, AVX, AVX512, and intrinsic-family terminology for SIMD helper documentation. |
-| `https://docs.nvidia.com/cuda/cuda-programming-guide/index.html` | NVIDIA CUDA C++ Programming Guide. | living | 06-29-2026 | partial | CUDA C++ terminology for SIMD, CUDA header, and GPU kernel helper documentation. |
+| `https://arxiv.org/pdf/gr-qc/0104063v3` | Version-pinned v3 PDF for Baker, Campanelli, and Lousto, arXiv:gr-qc/0104063. | frozen | 07-27-2026 | ingested | Primary deciding source for the Psi4 tetrad contract in Sec. V.A: Eqs. (5.6)-(5.7), the following unnumbered Gram-Schmidt procedure, and the later Eq. (5.9) rotation. |
+| `https://arxiv.org/pdf/0902.3652v2` | Version-pinned v2 PDF for Brown, arXiv:0902.3652. | frozen | 07-28-2026 | ingested | Deciding source for the covariant conformal connection constraint in Eqs. (12a), (12b), and (15); it does not prescribe the local conformal-metric norm diagnostic. |
+| `https://arxiv.org/pdf/gr-qc/0209066v2` | Version-pinned v2 PDF for Yo, Baumgarte, and Shapiro, arXiv:gr-qc/0209066. | frozen | 08-28-2026 | ingested | Deciding source for the full Gamma-constraint adjustment coefficient in Eq. (45); current NRPy already owns the baseline `2/3` contribution and therefore adds only the incremental `chi` term. |
+| `https://arxiv.org/pdf/1205.5111v2` | Version-pinned v2 PDF for Yo, Lin, and Cao, arXiv:1205.5111. | frozen | 08-28-2026 | ingested | Deciding source for the Eq. (47) `xi` parameterization and Eq. (56) direct covariant STF momentum-gradient adjustment; comparison with the earlier full Gamma coefficient gives NRPy's incremental mapping `chi=2*xi/3`. |
+| `https://doi.org/10.1103/PhysRevD.110.064045` | Published article for Etienne, Phys. Rev. D 110, 064045 (2024). | frozen | 08-30-2026 | ingested | Deciding source for the CAHD level-local CFL/grid-spacing scaling pattern transferred to YBS-MOM; CAHD itself remains parabolic. |
+| `https://arxiv.org/pdf/1106.2254v2` | Version-pinned v2 PDF for Alic et al., arXiv:1106.2254. | frozen | 08-25-2026 | ingested | Corroborating source for covariant CCZ4, the `kappa3=1` covariance choice, the one-stretch Cartesian connection composition, and the exact advective 1+log formula in Eq. (20). |
+| `https://arxiv.org/pdf/1403.3653v1` | Version-pinned v1 PDF for Sanchis-Gual et al., arXiv:1403.3653. | frozen | 08-25-2026 | ingested | Corroborating source for reference-metric fCCZ4 variables, constraints, gauge equations, reduction to BSSN, and one connection stretch. Its general display retains a geometric divergence coefficient while spherical Eq. (3.14) contains the compatible Z4 divergence promotion, so the two are not an unqualified full off-constraint cross-check. |
+| `https://arxiv.org/pdf/2002.06225v2` | Version-pinned v2 PDF for Mewes et al., arXiv:2002.06225. | frozen | 08-25-2026 | ingested | Principal scientific specification for NRPy's three-dimensional reference-metric fCCZ4 variables, Ricci tensor, evolution equations, gauge, and matter projections in Eqs. (3)-(41), including the unnumbered evolution system after Eq. (32). Its printed connection shift bracket contains an apparent convention error under its own full-Lie time-operator definition; NRPy documents and corrects the duplicated constraint-vector stretch. |
+| `https://arxiv.org/pdf/2201.08857v1` | Version-pinned v1 PDF for Baumgarte and de Oliveira, arXiv:2201.08857. | frozen | 08-25-2026 | ingested | Deciding source for the general Bona-Masso lapse equation and its `f(alpha)=1` harmonic specialization. |
+| `https://arxiv.org/pdf/gr-qc/9810065v1` | Version-pinned v1 PDF for Baumgarte and Shapiro, arXiv:gr-qc/9810065. | frozen | 08-25-2026 | ingested | Deciding source for the zero-shift harmonic lapse relation in Eqs. (30)-(32), including the special `C(x)=1` choice. |
+| `https://arxiv.org/pdf/gr-qc/9902024v1` | Version-pinned v1 PDF for Baumgarte, Hughes, and Shapiro, arXiv:gr-qc/9902024. | frozen | 08-25-2026 | ingested | Deciding source for the zero-shift statement that their harmonic slicing reduces to `partial_t(alpha)=partial_t(exp(6*phi))`. |
+| `https://arxiv.org/pdf/1712.07658v2` | Version-pinned v2 PDF for Ruchlin, Etienne, and Baumgarte, arXiv:1712.07658. | frozen | 08-25-2026 | ingested | Deciding source for the StaticTrumpet gauge pairing in Eqs. (65), (67), and (69). |
+| `https://github.com/zachetienne/nrpytutorial/blob/a32e120f5642bee00e32e9e04dd8cb4c58ae661c/Tutorial-BSSN_time_evolution-BSSN_gauge_RHSs.ipynb` | Historical NRPy gauge tutorial pinned to repository commit `a32e120f5642bee00e32e9e04dd8cb4c58ae661c`. | frozen | 08-25-2026 | ingested | Background provenance for the `HarmonicSlicing` name and the `W`/`phi` chain-rule implementation in Step 2.b. |
+| `https://arxiv.org/abs/1605.01938` | arXiv abstract page for HBR2016 final-spin paper. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit mapping is not yet audited. |
+| `https://arxiv.org/abs/1611.00332` | arXiv abstract page for UIB2016 final-state paper and ancillary implementation. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-fit/ancillary mapping is not yet audited. |
+| `https://arxiv.org/abs/2111.02424` | arXiv abstract page for arXiv:2111.02424. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-claim mapping is not yet audited. |
+| `https://arxiv.org/abs/2303.18039` | arXiv abstract page for SEOBNRv5HM aligned-spin waveform model. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-equation mapping is not yet audited. |
+| `https://arxiv.org/abs/2303.18046` | arXiv abstract page for SEOBNRv5PHM precessing waveform model. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-equation mapping is not yet audited. |
+| `https://arxiv.org/abs/2303.18143` | arXiv abstract page for SEOBNRv5 precessing dynamics groundwork. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-equation mapping is not yet audited. |
+| `https://arxiv.org/abs/2508.20418` | arXiv abstract page for SEBOB aligned-spin attachment model. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-equation mapping is not yet audited. |
+| `https://arxiv.org/abs/2510.25012` | arXiv abstract page for BOBv2 waveform model. | living | 07-13-2026 | partial | Mutable latest-revision background page; exact revision-to-equation/validation mapping is not yet audited. |
+| `https://pypi.org/pypi/black/26.5.1/json` | PyPI release metadata for Black 26.5.1. | frozen | 07-12-2026 | partial | Official release metadata for Black's Python 3.10+ runtime requirement and installation surface. |
+| `https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html` | Intel Intrinsics Guide landing page. | living | 07-12-2026 | partial | Official SSE, AVX, AVX512, and intrinsic-family terminology for SIMD helper documentation; not authority for NRPy macro behavior. |
+| `https://docs.nvidia.com/cuda/cuda-programming-guide/index.html` | NVIDIA CUDA Programming Guide. | living | 07-12-2026 | partial | Official CUDA programming-model terminology for helper documentation; not authority for NRPy kernel behavior. |
+| `https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/nvcc.html` | NVIDIA CUDA Programming Guide, NVCC chapter. | living | 07-12-2026 | partial | Official NVCC compiler-driver terminology used by CUDA example prerequisites. |
+| `https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case` | Einstein Toolkit documentation, `Adding a test case`. | living | 07-12-2026 | partial | Official test-suite terminology; local workflow configuration decides NRPy CI behavior. |
+| `https://docs.jax.dev/en/latest/installation.html` | JAX installation documentation. | living | 07-12-2026 | partial | Official supported-platform and installation context; local requirements and generator code decide NRPy behavior. |
+| `https://www.gnu.org/software/gsl/doc/html/usage.html` | GNU GSL 2.8 documentation, `Using the Library`. | living | 07-12-2026 | partial | Official compiling/linking context for GSL-dependent generated examples. |
 | `https://link.aps.org/doi/10.1103/PhysRev.55.374` | DOI landing page for `10.1103/PhysRev.55.374`. | living | 06-29-2026 | partial | Original Oppenheimer-Volkoff stellar-equilibrium background. |
 | `https://web2.ph.utexas.edu/~gsudama/pub/1967_008.pdf` | PDF URL for Goldberg et al. spin-weighted spherical-harmonic formula reference. | living | 06-29-2026 | partial | Goldberg-formula background for spin-weighted spherical harmonics. |
 | `https://pubs.aip.org/aip/jmp/article/57/9/092504/648118/How-should-spin-weighted-spherical-functions-be` | Journal of Mathematical Physics article landing page. | living | 06-29-2026 | partial | Background on spin-weighted functions and quaternion viewpoints. |
 | `https://rotations.berkeley.edu/geodesics-of-the-rotation-group-so3/` | Berkeley rotations course page. | living | 06-29-2026 | partial | Background on SO(3) and quaternion rotation geometry. |
-| `https://github.com/charmplusplus/charm/blob/main/doc/quickstart.rst` | Charm++ quickstart from the Charm++ repository. | living | 07-07-2026 | partial | External spec context for `.ci` files, generated `.decl.h` and `.def.h` files, `charmc`, and `charmrun`. |
-| `https://github.com/charmplusplus/charm/blob/main/doc/charm%2B%2B/manual.rst` | Charm++ language manual from the Charm++ repository. | living | 07-07-2026 | partial | External spec context for chares, entry methods, proxies, SDAG, PUP, checkpoint/restart, reductions, chare arrays, and generic message-transport caveats. |
-| `https://github.com/charmplusplus/charm/blob/main/doc/libraries/manual.rst` | Charm++ and Converse libraries manual from the Charm++ repository. | living | 07-07-2026 | partial | External spec context for CkIO and Charm++ library APIs. |
-| `https://github.com/charmplusplus/charm/blob/main/src/scripts/charmc` | Charm++ upstream `main` compiler-driver script. | living | 07-07-2026 | partial | Background implementation context for `charmc`; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/scripts/Makefile` | Charm++ upstream `main` build-script Makefile. | living | 07-07-2026 | partial | Background implementation context for Charm++ build scripts; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/scripts/Make.cidepends` | Charm++ upstream `main` `.ci` dependency helper. | living | 07-07-2026 | partial | Background implementation context for `.ci` dependency generation; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-main.C` | Charm++ upstream `main` charmxi translator main source. | living | 07-07-2026 | partial | Background implementation context for interface translation; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-Module.C` | Charm++ upstream `main` charmxi module translation source. | living | 07-07-2026 | partial | Background implementation context for modules and generated interface files; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/libs/ck-libs/io/Makefile` | Charm++ upstream `main` CkIO library Makefile. | living | 07-07-2026 | partial | Background implementation context for CkIO linking; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/tests/charm%2B%2B/io/Makefile` | Charm++ upstream `main` CkIO test Makefile. | living | 07-07-2026 | partial | Background test/example context for `-module CkIO`; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/tests/charm%2B%2B/io_read/Makefile` | Charm++ upstream `main` CkIO read-test Makefile. | living | 07-07-2026 | partial | Background test/example context for CkIO test builds; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/tests/charm%2B%2B/charmxi_parsing/Makefile` | Charm++ upstream `main` charmxi parsing test Makefile. | living | 07-07-2026 | partial | Background test/example context for charmxi parsing builds; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-grammar.y` | Charm++ upstream `main` charmxi grammar source. | living | 07-07-2026 | partial | Background implementation context for `.ci` grammar terms; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-Chare.C` | Charm++ upstream `main` charmxi chare translation source. | living | 07-07-2026 | partial | Background implementation context for chare and chare-array generation; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-Entry.C` | Charm++ upstream `main` charmxi entry-method translation source. | living | 07-07-2026 | partial | Background implementation context for entry methods and generated indexes; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-Parameter.C` | Charm++ upstream `main` charmxi parameter-marshalling source. | living | 07-07-2026 | partial | Background implementation context for parameter-marshaled entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/xi-Member.C` | Charm++ upstream `main` charmxi member translation source. | living | 07-07-2026 | partial | Background implementation context for generated class/member support; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckarray.h` | Charm++ upstream `main` chare-array header. | living | 07-07-2026 | partial | Background implementation context for chare arrays, proxies, and maps; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckarray.C` | Charm++ upstream `main` chare-array implementation. | living | 07-07-2026 | partial | Background implementation context for chare-array runtime behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckarrayindex.h` | Charm++ upstream `main` chare-array index header. | living | 07-07-2026 | partial | Background implementation context for `CkArrayIndex3D` and index objects; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckcallback.h` | Charm++ upstream `main` callback header. | living | 07-07-2026 | partial | Background implementation context for `CkCallback`; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckcallback.C` | Charm++ upstream `main` callback implementation. | living | 07-07-2026 | partial | Background implementation context for callback dispatch; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/readonly.h` | Charm++ upstream `main` readonly support header. | living | 07-07-2026 | partial | Background implementation context for readonly globals; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/sdag/CParsedFile.C` | Charm++ upstream `main` SDAG parsed-file source. | living | 07-07-2026 | partial | Background implementation context for SDAG translation; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/sdag/CEntry.C` | Charm++ upstream `main` SDAG entry translation source. | living | 07-07-2026 | partial | Background implementation context for SDAG entry behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/sdag/constructs/When.C` | Charm++ upstream `main` SDAG `when` construct source. | living | 07-07-2026 | partial | Background implementation context for SDAG `when` matching; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/xlat-i/sdag/constructs/SdagEntry.C` | Charm++ upstream `main` SDAG entry construct source. | living | 07-07-2026 | partial | Background implementation context for SDAG entry generation; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/sdag.h` | Charm++ upstream `main` SDAG runtime header. | living | 07-07-2026 | partial | Background implementation context for SDAG runtime buffering; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/sdag.C` | Charm++ upstream `main` SDAG runtime implementation. | living | 07-07-2026 | partial | Background implementation context for SDAG runtime state; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/charm%2B%2B.h` | Charm++ upstream `main` core Charm++ API header. | living | 07-07-2026 | partial | Background implementation context for core Charm++ runtime APIs; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/util/pup.h` | Charm++ upstream `main` PUP header. | living | 07-07-2026 | partial | Background implementation context for PUP serialization; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckcheckpoint.h` | Charm++ upstream `main` checkpoint header. | living | 07-07-2026 | partial | Background implementation context for checkpoint/restart APIs; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckcheckpoint.C` | Charm++ upstream `main` checkpoint implementation. | living | 07-07-2026 | partial | Background implementation context for checkpoint/restart behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckcheckpoint.ci` | Charm++ upstream `main` checkpoint interface file. | living | 07-07-2026 | partial | Background implementation context for checkpoint entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/init.C` | Charm++ upstream `main` runtime initialization source. | living | 07-07-2026 | partial | Background implementation context for runtime startup and restart paths; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/cklocation.h` | Charm++ upstream `main` location-manager header. | living | 07-07-2026 | partial | Background implementation context for location, migration, and placement caveats; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/cklocation.C` | Charm++ upstream `main` location-manager implementation. | living | 07-07-2026 | partial | Background implementation context for location-manager PUP and migration behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckmemcheckpoint.h` | Charm++ upstream `main` memory-checkpoint header. | living | 07-07-2026 | partial | Background implementation context for memory checkpointing; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckmemcheckpoint.C` | Charm++ upstream `main` memory-checkpoint implementation. | living | 07-07-2026 | partial | Background implementation context for memory checkpointing; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckmemcheckpoint.ci` | Charm++ upstream `main` memory-checkpoint interface file. | living | 07-07-2026 | partial | Background implementation context for memory-checkpoint entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-cp/controlPoints.h` | Charm++ upstream `main` control-points header. | living | 07-07-2026 | partial | Background implementation context for ck-cp caveats; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-cp/controlPoints.C` | Charm++ upstream `main` control-points implementation. | living | 07-07-2026 | partial | Background implementation context for ck-cp behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-cp/pathHistory.h` | Charm++ upstream `main` control-points path-history header. | living | 07-07-2026 | partial | Background implementation context for ck-cp path history; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-cp/pathHistory.C` | Charm++ upstream `main` control-points path-history implementation. | living | 07-07-2026 | partial | Background implementation context for ck-cp path history; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckreduction.h` | Charm++ upstream `main` reduction header. | living | 07-07-2026 | partial | Background implementation context for `CkReduction` and `CkReductionMsg`; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckreduction.C` | Charm++ upstream `main` reduction implementation. | living | 07-07-2026 | partial | Background implementation context for built-in reducers; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/libs/ck-libs/io/ckio.h` | Charm++ upstream `main` CkIO header. | living | 07-07-2026 | partial | Background implementation context for CkIO API shape; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/libs/ck-libs/io/ckio.C` | Charm++ upstream `main` CkIO implementation. | living | 07-07-2026 | partial | Background implementation context for CkIO sessions and callbacks; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/libs/ck-libs/io/ckio.ci` | Charm++ upstream `main` CkIO interface file. | living | 07-07-2026 | partial | Background implementation context for CkIO entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckarrayoptions.h` | Charm++ upstream `main` chare-array options header. | living | 07-07-2026 | partial | Background implementation context for array-map and placement options; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckarrayoptions.C` | Charm++ upstream `main` chare-array options implementation. | living | 07-07-2026 | partial | Background implementation context for array options; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/cklocation.ci` | Charm++ upstream `main` location-manager interface file. | living | 07-07-2026 | partial | Background implementation context for location-manager entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-core/ckmigratable.h` | Charm++ upstream `main` migratable-object header. | living | 07-07-2026 | partial | Background implementation context for migration caveats; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-ldb/LBManager.h` | Charm++ upstream `main` load-balancer manager header. | living | 07-07-2026 | partial | Background implementation context for ck-ldb and AtSync caveats; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-ldb/LBManager.C` | Charm++ upstream `main` load-balancer manager implementation. | living | 07-07-2026 | partial | Background implementation context for ck-ldb and AtSync behavior; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-ldb/CommonLBs.ci` | Charm++ upstream `main` common load-balancers interface file. | living | 07-07-2026 | partial | Background implementation context for load-balancer entry methods; living upstream `main` can drift. |
-| `https://github.com/charmplusplus/charm/blob/main/src/ck-ldb/EveryLB.ci` | Charm++ upstream `main` EveryLB interface file. | living | 07-07-2026 | partial | Background implementation context for load-balancer entry methods; living upstream `main` can drift. |
+| `https://charm.readthedocs.io/en/v8.0.0/quickstart.html` | Charm++ quickstart from the Charm++ repository. | frozen | 07-12-2026 | partial | External spec context for `.ci` files, generated `.decl.h` and `.def.h` files, `charmc`, and `charmrun`. |
+| `https://charm.readthedocs.io/en/v8.0.0/charm%2B%2B/manual.html` | Charm++ language manual from the Charm++ repository. | frozen | 07-12-2026 | partial | External spec context for chares, entry methods, proxies, SDAG, PUP, checkpoint/restart, reductions, chare arrays, and generic message-transport caveats. |
+| `https://charm.readthedocs.io/en/v8.0.0/libraries/manual.html` | Charm++ and Converse libraries manual from the Charm++ repository. | frozen | 07-12-2026 | partial | External spec context for CkIO and Charm++ library APIs. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/charmc` | Charm++ pinned Charm++ 8.0.0 compiler-driver script. | frozen | 07-12-2026 | partial | Background implementation context for `charmc`; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/Makefile` | Charm++ pinned Charm++ 8.0.0 build-script Makefile. | frozen | 07-12-2026 | partial | Background implementation context for Charm++ build scripts; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/scripts/Make.cidepends` | Charm++ pinned Charm++ 8.0.0 `.ci` dependency helper. | frozen | 07-12-2026 | partial | Background implementation context for `.ci` dependency generation; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-main.C` | Charm++ pinned Charm++ 8.0.0 charmxi translator main source. | frozen | 07-12-2026 | partial | Background implementation context for interface translation; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Module.C` | Charm++ pinned Charm++ 8.0.0 charmxi module translation source. | frozen | 07-12-2026 | partial | Background implementation context for modules and generated interface files; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/libs/ck-libs/io/Makefile` | Charm++ pinned Charm++ 8.0.0 CkIO library Makefile. | frozen | 07-12-2026 | partial | Background implementation context for CkIO linking; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/tests/charm%2B%2B/io/Makefile` | Charm++ pinned Charm++ 8.0.0 CkIO test Makefile. | frozen | 07-12-2026 | partial | Background test/example context for `-module CkIO`; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/tests/charm%2B%2B/io_read/Makefile` | Charm++ pinned Charm++ 8.0.0 CkIO read-test Makefile. | frozen | 07-12-2026 | partial | Background test/example context for CkIO test builds; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/tests/charm%2B%2B/charmxi_parsing/Makefile` | Charm++ pinned Charm++ 8.0.0 charmxi parsing test Makefile. | frozen | 07-12-2026 | partial | Background test/example context for charmxi parsing builds; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-grammar.y` | Charm++ pinned Charm++ 8.0.0 charmxi grammar source. | frozen | 07-12-2026 | partial | Background implementation context for `.ci` grammar terms; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Chare.C` | Charm++ pinned Charm++ 8.0.0 charmxi chare translation source. | frozen | 07-12-2026 | partial | Background implementation context for chare and chare-array generation; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Entry.C` | Charm++ pinned Charm++ 8.0.0 charmxi entry-method translation source. | frozen | 07-12-2026 | partial | Background implementation context for entry methods and generated indexes; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Parameter.C` | Charm++ pinned Charm++ 8.0.0 charmxi parameter-marshalling source. | frozen | 07-12-2026 | partial | Background implementation context for parameter-marshaled entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/xi-Member.C` | Charm++ pinned Charm++ 8.0.0 charmxi member translation source. | frozen | 07-12-2026 | partial | Background implementation context for generated class/member support; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarray.h` | Charm++ pinned Charm++ 8.0.0 chare-array header. | frozen | 07-12-2026 | partial | Background implementation context for chare arrays, proxies, and maps; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarray.C` | Charm++ pinned Charm++ 8.0.0 chare-array implementation. | frozen | 07-12-2026 | partial | Background implementation context for chare-array runtime behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarrayindex.h` | Charm++ pinned Charm++ 8.0.0 chare-array index header. | frozen | 07-12-2026 | partial | Background implementation context for `CkArrayIndex3D` and index objects; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcallback.h` | Charm++ pinned Charm++ 8.0.0 callback header. | frozen | 07-12-2026 | partial | Background implementation context for `CkCallback`; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcallback.C` | Charm++ pinned Charm++ 8.0.0 callback implementation. | frozen | 07-12-2026 | partial | Background implementation context for callback dispatch; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/readonly.h` | Charm++ pinned Charm++ 8.0.0 readonly support header. | frozen | 07-12-2026 | partial | Background implementation context for readonly globals; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CParsedFile.C` | Charm++ pinned Charm++ 8.0.0 SDAG parsed-file source. | frozen | 07-12-2026 | partial | Background implementation context for SDAG translation; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/CEntry.C` | Charm++ pinned Charm++ 8.0.0 SDAG entry translation source. | frozen | 07-12-2026 | partial | Background implementation context for SDAG entry behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/constructs/When.C` | Charm++ pinned Charm++ 8.0.0 SDAG `when` construct source. | frozen | 07-12-2026 | partial | Background implementation context for SDAG `when` matching; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/xlat-i/sdag/constructs/SdagEntry.C` | Charm++ pinned Charm++ 8.0.0 SDAG entry construct source. | frozen | 07-12-2026 | partial | Background implementation context for SDAG entry generation; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/sdag.h` | Charm++ pinned Charm++ 8.0.0 SDAG runtime header. | frozen | 07-12-2026 | partial | Background implementation context for SDAG runtime buffering; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/sdag.C` | Charm++ pinned Charm++ 8.0.0 SDAG runtime implementation. | frozen | 07-12-2026 | partial | Background implementation context for SDAG runtime state; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/charm%2B%2B.h` | Charm++ pinned Charm++ 8.0.0 core Charm++ API header. | frozen | 07-12-2026 | partial | Background implementation context for core Charm++ runtime APIs; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/util/pup.h` | Charm++ pinned Charm++ 8.0.0 PUP header. | frozen | 07-12-2026 | partial | Background implementation context for PUP serialization; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcheckpoint.h` | Charm++ pinned Charm++ 8.0.0 checkpoint header. | frozen | 07-12-2026 | partial | Background implementation context for checkpoint/restart APIs; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcheckpoint.C` | Charm++ pinned Charm++ 8.0.0 checkpoint implementation. | frozen | 07-12-2026 | partial | Background implementation context for checkpoint/restart behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckcheckpoint.ci` | Charm++ pinned Charm++ 8.0.0 checkpoint interface file. | frozen | 07-12-2026 | partial | Background implementation context for checkpoint entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/init.C` | Charm++ pinned Charm++ 8.0.0 runtime initialization source. | frozen | 07-12-2026 | partial | Background implementation context for runtime startup and restart paths; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.h` | Charm++ pinned Charm++ 8.0.0 location-manager header. | frozen | 07-12-2026 | partial | Background implementation context for location, migration, and placement caveats; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.C` | Charm++ pinned Charm++ 8.0.0 location-manager implementation. | frozen | 07-12-2026 | partial | Background implementation context for location-manager PUP and migration behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckmemcheckpoint.h` | Charm++ pinned Charm++ 8.0.0 memory-checkpoint header. | frozen | 07-12-2026 | partial | Background implementation context for memory checkpointing; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckmemcheckpoint.C` | Charm++ pinned Charm++ 8.0.0 memory-checkpoint implementation. | frozen | 07-12-2026 | partial | Background implementation context for memory checkpointing; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckmemcheckpoint.ci` | Charm++ pinned Charm++ 8.0.0 memory-checkpoint interface file. | frozen | 07-12-2026 | partial | Background implementation context for memory-checkpoint entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-cp/controlPoints.h` | Charm++ pinned Charm++ 8.0.0 control-points header. | frozen | 07-12-2026 | partial | Background implementation context for ck-cp caveats; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-cp/controlPoints.C` | Charm++ pinned Charm++ 8.0.0 control-points implementation. | frozen | 07-12-2026 | partial | Background implementation context for ck-cp behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-cp/pathHistory.h` | Charm++ pinned Charm++ 8.0.0 control-points path-history header. | frozen | 07-12-2026 | partial | Background implementation context for ck-cp path history; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-cp/pathHistory.C` | Charm++ pinned Charm++ 8.0.0 control-points path-history implementation. | frozen | 07-12-2026 | partial | Background implementation context for ck-cp path history; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckreduction.h` | Charm++ pinned Charm++ 8.0.0 reduction header. | frozen | 07-12-2026 | partial | Background implementation context for `CkReduction` and `CkReductionMsg`; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckreduction.C` | Charm++ pinned Charm++ 8.0.0 reduction implementation. | frozen | 07-12-2026 | partial | Background implementation context for built-in reducers; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/libs/ck-libs/io/ckio.h` | Charm++ pinned Charm++ 8.0.0 CkIO header. | frozen | 07-12-2026 | partial | Background implementation context for CkIO API shape; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/libs/ck-libs/io/ckio.C` | Charm++ pinned Charm++ 8.0.0 CkIO implementation. | frozen | 07-12-2026 | partial | Background implementation context for CkIO sessions and callbacks; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/libs/ck-libs/io/ckio.ci` | Charm++ pinned Charm++ 8.0.0 CkIO interface file. | frozen | 07-12-2026 | partial | Background implementation context for CkIO entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarrayoptions.h` | Charm++ pinned Charm++ 8.0.0 chare-array options header. | frozen | 07-12-2026 | partial | Background implementation context for array-map and placement options; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckarrayoptions.C` | Charm++ pinned Charm++ 8.0.0 chare-array options implementation. | frozen | 07-12-2026 | partial | Background implementation context for array options; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/cklocation.ci` | Charm++ pinned Charm++ 8.0.0 location-manager interface file. | frozen | 07-12-2026 | partial | Background implementation context for location-manager entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-core/ckmigratable.h` | Charm++ pinned Charm++ 8.0.0 migratable-object header. | frozen | 07-12-2026 | partial | Background implementation context for migration caveats; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-ldb/LBManager.h` | Charm++ pinned Charm++ 8.0.0 load-balancer manager header. | frozen | 07-12-2026 | partial | Background implementation context for ck-ldb and AtSync caveats; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-ldb/LBManager.C` | Charm++ pinned Charm++ 8.0.0 load-balancer manager implementation. | frozen | 07-12-2026 | partial | Background implementation context for ck-ldb and AtSync behavior; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-ldb/CommonLBs.ci` | Charm++ pinned Charm++ 8.0.0 common load-balancers interface file. | frozen | 07-12-2026 | partial | Background implementation context for load-balancer entry methods; pinned to Charm++ 8.0.0. |
+| `https://github.com/charmplusplus/charm/blob/v8.0.0/src/ck-ldb/EveryLB.ci` | Charm++ pinned Charm++ 8.0.0 EveryLB interface file. | frozen | 07-12-2026 | partial | Background implementation context for load-balancer entry methods; pinned to Charm++ 8.0.0. |
 | `https://einsteintoolkit.org/usersguide/UsersGuide.html` | Cactus 4.20 Users Guide page from the Einstein Toolkit site. | living | 06-30-2026 | partial | Background for Cactus thorn-writing and Cactus terminology emitted by ETLegacy code. |
 | `https://einsteintoolkit.org/referencemanual/ReferenceManual.html` | Cactus 4.20 Reference Manual page from the Einstein Toolkit site. | living | 06-30-2026 | partial | Background for `CCTK_*` thorn-writer function terminology emitted by ETLegacy code. |
 | `https://www.cactuscode.org/documentation/usersguide/UsersGuidech9.html` | Cactus users guide chapter C1, `Application thorns`. | living | 06-30-2026 | partial | Background for CCL and thorn-file terminology emitted by ETLegacy code. |

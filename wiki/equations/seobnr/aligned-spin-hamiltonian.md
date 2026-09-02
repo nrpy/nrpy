@@ -1,6 +1,6 @@
 # Aligned-Spin Hamiltonian
 
-> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 06-29-2026
+> Map the conservative SEOBNRv5 aligned-spin Hamiltonian quantities and derivative outputs. · Status: confirmed · Last reconciled: 07-13-2026
 > Up: [SEOBNR And BOB](index.md)
 
 ## Summary
@@ -10,6 +10,13 @@ dynamics implemented for SEOBNRv5 aligned-spin binaries. The source builds
 symbolic expressions for the tortoise map, effective and real Hamiltonian
 pieces, Hamiltonian derivatives, circular-orbit derivatives, and frequency-like
 quantities used by the waveform and orbital-evolution consumers.
+
+Scope is the source's current SEOBNRv5 aligned-spin implementation. The
+unversioned current-latest SEOBNRv5HM paper page is unaudited model background
+for quasi-circular, spinning, nonprecessing binary black holes; it does not
+define or decide this page's intended contract until a specific revision is
+audited. This page does not generalize the expressions to eccentric, precessing,
+or matter systems.
 
 ## Detail
 
@@ -34,12 +41,16 @@ doctests, processes the class `__dict__` through the trusted-expression helper,
 and compares the resulting expression dictionary against the sibling trusted
 file. The trusted dictionary pins the main conservative outputs, derivative
 outputs, and canonical input symbols that survive expression processing.
+This is a default-constructor sampled numerical fingerprint, not a formal
+derivation check, ODE integration, waveform validation, generated build, or
+runtime-accuracy result.
 
 ## Sources
 
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/SEOBNRv5_aligned_spin_Hamiltonian.py) - `SEOBNRv5_aligned_spin_Hamiltonian_quantities`
 - [validate_expressions.py](../../../nrpy/validate_expressions/validate_expressions.py) - `process_dictionary_of_expressions`, `compare_or_generate_trusted_results`
 - [SEOBNRv5_aligned_spin_Hamiltonian.py](../../../nrpy/equations/seobnr/tests/SEOBNRv5_aligned_spin_Hamiltonian.py) - `trusted_dict`
+- [SEOBNRv5HM current latest paper page](https://arxiv.org/abs/2303.18039) - background orientation only; aligned-spin model equations are not yet audited to a pinned revision
 
 ## See Also
 
