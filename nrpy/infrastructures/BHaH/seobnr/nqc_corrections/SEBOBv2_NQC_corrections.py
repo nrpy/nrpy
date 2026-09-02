@@ -138,7 +138,7 @@ if (commondata->projected_attachment_active) {
 } else {
   if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
     commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-  }
+  } // END IF: scalar r_ISCO lies below the final fine-dynamics radius
   else{
     const REAL dt_ISCO = 0.001;
     const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
@@ -149,7 +149,7 @@ if (commondata->projected_attachment_active) {
     }
     REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
     if (minus_r_zoom == NULL){
-      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
+      fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for minus_r_zoom\\n");
       exit(1);
     }
     gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
@@ -174,10 +174,10 @@ if (commondata->projected_attachment_active) {
     gsl_spline_free(spline_r);
     free(t_zoom);
     free(minus_r_zoom);
-  }
+  } // END ELSE: scalar r_ISCO lies within the fine-dynamics radius range
 
   t_peak = commondata->t_ISCO - commondata->Delta_t;
-  // if t_peak > the last point of the ODE trajector,
+  // if t_peak > the last point of the ODE trajectory,
   // use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
   // gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
   // resulting in a singular matrix.
@@ -220,7 +220,7 @@ if (acc == NULL){
 }
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
 if (spline == NULL){
-  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_splin_alloc() failed to initialize\\n");
+  fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
   exit(1);
 }
 

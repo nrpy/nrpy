@@ -1,5 +1,5 @@
 """
-Set up C function library for the SEOBNR aligned spin expressions.
+Generate SEOBNRv5 special amplitude coefficients and projected attachment inputs.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -107,27 +107,14 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
     """
     Register C function for computing and storing special amplitude coefficients.
 
+    The generated function calls ``SEOBNRv5_evaluate_l2m2_qnm``; composition
+    roots must register that helper before code generation.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
         pcg.register_func_call(f"{__name__}.{cast(FT, cfr()).f_code.co_name}", locals())
         return None
-
-    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
-    projected_reference_code = ccg.c_codegen(
-        [v5_const.M_f, v5_const.rISCO],
-        ["commondata->M_f", "commondata->r_ISCO"],
-        verbose=False,
-        include_braces=False,
-        cse_varprefix="projected_reference",
-    )
-    projected_delta_t_code = ccg.c_codegen(
-        [v5_const.Delta_t],
-        ["const REAL projected_Delta_t"],
-        verbose=False,
-        include_braces=False,
-        cse_varprefix="projected_delta_t",
-    )
 
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
@@ -136,161 +123,56 @@ Computes and stores special amplitude coefficients for inspiral waveform modes (
 @param[in,out] commondata Common data structure containing the model parameters.
 """
     cfunc_type = "void"
-    prefunc = r"""
-#include<complex.h>
-
-static inline REAL seobnr_clamp_real(const REAL x, const REAL lo, const REAL hi) {
-  return fmin(hi, fmax(lo, x));
-} // END FUNCTION: seobnr_clamp_real
-
-/**
- * Compute the HBR2016 M3J4 orbital angular-momentum fit ell.
- *
- * @param m1 Mass of body 1.
- * @param m2 Mass of body 2.
- * @param chi1z Spin of body 1 projected on the orbital angular momentum.
- * @param chi2z Spin of body 2 projected on the orbital angular momentum.
- * @return HBR2016 fitted ell value.
- */
-static inline REAL seobnr_hbr2016_ell_m3j4(
-    const REAL m1,
-    const REAL m2,
-    const REAL chi1z,
-    const REAL chi2z) {
-  const REAL q = m2 / m1;
-  const REAL nu = m1 * m2 / ((m1 + m2) * (m1 + m2));
-  const REAL atot = (chi1z + chi2z * q * q) / ((1.0 + q) * (1.0 + q));
-  const REAL xi = 0.474046;
-  const REAL aeff = atot + xi * nu * (chi1z + chi2z);
-  const REAL aeff_ceil_one = 0.5 * (aeff + 1.0 - fabs(aeff - 1.0));
-  const REAL z1 = 1.0 + cbrt(1.0 - aeff_ceil_one * aeff_ceil_one) *
-      (cbrt(1.0 + aeff_ceil_one) + cbrt(1.0 - aeff_ceil_one));
-  const REAL z2 = sqrt(3.0 * aeff_ceil_one * aeff_ceil_one + z1 * z1);
-  const REAL aeff_sign = (aeff_ceil_one > 0.0) - (aeff_ceil_one < 0.0);
-  const REAL r_isco_eff =
-      3.0 + z2 - sqrt((3.0 - z1) * (3.0 + z1 + 2.0 * z2)) * aeff_sign;
-  const REAL l_isco_eff = (2.0 / (3.0 * sqrt(3.0))) *
-      (1.0 + 2.0 * sqrt(3.0 * r_isco_eff - 2.0));
-  const REAL e_isco_eff = sqrt(1.0 - 2.0 / (3.0 * r_isco_eff));
-  const REAL aeff2 = aeff * aeff;
-  const REAL aeff3 = aeff2 * aeff;
-  const REAL aeff4 = aeff3 * aeff;
-  const REAL nu2 = nu * nu;
-  const REAL nu3 = nu2 * nu;
-  const REAL ksum = -5.97723 + 3.39221 * aeff + 4.48865 * aeff2 - 5.77101 * aeff3
-      - 13.0459 * aeff4 + nu * (35.1278 - 72.9336 * aeff - 86.0036 * aeff2
-      + 93.7371 * aeff3 + 200.975 * aeff4) + nu2 * (-146.822 + 387.184 * aeff
-      + 447.009 * aeff2 - 467.383 * aeff3 - 884.339 * aeff4) + nu3 * (223.911
-      - 648.502 * aeff - 697.177 * aeff2 + 753.738 * aeff3 + 1166.89 * aeff4);
-  return fabs(l_isco_eff - 2.0 * atot * (e_isco_eff - 1.0) + nu * ksum);
-} // END FUNCTION: seobnr_hbr2016_ell_m3j4
-
-/**
- * Compute the signed HBR2016 M3J4 precessing final spin.
- *
- * @param m1 Mass of body 1.
- * @param m2 Mass of body 2.
- * @param chi1_lnhat Spin of body 1 projected on the orbital angular momentum.
- * @param chi2_lnhat Spin of body 2 projected on the orbital angular momentum.
- * @param chi1_x Cartesian spin component of body 1.
- * @param chi1_y Cartesian spin component of body 1.
- * @param chi1_z Cartesian spin component of body 1.
- * @param chi2_x Cartesian spin component of body 2.
- * @param chi2_y Cartesian spin component of body 2.
- * @param chi2_z Cartesian spin component of body 2.
- * @return Signed precessing final spin.
- */
-static inline REAL seobnr_hbr2016_precessing_final_spin_m3j4(
-    const REAL m1,
-    const REAL m2,
-    const REAL chi1_lnhat,
-    const REAL chi2_lnhat,
-    const REAL chi1_x,
-    const REAL chi1_y,
-    const REAL chi1_z,
-    const REAL chi2_x,
-    const REAL chi2_y,
-    const REAL chi2_z) {
-  const REAL eps = 0.024;
-  const REAL q = m2 / m1;
-  const REAL q2 = q * q;
-  const REAL chi1_mag = sqrt(chi1_x * chi1_x + chi1_y * chi1_y + chi1_z * chi1_z);
-  const REAL chi2_mag = sqrt(chi2_x * chi2_x + chi2_y * chi2_y + chi2_z * chi2_z);
-  const REAL cos_beta = chi1_mag > 0.0 ? seobnr_clamp_real(chi1_lnhat / chi1_mag, -1.0, 1.0) : 1.0;
-  const REAL cos_gamma = chi2_mag > 0.0 ? seobnr_clamp_real(chi2_lnhat / chi2_mag, -1.0, 1.0) : 1.0;
-  const REAL sin_beta = sqrt(fmax(0.0, 1.0 - cos_beta * cos_beta));
-  const REAL sin_gamma = sqrt(fmax(0.0, 1.0 - cos_gamma * cos_gamma));
-  const REAL cos_betas = cos_beta * cos(eps * sin_beta) - sin_beta * sin(eps * sin_beta);
-  const REAL cos_gammas = cos_gamma * cos(eps * sin_gamma) - sin_gamma * sin(eps * sin_gamma);
-  const REAL spin_dot = chi1_x * chi2_x + chi1_y * chi2_y + chi1_z * chi2_z;
-  const REAL cos_alpha = (chi1_mag > 0.0 && chi2_mag > 0.0)
-      ? seobnr_clamp_real(spin_dot / (chi1_mag * chi2_mag), -1.0, 1.0) : 1.0;
-  const REAL ell = seobnr_hbr2016_ell_m3j4(m1, m2, chi1_mag * cos_betas, chi2_mag * cos_gammas);
-  REAL sqrt_arg = chi1_mag * chi1_mag + chi2_mag * chi2_mag * q2 * q2
-      + 2.0 * chi1_mag * chi2_mag * q2 * cos_alpha
-      + 2.0 * (chi1_mag * cos_betas + chi2_mag * q2 * cos_gammas) * ell * q
-      + ell * ell * q2;
-  if (sqrt_arg < 0.0)
-    sqrt_arg = 0.0;
-  const REAL atot_nonprecessing =
-      (chi1_lnhat + chi2_lnhat * q2) / ((1.0 + q) * (1.0 + q));
-  const REAL ell_nonprecessing =
-      seobnr_hbr2016_ell_m3j4(m1, m2, chi1_lnhat, chi2_lnhat);
-  const REAL final_spin_nonprecessing =
-      atot_nonprecessing + ell_nonprecessing / (1.0 / q + 2.0 + q);
-  const REAL sign_final_spin = final_spin_nonprecessing < 0.0 ? -1.0 : 1.0;
-  return sign_final_spin * sqrt(sqrt_arg) / ((1.0 + q) * (1.0 + q));
-} // END FUNCTION: seobnr_hbr2016_precessing_final_spin_m3j4
-"""
+    prefunc = "#include<complex.h>"
     name = "SEOBNRv5_aligned_spin_special_coefficients"
     params = "commondata_struct *restrict commondata"
     body = """
     
 REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
   exit(1);
 }
 
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (r == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for r\\n");
   exit(1);
 }
 
 REAL *restrict phi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phi == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for phi\\n");
   exit(1);
 }
 
 REAL *restrict pphi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (pphi == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for pphi\\n");
   exit(1);
 }
 
 REAL *restrict prstar = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (prstar == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for prstar\\n");
   exit(1);
 }
 
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega\\n");
   exit(1);
 }
 
 REAL *restrict Hreal = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Hreal == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Hreal\\n");
   exit(1);
 }
 
 REAL *restrict Omega_circ = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega_circ == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed to for times\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_circ\\n");
   exit(1);
 }
 
@@ -304,6 +186,7 @@ const REAL chiA = (chi1 - chi2) / 2;
 const int use_projected_attachment =
     fabs(commondata->chi1 - commondata->chi1_z) <= 1e-14 &&
     fabs(commondata->chi2 - commondata->chi2_z) <= 1e-14;
+// This setup owns the flag; downstream NQC code consumes it after this function returns.
 commondata->projected_attachment_active = false;
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_HNRFITS];
@@ -427,75 +310,126 @@ if (use_projected_attachment) {
   {
     const REAL chi1 = chi1_projected_r10;
     const REAL chi2 = chi2_projected_r10;
+    const REAL chi1_x = chi1_r10_x;
+    const REAL chi1_y = chi1_r10_y;
+    const REAL chi1_z = chi1_r10_z;
+    const REAL chi2_x = chi2_r10_x;
+    const REAL chi2_y = chi2_r10_y;
+    const REAL chi2_z = chi2_r10_z;
 """
-    body += projected_reference_code
-    body += """
-  } // END BLOCK: projected-spin reference evaluation at r=10M
-  commondata->a_f = seobnr_hbr2016_precessing_final_spin_m3j4(
-      m1, m2, chi1_projected_r10, chi2_projected_r10,
-      chi1_r10_x, chi1_r10_y, chi1_r10_z,
-      chi2_r10_x, chi2_r10_y, chi2_r10_z);
-  const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.9989, -0.9988,
-    -0.9987, -0.9986, -0.9985, -0.998, -0.9975, -0.997, -0.996, -0.995, -0.994, -0.992, -0.99, -0.988,
-    -0.986, -0.984, -0.982, -0.98, -0.975, -0.97, -0.96, -0.95, -0.94, -0.92, -0.9, -0.88, -0.86, -0.84,
-    -0.82, -0.8, -0.78, -0.76, -0.74, -0.72, -0.7, -0.65, -0.6, -0.55, -0.5, -0.45, -0.4, -0.35, -0.3,
-    -0.25, -0.2, -0.15, -0.1, -0.05, 0., 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6,
-    0.65, 0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.82, 0.84, 0.86, 0.88, 0.9, 0.92, 0.94, 0.95, 0.96, 0.97,
-    0.975, 0.98, 0.982, 0.984, 0.986, 0.988, 0.99, 0.992, 0.994, 0.995, 0.996, 0.997, 0.9975, 0.998,
-    0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
-  };
-  // Keep this l2m2 QNM table synchronized with SEOBNRv5_aligned_spin_coefficients.py.
-  const REAL reomegaqnm22[107] = {
-    0.2915755, 0.2915810, 0.2915866, 0.2915976, 0.2916086, 0.2916142, 0.2916197, 0.2916252,
-    0.2916307, 0.2916362, 0.2916638, 0.2916915, 0.2917191, 0.2917744, 0.2918297, 0.2918850,
-    0.2919958, 0.2921067, 0.2922178, 0.2923289, 0.2924403, 0.2925517, 0.2926633, 0.2929430,
-    0.2932235, 0.2937871, 0.2943542, 0.2949249, 0.2960772, 0.2972442, 0.2984264, 0.2996240,
-    0.3008375, 0.3020672, 0.3033134, 0.3045767, 0.3058573, 0.3071558, 0.3084726, 0.3098081,
-    0.3132321, 0.3167840, 0.3204726, 0.3243073, 0.3282986, 0.3324579, 0.3367980, 0.3413329,
-    0.3460786, 0.3510526, 0.3562748, 0.3617677, 0.3675569, 0.3736717, 0.3801456, 0.3870175,
-    0.3943330, 0.4021453, 0.4105179, 0.4195267, 0.4292637, 0.4398419, 0.4514022, 0.4641230,
-    0.4782352, 0.4940448, 0.5119692, 0.5326002, 0.5417937, 0.5516303, 0.5622007, 0.5736164,
-    0.5860170, 0.5995803, 0.6145391, 0.6312060, 0.6500179, 0.6716143, 0.6969947, 0.7278753,
-    0.7463200, 0.7676741, 0.7932082, 0.8082349, 0.8254295, 0.8331001, 0.8413428, 0.8502722,
-    0.8600462, 0.8708927, 0.8831622, 0.8974463, 0.9056637, 0.9149017, 0.9255811, 0.9316886,
-    0.9385236, 0.9463846, 0.9481225, 0.9499294, 0.9518133, 0.9537843, 0.9558544, 0.9603582,
-    0.9655139, 0.9684383, 0.9716904
-  };
-  const REAL imomegaqnm22[107] = {
-    0.0880269, 0.0880272, 0.0880274, 0.0880280, 0.0880285, 0.0880288, 0.0880290, 0.0880293,
-    0.0880296, 0.0880298, 0.0880311, 0.0880325, 0.0880338, 0.0880364, 0.0880391, 0.0880417,
-    0.0880470, 0.0880523, 0.0880575, 0.0880628, 0.0880680, 0.0880733, 0.0880785, 0.0880915,
-    0.0881045, 0.0881304, 0.0881560, 0.0881813, 0.0882315, 0.0882807, 0.0883289, 0.0883763,
-    0.0884226, 0.0884679, 0.0885122, 0.0885555, 0.0885976, 0.0886386, 0.0886785, 0.0887172,
-    0.0888085, 0.0888917, 0.0889663, 0.0890315, 0.0890868, 0.0891313, 0.0891643, 0.0891846,
-    0.0891911, 0.0891825, 0.0891574, 0.0891138, 0.0890496, 0.0889623, 0.0888489, 0.0887057,
-    0.0885283, 0.0883112, 0.0880477, 0.0877293, 0.0873453, 0.0868820, 0.0863212, 0.0856388,
-    0.0848021, 0.0837652, 0.0824618, 0.0807929, 0.0799908, 0.0790927, 0.0780817, 0.0769364,
-    0.0756296, 0.0741258, 0.0723780, 0.0703215, 0.0678642, 0.0648692, 0.0611186, 0.0562313,
-    0.0531490, 0.0494336, 0.0447904, 0.0419586, 0.0386302, 0.0371155, 0.0354676, 0.0336590,
-    0.0316516, 0.0293904, 0.0267908, 0.0237095, 0.0219107, 0.0198661, 0.0174737, 0.0160919,
-    0.0145340, 0.0127274, 0.0123259, 0.0119077, 0.0114708, 0.0110127, 0.0105306, 0.0094780,
-    0.0082669, 0.0075770, 0.0068074
-  };
-  gsl_interp_accel *restrict acc_qnm = gsl_interp_accel_alloc();
-  if (acc_qnm == NULL) {
-    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed for acc_qnm\\n");
-    exit(1);
-  } // END IF: acc_qnm allocation failed
-  gsl_spline *restrict spline_qnm = gsl_spline_alloc(gsl_interp_cspline, 107);
-  if (spline_qnm == NULL) {
-    fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed for spline_qnm\\n");
-    exit(1);
-  } // END IF: spline_qnm allocation failed
-  const REAL a_f_qnm = (commondata->a_f < afinallist[0]) ? afinallist[0] :
-      ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
-  gsl_spline_init(spline_qnm, afinallist, reomegaqnm22, 107);
-  commondata->omega_qnm = gsl_spline_eval(spline_qnm, a_f_qnm, acc_qnm) / commondata->M_f;
-  gsl_spline_init(spline_qnm, afinallist, imomegaqnm22, 107);
-  gsl_interp_accel_reset(acc_qnm);
-  commondata->tau_qnm = 1.0 / (gsl_spline_eval(spline_qnm, a_f_qnm, acc_qnm) / commondata->M_f);
-  gsl_spline_free(spline_qnm);
-  gsl_interp_accel_free(acc_qnm);
+    v5_const = SEOBNRv5_const.SEOBNR_aligned_spin_constants()
+    v5_const.final_spin_precessing_HBR2016()
+    body += ccg.c_codegen(
+        [
+            v5_const.M_f,
+            v5_const.rISCO,
+            v5_const.chi1_mag_precessing,
+            v5_const.chi2_mag_precessing,
+        ],
+        [
+            "commondata->M_f",
+            "commondata->r_ISCO",
+            "const REAL chi1_mag",
+            "const REAL chi2_mag",
+        ],
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_reference",
+    )
+    body += r"""
+    REAL cos_beta = 1.0;
+    if (chi1_mag > 0.0)
+"""
+    body += ccg.c_codegen(
+        v5_const.cos_beta_nonzero,
+        "cos_beta",
+        verbose=False,
+        include_braces=False,
+        enable_cse=False,
+    )
+    body += r"""
+    REAL cos_gamma = 1.0;
+    if (chi2_mag > 0.0)
+"""
+    body += ccg.c_codegen(
+        v5_const.cos_gamma_nonzero,
+        "cos_gamma",
+        verbose=False,
+        include_braces=False,
+        enable_cse=False,
+    )
+    body += ccg.c_codegen(
+        [
+            v5_const.sin_beta_precessing,
+            v5_const.sin_gamma_precessing,
+            v5_const.cos_betas_precessing,
+            v5_const.cos_gammas_precessing,
+        ],
+        [
+            "const REAL sin_beta",
+            "const REAL sin_gamma",
+            "const REAL cos_betas",
+            "const REAL cos_gammas",
+        ],
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_angles",
+    )
+    body += r"""
+    REAL cos_alpha = 1.0;
+    if (chi1_mag > 0.0 && chi2_mag > 0.0)
+"""
+    body += ccg.c_codegen(
+        v5_const.cos_alpha_nonzero,
+        "cos_alpha",
+        verbose=False,
+        include_braces=False,
+        enable_cse=False,
+    )
+    body += ccg.c_codegen(
+        v5_const.ell_precessing,
+        "const REAL ell",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_ell",
+    )
+    body += ccg.c_codegen(
+        v5_const.sqrt_arg_precessing,
+        "const REAL sqrt_arg",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_sqrt_arg",
+    )
+    body += ccg.c_codegen(
+        v5_const.a_f_nonprecessing_reference,
+        "const REAL a_f_nonprecessing",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_nonprecessing_spin",
+    )
+    body += ccg.c_codegen(
+        v5_const.sign_final_spin_precessing,
+        "const REAL sign_final_spin",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_final_spin_sign",
+    )
+    body += ccg.c_codegen(
+        v5_const.a_f_precessing,
+        "commondata->a_f",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_final_spin",
+    )
+    body += r"""
+    // Projected remnant support currently feeds only the (2,2) ringdown path.
+    // Keep its mode-specific and generic aliases synchronized; higher-mode QNM
+    // fields retain their coefficient-initialization values.
+    SEOBNRv5_evaluate_l2m2_qnm(commondata->a_f, commondata->M_f,
+                               &commondata->omega_qnm_l2m2, &commondata->tau_qnm_l2m2);
+    commondata->omega_qnm = commondata->omega_qnm_l2m2;
+    commondata->tau_qnm = commondata->tau_qnm_l2m2;
+  } // END BLOCK: projected-spin remnant evaluation at r=10M
   gsl_spline_free(spline_t_of_u);
   gsl_interp_accel_free(acc_t_of_u);
   gsl_spline_free(spline_Omega_combined);
@@ -510,12 +444,12 @@ if (use_projected_attachment) {
 
 gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
   if (acc_r == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_r == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
@@ -523,12 +457,12 @@ gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
   if (acc_phi == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_phi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_phi == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_phi,times,phi,commondata->nsteps_fine);
@@ -536,12 +470,12 @@ gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
   if (acc_prstar == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_prstar = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_prstar == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_prstar,times,prstar,commondata->nsteps_fine);
@@ -550,12 +484,12 @@ gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
   if (acc_pphi == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_pphi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_pphi == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_pphi,times,pphi,commondata->nsteps_fine);
@@ -563,12 +497,12 @@ gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
   if (acc_Omega == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_Omega = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_Omega,times,Omega,commondata->nsteps_fine);
@@ -576,24 +510,24 @@ gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
 
 gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
   if (acc_Omega_circ == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_Omega_circ = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega_circ == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_Omega_circ,times,Omega_circ,commondata->nsteps_fine); 
   
 gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
   if (acc_Hreal == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline *restrict spline_Hreal = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Hreal == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
     }
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
@@ -607,17 +541,17 @@ else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
   if (N_zoom == 0) {
-    fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), fine dynamics time interval is too short for t_ISCO search\\n");
+    fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), fine dynamics time interval is too short for t_ISCO search\n");
     exit(1);
   } // END IF: fine-dynamics interval is too short for t_ISCO search
   REAL *restrict t_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (t_zoom == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for t_zoom\n");
       exit(1);
     } // END IF: t_zoom allocation failed
   REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
   if (minus_r_zoom == NULL) {
-      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
+      fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for minus_r_zoom\n");
       exit(1);
     } // END IF: minus_r_zoom allocation failed
   for (i = 0; i < N_zoom; i++){
@@ -634,16 +568,15 @@ else{
         ISCO_zoom_idx = (size_t)i;
       }
     } // END LOOP: for i over fine-grid projected r_ISCO search samples
-  } else {
-    ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1);
-  } // END ELSE: legacy scalar aligned-spin r_ISCO search
+  } else
+    ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1); // END ELSE: legacy scalar aligned-spin r_ISCO search
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
   free(t_zoom);
   free(minus_r_zoom);
 }
 
-// Step 3: Evaluate the attachment-time shift from projected spins at r_ISCO.
+// Step 3: Finalize the attachment-time shift.
 if (use_projected_attachment) {
   REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
   omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
@@ -653,8 +586,14 @@ if (use_projected_attachment) {
     const REAL chi1 = chi1_projected_rISCO;
     const REAL chi2 = chi2_projected_rISCO;
 """
-    body += projected_delta_t_code
-    body += """
+    body += ccg.c_codegen(
+        v5_const.Delta_t,
+        "const REAL projected_Delta_t",
+        verbose=False,
+        include_braces=False,
+        cse_varprefix="projected_delta_t",
+    )
+    body += r"""
     commondata->Delta_t = projected_Delta_t;
   } // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
 } // END IF: projected-spin Delta_t inputs are self-consistent
