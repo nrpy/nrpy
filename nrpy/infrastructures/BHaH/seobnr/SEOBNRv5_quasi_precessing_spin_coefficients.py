@@ -1,5 +1,5 @@
 """
-Set up C function library for SEOBNR initial conditions.
+Generate SEOBNRv5 quasi-precessing coefficients and QNM interpolation data.
 
 Authors: Siddharth Mahesh
         sm0193 **at** mix **dot** wvu **dot** edu
@@ -18,18 +18,20 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients(
+    use_projected_attachment_default: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
-    Register CFunction for evaluating the masses and SEOBNRv5 coefficients.
-    The inputs needed to generate an EOB approximant are mass ratio, spins and
-    an initial orbital frequency. Therefore, one needs to compute the individual
-    masses from the mass ratio and the Hamiltonian coeffients which are a function
-    of mass ratio and spins.
-    It is identical to SEOBNRv5_aligned_spin_coefficients except it is used for
-    the quasi-precessing spin case.
+    Register the C function that initializes masses and quasi-precessing coefficients.
 
+    The function derives individual masses and Hamiltonian coefficients from the
+    mass ratio and scalar spin projections, initializes mode-specific QNM data,
+    and exposes spin-evolution storage used by the quasi-precessing pipeline.
+    It calls ``SEOBNRv5_evaluate_l2m2_qnm``; composition roots must register that
+    helper before code generation.
+
+    :param use_projected_attachment_default: Default runtime selection for
+        projected-spin attachment instead of the aligned-spin fallback.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -160,6 +162,35 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
+    # Central registration for the requested mode. The SEBOBv2 main generator
+    # and register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
+    # depend on this function having been called.
+    par.register_CodeParameters(
+        "bool",
+        __name__,
+        ["use_projected_attachment"],
+        [use_projected_attachment_default],
+        commondata=True,
+        add_to_parfile=True,
+        descriptions=[
+            "Use projected-spin attachment instead of the aligned-spin fallback."
+        ],
+    )
+
+    # Central registration for the shared projected-attachment state. Downstream
+    # register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
+    # and register_CFunction_SEBOBv2_NQC_corrections() depend on this function
+    # having been called.
+    par.register_CodeParameters(
+        "bool",
+        __name__,
+        ["projected_attachment_active"],
+        [False],
+        commondata=True,
+        add_to_parfile=False,
+        add_to_set_CodeParameters_h=False,
+    )
+
     par.register_CodeParameters(
         "REAL *restrict",
         __name__,
@@ -236,10 +267,8 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    # This is sufficient for initial conditions.
-    # Including chi1 and chi2 for now to be consistent with the aligned spin case.
-    # For the precessing spin case, we use spin vectors.
-    # We can possibly create a switch to use the aligned spin case, based on inputs.
+    # Scalar fields drive aligned-spin calculations. Projected composition roots
+    # initialize them from vector-z inputs and refresh them at attachment time.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -275,21 +304,21 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=True,
         descriptions=[
             "Mass ratio convention is m_greater/m_lesser.",
-            "Aligned-spin baseline parameter; for sandbox validation keep chi1 = chi1_z.",
-            "Aligned-spin baseline parameter; for sandbox validation keep chi2 = chi2_z.",
+            "Aligned-spin projection for body 1; ignored when projected attachment is enabled.",
+            "Aligned-spin projection for body 2; ignored when projected attachment is enabled.",
             "Dimensionless precessing spin x-component for body 1.",
             "Dimensionless precessing spin y-component for body 1.",
-            "Dimensionless precessing spin z-component for body 1.",
+            "Dimensionless precessing spin z-component for body 1; authoritative for projected attachment.",
             "Dimensionless precessing spin x-component for body 2.",
             "Dimensionless precessing spin y-component for body 2.",
-            "Dimensionless precessing spin z-component for body 2.",
+            "Dimensionless precessing spin z-component for body 2; authoritative for projected attachment.",
             "Initial dimensionless orbital frequency; default chosen for r ~ 20M.",
             "Total mass in solar masses.",
             "Output timestep in seconds.",
         ],
     )
 
-    includes = ["BHaH_defines.h"]
+    includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Evaluate and store the SEOBNRv5 calibration coefficients and remnant properties.
 
@@ -305,11 +334,12 @@ REAL eta = q / (1.0 + q) / (1.0 + q);
 if (eta > 0.25){
   if (fabs(q - 1.) < 1e-13){
     q = 1.;
-  } else{
+  } // END IF: roundoff mass ratio
+  else{
     printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
     exit(EXIT_FAILURE);
-  }
-}
+  } // END ELSE: invalid mass ratio
+} // END IF: eta exceeds physical limit
 commondata->m1 = q / (1.0 + q);
 commondata->m2 = 1.0 / (1.0 + q);
 const REAL m1 = commondata->m1;
@@ -317,7 +347,8 @@ const REAL m2 = commondata->m2;
 const REAL chi1 = commondata->chi1;
 const REAL chi2 = commondata->chi2;
 commondata->dT = commondata->dt / commondata->total_mass / 4.925490947641266978197229498498379006e-6;
-// The sebobv2 example still uses the aligned spin coefficients,
+// Initialize scalar aligned-spin coefficients and remnant quantities. The
+// projected attachment path refreshes its remnant values after spin evolution.
 """
     body += ccg.c_codegen(
         [
@@ -352,41 +383,6 @@ const REAL afinallist[107] = { -0.9996, -0.9995, -0.9994, -0.9992, -0.999, -0.99
   0.9985, 0.9986, 0.9987, 0.9988, 0.9989, 0.999, 0.9992, 0.9994, 0.9995, 0.9996
 };
 
-// NOTE: imomegaqnm_* tables store the positive damping rate |Im(omega)|.
-const REAL reomegaqnm_l2m2[107] = {
-  0.2915755, 0.2915810, 0.2915866, 0.2915976, 0.2916086, 0.2916142, 0.2916197, 0.2916252,
-  0.2916307, 0.2916362, 0.2916638, 0.2916915, 0.2917191, 0.2917744, 0.2918297, 0.2918850,
-  0.2919958, 0.2921067, 0.2922178, 0.2923289, 0.2924403, 0.2925517, 0.2926633, 0.2929430,
-  0.2932235, 0.2937871, 0.2943542, 0.2949249, 0.2960772, 0.2972442, 0.2984264, 0.2996240,
-  0.3008375, 0.3020672, 0.3033134, 0.3045767, 0.3058573, 0.3071558, 0.3084726, 0.3098081,
-  0.3132321, 0.3167840, 0.3204726, 0.3243073, 0.3282986, 0.3324579, 0.3367980, 0.3413329,
-  0.3460786, 0.3510526, 0.3562748, 0.3617677, 0.3675569, 0.3736717, 0.3801456, 0.3870175,
-  0.3943330, 0.4021453, 0.4105179, 0.4195267, 0.4292637, 0.4398419, 0.4514022, 0.4641230,
-  0.4782352, 0.4940448, 0.5119692, 0.5326002, 0.5417937, 0.5516303, 0.5622007, 0.5736164,
-  0.5860170, 0.5995803, 0.6145391, 0.6312060, 0.6500179, 0.6716143, 0.6969947, 0.7278753,
-  0.7463200, 0.7676741, 0.7932082, 0.8082349, 0.8254295, 0.8331001, 0.8413428, 0.8502722,
-  0.8600462, 0.8708927, 0.8831622, 0.8974463, 0.9056637, 0.9149017, 0.9255811, 0.9316886,
-  0.9385236, 0.9463846, 0.9481225, 0.9499294, 0.9518133, 0.9537843, 0.9558544, 0.9603582,
-  0.9655139, 0.9684383, 0.9716904
-};
-
-const REAL imomegaqnm_l2m2[107] = {
-  0.0880269, 0.0880272, 0.0880274, 0.0880280, 0.0880285, 0.0880288, 0.0880290, 0.0880293,
-  0.0880296, 0.0880298, 0.0880311, 0.0880325, 0.0880338, 0.0880364, 0.0880391, 0.0880417,
-  0.0880470, 0.0880523, 0.0880575, 0.0880628, 0.0880680, 0.0880733, 0.0880785, 0.0880915,
-  0.0881045, 0.0881304, 0.0881560, 0.0881813, 0.0882315, 0.0882807, 0.0883289, 0.0883763,
-  0.0884226, 0.0884679, 0.0885122, 0.0885555, 0.0885976, 0.0886386, 0.0886785, 0.0887172,
-  0.0888085, 0.0888917, 0.0889663, 0.0890315, 0.0890868, 0.0891313, 0.0891643, 0.0891846,
-  0.0891911, 0.0891825, 0.0891574, 0.0891138, 0.0890496, 0.0889623, 0.0888489, 0.0887057,
-  0.0885283, 0.0883112, 0.0880477, 0.0877293, 0.0873453, 0.0868820, 0.0863212, 0.0856388,
-  0.0848021, 0.0837652, 0.0824618, 0.0807929, 0.0799908, 0.0790927, 0.0780817, 0.0769364,
-  0.0756296, 0.0741258, 0.0723780, 0.0703215, 0.0678642, 0.0648692, 0.0611186, 0.0562313,
-  0.0531490, 0.0494336, 0.0447904, 0.0419586, 0.0386302, 0.0371155, 0.0354676, 0.0336590,
-  0.0316516, 0.0293904, 0.0267908, 0.0237095, 0.0219107, 0.0198661, 0.0174737, 0.0160919,
-  0.0145340, 0.0127274, 0.0123259, 0.0119077, 0.0114708, 0.0110127, 0.0105306, 0.0094780,
-  0.0082669, 0.0075770, 0.0068074
-};
-
 const REAL reomegaqnm_l2m1[107] = {
   0.3438626, 0.3438628, 0.3438631, 0.3438636, 0.3438642, 0.3438644, 0.3438647, 0.3438649,
   0.3438652, 0.3438655, 0.3438668, 0.3438681, 0.3438695, 0.3438722, 0.3438750, 0.3438778,
@@ -404,6 +400,7 @@ const REAL reomegaqnm_l2m1[107] = {
   0.5809502, 0.5810312, 0.5811120
 };
 
+// All imaginary-frequency tables below store positive damping rates |Im(omega)|.
 const REAL imomegaqnm_l2m1[107] = {
   0.0833908, 0.0833925, 0.0833942, 0.0833976, 0.0834009, 0.0834026, 0.0834043, 0.0834060,
   0.0834077, 0.0834093, 0.0834177, 0.0834261, 0.0834345, 0.0834512, 0.0834679, 0.0834845,
@@ -593,15 +590,15 @@ const REAL imomegaqnm_l5m5[107] = {
 
 gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
 if (spline == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
   exit(EXIT_FAILURE);
-}
+} // END IF: spline allocation failed
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
 if (acc == NULL){
-  fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_coefficients(), gsl_interp_accel_alloc failed to initialize\\n");
+  fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_coefficients(), gsl_interp_accel_alloc failed to initialize\\n");
   gsl_spline_free(spline); // Clean up the first allocation
   exit(EXIT_FAILURE);
-}
+} // END IF: accelerator allocation failed
 
 const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
                       ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
@@ -613,9 +610,8 @@ const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
     gsl_spline_init(spline, afinallist, IM_ARRAY, 107); \\
     gsl_interp_accel_reset(acc); \\
     commondata->TARGET_TAU = 1. / (gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f); \\
-} while(0)
+} while(0) // END DO-WHILE: evaluate QNM mode
 
-EVAL_QNM(2, 2, omega_qnm_l2m2, tau_qnm_l2m2, reomegaqnm_l2m2, imomegaqnm_l2m2);
 EVAL_QNM(2, 1, omega_qnm_l2m1, tau_qnm_l2m1, reomegaqnm_l2m1, imomegaqnm_l2m1);
 EVAL_QNM(3, 3, omega_qnm_l3m3, tau_qnm_l3m3, reomegaqnm_l3m3, imomegaqnm_l3m3);
 EVAL_QNM(3, 2, omega_qnm_l3m2, tau_qnm_l3m2, reomegaqnm_l3m2, imomegaqnm_l3m2);
@@ -623,6 +619,8 @@ EVAL_QNM(4, 4, omega_qnm_l4m4, tau_qnm_l4m4, reomegaqnm_l4m4, imomegaqnm_l4m4);
 EVAL_QNM(4, 3, omega_qnm_l4m3, tau_qnm_l4m3, reomegaqnm_l4m3, imomegaqnm_l4m3);
 EVAL_QNM(5, 5, omega_qnm_l5m5, tau_qnm_l5m5, reomegaqnm_l5m5, imomegaqnm_l5m5);
 
+SEOBNRv5_evaluate_l2m2_qnm(commondata->a_f, commondata->M_f,
+                           &commondata->omega_qnm_l2m2, &commondata->tau_qnm_l2m2);
 commondata->omega_qnm = commondata->omega_qnm_l2m2;
 commondata->tau_qnm   = commondata->tau_qnm_l2m2;
 
