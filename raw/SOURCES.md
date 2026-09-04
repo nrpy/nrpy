@@ -116,6 +116,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |
 | `nrpy/infrastructures/BHaH/rfm_precompute.py` | living |
+| `nrpy/infrastructures/BHaH/generalrfm_precompute.py` | living |
 | `nrpy/infrastructures/BHaH/read_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/write_checkpoint.py` | living |
 | `nrpy/infrastructures/BHaH/xx_tofrom_Cart.py` | living |

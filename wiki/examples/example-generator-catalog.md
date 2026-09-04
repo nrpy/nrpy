@@ -1,6 +1,6 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 07-12-2026
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 09-04-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -28,19 +28,6 @@ labels below describe configured workflow/helper steps, not latest CI outcomes;
 `manual/source-supported` means this audit inspected sources but did not
 generate, build, or run the project.
 
-`blackhole_spectroscopy.py` keeps BSSN as the default and adds public
-`--fccz4` generation. The flag selects fCCZ4 RHS/gauge registration and
-fresh-data Theta initialization; it is not a claim of restart correctness or
-scientific validity.
-
-Claim evidence:
-- Claim: `python -m nrpy.examples.blackhole_spectroscopy` defaults to BSSN and accepts `--fccz4` to generate the opt-in fCCZ4 formulation; no restart or scientific-result guarantee follows.
-- Role: user-facing command and interface
-- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, and formulation-selecting registrations
-- Corroboration: [GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md), formulation-selection and initial-data claim
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, --fccz4 generation/build and t_final=0.1 startup through iteration 1; date=08-28-2026`
-
 | Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
 | --- | --- | --- | --- | --- | --- |
 | `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
@@ -51,7 +38,7 @@ Claim evidence:
 | `carpetx_wavetoy_thorns.py` | `python -m nrpy.examples.carpetx_wavetoy_thorns` | CarpetX WaveToyNRPyX, IDWaveToyNRPyX, and diagWaveToyNRPyX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and inspected CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `hydro_without_hydro.py` | `python -m nrpy.examples.hydro_without_hydro [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH static-fluid spacetime evolution project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures a CUDA build, but no runtime/result check | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C or CUDA toolchain, `make` | Manual/source-supported benchmark route | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C compiler, `make` | Manual/source-supported default OpenMP route; the parser exposes `--cuda`, but GeneralRFM precompute rejects CUDA during generation | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `manga_bhah_lib.py` | `python -m nrpy.examples.manga_bhah_lib` | MANGA-facing `bhah_lib` library project | Python, C compiler, `make`, GSL | Source-supported library route; CI commands are present but commented out | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `mass_geodesic_integrator.py` | `python -m nrpy.examples.mass_geodesic_integrator` | Standalone massive-particle geodesic C project plus trajectory visualization copy | Python, C compiler, `make`, GSL, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpyelliptic_conformally_flat.py` | `python -m nrpy.examples.nrpyelliptic_conformally_flat [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH NRPyElliptic conformally flat project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures CUDA build only | [Elliptic Initial Data](elliptic-initial-data.md) |

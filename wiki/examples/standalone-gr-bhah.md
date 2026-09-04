@@ -78,18 +78,28 @@ horizon workflow: `IDtype = "Kasner"`, Cartesian initial-data coordinates,
 fourth-order finite differences, extrapolation outer boundaries, and a guard
 that requires the Kasner exponents to satisfy both Kasner constraints. It uses
 Kasner-specific diagnostic gridfunction registration and nearest diagnostics.
-The source keeps separate Ricci for supported paths, but disables device-side
-separate Ricci when CUDA and GeneralRFM are combined, then still registers a
-host-only Ricci path for CUDA. Its source-backed generation flags are `--cuda`
-and `--floating_point_precision`.
+The parser exposes `--cuda`, but that route is not usable. The fixed GeneralRFM
+coordinate causes initial-data registration to request GeneralRFM support, and
+GeneralRFM precompute rejects CUDA before later Ricci registration can help.
+Use the default OpenMP route; `--floating_point_precision` remains available.
 
-All four generators default to OpenMP and switch to CUDA only when `--cuda` is
-present. In CUDA mode they register CUDA host/device helpers, use `nvcc`,
-choose `.cu` source output, copy `cuda_intrinsics.h`, and relax generated
-pointer qualifiers from `*restrict` to `*`. In OpenMP mode, the three
-black-hole examples generate or link a BHaHAHA static library subdirectory and
-require double precision for that integration; non-double OpenMP BHaHAHA
-generation raises an error. The Kasner benchmark does not generate BHaHAHA.
+Claim evidence:
+- Claim: `kasner_exact_evolution.py` defaults to a source-supported OpenMP path and exposes `--floating_point_precision`; it also exposes `--cuda`, but CUDA generation fails while initial-data registration requests support for its fixed GeneralRFM coordinate because GeneralRFM precompute rejects CUDA before later Ricci registration. Source inspection did not generate, build, run, or check results for either path.
+- Role: descriptive behavior
+- Deciding authority: [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py), `parser`, `parallelization`, `CoordSystem`, `enable_rfm_precompute`, `BHaH.general_relativity.initial_data.register_CFunction_initial_data`, and `BHaH.general_relativity.Ricci_eval.register_CFunction_Ricci_eval`
+- Corroboration: [initial_data.py](../../nrpy/infrastructures/BHaH/general_relativity/initial_data.py), `register_CFunction_initial_data`; [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py), `register_CFunctions_generalrfm_support` and `register_CFunction_generalrfm_precompute`
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Linux; tool_version=not-run; backend=default OpenMP source path, CUDA rejected during registration; precision=double default; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=inspected; options=default, --floating_point_precision, --cuda; date=09-04-2026`
+
+All four generators default to OpenMP. The three black-hole generators switch
+to CUDA when `--cuda` is present; the Kasner parser selects CUDA but fails at
+the GeneralRFM precompute gate described above. For the usable CUDA routes,
+generators register CUDA host/device helpers, use `nvcc`, choose `.cu` source
+output, copy `cuda_intrinsics.h`, and relax generated pointer qualifiers from
+`*restrict` to `*`. In OpenMP mode, the three black-hole examples generate or
+link a BHaHAHA static library subdirectory and require double precision for
+that integration; non-double OpenMP BHaHAHA generation raises an error. The
+Kasner benchmark does not generate BHaHAHA.
 
 The shared BHaH runtime pieces include nearest and volume diagnostics,
 diagnostic gridfunction header generation, progress output, constraint
@@ -117,6 +127,7 @@ generator that horizon-enabled black-hole examples call.
 - [enforce_detgbar_equals_detghat_trAzero.py](../../nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - shared determinant/trace projector
 - [spinning_blackhole.py](../../nrpy/examples/spinning_blackhole.py) - `project_name`, `CoordSystem`, `IDtype`, `spin_alignment_vector_params`, `default_BH_spin_chiU`
 - [kasner_exact_evolution.py](../../nrpy/examples/kasner_exact_evolution.py) - `project_name`, `IDtype`, `LapseEvolutionOption`, `ShiftEvolutionOption`, `use_separate_ricci`
+- [generalrfm_precompute.py](../../nrpy/infrastructures/BHaH/generalrfm_precompute.py) - `register_CFunctions_generalrfm_support`, `register_CFunction_generalrfm_precompute`
 
 ## See Also
 
