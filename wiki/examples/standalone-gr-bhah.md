@@ -1,6 +1,6 @@
 # Standalone GR/BHaH
 
-> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 07-19-2026
+> Route standalone BHaH numerical-relativity generators by initial data, coordinates, diagnostics, and build mode. · Status: confirmed · Last reconciled: 09-04-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -38,7 +38,10 @@ explicitly OpenMP-only and is rejected with `--cuda`.
 Cartesian initial-data coordinates on `SinhCylindrical`, registers
 `NRPyPN_quasicircular_momenta`, registers the TwoPunctures library, solves the
 TwoPunctures initial-data persist structure before filling BHaH initial data,
-and frees the TwoPunctures derivative storage afterward. It uses
+and frees the TwoPunctures derivative storage afterward. It overrides the
+shared `psi^n` initial lapse with `W` for SSL; option semantics are documented in
+[BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
+It uses
 `OnePlusLog`/`GammaDriving2ndOrder_Covariant`, eighth-order finite differences,
 separate Ricci, outgoing radiation boundaries, checkpointing every `2.0` by
 default, Psi4 and spin-weight minus-two spherical-harmonic diagnostics, and GSL

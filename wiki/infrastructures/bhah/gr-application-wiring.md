@@ -1,6 +1,6 @@
 # GR Application Wiring
 
-> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 08-30-2026
+> Map how BHaH registers generated CFunctions that connect GR equations, initial data, diagnostics, and basis transforms. Status: confirmed. Last reconciled: 09-04-2026
 > Up: [BHaH](index.md)
 
 ## Summary
@@ -220,7 +220,22 @@ defaults, copies or derives binary masses, separation, momenta, spin, center
 offset, spectral grid sizes, and orientation. The explicit orientation choices
 are `native_cartesian_xy_plane` and `legacy_swap_xz`; the older
 `register_C_functions(enable_xy_plane=...)` shim maps the boolean interface to
-those names. If TwoPunctures/TOVola setup detail grows beyond routing and
+those names. The shared initial-lapse default remains `psi^n`. `TP_Interp`
+also recognizes `W` and assigns `1 / (psi1 / static_psi)^2`, so the spectral
+correction `U` in `psi1` participates in that initial lapse. The top-level
+standalone and superB spectroscopy generators explicitly select `W` for SSL;
+callers without an override, including paper-reproduction examples, retain
+`psi^n`.
+
+Claim evidence:
+- Claim: TwoPunctures retains its shared `psi^n` initial-lapse default, supports an optional `W` selector evaluated from the corrected total conformal factor, and the top-level standalone and superB spectroscopy generators explicitly select `W` for SSL while paper-reproduction examples continue to use the shared initializer without a lapse override; generation and compilation alone do not establish evolution behavior or scientific accuracy.
+- Role: descriptive behavior
+- Deciding authority: [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py), `register_CFunction_initialize_ID_persist_struct`; [TP_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py), `register_CFunction_TP_Interp`; [blackhole_spectroscopy.py](../../../nrpy/examples/blackhole_spectroscopy.py) and [superB_blackhole_spectroscopy.py](../../../nrpy/examples/superB_blackhole_spectroscopy.py), `populate_ID_persist_struct_str`
+- Corroboration: [superB_blackhole_spectroscopy_8Mseparation.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_8Mseparation.py) and [superB_blackhole_spectroscopy_last_orbit.py](../../../nrpy/examples/superb_paper2/superB_blackhole_spectroscopy_last_orbit.py), unchanged shared-initializer calls without a lapse override
+- Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
+- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-run; restart=not-run; distributed=not-run; error_path=not-run; options=top-level standalone W generation/build, top-level superB W generation, paper examples inspected unchanged with shared psi^n default; date=09-04-2026`
+
+If TwoPunctures/TOVola setup detail grows beyond routing and
 dataflow, split it into a future `compact-object-initial-data.md` leaf.
 
 TOVola is the corresponding single-star initial-data path. `TOVola.ID_persist_str`
@@ -276,6 +291,7 @@ does not remove `m=+l` cases from emitted BHaH C.
 - [basis_transform_BSSN_Cartesian_to_rfm_single_point.py](../../../nrpy/infrastructures/BHaH/general_relativity/basis_transforms/basis_transform_BSSN_Cartesian_to_rfm_single_point.py) - `register_CFunction_basis_transform_BSSN_Cartesian_to_rfm_single_point`
 - [TwoPunctures_lib.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TwoPunctures_lib.py) - `register_C_functions_explicit`, `register_C_functions`
 - [ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py) - `ID_persist_str`, `register_CFunction_initialize_ID_persist_struct`
+- [TP_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py) - `register_CFunction_TP_Interp`
 - [TOVola/ID_persist_struct.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/ID_persist_struct.py) - `ID_persist_str`
 - [TOVola_solve.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/TOVola_solve.py) - `register_CFunction_TOVola_solve`
 - [TOVola_interp.py](../../../nrpy/infrastructures/BHaH/general_relativity/TOVola/TOVola_interp.py) - `register_CFunction_TOVola_interp`

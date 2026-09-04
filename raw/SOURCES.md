@@ -110,6 +110,8 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/BHaH/general_relativity/rhs_eval.py` | living |
 | `nrpy/infrastructures/BHaH/general_relativity/dsmin_gf.py` | living |
 | `nrpy/infrastructures/BHaH/general_relativity/enforce_detgbar_equals_detghat_trAzero.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/ID_persist_struct.py` | living |
+| `nrpy/infrastructures/BHaH/general_relativity/TwoPunctures/TP_interp.py` | living |
 | `nrpy/infrastructures/BHaH/simple_loop.py` | living |
 | `nrpy/infrastructures/BHaH/griddata_commondata.py` | living |
 | `nrpy/infrastructures/BHaH/numerical_grids_and_timestep.py` | living |

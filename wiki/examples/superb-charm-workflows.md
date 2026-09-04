@@ -1,6 +1,6 @@
 # superB Charm++ Workflows
 
-> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 07-19-2026
+> Route the three superB example generators to their Charm++ project, build, run, and validation shape. · Status: confirmed · Last reconciled: 09-04-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -81,7 +81,9 @@ finite differences, RK4 by default and SSPRK33 for the paper branch, enables
 Kreiss-Oliger dissipation, CAKO, SSL, BHaHAHA, and Psi4, and enables Charm++
 checkpointing with `checkpoint_every = 20.0`. Because it registers
 TwoPunctures support, its generated Makefile uses `gsl-config --cflags` and
-`gsl-config --libs`; this is the GSL-backed superB example.
+`gsl-config --libs`; this is the GSL-backed superB example. It overrides the
+shared `psi^n` initial lapse with `W` for SSL; option semantics are owned by
+[BHaH GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md).
 
 `superB_nrpyelliptic_conformally_flat` is the Charm++ analog of the standalone
 NRPyElliptic conformally flat workflow. It uses `SinhSpherical` coordinates,
