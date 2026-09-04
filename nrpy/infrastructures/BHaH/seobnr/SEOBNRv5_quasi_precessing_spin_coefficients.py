@@ -18,9 +18,9 @@ import nrpy.helpers.parallel_codegen as pcg
 import nrpy.params as par
 
 
-def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
-    Union[None, pcg.NRPyEnv_type]
-):
+def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients(
+    use_projected_attachment_default: bool,
+) -> Union[None, pcg.NRPyEnv_type]:
     """
     Register the C function that initializes masses and quasi-precessing coefficients.
 
@@ -30,6 +30,8 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
     It calls ``SEOBNRv5_evaluate_l2m2_qnm``; composition roots must register that
     helper before code generation.
 
+    :param use_projected_attachment_default: Default runtime selection for
+        projected-spin attachment instead of the aligned-spin fallback.
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -160,7 +162,22 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    # Central registration for the shared projected-attachment flag. Downstream
+    # Central registration for the requested mode. The SEBOBv2 main generator
+    # and register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
+    # depend on this function having been called.
+    par.register_CodeParameters(
+        "bool",
+        __name__,
+        ["use_projected_attachment"],
+        [use_projected_attachment_default],
+        commondata=True,
+        add_to_parfile=True,
+        descriptions=[
+            "Use projected-spin attachment instead of the aligned-spin fallback."
+        ],
+    )
+
+    # Central registration for the shared projected-attachment state. Downstream
     # register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients()
     # and register_CFunction_SEBOBv2_NQC_corrections() depend on this function
     # having been called.
@@ -250,8 +267,8 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=False,
     )
 
-    # Scalar spins seed the aligned-spin dynamics. The projected-attachment path
-    # later refreshes them from the spin-projection splines at attachment time.
+    # Scalar fields drive aligned-spin calculations. Projected composition roots
+    # initialize them from vector-z inputs and refresh them at attachment time.
     par.register_CodeParameters(
         "REAL",
         __name__,
@@ -287,14 +304,14 @@ def register_CFunction_SEOBNRv5_quasi_precessing_spin_coefficients() -> (
         add_to_parfile=True,
         descriptions=[
             "Mass ratio convention is m_greater/m_lesser.",
-            "Initial aligned-spin projection for body 1; updated at attachment when projected attachment is active.",
-            "Initial aligned-spin projection for body 2; updated at attachment when projected attachment is active.",
+            "Aligned-spin projection for body 1; ignored when projected attachment is enabled.",
+            "Aligned-spin projection for body 2; ignored when projected attachment is enabled.",
             "Dimensionless precessing spin x-component for body 1.",
             "Dimensionless precessing spin y-component for body 1.",
-            "Dimensionless precessing spin z-component for body 1.",
+            "Dimensionless precessing spin z-component for body 1; authoritative for projected attachment.",
             "Dimensionless precessing spin x-component for body 2.",
             "Dimensionless precessing spin y-component for body 2.",
-            "Dimensionless precessing spin z-component for body 2.",
+            "Dimensionless precessing spin z-component for body 2; authoritative for projected attachment.",
             "Initial dimensionless orbital frequency; default chosen for r ~ 20M.",
             "Total mass in solar masses.",
             "Output timestep in seconds.",
@@ -317,11 +334,12 @@ REAL eta = q / (1.0 + q) / (1.0 + q);
 if (eta > 0.25){
   if (fabs(q - 1.) < 1e-13){
     q = 1.;
-  } else{
+  } // END IF: roundoff mass ratio
+  else{
     printf("mass ratio = %.15e causes eta = %.15e > 0.25\\n",q,eta);
     exit(EXIT_FAILURE);
-  }
-}
+  } // END ELSE: invalid mass ratio
+} // END IF: eta exceeds physical limit
 commondata->m1 = q / (1.0 + q);
 commondata->m2 = 1.0 / (1.0 + q);
 const REAL m1 = commondata->m1;
@@ -574,13 +592,13 @@ gsl_spline *spline = gsl_spline_alloc(gsl_interp_cspline, 107);
 if (spline == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_coefficients(), gsl_spline_alloc failed to initialize\\n");
   exit(EXIT_FAILURE);
-}
+} // END IF: spline allocation failed
 gsl_interp_accel *acc = gsl_interp_accel_alloc();
 if (acc == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_quasi_precessing_spin_coefficients(), gsl_interp_accel_alloc failed to initialize\\n");
   gsl_spline_free(spline); // Clean up the first allocation
   exit(EXIT_FAILURE);
-}
+} // END IF: accelerator allocation failed
 
 const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
                       ((commondata->a_f > afinallist[106]) ? afinallist[106] : commondata->a_f);
@@ -592,7 +610,7 @@ const REAL a_f_clamped = (commondata->a_f < afinallist[0]) ? afinallist[0] :
     gsl_spline_init(spline, afinallist, IM_ARRAY, 107); \\
     gsl_interp_accel_reset(acc); \\
     commondata->TARGET_TAU = 1. / (gsl_spline_eval(spline, a_f_clamped, acc) / commondata->M_f); \\
-} while(0)
+} while(0) // END DO-WHILE: evaluate QNM mode
 
 EVAL_QNM(2, 1, omega_qnm_l2m1, tau_qnm_l2m1, reomegaqnm_l2m1, imomegaqnm_l2m1);
 EVAL_QNM(3, 3, omega_qnm_l3m3, tau_qnm_l3m3, reomegaqnm_l3m3, imomegaqnm_l3m3);

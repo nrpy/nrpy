@@ -110,6 +110,9 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
     The generated function calls ``SEOBNRv5_evaluate_l2m2_qnm``; composition
     roots must register that helper before code generation.
 
+    ``use_projected_attachment`` selects projected-spin attachment explicitly;
+    otherwise the generated function retains the aligned-spin attachment path.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -119,6 +122,8 @@ def register_Cfunction_SEOBNRv5_aligned_spin_special_amplitude_coefficients() ->
     includes = ["BHaH_defines.h", "BHaH_function_prototypes.h"]
     desc = """
 Computes and stores special amplitude coefficients for inspiral waveform modes (2,1), (4,3), and (5,5).
+The commondata use_projected_attachment field selects projected-spin attachment;
+otherwise the aligned-spin attachment path is used.
 
 @param[in,out] commondata Common data structure containing the model parameters.
 """
@@ -132,61 +137,56 @@ REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for times\\n");
   exit(1);
-}
+} // END IF: times allocation failed
 
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (r == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for r\\n");
   exit(1);
-}
+} // END IF: r allocation failed
 
 REAL *restrict phi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phi == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for phi\\n");
   exit(1);
-}
+} // END IF: phi allocation failed
 
 REAL *restrict pphi = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (pphi == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for pphi\\n");
   exit(1);
-}
+} // END IF: pphi allocation failed
 
 REAL *restrict prstar = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (prstar == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for prstar\\n");
   exit(1);
-}
+} // END IF: prstar allocation failed
 
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega\\n");
   exit(1);
-}
+} // END IF: Omega allocation failed
 
 REAL *restrict Hreal = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Hreal == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Hreal\\n");
   exit(1);
-}
+} // END IF: Hreal allocation failed
 
 REAL *restrict Omega_circ = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega_circ == NULL){
   fprintf(stderr,"Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), malloc() failed for Omega_circ\\n");
   exit(1);
-}
+} // END IF: Omega_circ allocation failed
 
 
 const REAL m1 = commondata->m1;
 const REAL m2 = commondata->m2;
-const REAL chi1 = commondata->chi1;
-const REAL chi2 = commondata->chi2;
 const REAL nu = m1 * m2/((m1 + m2) * (m1 + m2));
-const REAL chiA = (chi1 - chi2) / 2;
-const int use_projected_attachment =
-    fabs(commondata->chi1 - commondata->chi1_z) <= 1e-14 &&
-    fabs(commondata->chi2 - commondata->chi2_z) <= 1e-14;
-// This setup owns the flag; downstream NQC code consumes it after this function returns.
+const int use_projected_attachment = commondata->use_projected_attachment;
+// This function owns projected_attachment_active; downstream NQC code consumes it.
 commondata->projected_attachment_active = false;
 REAL rhos[NUMVARS_COEFFICIENTS];
 REAL hNR[NUMVARS_HNRFITS];
@@ -204,9 +204,9 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   prstar[i] = commondata->dynamics_fine[IDX(i,PRSTAR)];
   pphi[i] = commondata->dynamics_fine[IDX(i,PPHI)];
   times[i] = commondata->dynamics_fine[IDX(i,TIME)];
-} // END LOOP: for i over fine dynamics samples
+} // END LOOP: fine dynamics samples
 
-// Step 1: Build combined time-frequency samples for projected-spin attachment fits.
+// Step 2: Build combined time-frequency samples for projected-spin attachment fits.
 if (use_projected_attachment) {
   commondata->projected_attachment_active = true;
   const size_t nsteps_combined = commondata->nsteps_low + commondata->nsteps_fine;
@@ -438,20 +438,20 @@ if (use_projected_attachment) {
   free(Omega_combined);
   free(u_rlow);
   free(t_rlow);
-} // END IF: projected-spin attachment inputs are self-consistent
+} // END IF: projected attachment requested
 
-// Step 2: Construct natural cubic splines of the fine-sampled dynamics.
+// Step 3: Construct natural cubic splines of the fine-sampled dynamics.
 
 gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
   if (acc_r == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_r allocation failed
   gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_r == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_r allocation failed
   gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
  
 
@@ -459,12 +459,12 @@ gsl_interp_accel *restrict acc_phi = gsl_interp_accel_alloc();
   if (acc_phi == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_phi allocation failed
   gsl_spline *restrict spline_phi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_phi == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_phi allocation failed
   gsl_spline_init(spline_phi,times,phi,commondata->nsteps_fine);
   
 
@@ -472,12 +472,12 @@ gsl_interp_accel *restrict acc_prstar = gsl_interp_accel_alloc();
   if (acc_prstar == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_prstar allocation failed
   gsl_spline *restrict spline_prstar = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_prstar == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_prstar allocation failed
   gsl_spline_init(spline_prstar,times,prstar,commondata->nsteps_fine);
   
 
@@ -486,12 +486,12 @@ gsl_interp_accel *restrict acc_pphi = gsl_interp_accel_alloc();
   if (acc_pphi == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_pphi allocation failed
   gsl_spline *restrict spline_pphi = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_pphi == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_pphi allocation failed
   gsl_spline_init(spline_pphi,times,pphi,commondata->nsteps_fine);
  
 
@@ -499,12 +499,12 @@ gsl_interp_accel *restrict acc_Omega = gsl_interp_accel_alloc();
   if (acc_Omega == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_Omega allocation failed
   gsl_spline *restrict spline_Omega = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_Omega allocation failed
   gsl_spline_init(spline_Omega,times,Omega,commondata->nsteps_fine);
   
 
@@ -512,31 +512,31 @@ gsl_interp_accel *restrict acc_Omega_circ = gsl_interp_accel_alloc();
   if (acc_Omega_circ == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_Omega_circ allocation failed
   gsl_spline *restrict spline_Omega_circ = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Omega_circ == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_Omega_circ allocation failed
   gsl_spline_init(spline_Omega_circ,times,Omega_circ,commondata->nsteps_fine); 
   
 gsl_interp_accel *restrict acc_Hreal = gsl_interp_accel_alloc();
   if (acc_Hreal == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_interp_accel_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: acc_Hreal allocation failed
   gsl_spline *restrict spline_Hreal = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
   if (spline_Hreal == NULL) {
       fprintf(stderr, "Error: in SEOBNRv5_aligned_spin_special_amplitude_coefficients(), gsl_spline_alloc() failed to initialize\n");
       exit(1);
-    }
+    } // END IF: spline_Hreal allocation failed
   gsl_spline_init(spline_Hreal,times,Hreal,commondata->nsteps_fine);
 
-// Step 2: Determine t_ISCO.
+// Step 4: Determine t_ISCO.
 
 if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
   commondata->t_ISCO = times[commondata->nsteps_fine - 1];
-}
+} // END IF: r_ISCO past trajectory endpoint
 else{
   const REAL dt_ISCO = 0.001;
   const size_t N_zoom = (size_t) ((times[commondata->nsteps_fine - 1] - times[0]) / dt_ISCO);
@@ -557,7 +557,7 @@ else{
   for (i = 0; i < N_zoom; i++){
     t_zoom[i] = times[0] + i * dt_ISCO;
     minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-  }
+  } // END LOOP: t_ISCO search samples
   size_t ISCO_zoom_idx = 0;
   if (use_projected_attachment) {
     REAL min_abs_r_gap = fabs(minus_r_zoom[0] + commondata->r_ISCO);
@@ -566,18 +566,18 @@ else{
       if (abs_r_gap < min_abs_r_gap) {
         min_abs_r_gap = abs_r_gap;
         ISCO_zoom_idx = (size_t)i;
-      }
+      } // END IF: closer r_ISCO candidate
     } // END LOOP: for i over r_ISCO candidates
-  } // END IF: use_projected_attachment
+  } // END IF: projected r_ISCO search
   else
-    ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1); // END ELSE: legacy scalar aligned-spin r_ISCO search
+    ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom - 1); // END ELSE: scalar r_ISCO search
   commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
   
   free(t_zoom);
   free(minus_r_zoom);
-}
+} // END ELSE: interpolated r_ISCO search
 
-// Step 3: Finalize the attachment-time shift.
+// Step 5: Finalize the attachment-time shift.
 if (use_projected_attachment) {
   REAL omega_rISCO = gsl_spline_eval(spline_Omega, commondata->t_ISCO, acc_Omega);
   omega_rISCO = fmin(commondata->omega_spin_max, fmax(commondata->omega_spin_min, omega_rISCO));
@@ -597,9 +597,9 @@ if (use_projected_attachment) {
     body += r"""
     commondata->Delta_t = projected_Delta_t;
   } // END BLOCK: projected-spin Delta_t evaluation at r_ISCO
-} // END IF: projected-spin Delta_t inputs are self-consistent
+} // END IF: projected Delta_t requested
 
-// Step 4: Build the (2,2) and (5,5) attachment states from the splines.
+// Step 6: Build the (2,2) and (5,5) attachment states from the splines.
 REAL t_peak_22 = commondata->t_ISCO - commondata->Delta_t;
 REAL t_peak_55 = t_peak_22 - 10;
 // GSL natural-cubic NQC splines have zero second derivative at endpoints, so
@@ -643,11 +643,12 @@ dynamics_55[OMEGA] = gsl_spline_eval(spline_Omega,t_peak_55,acc_Omega);
 dynamics_55[H] = gsl_spline_eval(spline_Hreal,t_peak_55,acc_Hreal);
 dynamics_55[OMEGA_CIRC] = gsl_spline_eval(spline_Omega_circ,t_peak_55,acc_Omega_circ);
 
+const REAL chiA = (commondata->chi1 - commondata->chi2) / 2;
 const REAL hNR21_threshold = 300;
 const REAL hNR43_threshold = 200 * nu * (1 - 0.8 * chiA);
 const REAL hNR55_threshold = 2000;
 
-// Step 5: Evaluate NR-informed target amplitudes and enforce mode floors.
+// Step 7: Evaluate NR-informed target amplitudes and enforce mode floors.
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_22, rhos);
 REAL rho21 = rhos[RHO21];
 REAL rho43 = rhos[RHO43];
@@ -660,18 +661,18 @@ REAL hNR22 = hNR[HNR22] * nu;
 
 if (fabs(hNR21) < hNR22 / hNR21_threshold) {
     hNR21 = copysign(hNR22/hNR21_threshold, hNR21);
-}
+} // END IF: enforce hNR21 floor
 
 if (fabs(hNR43) < hNR22 / hNR43_threshold) {
     hNR43 = copysign(hNR22/hNR43_threshold, hNR43);
-}
+} // END IF: enforce hNR43 floor
 
 SEOBNRv5_aligned_spin_special_coefficients_rholm(commondata, dynamics_55, rhos);
 REAL rho55 = rhos[RHO55];
 
 if (fabs(hNR55) < hNR22 / hNR55_threshold) {
     hNR55 = copysign(hNR22/hNR55_threshold, hNR55);
-}
+} // END IF: enforce hNR55 floor
 
 SEOBNRv5_aligned_spin_waveform(dynamics_22, commondata, inspiral_modes);
 double complex h21 = inspiral_modes[STRAIN21 - 1];
@@ -694,7 +695,7 @@ const REAL c21 = (hNR21/K21 - rho21)/vpow21;
 const REAL c43 = (hNR43/K43 - rho43)/vpow43;
 const REAL c55 = (hNR55/K55 - rho55)/vpow55;
 
-// Step 6: Store special amplitude coefficients for later inspiral mode generation.
+// Step 8: Store special amplitude coefficients for later inspiral mode generation.
 commondata->c_21 = c21;
 commondata->c_43 = c43;
 commondata->c_55 = c55;

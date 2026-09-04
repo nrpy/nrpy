@@ -21,6 +21,9 @@ def register_CFunction_SEBOBv2_NQC_corrections() -> Union[None, pcg.NRPyEnv_type
     """
     Register CFunction for evaluating the Non Quasi-Circular (NQC) corrections for the SEBOBv2 waveform.
 
+    The generated function consumes ``projected_attachment_active`` to select
+    the established projected attachment time or the aligned-spin fallback.
+
     :return: None if in registration phase, else the updated NRPy environment.
     """
     if pcg.pcg_registration_phase():
@@ -34,6 +37,9 @@ Solves and applies SEBOBv2 (2,2) Non Quasi-Circular (NQC) corrections.
 The NQC coefficients match inspiral amplitude and waveform-frequency data at
 the attachment time to BOBv2-informed targets, then correct the low- and
 fine-sampled inspiral waveform.
+An established projected attachment time is used when
+projected_attachment_active is set; otherwise the aligned-spin attachment is
+located from r_ISCO.
 
 @param[in,out] commondata Common data structure containing the model parameters.
 """
@@ -46,57 +52,57 @@ REAL *restrict times = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (times == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for times\\n");
   exit(1);
-}
+} // END IF: times allocation failed
 REAL *restrict Q1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q1 == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q1\\n");
   exit(1);
-}
+} // END IF: Q1 allocation failed
 REAL *restrict Q2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q2 == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q2\\n");
   exit(1);
-}
+} // END IF: Q2 allocation failed
 REAL *restrict Q3 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Q3 == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Q3\\n");
   exit(1);
-}
+} // END IF: Q3 allocation failed
 REAL *restrict P1 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P1 == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for P1\\n");
   exit(1);
-}
+} // END IF: P1 allocation failed
 REAL *restrict P2 = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (P2 == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for P2\\n");
   exit(1);
-}
+} // END IF: P2 allocation failed
 REAL *restrict r = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (r == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for r\\n");
   exit(1);
-}
+} // END IF: r allocation failed
 REAL *restrict Omega = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (Omega == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for Omega\\n");
   exit(1);
-}
+} // END IF: Omega allocation failed
 REAL *restrict hamp = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (hamp == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for hamp\\n");
   exit(1);
-}
+} // END IF: hamp allocation failed
 REAL *restrict phase = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for phase\\n");
   exit(1);
-}
+} // END IF: phase allocation failed
 REAL *restrict phase_unwrapped = (REAL *)malloc(commondata->nsteps_fine*sizeof(REAL));
 if (phase_unwrapped == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for phase_unwrapped\\n");
   exit(1);
-}
+} // END IF: phase_unwrapped allocation failed
 REAL radius, omega, prstar;
 double complex h22;
 size_t i;
@@ -115,9 +121,10 @@ for (i = 0; i < commondata->nsteps_fine; i++){
   Q3[i] = Q2[i] / sqrt(r[i]);
   P1[i] = -prstar / r[i] /Omega[i];
   P2[i] = -P1[i] * prstar * prstar;
-} // END LOOP: for i over fine dynamics samples
+} // END LOOP: fine dynamics samples
 SEOBNRv5_aligned_spin_unwrap(phase,phase_unwrapped,commondata->nsteps_fine);
 
+// Step 3: Select the projected or aligned attachment sample.
 REAL t_peak = commondata->t_attach;
 size_t peak_idx = 0;
 if (commondata->projected_attachment_active) {
@@ -125,7 +132,8 @@ if (commondata->projected_attachment_active) {
     t_peak = times[commondata->nsteps_fine - 2];
     peak_idx = commondata->nsteps_fine - 2;
     commondata->t_attach = t_peak;
-  } else {
+  } // END IF: projected endpoint fallback
+  else {
     REAL min_abs_dt = fabs(times[0] - t_peak);
     for (i = 1; i < commondata->nsteps_fine; i++) {
       const REAL abs_dt = fabs(times[i] - t_peak);
@@ -134,8 +142,8 @@ if (commondata->projected_attachment_active) {
         peak_idx = i;
       } // END IF: sample closer to t_peak
     } // END LOOP: for i over attachment candidates
-  } // END ELSE: projected attachment is endpoint-safe
-} // END IF: projected_attachment_active
+  } // END ELSE: projected peak sample search
+} // END IF: projected attachment selection
 else {
   if (commondata->r_ISCO < r[commondata->nsteps_fine - 1]){
     commondata->t_ISCO = times[commondata->nsteps_fine - 1];
@@ -147,27 +155,27 @@ else {
     if (t_zoom == NULL){
       fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for t_zoom\\n");
       exit(1);
-    }
+    } // END IF: t_zoom allocation failed
     REAL *restrict minus_r_zoom = (REAL *) malloc(N_zoom * sizeof(REAL));
     if (minus_r_zoom == NULL){
       fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for minus_r_zoom\\n");
       exit(1);
-    }
+    } // END IF: minus_r_zoom allocation failed
     gsl_interp_accel *restrict acc_r = gsl_interp_accel_alloc();
     if (acc_r == NULL){
       fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
       exit(1);
-    }
+    } // END IF: acc_r allocation failed
     gsl_spline *restrict spline_r = gsl_spline_alloc(gsl_interp_cspline, commondata->nsteps_fine);
     if (spline_r == NULL){
       fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
       exit(1);
-    }
+    } // END IF: spline_r allocation failed
     gsl_spline_init(spline_r,times,r,commondata->nsteps_fine);
     for (i = 0; i < N_zoom; i++){
       t_zoom[i] = times[0] + i * dt_ISCO;
       minus_r_zoom[i] = -1.0*gsl_spline_eval(spline_r,t_zoom[i],acc_r);
-    }
+    } // END LOOP: r_ISCO search samples
     const size_t ISCO_zoom_idx = gsl_interp_bsearch(minus_r_zoom, -commondata->r_ISCO, 0 , N_zoom);
     commondata->t_ISCO = t_zoom[ISCO_zoom_idx];
 
@@ -178,22 +186,18 @@ else {
   } // END ELSE: scalar r_ISCO spline search
 
   t_peak = commondata->t_ISCO - commondata->Delta_t;
-  // if t_peak > the last point of the ODE trajectory,
-  // use the second last point in time for t_peak, instead of the last point as in pySEOBNR.
-  // gsl's cubic spline uses natural boundary conditions that sets second derivatives to zero
-  // resulting in a singular matrix.
+  // Keep t_peak off the final trajectory sample because natural cubic splines
+  // have zero second derivatives at endpoints, producing a singular system.
   if (t_peak >= times[commondata->nsteps_fine - 1]){
     t_peak = times[commondata->nsteps_fine - 2];
     peak_idx = commondata->nsteps_fine - 2;
   } // END IF: scalar t_peak endpoint fallback
   else{
     peak_idx = gsl_interp_bsearch(times, t_peak, 0, commondata->nsteps_fine);
-  }
+  } // END ELSE: scalar peak sample search
   commondata->t_attach = t_peak;
 } // END ELSE: scalar aligned-spin NQC attachment selection
-// Compute t_p and Omega_0 in BOB
-//not needed anymore
-//BOB_v2_find_tp_Omega0(commondata);
+// Step 4: Initialize the BOB peak attachment.
 BOB_v2_setup_peak_attachment(commondata);
 
 // Step 5: Crop NQC basis and waveform samples around the attachment time.
@@ -211,30 +215,30 @@ for (i = left; i < right; i++){
   Q_cropped3[i - left] = Q3[i];
   P_cropped1[i - left] = P1[i];
   P_cropped2[i - left] = P2[i];
-} // END LOOP: for i over cropped attachment samples
+} // END LOOP: cropped attachment samples
 
 // Step 6: Build NQC amplitude and frequency systems.
 gsl_interp_accel *restrict acc = gsl_interp_accel_alloc();
 if (acc == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_interp_accel_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: acc allocation failed
 gsl_spline *restrict spline = gsl_spline_alloc(gsl_interp_cspline, right - left);
 if (spline == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_spline_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: spline allocation failed
 
 gsl_matrix *restrict Q = gsl_matrix_alloc (3, 3);
 if (Q == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: Q allocation failed
 gsl_matrix *restrict P = gsl_matrix_alloc (2, 2);
 if (P == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_matrix_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: P allocation failed
 
 gsl_spline_init(spline,t_cropped, Q_cropped1,right-left);
 gsl_matrix_set(Q,0,0,gsl_spline_eval(spline, t_peak, acc));
@@ -267,12 +271,12 @@ gsl_vector *restrict A = gsl_vector_alloc(3);
 if (A == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: A allocation failed
 gsl_vector *restrict O = gsl_vector_alloc(2);
 if (O == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: O allocation failed
 
 
 gsl_spline_init(spline,t_cropped, amp_cropped,right-left);
@@ -292,11 +296,11 @@ gsl_interp_accel_free(acc);
 if (omega_insp * omegadot_insp > 0.0){
   omega_insp = fabs(omega_insp);
   omegadot_insp = fabs(omegadot_insp);
-}
+} // END IF: frequency derivatives agree
 else{
   omega_insp = fabs(omega_insp);
   omegadot_insp = -fabs(omegadot_insp);
-}
+} // END ELSE: frequency derivatives differ
 
 REAL omegas[2] , amps[3];
 // Step 7: Evaluate target BOB NQC RHS data.
@@ -313,14 +317,14 @@ gsl_vector *restrict a = gsl_vector_alloc (3);
 if (a == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: a allocation failed
 
 int s;
 gsl_permutation *restrict p_A = gsl_permutation_alloc (3);
 if (p_A == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: p_A allocation failed
 gsl_linalg_LU_decomp(Q, p_A, &s);
 gsl_linalg_LU_solve(Q, p_A, A, a);
 gsl_permutation_free(p_A);
@@ -338,12 +342,12 @@ gsl_vector *restrict b = gsl_vector_alloc(2);
 if (b == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_vector_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: b allocation failed
 gsl_permutation * p_B = gsl_permutation_alloc(2);
 if (p_B == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), gsl_permutation_alloc() failed to initialize\\n");
   exit(1);
-}
+} // END IF: p_B allocation failed
 gsl_linalg_LU_decomp(P, p_B, &s);
 gsl_linalg_LU_solve (P, p_B, O, b);
 gsl_permutation_free (p_B);
@@ -374,7 +378,7 @@ commondata->waveform_inspiral = (double complex *)malloc(commondata->nsteps_insp
 if (commondata->waveform_inspiral == NULL){
   fprintf(stderr,"Error: in SEBOBv2_NQC_corrections(), malloc() failed for commondata->waveform_inspiral\\n");
   exit(1);
-}
+} // END IF: waveform_inspiral allocation failed
 REAL nqc_amp, nqc_phase, q1, q2, q3,p1, p2;
 for (i = 0; i < commondata->nsteps_low; i++){
   prstar = commondata->dynamics_low[IDX(i,PRSTAR)];
@@ -389,7 +393,7 @@ for (i = 0; i < commondata->nsteps_low; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i,TIME)] = commondata->dynamics_low[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i,STRAIN22)] = nqc_amp * commondata->waveform_low[IDX_WF(i,STRAIN22)] *cexp(I * nqc_phase);
-} // END LOOP: for i over low-resolution waveform samples
+} // END LOOP: low-resolution waveform samples
 for (i = 0; i< commondata->nsteps_fine; i++){
   prstar = commondata->dynamics_fine[IDX(i,PRSTAR)];
   radius = commondata->dynamics_fine[IDX(i,R)];
@@ -403,7 +407,7 @@ for (i = 0; i< commondata->nsteps_fine; i++){
   nqc_phase =  commondata->b_1_NQC*p1 + commondata->b_2_NQC*p2;
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,TIME)] = commondata->dynamics_fine[IDX(i,TIME)];
   commondata->waveform_inspiral[IDX_WF(i+commondata->nsteps_low,STRAIN22)] = nqc_amp * commondata->waveform_fine[IDX_WF(i,STRAIN22)] * cexp(I * nqc_phase);
-} // END LOOP: for i over fine-resolution waveform samples
+} // END LOOP: fine-resolution waveform samples
 """
     cfc.register_CFunction(
         subdirectory="nqc_corrections",
