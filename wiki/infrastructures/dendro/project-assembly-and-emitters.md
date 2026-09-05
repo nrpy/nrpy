@@ -32,6 +32,7 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 | `Dendro_parameter_file` | the sample parameter file for one profile |
 | `cmake_helpers` | the solver and tests `CMakeLists.txt` |
 | `Dendro_README_md` | the project and solver READMEs |
+| `kernel_lowering` | the formulation-agnostic pointer bindings, point loop, parameter lists, operator records and padding every builder lowers through |
 
 `output_project` owns no formulation choice and holds no state: it maps
 emitter output onto project-relative paths and writes it, then copies the mock
@@ -58,6 +59,10 @@ Claim evidence:
 - Corroboration: `nrpy/examples/dendro_fccz4.py`, the module-level `solver_name`/`solver_stem`/`solver_namespace` assignments
 
 ### Emitted layout
+
+Two examples drive this layer: `nrpy.examples.dendro_fccz4` and
+`nrpy.examples.dendro_bssn`. The second one exists as the test that the layer
+is generic; adding it required no change outside `general_relativity/`.
 
 The solver is emitted at `Dendro-GR/<solver_name>/` inside the project
 directory: `generated/include` and `generated/src` hold the registry-derived
