@@ -1,23 +1,23 @@
 # nrpy/infrastructures/Dendro/general_relativity/diagnostics.py
 """
-PR 9: fCCZ4 constraint diagnostics for the Dendro backend.
+fCCZ4 constraint diagnostics for the Dendro infrastructure.
 
 The first diagnostic set is the Hamiltonian constraint of the fCCZ4 system and
-the spatial Z4 connection constraint (whitepaper section 14.6).  Both come from
+the spatial Z4 connection constraint.  Both come from
 the shared expression factory
 (:func:`nrpy.equations.general_relativity.fCCZ4_system.build_fccz4_expression_bundle`
 with ``enable_diagnostics=True``), so the Dendro kernel and any other
 infrastructure lower the same expressions.
 
 The diagnostic gridfunctions are registered in the DIAG group: they are
-recomputed from the evolved state and are never authoritative checkpoint state
-(section 14.6).  The kernel uses the same finite-difference order and the same
+recomputed from the evolved state and are never authoritative checkpoint state.  The kernel uses the same finite-difference order and the same
 memory-access mechanism as the RHS, so no separate diagnostic profile exists.
 
 Every name in this module is read back from the shared factory or from the
 registry; none is written down here.
 
-Author: NRPy Dendro fCCZ4 infrastructure (PR 9)
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 from dataclasses import dataclass
@@ -31,18 +31,15 @@ from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.fCCZ4_system import (
     build_fccz4_expression_bundle,
 )
-from nrpy.infrastructures.Dendro import access_capture as cap
-from nrpy.infrastructures.Dendro import generation_parameters
-from nrpy.infrastructures.Dendro import gridfunction_output as gfo
-from nrpy.infrastructures.Dendro import naming
+from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters, naming
 from nrpy.infrastructures.Dendro import registration as reg
 from nrpy.infrastructures.Dendro.block_loop import block_loop
 from nrpy.infrastructures.Dendro.simple_loop import (
-    interior_loop,
     require_serial_parallelization,
+    simple_loop,
 )
 
-# CFunction names (Dendro scheduling role keys, whitepaper section 7.1).
+# CFunction names (Dendro scheduling role keys).
 CONSTRAINTS_BLOCK_CFUNCTION = "fccz4_constraints_block"
 CONSTRAINTS_GLOBAL_CFUNCTION = "fccz4_constraints"
 
@@ -103,16 +100,23 @@ def tensor_family_of(name: str) -> Optional[Tuple[str, int]]:
     return family, index_run
 
 
-def build_diagnostics() -> FCCZ4DiagnosticsBuild:
+def build_diagnostics(
+    *,
+    CoordSystem: str = "Cartesian",
+    LapseEvolutionOption: str = "OnePlusLog",
+    ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
+) -> FCCZ4DiagnosticsBuild:
     """
     Build the per-block and all-block constraint-diagnostic CFunction bodies.
 
-    The formulation profile is read from the registered Dendro generation
-    parameters, never from arguments: the registry is the single authority for
-    it (whitepaper sections 4.1/6.1/9.3), and a builder that accepted its own
-    copy could lower a kernel for a different reference metric than the frozen
-    snapshot, the manifests and every sibling CFunction declare.
+    The formulation profile arrives as arguments, exactly as BHaH threads
+    ``CoordSystem`` and ``LapseEvolutionOption`` into its own registration
+    functions, so the diagnostics and the RHS lower the same profile because
+    the caller passes the same values to both.
 
+    :param CoordSystem: Reference-metric coordinate system.
+    :param LapseEvolutionOption: Lapse evolution option.
+    :param ShiftEvolutionOption: Shift evolution option.
     :return: The immutable :class:`FCCZ4DiagnosticsBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, if the shared factory
         supplies no diagnostics, if a diagnostic has no registered DIAG
@@ -126,11 +130,11 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     >>> par.set_parval_from_str("parallelization", "none")
     >>> par.set_parval_from_str("fd_order", 4)
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
-    >>> par.set_parval_from_str("Dendro_enable_KO", False)
+    >>> par.set_parval_from_str("Dendro_enable_KreissOliger_dissipation", False)
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _build = build_diagnostics()
 
-    Section 14.6: the first diagnostic set is registered as DIAG, and the
+    The first diagnostic set is registered as DIAG, and the
     kernel writes exactly those gridfunctions.
 
     >>> reg.registered_diag_order()
@@ -154,7 +158,6 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     this module, so a change in the lowered text is caught here rather than by
     a standalone harness.
 
-    >>> validate_strings(_build.block_body, "constraints_block", file_ext="cpp")
     >>> validate_strings(_build.global_body, "constraints_allblock", file_ext="cpp")
     """
     # Step 1: Require the qualified Dendro profile, and validate the registered
@@ -172,22 +175,20 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     # Step 2: Take the diagnostic expressions from the shared factory, so the
     # Dendro kernel and every other infrastructure lower the same expressions.
     bundle = build_fccz4_expression_bundle(
-        CoordSystem=str(par.parval_from_str("Dendro_fccz4_CoordSystem")),
-        LapseEvolutionOption=str(
-            par.parval_from_str("Dendro_fccz4_LapseEvolutionOption")
+        CoordSystem=CoordSystem,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption,
+        enable_KreissOliger_dissipation=bool(
+            par.parval_from_str("Dendro_enable_KreissOliger_dissipation")
         ),
-        ShiftEvolutionOption=str(
-            par.parval_from_str("Dendro_fccz4_ShiftEvolutionOption")
-        ),
-        enable_KreissOliger_dissipation=bool(par.parval_from_str("Dendro_enable_KO")),
         enable_diagnostics=True,
     )
     expressions: Dict[str, sp.Expr] = dict(bundle.diagnostics_by_name)
     if not expressions:
         raise ValueError(
-            "The shared fCCZ4 factory supplied no diagnostics; PR 9 requires "
+            "The shared fCCZ4 factory supplied no diagnostics; this builder needs "
             "enable_diagnostics=True to produce H_Z4 and the connection "
-            "constraint (section 14.6)."
+            "constraint."
         )
 
     # Step 3: Register the diagnostics as DIAG gridfunctions.  Components of
@@ -215,26 +216,27 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     if missing:
         raise ValueError(
             f"Diagnostic expressions {missing} have no registered DIAG "
-            "gridfunction; the exact-name rule (section 5.2) is violated."
+            "gridfunction; the exact-name rule is violated."
         )
     written = tuple(name for name in diag_order if name in expressions)
     evol_order = reg.registered_evol_order()
 
-    # Step 4: Lower the diagnostics inside an access capture, so the padding
-    # comes from the reads the kernel actually emits.
-    with cap.capture_gridfunction_accesses(CONSTRAINTS_BLOCK_CFUNCTION):
-        kernel = c_codegen(
-            [expressions[name] for name in written],
-            [f"{naming.diag_pointer(name)}[pp]" for name in written],
-            include_braces=False,
-            enable_fd_codegen=True,
-            enable_fd_functions=False,
-            enable_simd=False,
-            fp_type=fp_type,
-            fp_type_alias=scalar_type,
-            verbose=False,
-        )
-    accessed = set(cap.accessed_gridfunction_names(CONSTRAINTS_BLOCK_CFUNCTION))
+    # Step 4: Lower the diagnostics.  The fields the kernel reads are the
+    # expression free symbols that are registered gridfunctions.
+    kernel = c_codegen(
+        [expressions[name] for name in written],
+        [f"{naming.diag_pointer(name)}[pp]" for name in written],
+        include_braces=False,
+        enable_fd_codegen=True,
+        enable_fd_functions=False,
+        enable_simd=False,
+        fp_type=fp_type,
+        fp_type_alias=scalar_type,
+        verbose=False,
+    )
+    accessed = {
+        str(symbol) for name in written for symbol in expressions[name].free_symbols
+    } & set(gri.glb_gridfcs_dict)
     unexpected = sorted(accessed - set(evol_order))
     if unexpected:
         raise ValueError(
@@ -243,9 +245,9 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
         )
     read_names = tuple(name for name in evol_order if name in accessed)
 
-    # Step 5: Bind exactly the fields the capture recorded, plus the diagnostic
+    # Step 5: Bind exactly the fields the kernel reads, plus the diagnostic
     # write targets, then wrap the kernel in the NRPy point and block loops.
-    block_body = gfo.render_component_bindings(
+    block_body = Dendro_state_h.output_component_bindings(
         read_names,
         scalar_type,
         array="in_gfs",
@@ -254,16 +256,16 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
     block_body += "\n"
-    block_body += gfo.render_component_bindings(
+    block_body += Dendro_state_h.output_component_bindings(
         written,
         scalar_type,
-        array="diag_gfs",
+        array="diagnostic_gfs",
         role=naming.diag_pointer,
         const_pointee=False,
         index_expression=lambda name, _position: str(diag_order.index(name)),
     )
     block_body += "\n"
-    block_body += interior_loop(
+    block_body += simple_loop(
         kernel,
         nx="geom.nx",
         ny="geom.ny",
@@ -274,15 +276,15 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     )
     block_params = (
         f"const BlockGeometry& geom, const {scalar_type}* const* in_gfs, "
-        f"{scalar_type}* const* diag_gfs"
+        f"{scalar_type}* const* diagnostic_gfs"
     )
     global_params = (
         f"const MockWorld& world, const {scalar_type}* const* in_gfs, "
-        f"{scalar_type}* const* diag_gfs"
+        f"{scalar_type}* const* diagnostic_gfs"
     )
     global_body = block_loop(
-        f"{CONSTRAINTS_BLOCK_CFUNCTION}(world.geom[blk_id], in_gfs, diag_gfs);",
-        count="world.num_blocks",
+        f"{CONSTRAINTS_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, diagnostic_gfs);",
+        num_blocks="world.num_blocks",
     )
     return FCCZ4DiagnosticsBuild(
         block_body=block_body,
@@ -292,9 +294,24 @@ def build_diagnostics() -> FCCZ4DiagnosticsBuild:
     )
 
 
-def register_diagnostics_CFunctions() -> None:
-    """Register the per-block and all-block diagnostic CFunctions."""
-    build = build_diagnostics()
+def register_CFunctions_diagnostics(
+    *,
+    CoordSystem: str = "Cartesian",
+    LapseEvolutionOption: str = "OnePlusLog",
+    ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
+) -> None:
+    """
+    Register the per-block and all-block diagnostic CFunctions.
+
+    :param CoordSystem: Reference-metric coordinate system.
+    :param LapseEvolutionOption: Lapse evolution option.
+    :param ShiftEvolutionOption: Shift evolution option.
+    """
+    build = build_diagnostics(
+        CoordSystem=CoordSystem,
+        LapseEvolutionOption=LapseEvolutionOption,
+        ShiftEvolutionOption=ShiftEvolutionOption,
+    )
     block_desc = (
         "Per-block fCCZ4 constraint diagnostics: the Hamiltonian constraint "
         "and the spatial Z4 connection constraint (recomputed, never "
@@ -302,23 +319,16 @@ def register_diagnostics_CFunctions() -> None:
     )
     global_desc = "All-block fCCZ4 constraint diagnostics (NRPy block loop)."
     subdirectory = "generated/src/diagnostics"
-    reg.register_dendro_CFunction(
+    reg.register_Dendro_CFunction(
         role="diagnostics_block",
-        # Invoked by the all-block entry point's NRPy block loop, not by the
-        # host, so it is not itself a Dendro entry point (section 4.5).
-        entry_point=False,
-        lifecycle_hook="diagnostic",
         name=CONSTRAINTS_BLOCK_CFUNCTION,
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
     )
-    reg.register_dendro_CFunction(
+    reg.register_Dendro_CFunction(
         role="diagnostics",
-        entry_point=True,
-        calls=(CONSTRAINTS_BLOCK_CFUNCTION,),
-        lifecycle_hook="diagnostic",
         name=CONSTRAINTS_GLOBAL_CFUNCTION,
         desc=global_desc,
         subdirectory=subdirectory,

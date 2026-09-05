@@ -4,32 +4,35 @@ Dendro numerical block-loop emission built on the generic NRPy loop helper.
 
 The block loop iterates the local block list supplied by Dendro and invokes
 the registered per-block CFunction for each block.  The loop is emitted by
-NRPy; the Dendro runtime only provides the block list and count.
+NRPy; the Dendro runtime only provides the block list and num_blocks.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 import nrpy.helpers.loop as lp
 
 
-def block_loop(loop_body: str, count: str = "num_blocks") -> str:
+def block_loop(loop_body: str, num_blocks: str = "numBlocks") -> str:
     """
     Emit a Dendro numerical block loop around a loop body.
 
-    :param loop_body: C code executed once per block; has access to ``blk_id``.
-    :param count: C expression for the number of local blocks.
+    :param loop_body: C code executed once per block; has access to ``blk``.
+    :param num_blocks: C expression for the number of local blocks.
     :return: The generated loop C code string.
 
     Doctests:
-    >>> print(block_loop("fccz4_rhs_block(blk_id);", count="NBLK"))
-    for (int blk_id = 0; blk_id < static_cast<std::ptrdiff_t>(NBLK); blk_id++) {
-    fccz4_rhs_block(blk_id);
-    } // END LOOP: for blk_id over [0, static_cast<std::ptrdiff_t>(NBLK))
+    >>> print(block_loop("rhs_block(blk);", num_blocks="NBLK"))
+    for (int blk = 0; blk < static_cast<std::ptrdiff_t>(NBLK); blk++) {
+    rhs_block(blk);
+    } // END LOOP: for blk over [0, static_cast<std::ptrdiff_t>(NBLK))
     <BLANKLINE>
     """
     return str(
         lp.loop(
-            idx_var="blk_id",
+            idx_var="blk",
             lower_bound="0",
-            upper_bound=f"static_cast<std::ptrdiff_t>({count})",
+            upper_bound=f"static_cast<std::ptrdiff_t>({num_blocks})",
             increment="1",
             pragma="",
             loop_body=loop_body,

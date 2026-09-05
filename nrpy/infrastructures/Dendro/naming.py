@@ -5,6 +5,9 @@ Reversible syntactic name transformations for Dendro generated code.
 Only syntactic decorations that map one-to-one onto the exact NRPy name are
 allowed here.  No semantic aliases (e.g., ``cf`` -> ``chi``) are permitted:
 every machine-readable identity preserves the registered name byte-for-byte.
+
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 import re
@@ -67,13 +70,13 @@ def out_pointer(name: str) -> str:
     ``rhs_`` is reserved for right-hand-side output, so a reader of a
     generated signature can tell the two apart.
 
-    DEVIATION FROM SECTION 5.2: the whitepaper enumerates four role prefixes
-    (``in_``, ``rhs_``, ``diag_``, ``aux_``) and none of them denotes "state
-    written by this kernel".  Reusing ``rhs_`` for the initial-data writer
-    made its generated signature say it fills the right-hand-side vector,
-    which is how a caller silently zeroes the state.  ``out_`` is added as a
-    fifth reversible decoration rather than overloading ``rhs_``; it renames
-    no scientific object, and the section 5.2 exact-name rule is preserved.
+    The other role prefixes (``in_``, ``rhs_``, ``diag_``) all denote
+    something other than "state written by this kernel".  Reusing
+    ``rhs_`` for the initial-data writer made its generated signature say it
+    fills the right-hand-side vector, which is how a caller silently zeroes
+    the state.  ``out_`` is therefore a fifth reversible decoration rather
+    than an overload of ``rhs_``; it renames no scientific object, so the
+    exact-name rule is preserved.
 
     :param name: Exact registered NRPy gridfunction name.
     :return: ``out_<name>``.
@@ -89,16 +92,6 @@ def diag_pointer(name: str) -> str:
     :return: ``diag_<name>``.
     """
     return f"diag_{validate_cpp_identifier(name)}"
-
-
-def aux_pointer(name: str) -> str:
-    """
-    Return the Dendro auxiliary-role pointer name for a gridfunction.
-
-    :param name: Exact registered NRPy gridfunction name.
-    :return: ``aux_<name>``.
-    """
-    return f"aux_{validate_cpp_identifier(name)}"
 
 
 def rhs_symbol_to_gridfunction_name(rhs_name: str) -> str:

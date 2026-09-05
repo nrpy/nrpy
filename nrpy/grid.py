@@ -892,15 +892,12 @@ class DendroGridFunction(GridFunction):
         wavespeed: float = 1.0,
         is_basename: bool = True,
         gf_array_name: Optional[str] = None,
-        **_ignored: Any,
     ) -> None:
         try:
             scalar_type = par.parval_from_str("Dendro_scalar_type")
         except ValueError as exc:
             raise ValueError(
-                "Invalid Dendro scalar type: 'Dendro_scalar_type' is not "
-                "registered; import "
-                "nrpy.infrastructures.Dendro.generation_parameters first."
+                "Invalid Dendro scalar type: 'Dendro_scalar_type' is not registered."
             ) from exc
         if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
             raise ValueError(f"Invalid Dendro scalar type: {scalar_type!r}")
@@ -956,9 +953,7 @@ class DendroGridFunction(GridFunction):
         Retrieve a one-point Dendro gridfunction read as C code.
 
         The result is a role-prefixed input pointer (``in_<name>``) indexed by
-        the base interior index ``pp`` plus the signed x-fastest offsets.  The
-        access is also recorded for the active Dendro access-capture context,
-        so the generated padding is derived from the exact accesses emitted.
+        the base interior index ``pp`` plus the signed x-fastest offsets.
 
         :param i0_offset: Offset in the fastest (x) direction.
         :param i1_offset: Offset in the middle (y) direction.
@@ -986,12 +981,6 @@ class DendroGridFunction(GridFunction):
         """
         if kwargs.get("enable_simd", False):
             raise ValueError("Dendro SIMD access is not qualified in the CPU MVP.")
-        # Imported here, not at module level: nrpy/grid.py is core and must not
-        # depend on a specific infrastructure package at import time.
-        # pylint: disable=import-outside-toplevel
-        from nrpy.infrastructures.Dendro.access_capture import record_dendro_access
-
-        record_dendro_access(self.name, i0_offset, i1_offset, i2_offset)
         index = (
             "pp"
             + self._term(i0_offset, "1")

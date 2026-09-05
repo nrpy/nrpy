@@ -1,10 +1,9 @@
 {
   "record": "Dendrolib source pin for the NRPy Dendro fCCZ4 infrastructure",
-  "status": "UNPINNED — no Dendrolib source is vendored in this repository",
-  "whitepaper": "sections 13.2 and 17 (Phase 0)",
+  "status": "UNPINNED \u2014 no Dendrolib source is vendored in this repository",
   "required": "full commit hash of paralab/Dendro-5.01 replacing the moving master branch default",
   "pinned_commit": null,
   "pinned_repository": "paralab/Dendro-5.01",
   "previous_default": "DENDRO_dendrolib_GIT_TAG=master (moving branch, not reproducible)",
-  "gate": "BlockGeometry adapter signatures (section 7.4) and padding/element-order claims stay frozen until this record carries a full commit plus dendrolib_capabilities.json proof"
+  "gate": "BlockGeometry adapter signatures and padding/element-order claims stay frozen until this record carries a full commit plus dendrolib_capabilities.json proof"
 }

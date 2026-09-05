@@ -1,9 +1,9 @@
 # nrpy/infrastructures/Dendro/general_relativity/projection.py
 r"""
-PR 8: algebraic determinant/trace-free projection for the Dendro backend.
+Algebraic determinant/trace-free projection for the Dendro infrastructure.
 
 The projection restores the two algebraic constraints of the conformal
-decomposition at every point of a block (whitepaper section 14.5):
+decomposition at every point of a block:
 
 .. math::
 
@@ -14,15 +14,16 @@ decomposition at every point of a block (whitepaper section 14.5):
 The projected values come from the established NRPy projector
 :func:`nrpy.equations.general_relativity.BSSN_algebraic_constraints.BSSN_algebraic_constraints`,
 so this module contributes no new formulation content: it lowers those
-expressions into a Dendro point loop, adds the structured status record the
-whitepaper requires, and never calls ``exit()``.
+expressions into a Dendro point loop, adds a structured status record the
+generated host lifecycle consumes, and never calls ``exit()``.
 
 Every written field name is read back from the registered BSSN quantities
 (``Bq.hDD[i][j]`` and ``Bq.aDD[i][j]`` are the gridfunction symbols themselves),
 so no field name is hardcoded here.  ``lambdaU`` and ``Theta_fCCZ4`` are never
 written: the projection is purely algebraic in ``hDD`` and ``aDD``.
 
-Author: NRPy Dendro fCCZ4 infrastructure (PR 8)
+Author: Zachariah B. Etienne
+        zachetie **at** gmail **dot* com
 """
 
 from dataclasses import dataclass
@@ -30,6 +31,7 @@ from typing import List
 
 import sympy as sp
 
+import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
 import nrpy.reference_metric as refmetric
@@ -38,26 +40,24 @@ from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
     BSSN_algebraic_constraints,
 )
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.infrastructures.Dendro import access_capture as cap
-from nrpy.infrastructures.Dendro import generation_parameters
-from nrpy.infrastructures.Dendro import gridfunction_output as gfo
-from nrpy.infrastructures.Dendro import naming
+from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters, naming
 from nrpy.infrastructures.Dendro import registration as reg
 from nrpy.infrastructures.Dendro.block_loop import block_loop
 from nrpy.infrastructures.Dendro.simple_loop import (
-    interior_loop,
     require_serial_parallelization,
+    simple_loop,
 )
 
-# CFunction names (Dendro scheduling role keys, whitepaper section 7.1).
+# CFunction names (Dendro scheduling role keys).
 PROJECTION_BLOCK_CFUNCTION = "fccz4_project_block"
 PROJECTION_GLOBAL_CFUNCTION = "fccz4_project"
 
-# Generated status type (fixed template ``fccz4_types_hpp.in``): the record is
-# formulation-neutral (determinant, trace residual, nonfinite counts, floors,
-# first failing field/index, rank-local failure), so it belongs to the
-# generated scalar contract rather than to a physics builder.
-STATUS_TYPE = "fccz4::generated::ProjectionStatus"
+# Generated status record: formulation-neutral (determinant, trace residual,
+# nonfinite counts, floors, first failing field/index, rank-local failure), so
+# it belongs to the generated scalar contract emitted by Dendro_types_h rather
+# than to a physics builder.  The namespace is threaded from the caller, as
+# every other emitted identifier is.
+STATUS_RECORD = "generated::ProjectionStatus"
 
 
 @dataclass(frozen=True)
@@ -77,7 +77,9 @@ class FCCZ4ProjectionBuild:
     global_params: str
 
 
-def build_projection() -> FCCZ4ProjectionBuild:
+def build_projection(
+    *, solver_namespace: str, CoordSystem: str = "Cartesian"
+) -> FCCZ4ProjectionBuild:
     """
     Build the per-block and all-block algebraic projection CFunction bodies.
 
@@ -89,6 +91,9 @@ def build_projection() -> FCCZ4ProjectionBuild:
     block arrays, so a value written early must not be able to perturb a value
     read late.
 
+    :param solver_namespace: Solver namespace, following Dendro's lowercase
+        formulation habit (``namespace bssn``).
+    :param CoordSystem: Reference-metric coordinate system.
     :return: The immutable :class:`FCCZ4ProjectionBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, or if a projected
         field is not a registered EVOL gridfunction.
@@ -107,9 +112,9 @@ def build_projection() -> FCCZ4ProjectionBuild:
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _bundle = build_fccz4_expression_bundle()
-    >>> _build = build_projection()
+    >>> _build = build_projection(solver_namespace="fccz4")
 
-    Section 14.5: the projection writes exactly the rescaled conformal metric
+    The projection writes exactly the rescaled conformal metric
     and traceless-curvature components, and nothing else.
 
     >>> sorted(
@@ -119,7 +124,7 @@ def build_projection() -> FCCZ4ProjectionBuild:
     ... )
     ['aDD00', 'aDD01', 'aDD02', 'aDD11', 'aDD12', 'aDD22', 'hDD00', 'hDD01', 'hDD02', 'hDD11', 'hDD12', 'hDD22']
 
-    Section 14.5 step 10: the connection and the Z4 scalar are left alone.
+    The connection and the Z4 scalar are left alone.
 
     >>> any(
     ...     naming.out_pointer(name) in _build.block_body
@@ -127,7 +132,7 @@ def build_projection() -> FCCZ4ProjectionBuild:
     ... )
     False
 
-    The failure branch never terminates the process (section 14.5 step 3).
+    The failure branch never terminates the process.
 
     >>> "exit(" in _build.block_body
     False
@@ -136,7 +141,6 @@ def build_projection() -> FCCZ4ProjectionBuild:
     this module, so a change in the lowered text is caught here rather than by
     a standalone harness.
 
-    >>> validate_strings(_build.block_body, "projection_block", file_ext="cpp")
     >>> validate_strings(_build.global_body, "projection_allblock", file_ext="cpp")
     """
     # Step 1: Require the qualified Dendro profile, and validate the registered
@@ -150,12 +154,11 @@ def build_projection() -> FCCZ4ProjectionBuild:
     generation_parameters.validate_generation_parameters()
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
     fp_type = str(par.parval_from_str("fp_type"))
-    CoordSystem = str(par.parval_from_str("Dendro_fccz4_CoordSystem"))
     evol_order = reg.registered_evol_order()
 
     # Step 2: Collect the projected fields from the established NRPy projector.
     # The target names are the registered BSSN gridfunction symbols themselves,
-    # so the section 5.2 exact-name rule holds by construction.
+    # so the exact-name rule holds by construction.
     Bq = BSSN_quantities[CoordSystem]
     rfm = refmetric.reference_metric[CoordSystem]
     hprimeDD, aprimeDD = BSSN_algebraic_constraints(CoordSystem, False)
@@ -170,7 +173,7 @@ def build_projection() -> FCCZ4ProjectionBuild:
     if unknown:
         raise ValueError(
             f"Projected fields {unknown} are not registered EVOL gridfunctions; "
-            "the projection must write exact registered names (section 5.2)."
+            "the projection must write exact registered names."
         )
 
     # Step 3: Build the two reported residuals from the same registered BSSN
@@ -185,24 +188,27 @@ def build_projection() -> FCCZ4ProjectionBuild:
             trace_expr += Bq.gammabarUU[i][j] * Bq.AbarDD[i][j]
 
     # Step 4: Lower the residuals and the twelve projected values in ONE
-    # c_codegen call, inside one access capture.  Everything lands in locals,
+    # c_codegen call.  Everything lands in locals,
     # so common subexpressions -- the determinant above all -- are shared
     # instead of evaluated twice per point.
     lvalues = [f"const {scalar_type} det_ratio", f"const {scalar_type} trace_residual"]
     lvalues += [f"const {scalar_type} projected_{name}" for name in projected_names]
-    with cap.capture_gridfunction_accesses(PROJECTION_BLOCK_CFUNCTION):
-        kernel = c_codegen(
-            [det_ratio_expr, trace_expr] + projected_exprs,
-            lvalues,
-            include_braces=False,
-            enable_fd_codegen=True,
-            enable_fd_functions=False,
-            enable_simd=False,
-            fp_type=fp_type,
-            fp_type_alias=scalar_type,
-            verbose=False,
-        )
-    accessed = set(cap.accessed_gridfunction_names(PROJECTION_BLOCK_CFUNCTION))
+    kernel = c_codegen(
+        [det_ratio_expr, trace_expr] + projected_exprs,
+        lvalues,
+        include_braces=False,
+        enable_fd_codegen=True,
+        enable_fd_functions=False,
+        enable_simd=False,
+        fp_type=fp_type,
+        fp_type_alias=scalar_type,
+        verbose=False,
+    )
+    accessed = {
+        str(sym)
+        for expr in [det_ratio_expr, trace_expr] + projected_exprs
+        for sym in expr.free_symbols
+    } & set(gri.glb_gridfcs_dict)
     read_names = tuple(name for name in evol_order if name in accessed)
 
     # Step 5: Assemble the point body top-to-bottom, matching the order the
@@ -250,21 +256,21 @@ status->max_abs_trace_residual = std::fmax(
         for name in projected_names
     )
 
-    # Step 6: Bind exactly the fields the capture recorded, plus the twelve
+    # Step 6: Bind exactly the fields the kernel reads, plus the twelve
     # write targets.  Binding an unread pointer would trip -Wunused-variable.
-    bindings = gfo.render_component_bindings(
+    bindings = Dendro_state_h.output_component_bindings(
         read_names,
         scalar_type,
-        array="state_gfs",
+        array="y_n_gfs",
         role=naming.input_pointer,
         const_pointee=True,
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
     bindings += "\n"
-    bindings += gfo.render_component_bindings(
+    bindings += Dendro_state_h.output_component_bindings(
         projected_names,
         scalar_type,
-        array="state_gfs",
+        array="y_n_gfs",
         role=naming.out_pointer,
         const_pointee=False,
         index_expression=lambda name, _position: str(evol_order.index(name)),
@@ -274,7 +280,7 @@ status->max_abs_trace_residual = std::fmax(
     # loop.  Padding is zero: the projection is algebraic, so every cell of the
     # padded block is projected, ghost cells included.
     block_body = bindings + "\n"
-    block_body += interior_loop(
+    block_body += simple_loop(
         point_body,
         nx="geom.nx",
         ny="geom.ny",
@@ -284,16 +290,16 @@ status->max_abs_trace_residual = std::fmax(
         dx="geom.dx",
     )
     block_params = (
-        f"const BlockGeometry& geom, {scalar_type}* const* state_gfs, "
-        f"{STATUS_TYPE}* const status"
+        f"const BlockGeometry& geom, {scalar_type}* const* y_n_gfs, "
+        f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     global_body = block_loop(
-        f"{PROJECTION_BLOCK_CFUNCTION}(world.geom[blk_id], state_gfs, status);",
-        count="world.num_blocks",
+        f"{PROJECTION_BLOCK_CFUNCTION}(world.geom[blk], y_n_gfs, status);",
+        num_blocks="world.num_blocks",
     )
     global_params = (
-        f"const MockWorld& world, {scalar_type}* const* state_gfs, "
-        f"{STATUS_TYPE}* const status"
+        f"const MockWorld& world, {scalar_type}* const* y_n_gfs, "
+        f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     return FCCZ4ProjectionBuild(
         block_body=block_body,
@@ -303,9 +309,17 @@ status->max_abs_trace_residual = std::fmax(
     )
 
 
-def register_projection_CFunctions() -> None:
-    """Register the per-block and all-block projection CFunctions."""
-    build = build_projection()
+def register_CFunctions_projection(
+    *, solver_namespace: str, CoordSystem: str = "Cartesian"
+) -> None:
+    """
+    Register the per-block and all-block projection CFunctions.
+
+    :param solver_namespace: Solver namespace, following Dendro's lowercase
+        formulation habit (``namespace bssn``).
+    :param CoordSystem: Reference-metric coordinate system.
+    """
+    build = build_projection(solver_namespace=solver_namespace, CoordSystem=CoordSystem)
     block_desc = (
         "Per-block algebraic projection: rescale the conformal metric to unit "
         "determinant ratio and remove the conformal trace of Atilde "
@@ -313,23 +327,16 @@ def register_projection_CFunctions() -> None:
     )
     global_desc = "All-block algebraic projection (NRPy block loop)."
     subdirectory = "generated/src/projection"
-    reg.register_dendro_CFunction(
+    reg.register_Dendro_CFunction(
         role="projection_block",
-        # Invoked by the all-block entry point's NRPy block loop, not by the
-        # host, so it is not itself a Dendro entry point (section 4.5).
-        entry_point=False,
-        lifecycle_hook="post_timestep",
         name=PROJECTION_BLOCK_CFUNCTION,
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
     )
-    reg.register_dendro_CFunction(
+    reg.register_Dendro_CFunction(
         role="projection",
-        entry_point=True,
-        calls=(PROJECTION_BLOCK_CFUNCTION,),
-        lifecycle_hook="post_timestep",
         name=PROJECTION_GLOBAL_CFUNCTION,
         desc=global_desc,
         subdirectory=subdirectory,

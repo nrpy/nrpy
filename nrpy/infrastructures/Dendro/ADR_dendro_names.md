@@ -2,7 +2,7 @@
 
 - Date: 09-03-2026
 - Status: approved
-- Scope: `nrpy/infrastructures/Dendro/` (whitepaper section 17, Phase 0)
+- Scope: `nrpy/infrastructures/Dendro/`
 
 ## Decision
 
@@ -22,18 +22,20 @@
 ## Consequences
 
 - Generated machine identities preserve registered names byte-for-byte
-  (`in_<name>`, `rhs_<name>` are reversible decorations).
-- `state_schema_hash` changes on any intentional rename/reorder, and
-  incompatible checkpoints are rejected.
+  (`in_<name>`, `rhs_<name>` are reversible decorations), so a generated
+  identifier always traces back to exactly one registered gridfunction.
+- An intentional rename or reorder therefore changes the emitted `EvolVar`
+  enum and the component order the generated state header declares. The
+  checkpoint ABI is a separate qualified profile and is deferred, so nothing
+  currently rejects an incompatible checkpoint.
 
 ## Deferred (not dropped)
 
-- I3-2 `BlockGeometry` adapter proof (whitepaper section 7.4): the single
-  auditable host function normalizing `pmin_padded`/`component_offset`
-  plus two-block/offset sentinel tests await the I0-1 Dendrolib pin and
-  capability proof. Only the `dendro_mock.hpp` struct exists. This ADR
-  records the deferral; adapter signatures stay frozen until the pin lands.
-- PR5 `used_codeparameters` scan still uses substring matching
-  (`Dendro/general_relativity/rhs_eval.py`); the freeze-side closure is
-  token-aware. Unifying PR5 on the shared helper is PR5-scoped follow-up
-  (frozen R2 scope excludes the PR5 builder).
+- The `BlockGeometry` adapter proof: the single auditable host function
+  normalizing `pmin_padded`/`component_offset`, plus two-block and offset
+  sentinel tests, awaits the Dendrolib pin and capability proof recorded in
+  `dendrolib_pin.json` and `dendrolib_capabilities.json`. Only the
+  `dendro_mock.h` struct exists. This ADR records the deferral; adapter
+  signatures stay frozen until the pin lands.
+- The checkpoint ABI and physical boundaries are separate qualified
+  profiles, gated on the same pin.
