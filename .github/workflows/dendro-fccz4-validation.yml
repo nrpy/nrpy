@@ -1,5 +1,11 @@
 name: Dendro fCCZ4 validation
 
+# No step uses GITHUB_TOKEN; only actions/checkout needs the repository
+# contents, so the token is capped at read-only rather than inheriting the
+# repository default.
+permissions:
+  contents: read
+
 # The NRPy-generated FCCZ4_GR module is a build-and-run product: generation
 # succeeding proves nothing about whether the emitted C++ compiles or whether
 # the Minkowski lifecycle gates hold.  The static-analysis job already executes
