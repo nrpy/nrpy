@@ -1,6 +1,6 @@
 # Infrastructure Code Style
 
-> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 07-20-2026
+> Infrastructure module structure, C-function registration, generated-code validation, and BHaH generator style rules. · Status: provisional · Last reconciled: 09-05-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -13,6 +13,16 @@ and prefer shared BHaH codegen helpers over hand-written emitted C for ordinary
 per-grid or per-point kernels.
 
 ## Detail
+
+### Patterns Match Existing Code
+
+Before writing a mechanism into an infrastructure, find its counterpart in
+`nrpy/infrastructures/{BHaH,ETLegacy,CarpetX,superB}`. Three or more instances
+is settled convention; a mechanism with no instance anywhere is an invention,
+and that absence is evidence against it. Conformance is one-way: a new
+infrastructure conforms to the established ones, never the reverse. [New
+Infrastructure Conformance](new-infrastructure-conformance.md) owns the
+individual rules, their right and wrong examples, and their mechanical tests.
 
 ### Module Organization
 
@@ -165,6 +175,7 @@ checks integer return codes immediately, and returns early when
 ## See Also
 
 - Parent: [Infrastructures](index.md)
+- Depends on: [New Infrastructure Conformance](new-infrastructure-conformance.md)
 - Depends on: [C Function Registry](../core/c-function-registry.md)
 - Depends on: [Gridfunctions And Parameters](../core/gridfunctions-and-parameters.md)
 - Depends on: [Parallel Codegen Orchestration](../core/helpers/parallel-codegen-orchestration.md)

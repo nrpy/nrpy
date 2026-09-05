@@ -1,6 +1,6 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the algebraic projection, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-04-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the algebraic projection, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-05-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -12,11 +12,10 @@ registry rather than written down. What the builders do author is bounded and
 deliberate: the analytic test perturbation profile, the two algebraic residuals
 the projection reports, and the rescaled connection relation — all assembled
 from registered quantities, and all registered as CFunctions rather than written
-into a fixed template. Each builder
-returns CFunction bodies and metadata; the caller registers them, freezes the
-environment, and exports. Keeping registration out of the builders is what lets
-one profile assemble a different subset without the builders knowing about each
-other.
+into a fixed template. Each family
+pairs a pure `build_*` function with a `register_CFunctions_*` function, as the
+other NRPy infrastructures do, so one profile can assemble a different subset
+without the builders knowing about each other.
 
 ## Detail
 
@@ -25,13 +24,14 @@ other.
 The RHS builder maps each RHS symbol to its registered EVOL gridfunction name
 algorithmically and asserts the bijection against the registry, derives the
 output lvalues and the `in_` and `rhs_` pointer bindings from the gridfunction
-registry, and runs `c_codegen` with direct finite differences inside a scoped
-access-capture context using the shared factory's upwind control vector and the
-`DendroScalar` alias. Point and block loops are emitted through the Dendro loop
-helpers. It provides three registered CFunction bodies — per-block, all-block,
-and a local-time-stepping flat-block adapter that reuses the same numerical
-body — and exposes the operator and access manifests together with the
-access-derived padding.
+registry, and runs `c_codegen` with direct finite differences using the shared factory's
+upwind control vector and the `DendroScalar` alias. Point and block loops are
+emitted through the Dendro loop helpers. It provides three registered CFunction
+bodies — per-block, all-block, and a local-time-stepping flat-block adapter
+that reuses the same numerical body — and records the ghost points its emitted
+operators reach. That padding is taken per axis from the same coefficient
+source the kernel was lowered with, so it is not `fd_order // 2`: the upwinded
+and Kreiss-Oliger families reach one point further than the centred ones.
 
 ### Algebraic projection
 
@@ -58,15 +58,12 @@ never touched by it.
 ### Initial data
 
 The Minkowski fill writes every EVOL field to its asymptotic value through
-exact-name `out_` bindings derived from the frozen EVOL registry. The role is
+exact-name `out_` bindings derived from the registered EVOL gridfunctions. The role is
 `out_` rather than `rhs_` because this writer produces state, not a right-hand
 side; reusing `rhs_` would make the generated signature claim it fills the
 right-hand-side vector, which is how a caller silently zeroes the state. No field name,
 count, or asymptotic value is hardcoded: all three come from the registered
-records, which makes this the first end-to-end proof that state allocation,
-field order, loops, and CFunctions agree. The module's own docstring still says
-`rhs_<name>` here; that wording is stale, and the pointer-binding helper is the
-deciding source.
+records.
 
 Claim evidence:
 - Claim: the generated Minkowski initial-data writer binds its outputs through `out_<name>` pointers, not `rhs_<name>`, because it produces state rather than a right-hand side.
@@ -114,10 +111,10 @@ the lowering. For the equations themselves see
 
 ## Sources
 
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_fccz4_rhs`, `FCCZ4RHSBuild`
-- [projection.py](../../../nrpy/infrastructures/Dendro/general_relativity/projection.py) - `build_projection`, `register_projection_CFunctions`
-- [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_adm_to_evolved`, `build_lambda_initialization`
-- [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - `build_diagnostics`, `tensor_family_of`, `register_diagnostics_CFunctions`
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_fccz4_rhs`, `register_CFunctions_rhs_eval`, `FCCZ4RHSBuild`
+- [projection.py](../../../nrpy/infrastructures/Dendro/general_relativity/projection.py) - `build_projection`, `register_CFunctions_projection`
+- [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_evolved`, `build_lambda_initialization`
+- [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - `build_diagnostics`, `tensor_family_of`, `register_CFunctions_diagnostics`
 - [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py) - `build_fccz4_expression_bundle`
 - [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - Kreiss-Oliger dissipation terms
 - [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
@@ -127,7 +124,7 @@ the lowering. For the equations themselves see
 
 - Parent: [Dendro](index.md)
 - Depends on: [Fully Covariant Conformal Z4](../../equations/general-relativity/fccz4.md)
-- Implements: [Gridfunctions, Naming, Access Capture, And Loops](gridfunctions-naming-access-capture-and-loops.md)
+- Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [GR Application Wiring](../bhah/gr-application-wiring.md)
 - Validated by: [Validation, Host Mock, And Deferral Gates](validation-host-mock-and-deferral-gates.md)
 - See also: [C Codegen](../../core/c-codegen.md)

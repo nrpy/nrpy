@@ -81,7 +81,7 @@ pages where a first-pass owner exists.
 | SDAG | Charm++ structured dagger notation for coordinating asynchronous entry-method control flow; see [Chare Entrypoints And Runtime](infrastructures/superb/chare-entrypoints-and-runtime.md). |
 | CkIO | Charm++ parallel I/O library used by superB diagnostic output paths; see [Diagnostics And Observables](infrastructures/superb/diagnostics-and-observables.md). |
 | JAX | Generated Python/JAX infrastructure target used by `sebobv1_jax`; see [JAX](infrastructures/jax/index.md). |
-| Dendro | Generated fCCZ4 module infrastructure target for a Dendro-GR checkout; the generated module is `FCCZ4_GR`, the real host library is Dendrolib, and `dendro5` is the host CMake target whose presence the generated module refuses to build against; see [Dendro](infrastructures/dendro/index.md). |
+| Dendro | Generated solver infrastructure target for a Dendro-GR checkout; the generated fCCZ4 solver directory is `FCCZ4_GR`, the real host library is Dendrolib, and `dendro5` is the host CMake target whose presence the generated solver refuses to build against; see [Dendro](infrastructures/dendro/index.md). |
 | NRPyElliptic | Hyperbolic-relaxation elliptic initial-data solver family spanning equation modules, BHaH workflows, and superB examples; see [NRPyElliptic Workflow](infrastructures/bhah/nrpyelliptic-workflow.md). |
 | SEBOB | SEOBNR-plus-BOB waveform example family (SEBOBv1, SEBOBv2) spanning generated C library and JAX routes; see [SEOBNR BOB Generated Library](infrastructures/bhah/seobnr-bob-generated-library.md). |
 | Kreiss-Oliger | Numerical dissipation scheme applied through `dKOD` finite-difference operators in evolution RHS wiring; see [Finite Difference](core/finite-difference.md). |

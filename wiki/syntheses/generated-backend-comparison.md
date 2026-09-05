@@ -26,7 +26,7 @@ chat history.
 | CarpetX | CarpetX/Cactus thorn infrastructure using Loop/CarpetX dependencies, C++ source emission, ODESolvers schedule bins, and CarpetX gridfunction metadata. | Generated thorn directory with `interface.ccl`, `param.ccl`, `schedule.ccl`, `configuration.ccl`, `src/make.code.defn`, and thorn-local `src/*.cxx`. | Generate thorns from NRPy, place them in an Einstein Toolkit/CarpetX-capable checkout, then build/run in that host environment. CarpetX thorns require `Loop` and `CarpetX`; schedules use ODESolvers bins. | Current cited CI/validation pages do not establish `carpetx_*` Einstein Toolkit build/test coverage. CarpetX GR RHS has trusted-expression dictionaries; several SIMD/CAHD details are source-observed caveats rather than proven runtime guarantees. | Emitted CCL, configuration, C++ source, and built toolkit outputs are generated products. Cite CarpetX writer modules, Cactus/CarpetX background docs only for terminology, and local validation pages for NRPy facts. |
 | superB | Charm++-based superB infrastructure for distributed-memory generated applications, with `Main`, `Timestepping`, optional interpolation/horizon chares, and PUP support. | Generated Charm++ project under `project/<project_name>/`: `.h`, `.cpp`, `.ci`, PUP routines, copied static headers, parameter/default files, BHaH defines/prototypes, and a Makefile using `charmc`. | Run the Python generator, enter the generated project directory, run `make`, then launch with `./charmrun +pN ./<project_name>`. Optional BHaHAHA and checkpoint paths add service chares and link inputs. | `charmpp-validation` CI generates several superB workflows, builds them in a Charm++ Apptainer image, and runs `superB_two_blackholes_collide` through `charmrun +p2`. | Generated Charm++ projects, translated `.decl.h`/`.def.h`, logs, checkpoints, binaries, and linked service outputs are products. Cite superB generator modules and static source headers. |
 | JAX | Python/JAX infrastructure driven by `PyFunction_dict` and `commondata_params_dict`, currently surfaced through `sebobv1_jax`. | Generated Python package under `project/<name>/src/<name>/`, with one module per registered `PyFunction`, `Commondata.py`, package `__init__.py`, `pyproject.toml`, `setup.cfg`, requirements, README, `.gitignore`, and a minimal import smoke test. | Run `python -m nrpy.examples.sebobv1_jax` or another JAX generator. Current CI generation route does not run a following generated `make` step; runtime use of generated package behavior is narrower than C backend build validation. | Ubuntu and macOS codegen CI run the JAX generator. Current `sebobv1_jax` route is generation-only and has a documented `a_f` Commondata mismatch, so end-to-end waveform runtime validation is provisional. | Generated Python package files and packaging metadata are products. Cite JAX project generator, `PyFunction`/Commondata registry code, example source, and CI workflow rather than generated package files. |
-| Dendro | Dendro infrastructure over registered `CFunction` objects, frozen into an immutable snapshot before any target file is rendered; fCCZ4 is currently the only application. | Generated `FCCZ4_GR` module under `project/<name>/Dendro-GR/`: state and parameter headers, one source per registered CFunction, module CMake, JSON manifests, a parameter profile, generated self-tests, and the mock host header; rendered verifier and installer tools are written at the project root beside the module. | Run the Python generator, configure the module with CMake, build it, then run the generated executable; the module compiles against a mock host header and needs only MPI and a C++17 compiler. Installing into a real Dendro-GR checkout is a separate explicit tool run that writes a receipt; the module refuses to configure where a real `dendro5` target is defined, so that path is not yet a working host integration. | No CI job exercises this infrastructure. Symbolic and emitted-source contracts run as owner doctests in static analysis; the generated self-tests and Minkowski lifecycle are run by hand against the mock host, and real-host coverage waits on a Dendro container image. | Generated module files, manifests, receipts, and binaries are products. Cite the Dendro generator modules, the frozen registry records, and the pin and capability records. |
+| Dendro | Dendro infrastructure over the NRPy gridfunction, CodeParameter, and `CFunction` registries, read directly by one emitter per artifact; fCCZ4 is currently the only application. | Generated solver directory under `project/<name>/Dendro-GR/<solver_name>/`: state and parameter headers, one source per registered CFunction, solver and tests CMake, a sample parameter file, generated self-tests, the host context and entry point, and the mock host header. | Run the Python generator, configure the solver with CMake, build it, then run the generated executable; it compiles against a mock host header and needs only MPI and a C++17 compiler. The solver refuses to configure where a real `dendro5` target is defined, so real-host integration is not yet a working path. | No CI job exercises this infrastructure. Symbolic and emitted-source contracts run as owner doctests in static analysis; the generated self-tests and Minkowski lifecycle are run by hand against the mock host, and real-host coverage waits on a Dendro container image. | Generated solver files and binaries are products. Cite the Dendro emitter modules, the registry symbols, and the pin and capability records. |
 
 The main backend split is not language alone. BHaH and superB both generate
 standalone project trees, but BHaH's lifecycle is process/library oriented
@@ -35,18 +35,18 @@ generate Cactus thorns, but ETLegacy emits C sources and MoL-oriented schedules
 while CarpetX emits C++ sources, `configuration.ccl`, `Loop CarpetX`
 requirements, and ODESolvers-oriented schedules. JAX is the outlier: it
 consumes Python-function registries and writes a Python package rather than a
-C/C++ build product. Dendro differs from all five on a different axis: its
-target translators read a frozen snapshot and nothing else, so apart from the
-designated self-test template no generated file introduces a state-field name
-or a formulation expression that was not registered first.
+C/C++ build product. Dendro differs on a different axis: its target is a
+third-party host it does not vendor, so the generated solver compiles against a
+mock host header and its real-host behaviour is gated behind an unrecorded
+source pin.
 
 Claim evidence:
-- Claim: Dendro's target translators read only a frozen snapshot, so apart from the designated generated-project self-test template no generated file introduces a state-field name or a formulation expression that was not registered first. Nothing cited here decides whether another backend family also freezes its registries.
+- Claim: the generated Dendro solver compiles against a mock host header rather than Dendrolib, and its real-host behaviour is gated behind a Dendrolib source pin and capability record that are both currently open. Nothing cited here decides how another backend family treats its host dependency.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/freeze.py`, `freeze_nrpy_dendro_environment`
-- Corroboration: `nrpy/infrastructures/Dendro/output_project.py`, module-docstring template policy and its designated self-test exception
-- Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=not-run`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3; backend=Dendro; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
+- Deciding authority: `nrpy/infrastructures/Dendro/dendrolib_pin.json`, `status`; `nrpy/infrastructures/Dendro/dendrolib_capabilities.json`, `status`
+- Corroboration: `nrpy/infrastructures/Dendro/output_project.py`, the `copy_files` call that ships `dendro_mock.h` into every generated project
+- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-05-2026`
 
 Validation is uneven by backend. Selected standalone C examples and superB have
 configured build or run coverage in generated-project CI; ETLegacy has configured Einstein Toolkit build/test
@@ -63,8 +63,8 @@ proves configured job shape, never latest successful execution.
   `https://gist.githubusercontent.com/karpathy/442a6bf555914893e9891c11519de94f/raw/ac46de1ad27f92b28ac95459c782c07f6b8c964a/llm-wiki.md`.
 - [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
-- [output_project.py](../../nrpy/infrastructures/Dendro/output_project.py) - `output_project`, template policy
-- [freeze.py](../../nrpy/infrastructures/Dendro/freeze.py) - `freeze_nrpy_dendro_environment`
+- [output_project.py](../../nrpy/infrastructures/Dendro/output_project.py) - `output_project`
+- [dendrolib_pin.json](../../nrpy/infrastructures/Dendro/dendrolib_pin.json) - `status`
 
 ## See Also
 
@@ -90,5 +90,5 @@ proves configured job shape, never latest successful execution.
 - Depends on: [JAX Commondata And PyFunction Registry](../infrastructures/jax/commondata-and-pyfunction-registry.md) - generation-time registries consumed by JAX project generation.
 - Depends on: [SEBOBv1 JAX Workflow](../infrastructures/jax/sebobv1-jax-workflow.md) - current JAX example surface, CI generation route, and provisional runtime caveat.
 - Depends on: [Dendro](../infrastructures/dendro/index.md) - Dendro branch router.
-- Depends on: [Dendro Lifecycle And Project Assembly](../infrastructures/dendro/lifecycle-and-project-assembly.md) - staged module export, installer receipt, and generated manifests.
-- Depends on: [Dendro Frozen Snapshot And Pure Translators](../infrastructures/dendro/frozen-snapshot-and-pure-translators.md) - the freeze boundary that distinguishes this backend from the other five.
+- Depends on: [Dendro Project Assembly And Emitters](../infrastructures/dendro/project-assembly-and-emitters.md) - one emitter per artifact, reading the registries directly.
+- Depends on: [Dendro Validation, Host Mock, And Deferral Gates](../infrastructures/dendro/validation-host-mock-and-deferral-gates.md) - the mock host vehicle and the open Dendrolib gates.

@@ -1,6 +1,6 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 07-20-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 09-05-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -80,6 +80,36 @@ matrix and command shape, not a latest successful run.
 
 Claim status: stale; contradiction: CONTR-0003.
 See [CONTR-0003](../contradictions.md#contr-0003) for the enforcement gap.
+
+### The Bars Are Not Machine-Checked
+
+Neither the 10.00 bar for a new file nor the no-regression rule for a modified
+file is enforced by any automated gate. The workflow floor is `9.5` and the
+single-file wrapper's is `9.91`, so a new file scoring `9.88` and a regression
+from `10.00` to `9.93` both pass every configured check. A reviewer must run
+the per-file score and compare it with the pre-change baseline by hand.
+
+Claim evidence:
+- Claim: no configured check enforces the 10.00 bar for a newly added handwritten Python file or the no-regression rule for a modified one; the workflow's inline Pylint floor is `9.5` and the single-file wrapper's is `9.91`, and neither compares a file with its pre-change rating.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis` inline Pylint threshold; [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh), `run_test_step`
+- Corroboration: [.pylintrc](../../.pylintrc), `[MASTER]` `fail-under`, which the wrapper and workflow both suppress in favour of their own floors
+
+### The Supported Python Floor
+
+The `static-analysis` matrix includes Python `3.7.13`, so `3.7` is the
+supported floor and a construct newer than that fails in CI even when it parses
+locally. Separate the two failure classes: a syntax error any parse check
+catches, and a runtime `TypeError` only an old interpreter or a targeted grep
+catches. PEP 584's `dict |= other` is the worked example — valid syntax on
+`3.8`, `TypeError` at runtime there — and `py_compile` on a modern interpreter
+reports nothing.
+
+Claim evidence:
+- Claim: the configured `static-analysis` matrix includes Python `3.7.13`, so a construct newer than 3.7 reaches CI on that cell; a version-gated construct that is valid syntax fails at runtime rather than at parse time, so a modern-interpreter parse check does not detect it.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `static-analysis` matrix
+- Corroboration: [setup.py](../../setup.py), `python_requires` and the declared Python classifiers
 
 The config files supply the tool policy: `pyproject.toml` sets isort to the
 Black profile; `.mypy.ini` enables strict typed definitions, no implicit

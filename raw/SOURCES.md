@@ -212,9 +212,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/Dendro/ADR_dendro_names.md` | living |
 | `nrpy/infrastructures/Dendro/dendrolib_pin.json` | living |
 | `nrpy/infrastructures/Dendro/dendrolib_capabilities.json` | living |
-| `nrpy/infrastructures/Dendro/host_mock/dendro_mock.hpp` | living |
-| `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_README_md.in` | living |
-| `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in` | living |
+| `nrpy/infrastructures/Dendro/host_mock/dendro_mock.h` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
