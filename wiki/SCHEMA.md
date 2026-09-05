@@ -1,6 +1,6 @@
 # Knowledge Base Schema
 
-> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 07-20-2026
+> Rules for the self-maintaining markdown KB. · Status: confirmed · Last reconciled: 09-05-2026
 
 ## Summary
 
@@ -205,7 +205,10 @@ Do not claim completed block coverage before the exact block is present.
 Deciding authority depends on role:
 
 - descriptive current behavior: code decides; targeted tests corroborate only
-  exercised conditions;
+  exercised conditions. A docstring, module comment, or README is
+  corroboration, never deciding authority, for a claim about behavior: where a
+  docstring and its own code disagree, the code decides and the docstring is a
+  defect;
 - normative KB or contributor rule: current owning governance or configuration
   decides; implementation divergence opens a contradiction;
 - intended public or scientific contract: owning stable specification and

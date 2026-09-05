@@ -8,7 +8,9 @@
 | [ETLegacy](etlegacy/index.md) | You need classic Einstein Toolkit generated-thorn infrastructure. |
 | [CarpetX](carpetx/index.md) | You need CarpetX generated-thorn infrastructure routes. |
 | [superB](superb/index.md) | You need Charm++-based superB generated-application infrastructure. |
+| [Dendro](dendro/index.md) | You need Dendro-GR generated solver infrastructure routes. |
 | [JAX](jax/index.md) | You need generated Python/JAX project infrastructure routes. |
+| [New Infrastructure Conformance](new-infrastructure-conformance.md) | You are adding a new infrastructure and need the conformance rules, their right and wrong examples, and their mechanical tests. |
 | [Infrastructure Code Style](infrastructure-code-style.md) | You need infrastructure module structure, C-function registration, CodeParameter scope, doctest, parallel codegen, or BHaH generator style rules. |
 | [BHaH Lifecycle](bhah-lifecycle.md) | You followed an older link to the moved BHaH lifecycle content and need the current route. |
 

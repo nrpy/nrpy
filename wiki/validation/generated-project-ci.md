@@ -1,6 +1,6 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-13-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 09-05-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -66,6 +66,14 @@ argument parser or CUDA branch, so its extra `--cuda` token is ignored and that
 cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
+
+The Dendro infrastructure has no configured job here. Its symbolic and
+emitted-source contracts run as owner doctests in `static-analysis`, and its
+generated self-tests and Minkowski lifecycle are run by hand against a mock
+host. A job building against that mock would establish only that the emitted
+C++ compiles, so real coverage waits on a container image with Dendro
+precompiled; see
+[Validation, Host Mock, And Deferral Gates](../infrastructures/dendro/validation-host-mock-and-deferral-gates.md).
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;

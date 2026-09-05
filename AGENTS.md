@@ -14,7 +14,7 @@ reject abstractions without demonstrated need.
 | [Architecture](wiki/architecture/index.md) | Project purpose, build/run paths, generated-output boundaries, and contribution rules. |
 | [Core APIs](wiki/core/index.md) | Core codegen APIs, parameters, gridfunctions, indexed expressions, reference metrics, and finite difference support. |
 | [Equations](wiki/equations/index.md) | Symbolic equation families, GR and SEOBNR routes, support helpers, and trusted expression validation. |
-| [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, and JAX. |
+| [Infrastructures](wiki/infrastructures/index.md) | Generated-backend lifecycle and infrastructure routes for BHaH, ETLegacy, CarpetX, superB, JAX, and Dendro. |
 | [Examples](wiki/examples/index.md) | First wave-equation run and black-hole evolution examples. |
 | [Validation](wiki/validation/index.md) | Test and oracle policy, static analysis, expression validation, and generated-project CI. |
 | [Glossary](wiki/glossary.md) | Canonical terms. |
@@ -34,7 +34,7 @@ reject abstractions without demonstrated need.
 | Build, run, inspect code generation, generated outputs, or contribution rules | [Architecture](wiki/architecture/index.md) |
 | Find `CFunction`, `c_codegen`, parameters, or gridfunctions | [Core APIs](wiki/core/index.md) |
 | Change equation modules or expression validation | [Equations](wiki/equations/index.md) |
-| Work on BHaH, ETLegacy, CarpetX, superB, or JAX generation | [Infrastructures](wiki/infrastructures/index.md) |
+| Work on BHaH, ETLegacy, CarpetX, superB, JAX, or Dendro generation | [Infrastructures](wiki/infrastructures/index.md) |
 | Run or compare example generators | [Examples](wiki/examples/index.md) |
 | Choose test placement or oracle rules, inspect static analysis or expression validation, or review generated-project CI | [Validation](wiki/validation/index.md) |
 | Update KB pages | [Workflows](wiki/workflows.md) |
