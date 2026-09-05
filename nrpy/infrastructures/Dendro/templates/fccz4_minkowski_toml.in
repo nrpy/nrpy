@@ -1,0 +1,18 @@
+# GENERATED FILE - DO NOT EDIT
+# Generator: nrpy.infrastructures.Dendro
+# Source object: frozen CodeParameter registry + fixed template (host parameters)
+# Module ABI: $MODULE_ABI_HASH
+#
+# Minkowski qualification profile (whitepaper section 16.8).  The mock-
+# vehicle main takes host controls (CFL, steps, extent, blocks) as CLI
+# arguments; the [fccz4.params] table below is generated from the frozen
+# CodeParameter defaults (section 6.5: defaults/parser/docs/TOML from the
+# same records).
+
+[fccz4.profile]
+name = "fccz4_cartesian_vacuum_minkowski"
+fd_order = $FD_ORDER
+required_padding = $PADDING
+ko_enabled = $KO_ENABLED
+
+$FCCZ4_PARAMS_TOML

@@ -1,0 +1,20 @@
+{
+  "record": "Dendrolib capability proof for the NRPy Dendro fCCZ4 infrastructure",
+  "status": "UNPROVEN — mini-tests against the pinned Dendrolib have not been run",
+  "whitepaper": "sections 7.4, 13.2-13.5, 17 (Phase 0)",
+  "pinned_commit": null,
+  "scalar_abi": {"status": "unproven"},
+  "layout": {"convention": "padded variable-major unzipped block, x-fastest", "status": "unproven"},
+  "offsets": {"status": "unproven"},
+  "dimensions": {"status": "unproven"},
+  "padding": {"max_proven_padding": 4, "note": "fd-order 8 needs padding 5: capability-gated, currently rejected"},
+  "ghost_validity": {"status": "unproven"},
+  "origin": {"pmin_padded": "coordinate of local padded index zero", "status": "unproven"},
+  "flags": {"status": "unproven"},
+  "zip": {"status": "unproven"},
+  "rhs_contracts": {"status": "unproven"},
+  "remesh": {"status": "unproven"},
+  "checkpoint": {"status": "unproven"},
+  "vtu": {"status": "unproven"},
+  "thread_model": {"default": "none", "openmp": "single deliberate level, unmeasured", "status": "unproven"}
+}

@@ -1,0 +1,125 @@
+// GENERATED FILE - DO NOT EDIT
+// Generator: nrpy.infrastructures.Dendro
+// Regenerate with: python -m nrpy.examples.dendro_fccz4
+// Source object: fixed template mock-vehicle context (header)
+// Module ABI: $MODULE_ABI_HASH
+// PR 7 mock-vehicle context (whitepaper sections 13.4/13.5/13.7).
+//
+// This context is the mock-vehicle runtime adapter: it allocates the
+// generated-count vectors, runs the section 13.7 startup checks, and invokes
+// the NRPy-registered generated CFunctions.  It contains no formulation
+// content: counts, names, hashes, and FD/padding constants all come from the
+// generated headers.  The real Dendro-GR CRTP context (DVector/ts::Ctx
+// lifecycle, remesh, checkpoint) lands after the I0-1 Dendrolib gates; the
+// mock host stubs in dendro_mock.hpp stand in for them.
+//
+// SCOPE OF EVIDENCE.  What this vehicle establishes is lifecycle plumbing:
+// allocation with generated counts, the unzip/call/zip call path, the block
+// and flat-block entry points agreeing, per-rank decomposition, and the
+// Minkowski fixed point.  A Minkowski state is spatially constant, so its RHS
+// vanishes for *any* stencil coefficients; the perturbed-state and
+// convergence gates exist so that this vehicle is not satisfied by a kernel
+// whose derivative terms are absent, mis-shaped, or applied at the wrong
+// offsets.
+//
+// What it still cannot detect, measured rather than assumed: a *uniform* sign
+// or scale error in the finite-difference coefficients.  Such a kernel
+// approximates a different continuum operator, and it does so at the
+// requested order, so it converges and its RHS is nonzero.  Detecting that
+// requires an independent evaluator, which is exactly what section 16.5
+// Gate 4 provides -- the fixed-block equivalence against BHaH in
+// nrpy/tests/test_dendro_fccz4_rhs_pr5.py.  Pointwise correctness of the
+// generated kernel is established there, never here.
+#pragma once
+
+#include <cstddef>
+
+#include "dendro_mock.hpp"  // PR 7 mock-vehicle host stubs (Dendrolib UNPINNED)
+#include "fccz4_parameters.hpp"
+#include "fccz4_state.hpp"
+#include "fccz4_types.hpp"
+
+namespace fccz4 {
+
+class Ctx {
+ public:
+  ~Ctx();
+  // Allocate this rank's mock host world (n_blocks padded blocks of the given
+  // extent and spacing) and the generated-count EVOL vectors (section 13.4:
+  // all component counts are generated), then run the registered parameter
+  // CFunctions (section 6.4).  `rank` shifts this rank's subdomain so that
+  // multiple ranks own disjoint physical blocks rather than duplicating one.
+  int initialize_world(int n_blocks, int extent, double dx, int rank,
+                       const char* toml_path);
+  // Section 13.7 startup checks: module ABI, scalar/state contracts, vector
+  // component counts, per-block padding, FD order, parameter validation;
+  // prints the semantic hashes.
+  int startup_checks();
+  // Fill the state through the generated initial-data CFunctions.
+  int minkowski_initial_data();
+  // Add a smooth, analytic, spatially varying perturbation to every evolved
+  // component over the whole padded block, so the interior RHS exercises the
+  // generated derivative stencils.  No field is named: the same continuum
+  // profile is applied to every component of the generated state.
+  int perturb_state(double amplitude, double wavelength);
+  // Generated all-block RHS (section 13.5 lifecycle: pointers -> generated
+  // fccz4_rhs; the mock unzip/zip are identity).
+  int rhs_all_blocks();
+  // RHS magnitude at the current state, maximised over this rank's interior.
+  double max_interior_rhs();
+  // Largest difference between the per-block entry point and the LTS
+  // flat-block adapter on the same state (section 13.6: one numerical body).
+  double flat_adapter_max_difference();
+  // Host (Dendro-owned) explicit-Euler lifecycle step: u += dt * f(u).  The
+  // mock integrator owns this loop exactly as the real Dendro integrator
+  // (RK/LTS) would; it evaluates no formulation - every derivative and every
+  // equation term comes from the registered generated CFunctions.
+  int euler_step(double dt);
+  // Host reduction: maximum |field| over the interior of every local block,
+  // over `ncomp` components.  The count is a parameter so the same reduction
+  // serves the evolved and the diagnostic vectors without naming either.
+  double max_interior_value(const DendroScalar* const* fields, unsigned ncomp);
+  // Section 14.5 scheduling: run the generated algebraic projection over
+  // every local block.  Returns nonzero when the generated status reports a
+  // refused point; the projection itself never calls exit().
+  int project_state();
+  // Maximum |diagnostic| over every DIAG component and local block, after
+  // recomputing the generated constraint diagnostics (section 14.6).  No
+  // diagnostic is named: the reduction runs over the generated count.
+  double max_constraint_violation();
+  // Section 14.7: resolve host-supplied exact NRPy names (VTU output or
+  // refinement selection).  An unknown name is fatal: this prints every valid
+  // generated name and returns nonzero.  No name is written down here.
+  int select_variables(const char* const* names, unsigned count);
+  // Copy the current state (bitwise snapshot for the drift gate).
+  int snapshot_state();
+  // Maximum |u - u_snapshot| over all components and blocks.
+  double max_drift_from_snapshot();
+
+  // Host world and EVOL vectors (in / rhs / out), mock lifecycle.
+  mock::Ctx host;
+  // Generated runtime parameter table (section 6.4), owned by the context.
+  fccz4::generated::GeneratedParams fccz4_params;
+  // Bitwise snapshot of the state taken before evolution.
+  DendroScalar** u0 = nullptr;
+  // Status of the most recent projection pass (section 14.5).
+  fccz4::generated::ProjectionStatus last_projection;
+  // Number of completed projection passes.  Section 16.7 asks that the
+  // post-initialization and post-timestep hooks be invoked exactly as
+  // configured; a count the host can check is the evidence for that, since a
+  // flat state looks the same whether or not it was projected.
+  unsigned long long projection_passes = 0;
+};
+
+// Observed convergence order of the generated RHS under grid refinement
+// (section 16.6 flavour): the same smooth analytic state is evaluated at
+// spacings h, h/2 and h/4 on a single block, and the Richardson ratio of the
+// successive differences at coincident physical points is returned.  A kernel
+// whose stencils are absent, mis-shaped, or applied at the wrong offsets does
+// not exhibit the requested order.  Returns a negative value when the
+// differences are too small to form a ratio.
+double observed_convergence_order(double base_dx, double amplitude,
+                                  double wavelength,
+                                  const fccz4::generated::GeneratedParams& params);
+
+}  // namespace fccz4

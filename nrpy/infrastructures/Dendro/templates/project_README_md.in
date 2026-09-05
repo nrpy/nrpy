@@ -1,0 +1,43 @@
+# dendro_fccz4 — NRPy-generated fCCZ4 project for Dendro-GR
+
+GENERATED PROJECT - DO NOT EDIT.
+Generator: nrpy.infrastructures.Dendro
+Regenerate with: `python -m nrpy.examples.dendro_fccz4 ...`
+Module ABI: `$MODULE_ABI_HASH`
+
+## Layout (whitepaper section 12.1)
+
+- `manifest/` — canonical JSON manifests and hashes (module, state,
+  parameters, CFunctions, stencils, provenance, file hashes, SHA256SUMS).
+- `tools/` — the generated project verifier, the safe Dendro-GR installer,
+  and the copy verifier / remover.
+- `Dendro-GR/FCCZ4_GR/` — the sibling module installed into a Dendro-GR
+  checkout (generated sources, context, pars, tests).
+
+## Verify
+
+    python tools/verify_generated_project.py
+
+## Install (transactional; default is a dry run)
+
+This profile is qualified against the NRPy mock host only.  If the target
+Dendro-GR root defines a real `dendro5` target, the module's CMake stops the
+configure with a `FATAL_ERROR` rather than compile the mock `ot::Block` /
+`DVector` doubles against the real host (whitepaper section 13.2).  Undo an
+installation with `python tools/remove_generated_module.py --dendro-root
+/path/to/Dendro-GR`.
+
+
+    python tools/copy_into_dendro.py --dendro-root /path/to/Dendro-GR
+    python tools/copy_into_dendro.py --dendro-root /path/to/Dendro-GR --execute --apply-root-cmake-patch
+
+## Status
+
+Dendrolib is UNPINNED in this repository; the generated module builds and
+runs against the mock host stubs (the PR 7 mock vehicle).  Algebraic
+projection, ADM initial-data conversion, connection initialization and
+constraint diagnostics are registered in this profile, and
+`manifest/{projection,initial_data,diagnostics}.json` describe the registered
+CFunctions.  Real Dendro-GR host integration, physical boundaries and the
+checkpoint ABI remain separate qualified profiles; `manifest/boundaries.json`
+and `manifest/dendrolib_capabilities.json` are the deferral records.

@@ -1,0 +1,38 @@
+// GENERATED FILE - DO NOT EDIT
+// Generator: nrpy.infrastructures.Dendro
+// Source object: frozen CFunction set (generated CFunction preamble)
+// Module ABI: $MODULE_ABI_HASH
+//
+// Preamble included by every generated CFunction source and by the
+// generated project self-tests: the mock host types (Dendrolib is UNPINNED
+// in this repository), the generated scalar/state/parameter registries and
+// CFunction declarations, the UPWIND_ALG macro (identical to the PR 5 gate
+// harness, whitepaper section 16.4), and the standard headers the generated
+// CFunction bodies use.  It contains no concrete field name, no FD
+// coefficient, and no numerical loop (section 9.16).
+#pragma once
+
+#include <array>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <string_view>
+
+#include "dendro_mock.hpp"
+
+#include "fccz4_parameters.hpp"
+#include "fccz4_state.hpp"
+#include "fccz4_types.hpp"
+#include "fccz4_cfunctions.hpp"
+
+// NRPy owns the upwind selection in the canonical backend (section 8.5), so
+// the generated definition must win over any host definition -- matching
+// nrpy/helpers/simd_intrinsics.h and cuda_intrinsics.h, which also #undef
+// first.  A host macro with the opposite orientation would silently invert
+// every advection term.
+#ifdef UPWIND_ALG
+#undef UPWIND_ALG
+#endif
+#define UPWIND_ALG(UpwindVecU) ((UpwindVecU) > 0.0 ? 1.0 : 0.0)

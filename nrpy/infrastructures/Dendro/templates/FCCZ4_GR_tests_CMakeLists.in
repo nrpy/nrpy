@@ -1,0 +1,36 @@
+# GENERATED FILE - DO NOT EDIT
+# Generator: nrpy.infrastructures.Dendro
+# Source object: fixed template generated-project self-tests (section 12.1)
+# Module ABI: $MODULE_ABI_HASH
+
+# Generated project self-test (mock-vehicle): builds the generated
+# self-test executable against the generated sources and the mock host
+# header.  The real Dendrolib integration tests land with the I0-1 gates.
+# The generated source list is consumed from the frozen CFunction set
+# (${FCCZ4_NRPY_GENERATED_SOURCES}), so this target never hardcodes a source
+# inventory (sections 7.1/9.16/12.1).  Paths are relative to this tests
+# directory so the target is correct both in the standalone mock-vehicle
+# build and when FCCZ4_GR is a subdirectory of a larger Dendro-GR project.
+set(FCCZ4_MODULE_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/..)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../generated/cmake/nrpy_generated_sources.cmake)
+add_executable(test_generated
+  ${CMAKE_CURRENT_SOURCE_DIR}/test_generated.cpp
+  ${FCCZ4_NRPY_GENERATED_SOURCES}
+)
+target_include_directories(test_generated PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/../host_mock
+  ${CMAKE_CURRENT_SOURCE_DIR}/../include
+  ${CMAKE_CURRENT_SOURCE_DIR}/../generated/include
+)
+target_compile_features(test_generated PRIVATE cxx_std_17)
+
+add_test(NAME fccz4_state COMMAND test_generated state)
+add_test(NAME fccz4_params COMMAND test_generated params)
+add_test(NAME fccz4_padding COMMAND test_generated padding)
+add_test(NAME fccz4_offsets COMMAND test_generated offsets)
+add_test(NAME fccz4_upwind COMMAND test_generated upwind)
+add_test(NAME fccz4_rhs_minkowski COMMAND test_generated rhs)
+add_test(NAME fccz4_initial_data COMMAND test_generated init)
+add_test(NAME fccz4_exact_names COMMAND test_generated names)
+add_test(NAME fccz4_projection COMMAND test_generated projection)
+add_test(NAME fccz4_constraints COMMAND test_generated constraints)

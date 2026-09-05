@@ -1,0 +1,55 @@
+// GENERATED FILE - DO NOT EDIT
+// Generator: nrpy.infrastructures.Dendro
+// Regenerate with: python -m nrpy.examples.dendro_fccz4
+// Source object: frozen NRPy scalar contract (fp_type / Dendro_scalar_type)
+// Module ABI: $MODULE_ABI_HASH
+
+#pragma once
+
+#include <type_traits>
+
+#ifndef DENDRO_SCALAR_DEFINED
+#define DENDRO_SCALAR_DEFINED
+using DendroScalar = $TARGET_SCALAR;
+#endif
+
+namespace fccz4::generated {
+
+using NRPyArithmetic = $NRPY_ARITHMETIC;
+using TargetScalar = DendroScalar;
+
+static_assert(sizeof(TargetScalar) == sizeof(NRPyArithmetic),
+              "fccz4 scalar contract: width mismatch");
+static_assert(std::is_same_v<TargetScalar, NRPyArithmetic>,
+              "The qualified CPU profile requires DendroScalar == double");
+
+// Structured status of one algebraic-projection pass (whitepaper section
+// 14.5).  The record is formulation-neutral -- it names no field and carries
+// no physics default -- so it belongs to the generated scalar contract.  The
+// projection never calls exit(): a rank-local failure is reported here and the
+// host owns the global reduction.
+struct ProjectionStatus {
+  // Largest |det(gammabar)/det(gammahat) - 1| seen before projection.
+  double max_abs_det_minus_one = 0.0;
+  // Largest |gammabar^ij Atilde_ij| seen before projection.
+  double max_abs_trace_residual = 0.0;
+  // Points projected, points refused, and points with nonfinite diagnostics.
+  unsigned long long projected_points = 0;
+  unsigned long long failed_points = 0;
+  unsigned long long nonfinite_points = 0;
+  // Padded-block index of the first refused point, or -1 when none.
+  // The index is block-local: under the all-block entry point it locates
+  // the point within its block, not within the whole local vector.
+  long long first_failing_index = -1;
+  // Registry position of the first nonfinite input field there, or -1.
+  int first_failing_field = -1;
+  // Registered floors applied at this profile (none are registered yet).
+  int floors_applied = 0;
+};  // END STRUCT: projection status record
+
+[[nodiscard]] inline bool projection_failed(
+    const ProjectionStatus& status) noexcept {
+  return status.failed_points != 0;
+}  // END FUNCTION: projection_failed
+
+}  // namespace fccz4::generated
