@@ -8,7 +8,10 @@ frozen NRPy gridfunction records.
 """
 
 import json
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+import math
+from typing import Callable, Dict, List, Optional, Sequence, Tuple, cast
+
+import sympy as sp
 
 from nrpy.infrastructures.Dendro import naming
 from nrpy.infrastructures.Dendro.freeze import FrozenNRPyDendroSnapshot
@@ -248,15 +251,13 @@ def _cxx_scalar_literal(value: str, gf_name: str, field: str) -> str:
         number = float(value)
     except (TypeError, ValueError):
         try:
-            import sympy as sp
-
-            number = float(sp.sympify(value))
+            number = float(cast(sp.Expr, sp.sympify(value)))
         except (TypeError, ValueError, AttributeError) as exc:
             raise ValueError(
                 f"Gridfunction {gf_name!r} has non-numeric {field} {value!r}: "
                 "generated metadata must be a finite real number."
             ) from exc
-    if number != number or number in (float("inf"), float("-inf")):
+    if not math.isfinite(number):
         raise ValueError(f"Gridfunction {gf_name!r} has non-finite {field} {value!r}.")
     return repr(number)
 
