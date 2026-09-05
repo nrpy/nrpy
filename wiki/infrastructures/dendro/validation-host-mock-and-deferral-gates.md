@@ -1,6 +1,6 @@
 # Validation, Host Mock, And Deferral Gates
 
-> Explain generated-project verification, the scaffold scan, the mock host vehicle and its self-tests, the Dendro CI job, and the unproven Dendrolib pin and capability gates. · Status: provisional · Last reconciled: 09-04-2026
+> Explain generated-project verification, the scaffold scan, the mock host vehicle and its self-tests, the Dendro CI job, and the unproven Dendrolib pin and capability gates. · Status: provisional · Last reconciled: 09-05-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -56,15 +56,19 @@ inside a Dendro-GR tree that defines a real `dendro5` target; linking generated
 sources built against the mock types to the real host would be a silent type
 mismatch.
 
-### Scoped CI
+### No CI coverage yet
 
-The `dendro-validation` job generates the module, builds it under an optimized
-configuration with `-Wall -Wextra -Werror`, runs the ten self-tests, and runs
-the Minkowski lifecycle gates under two MPI ranks. It covers only what needs a
-compiler and an MPI runtime; the symbolic and emitted-source contracts run as
-owner doctests in the static-analysis job. See
-[Generated Project CI](../../validation/generated-project-ci.md) for the
-configured job map and what that job does not establish.
+Nothing in continuous integration exercises this module. The symbolic and
+emitted-source contracts run as owner doctests in the static-analysis job, but
+the generated self-tests and the Minkowski lifecycle are run by hand.
+
+A job that built the module against the mock host would establish only that the
+emitted C++ compiles: every numerical gate would be NRPy's own kernels checked
+against NRPy's own stub, which says nothing about the real target. The route
+that would prove something is a container image with Dendro precompiled,
+generating the module inside it, building against the real host, and evolving a
+small job whose results are checked. That waits on the pin and capability
+records below, so it is recorded as a deferral rather than approximated.
 
 ### Deferral gates
 
@@ -89,17 +93,17 @@ reader is not left inferring coverage from a green build.
 
 A passing CI run establishes that the generated module regenerates
 deterministically, compiles warning-free under an optimized build, satisfies its
-ten self-tests, and completes its Minkowski lifecycle across two ranks. What it
-does not establish is enumerated once, on
-[Generated Project CI](../../validation/generated-project-ci.md).
+ten self-tests, and completes its Minkowski lifecycle across two ranks. None of
+that touches the real Dendro-GR host, so it establishes nothing about behavior
+on the real target.
 
 Claim evidence:
-- Claim: a passing `dendro-validation` run establishes deterministic regeneration, a warning-free optimized build under `-Wall -Wextra -Werror`, ten passing generated self-tests, and a completed Minkowski lifecycle across two MPI ranks; it establishes neither pointwise agreement with another NRPy backend, nor Kreiss-Oliger emitted-source compilation, nor any behavior of the real Dendro-GR host.
-- Role: CI behavior
-- Deciding authority: `.github/workflows/main.yml`, job `dendro-validation`
-- Corroboration: `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in`, the registered `add_test` set; the tuple below records a local reproduction of that configured recipe, not a hosted-runner result
+- Claim: the generated project ships ten CTest cases and a Minkowski lifecycle whose gates cover constraint violation, perturbed-RHS response, observed convergence order and 100-step drift; they are run by hand against the mock host and no continuous-integration job executes them.
+- Role: descriptive behavior
+- Deciding authority: `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in`, the registered `add_test` set
+- Corroboration: `nrpy/infrastructures/Dendro/templates/fccz4_main_cpp.in`, the gate list in its header comment
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-05-2026`
 
 ## Sources
 
@@ -109,13 +113,12 @@ Claim evidence:
 - [dendrolib_capabilities.json](../../../nrpy/infrastructures/Dendro/dendrolib_capabilities.json) - `status`, `layout`, `padding`
 - [dendro_mock.hpp](../../../nrpy/infrastructures/Dendro/host_mock/dendro_mock.hpp) - mock host types for the generated module
 - [FCCZ4_GR_tests_CMakeLists.in](../../../nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in) - the registered `add_test` set
-- [main.yml](../../../.github/workflows/main.yml) - `dendro-validation`
 - [FCCZ4_GR_README_md.in](../../../nrpy/infrastructures/Dendro/templates/FCCZ4_GR_README_md.in) - `Deferred (recorded, not dropped)`
 
 ## See Also
 
 - Parent: [Dendro](index.md)
-- Validated by: [Generated Project CI](../../validation/generated-project-ci.md)
+- See also: [Generated Project CI](../../validation/generated-project-ci.md)
 - Depends on: [Lifecycle And Project Assembly](lifecycle-and-project-assembly.md)
 - Implements: [Code Test Policy](../../validation/code-test-policy.md)
 - See also: [Generated Backend Comparison](../../syntheses/generated-backend-comparison.md)
