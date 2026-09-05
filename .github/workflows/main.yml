@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: '47 4 1,15 * *'
 
+# No job in this workflow uses GITHUB_TOKEN; only actions/checkout needs the
+# repository contents, so the token is capped at read-only rather than
+# inheriting the repository default.
+permissions:
+  contents: read
+
 jobs:
   static-analysis:
     runs-on: ${{ matrix.os }}
@@ -571,3 +577,53 @@ jobs:
           (cd trusted_code/project/sebobv2 && make clean) &&
           (cd project/sebobv2 && make clean)
 
+  dendro-validation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # The generated FCCZ4_GR module is a build-and-run product: generation
+      # succeeding proves nothing about whether the emitted C++ compiles or
+      # whether the Minkowski lifecycle gates hold.  static-analysis already
+      # executes every owning module, so the symbolic and emitted-source
+      # contracts run there as owner doctests; this job covers only what needs
+      # a compiler and MPI.  The generated module uses CMake rather than a
+      # Makefile, so it cannot ride the codegen-* generate-and-make chain.
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get -y install ninja-build openmpi-bin libopenmpi-dev
+
+      - name: Generate the FCCZ4_GR module
+        run: PYTHONPATH=. python -m nrpy.examples.dendro_fccz4 --project-dir project/dendro_fccz4 --fd-order 4 --no-ko
+
+      - name: Build the generated project
+        # The generated module compiles with -Wall -Wextra -Werror, and an
+        # optimized build type is what exposes warnings the default
+        # unoptimized configuration cannot reach.
+        run: |
+          cmake -S project/dendro_fccz4/Dendro-GR/FCCZ4_GR -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          cmake --build build
+
+      - name: Run the generated self-tests
+        # --no-tests=error: bare ctest exits 0 when a project registers no
+        # tests at all, so without this the step could report green while
+        # validating nothing.
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+
+      - name: Run the Minkowski lifecycle gates under MPI
+        # The solver evolves 100 CFL-limited steps and gates on constraint
+        # violation, perturbed-RHS response, observed convergence order, and
+        # drift.  It exits non-zero when any gate fails, so no output parsing
+        # is needed here.  Real Dendro-GR host evolution stays gated behind the
+        # Dendrolib pin and capability records.
+        run: mpirun -n 2 --oversubscribe ./build/fccz4Solver

@@ -17,7 +17,7 @@
 | `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 390 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
-| `ci-and-local-automation` | CI and local automation files from `.github`, 4 files. | living | partial |
+| `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |
 
 ## Source Documents Moved Below Root
 
@@ -48,7 +48,6 @@ aggregate rows and `wiki/source-map.md`.
 | `.pylintrc_python36` | living |
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
-| `.github/workflows/dendro-fccz4-validation.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |

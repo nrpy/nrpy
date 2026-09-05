@@ -58,7 +58,7 @@ mismatch.
 
 ### Scoped CI
 
-The `dendro-fccz4` job generates the module, builds it under an optimized
+The `dendro-validation` job generates the module, builds it under an optimized
 configuration with `-Wall -Wextra -Werror`, runs the ten self-tests, and runs
 the Minkowski lifecycle gates under two MPI ranks. It covers only what needs a
 compiler and an MPI runtime; the symbolic and emitted-source contracts run as
@@ -94,9 +94,9 @@ does not establish is enumerated once, on
 [Generated Project CI](../../validation/generated-project-ci.md).
 
 Claim evidence:
-- Claim: a passing `dendro-fccz4` run establishes deterministic regeneration, a warning-free optimized build under `-Wall -Wextra -Werror`, ten passing generated self-tests, and a completed Minkowski lifecycle across two MPI ranks; it establishes neither pointwise agreement with another NRPy backend, nor Kreiss-Oliger emitted-source compilation, nor any behavior of the real Dendro-GR host.
+- Claim: a passing `dendro-validation` run establishes deterministic regeneration, a warning-free optimized build under `-Wall -Wextra -Werror`, ten passing generated self-tests, and a completed Minkowski lifecycle across two MPI ranks; it establishes neither pointwise agreement with another NRPy backend, nor Kreiss-Oliger emitted-source compilation, nor any behavior of the real Dendro-GR host.
 - Role: CI behavior
-- Deciding authority: `.github/workflows/dendro-fccz4-validation.yml`, job `dendro-fccz4`
+- Deciding authority: `.github/workflows/main.yml`, job `dendro-validation`
 - Corroboration: `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in`, the registered `add_test` set; the tuple below records a local reproduction of that configured recipe, not a hosted-runner result
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
 - Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
@@ -109,7 +109,7 @@ Claim evidence:
 - [dendrolib_capabilities.json](../../../nrpy/infrastructures/Dendro/dendrolib_capabilities.json) - `status`, `layout`, `padding`
 - [dendro_mock.hpp](../../../nrpy/infrastructures/Dendro/host_mock/dendro_mock.hpp) - mock host types for the generated module
 - [FCCZ4_GR_tests_CMakeLists.in](../../../nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in) - the registered `add_test` set
-- [dendro-fccz4-validation.yml](../../../.github/workflows/dendro-fccz4-validation.yml) - `dendro-fccz4`
+- [main.yml](../../../.github/workflows/main.yml) - `dendro-validation`
 - [FCCZ4_GR_README_md.in](../../../nrpy/infrastructures/Dendro/templates/FCCZ4_GR_README_md.in) - `Deferred (recorded, not dropped)`
 
 ## See Also
