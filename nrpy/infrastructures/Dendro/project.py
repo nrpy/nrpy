@@ -300,7 +300,7 @@ def _render_artifacts(snapshot: FrozenNRPyDendroSnapshot) -> Dict[str, str]:
     artifacts[module_prefix + "generated/include/fccz4_provenance.hpp"] = (
         gridfunction_output.render_fccz4_provenance_hpp(snapshot)
     )
-    artifacts |= CFunction_output.CFunction_artifacts(snapshot)
+    artifacts.update(CFunction_output.CFunction_artifacts(snapshot))
     artifacts[module_prefix + "generated/cmake/nrpy_generated_sources.cmake"] = (
         cmake.render_nrpy_generated_sources_cmake(snapshot)
     )
@@ -348,7 +348,7 @@ def _render_artifacts(snapshot: FrozenNRPyDendroSnapshot) -> Dict[str, str]:
     artifacts[module_prefix + "CMakeLists.txt"] = cmake.render_module_cmake(snapshot)
 
     # Manifests.
-    artifacts |= manifests.all_manifests(snapshot, _capabilities_text(snapshot))
+    artifacts.update(manifests.all_manifests(snapshot, _capabilities_text(snapshot)))
 
     # Project README.
     artifacts["README.md"] = _render_template("project_README_md.in", host_mapping)
