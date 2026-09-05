@@ -11,7 +11,7 @@ from . import (
     gridfunction_output,
     manifests,
     naming,
-    project,
+    output_project,
     registration,
     runtime,
     simple_loop,

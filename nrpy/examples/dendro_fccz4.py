@@ -47,7 +47,7 @@ from nrpy.infrastructures.Dendro.general_relativity import (
     projection,
     rhs_eval,
 )
-from nrpy.infrastructures.Dendro.project import output_project
+from nrpy.infrastructures.Dendro.output_project import output_project
 from nrpy.infrastructures.Dendro.runtime import parameters
 from nrpy.infrastructures.Dendro.transaction import (
     dendro_generation_transaction,

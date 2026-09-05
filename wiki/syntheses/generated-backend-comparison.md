@@ -44,7 +44,7 @@ Claim evidence:
 - Claim: Dendro's target translators read only a frozen snapshot, so apart from the designated generated-project self-test template no generated file introduces a state-field name or a formulation expression that was not registered first. Nothing cited here decides whether another backend family also freezes its registries.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/freeze.py`, `freeze_nrpy_dendro_environment`
-- Corroboration: `nrpy/infrastructures/Dendro/project.py`, module-docstring template policy and its designated self-test exception
+- Corroboration: `nrpy/infrastructures/Dendro/output_project.py`, module-docstring template policy and its designated self-test exception
 - Validation: `inspected=pass; generated=pass; built=not-run; run=not-run; result_checked=not-run`
 - Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3; backend=Dendro; precision=not-applicable; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
 
@@ -64,7 +64,7 @@ proves configured job shape, never latest successful execution.
 - [README.md](../../README.md) - `## Project Families and Example Generators`, `## What Gets Generated?`
 - [main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`, `einsteintoolkit-validation`, `charmpp-validation`, SEOB/SEBOB consistency jobs
 - [dendro-fccz4-validation.yml](../../.github/workflows/dendro-fccz4-validation.yml) - `dendro-fccz4`
-- [project.py](../../nrpy/infrastructures/Dendro/project.py) - `output_project`, template policy
+- [output_project.py](../../nrpy/infrastructures/Dendro/output_project.py) - `output_project`, template policy
 - [freeze.py](../../nrpy/infrastructures/Dendro/freeze.py) - `freeze_nrpy_dendro_environment`
 
 ## See Also

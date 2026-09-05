@@ -130,11 +130,11 @@ Claim evidence:
 - Claim: the exported module, its binaries, its manifests, and its installation receipt are generated products rather than source evidence, so citations name the Python generators and registry symbols instead of emitted files.
 - Role: normative rule
 - Deciding authority: `wiki/architecture/generated-output-boundaries.md`, `Summary` and `Detail`
-- Corroboration: `nrpy/infrastructures/Dendro/project.py`, `output_project` staged-write and banner behavior
+- Corroboration: `nrpy/infrastructures/Dendro/output_project.py`, `output_project` staged-write and banner behavior
 
 ## Sources
 
-- [project.py](../../../nrpy/infrastructures/Dendro/project.py) - module docstring template policy, `output_project`, `verify_generated_project`
+- [output_project.py](../../../nrpy/infrastructures/Dendro/output_project.py) - module docstring template policy, `output_project`, `verify_generated_project`
 - [transaction.py](../../../nrpy/infrastructures/Dendro/transaction.py) - `GenerationTransaction`, `dendro_generation_transaction`, `registry_digest`
 - [cmake.py](../../../nrpy/infrastructures/Dendro/cmake.py) - `render_module_cmake`, `render_nrpy_generated_sources_cmake`
 - [manifests.py](../../../nrpy/infrastructures/Dendro/manifests.py) - `all_manifests`, `render_stencils_json`, `render_receipt_json`

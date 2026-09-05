@@ -1,4 +1,4 @@
-# nrpy/infrastructures/Dendro/project.py
+# nrpy/infrastructures/Dendro/output_project.py
 """
 Pure project exporter for the generated Dendro fCCZ4 project.
 
@@ -557,7 +557,7 @@ def output_project(
     >>> from nrpy.infrastructures.Dendro.freeze import (
     ...     freeze_nrpy_dendro_environment,
     ... )
-    >>> from nrpy.infrastructures.Dendro import project as _proj
+    >>> from nrpy.infrastructures.Dendro import output_project as _proj
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _snapshot = _doctest_frozen_profile(freeze_nrpy_dendro_environment)
     >>> _root = tempfile.mkdtemp(prefix="dendro_export_doctest_")
