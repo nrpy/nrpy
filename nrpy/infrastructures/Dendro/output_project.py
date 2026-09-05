@@ -641,7 +641,8 @@ def output_project(
         # committing the staged directory).
         second = _render_artifacts(snapshot)
         for rel, text in sorted(second.items()):
-            staged_text = open(os.path.join(stage, rel), "r", encoding="utf-8").read()
+            with open(os.path.join(stage, rel), "r", encoding="utf-8") as handle:
+                staged_text = handle.read()
             if staged_text != text:
                 raise ValueError(
                     f"Staged file {rel} differs from a fresh in-memory render"

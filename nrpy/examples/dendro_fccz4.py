@@ -32,10 +32,13 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+# pylint: disable=unused-import
 import nrpy.finite_difference  # noqa: F401  (registers fd_order)
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.Dendro import generation_parameters  # noqa: F401
+from nrpy.infrastructures.Dendro import (  # noqa: F401
+    generation_parameters,
+)
 from nrpy.infrastructures.Dendro import registration as reg
 from nrpy.infrastructures.Dendro.freeze import (
     assert_mutable_registries_match,

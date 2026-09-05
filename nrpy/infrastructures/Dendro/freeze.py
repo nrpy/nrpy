@@ -719,6 +719,10 @@ def freeze_nrpy_dendro_environment(
         )
 
     # Step 7: Generation parameters (frozen copy, sorted).
+    # Imported here, not at module level: generation_parameters registers its
+    # CodeParameters at import time, so a module-level import would make merely
+    # importing freeze register them.
+    # pylint: disable=import-outside-toplevel
     from nrpy.infrastructures.Dendro.generation_parameters import (
         get_generation_parameter_view,
         validate_generation_parameters,
