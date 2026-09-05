@@ -1,15 +1,18 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 07-13-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 09-04-2026
 > Up: [Validation](index.md)
 
 ## Summary
 
-Workflow YAML configures seven jobs. Two generate/build standalone projects on
-Ubuntu and macOS; one builds and regression-tests ETLegacy thorns; one builds
-three Charm++/superB projects and runs one; two build/run trusted/current
-waveforms and compare output; one performs Python static analysis. These are
-configured cells, not latest-pass claims.
+Workflow YAML configures eight jobs across two workflow files. `main.yml`
+configures seven: two generate/build standalone projects on Ubuntu and macOS;
+one builds and regression-tests ETLegacy thorns; one builds three
+Charm++/superB projects and runs one; two build/run trusted/current waveforms
+and compare output; one performs Python static analysis. A separate
+`dendro-fccz4-validation.yml` configures one job that generates, builds, and
+runs the NRPy-generated Dendro fCCZ4 module. These are configured cells, not
+latest-pass claims.
 
 ## Detail
 
@@ -24,6 +27,7 @@ Configured GitHub job map:
 | `charmpp-validation` | Ubuntu 24.04, Apptainer image, paths pinned to Charm++ 8.0.0 | Generates and builds `superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and `superB_two_blackholes_collide` with `make -j2` | Runs only `./charmrun +p2 ./superB_two_blackholes_collide`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
 | `sebobv2-consistency-test` | Same Ubuntu matrix shape | Generates/builds trusted and current `sebobv2` at the same trusted commit | Runs one helper invocation with ten deterministic inputs and the same median-error criterion. |
+| `dendro-fccz4` | Ubuntu 24.04, one cell, `timeout-minutes: 30`; configured in `.github/workflows/dendro-fccz4-validation.yml`, not `main.yml` | Generates the Dendro fCCZ4 module with `nrpy.examples.dendro_fccz4 --fd-order 4 --no-ko`, then configures the generated `FCCZ4_GR` project with Ninja under `RelWithDebInfo` and builds it; the generated module compiles with `-Wall -Wextra -Werror` | Runs the generated project's ten CTest self-tests with `--no-tests=error`, then `mpirun -n 2 ./build/fccz4Solver`. The solver exits nonzero when any Minkowski lifecycle gate fails, so no stdout parsing is configured. |
 
 A successful named build can establish only named generation plus toolchain
 compile/link compatibility. Generation completion or file existence is not a
@@ -67,6 +71,13 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
+The Dendro job compiles only the `--no-ko`, fourth-order profile and builds
+against the generated mock host, so it establishes neither the Kreiss-Oliger
+emitted-source build, nor real Dendro-GR host integration, nor pointwise
+equivalence against a BHaH reference. Its symbolic and emitted-source contracts
+are owner doctests executed by `static-analysis`, so this job is configured to
+cover only what requires a compiler and an MPI runtime.
+
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
 any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
@@ -86,6 +97,7 @@ generated file has been deliberately registered as frozen evidence.
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebob-consistency-test`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `sebobv2-consistency-test`
+- [../../.github/workflows/dendro-fccz4-validation.yml](../../.github/workflows/dendro-fccz4-validation.yml) - `dendro-fccz4`
 - [../../README.md](../../README.md) - `## Project Families and Example Generators`
 - [../../README.md](../../README.md) - `## What Gets Generated?`
 - [../../nrpy/examples/tests/sebob_consistency_check.py](../../nrpy/examples/tests/sebob_consistency_check.py) - `calculate_rmse`

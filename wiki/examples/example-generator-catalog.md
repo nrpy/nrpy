@@ -5,7 +5,7 @@
 
 ## Summary
 
-This catalog is the inventory leaf for `nrpy/examples`. All 27 non-`__init__.py`
+This catalog is the inventory leaf for `nrpy/examples`. All 28 non-`__init__.py`
 top-level generators under `nrpy/examples/*.py` appear once below with their
 command shape, output family, prerequisite class, validation route or manual
 status, and owning detail page. Companion files under
@@ -49,6 +49,7 @@ Claim evidence:
 | `carpet_wavetoy_thorns.py` | `python -m nrpy.examples.carpet_wavetoy_thorns` | ETLegacy/Carpet WaveToyNRPy, IDWaveToyNRPy, and diagWaveToyNRPy thorns | Python for generation; Einstein Toolkit checkout for build/test | Configured `einsteintoolkit-validation` generation, ET build, and WaveToyNRPy regression testsuite | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_baikal_thorns.py` | `python -m nrpy.examples.carpetx_baikal_thorns` | CarpetX BaikalX and BaikalVacuumX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
 | `carpetx_wavetoy_thorns.py` | `python -m nrpy.examples.carpetx_wavetoy_thorns` | CarpetX WaveToyNRPyX, IDWaveToyNRPyX, and diagWaveToyNRPyX thorns | Python for generation; CarpetX/Einstein Toolkit environment for build/test | Local helper invokes generation but skips compile for every `carpet*` script; no configured CarpetX build/run | [Einstein Toolkit Thorn Generators](einstein-toolkit-thorn-generators.md) |
+| `dendro_fccz4.py` | `python -m nrpy.examples.dendro_fccz4 [--project-dir DIR] [--fd-order N] [--ko/--no-ko]` | Dendro `FCCZ4_GR` module under `project/<name>/Dendro-GR/`, with generated state and parameter headers, one source per registered CFunction, module CMake, JSON manifests, a parameter profile, self-tests, and rendered verifier and installer tools | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated module | `dendro-fccz4` CI job: generate, build under `-Wall -Wextra -Werror`, ten generated self-tests, two-rank MPI lifecycle | [Dendro](../infrastructures/dendro/index.md) |
 | `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and inspected CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `hydro_without_hydro.py` | `python -m nrpy.examples.hydro_without_hydro [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH static-fluid spacetime evolution project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures a CUDA build, but no runtime/result check | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C or CUDA toolchain, `make` | Manual/source-supported benchmark route | [Standalone GR/BHaH](standalone-gr-bhah.md) |
@@ -79,9 +80,11 @@ Companion groups:
 | `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plotter, light-blueprint schema, lensed-image renderer, image visualizer, and blueprint diagnostics | `trajectory.txt`, PNGs, downloaded textures, and `light_blueprint_*.zip` files stay artifacts | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/sebob*_consistency_check.py` | Current-vs-trusted waveform consistency scripts | Trusted/current generated executable directories and waveform stdout are run artifacts | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 
-Inventory disposition is exact for the current aggregate: 27 generators, five
-ET fixture files, five geodesic companion scripts, two waveform consistency
-helpers, and one excluded `__init__.py` total the registered 40-file aggregate.
+Inventory disposition covers 28 generators, five ET fixture files, five
+geodesic companion scripts, two waveform consistency helpers, and one excluded
+`__init__.py`. The registered aggregate count in [Sources](../../raw/SOURCES.md)
+predates unrelated repository drift and understates the tracked file set, so it
+is not restated as a total here; the examples owner re-audits it.
 The direct source rows in [Sources](../../raw/SOURCES.md) register the cited
 files. Aggregate status remains `partial` because file-set ownership does not by
 itself prove complete semantic reconciliation or future-file ingestion.

@@ -14,10 +14,10 @@
 | `helpers-package-modules` | Helper package files from `find nrpy/helpers -type f \( -name '*.py' -o -name '*.h' \)`, 21 files. | living | ingested |
 | `helpers-validation-and-reference-metric-tests` | Helpers, validation helpers, and reference metric tests from `nrpy/helpers`, `nrpy/validate_expressions`, and `nrpy/tests`, 38 files. | living | partial |
 | `equation-modules-and-trusted-values` | Equation modules, generated trusted-value files, and BOB test metadata from `nrpy/equations`: 339 Python files and `nrpy/equations/seobnr/tests/BOB_v2_fit_sim_list.md`, 340 files total. | living | partial |
-| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 365 files. | living | partial |
+| `infrastructure-modules-and-embedded-headers` | Infrastructure modules and embedded headers from `nrpy/infrastructures`, 390 files. | living | partial |
 | `carpetx-package-inventory` | CarpetX Python package inventory from `find nrpy/infrastructures/CarpetX -type f -name '*.py'`, 26 files. | living | ingested |
 | `example-generators-and-companion-scripts` | Example generators and companion scripts from `nrpy/examples`, 40 files. | living | partial |
-| `ci-and-local-automation` | CI and local automation files from `.github`, 3 files. | living | partial |
+| `ci-and-local-automation` | CI and local automation files from `.github`, 4 files. | living | partial |
 
 ## Source Documents Moved Below Root
 
@@ -48,6 +48,7 @@ aggregate rows and `wiki/source-map.md`.
 | `.pylintrc_python36` | living |
 | `.darglint` | living |
 | `.github/workflows/main.yml` | living |
+| `.github/workflows/dendro-fccz4-validation.yml` | living |
 | `.github/single_file_static_analysis.sh` | living |
 | `.github/full_nrpy_local_ci.sh` | living |
 | `bin/nrpyinline.py` | living |
@@ -209,6 +210,12 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/infrastructures/superB/superB/superB_pup.py` | living |
 | `nrpy/infrastructures/superB/superB/superB.h` | living |
 | `nrpy/infrastructures/superB/superB/superB_pup_function_prototypes.h` | living |
+| `nrpy/infrastructures/Dendro/ADR_dendro_names.md` | living |
+| `nrpy/infrastructures/Dendro/dendrolib_pin.json` | living |
+| `nrpy/infrastructures/Dendro/dendrolib_capabilities.json` | living |
+| `nrpy/infrastructures/Dendro/host_mock/dendro_mock.hpp` | living |
+| `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_README_md.in` | living |
+| `nrpy/infrastructures/Dendro/templates/FCCZ4_GR_tests_CMakeLists.in` | living |
 | `nrpy/tests/reference_metric_Cartesian.py` | living |
 | `nrpy/tests/reference_metric_Spherical.py` | living |
 | `nrpy/tests/reference_metric_GeneralRFM_fisheyeN2.py` | living |
@@ -251,6 +258,7 @@ aggregate rows and `wiki/source-map.md`.
 | `nrpy/examples/geodesic_visualizations/blueprint_analysis.py` | living |
 | `nrpy/examples/tests/sebob_consistency_check.py` | living |
 | `nrpy/examples/tests/sebobv2_consistency_check.py` | living |
+| `nrpy/examples/dendro_fccz4.py` | living |
 | `nrpy/equations/basis_transforms/jacobians.py` | living |
 | `nrpy/equations/basis_transforms/tests/jacobians_Cartesian.py` | living |
 | `nrpy/equations/basis_transforms/tests/jacobians_GeneralRFM_fisheyeN2.py` | living |
