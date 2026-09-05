@@ -133,6 +133,11 @@ There is no peer cross-critique phase. Root resolves differences directly agains
 
 ## Bind and validate a candidate cycle
 
+Two rules govern how a correction and its evidence are produced:
+
+- After accepting a finding, grep the pattern across the whole change rather than editing the cited line. A reviewer cites one instance of a defect; the correction owns every instance of it.
+- A mechanical check written to satisfy a review obligation must be demonstrated to fail on a known-bad input before its passing result is quoted as evidence. An unexercised checker proves nothing about the candidate.
+
 A candidate-review cycle binds one canonical candidate within the frozen scope round.
 
 For each cycle, root:
