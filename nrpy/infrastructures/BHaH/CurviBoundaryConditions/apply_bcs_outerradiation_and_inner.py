@@ -45,32 +45,26 @@ from nrpy.validate_expressions.validate_expressions import check_zero
 # r_and_partial_xi_partial_r_derivs(): Compute r(x0,x1,x2) and dx^i / dr
 def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
     CoordSystem: str,
-    cfunc_decorators: str = "",
 ) -> str:
     """
     Generate C code to compute the radial coordinate r(x0, x1, x2) and its derivatives.
 
     Compute the radial coordinate r(x0, x1, x2) and its partial derivatives
-    partial x^i / partial r for a given coordinate system.
+    partial x^i / partial r for a given coordinate system. This helper is called
+    only from bcstruct_set_up(), which is host code in all parallelizations, so
+    it unconditionally takes a params_struct.
 
     :param CoordSystem: The coordinate system for which to compute r and its derivatives.
-    :param cfunc_decorators: Optional decorators for CFunctions, e.g. CUDA identifiers, templates
     :return: A string containing the generated C code for the function.
     """
     desc = "Compute r(xx0,xx1,xx2) and partial_r x^i."
     cfunc_type = "static inline void"
     name = "r_and_partial_xi_partial_r_derivs"
-    parallelization = par.parval_from_str("parallelization")
     params = (
-        "const size_t streamid, const REAL xx0,const REAL xx1,const REAL xx2, REAL *r,"
-        "REAL *partial_x0_partial_r,REAL *partial_x1_partial_r,REAL *partial_x2_partial_r"
-        if parallelization == "cuda"
-        else "const params_struct *restrict params, const REAL xx0,const REAL xx1,const REAL xx2, REAL *r,"
+        "const params_struct *restrict params, const REAL xx0,const REAL xx1,const REAL xx2, REAL *r,"
         "REAL *partial_x0_partial_r,REAL *partial_x1_partial_r,REAL *partial_x2_partial_r"
     )
     body = ""
-    if parallelization == "cuda" and "device" not in cfunc_decorators:
-        cfunc_decorators += " __device__"
 
     rfm = refmetric.reference_metric[CoordSystem]
     # sp.simplify(expr) is too slow here for SinhCylindrical
@@ -112,7 +106,6 @@ def setup_Cfunction_r_and_partial_xi_partial_r_derivs(
         params=params,
         include_CodeParameters_h=False,
         body=body,
-        cfunc_decorators=cfunc_decorators,
     )
     return cf.full_function
 
@@ -395,10 +388,7 @@ def setup_Cfunction_radiation_bcs(
                 radiation_BC_fd_order=radiation_BC_fd_order,
                 rational_const_alias=rational_const_alias,
             )
-    prefunc += setup_Cfunction_r_and_partial_xi_partial_r_derivs(
-        CoordSystem=CoordSystem,
-        cfunc_decorators=cfunc_decorators,
-    )
+
     prefunc += setup_Cfunction_compute_partial_r_f(
         CoordSystem=CoordSystem,
         cfunc_decorators=cfunc_decorators,
@@ -413,14 +403,18 @@ def setup_Cfunction_radiation_bcs(
         const REAL *restrict gfs, REAL *restrict gfs_rhss,
         const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity,
         const int dest_i0,const int dest_i1,const int dest_i2,
-        const short FACEi0,const short FACEi1,const short FACEi2"""
+        const short FACEi0,const short FACEi1,const short FACEi2,
+        const REAL r, const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL partial_x2_partial_r,
+        const REAL r_int, const REAL partial_x0_partial_r_int, const REAL partial_x1_partial_r_int, const REAL partial_x2_partial_r_int"""
         if parallelization == "cuda"
         else """const params_struct *restrict params,
     REAL *restrict xx[3],
     const REAL *restrict gfs, REAL *restrict gfs_rhss,
     const int which_gf, const REAL gf_wavespeed, const REAL gf_f_infinity,
     const int dest_i0,const int dest_i1,const int dest_i2,
-    const short FACEi0,const short FACEi1,const short FACEi2"""
+    const short FACEi0,const short FACEi1,const short FACEi2,
+    const REAL r, const REAL partial_x0_partial_r, const REAL partial_x1_partial_r, const REAL partial_x2_partial_r,
+    const REAL r_int, const REAL partial_x0_partial_r_int, const REAL partial_x1_partial_r_int, const REAL partial_x2_partial_r_int"""
     )
 
     param_access = parallel_utils.get_params_access(parallelization)
@@ -428,12 +422,6 @@ def setup_Cfunction_radiation_bcs(
     body += f"{parallel_utils.get_loop_parameters(parallelization)}\n"
     body += r"""// Nearest "interior" neighbor of this gridpoint, based on current face
 const int dest_i0_int=dest_i0+1*FACEi0, dest_i1_int=dest_i1+1*FACEi1, dest_i2_int=dest_i2+1*FACEi2;
-REAL r, partial_x0_partial_r,partial_x1_partial_r,partial_x2_partial_r;
-REAL r_int, partial_x0_partial_r_int,partial_x1_partial_r_int,partial_x2_partial_r_int;
-r_and_partial_xi_partial_r_derivs(params,xx[0][dest_i0],xx[1][dest_i1],xx[2][dest_i2],
-                                  &r, &partial_x0_partial_r, &partial_x1_partial_r,  &partial_x2_partial_r);
-r_and_partial_xi_partial_r_derivs(params, xx[0][dest_i0_int], xx[1][dest_i1_int], xx[2][dest_i2_int],
-                                  &r_int, &partial_x0_partial_r_int, &partial_x1_partial_r_int, &partial_x2_partial_r_int);
 const REAL partial_r_f     = compute_partial_r_f(params,xx,gfs, which_gf,dest_i0,    dest_i1,    dest_i2,
                                                  FACEi0,FACEi1,FACEi2,
                                                  partial_x0_partial_r    ,partial_x1_partial_r    ,partial_x2_partial_r);
@@ -526,11 +514,21 @@ for (int idx2d = tid0; idx2d < num_pure_outer_boundary_points; idx2d+=stride0) {
     const short FACEX2 = pure_outer_bc_array[idx2d].FACEX2;
     const int idx3 = IDX3(i0,i1,i2);
     REAL* xx[3] = {x0, x1, x2};
+    const REAL r = pure_outer_bc_array[idx2d].r;
+    const REAL partial_x0_partial_r = pure_outer_bc_array[idx2d].partial_x0_partial_r;
+    const REAL partial_x1_partial_r = pure_outer_bc_array[idx2d].partial_x1_partial_r;
+    const REAL partial_x2_partial_r = pure_outer_bc_array[idx2d].partial_x2_partial_r;
+    const REAL r_int = pure_outer_bc_array[idx2d].r_int;
+    const REAL partial_x0_partial_r_int = pure_outer_bc_array[idx2d].partial_x0_partial_r_int;
+    const REAL partial_x1_partial_r_int = pure_outer_bc_array[idx2d].partial_x1_partial_r_int;
+    const REAL partial_x2_partial_r_int = pure_outer_bc_array[idx2d].partial_x2_partial_r_int;
     for (int which_gf = 0; which_gf < NUM_EVOL_GFS; which_gf++) {
         // *** Apply radiation BCs to all outer boundary points. ***
         rhs_gfs[IDX4pt(which_gf, idx3)] = radiation_bcs(params, xx, gfs, rhs_gfs, which_gf,
                                                         custom_wavespeed[which_gf], custom_f_infinity[which_gf],
-                                                        i0,i1,i2, FACEX0,FACEX1,FACEX2);
+                                                        i0,i1,i2, FACEX0,FACEX1,FACEX2,
+                                                        r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r,
+                                                        r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int);
     }
   }
 """.replace("params,", "streamid," if parallelization == "cuda" else "params,").replace(
