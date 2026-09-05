@@ -21,7 +21,7 @@ Author: Zachariah B. Etienne
 """
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 
 import sympy as sp
 
@@ -31,9 +31,12 @@ from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.fCCZ4_system import (
     build_fccz4_expression_bundle,
 )
-from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters, naming
+from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters
+from nrpy.infrastructures.Dendro import kernel_lowering as kl
+from nrpy.infrastructures.Dendro import naming
 from nrpy.infrastructures.Dendro import registration as reg
 from nrpy.infrastructures.Dendro.block_loop import block_loop
+from nrpy.infrastructures.Dendro.naming import tensor_family_of
 from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
     simple_loop,
@@ -45,8 +48,6 @@ CONSTRAINTS_GLOBAL_CFUNCTION = "fccz4_constraints"
 
 # NRPy variance letters: an exact tensor-component name ends with a run of
 # these followed by one index digit per letter.
-_VARIANCE_LETTERS = frozenset({"U", "D"})
-_INDEX_DIGITS = "0123456789"
 
 
 @dataclass(frozen=True)
@@ -64,40 +65,6 @@ class FCCZ4DiagnosticsBuild:
     block_params: str
     global_body: str
     global_params: str
-
-
-def tensor_family_of(name: str) -> Optional[Tuple[str, int]]:
-    """
-    Split an exact NRPy name into its tensor family and rank, if it has one.
-
-    A component name ends with a variance run (``U``/``D``) followed by one
-    index digit per variance letter, so ``Z4constraintU0`` is component 0 of the
-    rank-1 family ``Z4constraintU`` while ``H_Z4`` is a scalar whose name merely
-    ends in a digit.  Plain string methods decide this, so no regular
-    expression is needed.
-
-    :param name: Exact registered or factory-supplied name.
-    :return: ``(family, rank)`` for a tensor component, or None for a scalar.
-
-    Doctests:
-    >>> tensor_family_of("Z4constraintU0")
-    ('Z4constraintU', 1)
-    >>> tensor_family_of("hDD01")
-    ('hDD', 2)
-    >>> print(tensor_family_of("H_Z4"))
-    None
-    >>> print(tensor_family_of("alpha"))
-    None
-    """
-    index_run = len(name) - len(name.rstrip(_INDEX_DIGITS))
-    if index_run == 0:
-        return None
-    family = name[: len(name) - index_run]
-    if len(family) <= index_run:
-        return None
-    if not set(family[-index_run:]) <= _VARIANCE_LETTERS:
-        return None
-    return family, index_run
 
 
 def build_diagnostics(
@@ -234,9 +201,7 @@ def build_diagnostics(
         fp_type_alias=scalar_type,
         verbose=False,
     )
-    accessed = {
-        str(symbol) for name in written for symbol in expressions[name].free_symbols
-    } & set(gri.glb_gridfcs_dict)
+    accessed = kl.accessed_gridfunctions(expressions[name] for name in written)
     unexpected = sorted(accessed - set(evol_order))
     if unexpected:
         raise ValueError(

@@ -11,12 +11,51 @@ Author: Zachariah B. Etienne
 """
 
 import re
+from typing import Optional, Tuple
 
 _C_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 # NRPy RHS naming convention: <base>_rhs<suffix>, where the optional suffix
 # carries the tensor-variance and component indices (e.g., "DD12", "U0").
 _RHS_RE = re.compile(r"^(?P<base>.+)_rhs(?P<suffix>(?:[UD]+[0-9]+)?)$")
+
+
+_VARIANCE_LETTERS = frozenset({"U", "D"})
+_INDEX_DIGITS = "0123456789"
+
+
+def tensor_family_of(name: str) -> Optional[Tuple[str, int]]:
+    """
+    Split an exact NRPy name into its tensor family and rank, if it has one.
+
+    A component name ends with a variance run (``U``/``D``) followed by one
+    index digit per variance letter, so ``Z4constraintU0`` is component 0 of the
+    rank-1 family ``Z4constraintU`` while ``H_Z4`` is a scalar whose name merely
+    ends in a digit.  Plain string methods decide this, so no regular
+    expression is needed.
+
+    :param name: Exact registered or factory-supplied name.
+    :return: ``(family, rank)`` for a tensor component, or None for a scalar.
+
+    Doctests:
+    >>> tensor_family_of("Z4constraintU0")
+    ('Z4constraintU', 1)
+    >>> tensor_family_of("hDD01")
+    ('hDD', 2)
+    >>> print(tensor_family_of("H_Z4"))
+    None
+    >>> print(tensor_family_of("alpha"))
+    None
+    """
+    index_run = len(name) - len(name.rstrip(_INDEX_DIGITS))
+    if index_run == 0:
+        return None
+    family = name[: len(name) - index_run]
+    if len(family) <= index_run:
+        return None
+    if not set(family[-index_run:]) <= _VARIANCE_LETTERS:
+        return None
+    return family, index_run
 
 
 def validate_cpp_identifier(name: str) -> str:

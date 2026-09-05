@@ -28,26 +28,20 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
-
-import sympy as sp
+from typing import Tuple
 
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.fCCZ4_system import (
     build_fccz4_expression_bundle,
 )
-from nrpy.finite_difference import compute_fdcoeffs_fdstencl
 from nrpy.infrastructures.Dendro import generation_parameters  # noqa: F401
-from nrpy.infrastructures.Dendro import Dendro_state_h, naming
+from nrpy.infrastructures.Dendro import kernel_lowering as kl
+from nrpy.infrastructures.Dendro import naming
 from nrpy.infrastructures.Dendro import registration as reg
 from nrpy.infrastructures.Dendro.block_loop import block_loop
-from nrpy.infrastructures.Dendro.simple_loop import (
-    require_serial_parallelization,
-    simple_loop,
-)
+from nrpy.infrastructures.Dendro.simple_loop import require_serial_parallelization
 
 # The per-block CFunction name (the Dendro scheduling role key).
 RHS_BLOCK_CFUNCTION = "fccz4_rhs_block"
@@ -57,25 +51,6 @@ RHS_GLOBAL_CFUNCTION = "fccz4_rhs"
 
 # LTS flat-block adapter CFunction name (same numerical body, flat layout).
 FLAT_BLOCK_CFUNCTION = "fccz4_rhs_flat_block"
-
-# Finite-difference operator families emitted by c_codegen.  Field names use
-# uppercase ``DD`` / ``U`` components, so these lowercase tokens identify
-# derivative operators unambiguously.  The digit run that follows is
-# ``<tensor component indices><derivative direction indices>`` -- e.g.
-# ``hDD_dDD0112`` is the mixed second derivative in directions (1, 2) of the
-# component (0, 1) -- so the run must be matched in full (``\d+``) and the
-# *trailing* index/indices taken as the direction.  Matching only one or two
-# digits made every derivative of a rank-1 or rank-2 field invisible and
-# recorded a rank-1 first derivative under its component index instead of its
-# direction.
-_OPERATOR_RE = re.compile(r"_(dD|dDD|dupD|ddnD|dKOD|dfullupD|dfulldnD)(\d+)\b")
-
-# Families carrying a single direction index; the rest carry two.  The
-# classification matches nrpy/finite_difference.py, where `dfullupD` and
-# `dfulldnD` are first-derivative (single-direction) operators.
-_SINGLE_DIRECTION_FAMILIES = frozenset(
-    {"dD", "dupD", "ddnD", "dKOD", "dfullupD", "dfulldnD"}
-)
 
 
 @dataclass(frozen=True)
@@ -105,190 +80,6 @@ class FCCZ4RHSBuild:
     global_params: str
     flat_block_body: str
     flat_block_params: str
-
-
-def _cparam_args(used_codeparameters: Tuple[str, ...], scalar_type: str) -> str:
-    """
-    Build the trailing ``const <scalar> <cp>, ...`` parameter list.
-
-    :param used_codeparameters: CodeParameter names to add.
-    :param scalar_type: The registered Dendro scalar alias.
-    :return: Comma-joined parameter declarations (no leading comma).
-    """
-    return ", ".join(f"const {scalar_type} {name}" for name in used_codeparameters)
-
-
-def _cparam_values(used_codeparameters: Tuple[str, ...]) -> str:
-    """
-    Build the argument-forwarding list for the used CodeParameters.
-
-    :param used_codeparameters: CodeParameter names to forward.
-    :return: Comma-joined name list (no trailing comma).
-    """
-    return ", ".join(used_codeparameters)
-
-
-def _by_position(_name: str, position: int) -> str:
-    """
-    Return the registered registry position as the component index expression.
-
-    The mock-vehicle translation units compile the kernels without the
-    generated state header, so the bindings use the integer registry position
-    rather than ``to_index(EvolVar::…)``; both orderings come from the same
-    NRPy list.
-
-    :param _name: Exact gridfunction name (unused; the index is positional).
-    :param position: Position in the registered EVOL order.
-    :return: The component index expression.
-    """
-    return str(position)
-
-
-def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> str:
-    """
-    Emit the per-field input and RHS pointer bindings for the block layout.
-
-    The bindings are rendered by the single shared emitter
-    (:func:`nrpy.infrastructures.Dendro.Dendro_state_h.output_component_bindings`)
-    from the registry order, so no field name is hardcoded and the roles and
-    per-component base offset cannot drift from the state-header renderer.
-    Every binding adds ``geom.component_offset``: the
-    pointer arrays are allocation-relative, so a nonzero per-component base
-    must be applied or multi-block layouts read the wrong component.
-
-    :param evol_order: The 25 EVOL names, in registry order.
-    :param scalar_type: The registered Dendro scalar alias.
-    :return: The binding statements.
-    """
-    return (
-        Dendro_state_h.output_component_bindings(
-            evol_order,
-            scalar_type,
-            array="in_gfs",
-            role=naming.input_pointer,
-            const_pointee=True,
-            index_expression=_by_position,
-        )
-        + "\n"
-        + Dendro_state_h.output_component_bindings(
-            evol_order,
-            scalar_type,
-            array="rhs_gfs",
-            role=naming.rhs_pointer,
-            const_pointee=False,
-            index_expression=_by_position,
-        )
-    )
-
-
-def _flat_block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> str:
-    """
-    Emit the per-field bindings for the LTS flat-block layout.
-
-    In this layout field ``f`` occupies
-    ``in_gfs_flat + f * (nx * ny * nz)``.  Extents are hoisted into a
-    ``ptrdiff_t`` local and the per-component base
-    ``geom.component_offset`` is applied exactly as in the block layout; the
-    same shared emitter renders both layouts.
-
-    :param evol_order: The 25 EVOL names, in registry order.
-    :param scalar_type: The registered Dendro scalar alias.
-    :return: The binding statements.
-    """
-    return "\n".join(
-        [
-            "const std::ptrdiff_t vol = static_cast<std::ptrdiff_t>(geom.nx)"
-            " * geom.ny * geom.nz;",
-            Dendro_state_h.output_component_bindings(
-                evol_order,
-                scalar_type,
-                array="in_gfs_flat",
-                role=naming.input_pointer,
-                const_pointee=True,
-                index_expression=_by_position,
-                flat_stride="vol",
-            ),
-            Dendro_state_h.output_component_bindings(
-                evol_order,
-                scalar_type,
-                array="rhs_gfs_flat",
-                role=naming.rhs_pointer,
-                const_pointee=False,
-                index_expression=_by_position,
-                flat_stride="vol",
-            ),
-        ]
-    )
-
-
-def _point_loop(kernel: str) -> str:
-    """
-    Wrap the point kernel in the NRPy Dendro interior point loop.
-
-    :param kernel: The c_codegen point kernel.
-    :return: The interior-loop-wrapped body.
-    """
-    return simple_loop(
-        kernel,
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="geom.padding",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
-
-
-def _emitted_operators(kernel: str, fd_order: int) -> List[Dict[str, Any]]:
-    """
-    Derive the derivative operators the emitted kernel actually contains.
-
-    The families are scanned from the generated code itself, and each
-    operator's exact rational stencil comes from the same coefficient source
-    the kernel was lowered with, so this is not a second stencil model.
-
-    :param kernel: The emitted point kernel.
-    :param fd_order: The finite-difference order.
-    :return: One record per distinct operator: name, order, exact rational
-        coefficient strings, signed offsets, and per-axis and total reach.
-    :raises ValueError: If a derivative token in the kernel is malformed.
-    """
-    operators: List[Tuple[str, str, str]] = []
-    for match in _OPERATOR_RE.finditer(kernel):
-        base = match.group(1)
-        idx = match.group(2)
-        directions = idx[-1] if base in _SINGLE_DIRECTION_FAMILIES else idx[-2:]
-        if len(directions) != (1 if base in _SINGLE_DIRECTION_FAMILIES else 2):
-            raise ValueError(
-                f"Malformed derivative token {base}{idx} in the emitted kernel."
-            )
-        derivstring = f"{base}{directions}"
-        if derivstring not in {op[0] for op in operators}:
-            operators.append((derivstring, base, directions))
-    operator_records = []
-    for derivstring, _base, _idx in operators:
-        # Pass the raw fd_order: compute_fdcoeffs_fdstencl applies the
-        # +2 for dKOD internally (exactly as c_codegen lowers the kernel),
-        # so this reproduces the operator offsets one coefficient source
-        # (not a second stencil generator).
-        coeffs, stencils = compute_fdcoeffs_fdstencl(derivstring, fd_order)
-        max_offset = 0
-        per_axis = [0, 0, 0]
-        for stencil in stencils:
-            for axis, step in enumerate(stencil):
-                per_axis[axis] = max(per_axis[axis], abs(step))
-                max_offset = max(max_offset, abs(step))
-        operator_records.append(
-            {
-                "operator": derivstring,
-                "fd_order": fd_order,
-                "coefficients": [str(coeff) for coeff in coeffs],
-                "offsets": [list(stencil) for stencil in stencils],
-                "max_offset_per_axis": per_axis,
-                "max_offset": max_offset,
-            }
-        )
-    return operator_records
 
 
 def build_fccz4_rhs(
@@ -408,11 +199,8 @@ def build_fccz4_rhs(
     # shared factory's upwind control vector (e.g. vetU0/1/2 for the
     # canonical fCCZ4 profile).  Derived, not hardcoded, so a Gate 4 harness
     # can drive positive/negative/zero control on exactly these fields.
-    _control_symbols = set()
-    for _component in bundle.upwind_control_vec:
-        _control_symbols |= set(sp.sympify(str(_component)).free_symbols)
-    upwind_control_fields = tuple(
-        name for name in evol_order if sp.Symbol(name) in _control_symbols
+    upwind_control_fields = kl.upwind_control_fields(
+        bundle.upwind_control_vec, evol_order
     )
     par.set_parval_from_str("fd_order", fd_order)
     # Both scalar spellings come from the registries,
@@ -443,21 +231,18 @@ def build_fccz4_rhs(
     # contain is exact; scanning the emitted C text for names is not.  Sorted
     # for a deterministic CFunction parameter order (the caller forwards the
     # values in this order).
-    free_symbol_names = {
-        str(symbol)
-        for expr in bundle.rhs_by_symbol_name.values()
-        for symbol in expr.free_symbols
-    }
-    used_codeparameters = tuple(
-        sorted(free_symbol_names & set(par.glb_code_params_dict))
-    )
-    point_loop_body = _point_loop(kernel)
+    used_codeparameters = kl.used_codeparameters(bundle.rhs_by_symbol_name.values())
+    point_loop_body = kl.point_loop(kernel)
     block_body = (
-        _block_pointer_bindings(evol_order, fp_type_alias) + "\n" + point_loop_body
+        kl.block_pointer_bindings(evol_order, fp_type_alias) + "\n" + point_loop_body
     )
     global_body = block_loop(
         f"{RHS_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, rhs_gfs"
-        + (f", {_cparam_values(used_codeparameters)}" if used_codeparameters else "")
+        + (
+            f", {kl.cparam_arguments(used_codeparameters)}"
+            if used_codeparameters
+            else ""
+        )
         + ");",
         num_blocks="world.num_blocks",
     )
@@ -466,10 +251,10 @@ def build_fccz4_rhs(
     # registered block kernel.  There is exactly one numerical body, so the
     # two paths cannot diverge.
     flat_call_args = (
-        f", {_cparam_values(used_codeparameters)}" if used_codeparameters else ""
+        f", {kl.cparam_arguments(used_codeparameters)}" if used_codeparameters else ""
     )
     flat_block_body = (
-        _flat_block_pointer_bindings(evol_order, fp_type_alias)
+        kl.flat_block_pointer_bindings(evol_order, fp_type_alias)
         + f"\nconst {fp_type_alias}* const in_gfs_call[] = {{"
         + ", ".join(naming.input_pointer(name) for name in evol_order)
         + f"}};\n{fp_type_alias}* rhs_gfs_call[] = {{"
@@ -477,7 +262,7 @@ def build_fccz4_rhs(
         + "};\n"
         + f"{RHS_BLOCK_CFUNCTION}(geom, in_gfs_call, rhs_gfs_call{flat_call_args});\n"
     )
-    cparam_args = _cparam_args(used_codeparameters, fp_type_alias)
+    cparam_args = kl.cparam_declarations(used_codeparameters, fp_type_alias)
     block_params = (
         f"const BlockGeometry& geom, const {fp_type_alias}* const* in_gfs, "
         f"{fp_type_alias}* const* rhs_gfs" + (f", {cparam_args}" if cparam_args else "")
@@ -496,21 +281,12 @@ def build_fccz4_rhs(
         f"{fp_type_alias}* const rhs_gfs_flat"
         + (f", {cparam_args}" if cparam_args else "")
     )
-    emitted_operators = _emitted_operators(kernel, fd_order)
-    per_axis = [0, 0, 0]
-    for record in emitted_operators:
-        for axis, reach in enumerate(record["max_offset_per_axis"]):
-            per_axis[axis] = max(per_axis[axis], int(reach))
-    padding = (per_axis[0], per_axis[1], per_axis[2])
-    if min(padding) < 1:
-        raise ValueError(
-            f"The emitted kernel needs no ghost points ({padding}); a "
-            "direct-FD RHS must read neighbours on every axis."
-        )
+    operator_records = kl.emitted_operators(kernel, fd_order)
+    padding = kl.padding_from_operators(operator_records)
     # Single KO ownership: dKOD operators are present in the emitted kernel if
     # and only if Kreiss-Oliger dissipation was requested.
     if (
-        any(record["operator"].startswith("dKOD") for record in emitted_operators)
+        any(record["operator"].startswith("dKOD") for record in operator_records)
         != enable_KreissOliger_dissipation
     ):
         raise ValueError(

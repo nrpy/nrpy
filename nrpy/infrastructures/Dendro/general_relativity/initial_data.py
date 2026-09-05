@@ -383,20 +383,24 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
         targets[str(Bq.vetU[i])] = adm.vetU[i]
         targets[str(Bq.betU[i])] = adm.betU[i]
 
-    # Step 2: The one evolved field the conversion neither defines nor leaves
-    # to the connection pass is the Z4 scalar, which constraint-satisfying
-    # source data sets to zero.  It is identified by set
-    # difference rather than by name.
+    # Step 2: Any evolved field the conversion neither defines nor leaves to
+    # the connection pass is a constraint quantity that constraint-satisfying
+    # source data sets to zero -- the Z4 scalar in the fCCZ4 profile, and
+    # nothing at all in BSSN.  The residual is identified by set difference
+    # rather than by name, so a formulation with a different constraint set
+    # needs no change here.
     connection = {str(Bq.lambdaU[i]) for i in range(3)}
     residual = [
         name for name in evol_order if name not in targets and name not in connection
     ]
-    if len(residual) != 1:
+    if len(residual) > 1:
         raise ValueError(
-            "The ADM conversion must leave exactly one evolved field (the Z4 "
-            f"scalar) to be zeroed, found {residual}."
+            "The ADM conversion left more than one evolved field undefined; a "
+            "constraint-satisfying conversion zeroes at most the formulation's "
+            f"constraint scalar, but found {residual}."
         )
-    targets[residual[0]] = sp.sympify(0)
+    for name in residual:
+        targets[name] = sp.sympify(0)
     missing = sorted(set(evol_order) - set(targets) - connection)
     if missing:
         raise ValueError(f"ADM conversion leaves evolved fields undefined: {missing}.")
