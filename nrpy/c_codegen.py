@@ -445,6 +445,7 @@ def c_codegen(
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
+            fp_type_alias=CCGParams.fp_type_alias,
             rational_const_alias=CCGParams.rational_const_alias,
         )
 
