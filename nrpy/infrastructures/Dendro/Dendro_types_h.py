@@ -79,8 +79,6 @@ struct ProjectionStatus {{
   long long first_failing_index = -1;
   // Registry position of the first nonfinite input field there, or -1.
   int first_failing_field = -1;
-  // Registered floors applied at this profile (none are registered yet).
-  int floors_applied = 0;
 }};  // END STRUCT: projection status record
 
 [[nodiscard]] inline bool projection_failed(

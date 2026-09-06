@@ -18,8 +18,12 @@ from typing import Any, Dict, Iterable, List, Sequence, Set, Tuple
 import sympy as sp
 
 import nrpy.grid as gri
-import nrpy.params as par
-from nrpy.finite_difference import compute_fdcoeffs_fdstencl
+from nrpy.finite_difference import (
+    compute_fdcoeffs_fdstencl,
+    extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars,
+    extract_list_of_deriv_var_strings_from_sympyexpr_list,
+)
+from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
 from nrpy.infrastructures.Dendro import Dendro_state_h, naming
 from nrpy.infrastructures.Dendro.simple_loop import simple_loop
 
@@ -40,14 +44,6 @@ _OPERATOR_RE = re.compile(r"_(dD|dDD|dupD|ddnD|dKOD|dfullupD|dfulldnD)(\d+)\b")
 # `dfulldnD` are first-derivative (single-direction) operators.
 _SINGLE_DIRECTION_FAMILIES = frozenset(
     {"dD", "dupD", "ddnD", "dKOD", "dfullupD", "dfulldnD"}
-)
-
-# A derivative symbol as c_codegen names it: <family>_<op><digits>, where the
-# digit run carries the tensor component indices followed by the derivative
-# direction indices.
-_DERIVATIVE_SYMBOL_RE = re.compile(
-    r"^(?P<family>.+)_(?P<op>dD|dDD|dupD|ddnD|dKOD|dfullupD|dfulldnD)"
-    r"(?P<digits>[0-9]+)$"
 )
 
 
@@ -94,61 +90,56 @@ def used_codeparameters(expressions: Iterable[sp.Expr]) -> Tuple[str, ...]:
     :param expressions: The lowered expressions.
     :return: Registered CodeParameter names, sorted.
     """
-    free_symbol_names = {
-        str(symbol) for expr in expressions for symbol in expr.free_symbols
-    }
-    return tuple(sorted(free_symbol_names & set(par.glb_code_params_dict)))
-
-
-def base_gridfunction_of(symbol_name: str) -> str:
-    """
-    Return the gridfunction a symbol reads, resolving derivative symbols.
-
-    ``c_codegen`` names a derivative ``<family>_<op><component><direction>``,
-    so a kernel that only differentiates a field never mentions the field's own
-    symbol.  Intersecting raw free symbols with the registry therefore misses
-    it, and the emitted kernel then reads a pointer nothing bound.
-
-    :param symbol_name: A free-symbol name from a lowered expression.
-    :return: The registered gridfunction name, or the input unchanged when the
-        symbol is not a derivative.
-
-    Doctests:
-    >>> base_gridfunction_of("lambdaU_dD00")
-    'lambdaU0'
-    >>> base_gridfunction_of("hDD_dDD0112")
-    'hDD01'
-    >>> base_gridfunction_of("alpha_dupD2")
-    'alpha'
-    >>> base_gridfunction_of("cf")
-    'cf'
-    """
-    match = _DERIVATIVE_SYMBOL_RE.match(symbol_name)
-    if match is None:
-        return symbol_name
-    family, operator, digits = match.group("family", "op", "digits")
-    directions = 1 if operator in _SINGLE_DIRECTION_FAMILIES else 2
-    if len(digits) < directions:
-        return symbol_name
-    return family + digits[: len(digits) - directions]
+    param_symbols, commondata_symbols = get_params_commondata_symbols_from_expr_list(
+        list(expressions)
+    )
+    return tuple(sorted(param_symbols + commondata_symbols))
 
 
 def accessed_gridfunctions(expressions: Iterable[sp.Expr]) -> Set[str]:
     """
     Return the registered gridfunctions the expressions read.
 
-    Derivative symbols are resolved back to the field they differentiate, so a
-    kernel that only differentiates a field still reports it.
+    ``c_codegen`` names a derivative ``<field>_<op><component><direction>``, so
+    a kernel that only differentiates a field never mentions the field's own
+    symbol.  Intersecting raw free symbols with the registry therefore misses
+    it, and the emitted kernel then reads a pointer nothing bound.  The
+    canonical NRPy derivative extraction resolves each derivative symbol back
+    to the field it differentiates, and the result is unioned with the fields
+    the expressions read directly.
+
+    The canonical extraction recognizes the ``_dD``, ``_dDD``, ``_dKOD``,
+    ``_dupD`` and ``_ddnD`` families.  It does not recognize ``_dfullupD`` or
+    ``_dfulldnD``; no Dendro formulation emits those, and ``emitted_operators``
+    below covers them when scanning emitted C text for the padding derivation.
 
     :param expressions: The lowered expressions.
     :return: Registered gridfunction names the expressions read.
+
+    Doctests:
+    >>> import nrpy.indexedexp as ixp
+    >>> import nrpy.params as par
+    >>> gri.glb_gridfcs_dict.clear()
+    >>> par.set_parval_from_str("Infrastructure", "Dendro")
+    >>> _ = gri.register_gridfunctions_for_single_rank1("lambdaU", group="EVOL")
+    >>> _ = gri.register_gridfunctions("cf", group="EVOL")
+    >>> lambdaU_dD = ixp.declarerank2("lambdaU_dD")
+    >>> cf_sym = sp.Symbol("cf")
+    >>> sorted(accessed_gridfunctions([lambdaU_dD[0][1] + cf_sym]))
+    ['cf', 'lambdaU0']
+    >>> gri.glb_gridfcs_dict.clear()
     """
-    names = {
-        base_gridfunction_of(str(symbol))
-        for expr in expressions
-        for symbol in expr.free_symbols
-    }
-    return names & set(gri.glb_gridfcs_dict)
+    free_symbols: List[sp.Basic] = []
+    for expr in expressions:
+        free_symbols.extend(expr.free_symbols)
+    deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(
+        free_symbols, "unset"
+    )
+    base_gridfunctions, _deriv_operators = (
+        extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(deriv_vars)
+    )
+    directly_read = {str(symbol) for symbol in free_symbols}
+    return (set(base_gridfunctions) | directly_read) & set(gri.glb_gridfcs_dict)
 
 
 def _by_position(_name: str, position: int) -> str:
@@ -209,13 +200,26 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
     Emit the per-field bindings for the local-time-stepping flat-block layout.
 
     In this layout field ``f`` occupies ``in_gfs_flat + f * (nx * ny * nz)``.
-    Extents are hoisted into a ``ptrdiff_t`` local and the per-component base
-    ``geom.component_offset`` is applied exactly as in the block layout; the
-    same shared emitter renders both layouts.
+    Extents are hoisted into a ``ptrdiff_t`` local and the same shared emitter
+    renders both layouts.
+
+    ``geom.component_offset`` is deliberately *not* applied here.  The adapter
+    forwards these pointers together with the unchanged ``geom`` to the
+    per-block kernel, whose own bindings apply the offset; applying it in both
+    places addressed ``base + f * vol + 2 * component_offset``, so a nonzero
+    offset read and wrote the wrong cells and could run past the allocation.
+    The single per-block numerical body owns the offset.
 
     :param evol_order: The EVOL names, in registry order.
     :param scalar_type: The registered Dendro scalar alias.
     :return: The binding statements.
+
+    Doctests:
+    >>> bindings = flat_block_pointer_bindings(("aa", "bb"), "DendroScalar")
+    >>> print(bindings.splitlines()[1])
+    const DendroScalar* const in_aa = in_gfs_flat + static_cast<std::ptrdiff_t>(0) * vol;
+    >>> "geom.component_offset" in bindings
+    False
     """
     return "\n".join(
         [
@@ -228,6 +232,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
                 role=naming.input_pointer,
                 const_pointee=True,
                 index_expression=_by_position,
+                base_offset=None,
                 flat_stride="vol",
             ),
             Dendro_state_h.output_component_bindings(
@@ -237,6 +242,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
                 role=naming.rhs_pointer,
                 const_pointee=False,
                 index_expression=_by_position,
+                base_offset=None,
                 flat_stride="vol",
             ),
         ]

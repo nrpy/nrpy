@@ -45,10 +45,6 @@ class FCCZ4ExpressionBundle:
         right-hand side, gauge and optional terms included.
     :param upwind_control_vec: Upwind control vector (beta^i) used by NRPy
         finite-difference upwinding.
-    :param projection_by_gridfunction_name: Algebraic projection expressions
-        keyed by EVOL gridfunction name.  Empty until the PR8/9 projection
-        profile qualifies its own closure, fingerprint, hashes, and tests
-        (whitepaper section 10.4: each feature is a separate profile).
     :param diagnostics_by_name: Diagnostic expressions keyed by diagnostic
         name (``H_Z4`` and ``Z4constraintU0..2`` from the registered
         constraint factory).  Empty unless ``enable_diagnostics`` was set.
@@ -59,7 +55,6 @@ class FCCZ4ExpressionBundle:
 
     rhs_by_symbol_name: Mapping[str, sp.Expr]
     upwind_control_vec: Tuple[sp.Expr, sp.Expr, sp.Expr]
-    projection_by_gridfunction_name: Mapping[str, sp.Expr]
     diagnostics_by_name: Mapping[str, sp.Expr]
     provenance_files: Tuple[str, ...]
 
@@ -353,7 +348,6 @@ def build_fccz4_expression_bundle(
     return FCCZ4ExpressionBundle(
         rhs_by_symbol_name=local_RHSs_varname_to_expr_dict,
         upwind_control_vec=(betaU[0], betaU[1], betaU[2]),
-        projection_by_gridfunction_name={},
         diagnostics_by_name=diagnostics,
         provenance_files=tuple(sorted(provenance)),
     )

@@ -117,14 +117,3 @@ def add_KreissOliger_dissipation_terms(
                 rhs_by_symbol_name[f"h_rhsDD{i}{j}"] += (
                     diss_strength_nongauge * hDD_dKOD[i][j][k] * rfm.ReU[k]
                 )  # ReU[k] = 1/scalefactor_orthog_funcform[k]
-
-
-if __name__ == "__main__":
-    import doctest
-    import sys
-
-    results = doctest.testmod()
-    if results.failed > 0:
-        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
-        sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")

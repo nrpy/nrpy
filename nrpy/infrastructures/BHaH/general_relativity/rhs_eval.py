@@ -197,8 +197,9 @@ def register_CFunction_rhs_eval(
         # BSSN cache keys and gauge modules differ).  Keep this branch
         # byte-identical for BSSN consumers; cross-formulation sharing would
         # couple two formulations and endanger the PR4 "BHaH unchanged" exit.
-        # BHaH fCCZ4-vs-baseline equivalence is covered by
-        # nrpy/tests/test_fccz4_baseline_equivalence.py.
+        # This branch's emitted expressions are pinned by the owner runner at
+        # the bottom of this module, which compares against the tracked
+        # dictionaries in nrpy/infrastructures/BHaH/general_relativity/tests/.
         bssn_rhs = BSSN_RHSs.get_rhs(
             rhs_cache_key,
             enable_YBS_Gamma_constraint_adjustment=enable_YBS_Gamma_constraint_adjustment,

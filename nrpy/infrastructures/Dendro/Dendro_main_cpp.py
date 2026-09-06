@@ -16,10 +16,12 @@ order:
     PROJPASSES    one projection per initial-data construction plus
                   one per accepted step                            (exact)
 
-Every gate but ORDER is an ``MPI_Allreduce(MAX)`` over ranks, and each rank
-owns a disjoint subdomain carrying a different piece of the analytic profile,
-so a rank-dependent fault cannot hide behind a rank-0 print.  ORDER is a
-single-block refinement study and is rank-independent by construction.
+Every gate but ORDER and PROJPASSES is an ``MPI_Allreduce(MAX)`` over ranks,
+and each rank owns a disjoint subdomain carrying a different piece of the
+analytic profile, so a rank-dependent fault cannot hide behind a rank-0 print.
+ORDER is a single-block refinement study and is rank-independent by
+construction.  PROJPASSES compares the rank-local counter, because every rank
+runs the same schedule and an exact per-rank count is the stronger check.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -158,8 +160,9 @@ int main(int argc, char* argv[]) {
 
   // The constraint diagnostics of an exact solution vanish.  A kernel that
   // computed nothing would also report zero, so this gate is a necessary
-  // condition only; the discriminating evidence is the trusted-value
-  // validation of the shared expression factory in the NRPy equations layer.
+  // condition only, and it establishes no pointwise value: the equations
+  // layer's trusted dictionaries pin a different construction profile than
+  // this solver lowers, so none of these expressions is pinned there.
   const double max_constraint = global_max(ctx.max_constraint_violation());
   if (rank == 0) std::printf("MAXCONSTRAINT %.3e\\n", max_constraint);
   if (max_constraint > 1e-12) {

@@ -19,9 +19,11 @@
 using DendroScalar = double;
 #endif
 
-// Normalized block geometry: interior extents, padding,
-// the padded origin, the per-axis spacing, the per-component base offset,
-// and the boundary flags.
+// Normalized block geometry: the padded per-axis extents (nx, ny and nz each
+// count the ghost points on both sides, so they size the allocation and set
+// the strides; a point loop subtracts the padding to reach the interior), the
+// padding, the padded origin, the per-axis spacing, the per-component base
+// offset, and the boundary flags.
 struct BlockGeometry {
   unsigned nx;
   unsigned ny;

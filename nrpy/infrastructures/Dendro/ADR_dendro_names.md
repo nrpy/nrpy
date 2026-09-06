@@ -1,6 +1,10 @@
 # ADR-001: Dendro fCCZ4 state names, order, and native semantics
 
 - Date: 09-03-2026
+- Amended: 09-06-2026 - decision point 3 corrected to describe the shipped
+  whole-registry emission.  An earlier draft of this branch did compute a
+  used-parameter closure; that design was discarded when the infrastructure was
+  rebuilt on direct registry reads, and the ADR is only now catching up.
 - Status: approved
 - Scope: `nrpy/infrastructures/Dendro/`
 
@@ -14,8 +18,9 @@
    perturbation, Cartesian: $\bar{\gamma}_{ij} = \delta_{ij} + h_{ij}$)
    and native evolved `lambdaU` (fCCZ4 conformal connection quantity, not
    a BSSN contracted connection). No full-metric field replaces `hDD`.
-3. Runtime physics parameters are the used registered `CodeParameter`
-   objects only; no Dendro physics table duplicates them.
+3. Runtime physics parameters are the registered `CodeParameter` objects,
+   emitted whole rather than filtered to a use closure; no Dendro physics
+   table duplicates them.
 4. A kernel is a registered `CFunction` plus non-authoritative Dendro
    role metadata; no second body registry exists.
 

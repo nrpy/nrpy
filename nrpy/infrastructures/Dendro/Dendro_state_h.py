@@ -84,6 +84,7 @@ def output_Dendro_state_h(solver_stem: str, solver_namespace: str) -> str:
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
     :return: The complete C++ header text.
+    :raises ValueError: If a recorded upwind control field is not an EVOL field.
 
     Doctests:
     >>> gri.glb_gridfcs_dict.clear()
@@ -178,7 +179,21 @@ def output_Dendro_state_h(solver_stem: str, solver_namespace: str) -> str:
         )
     lines.append("};  // END ARRAY: EVOL_GF_WAVESPEED")
     lines.append("")
-    control_indices = _upwind_control_indices([name for _i, name, _g in evol])
+    # The control fields come from the right-hand-side builder, which derives
+    # them from the shared expression factory's upwind control vector, so this
+    # renderer invents nothing.  Reading them through
+    # reg.upwind_control_fields() means an unrecorded set raises here rather
+    # than emitting an empty table that would silently disable the generated
+    # upwind self-test.
+    evol_positions = {name: index for index, (_i, name, _g) in enumerate(evol)}
+    control_index_list: List[int] = []
+    for control_name in reg.upwind_control_fields():
+        if control_name not in evol_positions:
+            raise ValueError(
+                f"Upwind control field {control_name!r} is not a registered EVOL field."
+            )
+        control_index_list.append(evol_positions[control_name])
+    control_indices = tuple(sorted(control_index_list))
     lines.append("// Indices of the evolved fields that drive NRPy's upwind selection.")
     lines.append(
         "inline constexpr unsigned NUM_UPWIND_CONTROL_GFS = " f"{len(control_indices)};"
@@ -304,33 +319,6 @@ def _cxx_scalar_literal(value: str, gf_name: str, field: str) -> str:
     return repr(number)
 
 
-def _upwind_control_indices(evol_names: List[str]) -> Tuple[int, ...]:
-    """
-    Return the EVOL indices of the builder-recorded upwind control fields.
-
-    The control fields come from the right-hand-side builder, which derives
-    them from the shared expression factory's upwind control vector, so this
-    renderer invents nothing.  Reading them through
-    :func:`nrpy.infrastructures.Dendro.registration.upwind_control_fields`
-    means an unrecorded set raises here rather than emitting an empty table
-    that would silently disable the generated upwind self-test.
-
-    :param evol_names: Ordered EVOL names.
-    :return: The control-field indices, in EVOL order.
-    :raises ValueError: If a recorded control field is not an EVOL field.
-    """
-    recorded = reg.upwind_control_fields()
-    positions = {name: index for index, name in enumerate(evol_names)}
-    indices = []
-    for name in recorded:
-        if name not in positions:
-            raise ValueError(
-                f"Upwind control field {name!r} is not a registered EVOL field."
-            )
-        indices.append(positions[name])
-    return tuple(sorted(indices))
-
-
 def output_component_bindings(
     names: Sequence[str],
     scalar_type: str,
@@ -339,7 +327,7 @@ def output_component_bindings(
     role: Callable[[str], str],
     const_pointee: bool,
     index_expression: Callable[[str, int], str],
-    base_offset: str = "geom.component_offset",
+    base_offset: Optional[str] = "geom.component_offset",
     flat_stride: Optional[str] = None,
 ) -> str:
     """
@@ -361,10 +349,16 @@ def output_component_bindings(
     :param index_expression: Maps (name, position) to the component index
         expression, so a caller may use either the generated ``EvolVar`` enum
         or the registered integer position.
-    :param base_offset: Per-component base offset expression.
+    :param base_offset: Per-component base offset expression, or ``None`` when
+        the caller's pointers are already rebased and the offset must not be
+        applied again.  A flat-block adapter that forwards its geometry
+        unchanged to the per-block kernel passes ``None``, because that kernel
+        applies the offset itself; applying it in both places would address
+        ``base + f * stride + 2 * offset``.
     :param flat_stride: When given, field ``f`` lives at
         ``array + base_offset + f * flat_stride`` (the LTS flat-block layout)
-        instead of ``array[f] + base_offset``.
+        instead of ``array[f] + base_offset``.  Both forms drop the
+        ``base_offset`` term when it is ``None``.
     :return: The C++ binding statements, one per line.
     """
     qualifier = (
@@ -373,11 +367,12 @@ def output_component_bindings(
     lines: List[str] = []
     for position, name in enumerate(names):
         index = index_expression(name, position)
+        offset_term = f" + {base_offset}" if base_offset is not None else ""
         if flat_stride is None:
-            source = f"{array}[{index}] + {base_offset}"
+            source = f"{array}[{index}]{offset_term}"
         else:
             source = (
-                f"{array} + {base_offset}"
+                f"{array}{offset_term}"
                 f" + static_cast<std::ptrdiff_t>({index}) * {flat_stride}"
             )
         lines.append(f"{qualifier} {role(name)} = {source};")

@@ -41,36 +41,6 @@ def emitted_parameter_names() -> List[str]:
     ]
 
 
-def _default_statement(cp_name: str, scalar_type: str) -> str:
-    """
-    Render the statement that sets one registered CodeParameter's default.
-
-    A ``char`` array is filled with ``snprintf``, which guarantees null
-    termination, exactly as BHaH's ``CodeParameters`` emitter does.  Numeric
-    array parameters are left value-initialized: a registered scalar default
-    supplies no element values, and inventing them would be worse than zero.
-
-    :param cp_name: CodeParameter name.
-    :param scalar_type: Registered Dendro scalar alias.
-    :return: One C++ statement, or the empty string when nothing is set.
-    """
-    code_param = par.glb_code_params_dict[cp_name]
-    value: Any = code_param.defaultvalue
-    cparam_type = code_param.cparam_type
-    size = array_size(cparam_type)
-    if size is not None:
-        if c_type(cparam_type, scalar_type) != "char":
-            return ""
-        return f'std::snprintf(params.{cp_name}, {size}, "%s", "{value}");'
-    if cparam_type == "bool":
-        return f"params.{cp_name} = {'true' if value else 'false'};"
-    if cparam_type == "int":
-        return f"params.{cp_name} = {int(value)};"
-    if cparam_type in ("REAL", "DendroScalar"):
-        return f"params.{cp_name} = static_cast<{scalar_type}>({float(value)!r});"
-    return f"params.{cp_name} = {float(value)!r};"
-
-
 def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> None:
     """
     Register the generated parameter CFunctions.
@@ -92,11 +62,31 @@ def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> N
     params_type = f"{solver_namespace}::generated::GeneratedParams"
     names = emitted_parameter_names()
 
+    # A char array is filled with snprintf, which guarantees null termination,
+    # exactly as BHaH's CodeParameters emitter does.  Numeric array parameters
+    # are left value-initialized: a registered scalar default supplies no
+    # element values, and inventing them would be worse than zero.
     set_lines: List[str] = [f"params = {params_type}{{}};"]
     for cp_name in names:
-        statement = _default_statement(cp_name, scalar_type)
-        if statement:
-            set_lines.append(statement)
+        code_param = par.glb_code_params_dict[cp_name]
+        value: Any = code_param.defaultvalue
+        cparam_type = code_param.cparam_type
+        size = array_size(cparam_type)
+        if size is not None:
+            if c_type(cparam_type, scalar_type) == "char":
+                set_lines.append(
+                    f'std::snprintf(params.{cp_name}, {size}, "%s", "{value}");'
+                )
+        elif cparam_type == "bool":
+            set_lines.append(f"params.{cp_name} = {'true' if value else 'false'};")
+        elif cparam_type == "int":
+            set_lines.append(f"params.{cp_name} = {int(value)};")
+        elif cparam_type in ("REAL", "DendroScalar"):
+            set_lines.append(
+                f"params.{cp_name} = static_cast<{scalar_type}>({float(value)!r});"
+            )
+        else:
+            set_lines.append(f"params.{cp_name} = {float(value)!r};")
     cfc.register_CFunction(
         subdirectory=PARAMETERS_SUBDIRECTORY,
         desc="Generated parameter defaults, from the registered CodeParameters.",

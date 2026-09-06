@@ -111,7 +111,7 @@ double max_abs_interior(const TestBlock& block) {
           worst = std::max(worst, std::fabs(static_cast<double>(
                                       block.rhs[f][block.index(a, b, c)])));
         }  // END LOOP: for a over interior x
-      }  // END LOOP: for b over local blocks
+      }  // END LOOP: for b over interior y
     }  // END LOOP: for c over interior z
   }  // END LOOP: for f over evolved components
   return worst;
@@ -139,7 +139,7 @@ int test_state() {
           $NAMESPACE::generated::EVOL_GF_NAMES[g]) {
         return 1;
       }
-    }  // END LOOP: for g over generated groups
+    }  // END LOOP: for g over later components
     if (!($NAMESPACE::generated::EVOL_GF_WAVESPEED[f] > 0.0)) return 1;
   }  // END LOOP: for f over evolved components
   return 0;
@@ -277,6 +277,55 @@ int test_offsets() {
       }  // END LOOP: for b over interior y
     }  // END LOOP: for c over interior z
   }  // END LOOP: for f over evolved components
+
+  // The flat-block adapter must apply the component offset exactly once.  It
+  // forwards its geometry unchanged to the per-block kernel, which applies the
+  // offset itself, so an adapter that also applied it would address
+  // `base + f*vol + 2*offset`.  Nothing else reaches this: the lifecycle's
+  // flat-versus-block comparison zeroes the offset on both sides, so without
+  // this check a reintroduced double application passes every gate.
+  //
+  // Minkowski data is staged at the component offset and the rest of the
+  // allocation carries the sentinel, so a correct binding reads a fixed point
+  // and must leave an identically zero interior.  Any binding that shifts the
+  // per-component base fails, in either direction: the shift leaves at least
+  // one asserted window unwritten, holding the sentinel, and moves the rest
+  // onto a neighbouring component's slot.  Under the doubled offset this guards
+  // against, the first component's window is the unwritten one, and each
+  // component reads its neighbour's staged data rather than its own.  The allocation is sized for the doubled reach as well, so a
+  // shifted binding fails this check rather than running past the end.
+  const std::size_t flat_offset = rhs_block.vol;
+  const std::size_t flat_span =
+      static_cast<std::size_t>(NUM_EVOL_GFS + 2) * rhs_block.vol;
+  std::vector<$SCALAR> flat_in(flat_span, sentinel);
+  std::vector<$SCALAR> flat_rhs(flat_span, sentinel);
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (std::size_t cell = 0; cell < rhs_block.vol; ++cell) {
+      flat_in[flat_offset + static_cast<std::size_t>(f) * rhs_block.vol + cell] =
+          rhs_block.store[f][rhs_block.vol + cell];
+    }  // END LOOP: for cell over the block
+  }  // END LOOP: for f over evolved components
+  $RHS_FLAT_BLOCK(rhs_block.geom, flat_in.data(), flat_rhs.data()$RHS_BLOCK_TAIL);
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (unsigned c = pad; c < rhs_block.extent - pad; ++c) {
+      for (unsigned b = pad; b < rhs_block.extent - pad; ++b) {
+        for (unsigned a = pad; a < rhs_block.extent - pad; ++a) {
+          const std::size_t at =
+              flat_offset + static_cast<std::size_t>(f) * rhs_block.vol + a +
+              rhs_block.extent * (b + rhs_block.extent * c);
+          if (flat_rhs[at] != static_cast<$SCALAR>(0)) {
+            std::fprintf(stderr,
+                         "FAIL: the flat-block adapter's Minkowski right-hand "
+                         "side of component %u is wrong at a component offset, "
+                         "so it did not apply geom.component_offset exactly "
+                         "once\\n",
+                         f);
+            return 1;
+          }  // END IF: flat RHS nonzero at offset
+        }  // END LOOP: for a over interior x
+      }  // END LOOP: for b over interior y
+    }  // END LOOP: for c over interior z
+  }  // END LOOP: for f over evolved components
   return 0;
 }  // END FUNCTION: test_offsets
 
@@ -328,9 +377,9 @@ int test_upwind() {
               for (unsigned a = 0; a < block.extent; ++a) {
                 block.store[f][block.index(a, b, c)] +=
                     static_cast<$SCALAR>(1e-3 * static_cast<double>(a + b + c));
-              }  // END LOOP: for a over interior
-            }  // END LOOP: for b over interior
-          }  // END LOOP: for c over interior
+              }  // END LOOP: for a over padded x
+            }  // END LOOP: for b over padded y
+          }  // END LOOP: for c over padded z
         }  // END LOOP: for f over evolved components
         // Only the control for this axis changes sign; the others stay
         // positive, so a permuted or partly dead selection is exposed too.
@@ -552,10 +601,11 @@ int test_projection() {
 int test_constraints() {
   // The constraint diagnostics of the Minkowski solution vanish.  The
   // reduction runs over the generated DIAG count, so no diagnostic is named.
-  // Pointwise diagnostic correctness is not established here: it rests on
-  // the trusted-value validation of the shared expression factory in
-  // the NRPy equations layer, plus the owner doctests that pin the DIAG
-  // registration and the exact write set of the lowered kernel.
+  // Pointwise diagnostic correctness is not established here.  What is
+  // pinned elsewhere is the DIAG registration and the exact write set of the
+  // lowered kernel, in the diagnostic owner's doctests.  The equations layer's
+  // trusted dictionaries pin a different construction profile than this
+  // solver lowers, so none of these expressions is pinned there.
   if ($NAMESPACE::generated::NUM_DIAG_GFS == 0) return 1;
   TestBlock block;
   std::vector<$SCALAR*> state = block.state_pointers();
@@ -572,9 +622,9 @@ int test_constraints() {
         for (unsigned a = pad; a < block.extent - pad; ++a) {
           worst = std::max(worst, std::fabs(static_cast<double>(
                                       diag.store[f][block.index(a, b, c)])));
-        }  // END LOOP: for a over interior
-      }  // END LOOP: for b over interior
-    }  // END LOOP: for c over interior
+        }  // END LOOP: for a over interior x
+      }  // END LOOP: for b over interior y
+    }  // END LOOP: for c over interior z
   }  // END LOOP: for f over diagnostic components
   return worst <= 1e-13 ? 0 : 2;
 }  // END FUNCTION: test_constraints

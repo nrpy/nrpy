@@ -93,7 +93,11 @@ class Ctx {
   double max_drift_from_snapshot();
 
   // Host world and EVOL vectors (in / rhs / out), mock lifecycle.
-  mock::Ctx host;
+  // Value-initialized: mock::DVector is an aggregate with no default member
+  // initializers, and ~Ctx frees all four vectors unconditionally.  When
+  // initialize_world rejects its inputs it returns before assigning them, so
+  // without the braces the destructor would free indeterminate pointers.
+  mock::Ctx host{};
   // Generated runtime parameter table, owned by the context.
   $NAMESPACE::generated::GeneratedParams params;
   // Bitwise snapshot of the state taken before evolution.
@@ -222,7 +226,7 @@ int Ctx::initialize_world(int n_blocks, int extent, double dx, int rank,
       vec->comp[f] = new $SCALAR[static_cast<std::size_t>(n_blocks) * vol];
       std::memset(vec->comp[f], 0,
                   sizeof($SCALAR) * static_cast<std::size_t>(n_blocks) * vol);
-    }  // END LOOP: for f over evolved components
+    }  // END LOOP: for f over vector components
   }  // END LOOP: for v over host vectors
   // The registered parameter CFunctions own the parameter lifecycle.
   $SET_DEFAULTS(params);
@@ -381,7 +385,7 @@ double Ctx::max_interior_value(const $SCALAR* const* fields, unsigned ncomp) {
           }  // END LOOP: for bx over interior x
         }  // END LOOP: for by over interior y
       }  // END LOOP: for bz over interior z
-    }  // END LOOP: for f over evolved components
+    }  // END LOOP: for f over vector components
   }  // END LOOP: for b over local blocks
   return worst;
 }  // END FUNCTION: Ctx::max_interior_value
@@ -417,7 +421,7 @@ double Ctx::max_drift_from_snapshot() {
       const double d = std::fabs(static_cast<double>(host.in.comp[f][cell]) -
                                  static_cast<double>(u0[f][cell]));
       if (d > worst) worst = d;
-    }  // END LOOP: for cell over the block
+    }  // END LOOP: for cell over local-block cells
   }  // END LOOP: for f over evolved components
   return worst;
 }  // END FUNCTION: Ctx::max_drift_from_snapshot

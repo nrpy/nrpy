@@ -15,21 +15,6 @@ import nrpy.helpers.loop as lp
 import nrpy.params as par
 
 
-def _Dendro_scalar_alias() -> str:
-    """
-    Return the live registered Dendro scalar type alias.
-
-    Both scalar spellings come from registered NRPy parameters, read from the live registry at the point of use.
-
-    :return: The scalar alias (e.g., ``"DendroScalar"``).
-    :raises ValueError: If the alias is missing or not a C identifier.
-    """
-    scalar_type = par.parval_from_str("Dendro_scalar_type")
-    if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
-        raise ValueError(f"Invalid Dendro scalar type: {scalar_type!r}")
-    return scalar_type
-
-
 def require_serial_parallelization() -> None:
     """
     Require the qualified serial point-loop profile.
@@ -76,7 +61,8 @@ def simple_loop(
         zero, an array of three.
     :param dx: C expression for the spacing, an array of three.
     :return: The generated nested-loop C code string.
-    :raises ValueError: If ``parallelization`` is not ``"none"``.
+    :raises ValueError: If ``parallelization`` is not ``"none"``, or if the
+        registered Dendro scalar alias is missing or not a C identifier.
 
     Doctests:
     >>> import nrpy.params as par
@@ -98,7 +84,11 @@ def simple_loop(
             "inside Dendro's own block traversal, so an inner OpenMP pragma "
             "would nest parallelism)."
         )
-    scalar_type = _Dendro_scalar_alias()
+    # Both scalar spellings come from registered NRPy parameters, read from
+    # the live registry at the point of use.
+    scalar_type = par.parval_from_str("Dendro_scalar_type")
+    if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
+        raise ValueError(f"Invalid Dendro scalar type: {scalar_type!r}")
     # Hoisted loop invariants: block extents, strides, padding,
     # and spacing inverses are computed once per block, not per point.
     # Bounds use these locals; `nxy` is maybe-unused when a kernel only

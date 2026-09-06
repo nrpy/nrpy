@@ -52,9 +52,10 @@ def output_Dendro_parameter_file(
         for line in sample.rstrip("\n").splitlines()
     )
     return BANNER + f"""#
-# The mock-vehicle entry point takes the host controls (CFL, steps, extent,
-# blocks) as command-line arguments; the parameter table below comes from the
-# registered CodeParameter defaults.
+# The mock-vehicle entry point takes the block count, the block extent, the
+# spacing and the output and refinement selections as command-line arguments.
+# The timestep is fixed at 0.5*dx and the step count at 100.  The table below
+# comes from the registered CodeParameter defaults.
 
 [{solver_stem}.profile]
 name = "{profile_name}"

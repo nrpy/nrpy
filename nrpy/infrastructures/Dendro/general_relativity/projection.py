@@ -53,7 +53,7 @@ PROJECTION_BLOCK_SUFFIX = "project_block"
 PROJECTION_GLOBAL_SUFFIX = "project"
 
 # Generated status record: formulation-neutral (determinant, trace residual,
-# nonfinite counts, floors, first failing field/index, rank-local failure), so
+# nonfinite counts, first failing field/index, rank-local failure), so
 # it belongs to the generated scalar contract emitted by Dendro_types_h rather
 # than to a physics builder.  The namespace is threaded from the caller, as
 # every other emitted identifier is.
@@ -84,8 +84,9 @@ def build_projection(
     Build the per-block and all-block algebraic projection CFunction bodies.
 
     The point body evaluates the determinant ratio and the conformal trace of
-    ``Atilde`` first, refuses the point when either is nonpositive or
-    nonfinite, and otherwise computes all twelve projected values into locals
+    ``Atilde`` first, refuses the point when the determinant ratio is not
+    positive or either quantity is nonfinite, and otherwise computes all
+    twelve projected values into locals
     before writing any of them.  Computing into locals is what makes the
     in-place projection safe: the input and output pointers alias the same
     block arrays, so a value written early must not be able to perturb a value
@@ -242,7 +243,7 @@ def build_projection(
     point_body += r"""  } // END IF: first refused point
   status->failed_points += 1;
   continue;
-} // END IF: nonpositive or nonfinite determinant
+} // END IF: nonpositive determinant or nonfinite value
 """
     point_body += r"""status->projected_points += 1;
 status->max_abs_det_minus_one = std::fmax(

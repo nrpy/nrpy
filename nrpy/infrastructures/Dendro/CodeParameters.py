@@ -3,16 +3,17 @@
 Emit the generated parameter header and sample parameter file for a Dendro solver.
 
 Every name, type and default is read from the NRPy CodeParameter registry, as
-BHaH's ``CodeParameters.py`` does.  Only parameters that a registered CFunction
-actually uses are emitted, so the generated struct matches the closure the
-solver needs; no physics parameter table is authored here and no equation module
-is imported.
+BHaH's ``CodeParameters.py`` does.  Every registered parameter whose
+``cparam_type`` is not ``#define`` is emitted -- there is no use closure, so the
+generated struct is the whole registry and a caller that registers a parameter
+gets it in the table; no physics parameter table is authored here and no
+equation module is imported.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import Any, List, Optional
+from typing import List, Optional
 
 import nrpy.params as par
 
@@ -97,24 +98,6 @@ def member_declaration(cp_name: str, cparam_type: str, scalar_type: str) -> str:
     return f"{base} {cp_name}[{size}];" if size else f"{base} {cp_name};"
 
 
-def _toml_value(cparam_type: str, default_value: Any) -> Any:
-    """
-    Render the TOML sample value for a CodeParameter default.
-
-    :param cparam_type: Registered ``cparam_type`` string.
-    :param default_value: Registered default value.
-    :return: A JSON-serializable value for the sample TOML entry.
-    :raises ValueError: If the type has no TOML mapping.
-    """
-    if cparam_type in ("int",):
-        return int(default_value)
-    if cparam_type == "bool":
-        return bool(default_value)
-    if cparam_type in ("REAL", "float", "double", "DendroScalar"):
-        return float(default_value)
-    raise ValueError(f"No TOML mapping for cparam_type {cparam_type!r}.")
-
-
 def output_Dendro_parameters_h(solver_stem: str, solver_namespace: str) -> str:
     """
     Emit the generated parameter struct header.
@@ -156,28 +139,24 @@ def output_parameter_file_sample() -> str:
     registered default.
 
     :return: Parameter-file text with a trailing newline.
+    :raises ValueError: If a registered ``cparam_type`` has no TOML mapping.
     """
     lines: List[str] = ["[params]"]
     for cp_name, code_param in sorted(par.glb_code_params_dict.items()):
         if not code_param.add_to_parfile or code_param.cparam_type == "#define":
             continue
-        lines.append(f"{cp_name} = {_format_toml_scalar(code_param)}")
+        cparam_type = code_param.cparam_type
+        default_value = code_param.defaultvalue
+        if cparam_type == "bool":
+            literal = "true" if bool(default_value) else "false"
+        elif cparam_type == "int":
+            literal = str(int(default_value))
+        elif cparam_type in ("REAL", "float", "double", "DendroScalar"):
+            literal = repr(float(default_value))
+        else:
+            raise ValueError(f"No TOML mapping for cparam_type {cparam_type!r}.")
+        lines.append(f"{cp_name} = {literal}")
     return "\n".join(lines) + "\n"
-
-
-def _format_toml_scalar(code_param: Any) -> str:
-    """
-    Format one parameter-file scalar from a registered CodeParameter.
-
-    :param code_param: The registered CodeParameter.
-    :return: The parameter-file literal.
-    """
-    value = _toml_value(code_param.cparam_type, code_param.defaultvalue)
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    return repr(value)
 
 
 if __name__ == "__main__":
