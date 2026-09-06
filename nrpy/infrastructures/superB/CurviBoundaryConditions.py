@@ -311,15 +311,11 @@ def register_CFunction_bcstruct_chare_set_up(CoordSystem: str) -> None:
           const int64_t globalidx3 = IDX3GENERAL_64(i0, i1, i2, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1);
           if (globalidx3pt_to_chareidx3(globalidx3, Nxx_plus_2NGHOSTS0, Nxx_plus_2NGHOSTS1, Nxx0chare, Nxx1chare, Nxx2chare, Nchare0, Nchare1,
                                               Nchare2) == idx3_this_chare) {
+            // Copy face signs and precomputed geometry, then remap only the grid indices.
+            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare] = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d];
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i0 = MAP_GLOBAL_TO_LOCAL_IDX0(chare_index[0], i0, Nxx0chare);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i1 = MAP_GLOBAL_TO_LOCAL_IDX1(chare_index[1], i1, Nxx1chare);
             bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].i2 = MAP_GLOBAL_TO_LOCAL_IDX2(chare_index[2], i2, Nxx2chare);
-            const short FACEX0 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX0;
-            const short FACEX1 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX1;
-            const short FACEX2 = bcstruct->pure_outer_bc_array[dirn + (3 * which_gz)][idx2d].FACEX2;
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].FACEX0 = FACEX0;
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].FACEX1 = FACEX1;
-            bcstruct_chare->pure_outer_bc_array[dirn + (3 * which_gz)][which_idx2d_chare].FACEX2 = FACEX2;
             which_idx2d_chare++;
           }
         }
@@ -406,6 +402,8 @@ typedef struct __outerpt_bc_struct__ {
   //                               FACEX0,FACEX1,FACEX2 =  0,-1, 0 if on the i1=i1max face,
   //                               FACEX0,FACEX1,FACEX2 =  0, 0,+1 if on the i2=i2min face, or
   //                               FACEX0,FACEX1,FACEX2 =  0, 0,-1 if on the i2=i2max face,
+  REAL r, partial_x0_partial_r, partial_x1_partial_r, partial_x2_partial_r;  // Geometry at the outer boundary point.
+  REAL r_int, partial_x0_partial_r_int, partial_x1_partial_r_int, partial_x2_partial_r_int;  // Geometry at its nearest interior neighbour.
 } outerpt_bc_struct;
 
 typedef struct __bc_info_struct__ {
