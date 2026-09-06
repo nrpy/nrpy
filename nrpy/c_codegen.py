@@ -306,25 +306,81 @@ def c_codegen(
     >>> import nrpy.grid as gri
     >>> saved_gfs = gri.glb_gridfcs_dict.copy()
     >>> saved_fd = fin.FDFunctions_dict.copy()
-    >>> saved_infra = par.parval_from_str("Infrastructure")
-    >>> saved_parallel = par.parval_from_str("parallelization")
-    >>> par.set_parval_from_str("Infrastructure", "BHaH")
-    >>> par.set_parval_from_str("parallelization", "openmp")
-    >>> gri.glb_gridfcs_dict.clear()
-    >>> u = gri.register_gridfunctions("u", group="AUXEVOL", gf_array_name="custom_gfs")[0]
-    >>> for simd in (False, True):
-    ...     pure = c_codegen(sp.Symbol("u_dDD01"), "out[0]", enable_fd_codegen=True, enable_fd_functions=True, enable_simd=simd)
-    ...     assert "Step 1 of 2" in pure and "Step 2 of 2" in pure
-    ...     assert "&custom_gfs[IDX4(UGF, i0, i1, i2)]" in pure
-    ...     assert "u_i0" not in pure
-    ...     mixed = c_codegen(u + sp.Symbol("u_dD0") + sp.Symbol("u_dDD01"), "out[0]", enable_fd_codegen=True, enable_fd_functions=True, enable_simd=simd)
-    ...     assert "custom_gfs[IDX4(UGF, i0-1, i1, i2)]" in mixed
-    ...     assert "custom_gfs[IDX4(UGF, i0+1, i1, i2)]" in mixed
-    ...     assert ("u = ReadSIMD(" if simd else "u = custom_gfs[") in mixed
-    >>> gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
-    >>> fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
-    >>> par.set_parval_from_str("Infrastructure", saved_infra)
-    >>> par.set_parval_from_str("parallelization", saved_parallel)
+    >>> saved_params = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization", "finite_difference::fd_order")}
+    >>> try:
+    ...     par.set_parval_from_str("Infrastructure", "BHaH")
+    ...     par.set_parval_from_str("parallelization", "openmp")
+    ...     par.set_parval_from_str("finite_difference::fd_order", 2)
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     u = gri.register_gridfunctions("u", group="AUXEVOL", gf_array_name="custom_gfs")[0]
+    ...     for simd in (False, True):
+    ...         for expression in (sp.Symbol("u_dDD01"), u + sp.Symbol("u_dD0") + sp.Symbol("u_dDD01")):
+    ...             print(c_codegen(expression, "out[0]", enable_fd_codegen=True, enable_fd_functions=True, enable_simd=simd, verbose=False, enable_clang_format=True))
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
+    ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
+    ...     for name, value in saved_params.items():
+    ...         par.set_parval_from_str(name, value)
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
+     * Read gridfunction(s) from main memory and compute FD stencils as needed.
+     */
+    const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
+     * Evaluate SymPy expressions and write to main memory.
+     */
+    out[0] = u_dDD01;
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
+     * Read gridfunction(s) from main memory and compute FD stencils as needed.
+     */
+    const REAL u_i0m1 = custom_gfs[IDX4(UGF, i0-1, i1, i2)];
+    const REAL u = custom_gfs[IDX4(UGF, i0, i1, i2)];
+    const REAL u_i0p1 = custom_gfs[IDX4(UGF, i0+1, i1, i2)];
+    const REAL u_dD0 = fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
+    const REAL u_dDD01 = fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
+     * Evaluate SymPy expressions and write to main memory.
+     */
+    out[0] = u + u_dD0 + u_dDD01;
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
+     * Read gridfunction(s) from main memory and compute FD stencils as needed.
+     */
+    const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
+     * Evaluate SymPy expressions and write to main memory.
+     */
+    const REAL_SIMD_ARRAY __RHS_exp_0 = u_dDD01;
+    <BLANKLINE>
+    WriteSIMD(&out[0], __RHS_exp_0);
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 1 of 2:
+     * Read gridfunction(s) from main memory and compute FD stencils as needed.
+     */
+    const REAL_SIMD_ARRAY u_i0m1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0-1, i1, i2)]);
+    const REAL_SIMD_ARRAY u = ReadSIMD(&custom_gfs[IDX4(UGF, i0, i1, i2)]);
+    const REAL_SIMD_ARRAY u_i0p1 = ReadSIMD(&custom_gfs[IDX4(UGF, i0+1, i1, i2)]);
+    const REAL_SIMD_ARRAY u_dD0 = SIMD_fd_function_dD0_fdorder2(u_i0m1,u_i0p1,invdxx0);
+    const REAL_SIMD_ARRAY u_dDD01 = SIMD_fd_function_dDD01_fdorder2(&custom_gfs[IDX4(UGF, i0, i1, i2)], Nxx_plus_2NGHOSTS0, invdxx0, invdxx1);
+    <BLANKLINE>
+    /*
+     * NRPy-Generated GF Access/FD Code, Step 2 of 2:
+     * Evaluate SymPy expressions and write to main memory.
+     */
+    const REAL_SIMD_ARRAY __RHS_exp_0 = AddSIMD(u_dD0, AddSIMD(u_dDD01, u));
+    <BLANKLINE>
+    WriteSIMD(&out[0], __RHS_exp_0);
+    <BLANKLINE>
 
     >>> x, y, z = sp.symbols("x y z", real=True)
     >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))

@@ -850,19 +850,24 @@ def use_pointer_stride_mixed_derivative(operator: str) -> bool:
     Doctests:
     >>> old_infra = par.parval_from_str("Infrastructure")
     >>> old_parallel = par.parval_from_str("parallelization")
-    >>> par.set_parval_from_str("Infrastructure", "BHaH")
-    >>> par.set_parval_from_str("parallelization", "openmp")
-    >>> [use_pointer_stride_mixed_derivative(op) for op in ("dDD01", "dDD02", "dDD12", "dDD00", "dD0", "dupD1")]
-    [True, True, True, False, False, False]
-    >>> par.set_parval_from_str("parallelization", "cuda")
-    >>> use_pointer_stride_mixed_derivative("dDD01")
-    True
-    >>> par.set_parval_from_str("parallelization", "openmp")
-    >>> for infra in ("ETLegacy", "CarpetX", "NRPy"):
-    ...     par.set_parval_from_str("Infrastructure", infra)
-    ...     assert not use_pointer_stride_mixed_derivative("dDD01")
-    >>> par.set_parval_from_str("Infrastructure", old_infra)
-    >>> par.set_parval_from_str("parallelization", old_parallel)
+    >>> operators = ("dDD01", "dDD02", "dDD12", "dDD00", "dD0", "dupD1")
+    >>> try:
+    ...     for infra in ("BHaH", "ETLegacy", "CarpetX", "NRPy"):
+    ...         par.set_parval_from_str("Infrastructure", infra)
+    ...         for parallel in ("openmp", "cuda"):
+    ...             par.set_parval_from_str("parallelization", parallel)
+    ...             print(infra, parallel, [use_pointer_stride_mixed_derivative(op) for op in operators])
+    ... finally:
+    ...     par.set_parval_from_str("Infrastructure", old_infra)
+    ...     par.set_parval_from_str("parallelization", old_parallel)
+    BHaH openmp [True, True, True, False, False, False]
+    BHaH cuda [True, True, True, False, False, False]
+    ETLegacy openmp [False, False, False, False, False, False]
+    ETLegacy cuda [False, False, False, False, False, False]
+    CarpetX openmp [False, False, False, False, False, False]
+    CarpetX cuda [False, False, False, False, False, False]
+    NRPy openmp [False, False, False, False, False, False]
+    NRPy cuda [False, False, False, False, False, False]
     """
     return par.parval_from_str("Infrastructure") == "BHaH" and operator in (
         "dDD01",
@@ -994,25 +999,41 @@ class FDFunction:
 
         Check the emitted scalar arithmetic against the established unfactored
         mixed stencil using independent symbols at each flattened grid offset.
-        Non-unit, unequal strides expose direction and sign mistakes.
+        Symbolic strides keep every offset distinct without choosing a grid size.
+        Each zero is an exact identity for arbitrary field values and spacings.
 
         Doctests:
-        >>> import re
+        >>> s1, s2 = sp.symbols("s1 s2", integer=True)
+        >>> u = sp.IndexedBase("u")
         >>> for order in (2, 4, 6, 8, 10):
         ...     for op in ("dDD01", "dDD02", "dDD12"):
         ...         helper = FDFunction("REAL", order, op, {}, sp.S.Zero, False)
         ...         params, body = helper.pointer_stride_mixed_params_body()
-        ...         values = {"s1": sp.Integer(31), "s2": sp.Integer(1147)}
+        ...         values = {"s1": s1, "s2": s2, "in_gf_pt": u}
         ...         for statement in body.splitlines():
         ...             expr = statement.split(" = ")[-1].replace("return ", "").rstrip(";")
-        ...             expr = re.sub(r"in_gf_pt\[([^]]+)\]", lambda m: str(sp.Symbol("v_" + str(sp.sympify(m[1], locals=values)).replace("-", "m"))), expr)
         ...             value = sp.sympify(expr.replace("(REAL)", ""), locals=values)
         ...             if not statement.startswith("return "):
         ...                 values[statement.split(" = ")[0].split()[-1]] = value
         ...         coeffs, points = compute_fdcoeffs_fdstencl(op, order)
-        ...         reference = sum(c * sp.Symbol("v_" + str(p[0] + 31*p[1] + 1147*p[2]).replace("-", "m")) for c, p in zip(coeffs, points))
+        ...         reference = sum(c * u[p[0] + s1*p[1] + s2*p[2]] for c, p in zip(coeffs, points))
         ...         reference *= sp.Symbol("invdxx" + op[-2]) * sp.Symbol("invdxx" + op[-1])
-        ...         assert sp.expand(value - reference) == 0, (order, op)
+        ...         print(order, op, sp.expand(value - reference))
+        2 dDD01 0
+        2 dDD02 0
+        2 dDD12 0
+        4 dDD01 0
+        4 dDD02 0
+        4 dDD12 0
+        6 dDD01 0
+        6 dDD02 0
+        6 dDD12 0
+        8 dDD01 0
+        8 dDD02 0
+        8 dDD12 0
+        10 dDD01 0
+        10 dDD02 0
+        10 dDD12 0
         """
         directions = [int(direction) for direction in self.operator[-2:]]
         strides = ["1" if d == 0 else f"s{d}" for d in directions]
