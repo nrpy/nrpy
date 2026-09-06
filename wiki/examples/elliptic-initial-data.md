@@ -1,6 +1,6 @@
 # Elliptic Initial Data
 
-> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 07-12-2026
+> Compare standalone NRPyElliptic and Charm++/superB conformally flat initial-data workflows. · Status: confirmed · Last reconciled: 09-04-2026
 > Up: [Examples](index.md)
 
 ## Summary
@@ -13,9 +13,9 @@ nrpy.examples.superB_nrpyelliptic_conformally_flat` generates a Charm++/superB
 project under `project/superB_nrpyelliptic_conformally_flat/`.
 
 Both examples solve the NRPyElliptic hyperbolic-relaxation system for
-conformally flat binary-black-hole initial data. This page is the example leaf
-for the workflow comparison; it does not create a separate non-example
-NRPyElliptic infrastructure page.
+conformally flat binary-black-hole initial data. This page owns the example
+comparison; [NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md)
+owns standalone BHaH infrastructure assembly.
 
 Both generators delete and recreate their fixed project directories. Preserve
 prior generated output before rerunning. Build/run commands below are generated
@@ -103,4 +103,5 @@ shape, not latest success.
 - [superB Lifecycle And Project Assembly](../infrastructures/superb/lifecycle-and-project-assembly.md)
 - [superB Grids, Boundaries, MoL, And Initial Data](../infrastructures/superb/grids-boundaries-mol-and-initial-data.md)
 - [Generated Output Boundaries](../architecture/generated-output-boundaries.md)
+- Depends on: [NRPyElliptic Workflow](../infrastructures/bhah/nrpyelliptic-workflow.md) - owns standalone BHaH infrastructure assembly.
 - Depends on: [Generated Project CI](../validation/generated-project-ci.md) - compiled CI validation summary.

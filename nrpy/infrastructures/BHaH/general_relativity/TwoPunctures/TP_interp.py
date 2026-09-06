@@ -44,7 +44,8 @@ def register_CFunction_TP_Interp(
     Provides spectral interpolation at an arbitrary Cartesian point. By default the exported
     tensor components follow the legacy ``swap_xz`` compatibility convention; with
     ``enable_xy_plane=True`` both the query point and tensor output remain in the
-    native Cartesian xy orientation.
+    native Cartesian xy orientation. The ``W`` lapse option uses the corrected total
+    conformal factor, including the spectral correction ``u``.
 
     :param enable_xy_plane: Whether to keep the query point in the native xy-plane orientation
         instead of using the legacy ``swap_xz`` convention.
@@ -126,7 +127,7 @@ def register_CFunction_TP_Interp(
   int const nvar = 1, n1 = ID_persist->npoints_A, n2 = ID_persist->npoints_B, n3 = ID_persist->npoints_phi;
   // int const ntotal = n1 * n2 * n3 * nvar;
 
-  int antisymmetric_lapse, averaged_lapse, pmn_lapse, brownsville_lapse;
+  int antisymmetric_lapse, averaged_lapse, pmn_lapse, W_lapse, brownsville_lapse;
 
   enum GRID_SETUP_METHOD { GSM_Taylor_expansion, GSM_evaluation };
   enum GRID_SETUP_METHOD gsm;
@@ -147,6 +148,7 @@ def register_CFunction_TP_Interp(
     if (pmn_lapse)
     fprintf(stderr,"Setting initial lapse to psi^%f profile.\n",(double)ID_persist->initial_lapse_psi_exponent);
   */
+  W_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "W");
   brownsville_lapse = CCTK_EQUALS(ID_persist->initial_lapse, "brownsville");
   /*
     if (brownsville_lapse)
@@ -331,6 +333,10 @@ def register_CFunction_TP_Interp(
   gyy_out = pow(psi1 / static_psi, 4);
   gyz_out = 0;
   gzz_out = pow(psi1 / static_psi, 4);
+
+  // W=(psi+u)^-2, needed for slow-start lapse; see arXiv:2404.01137.
+  if (W_lapse)
+    alp_out = 1.0 / pow(psi1 / static_psi, 2);
 
   Kxx_out = Aij[0][0] / pow(psi1, 2);
   Kxy_out = Aij[0][1] / pow(psi1, 2);

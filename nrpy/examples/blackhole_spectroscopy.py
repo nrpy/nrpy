@@ -233,6 +233,8 @@ BHaH.general_relativity.initial_data.register_CFunction_initial_data(
     ID_persist_struct_str=BHaH.general_relativity.TwoPunctures.ID_persist_struct.ID_persist_str(),
     populate_ID_persist_struct_str=r"""
 initialize_ID_persist_struct(commondata, &ID_persist);
+// SSL requires alpha=W=(psi+u)^-2 initially; see arXiv:2404.01137.
+snprintf(ID_persist.initial_lapse, 100, "W");
 TP_solve(&ID_persist);
 """,
     free_ID_persist_struct_str=r"""

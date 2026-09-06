@@ -306,7 +306,15 @@ void pup_outerpt_bc_struct(PUP::er &p, outerpt_bc_struct &obc) {
   p | obc.FACEX0;
   p | obc.FACEX1;
   p | obc.FACEX2;
-}
+  p | obc.r;
+  p | obc.partial_x0_partial_r;
+  p | obc.partial_x1_partial_r;
+  p | obc.partial_x2_partial_r;
+  p | obc.r_int;
+  p | obc.partial_x0_partial_r_int;
+  p | obc.partial_x1_partial_r_int;
+  p | obc.partial_x2_partial_r_int;
+} // END FUNCTION: pup_outerpt_bc_struct
 
 // PUP routine for struct bc_info_struct
 void pup_bc_info_struct(PUP::er &p, bc_info_struct &bci) {

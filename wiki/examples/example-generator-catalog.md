@@ -28,19 +28,6 @@ labels below describe configured workflow/helper steps, not latest CI outcomes;
 `manual/source-supported` means this audit inspected sources but did not
 generate, build, or run the project.
 
-`blackhole_spectroscopy.py` keeps BSSN as the default and adds public
-`--fccz4` generation. The flag selects fCCZ4 RHS/gauge registration and
-fresh-data Theta initialization; it is not a claim of restart correctness or
-scientific validity.
-
-Claim evidence:
-- Claim: `python -m nrpy.examples.blackhole_spectroscopy` defaults to BSSN and accepts `--fccz4` to generate the opt-in fCCZ4 formulation; no restart or scientific-result guarantee follows.
-- Role: user-facing command and interface
-- Deciding authority: [blackhole_spectroscopy.py](../../nrpy/examples/blackhole_spectroscopy.py), `parser`, `enable_fCCZ4`, and formulation-selecting registrations
-- Corroboration: [GR Application Wiring](../infrastructures/bhah/gr-application-wiring.md), formulation-selection and initial-data claim
-- Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04 x86_64; tool_version=Python 3.12.3, GCC 13.3.0, GNU Make 4.3; backend=BHaH OpenMP; precision=double; GPU=not-applicable; restart=not-run; distributed=not-run; error_path=not-run; options=default BSSN generation/build, --fccz4 generation/build and t_final=0.1 startup through iteration 1; date=08-28-2026`
-
 | Generator | Command shape | Output family | Prerequisites | Validation route or status | Owning page |
 | --- | --- | --- | --- | --- | --- |
 | `bhahaha.py` | `python -m nrpy.examples.bhahaha [--fdorder N] [--outrootdir DIR] [--cpp] [--no-openmp]` | Static BHaHAHA apparent-horizon library under the chosen output root | Python, C compiler, `make`; OpenMP optional | Configured Ubuntu/macOS CI generation and default library build; no library runtime exists | [Apparent Horizon Library](apparent-horizon-library.md) |
@@ -53,7 +40,7 @@ Claim evidence:
 | `dendro_fccz4.py` | `python -m nrpy.examples.dendro_fccz4 [--project-dir DIR] [--fd-order {2,4,6}] [--ko/--no-ko]` | Dendro `FCCZ4_GR` solver directory under `project/<name>/Dendro-GR/`, with generated state, parameter, constants and `<stem>_defines.h` headers, one source per registered CFunction, solver and tests CMake, the host context and entry point, a sample parameter file, generated self-tests, and the mock host header | Python for generation; MPI, a C++17 compiler, and a CMake generator to build the generated solver | No CI coverage; generated project ships ten CTest cases and a Minkowski lifecycle, run manually against the mock host | [Dendro](../infrastructures/dendro/index.md) |
 | `groovy_TOV_BSSN.py` | `python -m nrpy.examples.groovy_TOV_BSSN` | Standalone BHaH/GRoovy TOV GRHD evolution project | Python, Git and network access, C compiler, `make`, GSL, and GRHayL configure/build prerequisites | Manual/source-supported; generator clones, configures, builds, and installs GRHayL, and inspected CI does not invoke it | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `hydro_without_hydro.py` | `python -m nrpy.examples.hydro_without_hydro [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH static-fluid spacetime evolution project | Python, C or CUDA toolchain, `make`, GSL | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures a CUDA build, but no runtime/result check | [Matter TOV Workflows](matter-tov-workflows.md) |
-| `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C or CUDA toolchain, `make` | Manual/source-supported benchmark route | [Standalone GR/BHaH](standalone-gr-bhah.md) |
+| `kasner_exact_evolution.py` | `python -m nrpy.examples.kasner_exact_evolution [--floating_point_precision TYPE]` | Standalone BHaH Kasner benchmark project | Python, C compiler, `make` | Manual/source-supported default OpenMP route; the parser exposes `--cuda`, but GeneralRFM precompute rejects CUDA during generation | [Standalone GR/BHaH](standalone-gr-bhah.md) |
 | `manga_bhah_lib.py` | `python -m nrpy.examples.manga_bhah_lib` | MANGA-facing `bhah_lib` library project | Python, C compiler, `make`, GSL | Source-supported library route; CI commands are present but commented out | [Matter TOV Workflows](matter-tov-workflows.md) |
 | `mass_geodesic_integrator.py` | `python -m nrpy.examples.mass_geodesic_integrator` | Standalone massive-particle geodesic C project plus trajectory visualization copy | Python, C compiler, `make`, GSL, NumPy/Matplotlib for visualization | Manual/source-supported single-ray route | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpyelliptic_conformally_flat.py` | `python -m nrpy.examples.nrpyelliptic_conformally_flat [--cuda] [--floating_point_precision TYPE]` | Standalone BHaH NRPyElliptic conformally flat project | Python, C or CUDA toolchain, `make` | Configured Ubuntu/macOS CI generation and default OpenMP build; local helper configures CUDA build only | [Elliptic Initial Data](elliptic-initial-data.md) |
@@ -84,11 +71,11 @@ Companion groups:
 Inventory disposition covers 29 generators, five ET fixture files, five
 geodesic companion scripts, two waveform consistency helpers, and one excluded
 `__init__.py`. The registered aggregate count in [Sources](../../raw/SOURCES.md)
-predates unrelated repository drift and understates the tracked file set, so it
-is not restated as a total here; the examples owner re-audits it.
-The direct source rows in [Sources](../../raw/SOURCES.md) register the cited
-files. Aggregate status remains `partial` because file-set ownership does not by
-itself prove complete semantic reconciliation or future-file ingestion.
+predates later repository drift and understates the tracked file set, so it is
+not restated as a total here. The direct source rows in
+[Sources](../../raw/SOURCES.md) register the cited files. Aggregate status
+remains `partial` because file-set ownership does not by itself prove complete
+semantic reconciliation or future-file ingestion.
 
 Claim status: contested; contradiction: CONTR-0002. The `sebobv1_jax` row
 records generation intent only: current Commondata list truncation omits `a_f`
