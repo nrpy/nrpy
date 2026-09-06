@@ -5,13 +5,22 @@
 
 ## Summary
 
-BSSN is the second formulation lowered through the Dendro infrastructure. It
-lives under `general_relativity/BSSN/`, matching how BHaH puts variant families
-in a subdirectory (`Kasner/`, `TOVola/`, `TwoPunctures/`) beside the default at
-the package top level. Two modules are new — the right-hand side and the
-constraint diagnostics — and everything else is shared with fCCZ4 unchanged:
-the initial data, the algebraic projection, the whole generic layer, and the
-formulation-agnostic lowering in `kernel_lowering`.
+BSSN is the second formulation lowered through the Dendro infrastructure, and
+it lives under `general_relativity/BSSN/`. Two modules are new — the right-hand
+side and the constraint diagnostics — and the initial data, the algebraic
+projection and the generic layer are shared with fCCZ4.
+
+The layout is a deliberate divergence, not an imitation. NRPy's one existing
+two-formulation infrastructure is BHaH, which lowers BSSN and fCCZ4 through a
+single `general_relativity/rhs_eval.py` on an `enable_fCCZ4` boolean; BHaH's
+subdirectories (`Kasner/`, `TOVola/`, `TwoPunctures/`, `psi4/`) are diagnostics
+and initial-data providers, not second implementations of a top-level module's
+role. Dendro diverges because its two formulations differ in evolved-field
+count, in constraint set and in which shared equations module supplies the
+expressions, so a single module would branch on formulation in every one of
+those places. That is one instance against one instance, which the conformance
+page rates as weak evidence either way; collapsing onto BHaH's shape remains a
+live option.
 
 ## Detail
 
@@ -37,12 +46,14 @@ constraint components from the established `BSSN_constraints` projector.
 31 DIAG gridfunctions across its wave-equation, elliptic and GR diagnostics,
 while AUX appears once. Every registration in the projector is guarded by
 `if <name> not in gri.glb_gridfcs_dict`, so the Dendro builder registers the
-names it writes as DIAG *before* constructing the projector, which makes the
-projector's own registration a no-op. No change to the shared equations module
-and no change to the Dendro generic layer.
+names it writes as DIAG *before* constructing the projector. That covers `H`
+and `MU`; the projector still registers `M` and `LAMBDA_CONSTRAINT`, which this
+kernel does not compute, so the builder removes those two again afterwards.
+Without that the generated state header would advertise two variables no kernel
+writes and no vector backs. No change to the shared equations module.
 
 Claim evidence:
-- Claim: `BSSN_constraints` registers its diagnostic gridfunctions into the AUX group, each guarded by an existence check, so a caller that registers those exact names first determines their group; the Dendro BSSN builder uses this to keep them in DIAG.
+- Claim: `BSSN_constraints` registers `H`, `M`, `LAMBDA_CONSTRAINT` and `MU` into the AUX group, each guarded by an existence check, so a caller that registers those exact names first determines their group; the Dendro BSSN builder uses this for the names it writes and deletes the two it does not, leaving `NUM_AUX_GFS = 0` in the emitted state header.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
 - Corroboration: [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/diagnostics.py), `build_diagnostics` step 1
@@ -60,9 +71,13 @@ library is `bssn_common`, the executable is `bssnSolver`, the namespace is
 
 ### What the port found
 
-Adding the second formulation was the cheap test of whether the abstraction
-exists, and it found three real defects that a single-formulation tree could
-not expose:
+Adding the second formulation required generic-layer work: the
+formulation-agnostic lowering was extracted into `kernel_lowering` and
+`tensor_family_of` moved into `naming`. No formulation-specific content entered
+the generic layer and no existing emitter changed behaviour.
+
+The port was the cheap test of whether the abstraction exists, and it found
+defects that a single-formulation tree could not expose:
 
 - The "shared" ADM-to-evolved conversion asserted that exactly one evolved
   field was left undefined — true only for fCCZ4's Z4 scalar. The rule is now
@@ -74,9 +89,14 @@ not expose:
   resolves derivative symbols back to their field.
 - `naming.aux_pointer` had been deleted as dead code in an earlier review
   round. It was dead only because the tree had one formulation.
-
-Nothing outside `general_relativity/` needed a change, which is the result the
-port was run to obtain.
+- The shared initial-data and projection builders hardcoded `fccz4_` into the
+  CFunction names they registered, so the first BSSN solver shipped eight
+  `fccz4_`-named sources. The stem is now threaded from the caller.
+- The perturbation added an identical profile to every field, and 22 of 24
+  fields have an asymptotic value of zero, so the probe state carried two
+  distinct component values and the `FLATADAPTER` gate could not see a
+  component bound to the wrong flat-layout slab. Each component is now scaled
+  by its registry position.
 
 ## Sources
 

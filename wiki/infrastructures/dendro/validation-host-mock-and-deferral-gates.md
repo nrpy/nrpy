@@ -21,7 +21,8 @@ Each emitter that can be exercised cheaply carries doctests in the production
 module and runs them through the standard `__main__` runner: the naming
 decorations, the loop helpers, the parameter-header and parameter-file
 emitters, the CMake emitters, the state header and its enum ordering, the role
-sidecar, the generation-parameter validator, and all four fCCZ4 builders. An
+sidecar, the generation-parameter validator, and the builders of both
+formulations. An
 emitter that would need a full registered fCCZ4 environment to exercise carries
 no runner, because an empty runner is not coverage.
 

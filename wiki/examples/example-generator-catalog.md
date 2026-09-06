@@ -1,11 +1,11 @@
 # Example Generator Catalog
 
-> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 07-12-2026
+> Inventory the runnable example generators, companion scripts, output families, prerequisites, validation status, and owning pages. · Status: confirmed · Last reconciled: 09-05-2026
 > Up: [Examples](index.md)
 
 ## Summary
 
-This catalog is the inventory leaf for `nrpy/examples`. All 28 non-`__init__.py`
+This catalog is the inventory leaf for `nrpy/examples`. All 29 non-`__init__.py`
 top-level generators under `nrpy/examples/*.py` appear once below with their
 command shape, output family, prerequisite class, validation route or manual
 status, and owning detail page. Companion files under
@@ -81,7 +81,7 @@ Companion groups:
 | `nrpy/examples/geodesic_visualizations/*.py` | Trajectory plotter, light-blueprint schema, lensed-image renderer, image visualizer, and blueprint diagnostics | `trajectory.txt`, PNGs, downloaded textures, and `light_blueprint_*.zip` files stay artifacts | [Geodesic Raytracing](geodesic-raytracing.md) |
 | `nrpy/examples/tests/sebob*_consistency_check.py` | Current-vs-trusted waveform consistency scripts | Trusted/current generated executable directories and waveform stdout are run artifacts | [Waveform JAX PN Generators](waveform-jax-pn-generators.md) |
 
-Inventory disposition covers 28 generators, five ET fixture files, five
+Inventory disposition covers 29 generators, five ET fixture files, five
 geodesic companion scripts, two waveform consistency helpers, and one excluded
 `__init__.py`. The registered aggregate count in [Sources](../../raw/SOURCES.md)
 predates unrelated repository drift and understates the tracked file set, so it

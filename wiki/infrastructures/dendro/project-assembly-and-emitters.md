@@ -62,7 +62,9 @@ Claim evidence:
 
 Two examples drive this layer: `nrpy.examples.dendro_fccz4` and
 `nrpy.examples.dendro_bssn`. The second one exists as the test that the layer
-is generic; adding it required no change outside `general_relativity/`.
+is generic. Adding it did require generic-layer work — the formulation-agnostic
+lowering moved into `kernel_lowering` and `tensor_family_of` into `naming` —
+but no existing emitter changed behaviour.
 
 The solver is emitted at `Dendro-GR/<solver_name>/` inside the project
 directory: `generated/include` and `generated/src` hold the registry-derived

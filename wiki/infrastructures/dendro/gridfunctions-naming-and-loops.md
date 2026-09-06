@@ -107,7 +107,7 @@ every CodeParameter they use into the registry.
 ## Sources
 
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `read_gf_from_memory_Ccode_onept`
-- [naming.py](../../../nrpy/infrastructures/Dendro/naming.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`
+- [naming.py](../../../nrpy/infrastructures/Dendro/naming.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
 - [registration.py](../../../nrpy/infrastructures/Dendro/registration.py) - `register_Dendro_CFunction`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `require_serial_parallelization`
 - [block_loop.py](../../../nrpy/infrastructures/Dendro/block_loop.py) - `block_loop`

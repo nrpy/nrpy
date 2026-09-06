@@ -114,7 +114,7 @@ the lowering. For the equations themselves see
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_fccz4_rhs`, `register_CFunctions_rhs_eval`, `FCCZ4RHSBuild`
 - [projection.py](../../../nrpy/infrastructures/Dendro/general_relativity/projection.py) - `build_projection`, `register_CFunctions_projection`
 - [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_evolved`, `build_lambda_initialization`
-- [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - `build_diagnostics`, `tensor_family_of`, `register_CFunctions_diagnostics`
+- [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - `build_diagnostics`, `register_CFunctions_diagnostics`
 - [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py) - `build_fccz4_expression_bundle`
 - [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - Kreiss-Oliger dissipation terms
 - [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
