@@ -9,8 +9,12 @@ for the lapse and shift, and the shared Kreiss-Oliger helper — and then lowers
 it through the same formulation-agnostic Dendro helpers the fCCZ4 builder uses.
 
 It is the second formulation lowered through this infrastructure, and it exists
-partly as the test of whether the generic layer really is generic: nothing
-outside ``general_relativity/`` needed a change to add it.
+partly as the test of whether the generic layer really is generic.  Adding it
+did require generic-layer work — the formulation-agnostic lowering was
+extracted into ``kernel_lowering`` and ``tensor_family_of`` moved into
+``naming`` — but no formulation-specific content entered the generic layer and
+no existing emitter changed behaviour: the fCCZ4 output is byte-identical
+across every profile.
 
 :func:`build_bssn_rhs` registers no CFunction; it records the padding and the
 upwind-control set it derived into the Dendro area of the NRPy parameter
@@ -32,7 +36,6 @@ import nrpy.params as par
 import nrpy.reference_metric as refmetric
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.BSSN_gauge_RHSs import BSSN_gauge_RHSs
-from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.equations.general_relativity.BSSN_RHSs import BSSN_RHSs
 from nrpy.equations.general_relativity.kreiss_oliger_terms import (
     add_KreissOliger_dissipation_terms,
@@ -126,18 +129,6 @@ def bssn_rhs_expressions(
     rhs_by_symbol_name = OrderedDict(sorted(rhs_by_symbol_name.items()))
 
     if enable_KreissOliger_dissipation:
-        Bq = BSSN_quantities[CoordSystem]
-        # The conformal factor W in terms of the evolved representation,
-        # exactly as the shared fCCZ4 factory derives it: cf is W itself, the
-        # square root of chi, or exp(-2 phi).  Only enable_CAKO consumes it,
-        # but the helper takes it unconditionally.
-        cf_choice = str(par.parval_from_str("EvolvedConformalFactor_cf"))
-        if cf_choice == "W":
-            conformal_W = Bq.cf
-        elif cf_choice == "chi":
-            conformal_W = sp.sqrt(Bq.cf)
-        else:
-            conformal_W = sp.exp(-2 * Bq.cf)
         add_KreissOliger_dissipation_terms(
             rhs_by_symbol_name,
             CoordSystem=CoordSystem,
@@ -147,7 +138,9 @@ def bssn_rhs_expressions(
             KreissOliger_strength_gauge=0.3,
             KreissOliger_strength_nongauge=0.3,
             enable_CAKO=False,
-            W=conformal_W,
+            # W is consumed only under enable_CAKO, which this profile does
+            # not offer, so no conformal factor needs deriving here.
+            W=sp.sympify(1),
             # BSSN has no Z4 scalar; the fCCZ4 profile is the only one that
             # dissipates Theta_fCCZ4.
             include_Theta_fCCZ4=False,
@@ -192,6 +185,34 @@ def build_bssn_rhs(
         onto the registered EVOL fields, if the EVOL count is not exactly 24,
         or if the kernel's dKOD presence does not match
         ``enable_KreissOliger_dissipation``.
+
+    Doctests:
+    >>> import contextlib, io
+    >>> import nrpy.infrastructures.Dendro.generation_parameters  # noqa: F401
+    >>> par.set_parval_from_str("Infrastructure", "Dendro")
+    >>> par.set_parval_from_str("parallelization", "none")
+    >>> par.set_parval_from_str("fp_type", "double")
+    >>> par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
+    >>> par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    >>> try:
+    ...     build_bssn_rhs(fd_order=8, enable_KreissOliger_dissipation=False)
+    ... except ValueError as error:
+    ...     print(str(error).splitlines()[0])
+    Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, above the max_proven_padding of 4 recorded in dendrolib_capabilities.json, so it stays capability-gated until Dendrolib is pinned.
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _build = build_bssn_rhs(fd_order=4, enable_KreissOliger_dissipation=False)
+    >>> len(_build.evol_order), "Theta_fCCZ4" in _build.evol_order
+    (24, False)
+    >>> sorted(_build.lvalues)[:2]
+    ['rhs_aDD00[pp]', 'rhs_aDD01[pp]']
+    >>> _build.padding
+    (3, 3, 3)
+    >>> _build.upwind_control_fields
+    ('vetU0', 'vetU1', 'vetU2')
+    >>> reg.upwind_control_fields() == _build.upwind_control_fields
+    True
+    >>> reg.required_padding()
+    (3, 3, 3)
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError(
@@ -369,3 +390,14 @@ def register_CFunctions_rhs_eval(
         params=build.flat_block_params,
         body=build.flat_block_body,
     )
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    print(f"Doctest passed: All {results.attempted} test(s) passed")

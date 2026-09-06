@@ -108,16 +108,20 @@ def main() -> None:
 
     # Minkowski initial data and the smooth analytic perturbation the
     # lifecycle gates evolve.  Both are NRPy-authored kernels.
-    initial_data.register_CFunctions_minkowski_initial_data()
-    initial_data.register_CFunctions_perturbation()
+    initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
+    initial_data.register_CFunctions_perturbation(solver_stem=solver_stem)
 
     # The smooth ADM conversion, the separate connection-initialization pass,
     # and the algebraic projection.  The conversion registers the ADM source
     # fields as AUXEVOL; the projection is scheduled after initial data and
     # after every accepted timestep by the host context.
-    initial_data.register_CFunctions_initial_data_conversion(CoordSystem=CoordSystem)
+    initial_data.register_CFunctions_initial_data_conversion(
+        solver_stem=solver_stem, CoordSystem=CoordSystem
+    )
     projection.register_CFunctions_projection(
-        solver_namespace=solver_namespace, CoordSystem=CoordSystem
+        solver_stem=solver_stem,
+        solver_namespace=solver_namespace,
+        CoordSystem=CoordSystem,
     )
 
     # The constraint diagnostics.  H_Z4 and the connection constraint are

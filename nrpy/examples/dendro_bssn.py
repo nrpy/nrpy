@@ -3,8 +3,9 @@ Generate an NRPy-authored BSSN solver for Dendro-GR.
 
 This is the second formulation lowered through the Dendro infrastructure. It
 exists as much to test the infrastructure as to produce a solver: adding it
-required no change outside ``general_relativity/``, which is what makes the
-generic layer generic.
+required the formulation-agnostic lowering to be extracted into
+``kernel_lowering``, but no existing emitter changed behaviour and the fCCZ4
+output is unaffected.
 
 The emitted names follow Dendro-GR's own BSSN solver rather than NRPy's
 vocabulary: the solver directory is ``BSSN_GR``, CMake variables carry the
@@ -112,15 +113,19 @@ def main() -> None:
     # Minkowski initial data and the smooth analytic perturbation the
     # lifecycle gates evolve.  Both are formulation-agnostic: they write every
     # registered EVOL field to its registered asymptotic value.
-    initial_data.register_CFunctions_minkowski_initial_data()
-    initial_data.register_CFunctions_perturbation()
+    initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
+    initial_data.register_CFunctions_perturbation(solver_stem=solver_stem)
 
     # The smooth ADM conversion, the separate connection-initialization pass,
     # and the algebraic projection.  Both already read the registered BSSN
     # quantities, so they are shared with the fCCZ4 profile unchanged.
-    initial_data.register_CFunctions_initial_data_conversion(CoordSystem=CoordSystem)
+    initial_data.register_CFunctions_initial_data_conversion(
+        solver_stem=solver_stem, CoordSystem=CoordSystem
+    )
     projection.register_CFunctions_projection(
-        solver_namespace=solver_namespace, CoordSystem=CoordSystem
+        solver_stem=solver_stem,
+        solver_namespace=solver_namespace,
+        CoordSystem=CoordSystem,
     )
 
     # The constraint diagnostics: the Hamiltonian constraint and the three

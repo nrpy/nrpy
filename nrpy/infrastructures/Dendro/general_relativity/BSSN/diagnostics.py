@@ -13,8 +13,9 @@ authoritative checkpoint state, so they are registered in the DIAG group.  The
 kernel uses the same finite-difference order and the same memory-access
 mechanism as the right-hand side, so no separate diagnostic profile exists.
 
-Every name is read back from the projector or from the registry; none is
-written down here.
+The diagnostic name set is written down here, because the DIAG registration
+must precede the projector's own guarded AUX registration to decide the group;
+every other name is read back from the projector or from the registry.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -75,6 +76,36 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     :raises ValueError: If Infrastructure is not Dendro, if a diagnostic
         expression has no registered DIAG gridfunction, or if the kernel reads
         anything other than evolved state.
+
+    Doctests:
+    >>> import contextlib, io
+    >>> import nrpy.infrastructures.Dendro.generation_parameters  # noqa: F401
+    >>> from nrpy.infrastructures.Dendro.general_relativity.BSSN import rhs_eval
+    >>> par.set_parval_from_str("Infrastructure", "Dendro")
+    >>> par.set_parval_from_str("parallelization", "none")
+    >>> par.set_parval_from_str("fp_type", "double")
+    >>> par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
+    >>> par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    >>> with contextlib.redirect_stdout(io.StringIO()):
+    ...     _ = rhs_eval.build_bssn_rhs(
+    ...         fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     _build = build_diagnostics()
+
+    The diagnostics register in DIAG, and the projector's AUX names are gone:
+
+    >>> reg.registered_diag_order()
+    ('H', 'MU0', 'MU1', 'MU2')
+    >>> [n for n in ("M", "LAMBDA_CONSTRAINT") if n in gri.glb_gridfcs_dict]
+    []
+
+    The kernel writes exactly those four and reads only evolved state:
+
+    >>> sorted({line.split("[pp]")[0][len("diag_"):]
+    ...         for line in _build.block_body.splitlines()
+    ...         if line.strip().startswith("diag_")})
+    ['H', 'MU0', 'MU1', 'MU2']
+    >>> "in_trK" in _build.block_body, "aux_" in _build.block_body
+    (True, False)
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError(
@@ -113,8 +144,16 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
             gri.register_gridfunctions_for_single_rankN(base, rank=rank, group="DIAG")
 
     # Step 2: Take the constraint expressions from the established NRPy
-    # projector, which now finds its diagnostic names already registered.
+    # projector, which now finds the names this kernel writes already
+    # registered.  It also registers M and LAMBDA_CONSTRAINT, which this
+    # kernel does not compute; leaving them would make the generated state
+    # header advertise two variables no kernel writes and no vector backs, so
+    # they are dropped again here.
+    before = set(gri.glb_gridfcs_dict)
     constraints = BSSN_constraints[CoordSystem]
+    for name in sorted(set(gri.glb_gridfcs_dict) - before):
+        if name not in written_names:
+            del gri.glb_gridfcs_dict[name]
     expressions: Dict[str, sp.Expr] = {"H": constraints.H}
     for i in range(3):
         expressions[f"MU{i}"] = constraints.MU[i]
@@ -228,3 +267,14 @@ def register_CFunctions_diagnostics(*, CoordSystem: str = "Cartesian") -> None:
         params=build.global_params,
         body=build.global_body,
     )
+
+
+if __name__ == "__main__":
+    import doctest
+    import sys
+
+    results = doctest.testmod()
+    if results.failed > 0:
+        print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
+        sys.exit(1)
+    print(f"Doctest passed: All {results.attempted} test(s) passed")

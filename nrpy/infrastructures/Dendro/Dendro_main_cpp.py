@@ -142,7 +142,7 @@ int main(int argc, char* argv[]) {
   }  // END IF: projection refused after initial data
   // Measured on flat initial data, so it is identically zero whatever the
   // projector computes.  The discriminating projection evidence is the
-  // fccz4_projection self-test and the owner doctests that pin the exact
+  // projection self-test and the owner doctests that pin the exact
   // projected write set, not this line.
   const double projection_residual = global_max(
       std::fmax(ctx.last_projection.max_abs_det_minus_one,

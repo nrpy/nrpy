@@ -48,9 +48,9 @@ from nrpy.infrastructures.Dendro.simple_loop import (
     simple_loop,
 )
 
-# CFunction names (Dendro scheduling role keys).
-PROJECTION_BLOCK_CFUNCTION = "fccz4_project_block"
-PROJECTION_GLOBAL_CFUNCTION = "fccz4_project"
+# CFunction name suffixes; the solver stem is threaded from the caller.
+PROJECTION_BLOCK_SUFFIX = "project_block"
+PROJECTION_GLOBAL_SUFFIX = "project"
 
 # Generated status record: formulation-neutral (determinant, trace residual,
 # nonfinite counts, floors, first failing field/index, rank-local failure), so
@@ -61,7 +61,7 @@ STATUS_RECORD = "generated::ProjectionStatus"
 
 
 @dataclass(frozen=True)
-class FCCZ4ProjectionBuild:
+class ProjectionBuild:
     """
     Immutable result of building the algebraic projection for one profile.
 
@@ -78,8 +78,8 @@ class FCCZ4ProjectionBuild:
 
 
 def build_projection(
-    *, solver_namespace: str, CoordSystem: str = "Cartesian"
-) -> FCCZ4ProjectionBuild:
+    *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
+) -> ProjectionBuild:
     """
     Build the per-block and all-block algebraic projection CFunction bodies.
 
@@ -91,10 +91,11 @@ def build_projection(
     block arrays, so a value written early must not be able to perturb a value
     read late.
 
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
     :param CoordSystem: Reference-metric coordinate system.
-    :return: The immutable :class:`FCCZ4ProjectionBuild` result.
+    :return: The immutable :class:`ProjectionBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, or if a projected
         field is not a registered EVOL gridfunction.
 
@@ -112,7 +113,7 @@ def build_projection(
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _bundle = build_fccz4_expression_bundle()
-    >>> _build = build_projection(solver_namespace="fccz4")
+    >>> _build = build_projection(solver_stem="fccz4", solver_namespace="fccz4")
 
     The projection writes exactly the rescaled conformal metric
     and traceless-curvature components, and nothing else.
@@ -294,14 +295,14 @@ status->max_abs_trace_residual = std::fmax(
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     global_body = block_loop(
-        f"{PROJECTION_BLOCK_CFUNCTION}(world.geom[blk], y_n_gfs, status);",
+        f"{solver_stem}_{PROJECTION_BLOCK_SUFFIX}(world.geom[blk], y_n_gfs, status);",
         num_blocks="world.num_blocks",
     )
     global_params = (
         f"const MockWorld& world, {scalar_type}* const* y_n_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
-    return FCCZ4ProjectionBuild(
+    return ProjectionBuild(
         block_body=block_body,
         block_params=block_params,
         global_body=global_body,
@@ -310,16 +311,21 @@ status->max_abs_trace_residual = std::fmax(
 
 
 def register_CFunctions_projection(
-    *, solver_namespace: str, CoordSystem: str = "Cartesian"
+    *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
 ) -> None:
     """
     Register the per-block and all-block projection CFunctions.
 
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
     :param CoordSystem: Reference-metric coordinate system.
     """
-    build = build_projection(solver_namespace=solver_namespace, CoordSystem=CoordSystem)
+    build = build_projection(
+        solver_stem=solver_stem,
+        solver_namespace=solver_namespace,
+        CoordSystem=CoordSystem,
+    )
     block_desc = (
         "Per-block algebraic projection: rescale the conformal metric to unit "
         "determinant ratio and remove the conformal trace of Atilde "
@@ -329,7 +335,7 @@ def register_CFunctions_projection(
     subdirectory = "generated/src/projection"
     reg.register_Dendro_CFunction(
         role="projection_block",
-        name=PROJECTION_BLOCK_CFUNCTION,
+        name=f"{solver_stem}_{PROJECTION_BLOCK_SUFFIX}",
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
@@ -337,7 +343,7 @@ def register_CFunctions_projection(
     )
     reg.register_Dendro_CFunction(
         role="projection",
-        name=PROJECTION_GLOBAL_CFUNCTION,
+        name=f"{solver_stem}_{PROJECTION_GLOBAL_SUFFIX}",
         desc=global_desc,
         subdirectory=subdirectory,
         params=build.global_params,

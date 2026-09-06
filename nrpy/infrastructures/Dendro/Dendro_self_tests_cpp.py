@@ -472,7 +472,7 @@ int test_constraints() {
   // The constraint diagnostics of the Minkowski solution vanish.  The
   // reduction runs over the generated DIAG count, so no diagnostic is named.
   // Pointwise diagnostic correctness is not established here: it rests on
-  // the trusted-value validation of the shared fCCZ4 expression factory in
+  // the trusted-value validation of the shared expression factory in
   // the NRPy equations layer, plus the owner doctests that pin the DIAG
   // registration and the exact write set of the lowered kernel.
   if ($NAMESPACE::generated::NUM_DIAG_GFS == 0) return 1;

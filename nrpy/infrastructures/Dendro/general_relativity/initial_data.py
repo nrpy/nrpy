@@ -40,19 +40,19 @@ from nrpy.infrastructures.Dendro.simple_loop import (
     simple_loop,
 )
 
-# CFunction names (Dendro scheduling role keys).
-MINKOWSKI_BLOCK_CFUNCTION = "fccz4_minkowski_initial_data_block"
-MINKOWSKI_GLOBAL_CFUNCTION = "fccz4_minkowski_initial_data"
+# CFunction name suffixes.  The solver stem is threaded from the caller, as
+# Dendro names solver sources for the formulation, so these modules are shared
+# by every formulation without carrying one formulation's name.
+MINKOWSKI_BLOCK_SUFFIX = "minkowski_initial_data_block"
+MINKOWSKI_GLOBAL_SUFFIX = "minkowski_initial_data"
 
-# Smooth analytic perturbation used by the lifecycle gates: a
-# spatially varying state is what makes the generated derivative stencils
-# observable at all.
-PERTURBATION_BLOCK_CFUNCTION = "fccz4_smooth_perturbation_block"
-PERTURBATION_GLOBAL_CFUNCTION = "fccz4_smooth_perturbation"
+# Smooth analytic perturbation used by the lifecycle gates: a spatially varying
+# state is what makes the generated derivative stencils observable at all.
+PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
+PERTURBATION_GLOBAL_SUFFIX = "smooth_perturbation"
 
-# CFunction names.
-ADM_TO_EVOLVED_BLOCK_CFUNCTION = "fccz4_adm_to_evolved_block"
-INITIALIZE_LAMBDA_BLOCK_CFUNCTION = "fccz4_initialize_lambda_block"
+ADM_TO_EVOLVED_BLOCK_SUFFIX = "adm_to_evolved_block"
+INITIALIZE_LAMBDA_BLOCK_SUFFIX = "initialize_lambda_block"
 
 
 def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> str:
@@ -78,7 +78,7 @@ def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> st
     )
 
 
-def build_minkowski_initial_data() -> Tuple[str, str, str, str]:
+def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, str]:
     """
     Build the Minkowski initial data block and all-block CFunction bodies.
 
@@ -87,6 +87,7 @@ def build_minkowski_initial_data() -> Tuple[str, str, str, str]:
     emitted through the NRPy Dendro loop helper; the all-block entry point
     wraps it in the NRPy numerical block loop.
 
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     :return: (block_body, block_params, global_body, global_params).
     :raises ValueError: If Infrastructure is not Dendro.
     """
@@ -127,14 +128,14 @@ def build_minkowski_initial_data() -> Tuple[str, str, str, str]:
     )
     block_params = f"const BlockGeometry& geom, {scalar_type}* const* out_gfs"
     global_body = block_loop(
-        f"{MINKOWSKI_BLOCK_CFUNCTION}(world.geom[blk], out_gfs);",
+        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}(world.geom[blk], out_gfs);",
         num_blocks="world.num_blocks",
     )
     global_params = f"const MockWorld& world, {scalar_type}* const* out_gfs"
     return block_body, block_params, global_body, global_params
 
 
-def build_smooth_perturbation() -> Tuple[str, str, str, str]:
+def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     """
     Build the smooth analytic perturbation CFunction bodies.
 
@@ -146,6 +147,14 @@ def build_smooth_perturbation() -> Tuple[str, str, str, str]:
     ``c_codegen``: it is formulation content, so it belongs in a registered
     CFunction and never in a fixed template.
 
+    Each component is scaled by ``1 + its registry position``.  Without that
+    the perturbed state carries only two distinct component values, because
+    every field but the lapse and the conformal factor has an asymptotic value
+    of zero and receives an identical increment.  A flat-layout adapter that
+    bound a component to the wrong slab would then read a numerically
+    identical field, and the ``FLATADAPTER`` lifecycle gate could not see it.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     :return: (block_body, block_params, global_body, global_params).
     :raises ValueError: If Infrastructure is not Dendro.
     """
@@ -177,8 +186,11 @@ def build_smooth_perturbation() -> Tuple[str, str, str, str]:
         verbose=False,
     )
     fill_lines: List[str] = [profile_code.strip()]
-    for name in evol_order:
-        fill_lines.append(f"{naming.out_pointer(name)}[pp] += smooth_profile;")
+    for position, name in enumerate(evol_order):
+        fill_lines.append(
+            f"{naming.out_pointer(name)}[pp] += "
+            f"{scalar_type}{{{position + 1}}} * smooth_profile;"
+        )
     # The perturbation is applied over the whole padded block, ghost cells
     # included, so the interior RHS sees a consistent field on every stencil.
     point_loop_body = simple_loop(
@@ -198,7 +210,7 @@ def build_smooth_perturbation() -> Tuple[str, str, str, str]:
         f"const {scalar_type} amplitude, const {scalar_type} wavelength"
     )
     global_body = block_loop(
-        f"{PERTURBATION_BLOCK_CFUNCTION}"
+        f"{solver_stem}_{PERTURBATION_BLOCK_SUFFIX}"
         "(world.geom[blk], out_gfs, amplitude, wavelength);",
         num_blocks="world.num_blocks",
     )
@@ -209,16 +221,20 @@ def build_smooth_perturbation() -> Tuple[str, str, str, str]:
     return block_body, block_params, global_body, global_params
 
 
-def register_CFunctions_perturbation() -> None:
+def register_CFunctions_perturbation(*, solver_stem: str) -> None:
     """
     Register the smooth-perturbation CFunctions (with Dendro roles).
 
     The writer touches only the current point, so it needs no ghost points.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
-    block_body, block_params, global_body, global_params = build_smooth_perturbation()
+    block_body, block_params, global_body, global_params = build_smooth_perturbation(
+        solver_stem=solver_stem
+    )
     reg.register_Dendro_CFunction(
         role="perturbation_block",
-        name=PERTURBATION_BLOCK_CFUNCTION,
+        name=f"{solver_stem}_{PERTURBATION_BLOCK_SUFFIX}",
         desc=(
             "Per-block smooth analytic perturbation of every evolved field "
             "(lifecycle-test state; NRPy-authored profile)."
@@ -229,7 +245,7 @@ def register_CFunctions_perturbation() -> None:
     )
     reg.register_Dendro_CFunction(
         role="perturbation",
-        name=PERTURBATION_GLOBAL_CFUNCTION,
+        name=f"{solver_stem}_{PERTURBATION_GLOBAL_SUFFIX}",
         desc="All-block smooth analytic perturbation (NRPy block loop).",
         subdirectory="generated/src/initial_data",
         params=global_params,
@@ -237,19 +253,21 @@ def register_CFunctions_perturbation() -> None:
     )
 
 
-def register_CFunctions_minkowski_initial_data() -> None:
+def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
     """
     Register the Minkowski initial data CFunctions (with Dendro roles).
 
     The block writer reads no neighbors, so it is registered with an explicit
     no ghost points: the fill touches only the current point.
+
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
-    block_body, block_params, global_body, global_params = (
-        build_minkowski_initial_data()
+    block_body, block_params, global_body, global_params = build_minkowski_initial_data(
+        solver_stem=solver_stem
     )
     reg.register_Dendro_CFunction(
         role="minkowski_initial_data_block",
-        name=MINKOWSKI_BLOCK_CFUNCTION,
+        name=f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}",
         desc="Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values).",
         subdirectory="generated/src/initial_data",
         params=block_params,
@@ -257,7 +275,7 @@ def register_CFunctions_minkowski_initial_data() -> None:
     )
     reg.register_Dendro_CFunction(
         role="minkowski_initial_data",
-        name=MINKOWSKI_GLOBAL_CFUNCTION,
+        name=f"{solver_stem}_{MINKOWSKI_GLOBAL_SUFFIX}",
         desc="All-block Minkowski initial data fill (NRPy block loop).",
         subdirectory="generated/src/initial_data",
         params=global_params,
@@ -579,19 +597,20 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
 
 
 def register_CFunctions_initial_data_conversion(
-    *, CoordSystem: str = "Cartesian"
+    *, solver_stem: str, CoordSystem: str = "Cartesian"
 ) -> None:
     """
     Register the ADM conversion and the connection-initialization CFunctions.
 
+    :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param CoordSystem: Reference-metric coordinate system.
     """
     adm_body, adm_params = build_ADM_to_evolved(CoordSystem=CoordSystem)
     reg.register_Dendro_CFunction(
         role="adm_to_evolved_block",
-        name=ADM_TO_EVOLVED_BLOCK_CFUNCTION,
+        name=f"{solver_stem}_{ADM_TO_EVOLVED_BLOCK_SUFFIX}",
         desc=(
-            "Per-block smooth ADM-to-fCCZ4 conversion; the "
+            "Per-block smooth ADM-to-evolved conversion; the "
             "connection components are written by the separate pass."
         ),
         subdirectory="generated/src/initial_data",
@@ -601,7 +620,7 @@ def register_CFunctions_initial_data_conversion(
     lam_body, lam_params = build_lambda_initialization(CoordSystem=CoordSystem)
     reg.register_Dendro_CFunction(
         role="initialize_lambda_block",
-        name=INITIALIZE_LAMBDA_BLOCK_CFUNCTION,
+        name=f"{solver_stem}_{INITIALIZE_LAMBDA_BLOCK_SUFFIX}",
         desc=(
             "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
             "ReU^i, so the connection constraint C^i vanishes."

@@ -46,9 +46,6 @@ from nrpy.infrastructures.Dendro.simple_loop import (
 CONSTRAINTS_BLOCK_CFUNCTION = "fccz4_constraints_block"
 CONSTRAINTS_GLOBAL_CFUNCTION = "fccz4_constraints"
 
-# NRPy variance letters: an exact tensor-component name ends with a run of
-# these followed by one index digit per letter.
-
 
 @dataclass(frozen=True)
 class FCCZ4DiagnosticsBuild:
