@@ -38,7 +38,8 @@ jobs:
           pip install -U -r requirements.txt matplotlib
           if [[ "${{ matrix.python-version }}" != "3.7.13"  && "${{ matrix.python-version }}" != "3.8.12" && "${{ matrix.python-version }}" != "3.9.19" ]]; then
             pip install -U -r requirements-dev.txt
-            pip install git+https://github.com/sympy/sympy.git
+            # Pin before the regression reported in https://github.com/sympy/sympy/issues/30395.
+            pip install git+https://github.com/sympy/sympy.git@024191d3c79c74b20457d7e5534ae010ac171aab
           else
             # Install packages from requirements-dev.txt without fixed versions; i.e., install the latest version compatible with this Python version.
             sed 's/==.*//' requirements-dev.txt | xargs pip install -U
