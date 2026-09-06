@@ -964,18 +964,21 @@ class FDFunction:
         includes: List[str] = []
         fp_type_alias = self.fp_type_alias
         name = self.c_function_name
-        params = ""
-        params += ",".join(
-            sorted(
-                f"const {fp_type_alias} {str(symb)}"
-                for symb in self.FDexpr.free_symbols
-                if "FDPart1_" not in str(symb)
-            )
-        )
-
-        body = f"{FDexpr_c_code}\n return FD_result;"
         if self.uses_pointer_stride:
+            # For BHaH mixed derivatives, pass the gridfunction pointer, strides,
+            # and inverse spacings, and compute the FD stencil inside the function.
             params, body = self.pointer_stride_mixed_params_body()
+        else:
+            # For all other finite difference functions, pass the stencil values
+            # and inverse spacings in FDexpr, and use the generated C code for FD_result.
+            params = ",".join(
+                sorted(
+                    f"const {fp_type_alias} {str(symb)}"
+                    for symb in self.FDexpr.free_symbols
+                    if "FDPart1_" not in str(symb)
+                )
+            )
+            body = f"{FDexpr_c_code}\n return FD_result;"
 
         return cfc.CFunction(
             includes=includes,
