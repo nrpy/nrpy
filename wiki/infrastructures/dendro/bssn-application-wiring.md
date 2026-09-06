@@ -102,7 +102,7 @@ defects that a single-formulation tree could not expose:
   fields have an asymptotic value of zero, so the probe state carried two
   distinct component values and the `FLATADAPTER` gate could not see a
   component bound to the wrong flat-layout slab. Each component is now scaled
-  by its registry position.
+  by one plus its registry position.
 
 ## Sources
 
