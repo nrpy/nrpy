@@ -272,7 +272,7 @@ int test_offsets() {
                          "input binding dropped geom.component_offset\\n",
                          f);
             return 1;
-          }  // END IF: RHS nonzero on the fixed point
+          }  // END IF: RHS nonzero at offset
         }  // END LOOP: for a over interior x
       }  // END LOOP: for b over interior y
     }  // END LOOP: for c over interior z

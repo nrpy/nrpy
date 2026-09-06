@@ -71,15 +71,16 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     """
     Build the per-block and all-block BSSN constraint CFunction bodies.
 
-    The evolved state must already be registered when this is called; the
-    right-hand-side builder does that, and the Dendro examples call it first.
+    Either call order works: the projector's construction registers the
+    evolved state through ``BSSN_quantities`` if the right-hand-side builder
+    has not already done so, and the AUX cleanup below is restricted to the
+    names the projector newly added, so nothing pre-existing is disturbed.
 
     :param CoordSystem: Reference-metric coordinate system.
     :return: The immutable :class:`BSSNDiagnosticsBuild` result.
-    :raises ValueError: If Infrastructure is not Dendro, if the evolved state
-        is not yet registered, if a diagnostic expression has no registered
-        DIAG gridfunction, or if the kernel reads anything other than evolved
-        state.
+    :raises ValueError: If Infrastructure is not Dendro, if a diagnostic
+        expression has no registered DIAG gridfunction, or if the kernel reads
+        anything other than evolved state.
 
     Doctests:
     >>> import contextlib, io
