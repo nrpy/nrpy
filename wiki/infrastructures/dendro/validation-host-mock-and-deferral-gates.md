@@ -34,17 +34,17 @@ copies it into every generated project through `copy_files`, so it is part of
 the generated solver's build. The generated `tests/` directory registers ten
 CTest cases covering the state registry, parameter registry, padding, memory
 offsets, upwind selection, the right-hand side, initial data, exact-name
-selection, algebraic projection, and constraint diagnostics.
+selection, det/trace enforcement, and constraint diagnostics.
 
 Because the solver is compiled against mock host types, it refuses to configure
 inside a Dendro-GR tree that defines a real `dendro5` target; linking generated
 sources built against the mock types to the real host would be a silent type
 mismatch.
 
-The entry point runs a Minkowski lifecycle whose gates are the projection
+The entry point runs a Minkowski lifecycle whose gates are the det/trace
 residual, the maximum constraint violation, the flat-state right-hand side, the
 flat-block adapter agreement, the perturbed right-hand-side response, the
-observed convergence order, the 100-step drift, and the exact projection-pass
+observed convergence order, the 100-step drift, and the exact enforcement-pass
 count; a run that clears all eight prints its `MINKOWSKI_OK` line, which is a
 terminal banner rather than a ninth gate. It is run by hand.
 
@@ -107,7 +107,7 @@ proven, so a reader is not left inferring coverage from a green build.
 - [Dendro_main_cpp.py](../../../nrpy/infrastructures/Dendro/Dendro_main_cpp.py) - `output_Dendro_main_cpp`
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_tests_cmake`, `output_solver_cmake`
 - [Dendro_README_md.py](../../../nrpy/infrastructures/Dendro/Dendro_README_md.py) - `output_solver_README_md`
-- [Dendro_parameter_file.py](../../../nrpy/infrastructures/Dendro/Dendro_parameter_file.py) - `output_Dendro_parameter_file`
+- [Dendro_parfile.py](../../../nrpy/infrastructures/Dendro/Dendro_parfile.py) - `output_Dendro_parfile`
 
 ## See Also
 

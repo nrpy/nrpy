@@ -1,6 +1,6 @@
 # New Infrastructure Conformance
 
-> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed · Last reconciled: 09-05-2026
+> Rules a new NRPy infrastructure must satisfy to match the established ones, each with a right example, a wrong example, and a mechanical test. · Status: confirmed · Last reconciled: 09-06-2026
 > Up: [Infrastructures](index.md)
 
 ## Summary
@@ -152,7 +152,12 @@ for the project instance.
 the host-vocabulary rule above governs and this one yields: Dendro-GR ships
 `bssnCtx.cpp` and `bssn_constraints.h`, so a generated Dendro solver emits
 `<solver_stem>Ctx.cpp`. This rule still governs artifacts that are
-infrastructure-generic rather than host-named.
+infrastructure-generic rather than host-named. The host's vocabulary reaches
+only host-side identifiers — the solver directory, namespace, executable,
+context class and CMake variables. An NRPy-emitted kernel takes the name BHaH
+and ETLegacy already use for that operation (`rhs_eval`, `constraints_eval`,
+`enforce_detgbar_equals_detghat_trAzero`), prefixed with the stem the way
+ETLegacy prefixes its thorn name.
 
 ### Module naming
 

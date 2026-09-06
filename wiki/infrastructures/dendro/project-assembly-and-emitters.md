@@ -1,6 +1,6 @@
 # Project Assembly And Emitters
 
-> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-05-2026
+> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -21,18 +21,18 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 
 | Module | Emits |
 | --- | --- |
-| `Dendro_types_h` | the scalar contract header and the projection status record |
+| `Dendro_types_h` | the scalar contract header and the det/trace enforcement status record |
 | `Dendro_state_h` | the EVOL enum, name array, metadata, exact-name lookup, and the constants header |
-| `CodeParameters` | the generated parameter struct header and the sample parameter table |
-| `Dendro_preamble_h` | the preamble every generated source includes |
-| `output_CFunctions` | one source file per registered CFunction, the declaration header, and the CMake source list |
+| `CodeParameters` | the generated `params_struct` header, the sample parameter table, and the parameter CFunctions |
+| `Dendro_defines_h` | the `<stem>_defines.h` header every generated source includes, the role `BHaH_defines.h` plays in BHaH |
+| `output_CFunctions` | one source file per registered CFunction, the `<stem>_function_prototypes.h` header, and the CMake source list |
 | `Dendro_solver_context` | the host context header and source |
 | `Dendro_main_cpp` | the entry point and its lifecycle gates |
 | `Dendro_self_tests_cpp` | the generated CTest sources |
-| `Dendro_parameter_file` | the sample parameter file for one profile |
+| `Dendro_parfile` | the sample parameter file for one profile |
 | `cmake_helpers` | the solver and tests `CMakeLists.txt` |
 | `Dendro_README_md` | the project and solver READMEs |
-| `kernel_lowering` | the formulation-agnostic pointer bindings, point loop, parameter lists, operator records and padding every builder lowers through |
+| `block_kernel_helpers` | the formulation-agnostic pointer bindings, point loop, parameter lists, operator records and padding every builder lowers through |
 
 `output_project` owns no formulation choice and holds no state: it maps
 emitter output onto project-relative paths and writes it, then copies the mock
@@ -63,7 +63,7 @@ Claim evidence:
 Two examples drive this layer: `nrpy.examples.dendro_fccz4` and
 `nrpy.examples.dendro_bssn`. The second one exists as the test that the layer
 is generic. Adding it did require generic-layer work — the formulation-agnostic
-lowering moved into `kernel_lowering` and `tensor_family_of` into `naming` —
+lowering moved into `block_kernel_helpers` and `tensor_family_of` into `gridfunction_name_decorations` —
 but no existing emitter changed behaviour.
 
 The solver is emitted at `Dendro-GR/<solver_name>/` inside the project
@@ -80,8 +80,8 @@ from `cfc.CFunction_dict`, so the build can never carry a hand-written source
 inventory: one registered CFunction, one emitted source file, one CMake entry.
 
 The ghost points the emitted kernels need are recorded by the right-hand-side
-builder through `registration.set_required_padding` and read back by
-`output_project` through `registration.required_padding`. They are not
+builder through `CFunction_roles.set_required_padding` and read back by
+`output_project` through `CFunction_roles.required_padding`. They are not
 `fd_order // 2`: the upwinded and Kreiss-Oliger operator families reach one
 point further than the centred ones.
 
@@ -111,7 +111,7 @@ evidence. Cite the Python emitters and the registry symbols instead; see
 
 - [output_project.py](../../../nrpy/infrastructures/Dendro/output_project.py) - `output_project`
 - [output_CFunctions.py](../../../nrpy/infrastructures/Dendro/output_CFunctions.py) - `CFunction_artifacts`, `CFunction_cmake_source_list`, `derived_source_path`
-- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_Dendro_parameters_h`, `output_parameter_file_sample`
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `output_Dendro_parameters_h`, `output_parfile_sample`
 - [Dendro_state_h.py](../../../nrpy/infrastructures/Dendro/Dendro_state_h.py) - `state_records`, `output_Dendro_state_h`, `output_Dendro_constants_h`
 - [cmake_helpers.py](../../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`, `output_generated_sources_cmake`, `output_tests_cmake`
 - [Dendro_solver_context.py](../../../nrpy/infrastructures/Dendro/Dendro_solver_context.py) - `output_Dendro_solver_context_h`, `substitute_solver_identifiers`

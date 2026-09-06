@@ -1,6 +1,6 @@
 # Gridfunctions, Naming, And Loops
 
-> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-05-2026
+> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -25,7 +25,7 @@ the qualified CPU profile is not SIMD-qualified. It imports nothing from
 
 ### Exact names, no aliases
 
-The naming module permits only syntactic decorations that map one-to-one onto
+The `gridfunction_name_decorations` module permits only syntactic decorations that map one-to-one onto
 the exact NRPy name. Semantic aliases are prohibited: `cf` stays `cf` and never
 becomes `chi`, `lambdaU` never becomes `Gt`, and `Theta_fCCZ4` never becomes
 `Theta`. The decorations are the role pointers `in_`, `rhs_`, `out_`, and
@@ -76,7 +76,7 @@ solver cannot report.
 Claim evidence:
 - Claim: the Dendro role sidecar stores exactly one scheduling role string per registered CFunction name and no other metadata, and duplicate registration is rejected by `nrpy.c_function.register_CFunction` rather than by the sidecar.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/registration.py`, `register_Dendro_CFunction` and its doctest
+- Deciding authority: `nrpy/infrastructures/Dendro/CFunction_roles.py`, `register_Dendro_CFunction` and its doctest
 - Corroboration: `nrpy/c_function.py`, `register_CFunction` duplicate-name `ValueError`
 
 ### Loops
@@ -107,12 +107,12 @@ every CodeParameter they use into the registry.
 ## Sources
 
 - [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `read_gf_from_memory_Ccode_onept`
-- [naming.py](../../../nrpy/infrastructures/Dendro/naming.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
-- [registration.py](../../../nrpy/infrastructures/Dendro/registration.py) - `register_Dendro_CFunction`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
+- [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
+- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `register_Dendro_CFunction`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `require_serial_parallelization`
 - [block_loop.py](../../../nrpy/infrastructures/Dendro/block_loop.py) - `block_loop`
 - [generation_parameters.py](../../../nrpy/infrastructures/Dendro/generation_parameters.py) - `validate_generation_parameters`
-- [parameters.py](../../../nrpy/infrastructures/Dendro/runtime/parameters.py) - `register_CFunctions_parameters`
+- [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `register_CFunctions_parameters`
 - [ADR_dendro_names.md](../../../nrpy/infrastructures/Dendro/ADR_dendro_names.md) - `Decision`, `Consequences`
 
 ## See Also

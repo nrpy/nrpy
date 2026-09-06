@@ -1,21 +1,23 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the algebraic projection, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-05-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Dendro](index.md)
 
 ## Summary
 
 Four builders lower the shared fCCZ4 expression factory into Dendro kernels.
 The scientific formulation comes from the shared factory and from established
-NRPy projectors and conversions, and every field name is read back from the
+NRPy constraint factories and conversions, and every field name is read back from the
 registry rather than written down. What the builders do author is bounded and
 deliberate: the analytic test perturbation profile, the two algebraic residuals
-the projection reports, and the rescaled connection relation — all assembled
+the enforcement reports, and the rescaled connection relation — all assembled
 from registered quantities, and all registered as CFunctions rather than written
 into a fixed template. Each family
-pairs a pure `build_*` function with a `register_CFunctions_*` function, as the
-other NRPy infrastructures do, so one profile can assemble a different subset
-without the builders knowing about each other.
+pairs a pure `build_*` function with a `register_CFunctions_*` function so one
+profile can assemble a different subset without the builders knowing about each
+other. That split is Dendro's own: the established infrastructures build and
+register inside a single `register_CFunction_*`, and their kernel-building
+`build_*` helpers return C strings rather than a record.
 
 ## Detail
 
@@ -33,25 +35,25 @@ operators reach. That padding is taken per axis from the same coefficient
 source the kernel was lowered with, so it is not `fd_order // 2`: the upwinded
 and Kreiss-Oliger families reach one point further than the centred ones.
 
-### Algebraic projection
+### Enforcing det(gammabar) = det(gammahat) and tr(Abar) = 0
 
-The projection restores the two algebraic constraints of the conformal
+The kernel restores the two algebraic constraints of the conformal
 decomposition at every point of a block: the conformal metric determinant ratio
 returns to one, and the trace of the conformal traceless extrinsic curvature
-returns to zero. The projected values come from the established NRPy projector
+returns to zero. The projected values come from the established NRPy module
 `BSSN_algebraic_constraints`, so the module contributes no new formulation
 content; it lowers those expressions into a Dendro point loop and adds the
 structured status record the generated host lifecycle consumes. The kernel never
 calls `exit()`.
 
-Because the projection is pointwise, it needs no padding, and computing every
+Because the enforcement is pointwise, it needs no padding, and computing every
 projected value into a local before storing is what makes an in-place call
 safe: the input and output pointers may alias the same block arrays. That
 argument is specific to a pointwise kernel and does not extend to the stencil
 kernels on this page.
 
 Every written field name is read back from the registered BSSN quantities, so
-no field name is hardcoded. Only `hDD` and `aDD` are written: the projection is
+no field name is hardcoded. Only `hDD` and `aDD` are written: the enforcement is
 purely algebraic in those two families, and `lambdaU` and `Theta_fCCZ4` are
 never touched by it.
 
@@ -69,7 +71,7 @@ Claim evidence:
 - Claim: the generated Minkowski initial-data writer binds its outputs through `out_<name>` pointers, not `rhs_<name>`, because it produces state rather than a right-hand side.
 - Role: descriptive behavior
 - Deciding authority: `nrpy/infrastructures/Dendro/general_relativity/initial_data.py`, `_block_pointer_bindings`
-- Corroboration: `nrpy/infrastructures/Dendro/naming.py`, `out_pointer` docstring recording why `rhs_` was rejected
+- Corroboration: `nrpy/infrastructures/Dendro/gridfunction_name_decorations.py`, `out_pointer` docstring recording why `rhs_` was rejected
 - Validation: `inspected=pass; generated=pass; built=pass; run=not-run; result_checked=not-run`
 - Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=--fd-order 4 --no-ko; date=09-04-2026`
 
@@ -111,10 +113,10 @@ the lowering. For the equations themselves see
 
 ## Sources
 
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_fccz4_rhs`, `register_CFunctions_rhs_eval`, `FCCZ4RHSBuild`
-- [projection.py](../../../nrpy/infrastructures/Dendro/general_relativity/projection.py) - `build_projection`, `register_CFunctions_projection`
-- [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_evolved`, `build_lambda_initialization`
-- [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/diagnostics.py) - `build_diagnostics`, `register_CFunctions_diagnostics`
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `build_rhs_eval`, `register_CFunctions_rhs_eval`, `FCCZ4RHSBuild`
+- [enforce_detgbar_equals_detghat_trAzero.py](../../../nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py) - `build_enforce_detgbar_equals_detghat_trAzero`, `register_CFunctions_enforce_detgbar_equals_detghat_trAzero`
+- [initial_data.py](../../../nrpy/infrastructures/Dendro/general_relativity/initial_data.py) - `build_minkowski_initial_data`, `build_ADM_to_BSSN`, `build_initial_data_lambdaU`
+- [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py) - `build_constraints_eval`, `register_CFunctions_constraints_eval`
 - [fCCZ4_system.py](../../../nrpy/equations/general_relativity/fCCZ4_system.py) - `build_fccz4_expression_bundle`
 - [kreiss_oliger_terms.py](../../../nrpy/equations/general_relativity/kreiss_oliger_terms.py) - Kreiss-Oliger dissipation terms
 - [BSSN_algebraic_constraints.py](../../../nrpy/equations/general_relativity/BSSN_algebraic_constraints.py) - `BSSN_algebraic_constraints`
