@@ -1,8 +1,8 @@
-# nrpy/infrastructures/Dendro/general_relativity/projection.py
+# nrpy/infrastructures/Dendro/general_relativity/enforce_detgbar_equals_detghat_trAzero.py
 r"""
-Algebraic determinant/trace-free projection for the Dendro infrastructure.
+Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 for the Dendro infrastructure.
 
-The projection restores the two algebraic constraints of the conformal
+The kernel restores the two algebraic constraints of the conformal
 decomposition at every point of a block:
 
 .. math::
@@ -11,7 +11,7 @@ decomposition at every point of a block:
     \qquad
     \bar\gamma^{ij}\widetilde{A}_{ij} = 0.
 
-The projected values come from the established NRPy projector
+The projected values come from the established NRPy module
 :func:`nrpy.equations.general_relativity.BSSN_algebraic_constraints.BSSN_algebraic_constraints`,
 so this module contributes no new formulation content: it lowers those
 expressions into a Dendro point loop, adds a structured status record the
@@ -20,7 +20,7 @@ generated host lifecycle consumes, and never calls ``exit()``.
 Every written field name is read back from the registered BSSN quantities
 (``Bq.hDD[i][j]`` and ``Bq.aDD[i][j]`` are the gridfunction symbols themselves),
 so no field name is hardcoded here.  ``lambdaU`` and ``Theta_fCCZ4`` are never
-written: the projection is purely algebraic in ``hDD`` and ``aDD``.
+written: the enforcement is purely algebraic in ``hDD`` and ``aDD``.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -40,8 +40,9 @@ from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
     BSSN_algebraic_constraints,
 )
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters, naming
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.block_loop import block_loop
 from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
@@ -49,21 +50,25 @@ from nrpy.infrastructures.Dendro.simple_loop import (
 )
 
 # CFunction name suffixes; the solver stem is threaded from the caller.
-PROJECTION_BLOCK_SUFFIX = "project_block"
-PROJECTION_GLOBAL_SUFFIX = "project"
+ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX = (
+    "enforce_detgbar_equals_detghat_trAzero_block"
+)
+ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_GLOBAL_SUFFIX = (
+    "enforce_detgbar_equals_detghat_trAzero"
+)
 
 # Generated status record: formulation-neutral (determinant, trace residual,
 # nonfinite counts, first failing field/index, rank-local failure), so
 # it belongs to the generated scalar contract emitted by Dendro_types_h rather
 # than to a physics builder.  The namespace is threaded from the caller, as
 # every other emitted identifier is.
-STATUS_RECORD = "generated::ProjectionStatus"
+STATUS_RECORD = "generated::detgtrazero_status_struct"
 
 
 @dataclass(frozen=True)
-class ProjectionBuild:
+class DetgtrazeroBuild:
     """
-    Immutable result of building the algebraic projection for one profile.
+    Immutable result of building the constraint enforcement for one profile.
 
     :param block_body: The per-block CFunction body (bindings + point loop).
     :param block_params: The per-block CFunction parameter list.
@@ -77,18 +82,18 @@ class ProjectionBuild:
     global_params: str
 
 
-def build_projection(
+def build_enforce_detgbar_equals_detghat_trAzero(
     *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
-) -> ProjectionBuild:
+) -> DetgtrazeroBuild:
     """
-    Build the per-block and all-block algebraic projection CFunction bodies.
+    Build the per-block and all-block constraint-enforcement CFunction bodies.
 
     The point body evaluates the determinant ratio and the conformal trace of
     ``Atilde`` first, refuses the point when the determinant ratio is not
     positive or either quantity is nonfinite, and otherwise computes all
     twelve projected values into locals
     before writing any of them.  Computing into locals is what makes the
-    in-place projection safe: the input and output pointers alias the same
+    in-place enforcement safe: the input and output pointers alias the same
     block arrays, so a value written early must not be able to perturb a value
     read late.
 
@@ -96,7 +101,7 @@ def build_projection(
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
     :param CoordSystem: Reference-metric coordinate system.
-    :return: The immutable :class:`ProjectionBuild` result.
+    :return: The immutable :class:`DetgtrazeroBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, or if a projected
         field is not a registered EVOL gridfunction.
 
@@ -114,22 +119,22 @@ def build_projection(
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _bundle = build_fccz4_expression_bundle()
-    >>> _build = build_projection(solver_stem="fccz4", solver_namespace="fccz4")
+    >>> _build = build_enforce_detgbar_equals_detghat_trAzero(solver_stem="fccz4", solver_namespace="fccz4")
 
-    The projection writes exactly the rescaled conformal metric
+    The kernel writes exactly the rescaled conformal metric
     and traceless-curvature components, and nothing else.
 
     >>> sorted(
     ...     name
     ...     for name in gri.glb_gridfcs_dict
-    ...     if naming.out_pointer(name) + "[pp] =" in _build.block_body
+    ...     if gf_names.out_pointer(name) + "[pp] =" in _build.block_body
     ... )
     ['aDD00', 'aDD01', 'aDD02', 'aDD11', 'aDD12', 'aDD22', 'hDD00', 'hDD01', 'hDD02', 'hDD11', 'hDD12', 'hDD22']
 
     The connection and the Z4 scalar are left alone.
 
     >>> any(
-    ...     naming.out_pointer(name) in _build.block_body
+    ...     gf_names.out_pointer(name) in _build.block_body
     ...     for name in ("lambdaU0", "lambdaU1", "lambdaU2", "Theta_fCCZ4")
     ... )
     False
@@ -143,22 +148,22 @@ def build_projection(
     this module, so a change in the lowered text is caught here rather than by
     a standalone harness.
 
-    >>> validate_strings(_build.global_body, "projection_allblock", file_ext="cpp")
+    >>> validate_strings(_build.global_body, "allblock", file_ext="cpp")
     """
     # Step 1: Require the qualified Dendro profile, and validate the registered
     # generation parameters before any expression is built.
     if par.parval_from_str("Infrastructure") != "Dendro":
         raise ValueError(
-            "Infrastructure must be 'Dendro' to build the Dendro projection, "
+            "Infrastructure must be 'Dendro' to build the Dendro constraint enforcement, "
             f"got {par.parval_from_str('Infrastructure')!r}."
         )
     require_serial_parallelization()
     generation_parameters.validate_generation_parameters()
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
     fp_type = str(par.parval_from_str("fp_type"))
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
 
-    # Step 2: Collect the projected fields from the established NRPy projector.
+    # Step 2: Collect the projected fields from BSSN_algebraic_constraints.
     # The target names are the registered BSSN gridfunction symbols themselves,
     # so the exact-name rule holds by construction.
     Bq = BSSN_quantities[CoordSystem]
@@ -175,11 +180,11 @@ def build_projection(
     if unknown:
         raise ValueError(
             f"Projected fields {unknown} are not registered EVOL gridfunctions; "
-            "the projection must write exact registered names."
+            "the enforcement must write exact registered names."
         )
 
     # Step 3: Build the two reported residuals from the same registered BSSN
-    # quantities the projector uses, so they describe the state it saw.  The
+    # quantities the enforcement uses, so they describe the state it saw.  The
     # determinant is recomputed rather than read from ``Bq.detgammabar``, which
     # is the *assumed* value and would make the residual identically zero.
     _gammabarUU, detgammabar = ixp.symm_matrix_inverter3x3(Bq.gammabarDD)
@@ -216,7 +221,7 @@ def build_projection(
     # Step 5: Assemble the point body top-to-bottom, matching the order the
     # generated C executes in: compute everything into locals, refuse the point
     # if the state is inadmissible, then store.  Storing last is what makes the
-    # in-place projection safe, since the input and output pointers alias.
+    # in-place enforcement safe, since the input and output pointers alias.
     point_body = kernel
     # Step 5.a: The structured-failure branch records the determinant, the
     # trace residual, the nonfinite flags, and the first failing field and
@@ -227,7 +232,7 @@ def build_projection(
     # above are simply not stored for a refused point.
     first_failing_field_scan = "".join(
         f"    if (status->first_failing_field < 0 && "
-        f"!std::isfinite({naming.input_pointer(name)}[pp])) "
+        f"!std::isfinite({gf_names.input_pointer(name)}[pp])) "
         f"status->first_failing_field = {evol_order.index(name)};\n"
         for name in read_names
     )
@@ -254,7 +259,7 @@ status->max_abs_trace_residual = std::fmax(
     static_cast<double>(std::fabs(trace_residual)));
 """
     point_body += "".join(
-        f"{naming.out_pointer(name)}[pp] = projected_{name};\n"
+        f"{gf_names.out_pointer(name)}[pp] = projected_{name};\n"
         for name in projected_names
     )
 
@@ -263,8 +268,8 @@ status->max_abs_trace_residual = std::fmax(
     bindings = Dendro_state_h.output_component_bindings(
         read_names,
         scalar_type,
-        array="y_n_gfs",
-        role=naming.input_pointer,
+        array="in_gfs",
+        role=gf_names.input_pointer,
         const_pointee=True,
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
@@ -272,14 +277,14 @@ status->max_abs_trace_residual = std::fmax(
     bindings += Dendro_state_h.output_component_bindings(
         projected_names,
         scalar_type,
-        array="y_n_gfs",
-        role=naming.out_pointer,
+        array="in_gfs",
+        role=gf_names.out_pointer,
         const_pointee=False,
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
 
     # Step 7: Wrap the point body in the NRPy point loop and the NRPy block
-    # loop.  Padding is zero: the projection is algebraic, so every cell of the
+    # loop.  Padding is zero: the enforcement is algebraic, so every cell of the
     # padded block is projected, ghost cells included.
     block_body = bindings + "\n"
     block_body += simple_loop(
@@ -292,18 +297,18 @@ status->max_abs_trace_residual = std::fmax(
         dx="geom.dx",
     )
     block_params = (
-        f"const BlockGeometry& geom, {scalar_type}* const* y_n_gfs, "
+        f"const BlockGeometry& geom, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     global_body = block_loop(
-        f"{solver_stem}_{PROJECTION_BLOCK_SUFFIX}(world.geom[blk], y_n_gfs, status);",
+        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}(world.geom[blk], in_gfs, status);",
         num_blocks="world.num_blocks",
     )
     global_params = (
-        f"const MockWorld& world, {scalar_type}* const* y_n_gfs, "
+        f"const MockWorld& world, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
-    return ProjectionBuild(
+    return DetgtrazeroBuild(
         block_body=block_body,
         block_params=block_params,
         global_body=global_body,
@@ -311,40 +316,40 @@ status->max_abs_trace_residual = std::fmax(
     )
 
 
-def register_CFunctions_projection(
+def register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
     *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
 ) -> None:
     """
-    Register the per-block and all-block projection CFunctions.
+    Register the per-block and all-block constraint-enforcement CFunctions.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param solver_namespace: Solver namespace, following Dendro's lowercase
         formulation habit (``namespace bssn``).
     :param CoordSystem: Reference-metric coordinate system.
     """
-    build = build_projection(
+    build = build_enforce_detgbar_equals_detghat_trAzero(
         solver_stem=solver_stem,
         solver_namespace=solver_namespace,
         CoordSystem=CoordSystem,
     )
     block_desc = (
-        "Per-block algebraic projection: rescale the conformal metric to unit "
+        "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 per block: rescale the conformal metric to unit "
         "determinant ratio and remove the conformal trace of Atilde "
         "(structured status, no exit())."
     )
-    global_desc = "All-block algebraic projection (NRPy block loop)."
-    subdirectory = "generated/src/projection"
-    reg.register_Dendro_CFunction(
-        role="projection_block",
-        name=f"{solver_stem}_{PROJECTION_BLOCK_SUFFIX}",
+    global_desc = "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 over all blocks (NRPy block loop)."
+    subdirectory = "generated/src/enforce_detgbar_equals_detghat_trAzero"
+    roles.register_Dendro_CFunction(
+        role="enforce_detgbar_equals_detghat_trAzero_block",
+        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}",
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
     )
-    reg.register_Dendro_CFunction(
-        role="projection",
-        name=f"{solver_stem}_{PROJECTION_GLOBAL_SUFFIX}",
+    roles.register_Dendro_CFunction(
+        role="enforce_detgbar_equals_detghat_trAzero",
+        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_GLOBAL_SUFFIX}",
         desc=global_desc,
         subdirectory=subdirectory,
         params=build.global_params,

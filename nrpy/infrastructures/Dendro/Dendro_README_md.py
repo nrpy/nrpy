@@ -85,7 +85,7 @@ Regenerate with: `python -m {generator_module} ...`
 - `pars/` — the generated sample parameter file.
 - `tests/` — self-tests over the state registry, parameter registry, padding,
   memory offsets, upwind selection, RHS, initial data, exact-name selection,
-  algebraic projection, and constraint diagnostics.
+  algebraic constraint enforcement, and constraint diagnostics.
 
 No formulation content is authored here: the names, order, stencils, and
 expressions come from the NRPy registries, and the Dendro runtime owns only

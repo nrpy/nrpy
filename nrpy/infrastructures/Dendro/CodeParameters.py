@@ -1,6 +1,6 @@
 # nrpy/infrastructures/Dendro/CodeParameters.py
 """
-Emit the generated parameter header and sample parameter file for a Dendro solver.
+Emit the parameter header, the sample parameter file and the parameter CFunctions.
 
 Every name, type and default is read from the NRPy CodeParameter registry, as
 BHaH's ``CodeParameters.py`` does.  Every registered parameter whose
@@ -9,12 +9,18 @@ generated struct is the whole registry and a caller that registers a parameter
 gets it in the table; no physics parameter table is authored here and no
 equation module is imported.
 
+The parameter CFunctions (set defaults, parse a file, validate, print) are
+registered from here as well, as BHaH registers ``params_struct_set_to_default``
+from its own ``CodeParameters``.  They carry no Dendro role: the host context
+calls them, and they are not scheduled as numerical kernels.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
+import nrpy.c_function as cfc
 import nrpy.params as par
 
 BANNER = (
@@ -73,14 +79,14 @@ def c_type(cparam_type: str, scalar_type: str) -> str:
     if base == "#define":
         raise ValueError(
             "`#define` CodeParameters are compile-time constants and are never "
-            "`GeneratedParams` members."
+            "`params_struct` members."
         )
     raise ValueError(f"CodeParameter type {cparam_type!r} has no generated mapping.")
 
 
 def member_declaration(cp_name: str, cparam_type: str, scalar_type: str) -> str:
     """
-    Render one ``GeneratedParams`` member declaration.
+    Render one ``params_struct`` member declaration.
 
     :param cp_name: Registered CodeParameter name.
     :param cparam_type: Registered ``cparam_type`` string.
@@ -116,7 +122,7 @@ def output_Dendro_parameters_h(solver_stem: str, solver_namespace: str) -> str:
     lines: List[str] = [BANNER.rstrip("\n"), "#pragma once", ""]
     lines += ["", f'#include "{solver_stem}_types.h"', ""]
     lines.append(f"namespace {solver_namespace}::generated {{")
-    lines += ["", "struct GeneratedParams {"]
+    lines += ["", "struct params_struct {"]
     emitted = 0
     for cp_name, code_param in sorted(par.glb_code_params_dict.items()):
         if code_param.cparam_type == "#define":
@@ -125,13 +131,13 @@ def output_Dendro_parameters_h(solver_stem: str, solver_namespace: str) -> str:
             "    " + member_declaration(cp_name, code_param.cparam_type, scalar_type)
         )
         emitted += 1
-    lines += ["};  // END STRUCT: GeneratedParams", ""]
+    lines += ["};  // END STRUCT: params_struct", ""]
     lines.append(f"inline constexpr unsigned NUM_CODE_PARAMETERS = {emitted};")
     lines += ["", f"}}  // END NAMESPACE: {solver_namespace}::generated", ""]
     return "\n".join(lines)
 
 
-def output_parameter_file_sample() -> str:
+def output_parfile_sample() -> str:
     """
     Emit the sample parameter-file section for the runtime parameters.
 
@@ -157,6 +163,154 @@ def output_parameter_file_sample() -> str:
             raise ValueError(f"No TOML mapping for cparam_type {cparam_type!r}.")
         lines.append(f"{cp_name} = {literal}")
     return "\n".join(lines) + "\n"
+
+
+PARAMETERS_SUBDIRECTORY = "generated/src/parameters"
+
+
+def emitted_parameter_names() -> List[str]:
+    """
+    Return the registered CodeParameter names the generated struct carries.
+
+    The order and the ``#define`` exclusion match
+    :func:`nrpy.infrastructures.Dendro.CodeParameters.output_Dendro_parameters_h`,
+    so a generated body and the generated struct cannot disagree about which
+    members exist.
+
+    :return: Sorted CodeParameter names, ``#define`` parameters excluded.
+    """
+    return [
+        cp_name
+        for cp_name, code_param in sorted(par.glb_code_params_dict.items())
+        if code_param.cparam_type != "#define"
+    ]
+
+
+def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> None:
+    """
+    Register the generated parameter CFunctions.
+
+    Every parameter CFunction takes the generated parameter table by reference
+    (``<solver_namespace>::generated::params_struct& params``).  The table
+    object is owned by the host context, so the generated bodies carry no host
+    storage.
+
+    Call this after every scientific CFunction is registered.
+
+    :param solver_namespace: Solver namespace, following Dendro's lowercase
+        formulation habit (``namespace bssn``).
+    :param solver_stem: Lowercase formulation stem for the emitted CFunction
+        names, following Dendro's habit of naming solver symbols for the
+        formulation.
+    """
+    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    params_type = f"{solver_namespace}::generated::params_struct"
+    names = emitted_parameter_names()
+
+    # A char array is filled with snprintf, which guarantees null termination,
+    # exactly as BHaH's CodeParameters emitter does.  Numeric array parameters
+    # are left value-initialized: a registered scalar default supplies no
+    # element values, and inventing them would be worse than zero.
+    set_lines: List[str] = [f"params = {params_type}{{}};"]
+    for cp_name in names:
+        code_param = par.glb_code_params_dict[cp_name]
+        value: Any = code_param.defaultvalue
+        cparam_type = code_param.cparam_type
+        size = array_size(cparam_type)
+        if size is not None:
+            if c_type(cparam_type, scalar_type) == "char":
+                set_lines.append(
+                    f'std::snprintf(params.{cp_name}, {size}, "%s", "{value}");'
+                )
+        elif cparam_type == "bool":
+            set_lines.append(f"params.{cp_name} = {'true' if value else 'false'};")
+        elif cparam_type == "int":
+            set_lines.append(f"params.{cp_name} = {int(value)};")
+        elif cparam_type in ("REAL", "DendroScalar"):
+            set_lines.append(
+                f"params.{cp_name} = static_cast<{scalar_type}>({float(value)!r});"
+            )
+        else:
+            set_lines.append(f"params.{cp_name} = {float(value)!r};")
+    cfc.register_CFunction(
+        subdirectory=PARAMETERS_SUBDIRECTORY,
+        desc="Generated parameter defaults, from the registered CodeParameters.",
+        includes=["<cstdio>"],
+        name=f"{solver_stem}_params_struct_set_to_default",
+        params=f"{params_type}& params",
+        body="\n".join(set_lines),
+    )
+
+    validate_lines: List[str] = ["bool ok = true;"]
+    for cp_name in names:
+        cparam_type = par.glb_code_params_dict[cp_name].cparam_type
+        if array_size(cparam_type) is not None:
+            continue
+        if c_type(cparam_type, scalar_type) in ("bool", "int", "char"):
+            continue
+        validate_lines.append(
+            f"if (!std::isfinite(params.{cp_name})) {{ ok = false; }}"
+        )
+    validate_lines.append("return ok;")
+    cfc.register_CFunction(
+        subdirectory=PARAMETERS_SUBDIRECTORY,
+        desc="Generated parameter validation: finite checks for floating point parameters.",
+        cfunc_type="bool",
+        includes=["<cmath>"],
+        name=f"{solver_stem}_params_validate",
+        params=f"const {params_type}& params",
+        body="\n".join(validate_lines),
+    )
+
+    print_lines: List[str] = [f'std::printf("{solver_stem} effective parameters:\\n");']
+    for cp_name in names:
+        cparam_type = par.glb_code_params_dict[cp_name].cparam_type
+        base = c_type(cparam_type, scalar_type)
+        if array_size(cparam_type) is not None:
+            if base == "char":
+                print_lines.append(
+                    f'std::printf("  {cp_name} = %s\\n", params.{cp_name});'
+                )
+            continue
+        if base in ("bool", "int"):
+            print_lines.append(
+                f'std::printf("  {cp_name} = %d\\n", (int) params.{cp_name});'
+            )
+        else:
+            print_lines.append(
+                f'std::printf("  {cp_name} = %g\\n", (double) params.{cp_name});'
+            )
+    cfc.register_CFunction(
+        subdirectory=PARAMETERS_SUBDIRECTORY,
+        desc="Generated effective-parameter printout.",
+        includes=["<cstdio>"],
+        name=f"{solver_stem}_params_print_effective",
+        params=f"const {params_type}& params",
+        body="\n".join(print_lines),
+    )
+
+    # No parameter-file binding exists in this profile: the host parser binds
+    # the same generated struct once Dendrolib is pinned.  Returning nonzero
+    # keeps a supplied parameter file from being silently ignored.
+    parse_lines: List[str] = [
+        "// This profile has no parameter-file binding: the host parser binds",
+        "// the same generated struct once Dendrolib is pinned.  Refusing the",
+        "// file keeps a caller from believing its values were applied.",
+        "(void) params;",
+        "(void) parfile_path;",
+        "return 1;",
+    ]
+    cfc.register_CFunction(
+        subdirectory=PARAMETERS_SUBDIRECTORY,
+        desc=(
+            "Generated parameter-file binding, unimplemented in this profile: "
+            "refuses a supplied parameter file."
+        ),
+        cfunc_type="int",
+        name=f"{solver_stem}_params_parse_file",
+        params=f"{params_type}& params, const char* parfile_path",
+        body="\n".join(parse_lines),
+    )
 
 
 if __name__ == "__main__":

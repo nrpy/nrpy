@@ -1,4 +1,4 @@
-# nrpy/infrastructures/Dendro/kernel_lowering.py
+# nrpy/infrastructures/Dendro/block_kernel_helpers.py
 """
 Lower a registered NRPy expression set into Dendro kernel bodies.
 
@@ -24,7 +24,8 @@ from nrpy.finite_difference import (
     extract_list_of_deriv_var_strings_from_sympyexpr_list,
 )
 from nrpy.helpers.expression_utils import get_params_commondata_symbols_from_expr_list
-from nrpy.infrastructures.Dendro import Dendro_state_h, naming
+from nrpy.infrastructures.Dendro import Dendro_state_h
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.simple_loop import simple_loop
 
 # Finite-difference operator families emitted by c_codegen.  Field names use
@@ -179,7 +180,7 @@ def block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> str:
             evol_order,
             scalar_type,
             array="in_gfs",
-            role=naming.input_pointer,
+            role=gf_names.input_pointer,
             const_pointee=True,
             index_expression=_by_position,
         )
@@ -188,7 +189,7 @@ def block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> str:
             evol_order,
             scalar_type,
             array="rhs_gfs",
-            role=naming.rhs_pointer,
+            role=gf_names.rhs_pointer,
             const_pointee=False,
             index_expression=_by_position,
         )
@@ -229,7 +230,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
                 evol_order,
                 scalar_type,
                 array="in_gfs_flat",
-                role=naming.input_pointer,
+                role=gf_names.input_pointer,
                 const_pointee=True,
                 index_expression=_by_position,
                 base_offset=None,
@@ -239,7 +240,7 @@ def flat_block_pointer_bindings(evol_order: Sequence[str], scalar_type: str) -> 
                 evol_order,
                 scalar_type,
                 array="rhs_gfs_flat",
-                role=naming.rhs_pointer,
+                role=gf_names.rhs_pointer,
                 const_pointee=False,
                 index_expression=_by_position,
                 base_offset=None,

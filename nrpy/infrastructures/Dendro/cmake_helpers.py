@@ -169,21 +169,21 @@ def output_tests_cmake(solver_prefix: str, solver_stem: str) -> str:
     lines: List[str] = list(BANNER) + [
         f"set({solver_prefix}_MODULE_ROOT {SRC}/..)",
         f"include({SRC}/../generated/cmake/nrpy_generated_sources.cmake)",
-        "add_executable(test_generated",
-        f"  {SRC}/test_generated.cpp",
+        f"add_executable({stem}_self_tests",
+        f"  {SRC}/{stem}_self_tests.cpp",
         "  ${" + solver_prefix + "_NRPY_GENERATED_SOURCES}",
         ")",
-        "target_include_directories(test_generated PRIVATE",
+        f"target_include_directories({stem}_self_tests PRIVATE",
         f"  {SRC}/../host_mock",
         f"  {SRC}/../include",
         f"  {SRC}/../generated/include",
         ")",
-        "target_compile_features(test_generated PRIVATE cxx_std_17)",
+        f"target_compile_features({stem}_self_tests PRIVATE cxx_std_17)",
         "",
     ]
     for section in Dendro_self_tests_cpp.SECTIONS:
         lines.append(
-            f"add_test(NAME {stem}_{section} COMMAND test_generated {section})"
+            f"add_test(NAME {stem}_{section} COMMAND {stem}_self_tests {section})"
         )
     lines.append("")
     return "\n".join(lines)

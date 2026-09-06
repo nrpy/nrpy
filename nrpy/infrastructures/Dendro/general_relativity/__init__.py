@@ -1,7 +1,7 @@
 from . import (
     BSSN,
-    diagnostics,
+    constraints_eval,
+    enforce_detgbar_equals_detghat_trAzero,
     initial_data,
-    projection,
     rhs_eval,
 )

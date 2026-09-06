@@ -17,8 +17,8 @@ import sympy as sp
 
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.Dendro import naming
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 
 BANNER = (
     "// GENERATED FILE - DO NOT EDIT\n"
@@ -96,7 +96,7 @@ def output_Dendro_state_h(solver_stem: str, solver_namespace: str) -> str:
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
     No Dendro kernel has recorded an upwind control set; register the right-hand-side CFunctions before emitting the state header.
-    >>> reg.set_upwind_control_fields(("bXX",))
+    >>> roles.set_upwind_control_fields(("bXX",))
     >>> header = output_Dendro_state_h("bssn", "bssn")
     >>> "inline constexpr unsigned NUM_UPWIND_CONTROL_GFS = 1;" in header
     True
@@ -127,7 +127,7 @@ def output_Dendro_state_h(solver_stem: str, solver_namespace: str) -> str:
     lines.append("")
     lines.append("enum class EvolVar : unsigned {")
     for index, name, _gf in evol:
-        lines.append(f"    {naming.enum_member(name)} = {index},")
+        lines.append(f"    {gf_names.enum_member(name)} = {index},")
     lines.append("    END,")
     lines.append("};  // END ENUM: EvolVar")
     lines.append("")
@@ -182,12 +182,12 @@ def output_Dendro_state_h(solver_stem: str, solver_namespace: str) -> str:
     # The control fields come from the right-hand-side builder, which derives
     # them from the shared expression factory's upwind control vector, so this
     # renderer invents nothing.  Reading them through
-    # reg.upwind_control_fields() means an unrecorded set raises here rather
+    # roles.upwind_control_fields() means an unrecorded set raises here rather
     # than emitting an empty table that would silently disable the generated
     # upwind self-test.
     evol_positions = {name: index for index, (_i, name, _g) in enumerate(evol)}
     control_index_list: List[int] = []
-    for control_name in reg.upwind_control_fields():
+    for control_name in roles.upwind_control_fields():
         if control_name not in evol_positions:
             raise ValueError(
                 f"Upwind control field {control_name!r} is not a registered EVOL field."
@@ -342,8 +342,8 @@ def output_component_bindings(
     :param scalar_type: Generated scalar alias (e.g. ``DendroScalar``).
     :param array: Name of the caller's pointer array (component layout) or of
         the flat base pointer (flat layout).
-    :param role: Role-prefix function from :mod:`naming` (e.g.
-        :func:`naming.input_pointer`).
+    :param role: Role-prefix function from :mod:`gridfunction_name_decorations` (e.g.
+        :func:`gridfunction_name_decorations.input_pointer`).
     :param const_pointee: Emit ``const <scalar>* const`` rather than
         ``<scalar>* const``.
     :param index_expression: Maps (name, position) to the component index

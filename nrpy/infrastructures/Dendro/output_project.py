@@ -17,11 +17,12 @@ from typing import Dict, Union
 
 import nrpy.params as par
 from nrpy.helpers.generic import copy_files
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import (
     CodeParameters,
+    Dendro_defines_h,
     Dendro_main_cpp,
-    Dendro_parameter_file,
-    Dendro_preamble_h,
+    Dendro_parfile,
     Dendro_README_md,
     Dendro_self_tests_cpp,
     Dendro_solver_context,
@@ -30,7 +31,6 @@ from nrpy.infrastructures.Dendro import (
     cmake_helpers,
     output_CFunctions,
 )
-from nrpy.infrastructures.Dendro import registration as reg
 
 
 def output_project(
@@ -59,7 +59,7 @@ def output_project(
     """
     project_path = Path(project_dir)
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
-    required_padding = reg.required_padding()
+    required_padding = roles.required_padding()
     root = f"Dendro-GR/{solver_name}/"
     generated_include = root + "generated/include/"
 
@@ -81,7 +81,7 @@ def output_project(
             solver_stem, solver_namespace
         ),
         generated_include
-        + "generated_project_preamble.h": Dendro_preamble_h.output_Dendro_preamble_h(
+        + f"{solver_stem}_defines.h": Dendro_defines_h.output_Dendro_defines_h(
             solver_stem
         ),
         root
@@ -106,12 +106,12 @@ def output_project(
         ),
         root
         + f"pars/{solver_stem}_minkowski.par": (
-            Dendro_parameter_file.output_Dendro_parameter_file(
+            Dendro_parfile.output_Dendro_parfile(
                 solver_stem, profile_name, required_padding
             )
         ),
         root
-        + "tests/test_generated.cpp": (
+        + f"tests/{solver_stem}_self_tests.cpp": (
             Dendro_self_tests_cpp.output_Dendro_self_tests_cpp(
                 solver_stem, solver_namespace, scalar_type
             )

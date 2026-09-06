@@ -32,8 +32,9 @@ import nrpy.reference_metric as refmetric
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
-from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters, naming
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.block_loop import block_loop
 from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
@@ -48,11 +49,11 @@ MINKOWSKI_GLOBAL_SUFFIX = "minkowski_initial_data"
 
 # Smooth analytic perturbation used by the lifecycle gates: a spatially varying
 # state is what makes the generated derivative stencils observable at all.
-PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
-PERTURBATION_GLOBAL_SUFFIX = "smooth_perturbation"
+SMOOTH_PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
+SMOOTH_PERTURBATION_GLOBAL_SUFFIX = "smooth_perturbation"
 
-ADM_TO_EVOLVED_BLOCK_SUFFIX = "adm_to_evolved_block"
-INITIALIZE_LAMBDA_BLOCK_SUFFIX = "initialize_lambda_block"
+ADM_TO_BSSN_BLOCK_SUFFIX = "ADM_to_BSSN_block"
+INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX = "initial_data_lambdaU_block"
 
 
 def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> str:
@@ -72,7 +73,7 @@ def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> st
         evol_order,
         scalar_type,
         array="out_gfs",
-        role=naming.out_pointer,
+        role=gf_names.out_pointer,
         const_pointee=False,
         index_expression=lambda _name, position: str(position),
     )
@@ -98,7 +99,7 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
         )
     require_serial_parallelization()
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
 
     # The fill writes every EVOL field to its registered asymptotic value.
     fill_lines: List[str] = []
@@ -106,7 +107,9 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
         gf = gri.glb_gridfcs_dict[name]
         value = str(gf.f_infinity)
         # Render a double literal (registered values are float).
-        fill_lines.append(f"{naming.out_pointer(name)}[pp] = {scalar_type}{{{value}}};")
+        fill_lines.append(
+            f"{gf_names.out_pointer(name)}[pp] = {scalar_type}{{{value}}};"
+        )
     fill_body = "\n".join(fill_lines)
 
     # Minkowski is spatially constant: every cell of the padded block (ghost
@@ -165,7 +168,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
         )
     require_serial_parallelization()
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
 
     amplitude, wavelength = sp.symbols("amplitude wavelength", real=True)
     xx0, xx1, xx2 = sp.symbols("xx0 xx1 xx2", real=True)
@@ -188,7 +191,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     fill_lines: List[str] = [profile_code.strip()]
     for position, name in enumerate(evol_order):
         fill_lines.append(
-            f"{naming.out_pointer(name)}[pp] += "
+            f"{gf_names.out_pointer(name)}[pp] += "
             f"{scalar_type}{{{position + 1}}} * smooth_profile;"
         )
     # The perturbation is applied over the whole padded block, ghost cells
@@ -210,7 +213,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
         f"const {scalar_type} amplitude, const {scalar_type} wavelength"
     )
     global_body = block_loop(
-        f"{solver_stem}_{PERTURBATION_BLOCK_SUFFIX}"
+        f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
         "(world.geom[blk], out_gfs, amplitude, wavelength);",
         num_blocks="world.num_blocks",
     )
@@ -221,7 +224,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     return block_body, block_params, global_body, global_params
 
 
-def register_CFunctions_perturbation(*, solver_stem: str) -> None:
+def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
     """
     Register the smooth-perturbation CFunctions (with Dendro roles).
 
@@ -232,9 +235,9 @@ def register_CFunctions_perturbation(*, solver_stem: str) -> None:
     block_body, block_params, global_body, global_params = build_smooth_perturbation(
         solver_stem=solver_stem
     )
-    reg.register_Dendro_CFunction(
-        role="perturbation_block",
-        name=f"{solver_stem}_{PERTURBATION_BLOCK_SUFFIX}",
+    roles.register_Dendro_CFunction(
+        role="smooth_perturbation_block",
+        name=f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}",
         desc=(
             "Per-block smooth analytic perturbation of every evolved field "
             "(lifecycle-test state; NRPy-authored profile)."
@@ -243,9 +246,9 @@ def register_CFunctions_perturbation(*, solver_stem: str) -> None:
         params=block_params,
         body=block_body,
     )
-    reg.register_Dendro_CFunction(
-        role="perturbation",
-        name=f"{solver_stem}_{PERTURBATION_GLOBAL_SUFFIX}",
+    roles.register_Dendro_CFunction(
+        role="smooth_perturbation",
+        name=f"{solver_stem}_{SMOOTH_PERTURBATION_GLOBAL_SUFFIX}",
         desc="All-block smooth analytic perturbation (NRPy block loop).",
         subdirectory="generated/src/initial_data",
         params=global_params,
@@ -265,7 +268,7 @@ def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
     block_body, block_params, global_body, global_params = build_minkowski_initial_data(
         solver_stem=solver_stem
     )
-    reg.register_Dendro_CFunction(
+    roles.register_Dendro_CFunction(
         role="minkowski_initial_data_block",
         name=f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}",
         desc="Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values).",
@@ -273,7 +276,7 @@ def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
         params=block_params,
         body=block_body,
     )
-    reg.register_Dendro_CFunction(
+    roles.register_Dendro_CFunction(
         role="minkowski_initial_data",
         name=f"{solver_stem}_{MINKOWSKI_GLOBAL_SUFFIX}",
         desc="All-block Minkowski initial data fill (NRPy block loop).",
@@ -314,7 +317,7 @@ def register_ADM_source_gridfunctions() -> (
     return gammaDD, KDD, betaU, BU
 
 
-def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     """
     Build the smooth ADM-to-evolved conversion CFunction body.
 
@@ -341,15 +344,15 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _bundle = build_fccz4_expression_bundle()
-    >>> _body, _params = build_ADM_to_evolved()
+    >>> _body, _params = build_ADM_to_BSSN()
 
     The conversion defines every evolved field except the three
     connection components, which the separate pass below owns.
 
     >>> _written = [
     ...     name
-    ...     for name in reg.registered_evol_order()
-    ...     if naming.out_pointer(name) + "[pp] =" in _body
+    ...     for name in roles.registered_evol_order()
+    ...     if gf_names.out_pointer(name) + "[pp] =" in _body
     ... ]
     >>> len(_written)
     22
@@ -358,9 +361,9 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
 
     The ADM source data is registered as AUXEVOL under exact NRPy names.
 
-    >>> reg.registered_auxevol_order()[:3]
+    >>> roles.registered_auxevol_order()[:3]
     ('betaU0', 'betaU1', 'betaU2')
-    >>> len(reg.registered_auxevol_order())
+    >>> len(roles.registered_auxevol_order())
     18
 
     """
@@ -373,7 +376,7 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     generation_parameters.validate_generation_parameters()
     scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
     fp_type = str(par.parval_from_str("fp_type"))
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
 
     # Step 1: Map every evolved field the conversion defines to its expression,
     # reading each target name back from the registered BSSN gridfunction
@@ -425,11 +428,11 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
 
     # Step 3: Lower the conversion.  The fields it reads are the expression
     # free symbols that are registered gridfunctions.
-    auxevol_order = reg.registered_auxevol_order()
+    auxevol_order = roles.registered_auxevol_order()
     written = tuple(name for name in evol_order if name in targets)
     kernel = c_codegen(
         [targets[name] for name in written],
-        [f"{naming.out_pointer(name)}[pp]" for name in written],
+        [f"{gf_names.out_pointer(name)}[pp]" for name in written],
         include_braces=False,
         enable_fd_codegen=True,
         enable_fd_functions=False,
@@ -454,7 +457,7 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
                 read_names,
                 scalar_type,
                 array="auxevol_gfs",
-                role=naming.input_pointer,
+                role=gf_names.input_pointer,
                 const_pointee=True,
                 index_expression=lambda name, _p: str(auxevol_order.index(name)),
             ),
@@ -462,7 +465,7 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
                 written,
                 scalar_type,
                 array="out_gfs",
-                role=naming.out_pointer,
+                role=gf_names.out_pointer,
                 const_pointee=False,
                 index_expression=lambda name, _p: str(evol_order.index(name)),
             ),
@@ -484,7 +487,7 @@ def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     return bindings + "\n" + point_loop_body, block_params
 
 
-def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     """
     Build the separate connection-initialization CFunction body.
 
@@ -510,15 +513,15 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _bundle = build_fccz4_expression_bundle()
-    >>> _body, _params = build_lambda_initialization()
+    >>> _body, _params = build_initial_data_lambdaU()
 
     The pass writes exactly the three connection components, and
     reads a distinct input array.
 
     >>> [
     ...     name
-    ...     for name in reg.registered_evol_order()
-    ...     if naming.out_pointer(name) + "[pp] =" in _body
+    ...     for name in roles.registered_evol_order()
+    ...     if gf_names.out_pointer(name) + "[pp] =" in _body
     ... ]
     ['lambdaU0', 'lambdaU1', 'lambdaU2']
     >>> "const DendroScalar* const* in_gfs" in _params
@@ -544,10 +547,10 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
     )
     if circular:
         raise ValueError(f"The connection pass reads the fields it writes: {circular}.")
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
     kernel = c_codegen(
         exprs,
-        [f"{naming.out_pointer(name)}[pp]" for name in written],
+        [f"{gf_names.out_pointer(name)}[pp]" for name in written],
         include_braces=False,
         enable_fd_codegen=True,
         enable_fd_functions=False,
@@ -566,7 +569,7 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
                 read_names,
                 scalar_type,
                 array="in_gfs",
-                role=naming.input_pointer,
+                role=gf_names.input_pointer,
                 const_pointee=True,
                 index_expression=lambda name, _p: str(evol_order.index(name)),
             ),
@@ -574,7 +577,7 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
                 written,
                 scalar_type,
                 array="out_gfs",
-                role=naming.out_pointer,
+                role=gf_names.out_pointer,
                 const_pointee=False,
                 index_expression=lambda name, _p: str(evol_order.index(name)),
             ),
@@ -596,7 +599,7 @@ def build_lambda_initialization(*, CoordSystem: str = "Cartesian") -> Tuple[str,
     return bindings + "\n" + point_loop_body, block_params
 
 
-def register_CFunctions_initial_data_conversion(
+def register_CFunctions_ADM_to_BSSN(
     *, solver_stem: str, CoordSystem: str = "Cartesian"
 ) -> None:
     """
@@ -605,10 +608,10 @@ def register_CFunctions_initial_data_conversion(
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param CoordSystem: Reference-metric coordinate system.
     """
-    adm_body, adm_params = build_ADM_to_evolved(CoordSystem=CoordSystem)
-    reg.register_Dendro_CFunction(
-        role="adm_to_evolved_block",
-        name=f"{solver_stem}_{ADM_TO_EVOLVED_BLOCK_SUFFIX}",
+    adm_body, adm_params = build_ADM_to_BSSN(CoordSystem=CoordSystem)
+    roles.register_Dendro_CFunction(
+        role="ADM_to_BSSN_block",
+        name=f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}",
         desc=(
             "Per-block smooth ADM-to-evolved conversion; the "
             "connection components are written by the separate pass."
@@ -617,10 +620,10 @@ def register_CFunctions_initial_data_conversion(
         params=adm_params,
         body=adm_body,
     )
-    lam_body, lam_params = build_lambda_initialization(CoordSystem=CoordSystem)
-    reg.register_Dendro_CFunction(
-        role="initialize_lambda_block",
-        name=f"{solver_stem}_{INITIALIZE_LAMBDA_BLOCK_SUFFIX}",
+    lam_body, lam_params = build_initial_data_lambdaU(CoordSystem=CoordSystem)
+    roles.register_Dendro_CFunction(
+        role="initial_data_lambdaU_block",
+        name=f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}",
         desc=(
             "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
             "ReU^i, so the connection constraint C^i vanishes."

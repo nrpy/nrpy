@@ -1,9 +1,9 @@
-# nrpy/infrastructures/Dendro/general_relativity/BSSN/diagnostics.py
+# nrpy/infrastructures/Dendro/general_relativity/BSSN/constraints_eval.py
 """
 BSSN constraint diagnostics for the Dendro infrastructure.
 
 The diagnostic set is the Hamiltonian constraint and the three momentum
-constraint components, taken from the established NRPy projector
+constraint components, taken from the established NRPy constraint factory
 :class:`nrpy.equations.general_relativity.BSSN_constraints.BSSNconstraints`, so
 this module contributes no new formulation content: it registers the DIAG
 gridfunctions and lowers those expressions into a Dendro point loop.
@@ -14,8 +14,8 @@ kernel uses the same finite-difference order and the same memory-access
 mechanism as the right-hand side, so no separate diagnostic profile exists.
 
 The diagnostic name set is written down here, because the DIAG registration
-must precede the projector's own guarded AUX registration to decide the group;
-every other name is read back from the projector or from the registry.
+must precede the factory's own guarded AUX registration to decide the group;
+every other name is read back from the factory or from the registry.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -30,28 +30,27 @@ import nrpy.grid as gri
 import nrpy.params as par
 from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.BSSN_constraints import BSSN_constraints
-from nrpy.infrastructures.Dendro import (  # noqa: F401
-    Dendro_state_h,
-    generation_parameters,
-)
-from nrpy.infrastructures.Dendro import kernel_lowering as kl
-from nrpy.infrastructures.Dendro import naming
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import Dendro_state_h  # noqa: F401
+from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
+from nrpy.infrastructures.Dendro import generation_parameters
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.block_loop import block_loop
-from nrpy.infrastructures.Dendro.naming import tensor_family_of
+from nrpy.infrastructures.Dendro.gridfunction_name_decorations import tensor_family_of
 from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
     simple_loop,
 )
 
-# Dendro names solver sources for the formulation; its own BSSN solver ships
-# bssn_constraints.cpp, so the emitted CFunctions carry the same stem.
-CONSTRAINTS_BLOCK_CFUNCTION = "bssn_constraints_block"
-CONSTRAINTS_GLOBAL_CFUNCTION = "bssn_constraints"
+# BHaH's name for this kernel is constraints_eval; the formulation stem is
+# prefixed the way ETLegacy prefixes its thorn name.  (Dendro-GR's own
+# bssn_constraints.cpp is the det/trace *enforcement*, not these diagnostics.)
+CONSTRAINTS_EVAL_BLOCK_CFUNCTION = "bssn_constraints_eval_block"
+CONSTRAINTS_EVAL_GLOBAL_CFUNCTION = "bssn_constraints_eval"
 
 
 @dataclass(frozen=True)
-class BSSNDiagnosticsBuild:
+class BSSNConstraintsEvalBuild:
     """
     Immutable result of building the BSSN constraint diagnostics.
 
@@ -67,17 +66,19 @@ class BSSNDiagnosticsBuild:
     global_params: str
 
 
-def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild:
+def build_constraints_eval(
+    *, CoordSystem: str = "Cartesian"
+) -> BSSNConstraintsEvalBuild:
     """
     Build the per-block and all-block BSSN constraint CFunction bodies.
 
-    Either call order works: the projector's construction registers the
+    Either call order works: the factory's construction registers the
     evolved state through ``BSSN_quantities`` if the right-hand-side builder
     has not already done so, and the AUX cleanup below is restricted to the
-    names the projector newly added, so nothing pre-existing is disturbed.
+    names the factory newly added, so nothing pre-existing is disturbed.
 
     :param CoordSystem: Reference-metric coordinate system.
-    :return: The immutable :class:`BSSNDiagnosticsBuild` result.
+    :return: The immutable :class:`BSSNConstraintsEvalBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, if a diagnostic
         expression has no registered DIAG gridfunction, or if the kernel reads
         anything other than evolved state.
@@ -92,13 +93,13 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     >>> par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
     >>> par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     _ = rhs_eval.build_bssn_rhs(
+    ...     _ = rhs_eval.build_rhs_eval(
     ...         fd_order=4, enable_KreissOliger_dissipation=False)
-    ...     _build = build_diagnostics()
+    ...     _build = build_constraints_eval()
 
-    The diagnostics register in DIAG, and the projector's AUX names are gone:
+    The diagnostics register in DIAG, and the factory's AUX names are gone:
 
-    >>> reg.registered_diag_order()
+    >>> roles.registered_diag_order()
     ('H', 'MU0', 'MU1', 'MU2')
     >>> [n for n in ("M", "LAMBDA_CONSTRAINT") if n in gri.glb_gridfcs_dict]
     []
@@ -123,13 +124,13 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     fp_type = str(par.parval_from_str("fp_type"))
 
     # Step 1: Register the constraint diagnostics as DIAG gridfunctions BEFORE
-    # constructing the projector.  DIAG is the settled infrastructure group for
+    # constructing the factory.  DIAG is the settled infrastructure group for
     # diagnostics (BHaH registers 31 of them across its wave-equation, elliptic
     # and GR diagnostics), whereas BSSN_constraints files H, M and
     # LAMBDA_CONSTRAINT under AUX in the equations layer, each guarded by
     # ``if <name> not in glb_gridfcs_dict``.  Registering H first therefore
-    # makes the projector's registration of that name a no-op and keeps it in
-    # DIAG.  MU is different: the projector registers it only under the
+    # makes the factory's registration of that name a no-op and keeps it in
+    # DIAG.  MU is different: the factory registers it only under the
     # register_MU_gridfunctions CodeParameter, which defaults to False and
     # which no Dendro module sets, so nothing competes for those names and
     # this builder is their sole owner.  Neither case touches the shared
@@ -152,11 +153,11 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
             gri.register_gridfunctions_for_single_rankN(base, rank=rank, group="DIAG")
 
     # Step 2: Take the constraint expressions from the established NRPy
-    # projector.  It also registers M and LAMBDA_CONSTRAINT, which this kernel
+    # factory.  It also registers M and LAMBDA_CONSTRAINT, which this kernel
     # does not compute; leaving them would make the generated state header
     # advertise two variables no kernel writes and no vector backs, so they
     # are dropped again here.  Only newly added AUX names are removed: the
-    # projector's construction also pulls in the evolved state through
+    # factory's construction also pulls in the evolved state through
     # BSSN_quantities, and those must survive.
     before = set(gri.glb_gridfcs_dict)
     constraints = BSSN_constraints[CoordSystem]
@@ -166,7 +167,7 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     expressions: Dict[str, sp.Expr] = {"H": constraints.H}
     for i in range(3):
         expressions[f"MU{i}"] = constraints.MU[i]
-    diag_order = reg.registered_diag_order()
+    diag_order = roles.registered_diag_order()
     missing = sorted(set(expressions) - set(diag_order))
     if missing:
         raise ValueError(
@@ -174,12 +175,12 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
             "gridfunction; the exact-name rule is violated."
         )
     written = tuple(name for name in diag_order if name in expressions)
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
 
     # Step 3: Lower the diagnostics.
     kernel = c_codegen(
         [expressions[name] for name in written],
-        [f"{naming.diag_pointer(name)}[pp]" for name in written],
+        [f"{gf_names.diag_pointer(name)}[pp]" for name in written],
         include_braces=False,
         enable_fd_codegen=True,
         enable_fd_functions=False,
@@ -188,7 +189,7 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
         fp_type_alias=scalar_type,
         verbose=False,
     )
-    accessed = kl.accessed_gridfunctions(expressions[name] for name in written)
+    accessed = bkh.accessed_gridfunctions(expressions[name] for name in written)
     unexpected = sorted(accessed - set(evol_order))
     if unexpected:
         raise ValueError(
@@ -203,7 +204,7 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
         read_names,
         scalar_type,
         array="in_gfs",
-        role=naming.input_pointer,
+        role=gf_names.input_pointer,
         const_pointee=True,
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
@@ -212,7 +213,7 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
         written,
         scalar_type,
         array="diagnostic_gfs",
-        role=naming.diag_pointer,
+        role=gf_names.diag_pointer,
         const_pointee=False,
         index_expression=lambda name, _position: str(diag_order.index(name)),
     )
@@ -235,10 +236,10 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
         f"{scalar_type}* const* diagnostic_gfs"
     )
     global_body = block_loop(
-        f"{CONSTRAINTS_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, diagnostic_gfs);",
+        f"{CONSTRAINTS_EVAL_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, diagnostic_gfs);",
         num_blocks="world.num_blocks",
     )
-    return BSSNDiagnosticsBuild(
+    return BSSNConstraintsEvalBuild(
         block_body=block_body,
         block_params=block_params,
         global_body=global_body,
@@ -246,13 +247,13 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     )
 
 
-def register_CFunctions_diagnostics(*, CoordSystem: str = "Cartesian") -> None:
+def register_CFunctions_constraints_eval(*, CoordSystem: str = "Cartesian") -> None:
     """
     Register the per-block and all-block BSSN diagnostic CFunctions.
 
     :param CoordSystem: Reference-metric coordinate system.
     """
-    build = build_diagnostics(CoordSystem=CoordSystem)
+    build = build_constraints_eval(CoordSystem=CoordSystem)
     block_desc = (
         "Per-block BSSN constraint diagnostics: the Hamiltonian constraint and "
         "the three momentum constraint components (recomputed, never "
@@ -260,17 +261,17 @@ def register_CFunctions_diagnostics(*, CoordSystem: str = "Cartesian") -> None:
     )
     global_desc = "All-block BSSN constraint diagnostics (NRPy block loop)."
     subdirectory = "generated/src/diagnostics"
-    reg.register_Dendro_CFunction(
-        role="diagnostics_block",
-        name=CONSTRAINTS_BLOCK_CFUNCTION,
+    roles.register_Dendro_CFunction(
+        role="constraints_eval_block",
+        name=CONSTRAINTS_EVAL_BLOCK_CFUNCTION,
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
     )
-    reg.register_Dendro_CFunction(
-        role="diagnostics",
-        name=CONSTRAINTS_GLOBAL_CFUNCTION,
+    roles.register_Dendro_CFunction(
+        role="constraints_eval",
+        name=CONSTRAINTS_EVAL_GLOBAL_CFUNCTION,
         desc=global_desc,
         subdirectory=subdirectory,
         params=build.global_params,

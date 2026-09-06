@@ -6,7 +6,7 @@ This module lowers the shared fCCZ4 expression factory
 into a Dendro per-block direct-FD RHS kernel:
 
 * map each RHS symbol to its registered EVOL gridfunction name algorithmically
-  (:func:`nrpy.infrastructures.Dendro.naming.rhs_symbol_to_gridfunction_name`)
+  (:func:`nrpy.infrastructures.Dendro.gridfunction_name_decorations.rhs_symbol_to_gridfunction_name`)
   and assert the bijection against the registry;
 * derive the output lvalues and the ``in_<name>`` / ``rhs_<name>`` pointer
   bindings from the NRPy gridfunction registry (no field name is hardcoded);
@@ -19,7 +19,7 @@ into a Dendro per-block direct-FD RHS kernel:
 * expose the emitted operator records and the ghost-point padding those
   operators reach.
 
-:func:`build_fccz4_rhs` registers no CFunction; it records the padding and the
+:func:`build_rhs_eval` registers no CFunction; it records the padding and the
 upwind-control set it derived into the Dendro area of the NRPy parameter
 registry, and :func:`register_CFunctions_rhs_eval` registers the bodies it
 returns.
@@ -36,21 +36,21 @@ from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.fCCZ4_system import (
     build_fccz4_expression_bundle,
 )
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
 from nrpy.infrastructures.Dendro import generation_parameters  # noqa: F401
-from nrpy.infrastructures.Dendro import kernel_lowering as kl
-from nrpy.infrastructures.Dendro import naming
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
 from nrpy.infrastructures.Dendro.block_loop import block_loop
 from nrpy.infrastructures.Dendro.simple_loop import require_serial_parallelization
 
 # The per-block CFunction name (the Dendro scheduling role key).
-RHS_BLOCK_CFUNCTION = "fccz4_rhs_block"
+RHS_EVAL_BLOCK_CFUNCTION = "fccz4_rhs_eval_block"
 
 # All-block CFunction name.
-RHS_GLOBAL_CFUNCTION = "fccz4_rhs"
+RHS_EVAL_GLOBAL_CFUNCTION = "fccz4_rhs_eval"
 
 # LTS flat-block adapter CFunction name (same numerical body, flat layout).
-FLAT_BLOCK_CFUNCTION = "fccz4_rhs_flat_block"
+RHS_EVAL_FLAT_BLOCK_CFUNCTION = "fccz4_rhs_eval_flat_block"
 
 
 @dataclass(frozen=True)
@@ -82,7 +82,7 @@ class FCCZ4RHSBuild:
     flat_block_params: str
 
 
-def build_fccz4_rhs(
+def build_rhs_eval(
     *,
     fd_order: int,
     enable_KreissOliger_dissipation: bool,
@@ -122,13 +122,13 @@ def build_fccz4_rhs(
     >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
     >>> try:
-    ...     build_fccz4_rhs(fd_order=8, enable_KreissOliger_dissipation=False)
+    ...     build_rhs_eval(fd_order=8, enable_KreissOliger_dissipation=False)
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
     Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, above the max_proven_padding of 4 recorded in dendrolib_capabilities.json, so it stays capability-gated until Dendrolib is pinned.
     >>> import contextlib, io
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     _build = build_fccz4_rhs(fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     _build = build_rhs_eval(fd_order=4, enable_KreissOliger_dissipation=False)
     >>> len(_build.evol_order), "Theta_fCCZ4" in _build.evol_order
     (25, True)
     >>> sorted(_build.lvalues)[:2]
@@ -137,9 +137,9 @@ def build_fccz4_rhs(
     (3, 3, 3)
     >>> _build.upwind_control_fields
     ('vetU0', 'vetU1', 'vetU2')
-    >>> reg.upwind_control_fields()
+    >>> roles.upwind_control_fields()
     ('vetU0', 'vetU1', 'vetU2')
-    >>> reg.required_padding()
+    >>> roles.required_padding()
     (3, 3, 3)
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
@@ -176,10 +176,10 @@ def build_fccz4_rhs(
     )
     rhs_symbols = tuple(bundle.rhs_by_symbol_name)
     lvalues = tuple(
-        f"rhs_{naming.rhs_symbol_to_gridfunction_name(symbol)}[pp]"
+        f"rhs_{gf_names.rhs_symbol_to_gridfunction_name(symbol)}[pp]"
         for symbol in rhs_symbols
     )
-    evol_order = reg.registered_evol_order()
+    evol_order = roles.registered_evol_order()
     # The qualified profile is exactly 25 EVOL fields.
     if len(evol_order) != 25:
         raise ValueError(
@@ -188,7 +188,9 @@ def build_fccz4_rhs(
         )
     # The RHS symbols must map bijectively onto the registered EVOL fields
     # (25 EVOL fields, under their exact registered names).
-    mapped = {naming.rhs_symbol_to_gridfunction_name(symbol) for symbol in rhs_symbols}
+    mapped = {
+        gf_names.rhs_symbol_to_gridfunction_name(symbol) for symbol in rhs_symbols
+    }
     if len(lvalues) != len(set(lvalues)) or mapped != set(evol_order):
         raise ValueError(
             "fCCZ4 RHS symbols do not map bijectively onto the registered "
@@ -199,7 +201,7 @@ def build_fccz4_rhs(
     # shared factory's upwind control vector (e.g. vetU0/1/2 for the
     # canonical fCCZ4 profile).  Derived, not hardcoded, so a Gate 4 harness
     # can drive positive/negative/zero control on exactly these fields.
-    upwind_control_fields = kl.upwind_control_fields(
+    upwind_control_fields = bkh.upwind_control_fields(
         bundle.upwind_control_vec, evol_order
     )
     par.set_parval_from_str("fd_order", fd_order)
@@ -231,15 +233,15 @@ def build_fccz4_rhs(
     # contain is exact; scanning the emitted C text for names is not.  Sorted
     # for a deterministic CFunction parameter order (the caller forwards the
     # values in this order).
-    used_codeparameters = kl.used_codeparameters(bundle.rhs_by_symbol_name.values())
-    point_loop_body = kl.point_loop(kernel)
+    used_codeparameters = bkh.used_codeparameters(bundle.rhs_by_symbol_name.values())
+    point_loop_body = bkh.point_loop(kernel)
     block_body = (
-        kl.block_pointer_bindings(evol_order, fp_type_alias) + "\n" + point_loop_body
+        bkh.block_pointer_bindings(evol_order, fp_type_alias) + "\n" + point_loop_body
     )
     global_body = block_loop(
-        f"{RHS_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, rhs_gfs"
+        f"{RHS_EVAL_BLOCK_CFUNCTION}(world.geom[blk], in_gfs, rhs_gfs"
         + (
-            f", {kl.cparam_arguments(used_codeparameters)}"
+            f", {bkh.cparam_arguments(used_codeparameters)}"
             if used_codeparameters
             else ""
         )
@@ -251,18 +253,18 @@ def build_fccz4_rhs(
     # registered block kernel.  There is exactly one numerical body, so the
     # two paths cannot diverge.
     flat_call_args = (
-        f", {kl.cparam_arguments(used_codeparameters)}" if used_codeparameters else ""
+        f", {bkh.cparam_arguments(used_codeparameters)}" if used_codeparameters else ""
     )
     flat_block_body = (
-        kl.flat_block_pointer_bindings(evol_order, fp_type_alias)
+        bkh.flat_block_pointer_bindings(evol_order, fp_type_alias)
         + f"\nconst {fp_type_alias}* const in_gfs_call[] = {{"
-        + ", ".join(naming.input_pointer(name) for name in evol_order)
+        + ", ".join(gf_names.input_pointer(name) for name in evol_order)
         + f"}};\n{fp_type_alias}* rhs_gfs_call[] = {{"
-        + ", ".join(naming.rhs_pointer(name) for name in evol_order)
+        + ", ".join(gf_names.rhs_pointer(name) for name in evol_order)
         + "};\n"
-        + f"{RHS_BLOCK_CFUNCTION}(geom, in_gfs_call, rhs_gfs_call{flat_call_args});\n"
+        + f"{RHS_EVAL_BLOCK_CFUNCTION}(geom, in_gfs_call, rhs_gfs_call{flat_call_args});\n"
     )
-    cparam_args = kl.cparam_declarations(used_codeparameters, fp_type_alias)
+    cparam_args = bkh.cparam_declarations(used_codeparameters, fp_type_alias)
     block_params = (
         f"const BlockGeometry& geom, const {fp_type_alias}* const* in_gfs, "
         f"{fp_type_alias}* const* rhs_gfs" + (f", {cparam_args}" if cparam_args else "")
@@ -281,8 +283,8 @@ def build_fccz4_rhs(
         f"{fp_type_alias}* const rhs_gfs_flat"
         + (f", {cparam_args}" if cparam_args else "")
     )
-    operator_records = kl.emitted_operators(kernel, fd_order)
-    padding = kl.padding_from_operators(operator_records)
+    operator_records = bkh.emitted_operators(kernel, fd_order)
+    padding = bkh.padding_from_operators(operator_records)
     # Single KO ownership: dKOD operators are present in the emitted kernel if
     # and only if Kreiss-Oliger dissipation was requested.
     if (
@@ -295,8 +297,8 @@ def build_fccz4_rhs(
         )
     # Recorded beside the padding so the state header renders the positions
     # the emitted kernel actually upwinds on, rather than an empty table.
-    reg.set_upwind_control_fields(upwind_control_fields)
-    reg.set_required_padding(padding)
+    roles.set_upwind_control_fields(upwind_control_fields)
+    roles.set_required_padding(padding)
     return FCCZ4RHSBuild(
         evol_order=evol_order,
         upwind_control_fields=upwind_control_fields,
@@ -323,7 +325,7 @@ def register_CFunctions_rhs_eval(
     Register the per-block, all-block, and flat-block fCCZ4 RHS CFunctions.
 
     The ghost points the emitted operators reach are recorded through
-    :func:`nrpy.infrastructures.Dendro.registration.set_required_padding`, so
+    :func:`nrpy.infrastructures.Dendro.CFunction_roles.set_required_padding`, so
     the state header and the parameter file read them from the registry.
 
     :param fd_order: The finite-difference order (2, 4, or 6).  Order 8
@@ -334,33 +336,33 @@ def register_CFunctions_rhs_eval(
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     """
-    build = build_fccz4_rhs(
+    build = build_rhs_eval(
         fd_order=fd_order,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
-    subdirectory = "generated/src/rhs"
-    reg.register_Dendro_CFunction(
-        role="rhs_block",
-        name=RHS_BLOCK_CFUNCTION,
+    subdirectory = "generated/src/rhs_eval"
+    roles.register_Dendro_CFunction(
+        role="rhs_eval_block",
+        name=RHS_EVAL_BLOCK_CFUNCTION,
         desc="Per-block direct-FD fCCZ4 RHS (25 fields).",
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
     )
-    reg.register_Dendro_CFunction(
-        role="rhs",
-        name=RHS_GLOBAL_CFUNCTION,
+    roles.register_Dendro_CFunction(
+        role="rhs_eval",
+        name=RHS_EVAL_GLOBAL_CFUNCTION,
         desc="All-block direct-FD fCCZ4 RHS (NRPy block loop).",
         subdirectory=subdirectory,
         params=build.global_params,
         body=build.global_body,
     )
-    reg.register_Dendro_CFunction(
-        role="rhs_flat_block",
-        name=FLAT_BLOCK_CFUNCTION,
+    roles.register_Dendro_CFunction(
+        role="rhs_eval_flat_block",
+        name=RHS_EVAL_FLAT_BLOCK_CFUNCTION,
         desc="LTS flat-block adapter (same numerical body, flat layout).",
         subdirectory=subdirectory,
         params=build.flat_block_params,

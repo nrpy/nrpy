@@ -34,12 +34,12 @@ SECTIONS: Tuple[str, ...] = (
     "rhs",
     "init",
     "names",
-    "projection",
+    "detgtrazero",
     "constraints",
 )
 
-_TESTS = """// Usage: test_generated {state|params|padding|offsets|upwind|rhs|init|names|
-//                        projection|constraints|all}
+_TESTS = """// Usage: $STEM_self_tests {state|params|padding|offsets|upwind|rhs|init|names|
+//                            detgtrazero|constraints|all}
 // Exits 0 on success.  Each section runs only what it names, so a failure
 // localises to one gate.
 
@@ -52,7 +52,7 @@ _TESTS = """// Usage: test_generated {state|params|padding|offsets|upwind|rhs|in
 #include <string_view>
 #include <vector>
 
-#include "generated_project_preamble.h"
+#include "$STEM_defines.h"
 
 namespace {
 
@@ -148,8 +148,8 @@ int test_state() {
 int test_params() {
   // The registered parameter CFunctions set, validate, and print the
   // generated defaults.
-  $NAMESPACE::generated::GeneratedParams params;
-  $SET_DEFAULTS(params);
+  $NAMESPACE::generated::params_struct params;
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   if (!$VALIDATE(params)) return 1;
   $PRINT_EFFECTIVE(params);
   return 0;
@@ -198,7 +198,7 @@ int test_offsets() {
     }  // END LOOP: for cell over both blocks
   }  // END LOOP: for f over evolved components
   std::vector<$SCALAR*> out = block.state_pointers();
-  $INITIAL_DATA_BLOCK(block.geom, out.data());
+  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, out.data());
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
     for (std::size_t cell = 0; cell < block.vol; ++cell) {
       if (block.store[f][cell] != sentinel) {
@@ -240,12 +240,12 @@ int test_offsets() {
     }  // END LOOP: for cell over both blocks
   }  // END LOOP: for f over evolved components
   std::vector<$SCALAR*> rhs_state = rhs_block.state_pointers();
-  $INITIAL_DATA_BLOCK(rhs_block.geom, rhs_state.data());
-  $NAMESPACE::generated::GeneratedParams params;
-  $SET_DEFAULTS(params);
+  $MINKOWSKI_INITIAL_DATA_BLOCK(rhs_block.geom, rhs_state.data());
+  $NAMESPACE::generated::params_struct params;
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   std::vector<const $SCALAR*> rhs_in = rhs_block.const_state_pointers();
   std::vector<$SCALAR*> rhs_out = rhs_block.rhs_pointers();
-  $RHS_BLOCK(rhs_block.geom, rhs_in.data(), rhs_out.data()$RHS_BLOCK_TAIL);
+  $RHS_EVAL_BLOCK(rhs_block.geom, rhs_in.data(), rhs_out.data()$RHS_EVAL_BLOCK_TAIL);
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
     for (std::size_t cell = 0; cell < rhs_block.vol; ++cell) {
       if (rhs_block.rhs[f][cell] != sentinel) {
@@ -305,7 +305,7 @@ int test_offsets() {
           rhs_block.store[f][rhs_block.vol + cell];
     }  // END LOOP: for cell over the block
   }  // END LOOP: for f over evolved components
-  $RHS_FLAT_BLOCK(rhs_block.geom, flat_in.data(), flat_rhs.data()$RHS_BLOCK_TAIL);
+  $RHS_EVAL_FLAT_BLOCK(rhs_block.geom, flat_in.data(), flat_rhs.data()$RHS_EVAL_BLOCK_TAIL);
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
     for (unsigned c = pad; c < rhs_block.extent - pad; ++c) {
       for (unsigned b = pad; b < rhs_block.extent - pad; ++b) {
@@ -352,8 +352,8 @@ int test_upwind() {
                  "selection cannot be exercised\\n");
     return 1;
   }  // END IF: no upwind control fields
-  $NAMESPACE::generated::GeneratedParams params;
-  $SET_DEFAULTS(params);
+  $NAMESPACE::generated::params_struct params;
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   const unsigned reach[3] = {$NAMESPACE::generated::REQUIRED_PADDING_X,
                              $NAMESPACE::generated::REQUIRED_PADDING_Y,
                              $NAMESPACE::generated::REQUIRED_PADDING_Z};
@@ -369,7 +369,7 @@ int test_upwind() {
       for (int side = 0; side < 2; ++side) {
         TestBlock block;
         std::vector<$SCALAR*> out = block.state_pointers();
-        $INITIAL_DATA_BLOCK(block.geom, out.data());
+        $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, out.data());
         // A ramp along every axis makes each first derivative nonzero.
         for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
           for (unsigned c = 0; c < block.extent; ++c) {
@@ -401,7 +401,7 @@ int test_upwind() {
         if (axis == 2) moved_cell = block.index(p, p, q);
         std::vector<const $SCALAR*> in = block.const_state_pointers();
         std::vector<$SCALAR*> rhs = block.rhs_pointers();
-        $RHS_BLOCK(block.geom, in.data(), rhs.data()$RHS_BLOCK_TAIL);
+        $RHS_EVAL_BLOCK(block.geom, in.data(), rhs.data()$RHS_EVAL_BLOCK_TAIL);
         std::vector<double> before(NUM_EVOL_GFS, 0.0);
         for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
           before[f] = static_cast<double>(block.rhs[f][probe]);
@@ -409,7 +409,7 @@ int test_upwind() {
         for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
           block.store[f][moved_cell] += static_cast<$SCALAR>(0.25);
         }  // END LOOP: for f over evolved components
-        $RHS_BLOCK(block.geom, in.data(), rhs.data()$RHS_BLOCK_TAIL);
+        $RHS_EVAL_BLOCK(block.geom, in.data(), rhs.data()$RHS_EVAL_BLOCK_TAIL);
         for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
           const double moved =
               std::fabs(static_cast<double>(block.rhs[f][probe]) - before[f]);
@@ -438,14 +438,14 @@ int test_rhs() {
   // The Minkowski state is a fixed point: the generated initial-data CFunction
   // fills every EVOL field to its registered asymptotic value and the
   // generated direct-FD RHS must then vanish at every interior cell.
-  $NAMESPACE::generated::GeneratedParams params;
-  $SET_DEFAULTS(params);
+  $NAMESPACE::generated::params_struct params;
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   TestBlock block;
   std::vector<$SCALAR*> out = block.state_pointers();
-  $INITIAL_DATA_BLOCK(block.geom, out.data());
+  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, out.data());
   std::vector<const $SCALAR*> in = block.const_state_pointers();
   std::vector<$SCALAR*> rhs = block.rhs_pointers();
-  $RHS_BLOCK(block.geom, in.data(), rhs.data()$RHS_BLOCK_TAIL);
+  $RHS_EVAL_BLOCK(block.geom, in.data(), rhs.data()$RHS_EVAL_BLOCK_TAIL);
   return max_abs_interior(block) <= 1e-13 ? 0 : 2;
 }  // END FUNCTION: test_rhs
 
@@ -456,7 +456,7 @@ int test_init() {
   // and the state registry agree without naming a field.
   TestBlock block;
   std::vector<$SCALAR*> out = block.state_pointers();
-  $INITIAL_DATA_BLOCK(block.geom, out.data());
+  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, out.data());
   double norm = 0.0;
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
     for (std::size_t cell = 0; cell < block.vol; ++cell) {
@@ -540,32 +540,32 @@ int test_names() {
   return 0;
 }  // END FUNCTION: test_names
 
-int test_projection() {
+int test_detgtrazero() {
   // A flat state is unchanged, a perturbed state is projected onto the
-  // determinant and trace constraints, and projection is idempotent.  The
+  // determinant and trace constraints, and enforcement is idempotent.  The
   // perturbation is applied through the generated CFunction to every
   // component, so no field is named and no asymptotic value is written here.
   TestBlock block;
   std::vector<$SCALAR*> state = block.state_pointers();
-  $INITIAL_DATA_BLOCK(block.geom, state.data());
+  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, state.data());
   std::vector<std::vector<$SCALAR>> flat = block.store;
-  $NAMESPACE::generated::ProjectionStatus flat_status;
-  $PROJECTION_BLOCK(block.geom, state.data(), &flat_status);
+  $NAMESPACE::generated::detgtrazero_status_struct flat_status;
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(block.geom, state.data(), &flat_status);
   if (flat_status.failed_points != 0) return 1;
   if (block.store != flat) return 2;  // flat state must be untouched
   if (flat_status.max_abs_det_minus_one > 5e-13) return 3;
   if (flat_status.max_abs_trace_residual > 5e-13) return 4;
 
-  $PERTURBATION_BLOCK(block.geom, state.data(), static_cast<$SCALAR>(1e-2),
+  $SMOOTH_PERTURBATION_BLOCK(block.geom, state.data(), static_cast<$SCALAR>(1e-2),
                       static_cast<$SCALAR>(1.0));
-  $NAMESPACE::generated::ProjectionStatus first;
-  $PROJECTION_BLOCK(block.geom, state.data(), &first);
+  $NAMESPACE::generated::detgtrazero_status_struct first;
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(block.geom, state.data(), &first);
   if (first.failed_points != 0) return 5;
   if (first.projected_points == 0) return 6;
-  $NAMESPACE::generated::ProjectionStatus second;
-  $PROJECTION_BLOCK(block.geom, state.data(), &second);
+  $NAMESPACE::generated::detgtrazero_status_struct second;
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(block.geom, state.data(), &second);
   if (second.failed_points != 0) return 7;
-  // After one projection the constraints hold to the stated tolerance.
+  // After one enforcement pass the constraints hold to the stated tolerance.
   if (second.max_abs_det_minus_one > 5e-13) return 8;
   // Tolerance scale: max(1, largest |evolved component|) over the block.
   double state_scale = 1.0;
@@ -576,13 +576,13 @@ int test_projection() {
     }  // END LOOP: for cell over the block
   }  // END LOOP: for f over evolved components
   if (second.max_abs_trace_residual > 5e-13 * state_scale) return 9;
-  // Idempotence: a further projection of an already-projected state moves no
+  // Idempotence: a further pass over an already-projected state moves no
   // value by more than the tolerance.  Bitwise equality is not the claim --
-  // the projector recomputes a cube root and an inverse, so the last ulp may
+  // the kernel recomputes a cube root and an inverse, so the last ulp may
   // move.
   std::vector<std::vector<$SCALAR>> projected = block.store;
-  $NAMESPACE::generated::ProjectionStatus third;
-  $PROJECTION_BLOCK(block.geom, state.data(), &third);
+  $NAMESPACE::generated::detgtrazero_status_struct third;
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK(block.geom, state.data(), &third);
   if (third.failed_points != 0) return 10;
   double moved = 0.0;
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
@@ -596,7 +596,7 @@ int test_projection() {
   if (third.max_abs_det_minus_one > 5e-13) return 12;
   if (third.max_abs_trace_residual > 5e-13 * state_scale) return 13;
   return 0;
-}  // END FUNCTION: test_projection
+}  // END FUNCTION: test_detgtrazero
 
 int test_constraints() {
   // The constraint diagnostics of the Minkowski solution vanish.  The
@@ -609,11 +609,11 @@ int test_constraints() {
   if ($NAMESPACE::generated::NUM_DIAG_GFS == 0) return 1;
   TestBlock block;
   std::vector<$SCALAR*> state = block.state_pointers();
-  $INITIAL_DATA_BLOCK(block.geom, state.data());
+  $MINKOWSKI_INITIAL_DATA_BLOCK(block.geom, state.data());
   DiagBlock diag(block.vol);
   std::vector<$SCALAR*> diag_ptr = diag.pointers();
   std::vector<const $SCALAR*> in = block.const_state_pointers();
-  $DIAGNOSTICS_BLOCK(block.geom, in.data(), diag_ptr.data());
+  $CONSTRAINTS_EVAL_BLOCK(block.geom, in.data(), diag_ptr.data());
   const unsigned pad = block.geom.padding;
   double worst = 0.0;
   for (unsigned f = 0; f < $NAMESPACE::generated::NUM_DIAG_GFS; ++f) {
@@ -638,12 +638,12 @@ int run_section(const char* section) {
   if (std::strcmp(section, "rhs") == 0) return test_rhs();
   if (std::strcmp(section, "init") == 0) return test_init();
   if (std::strcmp(section, "names") == 0) return test_names();
-  if (std::strcmp(section, "projection") == 0) return test_projection();
+  if (std::strcmp(section, "detgtrazero") == 0) return test_detgtrazero();
   if (std::strcmp(section, "constraints") == 0) return test_constraints();
   if (std::strcmp(section, "all") == 0) {
     const int rc = test_state() + test_params() + test_padding() +
                    test_offsets() + test_upwind() + test_rhs() + test_init() +
-                   test_names() + test_projection() + test_constraints();
+                   test_names() + test_detgtrazero() + test_constraints();
     return rc == 0 ? 0 : 1;
   }  // END IF: section is all
   std::fprintf(stderr, "unknown section %s\\n", section);

@@ -4,7 +4,7 @@ Generate an NRPy-authored BSSN solver for Dendro-GR.
 This is the second formulation lowered through the Dendro infrastructure. It
 exists as much to test the infrastructure as to produce a solver: adding it
 required the formulation-agnostic lowering to be extracted into
-``kernel_lowering``, but no existing emitter changed behaviour and the fCCZ4
+``block_kernel_helpers``, but no existing emitter changed behaviour and the fCCZ4
 output is unaffected.
 
 The emitted names follow Dendro-GR's own BSSN solver rather than NRPy's
@@ -27,11 +27,17 @@ import os
 
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.Dendro import registration as reg
-from nrpy.infrastructures.Dendro.general_relativity import initial_data, projection
-from nrpy.infrastructures.Dendro.general_relativity.BSSN import diagnostics, rhs_eval
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import CodeParameters
+from nrpy.infrastructures.Dendro.general_relativity import (
+    enforce_detgbar_equals_detghat_trAzero,
+    initial_data,
+)
+from nrpy.infrastructures.Dendro.general_relativity.BSSN import (
+    constraints_eval,
+    rhs_eval,
+)
 from nrpy.infrastructures.Dendro.output_project import output_project
-from nrpy.infrastructures.Dendro.runtime import parameters
 
 # Dendro-GR's own BSSN solver: directory BSSN_GR, namespace bssn, sources
 # bssnCtx.cpp / bssn_constraints.cpp, object library bssn_common, executable
@@ -114,15 +120,15 @@ def main() -> None:
     # lifecycle gates evolve.  Both are formulation-agnostic: they write every
     # registered EVOL field to its registered asymptotic value.
     initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
-    initial_data.register_CFunctions_perturbation(solver_stem=solver_stem)
+    initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
 
     # The smooth ADM conversion, the separate connection-initialization pass,
-    # and the algebraic projection.  Both already read the registered BSSN
+    # and the det(gammabar)/tr(Abar) enforcement.  Both already read the registered BSSN
     # quantities, so they are shared with the fCCZ4 profile unchanged.
-    initial_data.register_CFunctions_initial_data_conversion(
+    initial_data.register_CFunctions_ADM_to_BSSN(
         solver_stem=solver_stem, CoordSystem=CoordSystem
     )
-    projection.register_CFunctions_projection(
+    enforce_detgbar_equals_detghat_trAzero.register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
         solver_stem=solver_stem,
         solver_namespace=solver_namespace,
         CoordSystem=CoordSystem,
@@ -130,11 +136,11 @@ def main() -> None:
 
     # The constraint diagnostics: the Hamiltonian constraint and the three
     # momentum constraint components, registered as DIAG gridfunctions.
-    diagnostics.register_CFunctions_diagnostics(CoordSystem=CoordSystem)
+    constraints_eval.register_CFunctions_constraints_eval(CoordSystem=CoordSystem)
 
     # The parameter C functions come last, after every CodeParameter the
     # scientific kernels register is in the registry.
-    parameters.register_CFunctions_parameters(solver_namespace, solver_stem)
+    CodeParameters.register_CFunctions_parameters(solver_namespace, solver_stem)
 
     #########################################################
     # Step 3: Write the project to project_dir.
@@ -155,7 +161,7 @@ def main() -> None:
     print(f"  evolved variables: {len(EVOL)}")
     print(f"  finite-difference order: {args.fd_order}")
     print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
-    print(f"  required ghost points: {list(reg.required_padding())}")
+    print(f"  required ghost points: {list(roles.required_padding())}")
     print("Now build and run the generated self-tests with:")
     print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")
     print("  cmake --build build && ctest --test-dir build")

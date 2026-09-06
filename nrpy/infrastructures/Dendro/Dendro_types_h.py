@@ -3,7 +3,7 @@
 Emit the generated scalar-contract header for a Dendro solver.
 
 The header fixes the generated scalar alias against the registered ``fp_type``
-and carries the structured status record the algebraic projection reports.
+and carries the structured status record the constraint enforcement reports.
 Neither names a field nor carries a physics default, so both belong to the
 generic scalar contract rather than to a formulation module.
 
@@ -60,14 +60,14 @@ static_assert(sizeof(TargetScalar) == sizeof(NRPyArithmetic),
 static_assert(std::is_same_v<TargetScalar, NRPyArithmetic>,
               "generated scalar contract: alias must be the registered fp_type");
 
-// Structured status of one algebraic-projection pass.  The record names no
+// Structured status of one det/trace enforcement pass.  The record names no
 // field and carries no physics default, so it belongs to the scalar contract.
-// The projection never calls exit(): a rank-local failure is reported here and
+// The kernel never calls exit(): a rank-local failure is reported here and
 // the host owns the global reduction.
-struct ProjectionStatus {{
-  // Largest |det(gammabar)/det(gammahat) - 1| seen before projection.
+struct detgtrazero_status_struct {{
+  // Largest |det(gammabar)/det(gammahat) - 1| seen before enforcement.
   double max_abs_det_minus_one = 0.0;
-  // Largest |gammabar^ij Atilde_ij| seen before projection.
+  // Largest |gammabar^ij Atilde_ij| seen before enforcement.
   double max_abs_trace_residual = 0.0;
   // Points projected, points refused, and points with nonfinite diagnostics.
   unsigned long long projected_points = 0;
@@ -79,12 +79,7 @@ struct ProjectionStatus {{
   long long first_failing_index = -1;
   // Registry position of the first nonfinite input field there, or -1.
   int first_failing_field = -1;
-}};  // END STRUCT: projection status record
-
-[[nodiscard]] inline bool projection_failed(
-    const ProjectionStatus& status) noexcept {{
-  return status.failed_points != 0;
-}}  // END FUNCTION: projection_failed
+}};  // END STRUCT: detgtrazero_status_struct
 
 }}  // END NAMESPACE: {solver_namespace}::generated
 """

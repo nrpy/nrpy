@@ -19,8 +19,8 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import output_CFunctions
-from nrpy.infrastructures.Dendro import registration as reg
 
 BANNER = (
     "// GENERATED FILE - DO NOT EDIT\n"
@@ -60,7 +60,7 @@ class Ctx {
   // profile is applied to every component of the generated state.
   int perturb_state(double amplitude, double wavelength);
   // Generated all-block RHS.
-  int rhs_all_blocks();
+  int rhs_eval_all_blocks();
   // RHS magnitude at the current state, maximised over this rank's interior.
   double max_interior_rhs();
   // Largest difference between the per-block entry point and the LTS
@@ -75,10 +75,10 @@ class Ctx {
   // over `ncomp` components.  The count is a parameter so the same reduction
   // serves the evolved and the diagnostic vectors without naming either.
   double max_interior_value(const $SCALAR* const* fields, unsigned ncomp);
-  // Run the generated algebraic projection over every local block.  Returns
-  // nonzero when the generated status reports a refused point; the projection
+  // Run the generated constraint enforcement over every local block.  Returns
+  // nonzero when the generated status reports a refused point; the enforcement
   // itself never calls exit().
-  int project_state();
+  int enforce_detgbar_equals_detghat_trAzero_all_blocks();
   // Maximum |diagnostic| over every DIAG component and local block, after
   // recomputing the generated constraint diagnostics.  No diagnostic is named:
   // the reduction runs over the generated count.
@@ -99,15 +99,15 @@ class Ctx {
   // without the braces the destructor would free indeterminate pointers.
   mock::Ctx host{};
   // Generated runtime parameter table, owned by the context.
-  $NAMESPACE::generated::GeneratedParams params;
+  $NAMESPACE::generated::params_struct params;
   // Bitwise snapshot of the state taken before evolution.
   $SCALAR** u0 = nullptr;
-  // Status of the most recent projection pass.
-  $NAMESPACE::generated::ProjectionStatus last_projection;
-  // Number of completed projection passes.  A flat state looks the same
+  // Status of the most recent enforcement pass.
+  $NAMESPACE::generated::detgtrazero_status_struct last_detgtrazero_status;
+  // Number of completed enforcement passes.  A flat state looks the same
   // whether or not it was projected, so a count the host can check is the
   // evidence that the hooks ran as configured.
-  unsigned long long projection_passes = 0;
+  unsigned long long detgtrazero_passes = 0;
 };  // END CLASS: Ctx
 
 // Observed convergence order of the generated RHS under grid refinement: the
@@ -119,7 +119,7 @@ class Ctx {
 // a ratio.
 double observed_convergence_order(
     double base_dx, double amplitude, double wavelength,
-    const $NAMESPACE::generated::GeneratedParams& params);
+    const $NAMESPACE::generated::params_struct& params);
 
 }  // END NAMESPACE: $NAMESPACE
 """
@@ -138,7 +138,7 @@ _SOURCE = """// Host-owned lifecycle only.  Loops here are host reductions and i
 #include <string_view>
 #include <vector>
 
-#include "$STEM_cfunctions.h"
+#include "$STEM_function_prototypes.h"
 
 namespace $NAMESPACE {
 
@@ -229,7 +229,7 @@ int Ctx::initialize_world(int n_blocks, int extent, double dx, int rank,
     }  // END LOOP: for f over vector components
   }  // END LOOP: for v over host vectors
   // The registered parameter CFunctions own the parameter lifecycle.
-  $SET_DEFAULTS(params);
+  $PARAMS_STRUCT_SET_TO_DEFAULT(params);
   if (parfile_path != nullptr) {
     if ($PARSE_FILE(params, parfile_path) != 0) {
       std::fprintf(stderr,
@@ -280,25 +280,25 @@ int Ctx::startup_checks() {
 }  // END FUNCTION: Ctx::startup_checks
 
 int Ctx::minkowski_initial_data() {
-  $INITIAL_DATA(host.world, host.in.comp);
+  $MINKOWSKI_INITIAL_DATA(host.world, host.in.comp);
   return 0;
 }  // END FUNCTION: Ctx::minkowski_initial_data
 
 int Ctx::perturb_state(double amplitude, double wavelength) {
   // The analytic profile and the loop that applies it are NRPy-authored and
   // registered; the host only supplies the state and the two scalars.
-  $PERTURBATION(host.world, host.in.comp, static_cast<$SCALAR>(amplitude),
+  $SMOOTH_PERTURBATION(host.world, host.in.comp, static_cast<$SCALAR>(amplitude),
                 static_cast<$SCALAR>(wavelength));
   return 0;
 }  // END FUNCTION: Ctx::perturb_state
 
-int Ctx::rhs_all_blocks() {
-  $RHS(host.world, host.in.comp, host.rhs.comp$RHS_TAIL);
+int Ctx::rhs_eval_all_blocks() {
+  $RHS_EVAL(host.world, host.in.comp, host.rhs.comp$RHS_EVAL_TAIL);
   return 0;
-}  // END FUNCTION: Ctx::rhs_all_blocks
+}  // END FUNCTION: Ctx::rhs_eval_all_blocks
 
 double Ctx::max_interior_rhs() {
-  rhs_all_blocks();
+  rhs_eval_all_blocks();
   return max_interior_value(host.rhs.comp,
                             $NAMESPACE::generated::NUM_EVOL_GFS);
 }  // END FUNCTION: Ctx::max_interior_rhs
@@ -319,7 +319,7 @@ double Ctx::flat_adapter_max_difference() {
   }  // END LOOP: for f over evolved components
   BlockGeometry flat_geom = g;
   flat_geom.component_offset = 0;
-  $RHS_FLAT_BLOCK(flat_geom, flat_in.data(), flat_rhs.data()$RHS_TAIL);
+  $RHS_EVAL_FLAT_BLOCK(flat_geom, flat_in.data(), flat_rhs.data()$RHS_EVAL_TAIL);
   std::vector<const $SCALAR*> block_in(ncomp);
   std::vector<$SCALAR*> block_rhs(ncomp);
   std::vector<std::vector<$SCALAR>> storage(
@@ -328,7 +328,7 @@ double Ctx::flat_adapter_max_difference() {
     block_in[f] = host.in.comp[f] + g.component_offset;
     block_rhs[f] = storage[f].data();
   }  // END LOOP: for f over evolved components
-  $RHS_BLOCK(flat_geom, block_in.data(), block_rhs.data()$RHS_TAIL);
+  $RHS_EVAL_BLOCK(flat_geom, block_in.data(), block_rhs.data()$RHS_EVAL_TAIL);
   double worst = 0.0;
   for (unsigned f = 0; f < ncomp; ++f) {
     for (unsigned bz = g.padding; bz < g.nz - g.padding; ++bz) {
@@ -348,7 +348,7 @@ double Ctx::flat_adapter_max_difference() {
 }  // END FUNCTION: Ctx::flat_adapter_max_difference
 
 int Ctx::euler_step(double dt) {
-  rhs_all_blocks();
+  rhs_eval_all_blocks();
   // Host integrator: u_out = u_in + dt * rhs.  No formulation content here:
   // every derivative and equation term was computed by the registered
   // generated CFunctions.
@@ -426,30 +426,30 @@ double Ctx::max_drift_from_snapshot() {
   return worst;
 }  // END FUNCTION: Ctx::max_drift_from_snapshot
 
-int Ctx::project_state() {
-  // The projection is scheduled after initial-data construction and after
+int Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks() {
+  // The enforcement is scheduled after initial-data construction and after
   // every accepted timestep.  The generated kernel never calls exit(); it
   // reports a structured status, and the host decides.
-  last_projection = $NAMESPACE::generated::ProjectionStatus{};
-  $PROJECTION(host.world, host.in.comp, &last_projection);
-  ++projection_passes;
-  if ($NAMESPACE::generated::projection_failed(last_projection)) {
+  last_detgtrazero_status = $NAMESPACE::generated::detgtrazero_status_struct{};
+  $ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO(host.world, host.in.comp, &last_detgtrazero_status);
+  ++detgtrazero_passes;
+  if (last_detgtrazero_status.failed_points != 0) {
     std::fprintf(stderr,
-                 "ERROR: projection refused %llu point(s); first at index "
+                 "ERROR: constraint enforcement refused %llu point(s); first at index "
                  "%lld, first nonfinite field index %d\\n",
-                 last_projection.failed_points,
-                 last_projection.first_failing_index,
-                 last_projection.first_failing_field);
+                 last_detgtrazero_status.failed_points,
+                 last_detgtrazero_status.first_failing_index,
+                 last_detgtrazero_status.first_failing_field);
     return 1;
-  }  // END IF: projection refused a point
+  }  // END IF: enforcement refused a point
   return 0;
-}  // END FUNCTION: Ctx::project_state
+}  // END FUNCTION: Ctx::enforce_detgbar_equals_detghat_trAzero_all_blocks
 
 double Ctx::max_constraint_violation() {
   // Recompute the diagnostics from the current evolved state and reduce over
   // every generated DIAG component.  No diagnostic is named here: the count
   // and the ordering are generated.
-  $DIAGNOSTICS(host.world, host.in.comp, host.diag.comp);
+  $CONSTRAINTS_EVAL(host.world, host.in.comp, host.diag.comp);
   return max_interior_value(host.diag.comp,
                             $NAMESPACE::generated::NUM_DIAG_GFS);
 }  // END FUNCTION: Ctx::max_constraint_violation
@@ -492,7 +492,7 @@ namespace {
 // coincident physical point (the block centre) for every component.
 void sample_rhs_at_centre(
     int extent, double dx, int sample_index, double amplitude,
-    double wavelength, const $NAMESPACE::generated::GeneratedParams& params,
+    double wavelength, const $NAMESPACE::generated::params_struct& params,
     std::vector<double>& out) {
   const unsigned ncomp = $NAMESPACE::generated::NUM_EVOL_GFS;
   const std::size_t vol = static_cast<std::size_t>(extent) * extent * extent;
@@ -515,10 +515,10 @@ void sample_rhs_at_centre(
     state_cptr[f] = state[f].data();
     rhs_ptr[f] = rhs[f].data();
   }  // END LOOP: for f over evolved components
-  $INITIAL_DATA_BLOCK(g, state_ptr.data());
-  $PERTURBATION_BLOCK(g, state_ptr.data(), static_cast<$SCALAR>(amplitude),
+  $MINKOWSKI_INITIAL_DATA_BLOCK(g, state_ptr.data());
+  $SMOOTH_PERTURBATION_BLOCK(g, state_ptr.data(), static_cast<$SCALAR>(amplitude),
                       static_cast<$SCALAR>(wavelength));
-  $RHS_BLOCK(g, state_cptr.data(), rhs_ptr.data()$RHS_BLOCK_TAIL);
+  $RHS_EVAL_BLOCK(g, state_cptr.data(), rhs_ptr.data()$RHS_EVAL_BLOCK_TAIL);
   // The caller passes the index of the shared physical point: at spacing
   // dx/2^k that point is index sample_index*2^k, so the three grids sample the
   // same location and the Richardson ratio is meaningful.
@@ -544,7 +544,7 @@ double max_abs_difference(const std::vector<double>& a,
 
 double observed_convergence_order(
     double base_dx, double amplitude, double wavelength,
-    const $NAMESPACE::generated::GeneratedParams& params) {
+    const $NAMESPACE::generated::params_struct& params) {
   const int pad = static_cast<int>($NAMESPACE::generated::REQUIRED_PADDING);
   const int coarse = 2 * pad + 9;  // odd, so the centre is a grid point
   const int centre = (coarse - 1) / 2;
@@ -597,31 +597,51 @@ def substitute_solver_identifiers(
     :param scalar_type: Registered generated scalar alias.
     :return: The substituted text.
     """
-    rhs_block = reg.CFunction_name_for_role("rhs_block")
+    rhs_block = roles.CFunction_name_for_role("rhs_eval_block")
     replacements = (
-        ("$SET_DEFAULTS", f"{solver_stem}_params_set_defaults"),
+        (
+            "$PARAMS_STRUCT_SET_TO_DEFAULT",
+            f"{solver_stem}_params_struct_set_to_default",
+        ),
         ("$PARSE_FILE", f"{solver_stem}_params_parse_file"),
         ("$VALIDATE", f"{solver_stem}_params_validate"),
         ("$PRINT_EFFECTIVE", f"{solver_stem}_params_print_effective"),
         (
-            "$INITIAL_DATA_BLOCK",
-            reg.CFunction_name_for_role("minkowski_initial_data_block"),
+            "$MINKOWSKI_INITIAL_DATA_BLOCK",
+            roles.CFunction_name_for_role("minkowski_initial_data_block"),
         ),
-        ("$INITIAL_DATA", reg.CFunction_name_for_role("minkowski_initial_data")),
-        ("$PERTURBATION_BLOCK", reg.CFunction_name_for_role("perturbation_block")),
-        ("$PERTURBATION", reg.CFunction_name_for_role("perturbation")),
-        ("$RHS_FLAT_BLOCK", reg.CFunction_name_for_role("rhs_flat_block")),
-        ("$RHS_BLOCK_TAIL", _codeparameter_tail(rhs_block, "params")),
-        ("$RHS_BLOCK", rhs_block),
         (
-            "$RHS_TAIL",
-            _codeparameter_tail(reg.CFunction_name_for_role("rhs"), "params"),
+            "$MINKOWSKI_INITIAL_DATA",
+            roles.CFunction_name_for_role("minkowski_initial_data"),
         ),
-        ("$RHS", reg.CFunction_name_for_role("rhs")),
-        ("$PROJECTION_BLOCK", reg.CFunction_name_for_role("projection_block")),
-        ("$PROJECTION", reg.CFunction_name_for_role("projection")),
-        ("$DIAGNOSTICS_BLOCK", reg.CFunction_name_for_role("diagnostics_block")),
-        ("$DIAGNOSTICS", reg.CFunction_name_for_role("diagnostics")),
+        (
+            "$SMOOTH_PERTURBATION_BLOCK",
+            roles.CFunction_name_for_role("smooth_perturbation_block"),
+        ),
+        ("$SMOOTH_PERTURBATION", roles.CFunction_name_for_role("smooth_perturbation")),
+        ("$RHS_EVAL_FLAT_BLOCK", roles.CFunction_name_for_role("rhs_eval_flat_block")),
+        ("$RHS_EVAL_BLOCK_TAIL", _codeparameter_tail(rhs_block, "params")),
+        ("$RHS_EVAL_BLOCK", rhs_block),
+        (
+            "$RHS_EVAL_TAIL",
+            _codeparameter_tail(roles.CFunction_name_for_role("rhs_eval"), "params"),
+        ),
+        ("$RHS_EVAL", roles.CFunction_name_for_role("rhs_eval")),
+        (
+            "$ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK",
+            roles.CFunction_name_for_role(
+                "enforce_detgbar_equals_detghat_trAzero_block"
+            ),
+        ),
+        (
+            "$ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO",
+            roles.CFunction_name_for_role("enforce_detgbar_equals_detghat_trAzero"),
+        ),
+        (
+            "$CONSTRAINTS_EVAL_BLOCK",
+            roles.CFunction_name_for_role("constraints_eval_block"),
+        ),
+        ("$CONSTRAINTS_EVAL", roles.CFunction_name_for_role("constraints_eval")),
         ("$NAMESPACE", solver_namespace),
         ("$STEM", solver_stem),
         ("$SCALAR", scalar_type),

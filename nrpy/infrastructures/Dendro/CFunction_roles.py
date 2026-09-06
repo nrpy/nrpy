@@ -1,6 +1,6 @@
-# nrpy/infrastructures/Dendro/registration.py
+# nrpy/infrastructures/Dendro/CFunction_roles.py
 """
-Dendro CFunction registration with non-authoritative role metadata.
+Dendro CFunction roles, plus the padding, upwind-control and registry-order records the emitters read.
 
 A Dendro kernel is an ordinary NRPy CFunction plus scheduling metadata keyed
 by the registered function name.  The sidecar (stored in
@@ -152,7 +152,7 @@ def register_Dendro_CFunction(*, role: str, **cfunction_kwargs: Any) -> None:
     the host-adapter emitters can ask for "the all-block RHS entry point"
     instead of taking a dozen name arguments.
 
-    :param role: Non-authoritative scheduling role (e.g., ``"rhs_block"``).
+    :param role: Non-authoritative scheduling role (e.g., ``"rhs_eval_block"``).
     :param cfunction_kwargs: Arguments forwarded to
         :func:`nrpy.c_function.register_CFunction`.
 
@@ -160,17 +160,17 @@ def register_Dendro_CFunction(*, role: str, **cfunction_kwargs: Any) -> None:
     >>> cfc.CFunction_dict.clear()
     >>> par.glb_extras_dict.pop("Dendro", None) and None
     >>> register_Dendro_CFunction(
-    ...     role="rhs_block", desc="Per-block RHS.", name="bssn_rhs_block",
+    ...     role="rhs_eval_block", desc="Per-block RHS.", name="bssn_rhs_eval_block",
     ...     params="int n", body="(void)n;")
-    >>> CFunction_name_for_role("rhs_block")
-    'bssn_rhs_block'
-    >>> "bssn_rhs_block" in cfc.CFunction_dict
+    >>> CFunction_name_for_role("rhs_eval_block")
+    'bssn_rhs_eval_block'
+    >>> "bssn_rhs_eval_block" in cfc.CFunction_dict
     True
     >>> try:
-    ...     CFunction_name_for_role("diagnostics")
+    ...     CFunction_name_for_role("constraints_eval")
     ... except ValueError as error:
     ...     print(error)
-    Expected exactly one registered CFunction with Dendro role 'diagnostics', found [].
+    Expected exactly one registered CFunction with Dendro role 'constraints_eval', found [].
     """
     # ``cfc.register_CFunction`` already rejects a duplicate name, so the
     # sidecar cannot acquire two entries for one CFunction.
@@ -195,7 +195,7 @@ def CFunction_name_for_role(role: str) -> str:
     point.  The role sidecar already records it, so they read it from there
     rather than take a dozen name arguments or rebuild the naming convention.
 
-    :param role: Dendro scheduling role, e.g. ``"rhs_block"``.
+    :param role: Dendro scheduling role, e.g. ``"rhs_eval_block"``.
     :return: The registered CFunction name carrying that role.
     :raises ValueError: If no registered CFunction, or more than one, carries
         the role.

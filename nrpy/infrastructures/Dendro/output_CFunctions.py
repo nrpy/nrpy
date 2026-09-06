@@ -47,32 +47,29 @@ def derived_source_path(name: str, subdirectory: str) -> str:
     :return: Path relative to the solver root, with forward slashes.
 
     Doctests:
-    >>> derived_source_path("bssn_rhs", "generated/src/rhs")
-    'generated/src/rhs/bssn_rhs.cpp'
+    >>> derived_source_path("bssn_rhs_eval", "generated/src/rhs_eval")
+    'generated/src/rhs_eval/bssn_rhs_eval.cpp'
     """
     return f"{subdirectory.replace(os.sep, '/')}/{name}.cpp"
 
 
-def output_CFunction_source(cfunc: cfc.CFunction) -> str:
+def output_CFunction_source(cfunc: cfc.CFunction, solver_stem: str) -> str:
     """
     Emit one generated CFunction source file.
 
     The registered ``full_function`` is written verbatim after the banner and a
-    single preamble include supplying the host types, the generated state and
-    parameter declarations, and the standard headers the body uses.
+    single include of ``<stem>_defines.h`` supplying the host types, the
+    generated state and parameter declarations, and the standard headers the
+    body uses -- the role ``BHaH_defines.h`` plays for every BHaH CFunction.
 
     :param cfunc: The registered CFunction to emit.
+    :param solver_stem: Lowercase formulation stem for the emitted header names.
     :return: The complete source file text.
     """
-    return (
-        BANNER
-        + '#include "generated_project_preamble.h"\n'
-        + cfunc.full_function
-        + "\n"
-    )
+    return BANNER + f'#include "{solver_stem}_defines.h"\n' + cfunc.full_function + "\n"
 
 
-def output_CFunction_declarations(solver_stem: str) -> str:
+def output_function_prototypes_h(solver_stem: str) -> str:
     """
     Emit the generated CFunction declaration header.
 
@@ -144,10 +141,10 @@ def CFunction_artifacts(solver_name: str, solver_stem: str) -> Dict[str, str]:
     artifacts: Dict[str, str] = {}
     for name, cfunc in registered_CFunctions():
         artifacts[prefix + derived_source_path(name, cfunc.subdirectory)] = (
-            output_CFunction_source(cfunc)
+            output_CFunction_source(cfunc, solver_stem)
         )
-    artifacts[prefix + f"generated/include/{solver_stem}_cfunctions.h"] = (
-        output_CFunction_declarations(solver_stem)
+    artifacts[prefix + f"generated/include/{solver_stem}_function_prototypes.h"] = (
+        output_function_prototypes_h(solver_stem)
     )
     return artifacts
 

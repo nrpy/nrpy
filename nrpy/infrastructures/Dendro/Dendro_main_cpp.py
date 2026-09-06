@@ -6,21 +6,21 @@ The executable drives the registered generated CFunctions through the mock
 host stubs so the Minkowski lifecycle is exercised end to end.  Gates, in
 order:
 
-    PROJRESIDUAL  max projection residual after initial data       (<= 1e-13)
+    DETGTRAZERO_RESIDUAL  max det/trace residual after initial data        (<= 1e-13)
     MAXCONSTRAINT max |constraint diagnostic| after initial data   (<= 1e-12)
     MINKOWSKIRHS  max |RHS| at the Minkowski fixed point           (<= 1e-13)
     FLATADAPTER   |per-block RHS - flat-block adapter RHS|         (== 0)
     PERTURBEDRHS  max |RHS| on a smooth perturbed state            (> 0)
     ORDER         observed convergence order under h -> h/2 -> h/4 (>= N-0.5)
     DRIFT100      max drift after 100 CFL-limited steps            (<= 1e-11)
-    PROJPASSES    one projection per initial-data construction plus
+    DETGTRAZERO_PASSES    one enforcement per initial-data construction plus
                   one per accepted step                            (exact)
 
-Every gate but ORDER and PROJPASSES is an ``MPI_Allreduce(MAX)`` over ranks,
+Every gate but ORDER and DETGTRAZERO_PASSES is an ``MPI_Allreduce(MAX)`` over ranks,
 and each rank owns a disjoint subdomain carrying a different piece of the
 analytic profile, so a rank-dependent fault cannot hide behind a rank-0 print.
 ORDER is a single-block refinement study and is rank-independent by
-construction.  PROJPASSES compares the rank-local counter, because every rank
+construction.  DETGTRAZERO_PASSES compares the rank-local counter, because every rank
 runs the same schedule and an exact per-rank count is the stronger check.
 
 Author: Zachariah B. Etienne
@@ -131,32 +131,32 @@ int main(int argc, char* argv[]) {
   }  // END IF: name selection failed
 
   // Project after initial-data construction.  The failure decision is
-  // collective: a projection failure is data dependent, so a rank-local
+  // collective: an enforcement failure is data dependent, so a rank-local
   // `return` here would leave the other ranks waiting inside the next
   // reduction.  Every rank reduces the same flag and then agrees.
-  if (global_max(ctx.project_state() != 0 ? 1.0 : 0.0) > 0.0) {
+  if (global_max(ctx.enforce_detgbar_equals_detghat_trAzero_all_blocks() != 0 ? 1.0 : 0.0) > 0.0) {
     if (rank == 0) {
       std::fprintf(stderr,
-                   "FAIL: projection refused a point after initial data\\n");
+                   "FAIL: constraint enforcement refused a point after initial data\\n");
     }  // END IF: rank 0 reports the refusal
     MPI_Finalize();
     return 1;
-  }  // END IF: projection refused after initial data
+  }  // END IF: enforcement refused after initial data
   // Measured on flat initial data, so it is identically zero whatever the
-  // projector computes.  The discriminating projection evidence is the
-  // projection self-test and the owner doctests that pin the exact
+  // kernel computes.  The discriminating enforcement evidence is the
+  // detgtrazero self-test and the owner doctests that pin the exact
   // projected write set, not this line.
-  const double projection_residual = global_max(
-      std::fmax(ctx.last_projection.max_abs_det_minus_one,
-                ctx.last_projection.max_abs_trace_residual));
-  if (rank == 0) std::printf("PROJRESIDUAL %.3e\\n", projection_residual);
-  if (projection_residual > 1e-13) {
+  const double detgtrazero_residual = global_max(
+      std::fmax(ctx.last_detgtrazero_status.max_abs_det_minus_one,
+                ctx.last_detgtrazero_status.max_abs_trace_residual));
+  if (rank == 0) std::printf("DETGTRAZERO_RESIDUAL %.3e\\n", detgtrazero_residual);
+  if (detgtrazero_residual > 1e-13) {
     if (rank == 0) {
-      std::fprintf(stderr, "FAIL: initial projection residual exceeds 1e-13\\n");
+      std::fprintf(stderr, "FAIL: initial det/trace residual exceeds 1e-13\\n");
     }  // END IF: rank 0 reports the residual
     MPI_Finalize();
     return 1;
-  }  // END IF: initial projection residual too large
+  }  // END IF: initial residual too large
 
   // The constraint diagnostics of an exact solution vanish.  A kernel that
   // computed nothing would also report zero, so this gate is a necessary
@@ -251,14 +251,14 @@ int main(int argc, char* argv[]) {
   // The same scheduling rule applies to this second initial-data
   // construction, so the pass count below stays exactly one per construction
   // plus one per accepted step.
-  if (global_max(ctx.project_state() != 0 ? 1.0 : 0.0) > 0.0) {
+  if (global_max(ctx.enforce_detgbar_equals_detghat_trAzero_all_blocks() != 0 ? 1.0 : 0.0) > 0.0) {
     if (rank == 0) {
       std::fprintf(stderr,
-                   "FAIL: projection refused a point after initial data\\n");
+                   "FAIL: constraint enforcement refused a point after initial data\\n");
     }  // END IF: rank 0 reports it
     MPI_Finalize();
     return 1;
-  }  // END IF: projection refused a point
+  }  // END IF: enforcement refused a point
   const int initial_data_constructions = 2;
   ctx.snapshot_state();
   const int nsteps = 100;
@@ -271,14 +271,14 @@ int main(int argc, char* argv[]) {
     // Project after every accepted timestep, which is what the post_timestep
     // hook does on the real host.  The failure decision is collective, for the
     // reason given above.
-    if (global_max(ctx.project_state() != 0 ? 1.0 : 0.0) > 0.0) {
+    if (global_max(ctx.enforce_detgbar_equals_detghat_trAzero_all_blocks() != 0 ? 1.0 : 0.0) > 0.0) {
       if (rank == 0) {
         std::fprintf(stderr,
-                     "FAIL: projection refused a point during evolution\\n");
+                     "FAIL: constraint enforcement refused a point during evolution\\n");
       }  // END IF: rank 0 reports the refusal
       MPI_Finalize();
       return 1;
-    }  // END IF: projection refused during evolution
+    }  // END IF: enforcement refused during evolution
   }  // END LOOP: for s over CFL-limited steps
   const double drift = global_max(ctx.max_drift_from_snapshot());
   if (rank == 0) std::printf("DRIFT100 %.3e\\n", drift);
@@ -287,23 +287,23 @@ int main(int argc, char* argv[]) {
     MPI_Finalize();
     return 1;
   }  // END IF: 100-step drift too large
-  // The projection hooks ran exactly as configured -- once per initial-data
+  // The enforcement hooks ran exactly as configured -- once per initial-data
   // construction and once per accepted timestep.  The count is incremented by
   // the context when the generated CFunction actually runs.
   if (rank == 0) {
-    std::printf("PROJPASSES %llu STEPS %d INITIALDATA %d\\n",
-                ctx.projection_passes, nsteps, initial_data_constructions);
+    std::printf("DETGTRAZERO_PASSES %llu STEPS %d INITIALDATA %d\\n",
+                ctx.detgtrazero_passes, nsteps, initial_data_constructions);
   }  // END IF: rank 0 reports pass count
-  if (ctx.projection_passes !=
+  if (ctx.detgtrazero_passes !=
       static_cast<unsigned long long>(nsteps + initial_data_constructions)) {
     if (rank == 0) {
-      std::fprintf(stderr, "FAIL: projection ran %llu times, expected %d\\n",
-                   ctx.projection_passes,
+      std::fprintf(stderr, "FAIL: constraint enforcement ran %llu times, expected %d\\n",
+                   ctx.detgtrazero_passes,
                    nsteps + initial_data_constructions);
     }  // END IF: rank 0 reports the count
     MPI_Finalize();
     return 1;
-  }  // END IF: wrong projection pass count
+  }  // END IF: wrong enforcement pass count
   if (rank == 0) {
     std::printf("MINKOWSKI_OK blocks=%d extent=%d ranks=%d\\n", n_blocks,
                 extent, size);

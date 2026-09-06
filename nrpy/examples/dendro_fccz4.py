@@ -15,15 +15,15 @@ import os
 
 import nrpy.grid as gri
 import nrpy.params as par
-from nrpy.infrastructures.Dendro import registration as reg
+from nrpy.infrastructures.Dendro import CFunction_roles as roles
+from nrpy.infrastructures.Dendro import CodeParameters
 from nrpy.infrastructures.Dendro.general_relativity import (
-    diagnostics,
+    constraints_eval,
+    enforce_detgbar_equals_detghat_trAzero,
     initial_data,
-    projection,
     rhs_eval,
 )
 from nrpy.infrastructures.Dendro.output_project import output_project
-from nrpy.infrastructures.Dendro.runtime import parameters
 
 # Dendro names a solver directory for its formulation (its own is BSSN_GR) and
 # namespaces the solver by the lowercase formulation (namespace bssn), so this
@@ -109,16 +109,16 @@ def main() -> None:
     # Minkowski initial data and the smooth analytic perturbation the
     # lifecycle gates evolve.  Both are NRPy-authored kernels.
     initial_data.register_CFunctions_minkowski_initial_data(solver_stem=solver_stem)
-    initial_data.register_CFunctions_perturbation(solver_stem=solver_stem)
+    initial_data.register_CFunctions_smooth_perturbation(solver_stem=solver_stem)
 
     # The smooth ADM conversion, the separate connection-initialization pass,
-    # and the algebraic projection.  The conversion registers the ADM source
-    # fields as AUXEVOL; the projection is scheduled after initial data and
+    # and the det(gammabar)/tr(Abar) enforcement.  The conversion registers the ADM source
+    # fields as AUXEVOL; the enforcement is scheduled after initial data and
     # after every accepted timestep by the host context.
-    initial_data.register_CFunctions_initial_data_conversion(
+    initial_data.register_CFunctions_ADM_to_BSSN(
         solver_stem=solver_stem, CoordSystem=CoordSystem
     )
-    projection.register_CFunctions_projection(
+    enforce_detgbar_equals_detghat_trAzero.register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
         solver_stem=solver_stem,
         solver_namespace=solver_namespace,
         CoordSystem=CoordSystem,
@@ -127,7 +127,7 @@ def main() -> None:
     # The constraint diagnostics.  H_Z4 and the connection constraint are
     # registered as DIAG gridfunctions: they are recomputed from the evolved
     # state and are never checkpoint state.
-    diagnostics.register_CFunctions_diagnostics(
+    constraints_eval.register_CFunctions_constraints_eval(
         CoordSystem=CoordSystem,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
@@ -135,7 +135,7 @@ def main() -> None:
 
     # The parameter C functions come last, after every CodeParameter the
     # scientific kernels register is in the registry.
-    parameters.register_CFunctions_parameters(solver_namespace, solver_stem)
+    CodeParameters.register_CFunctions_parameters(solver_namespace, solver_stem)
 
     #########################################################
     # Step 3: Write the project to project_dir.
@@ -156,7 +156,7 @@ def main() -> None:
     print(f"  evolved variables: {len(EVOL)}")
     print(f"  finite-difference order: {args.fd_order}")
     print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
-    print(f"  required ghost points: {list(reg.required_padding())}")
+    print(f"  required ghost points: {list(roles.required_padding())}")
     print("Now build and run the generated self-tests with:")
     print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")
     print("  cmake --build build && ctest --test-dir build")

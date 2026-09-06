@@ -1,4 +1,4 @@
-# nrpy/infrastructures/Dendro/naming.py
+# nrpy/infrastructures/Dendro/gridfunction_name_decorations.py
 """
 Reversible syntactic name transformations for Dendro generated code.
 
@@ -105,7 +105,7 @@ def out_pointer(name: str) -> str:
     """
     Return the Dendro output-role pointer name for a gridfunction.
 
-    Writers that produce *state* (initial data, projection) use this role;
+    Writers that produce *state* (initial data, constraint enforcement) use this role;
     ``rhs_`` is reserved for right-hand-side output, so a reader of a
     generated signature can tell the two apart.
 
