@@ -1,6 +1,6 @@
 # Validation, Host Mock, And Deferral Gates
 
-> Explain the mock host vehicle, the generated self-tests and Minkowski lifecycle gates, the absent CI coverage, and the unproven Dendrolib pin and capability gates. · Status: provisional · Last reconciled: 09-05-2026
+> Explain the mock host vehicle, the generated self-tests and Minkowski lifecycle gates, the absent CI coverage, and the unproven Dendrolib pin and capability gates. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -44,7 +44,9 @@ mismatch.
 The entry point runs a Minkowski lifecycle whose gates are the projection
 residual, the maximum constraint violation, the flat-state right-hand side, the
 flat-block adapter agreement, the perturbed right-hand-side response, the
-observed convergence order, and the 100-step drift. It is run by hand.
+observed convergence order, the 100-step drift, and the exact projection-pass
+count; a run that clears all eight prints its `MINKOWSKI_OK` line, which is a
+terminal banner rather than a ninth gate. It is run by hand.
 
 Claim evidence:
 - Claim: the generated solver builds warning-free against the mock host, passes its ten CTest cases, and completes its Minkowski lifecycle on one and two MPI ranks with observed convergence order 3.977 at finite-difference order 4; none of this touches the real Dendro-GR host.

@@ -1,6 +1,6 @@
 # BSSN Application Wiring
 
-> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-05-2026
+> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -91,8 +91,9 @@ defects that a single-formulation tree could not expose:
 - The diagnostics accessed-set intersected raw free symbols with the registry,
   so a field that a kernel only *differentiates* was never bound. The BSSN
   momentum constraint takes derivatives of `lambdaU`, and the emitted kernel
-  read a pointer nothing declared. `kernel_lowering.base_gridfunction_of` now
-  resolves derivative symbols back to their field.
+  read a pointer nothing declared. `kernel_lowering.accessed_gridfunctions` now
+  composes the canonical NRPy derivative extraction to resolve each derivative
+  symbol back to the field it differentiates.
 - `naming.aux_pointer` had been deleted as dead code in an earlier review
   round. It was dead only because the tree had one formulation.
 - The shared initial-data and projection builders hardcoded `fccz4_` into the
@@ -108,7 +109,7 @@ defects that a single-formulation tree could not expose:
 
 - [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/rhs_eval.py) - `bssn_rhs_expressions`, `build_bssn_rhs`, `register_CFunctions_rhs_eval`
 - [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/diagnostics.py) - `build_diagnostics`, `register_CFunctions_diagnostics`
-- [kernel_lowering.py](../../../nrpy/infrastructures/Dendro/kernel_lowering.py) - `base_gridfunction_of`, `accessed_gridfunctions`, `padding_from_operators`
+- [kernel_lowering.py](../../../nrpy/infrastructures/Dendro/kernel_lowering.py) - `accessed_gridfunctions`, `padding_from_operators`, `emitted_operators`
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`

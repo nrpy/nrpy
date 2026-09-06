@@ -1,6 +1,6 @@
 # Static Analysis
 
-> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 09-05-2026
+> Local and CI static-analysis behavior for NRPy Python changes. · Status: confirmed · Last reconciled: 09-06-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -85,7 +85,7 @@ See [CONTR-0003](../contradictions.md#contr-0003) for the enforcement gap.
 
 Neither the 10.00 bar for a new file nor the no-regression rule for a modified
 file is enforced by any automated gate. The workflow floor is `9.5` and the
-single-file wrapper's is `9.91`, so a new file scoring `9.88` and a regression
+single-file wrapper's is `9.91`, so a new file scoring `9.94` and a regression
 from `10.00` to `9.93` both pass every configured check. A reviewer must run
 the per-file score and compare it with the pre-change baseline by hand.
 
