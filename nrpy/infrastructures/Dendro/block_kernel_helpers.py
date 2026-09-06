@@ -133,8 +133,12 @@ def accessed_gridfunctions(expressions: Iterable[sp.Expr]) -> Set[str]:
     free_symbols: List[sp.Basic] = []
     for expr in expressions:
         free_symbols.extend(expr.free_symbols)
+    # The sentinel is the symbol form ``sp.Symbol("unset")`` that ``c_codegen``
+    # itself passes.  With that form the canonical extraction also appends the
+    # ``_ddnD`` twin of every ``_dupD`` derivative, which adds no base
+    # gridfunction: a twin and its parent differentiate the same field.
     deriv_vars = extract_list_of_deriv_var_strings_from_sympyexpr_list(
-        free_symbols, "unset"
+        free_symbols, sp.Symbol("unset")
     )
     base_gridfunctions, _deriv_operators = (
         extract_base_gfs_and_deriv_ops_lists__from_list_of_deriv_vars(deriv_vars)
@@ -362,9 +366,14 @@ def upwind_control_fields(
     :param evol_order: The EVOL names, in registry order.
     :return: The control field names, in registry order.
     """
-    control_symbols: Set[sp.Symbol] = set()
+    # ``str`` round-trips the component so every control symbol is rebuilt
+    # under SymPy's default assumptions, matching the plain ``sp.Symbol(name)``
+    # built below: two symbols of the same name compare equal only when their
+    # assumptions agree.  SymPy types ``free_symbols`` as a set of ``Basic``,
+    # so the accumulator is annotated ``Set[sp.Basic]``.
+    control_symbols: Set[sp.Basic] = set()
     for component in upwind_control_vec:
-        control_symbols |= set(sp.sympify(str(component)).free_symbols)
+        control_symbols |= sp.sympify(str(component)).free_symbols
     return tuple(name for name in evol_order if sp.Symbol(name) in control_symbols)
 
 
