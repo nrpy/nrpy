@@ -71,11 +71,15 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     """
     Build the per-block and all-block BSSN constraint CFunction bodies.
 
+    The evolved state must already be registered when this is called; the
+    right-hand-side builder does that, and the Dendro examples call it first.
+
     :param CoordSystem: Reference-metric coordinate system.
     :return: The immutable :class:`BSSNDiagnosticsBuild` result.
-    :raises ValueError: If Infrastructure is not Dendro, if a diagnostic
-        expression has no registered DIAG gridfunction, or if the kernel reads
-        anything other than evolved state.
+    :raises ValueError: If Infrastructure is not Dendro, if the evolved state
+        is not yet registered, if a diagnostic expression has no registered
+        DIAG gridfunction, or if the kernel reads anything other than evolved
+        state.
 
     Doctests:
     >>> import contextlib, io
@@ -120,12 +124,15 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
     # Step 1: Register the constraint diagnostics as DIAG gridfunctions BEFORE
     # constructing the projector.  DIAG is the settled infrastructure group for
     # diagnostics (BHaH registers 31 of them across its wave-equation, elliptic
-    # and GR diagnostics), whereas BSSN_constraints files H, M,
-    # LAMBDA_CONSTRAINT and MU under AUX in the equations layer.  Every one of
-    # those registrations is guarded by ``if <name> not in glb_gridfcs_dict``,
-    # so registering the names this kernel writes first leaves the projector's
-    # own registration a no-op and keeps the Dendro diagnostics contract
-    # intact without touching the shared equations module.
+    # and GR diagnostics), whereas BSSN_constraints files H, M and
+    # LAMBDA_CONSTRAINT under AUX in the equations layer, each guarded by
+    # ``if <name> not in glb_gridfcs_dict``.  Registering H first therefore
+    # makes the projector's registration of that name a no-op and keeps it in
+    # DIAG.  MU is different: the projector registers it only under the
+    # register_MU_gridfunctions CodeParameter, which defaults to False and
+    # which no Dendro module sets, so nothing competes for those names and
+    # this builder is their sole owner.  Neither case touches the shared
+    # equations module.
     written_names = ("H",) + tuple(f"MU{i}" for i in range(3))
     families: Dict[str, int] = {}
     scalars: List[str] = []
@@ -144,15 +151,16 @@ def build_diagnostics(*, CoordSystem: str = "Cartesian") -> BSSNDiagnosticsBuild
             gri.register_gridfunctions_for_single_rankN(base, rank=rank, group="DIAG")
 
     # Step 2: Take the constraint expressions from the established NRPy
-    # projector, which now finds the names this kernel writes already
-    # registered.  It also registers M and LAMBDA_CONSTRAINT, which this
-    # kernel does not compute; leaving them would make the generated state
-    # header advertise two variables no kernel writes and no vector backs, so
-    # they are dropped again here.
+    # projector.  It also registers M and LAMBDA_CONSTRAINT, which this kernel
+    # does not compute; leaving them would make the generated state header
+    # advertise two variables no kernel writes and no vector backs, so they
+    # are dropped again here.  Only newly added AUX names are removed: the
+    # projector's construction also pulls in the evolved state through
+    # BSSN_quantities, and those must survive.
     before = set(gri.glb_gridfcs_dict)
     constraints = BSSN_constraints[CoordSystem]
     for name in sorted(set(gri.glb_gridfcs_dict) - before):
-        if name not in written_names:
+        if name not in written_names and gri.glb_gridfcs_dict[name].group == "AUX":
             del gri.glb_gridfcs_dict[name]
     expressions: Dict[str, sp.Expr] = {"H": constraints.H}
     for i in range(3):

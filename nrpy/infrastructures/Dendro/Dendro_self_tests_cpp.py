@@ -181,21 +181,102 @@ int test_offsets() {
   // component offset V must fill exactly the second block of a two-block
   // allocation and leave the first untouched.  This exercises the emitted
   // pointer arithmetic rather than restating it.
+  //
+  // The whole allocation is pre-filled with a sentinel first.  Summing the
+  // untouched region is not enough on its own: the initial-data fill writes
+  // the registered asymptotic value, which is zero for every field but the
+  // lapse and the conformal factor, so a mis-aimed writer would write zeros
+  // over an already-zero region and stay invisible for most components.
+  // Against a sentinel every component is discriminating, and each is checked
+  // on its own rather than through a summed norm.
   TestBlock block(2);
   block.geom.component_offset = block.vol;
+  const $SCALAR sentinel = static_cast<$SCALAR>(-7.5);
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (std::size_t cell = 0; cell < 2 * block.vol; ++cell) {
+      block.store[f][cell] = sentinel;
+    }  // END LOOP: for cell over both blocks
+  }  // END LOOP: for f over evolved components
   std::vector<$SCALAR*> out = block.state_pointers();
   $INITIAL_DATA_BLOCK(block.geom, out.data());
-  double first_block_norm = 0.0;
-  double second_block_norm = 0.0;
   for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
     for (std::size_t cell = 0; cell < block.vol; ++cell) {
-      first_block_norm += std::fabs(static_cast<double>(block.store[f][cell]));
-      second_block_norm +=
-          std::fabs(static_cast<double>(block.store[f][block.vol + cell]));
+      if (block.store[f][cell] != sentinel) {
+        std::fprintf(stderr,
+                     "FAIL: component %u was written outside its own block, "
+                     "so the emitted binding dropped geom.component_offset\\n",
+                     f);
+        return 1;
+      }  // END IF: wrote outside its component
+      if (block.store[f][block.vol + cell] != $NAMESPACE::generated::EVOL_GF_F_INFINITY[f]) {
+        std::fprintf(stderr,
+                     "FAIL: component %u was not filled at its component "
+                     "offset\\n",
+                     f);
+        return 1;
+      }  // END IF: not filled at the offset
     }  // END LOOP: for cell over the block
   }  // END LOOP: for f over evolved components
-  if (first_block_norm != 0.0) return 1;   // wrote outside its component
-  if (second_block_norm <= 0.0) return 1;  // wrote nothing at the offset
+
+  // The same contract binds the right-hand side: its in_ and rhs_ bindings
+  // add the same per-component base, so with a nonzero component offset the
+  // kernel must leave the first block's right-hand side untouched.  Without
+  // this the initial-data writer is the only binding any gate covers.
+  //
+  // The first block's state is filled with a spatially *varying* decoy the
+  // initial-data fill never writes.  Minkowski is a fixed point, so with
+  // correct input bindings the right-hand side is identically zero; an input
+  // binding that dropped the offset would read the decoy and produce a nonzero
+  // result.  The decoy has to vary in space: a constant decoy has vanishing
+  // derivatives, and a constant perturbation of a single field leaves the
+  // right-hand side zero, so most bindings would stay invisible.
+  TestBlock rhs_block(2);
+  rhs_block.geom.component_offset = rhs_block.vol;
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (std::size_t cell = 0; cell < 2 * rhs_block.vol; ++cell) {
+      rhs_block.store[f][cell] = static_cast<$SCALAR>(
+          0.05 * static_cast<double>((f + 1) * (cell % 13) + 1));
+      rhs_block.rhs[f][cell] = sentinel;
+    }  // END LOOP: for cell over both blocks
+  }  // END LOOP: for f over evolved components
+  std::vector<$SCALAR*> rhs_state = rhs_block.state_pointers();
+  $INITIAL_DATA_BLOCK(rhs_block.geom, rhs_state.data());
+  $NAMESPACE::generated::GeneratedParams params;
+  $SET_DEFAULTS(params);
+  std::vector<const $SCALAR*> rhs_in = rhs_block.const_state_pointers();
+  std::vector<$SCALAR*> rhs_out = rhs_block.rhs_pointers();
+  $RHS_BLOCK(rhs_block.geom, rhs_in.data(), rhs_out.data()$RHS_BLOCK_TAIL);
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (std::size_t cell = 0; cell < rhs_block.vol; ++cell) {
+      if (rhs_block.rhs[f][cell] != sentinel) {
+        std::fprintf(stderr,
+                     "FAIL: the right-hand side wrote component %u outside "
+                     "its own block, so an emitted output binding dropped "
+                     "geom.component_offset\\n",
+                     f);
+        return 1;
+      }  // END IF: RHS wrote outside its component
+    }  // END LOOP: for cell over the block
+  }  // END LOOP: for f over evolved components
+  const unsigned pad = rhs_block.geom.padding;
+  for (unsigned f = 0; f < NUM_EVOL_GFS; ++f) {
+    for (unsigned c = pad; c < rhs_block.extent - pad; ++c) {
+      for (unsigned b = pad; b < rhs_block.extent - pad; ++b) {
+        for (unsigned a = pad; a < rhs_block.extent - pad; ++a) {
+          const std::size_t at = rhs_block.vol + rhs_block.index(a, b, c) -
+                                 rhs_block.geom.component_offset;
+          if (rhs_block.rhs[f][at] != static_cast<$SCALAR>(0)) {
+            std::fprintf(stderr,
+                         "FAIL: the Minkowski right-hand side of component %u "
+                         "is nonzero at a component offset, so an emitted "
+                         "input binding dropped geom.component_offset\\n",
+                         f);
+            return 1;
+          }  // END IF: RHS nonzero on the fixed point
+        }  // END LOOP: for a over interior x
+      }  // END LOOP: for b over interior y
+    }  // END LOOP: for c over interior z
+  }  // END LOOP: for f over evolved components
   return 0;
 }  // END FUNCTION: test_offsets
 

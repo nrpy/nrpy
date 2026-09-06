@@ -8,7 +8,7 @@ gridfunctions.  No field name, count, or
 asymptotic value is hardcoded in the builder: all three come from the
 registered gridfunction records.
 
-A second builder emits the smooth ADM-to-fCCZ4 conversion and
+A second builder emits the smooth ADM-to-evolved conversion and
 the separate connection (``lambdaU``) initialization pass.
 The conversion reuses the established
 :class:`nrpy.equations.general_relativity.ADM_to_BSSN.ADM_to_BSSN` map, so
@@ -316,7 +316,7 @@ def register_ADM_source_gridfunctions() -> (
 
 def build_ADM_to_evolved(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     """
-    Build the smooth ADM-to-fCCZ4 conversion CFunction body.
+    Build the smooth ADM-to-evolved conversion CFunction body.
 
     The conversion is pointwise (no neighbour reads), so it runs over the whole
     padded block and its padding is zero.  The three connection components are

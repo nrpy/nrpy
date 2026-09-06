@@ -13,6 +13,7 @@ from . import (
     general_relativity,
     generation_parameters,
     host_mock,
+    kernel_lowering,
     naming,
     output_CFunctions,
     output_project,
