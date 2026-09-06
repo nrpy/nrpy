@@ -300,6 +300,32 @@ def c_codegen(
 
     :return: A string containing the generated C code.
 
+    Expressions using only pointer/stride helpers need helper calls even with no caller loads.
+    Ordinary derivatives and direct field references retain their reads.
+
+    >>> import nrpy.grid as gri
+    >>> saved_gfs = gri.glb_gridfcs_dict.copy()
+    >>> saved_fd = fin.FDFunctions_dict.copy()
+    >>> saved_infra = par.parval_from_str("Infrastructure")
+    >>> saved_parallel = par.parval_from_str("parallelization")
+    >>> par.set_parval_from_str("Infrastructure", "BHaH")
+    >>> par.set_parval_from_str("parallelization", "openmp")
+    >>> gri.glb_gridfcs_dict.clear()
+    >>> u = gri.register_gridfunctions("u", group="AUXEVOL", gf_array_name="custom_gfs")[0]
+    >>> for simd in (False, True):
+    ...     pure = c_codegen(sp.Symbol("u_dDD01"), "out[0]", enable_fd_codegen=True, enable_fd_functions=True, enable_simd=simd)
+    ...     assert "Step 1 of 2" in pure and "Step 2 of 2" in pure
+    ...     assert "&custom_gfs[IDX4(UGF, i0, i1, i2)]" in pure
+    ...     assert "u_i0" not in pure
+    ...     mixed = c_codegen(u + sp.Symbol("u_dD0") + sp.Symbol("u_dDD01"), "out[0]", enable_fd_codegen=True, enable_fd_functions=True, enable_simd=simd)
+    ...     assert "custom_gfs[IDX4(UGF, i0-1, i1, i2)]" in mixed
+    ...     assert "custom_gfs[IDX4(UGF, i0+1, i1, i2)]" in mixed
+    ...     assert ("u = ReadSIMD(" if simd else "u = custom_gfs[") in mixed
+    >>> gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
+    >>> fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
+    >>> par.set_parval_from_str("Infrastructure", saved_infra)
+    >>> par.set_parval_from_str("parallelization", saved_parallel)
+
     >>> x, y, z = sp.symbols("x y z", real=True)
     >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
@@ -423,9 +449,20 @@ def c_codegen(
         for i, deriv_op in enumerate(list_of_deriv_operators):
             fdcoeffs[i], fdstencl[i] = deriv_operator_dict[deriv_op]
 
+        # Pointer/stride helpers load their own mixed stencil. Other derivatives and
+        # direct field references still contribute their ordinary caller reads.
+        fdstencl_to_read = [
+            (
+                []
+                if CCGParams.enable_fd_functions
+                and fin.use_pointer_stride_mixed_derivative(op)
+                else stencil
+            )
+            for op, stencil in zip(list_of_deriv_operators, fdstencl)
+        ]
         read_from_memory_C_code = fin.read_gfs_from_memory(
             list_of_base_gridfunction_names_in_derivs,
-            fdstencl,
+            fdstencl_to_read,
             free_symbols_list,
             mem_alloc_style=CCGParams.mem_alloc_style,
             enable_simd=CCGParams.enable_simd,
@@ -1012,7 +1049,10 @@ def gridfunction_management_and_FD_codegen(
     #           results to main memory.
     NRPy_FD_StepNumber = 1
     NRPy_FD__Number_of_Steps = 1
-    if len(read_from_memory_Ccode) > 0:
+    has_reads_or_helpers = bool(read_from_memory_Ccode) or (
+        CCGParams.enable_fd_functions and bool(list_of_deriv_operators)
+    )
+    if has_reads_or_helpers:
         NRPy_FD__Number_of_Steps += 1
     if not isinstance(CCGParams.upwind_control_vec, str) and len(upwind_directions) > 0:
         NRPy_FD__Number_of_Steps += 1
@@ -1021,7 +1061,7 @@ def gridfunction_management_and_FD_codegen(
 
     # Copy kwargs
     kwargs_FDPart1 = kwargs.copy()
-    if len(read_from_memory_Ccode) > 0:
+    if has_reads_or_helpers:
         Coutput += f"""/*\n * NRPy-Generated GF Access/FD Code, Step {NRPy_FD_StepNumber} of {NRPy_FD__Number_of_Steps}:
  * Read gridfunction(s) from main memory and compute FD stencils as needed.\n */
 """
