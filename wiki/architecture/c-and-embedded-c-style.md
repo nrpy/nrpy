@@ -1,6 +1,6 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 07-20-2026
+> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -13,7 +13,8 @@ for indentation, tabs, spacing, alignment, wrapping, and brace layout must never
 be reviewed, enforced, or repaired. Mandatory semantic C/C++ `//` line-comment
 `END` marker presence, correct construct keyword, colon separator, and accurate
 meaningful high-signal description of at most five words remain enforced for
-generated code. No
+generated code; the sole exception to the word limit is the loop footer emitted
+by the canonical `nrpy/helpers/loop.py`. No
 generated-identifier naming style is reviewed or enforced.
 Generated semantics, interfaces, documentation content and syntax,
 compiler behavior, and runtime behavior remain in scope.
@@ -83,10 +84,10 @@ scope. Generated `#include` behavior remains an interface/compiler concern, not
 a layout exception.
 
 Claim evidence:
-- Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words, and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
+- Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words -- excepting only the loop footer emitted by canonical `nrpy/helpers/loop.py`, whose substituted bound expressions exceed the limit identically across every infrastructure -- and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
 - Role: normative rule
-- Deciding authority: `coding_style.md` - `#### Embedded C Code String Conventions`, `## C/H Coding Style`
-- Corroboration: none available; the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
+- Deciding authority: `coding_style.md` - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`
+- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
 
 ### End-Curly-Brace Comments
 
@@ -96,6 +97,17 @@ must be carried by a C/C++ `//` line comment, use the correct
 syntactic-construct keyword, include a colon separator, and carry an accurate,
 meaningful, high-signal description of at most five words. Do not review or enforce its exact
 whitespace, alignment, wrapping, placement, or brace shape.
+
+One exception applies to the word limit. `nrpy/helpers/loop.py` builds every
+generated loop's closing marker as
+`} // END LOOP: for <index> over [<lower>, <upper>)`, substituting the loop's
+own bound expressions, so a real interior loop's description runs past five
+words -- `for i0 over [NGHOSTS, Nxx_plus_2NGHOSTS0 - NGHOSTS)` in BHaH,
+`for i0 over [static_cast<int>(padding), static_cast<int>(nx - padding))` in
+Dendro. Because the shape is identical for every infrastructure that calls the
+canonical emitter, and the literal bounds are higher-signal than a paraphrase,
+the style guide exempts that emitter's footers. Nothing else is exempt: markers
+a builder hand-assembles around `c_codegen` output stay within the limit.
 
 For new handwritten C/CUDA/H, every closing brace that ends a non-trivial block
 must carry an informative `// END ...` comment. The keyword is all caps,

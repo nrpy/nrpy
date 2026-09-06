@@ -1032,7 +1032,11 @@ subset for every closing brace that ends a non-trivial block:
 - A colon separates the keyword from the description.
 - The description is accurate, meaningful, and preserves high-signal semantic
   context.
-- The description contains at most five words.
+- The description contains at most five words. The single exception is the loop
+  footer that `nrpy/helpers/loop.py` emits, which substitutes the loop's own
+  bound expressions and so runs longer for every infrastructure that calls it.
+  That emitter's own footers are exempt and nothing else is: a marker a builder
+  hand-assembles around `c_codegen` output is subject to the limit.
 
 Do not review or enforce exact whitespace (including the single-space
 convention), alignment, wrapping, placement, or brace shape for generated
