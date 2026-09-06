@@ -40,20 +40,26 @@ constraint components from the established `BSSN_constraints` projector.
 
 ### The DIAG-before-projector ordering, and why
 
-`BSSN_constraints` registers `H`, `M`, `LAMBDA_CONSTRAINT` and `MU` into the
-**AUX** group when it is constructed. Dendro's diagnostics contract is the
+`BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the **AUX**
+group when it is constructed, each guarded by an existence check. `MU` is
+different: the projector registers it only under the `register_MU_gridfunctions`
+CodeParameter, which defaults to `False` and which no Dendro module sets, so
+nothing competes for those names. Dendro's diagnostics contract is the
 **DIAG** group, which is the settled infrastructure convention: BHaH registers
 31 DIAG gridfunctions across its wave-equation, elliptic and GR diagnostics,
 while AUX appears once. Every registration in the projector is guarded by
 `if <name> not in gri.glb_gridfcs_dict`, so the Dendro builder registers the
-names it writes as DIAG *before* constructing the projector. That covers `H`
-and `MU`; the projector still registers `M` and `LAMBDA_CONSTRAINT`, which this
-kernel does not compute, so the builder removes those two again afterwards.
+names it writes as DIAG *before* constructing the projector. That is
+load-bearing for `H`; `MU0`-`MU2` are DIAG simply because this builder is their
+sole registrant. The projector still registers `M` and `LAMBDA_CONSTRAINT`,
+which this kernel does not compute, so the builder removes those two
+afterwards — restricted to newly added AUX names, because the projector's
+construction also pulls in the evolved state.
 Without that the generated state header would advertise two variables no kernel
 writes and no vector backs. No change to the shared equations module.
 
 Claim evidence:
-- Claim: `BSSN_constraints` registers `H`, `M`, `LAMBDA_CONSTRAINT` and `MU` into the AUX group, each guarded by an existence check, so a caller that registers those exact names first determines their group; the Dendro BSSN builder uses this for the names it writes and deletes the two it does not, leaving `NUM_AUX_GFS = 0` in the emitted state header.
+- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; it registers `MU` only under the `register_MU_gridfunctions` CodeParameter, which defaults to `False` and which no Dendro module sets. The Dendro BSSN builder pre-registers the names it writes and afterwards deletes the newly added AUX names it does not write, leaving `NUM_AUX_GFS = 0` in the emitted state header.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
 - Corroboration: [diagnostics.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/diagnostics.py), `build_diagnostics` step 1
