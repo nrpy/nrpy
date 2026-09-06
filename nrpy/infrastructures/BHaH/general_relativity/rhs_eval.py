@@ -57,6 +57,7 @@ def register_CFunction_rhs_eval(
     enable_fCCZ4: bool = False,
     enable_YBS_Gamma_constraint_adjustment: bool = False,
     enable_YBS_momentum_constraint_adjustment: bool = False,
+    enable_upwind_ko_reuse: bool = False,
 ) -> Union[None, Dict[str, Union[mpf, mpc]], pcg.NRPyEnv_type]:
     """
     Register the right-hand side evaluation function for BSSN or fCCZ4.
@@ -81,6 +82,8 @@ def register_CFunction_rhs_eval(
     :param enable_YBS_Gamma_constraint_adjustment: Enable the YBS connection-constraint adjustment.
     :param enable_YBS_momentum_constraint_adjustment: Enable the timestep-scaled
         Yo--Lin--Cao momentum-constraint adjustment.
+
+    :param enable_upwind_ko_reuse: Reuse raw KO derivatives to reconstruct eligible downwind derivatives.
 
     :raises ValueError: If EvolvedConformalFactor_cf not set to a supported value: {phi, chi, W}.
 
@@ -414,6 +417,7 @@ def register_CFunction_rhs_eval(
             enable_simd=enable_intrinsics,
             upwind_control_vec=betaU,
             enable_fd_functions=enable_fd_functions,
+            enable_upwind_ko_reuse=enable_upwind_ko_reuse,
             rational_const_alias=(
                 "static constexpr" if parallelization == "cuda" else "static const"
             ),

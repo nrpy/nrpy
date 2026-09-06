@@ -92,6 +92,7 @@ class CCodeGen:
         symbol_to_Rational_dict: Optional[Dict[sp.Basic, sp.Rational]] = None,
         rational_const_alias: str = "static const",
         enable_clang_format: bool = False,
+        enable_upwind_ko_reuse: bool = False,
     ) -> None:
         """
         Initialize the CCodeGen class with provided options for generating C code.
@@ -123,6 +124,7 @@ class CCodeGen:
         :param upwind_control_vec: Upwind control vector as a symbol or list of symbols.
         :param symbol_to_Rational_dict: Dictionary mapping sympy symbols to their corresponding sympy Rationals.
         :param rational_const_alias: Override default alias for specifying rational constness
+        :param enable_upwind_ko_reuse: Reconstruct eligible downwind derivatives from upwind and raw KO derivatives.
         :param enable_clang_format: Boolean to enable clang formatting.
 
         :raises ValueError: If 'fp_type' is not recognized as a valid floating-point type.
@@ -184,6 +186,7 @@ class CCodeGen:
             automatically_read_gf_data_from_memory
         )
         self.enforce_c_parameters_must_be_defined = enforce_c_parameters_must_be_defined
+        self.enable_upwind_ko_reuse = enable_upwind_ko_reuse
         self.enable_fd_functions = enable_fd_functions
         self.mem_alloc_style = mem_alloc_style
         self.upwind_control_vec = upwind_control_vec
@@ -382,6 +385,56 @@ def c_codegen(
     WriteSIMD(&out[0], __RHS_exp_0);
     <BLANKLINE>
 
+    The upwind/KO coefficient identity holds for every stencil point in all
+    three directions. These residuals use the actual FD coefficients.
+
+    >>> for order in (2, 4, 6, 8, 10):
+    ...     factor = sp.Rational(2**(order + 3), order * sp.binomial(order, order // 2))
+    ...     residuals = []
+    ...     for direction in range(3):
+    ...         stencils = []
+    ...         for operator in ("dupD", "ddnD", "dKOD"):
+    ...             coeffs, offsets = fin.compute_fdcoeffs_fdstencl(operator + str(direction), order)
+    ...             stencils.append(dict(zip(map(tuple, offsets), coeffs)))
+    ...         upper, lower, dissipation = stencils
+    ...         residuals.extend(upper.get(offset, 0) - lower.get(offset, 0) - factor * dissipation.get(offset, 0)
+    ...                          for offset in upper.keys() | lower.keys() | dissipation.keys())
+    ...     print(order, set(residuals))
+    2 {0}
+    4 {0}
+    6 {0}
+    8 {0}
+    10 {0}
+
+    Compare complete small generated kernels using the standard trusted-source
+    helper. Cover reuse on/off, scalar/SIMD, and inline/helper emission. Matched
+    derivatives in all three directions coexist with missing-KO and mismatched-
+    direction requests, so shared downwind helpers must remain available. Include
+    a mixed derivative to cover the pointer/stride helper path. FD4 exercises a
+    noninteger reuse coefficient; the exact checks above cover order dependence.
+
+    >>> from nrpy.helpers.generic import validate_strings
+    >>> try:
+    ...     par.set_parval_from_str("Infrastructure", "BHaH")
+    ...     par.set_parval_from_str("parallelization", "openmp")
+    ...     par.set_parval_from_str("finite_difference::fd_order", 4)
+    ...     gri.glb_gridfcs_dict.clear()
+    ...     u, v, w = gri.register_gridfunctions(["u", "v", "w"], group="AUXEVOL")
+    ...     expressions = [sp.Symbol(f"u_dupD{d}") + sp.Symbol(f"u_dKOD{d}") for d in range(3)]
+    ...     expressions += [sp.Symbol("v_dupD0"), sp.Symbol("w_dupD1") + sp.Symbol("w_dKOD2"), sp.Symbol("u_dDD01")]
+    ...     for helpers in (False, True):
+    ...         for simd in (False, True):
+    ...             for reuse in (False, True):
+    ...                 code = c_codegen(expressions, [f"out[{i}]" for i in range(len(expressions))],
+    ...                                  enable_fd_codegen=True, enable_fd_functions=helpers, enable_simd=simd,
+    ...                                  upwind_control_vec=[u, v, w], enable_upwind_ko_reuse=reuse)
+    ...                 validate_strings(clang_format(code), f"upwind_ko__helpers{helpers}__simd{simd}__reuse{reuse}", file_ext="c")
+    ... finally:
+    ...     gri.glb_gridfcs_dict.clear(); gri.glb_gridfcs_dict.update(saved_gfs)
+    ...     fin.FDFunctions_dict.clear(); fin.FDFunctions_dict.update(saved_fd)
+    ...     for name, value in saved_params.items():
+    ...         par.set_parval_from_str(name, value)
+
     >>> x, y, z = sp.symbols("x y z", real=True)
     >>> print(c_codegen(x**2 + sp.sqrt(y) - sp.sin(x*z), "double blah", include_braces=False, verbose=False))
     double blah = ((x)*(x)) + sqrt(y) - sin(x*z);
@@ -535,6 +588,7 @@ def c_codegen(
             read_from_memory_Ccode=read_from_memory_C_code,
             upwind_control_vec=CCGParams.upwind_control_vec,
             enable_fd_functions=CCGParams.enable_fd_functions,
+            enable_upwind_ko_reuse=CCGParams.enable_upwind_ko_reuse,
             enable_simd=CCGParams.enable_simd,
             enable_GoldenKernels=CCGParams.enable_GoldenKernels,
             fp_type=CCGParams.fp_type,
@@ -1033,6 +1087,58 @@ def gridfunction_management_and_FD_codegen(
         FDlhsvarnames,
     ) = construct_deriv_prototypes()
 
+    # For the current shifted stencils, dup - ddn = A(fd_order) * raw KO.
+    # Match concrete fields/directions and preserve explicitly requested downwind work.
+    upwind_ko_symbols: Dict[str, sp.Symbol] = {}
+    if (
+        CCGParams.enable_upwind_ko_reuse
+        and par.parval_from_str("Infrastructure") == "BHaH"
+        and CCGParams.fp_type == "double"
+        and isinstance(CCGParams.upwind_control_vec, list)
+    ):
+        original_symbols = {
+            str(symbol) for expr in sympyexpr_list for symbol in expr.free_symbols
+        }
+        derivatives = {
+            (base, operator): str(var)
+            for var, base, operator in zip(
+                list_of_deriv_vars,
+                list_of_base_gridfunction_names_in_derivs,
+                list_of_deriv_operators,
+            )
+        }
+        removed = set()
+        for (base, operator), var in derivatives.items():
+            if operator in ("dupD0", "dupD1", "dupD2"):
+                downwind = derivatives.get((base, "ddnD" + operator[-1]))
+                ko = derivatives.get((base, "dKOD" + operator[-1]))
+                if downwind and ko and downwind not in original_symbols:
+                    upwind_ko_symbols[var] = sp.Symbol(ko)
+                    removed.add(downwind)
+        retained = [
+            i for i, var in enumerate(list_of_deriv_vars) if str(var) not in removed
+        ]
+        list_of_deriv_vars = [list_of_deriv_vars[i] for i in retained]
+        list_of_base_gridfunction_names_in_derivs = [
+            list_of_base_gridfunction_names_in_derivs[i] for i in retained
+        ]
+        list_of_deriv_operators = [list_of_deriv_operators[i] for i in retained]
+        FDexprs = [FDexprs[i] for i in retained]
+        FDlhsvarnames = [FDlhsvarnames[i] for i in retained]
+        # The registry is operator-wide; an unmatched field may still need ddnD.
+        for operator in tuple(fin.FDFunctions_dict):
+            if operator.startswith("ddnD") and operator not in list_of_deriv_operators:
+                del fin.FDFunctions_dict[operator]
+    upwind_ko_factor = (
+        sp.Rational(
+            2 ** (CCGParams.fd_order + 3),
+            CCGParams.fd_order
+            * sp.binomial(CCGParams.fd_order, CCGParams.fd_order // 2),
+        )
+        if upwind_ko_symbols
+        else sp.S.Zero
+    )
+
     # Step 5.b.i: (Upwinded derivatives algorithm, part 1):
     # If an upwinding control vector is specified, determine
     #    which of the elements of the vector will be required.
@@ -1217,9 +1323,17 @@ MAYBE_UNUSED const REAL_SIMD_ARRAY upwind_Integer_{n} = ConstSIMD(tmp_upwind_Int
                 upwind_direction = int(operator[-1])
 
                 # Calculate upwind expression
-                upwind_expr = (
-                    upwindU[upwind_direction] * (var_dupD - var_ddnD) + var_ddnD
-                )
+                if deriv_var in upwind_ko_symbols:
+                    upwind_expr = (
+                        var_dupD
+                        + (upwindU[upwind_direction] - 1)
+                        * upwind_ko_factor
+                        * upwind_ko_symbols[deriv_var]
+                    )
+                else:
+                    upwind_expr = (
+                        upwindU[upwind_direction] * (var_dupD - var_ddnD) + var_ddnD
+                    )
 
                 # Update expression and variable lists
                 upwind_expr_list.append(upwind_expr)
