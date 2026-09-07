@@ -836,6 +836,46 @@ def read_gfs_from_memory(
     return read_gf_from_memory_Ccode
 
 
+def use_pointer_stride_mixed_derivative(operator: str) -> bool:
+    """
+    Select pointer/stride helpers for centered mixed derivatives on BHaH.
+
+    BHaH uses three-dimensional IDX4 storage with unit stride in direction zero.
+    CUDA callers translate SIMD intrinsics and apply device decorators as usual.
+    Other infrastructures retain their existing helper ABI and loads.
+
+    :param operator: Finite-difference operator name.
+    :return: Whether the operator uses a pointer/stride helper.
+
+    Doctests:
+    >>> old_infra = par.parval_from_str("Infrastructure")
+    >>> old_parallel = par.parval_from_str("parallelization")
+    >>> operators = ("dDD01", "dDD02", "dDD12", "dDD00", "dD0", "dupD1")
+    >>> try:
+    ...     for infra in ("BHaH", "ETLegacy", "CarpetX", "NRPy"):
+    ...         par.set_parval_from_str("Infrastructure", infra)
+    ...         for parallel in ("openmp", "cuda"):
+    ...             par.set_parval_from_str("parallelization", parallel)
+    ...             print(infra, parallel, [use_pointer_stride_mixed_derivative(op) for op in operators])
+    ... finally:
+    ...     par.set_parval_from_str("Infrastructure", old_infra)
+    ...     par.set_parval_from_str("parallelization", old_parallel)
+    BHaH openmp [True, True, True, False, False, False]
+    BHaH cuda [True, True, True, False, False, False]
+    ETLegacy openmp [False, False, False, False, False, False]
+    ETLegacy cuda [False, False, False, False, False, False]
+    CarpetX openmp [False, False, False, False, False, False]
+    CarpetX cuda [False, False, False, False, False, False]
+    NRPy openmp [False, False, False, False, False, False]
+    NRPy cuda [False, False, False, False, False, False]
+    """
+    return par.parval_from_str("Infrastructure") == "BHaH" and operator in (
+        "dDD01",
+        "dDD02",
+        "dDD12",
+    )
+
+
 class FDFunction:
     """
     A class to represent Finite-Difference (FD) functions in C/C++.
@@ -869,6 +909,8 @@ class FDFunction:
         if par.parval_from_str("Infrastructure") == "CarpetX":
             self.modifiers += "CCTK_DEVICE CCTK_HOST"
 
+        self.uses_pointer_stride = use_pointer_stride_mixed_derivative(operator)
+
         self.CFunction: cfc.CFunction
 
     def c_function_call(self, gf_name: str, deriv_var: str) -> str:
@@ -882,6 +924,20 @@ class FDFunction:
         """
         if "_dupD" in deriv_var or "_ddnD" in deriv_var:
             deriv_var = f"UpwindAlgInput{deriv_var}"
+        if self.uses_pointer_stride:
+            # Use the registered field's array, including AUXEVOL and custom arrays.
+            pointer = (
+                "&" + gri.glb_gridfcs_dict[gf_name].read_gf_from_memory_Ccode_onept()
+            )
+            strides = (
+                "1",
+                "Nxx_plus_2NGHOSTS0",
+                "Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1",
+            )
+            directions = [int(direction) for direction in self.operator[-2:]]
+            args = [pointer] + [strides[d] for d in directions if d != 0]
+            args += [f"invdxx{d}" for d in directions]
+            return f"const {self.fp_type_alias} {deriv_var} = {self.c_function_name}({', '.join(args)})"
         c_function_call = (
             f"const {self.fp_type_alias} {deriv_var} = {self.c_function_name}("
         )
@@ -908,16 +964,21 @@ class FDFunction:
         includes: List[str] = []
         fp_type_alias = self.fp_type_alias
         name = self.c_function_name
-        params = ""
-        params += ",".join(
-            sorted(
-                f"const {fp_type_alias} {str(symb)}"
-                for symb in self.FDexpr.free_symbols
-                if "FDPart1_" not in str(symb)
+        if self.uses_pointer_stride:
+            # For BHaH mixed derivatives, pass the gridfunction pointer, strides,
+            # and inverse spacings, and compute the FD stencil inside the function.
+            params, body = self.pointer_stride_mixed_params_body()
+        else:
+            # For all other finite difference functions, pass the stencil values
+            # and inverse spacings in FDexpr, and use the generated C code for FD_result.
+            params = ",".join(
+                sorted(
+                    f"const {fp_type_alias} {str(symb)}"
+                    for symb in self.FDexpr.free_symbols
+                    if "FDPart1_" not in str(symb)
+                )
             )
-        )
-
-        body = f"{FDexpr_c_code}\n return FD_result;"
+            body = f"{FDexpr_c_code}\n return FD_result;"
 
         return cfc.CFunction(
             includes=includes,
@@ -927,6 +988,125 @@ class FDFunction:
             params=params,
             body=body,
         )
+
+    def pointer_stride_mixed_params_body(self) -> Tuple[str, str]:
+        r"""
+        Build a tensor product of centered first-derivative lines at one point.
+
+        Antisymmetric differences use the positive-offset first-derivative
+        coefficients. The outer derivative combines those lines in the same
+        orientation, then applies both inverse spacings. Factoring changes
+        floating-point association, so bitwise agreement is not guaranteed.
+
+        :return: The pointer/stride parameter declaration and helper body.
+
+        Check the emitted scalar arithmetic against the established unfactored
+        mixed stencil using independent symbols at each flattened grid offset.
+        Symbolic strides keep every offset distinct without choosing a grid size.
+        Each zero is an exact identity for arbitrary field values and spacings.
+
+        Doctests:
+        >>> s1, s2 = sp.symbols("s1 s2", integer=True)
+        >>> u = sp.IndexedBase("u")
+        >>> for order in (2, 4, 6, 8, 10):
+        ...     for op in ("dDD01", "dDD02", "dDD12"):
+        ...         helper = FDFunction("REAL", order, op, {}, sp.S.Zero, False)
+        ...         params, body = helper.pointer_stride_mixed_params_body()
+        ...         values = {"s1": s1, "s2": s2, "in_gf_pt": u}
+        ...         for statement in body.splitlines():
+        ...             expr = statement.split(" = ")[-1].replace("return ", "").rstrip(";")
+        ...             value = sp.sympify(expr.replace("(REAL)", ""), locals=values)
+        ...             if not statement.startswith("return "):
+        ...                 values[statement.split(" = ")[0].split()[-1]] = value
+        ...         coeffs, points = compute_fdcoeffs_fdstencl(op, order)
+        ...         reference = sum(c * u[p[0] + s1*p[1] + s2*p[2]] for c, p in zip(coeffs, points))
+        ...         reference *= sp.Symbol("invdxx" + op[-2]) * sp.Symbol("invdxx" + op[-1])
+        ...         print(order, op, sp.expand(value - reference))
+        2 dDD01 0
+        2 dDD02 0
+        2 dDD12 0
+        4 dDD01 0
+        4 dDD02 0
+        4 dDD12 0
+        6 dDD01 0
+        6 dDD02 0
+        6 dDD12 0
+        8 dDD01 0
+        8 dDD02 0
+        8 dDD12 0
+        10 dDD01 0
+        10 dDD02 0
+        10 dDD12 0
+        """
+        directions = [int(direction) for direction in self.operator[-2:]]
+        strides = ["1" if d == 0 else f"s{d}" for d in directions]
+        params = ["const REAL *restrict in_gf_pt"]
+        params += [f"const int s{d}" for d in directions if d != 0]
+        params += [f"const {self.fp_type_alias} invdxx{d}" for d in directions]
+        coeffs, stencil = compute_fdcoeffs_fdstencl("dD0", self.fd_order)
+        positive = [
+            (point[0], coeff) for point, coeff in zip(stencil, coeffs) if point[0] > 0
+        ]
+        body = []
+        for k, coeff in positive:
+            value = f"{coeff.p}.0 / {coeff.q}.0"
+            if self.enable_simd:
+                body.append(f"const {self.fp_type_alias} c{k} = ConstSIMD({value});")
+            else:
+                body.append(f"const REAL c{k} = (REAL){coeff.p} / (REAL){coeff.q};")
+
+        def weighted_difference(plus: List[str], minus: List[str]) -> str:
+            """
+            Combine antisymmetric differences with first-derivative weights.
+
+            :param plus: Positive-offset values.
+            :param minus: Negative-offset values.
+            :return: Weighted sum as scalar C or SIMD intrinsics.
+            """
+            terms = []
+            for (k, _), pos, neg in zip(positive, plus, minus):
+                diff = (
+                    f"SubSIMD({pos}, {neg})" if self.enable_simd else f"({pos} - {neg})"
+                )
+                terms.append((f"c{k}", diff))
+            if not self.enable_simd:
+                return " + ".join(f"{coeff} * {diff}" for coeff, diff in terms)
+            result = f"MulSIMD({terms[0][0]}, {terms[0][1]})"
+            for coeff, diff in terms[1:]:
+                result = f"FusedMulAddSIMD({coeff}, {diff}, {result})"
+            return result
+
+        halfwidth = self.fd_order // 2
+        for row in range(-halfwidth, halfwidth + 1):
+            if row == 0:
+                continue
+            reads = []
+            for sign in (1, -1):
+                values = []
+                for k, _ in positive:
+                    offset = f"({row}) * {strides[1]} + ({sign * k}) * {strides[0]}"
+                    values.append(
+                        f"ReadSIMD(in_gf_pt + {offset})"
+                        if self.enable_simd
+                        else f"in_gf_pt[{offset}]"
+                    )
+                reads.append(values)
+            body.append(
+                f"const {self.fp_type_alias} line{row + halfwidth} = {weighted_difference(reads[0], reads[1])};"
+            )
+        result = weighted_difference(
+            [f"line{halfwidth + k}" for k, _ in positive],
+            [f"line{halfwidth - k}" for k, _ in positive],
+        )
+        body.append(f"const {self.fp_type_alias} result = {result};")
+        inv0, inv1 = [f"invdxx{d}" for d in directions]
+        result = (
+            f"MulSIMD({inv0}, MulSIMD({inv1}, result))"
+            if self.enable_simd
+            else f"{inv0} * {inv1} * result"
+        )
+        body.append(f"return {result};")
+        return ", ".join(params), "\n".join(body)
 
 
 FDFunctions_dict: Dict[str, FDFunction] = {}

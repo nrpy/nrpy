@@ -40,7 +40,7 @@ source-backed option that disables OpenMP flags in the generated Makefile.
 
 The generator fixes `CoordSystem = "Spherical"`, uses `SSPRK33`, inner
 boundaries only, reference-metric precomputation, no SIMD, and
-`enable_fd_functions = False`. It registers BHaHAHA setup, poisoning,
+`enable_fd_functions = True`. It registers BHaHAHA setup, poisoning,
 relaxation, radial-grid, interpolation, diagnostics, error-message, local
 boundary, RHS, KO, and BHaH define/header functions, then removes
 `__rfm__Spherical` wrapper suffixes so the library exports plain `bah_`

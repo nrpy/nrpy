@@ -1,6 +1,6 @@
 # C Codegen
 
-> Core route for turning SymPy expressions into generated C text. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for turning SymPy expressions into generated C text. · Status: confirmed · Last reconciled: 09-06-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -27,7 +27,17 @@ When `automatically_read_gf_data_from_memory` or `enable_fd_codegen` is enabled,
 
 Only a list-valued `upwind_control_vec` activates direction selection and control-vector expressions. Current constructor logic does not comprehensively validate list length or every element, so callers must supply an entry for each derivative direction used. Non-list values do not establish an upwind control vector even if accepted by construction.
 
-`gridfunction_management_and_FD_codegen()` emits up to three generated comment sections. Step 1 reads gridfunctions from memory and computes finite-difference stencils; Step 2 implements the upwind algorithm when an upwind control vector and `dupD` operators require it; Step 3 evaluates the remaining SymPy expressions and writes results. The upwind path extracts the used directions, emits `UpwindControlVectorU*`, computes `UPWIND_ALG(UpwindControlVectorU*)`, and combines `UpwindAlgInput*_ddnD*` and `UpwindAlgInput*_dupD*` into the final `dupD` derivative. SIMD Step 3 assigns each RHS to a temporary `REAL_SIMD_ARRAY __RHS_exp_*` and emits `WriteSIMD(&output, __RHS_exp_*)`.
+`gridfunction_management_and_FD_codegen()` emits up to three generated comment sections. Step 1 reads gridfunctions from memory and computes finite-difference stencils; Step 2 implements the upwind algorithm when an upwind control vector and `dupD` operators require it; Step 3 evaluates the remaining SymPy expressions and writes results. The upwind path extracts the used directions, emits `UpwindControlVectorU*`, and computes `Upwind* = UPWIND_ALG(UpwindControlVectorU*)`. Normally, selection combines `UpwindAlgInput*_ddnD*` and `UpwindAlgInput*_dupD*` into the final `dupD` derivative. For BHaH with `fp_type="double"` and a list-valued control vector, a requested `dKOD` derivative for the same field and direction as `dupD0`, `dupD1`, or `dupD2` replaces the implicit downwind computation, provided the original expressions do not explicitly request that `ddnD` derivative. Selection then uses `dup + (Upwind - 1) * A(n) * raw_KO`, where `dup` is the upwind input, `n = fd_order`, and `A(n) = 2**(n+3) / (n * binomial(n, n/2))`. Raw KO is the derivative before any dissipation strength or equation prefactor and remains available to the RHS. This applies to scalar/SIMD and inline/helper emission; explicit downwind requests, unmatched field/direction pairs, other infrastructures, and other precisions retain the existing construction. The stencil identity is exact, but reassociated floating-point evaluation need not be bitwise identical.
+
+Claim evidence:
+- Claim: Only BHaH double-precision generation with list-valued upwind control and a same-field/same-direction KO request replaces an implicit `ddnD` computation with raw KO; explicitly requested downwind derivatives are preserved.
+- Role: descriptive behavior
+- Deciding authority: [nrpy/c_codegen.py](../../nrpy/c_codegen.py) - `gridfunction_management_and_FD_codegen`, `upwind_ko_symbols` eligibility/filtering and final upwind selection; `c_codegen` scalar/SIMD and inline/helper doctest examples (inspected, not executed).
+- Corroboration: [nrpy/finite_difference.py](../../nrpy/finite_difference.py) - `compute_fdcoeffs_fdstencl` defines the shifted upwind/downwind and raw KO stencils used by the identity.
+- Validation: `inspected=pass; generated=not-run; built=not-run; run=not-run; result_checked=not-run`
+- Dimensions: `platform=not-run; tool_version=not-run; backend=BHaH; precision=double; GPU=not-run; restart=not-applicable; distributed=not-applicable; error_path=not-run; options=list-valued upwind_control_vec, enable_fd_functions=False/True, enable_simd=False/True; date=09-06-2026`
+
+SIMD Step 3 assigns each RHS to a temporary `REAL_SIMD_ARRAY __RHS_exp_*` and emits `WriteSIMD(&output, __RHS_exp_*)`.
 
 Finite-difference codegen recursively calls `c_codegen()` for each generated part with local options: `FDPart1` for stencil arithmetic, `FDPart2` for upwind arithmetic, and `FDPart3` for final expression evaluation. Those recursive calls explicitly disable automatic memory reads and FD recursion for the stencil part and pass rational-symbol dictionaries from finite-difference preprocessing. With `enable_fd_functions`, Step 1 emits helper calls instead of inline stencil formulas, prepares upwind-control expressions separately, and builds each `FDFunction.CFunction` so `construct_FD_functions_prefunc()` can later collect the static helper functions for a C function `prefunc`.
 
