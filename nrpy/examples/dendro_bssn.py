@@ -34,7 +34,7 @@ from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
 from nrpy.infrastructures.Dendro import (
     CodeParameters,
-    Dendro_include_header,
+    Dendro_defines_h,
     cmake_helpers,
     cmdline_input_and_parfiles,
     constants_h,
@@ -154,7 +154,7 @@ def main() -> None:
 
     # The parameter C functions come last, after every CodeParameter the
     # scientific kernels register is in the registry.
-    CodeParameters.register_CFunctions_parameters(solver_namespace, solver_stem)
+    CodeParameters.register_CFunctions_parameters(solver_stem, solver_namespace)
 
     #########################################################
     # Step 3: Assemble and write the project.  The assembly lives here, in the
@@ -180,7 +180,7 @@ def main() -> None:
             solver_stem, solver_namespace
         ),
         layout.generated_include
-        + f"{solver_stem}_defines.h": Dendro_include_header.output_include_header(
+        + f"{solver_stem}_defines.h": Dendro_defines_h.output_Dendro_defines_h(
             solver_stem, solver_prefix
         ),
         layout.include

@@ -38,9 +38,12 @@ from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
 )
 
-# CFunction names (Dendro scheduling role keys).
-FCCZ4_CONSTRAINTS_EVAL_BLOCK_CFUNCTION = "fccz4_constraints_eval_block"
-FCCZ4_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION = "fccz4_constraints_eval"
+# The emitted CFunction names are the established NRPy operation name,
+# prefixed with the solver stem the caller supplies, as the sibling modules
+# spell theirs.  The formulation is carried by the stem, so one suffix serves
+# both formulations.
+CONSTRAINTS_EVAL_BLOCK_SUFFIX = "constraints_eval_block"
+CONSTRAINTS_EVAL_ALL_BLOCKS_SUFFIX = "constraints_eval"
 
 
 @dataclass(frozen=True)
@@ -65,6 +68,7 @@ class FCCZ4ConstraintsEvalBuild:
 
 
 def _build_constraints_eval_fCCZ4(
+    solver_stem: str,
     *,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
@@ -79,6 +83,8 @@ def _build_constraints_eval_fCCZ4(
     functions, so the diagnostics and the RHS lower the same profile because
     the caller passes the same values to both.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
@@ -104,7 +110,7 @@ def _build_constraints_eval_fCCZ4(
     >>> par.glb_extras_dict.pop("Dendro", None) and None
     >>> _bc.clear()
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     _build = build_constraints_eval(enable_fCCZ4=True)
+    ...     _build = build_constraints_eval("fccz4", enable_fCCZ4=True)
 
     The first diagnostic set is registered as DIAG, and the
     kernel writes exactly those gridfunctions.
@@ -242,7 +248,8 @@ def _build_constraints_eval_fCCZ4(
         f"{scalar_type}* const* diagnostic_gfs"
     )
     all_blocks_body = block_loop(
-        f"{FCCZ4_CONSTRAINTS_EVAL_BLOCK_CFUNCTION}(mesh.geom[blk], in_gfs, diagnostic_gfs);",
+        f"{solver_stem}_{CONSTRAINTS_EVAL_BLOCK_SUFFIX}"
+        f"(mesh.geom[blk], in_gfs, diagnostic_gfs);",
         num_blocks="mesh.num_blocks",
     )
     return FCCZ4ConstraintsEvalBuild(
@@ -255,17 +262,18 @@ def _build_constraints_eval_fCCZ4(
 
 
 def _register_CFunctions_constraints_eval_fCCZ4(
+    solver_stem: str,
     *,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
     enable_KreissOliger_dissipation: bool = False,
-    solver_stem: str,
 ) -> None:
     """
     Register the per-block and all-block diagnostic CFunctions.
 
-    :param solver_stem: Lowercase formulation stem for the emitted include.
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
@@ -273,44 +281,43 @@ def _register_CFunctions_constraints_eval_fCCZ4(
         diagnostics come from the same expression set as the right-hand side.
     """
     build = _build_constraints_eval_fCCZ4(
+        solver_stem,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
+    subdirectory = "generated/src/diagnostics"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{CONSTRAINTS_EVAL_BLOCK_SUFFIX}"
     block_desc = (
         "Per-block fCCZ4 constraint diagnostics: the Hamiltonian constraint "
         "and the spatial Z4 connection constraint (recomputed, never "
         "checkpoint state)."
     )
-    global_desc = "All-block fCCZ4 constraint diagnostics (NRPy block loop)."
-    subdirectory = "generated/src/diagnostics"
     cfc.register_CFunction(
-        name=FCCZ4_CONSTRAINTS_EVAL_BLOCK_CFUNCTION,
-        desc=block_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=build.block_params,
         body=build.block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        FCCZ4_CONSTRAINTS_EVAL_BLOCK_CFUNCTION, "constraints_eval_block"
-    )
+    roles.set_CFunction_role(block_name, "constraints_eval_block")
+    all_blocks_name = f"{solver_stem}_{CONSTRAINTS_EVAL_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block fCCZ4 constraint diagnostics (NRPy block loop)."
     cfc.register_CFunction(
-        name=FCCZ4_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION,
-        desc=global_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=build.all_blocks_params,
         body=build.all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        FCCZ4_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION, "constraints_eval"
-    )
-
-
-BSSN_CONSTRAINTS_EVAL_BLOCK_CFUNCTION = "bssn_constraints_eval_block"
-BSSN_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION = "bssn_constraints_eval"
+    roles.set_CFunction_role(all_blocks_name, "constraints_eval")
 
 
 @dataclass(frozen=True)
@@ -335,16 +342,19 @@ class BSSNConstraintsEvalBuild:
 
 
 def _build_constraints_eval_BSSN(
-    *, CoordSystem: str = "Cartesian"
+    solver_stem: str, *, CoordSystem: str = "Cartesian"
 ) -> BSSNConstraintsEvalBuild:
     """
     Build the per-block and all-block BSSN constraint CFunction bodies.
 
     Either call order works: the factory's construction registers the
     evolved state through ``BSSN_quantities`` if the right-hand-side builder
-    has not already done so, and the AUX cleanup below is restricted to the
-    names the factory newly added, so nothing pre-existing is disturbed.
+    has not already done so, and the two AUX names this kernel does not write
+    are suppressed at the source by the gate below rather than deleted
+    afterwards, so nothing pre-existing is disturbed.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param CoordSystem: Reference-metric coordinate system.
     :return: The immutable :class:`BSSNConstraintsEvalBuild` result.
     :raises ValueError: If Infrastructure is not Dendro, if a diagnostic
@@ -369,10 +379,11 @@ def _build_constraints_eval_BSSN(
     >>> _bq.clear() or _brhs.clear()
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _ = rhs_eval.build_rhs_eval(
-    ...         fd_order=4, enable_KreissOliger_dissipation=False)
-    ...     _build = _build_constraints_eval_BSSN()
+    ...         "bssn", fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     _build = _build_constraints_eval_BSSN("bssn")
 
-    The diagnostics register in DIAG, and the factory's AUX names are gone:
+    The diagnostics register in DIAG, and the two suppressed AUX names were
+    never registered:
 
     >>> roles.registered_diag_order()
     ('H', 'MU0', 'MU1', 'MU2')
@@ -505,7 +516,8 @@ def _build_constraints_eval_BSSN(
         f"{scalar_type}* const* diagnostic_gfs"
     )
     all_blocks_body = block_loop(
-        f"{BSSN_CONSTRAINTS_EVAL_BLOCK_CFUNCTION}(mesh.geom[blk], in_gfs, diagnostic_gfs);",
+        f"{solver_stem}_{CONSTRAINTS_EVAL_BLOCK_SUFFIX}"
+        f"(mesh.geom[blk], in_gfs, diagnostic_gfs);",
         num_blocks="mesh.num_blocks",
     )
     return BSSNConstraintsEvalBuild(
@@ -518,49 +530,53 @@ def _build_constraints_eval_BSSN(
 
 
 def _register_CFunctions_constraints_eval_BSSN(
+    solver_stem: str,
     *,
     CoordSystem: str = "Cartesian",
-    solver_stem: str,
 ) -> None:
     """
     Register the per-block and all-block BSSN diagnostic CFunctions.
 
-    :param solver_stem: Lowercase formulation stem for the emitted include.
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     """
-    build = _build_constraints_eval_BSSN(CoordSystem=CoordSystem)
+    build = _build_constraints_eval_BSSN(solver_stem, CoordSystem=CoordSystem)
+    subdirectory = "generated/src/diagnostics"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{CONSTRAINTS_EVAL_BLOCK_SUFFIX}"
     block_desc = (
         "Per-block BSSN constraint diagnostics: the Hamiltonian constraint and "
         "the three momentum constraint components (recomputed, never "
         "checkpoint state)."
     )
-    global_desc = "All-block BSSN constraint diagnostics (NRPy block loop)."
-    subdirectory = "generated/src/diagnostics"
     cfc.register_CFunction(
-        name=BSSN_CONSTRAINTS_EVAL_BLOCK_CFUNCTION,
-        desc=block_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=build.block_params,
         body=build.block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        BSSN_CONSTRAINTS_EVAL_BLOCK_CFUNCTION, "constraints_eval_block"
-    )
+    roles.set_CFunction_role(block_name, "constraints_eval_block")
+    all_blocks_name = f"{solver_stem}_{CONSTRAINTS_EVAL_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block BSSN constraint diagnostics (NRPy block loop)."
     cfc.register_CFunction(
-        name=BSSN_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION,
-        desc=global_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=build.all_blocks_params,
         body=build.all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        BSSN_CONSTRAINTS_EVAL_ALL_BLOCKS_CFUNCTION, "constraints_eval"
-    )
+    roles.set_CFunction_role(all_blocks_name, "constraints_eval")
 
 
 def build_constraints_eval(
+    solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
     CoordSystem: str = "Cartesian",
@@ -574,6 +590,8 @@ def build_constraints_eval(
     One entry point taking the formulation as an argument, as
     ``BHaH/general_relativity/rhs_eval.py`` does for its own two formulations.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param enable_fCCZ4: Build the fCCZ4 diagnostics instead of the BSSN ones.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option; ignored when
@@ -589,28 +607,30 @@ def build_constraints_eval(
     """
     if enable_fCCZ4:
         return _build_constraints_eval_fCCZ4(
+            solver_stem,
             CoordSystem=CoordSystem,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
-    return _build_constraints_eval_BSSN(CoordSystem=CoordSystem)
+    return _build_constraints_eval_BSSN(solver_stem, CoordSystem=CoordSystem)
 
 
 def register_CFunctions_constraints_eval(
+    solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
     enable_KreissOliger_dissipation: bool = False,
-    solver_stem: str,
 ) -> None:
     """
     Register the constraint-diagnostic CFunctions for one formulation.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param enable_fCCZ4: Register the fCCZ4 diagnostics instead of the BSSN ones.
-    :param solver_stem: Lowercase formulation stem for the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
@@ -618,16 +638,14 @@ def register_CFunctions_constraints_eval(
     """
     if enable_fCCZ4:
         _register_CFunctions_constraints_eval_fCCZ4(
-            solver_stem=solver_stem,
+            solver_stem,
             CoordSystem=CoordSystem,
             LapseEvolutionOption=LapseEvolutionOption,
             ShiftEvolutionOption=ShiftEvolutionOption,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         )
         return
-    _register_CFunctions_constraints_eval_BSSN(
-        solver_stem=solver_stem, CoordSystem=CoordSystem
-    )
+    _register_CFunctions_constraints_eval_BSSN(solver_stem, CoordSystem=CoordSystem)
 
 
 if __name__ == "__main__":
@@ -635,10 +653,12 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Symbolic pinning of the two shipped diagnostic sets; rhs_eval.py's sweep
     # carries the rationale.  What is local here: the evolved state these
@@ -661,12 +681,15 @@ if __name__ == "__main__":
         trusted_capture.reset_generation_state()
         par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
         _ = sweep_rhs_eval.build_rhs_eval(
+            "fccz4" if sweep_fCCZ4 else "bssn",
             enable_fCCZ4=sweep_fCCZ4,
             fd_order=4,
             enable_KreissOliger_dissipation=False,
         )
         sweep_build = build_constraints_eval(
-            enable_fCCZ4=sweep_fCCZ4, enable_KreissOliger_dissipation=False
+            "fccz4" if sweep_fCCZ4 else "bssn",
+            enable_fCCZ4=sweep_fCCZ4,
+            enable_KreissOliger_dissipation=False,
         )
         ve.compare_or_generate_trusted_results(
             os.path.abspath(__file__),

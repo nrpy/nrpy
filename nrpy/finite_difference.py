@@ -404,9 +404,10 @@ def stencil_reach_per_axis(
 
     An infrastructure that lays its data out in blocks or patches must size its
     ghost zone to the widest stencil any emitted derivative reads.  That is not
-    ``fd_order // 2``: the upwinded and Kreiss-Oliger families reach one point
-    further than the centered ones, so a radius derived from the order alone
-    reads past the end of a block.  The reach is therefore taken from the same
+    ``fd_order // 2``: the single-point upwinded and Kreiss-Oliger families reach
+    one point further than the centered ones and the full-upwind families reach
+    ``fd_order``, so a radius derived from the order alone reads past the end of
+    a block.  The reach is therefore taken from the same
     coefficient source the kernel is lowered with, per axis, because a stencil
     is one-dimensional and only the axis it differentiates grows.
 
@@ -430,6 +431,17 @@ def stencil_reach_per_axis(
     >>> uu_dupD = ixp.declarerank1("uu_dupD")
     >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 4)
     (0, 3, 0)
+
+    Pinning more than one order is what catches an order-dependent regression
+    rather than only a family-blind one.
+
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 2)
+    (0, 2, 0)
+    >>> stencil_reach_per_axis([uu_dupD[1]], "unset", 6)
+    (0, 4, 0)
+    >>> uu_dfullupD = ixp.declarerank1("uu_dfullupD")
+    >>> stencil_reach_per_axis([uu_dfullupD[1]], "unset", 4)
+    (0, 4, 0)
     >>> try:
     ...     stencil_reach_per_axis([sp.Symbol("uu_dbogusD0")], "unset", 4)
     ... except ValueError as error:

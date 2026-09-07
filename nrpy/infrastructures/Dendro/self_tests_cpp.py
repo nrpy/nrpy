@@ -153,30 +153,28 @@ int test_params() {
 }  // END FUNCTION: test_params
 
 int test_padding() {
-  // The padding must cover the centred radius, plus one more point when the
-  // kernel upwinds or carries Kreiss-Oliger dissipation, because both of those
-  // families reach one point further.  The four constants come from different
-  // registries -- the padding from the reach of the emitted derivative
-  // operators, the order and the dissipation switch from the generation
-  // parameters, the control-field count from the state registry -- so this
-  // compares them rather than restating one.  Re-deriving the reach here would
-  // be a second stencil model.
-  const unsigned needed =
-      $NAMESPACE::generated::FD_ORDER / 2 +
-      (($NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS > 0 ||
-        $NAMESPACE::generated::KO_ENABLED)
-           ? 1u
-           : 0u);
-  if ($NAMESPACE::generated::REQUIRED_PADDING < needed) {
+  // REQUIRED_PADDING is the exact reach of the derivative operators the emitted
+  // kernel contains, taken from the same coefficients the kernel was lowered
+  // with.  This case does not re-derive it: a formula here that added a point
+  // for the upwinded and Kreiss-Oliger families would be a second model of
+  // what nrpy/finite_difference.py already owns.  What it checks instead is the
+  // one bound that holds for every family and is a definition rather than a
+  // model -- a centered stencil of order N reaches N/2 -- against an order that
+  // comes from the generation parameters and a padding that comes from the
+  // operator reach.  That is a bound and not the reach: a padding equal to the
+  // centered radius passes here even when the kernel upwinds, so this case does
+  // not stand in for the reach itself.  The host's own block padding is checked
+  // against REQUIRED_PADDING by Ctx::startup_checks, which is where an
+  // undersized block is caught.
+  const unsigned centered_radius = $NAMESPACE::generated::FD_ORDER / 2;
+  if ($NAMESPACE::generated::REQUIRED_PADDING < centered_radius) {
     std::fprintf(stderr,
-                 "FAIL: REQUIRED_PADDING %u is below the reach %u implied by "
-                 "FD_ORDER %u, NUM_UPWIND_CONTROL_GFS %u and KO_ENABLED %d\\n",
-                 $NAMESPACE::generated::REQUIRED_PADDING, needed,
-                 $NAMESPACE::generated::FD_ORDER,
-                 $NAMESPACE::generated::NUM_UPWIND_CONTROL_GFS,
-                 static_cast<int>($NAMESPACE::generated::KO_ENABLED));
+                 "FAIL: REQUIRED_PADDING %u is below the centered radius %u of "
+                 "FD_ORDER %u\\n",
+                 $NAMESPACE::generated::REQUIRED_PADDING, centered_radius,
+                 $NAMESPACE::generated::FD_ORDER);
     return 1;
-  }  // END IF: padding below stencil reach
+  }  // END IF: padding below centered radius
   return 0;
 }  // END FUNCTION: test_padding
 
@@ -689,7 +687,9 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

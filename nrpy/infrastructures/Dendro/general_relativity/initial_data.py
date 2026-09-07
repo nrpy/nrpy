@@ -81,7 +81,7 @@ def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> st
     )
 
 
-def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, str]:
+def build_minkowski_initial_data(solver_stem: str) -> Tuple[str, str, str, str]:
     """
     Build the Minkowski initial data block and all-block CFunction bodies.
 
@@ -132,7 +132,9 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
     return block_body, block_params, all_blocks_body, all_blocks_params
 
 
-def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
+def build_smooth_perturbation(
+    solver_stem: str, amplitude: sp.Expr, wavelength: sp.Expr
+) -> Tuple[str, str, str, str]:
     """
     Build the smooth analytic perturbation CFunction bodies.
 
@@ -152,6 +154,10 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     identical field, and the ``FLATADAPTER`` lifecycle gate could not see it.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
+    :param amplitude: The registered ``smooth_perturbation_amplitude``
+        CodeParameter symbol, supplied by the registrar that registers it.
+    :param wavelength: The registered ``smooth_perturbation_wavelength``
+        CodeParameter symbol, supplied by the same registrar.
     :return: (block_body, block_params, all_blocks_body, all_blocks_params).
     :raises ValueError: If Infrastructure is not Dendro.
     """
@@ -163,28 +169,6 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     require_serial_parallelization()
     scalar_type = gri.DENDRO_SCALAR_TYPE
     evol_order = roles.registered_evol_order()
-
-    # Registered CodeParameters, not bare symbols: a tunable the host must
-    # supply belongs in params_struct with a default, a validation entry and a
-    # parfile line, exactly as eta and the kappas are.
-    amplitude = par.register_CodeParameter(
-        "REAL",
-        __name__,
-        "smooth_perturbation_amplitude",
-        1e-3,
-        description="Amplitude of the smooth analytic perturbation applied to the evolved state.",
-        commondata=False,
-        add_to_set_CodeParameters_h=False,
-    )
-    wavelength = par.register_CodeParameter(
-        "REAL",
-        __name__,
-        "smooth_perturbation_wavelength",
-        1.0,
-        description="Wavelength of the smooth analytic perturbation applied to the evolved state; the host overwrites this default with a grid-derived value once it knows the block extent and spacing.",
-        commondata=False,
-        add_to_set_CodeParameters_h=False,
-    )
     xx0, xx1, xx2 = sp.symbols("xx0 xx1 xx2", real=True)
     wavenumber = 2 * sp.pi / wavelength
     profile = (
@@ -232,7 +216,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     return block_body, block_params, all_blocks_body, all_blocks_params
 
 
-def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
+def register_CFunctions_smooth_perturbation(solver_stem: str) -> None:
     """
     Register the smooth-perturbation CFunctions (with Dendro roles).
 
@@ -240,37 +224,64 @@ def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
+    # Registered CodeParameters, not bare symbols: a tunable the host must
+    # supply belongs in params_struct with a default, a validation entry and a
+    # parfile line, exactly as eta and the kappas are.  They are registered
+    # here, in the principal registration routine, and handed to the builder.
+    amplitude = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_amplitude",
+        1e-3,
+        description="Amplitude of the smooth analytic perturbation applied to the evolved state.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
+    wavelength = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_wavelength",
+        1.0,
+        description="Wavelength of the smooth analytic perturbation applied to the evolved state; the host overwrites this default with a grid-derived value once it knows the block extent and spacing.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
     block_body, block_params, all_blocks_body, all_blocks_params = (
-        build_smooth_perturbation(solver_stem=solver_stem)
+        build_smooth_perturbation(solver_stem, amplitude, wavelength)
+    )
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
+    block_desc = (
+        "Per-block smooth analytic perturbation of every evolved field "
+        "(lifecycle-test state; NRPy-authored profile)."
     )
     cfc.register_CFunction(
-        name=f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}",
-        desc=(
-            "Per-block smooth analytic perturbation of every evolved field "
-            "(lifecycle-test state; NRPy-authored profile)."
-        ),
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=block_params,
         body=block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}", "smooth_perturbation_block"
-    )
+    roles.set_CFunction_role(block_name, "smooth_perturbation_block")
+    all_blocks_name = f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block smooth analytic perturbation (NRPy block loop)."
     cfc.register_CFunction(
-        name=f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}",
-        desc="All-block smooth analytic perturbation (NRPy block loop).",
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=all_blocks_params,
         body=all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}", "smooth_perturbation"
-    )
+    roles.set_CFunction_role(all_blocks_name, "smooth_perturbation")
 
 
-def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
+def register_CFunctions_minkowski_initial_data(solver_stem: str) -> None:
     """
     Register the Minkowski initial data CFunctions (with Dendro roles).
 
@@ -280,30 +291,35 @@ def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
     block_body, block_params, all_blocks_body, all_blocks_params = (
-        build_minkowski_initial_data(solver_stem=solver_stem)
+        build_minkowski_initial_data(solver_stem)
     )
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}"
+    block_desc = "Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values)."
     cfc.register_CFunction(
-        name=f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}",
-        desc="Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values).",
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=block_params,
         body=block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}", "minkowski_initial_data_block"
-    )
+    roles.set_CFunction_role(block_name, "minkowski_initial_data_block")
+    all_blocks_name = f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block Minkowski initial data fill (NRPy block loop)."
     cfc.register_CFunction(
-        name=f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}",
-        desc="All-block Minkowski initial data fill (NRPy block loop).",
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=all_blocks_params,
         body=all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}", "minkowski_initial_data"
-    )
+    roles.set_CFunction_role(all_blocks_name, "minkowski_initial_data")
 
 
 def register_ADM_source_gridfunctions() -> (
@@ -337,7 +353,7 @@ def register_ADM_source_gridfunctions() -> (
     return gammaDD, KDD, betaU, BU
 
 
-def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+def build_ADM_to_BSSN(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     """
     Build the smooth ADM-to-evolved conversion CFunction body.
 
@@ -499,7 +515,7 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     return bindings + "\n" + point_loop_body, block_params
 
 
-def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
+def build_initial_data_lambdaU(CoordSystem: str = "Cartesian") -> Tuple[str, str]:
     """
     Build the separate connection-initialization CFunction body.
 
@@ -603,7 +619,7 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
 
 
 def register_CFunctions_ADM_to_BSSN(
-    *, solver_stem: str, CoordSystem: str = "Cartesian"
+    solver_stem: str, *, CoordSystem: str = "Cartesian"
 ) -> None:
     """
     Register the ADM conversion and the connection-initialization CFunctions.
@@ -611,37 +627,41 @@ def register_CFunctions_ADM_to_BSSN(
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     :param CoordSystem: Reference-metric coordinate system.
     """
+    subdirectory = "generated/src/initial_data"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
     adm_body, adm_params = build_ADM_to_BSSN(CoordSystem=CoordSystem)
+    adm_name = f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}"
+    adm_desc = (
+        "Per-block smooth ADM-to-evolved conversion; the "
+        "connection components are written by the separate pass."
+    )
     cfc.register_CFunction(
-        name=f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}",
-        desc=(
-            "Per-block smooth ADM-to-evolved conversion; the "
-            "connection components are written by the separate pass."
-        ),
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=adm_desc,
+        cfunc_type=cfunc_type,
+        name=adm_name,
         params=adm_params,
         body=adm_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}", "ADM_to_BSSN_block"
-    )
+    roles.set_CFunction_role(adm_name, "ADM_to_BSSN_block")
     lam_body, lam_params = build_initial_data_lambdaU(CoordSystem=CoordSystem)
+    lam_name = f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}"
+    lam_desc = (
+        "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
+        "ReU^i, so the connection constraint C^i vanishes."
+    )
     cfc.register_CFunction(
-        name=f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}",
-        desc=(
-            "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
-            "ReU^i, so the connection constraint C^i vanishes."
-        ),
-        subdirectory="generated/src/initial_data",
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=lam_desc,
+        cfunc_type=cfunc_type,
+        name=lam_name,
         params=lam_params,
         body=lam_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}",
-        "initial_data_lambdaU_block",
-    )
+    roles.set_CFunction_role(lam_name, "initial_data_lambdaU_block")
 
 
 if __name__ == "__main__":
@@ -649,10 +669,12 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Trusted baselines for the small emitted kernels: one file per shipped
     # profile under tests/, captured from the registered CFunction as

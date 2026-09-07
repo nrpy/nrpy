@@ -1,6 +1,6 @@
 # Project Assembly And Emitters
 
-> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-06-2026
+> Explain how the Dendro infrastructure turns the NRPy registries into a complete generated solver directory, which module emits which artifact, and where the emitted names come from. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -25,7 +25,7 @@ Modules are named for what they emit, following BHaH's `BHaH_defines_h.py` and
 | `state_h` | the EVOL enum, name array, metadata, and exact-name lookup |
 | `constants_h` | the generated finite-difference order, required padding and Kreiss-Oliger switch |
 | `CodeParameters` | the generated `params_struct` header, the sample parameter table, and the parameter CFunctions |
-| `Dendro_include_header` | the `<stem>_defines.h` header every generated source includes, playing the role `BHaH_defines.h` plays in BHaH |
+| `Dendro_defines_h` | the `<stem>_defines.h` header every generated source includes, playing the role `BHaH_defines.h` plays in BHaH |
 | `cmake_helpers` | one source file per registered CFunction, the `<stem>_function_prototypes.h` header, the CMake source list, and the solver and tests `CMakeLists.txt` |
 | `solver_context` | the host context header and source |
 | `main_cpp` | the entry point and its lifecycle gates |
@@ -83,7 +83,7 @@ The ghost points the emitted kernels need are recorded by the right-hand-side
 builder through `CFunction_roles.set_required_padding` and read back by
 `main` through `CFunction_roles.required_padding`. They are not
 `fd_order // 2`: the upwinded and Kreiss-Oliger operator families reach one
-point further than the centred ones.
+point further than the centered ones.
 
 ### Determinism
 

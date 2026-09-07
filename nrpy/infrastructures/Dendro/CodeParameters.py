@@ -153,7 +153,7 @@ def emitted_parameter_names() -> List[str]:
     ]
 
 
-def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> None:
+def register_CFunctions_parameters(solver_stem: str, solver_namespace: str) -> None:
     """
     Register the generated parameter CFunctions.
 
@@ -164,14 +164,16 @@ def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> N
 
     Call this after every scientific CFunction is registered.
 
-    :param solver_namespace: Solver namespace, following Dendro's lowercase
-        formulation habit (``namespace bssn``).
     :param solver_stem: Lowercase formulation stem for the emitted CFunction
         names, following Dendro's habit of naming solver symbols for the
         formulation.
+    :param solver_namespace: Solver namespace, following Dendro's lowercase
+        formulation habit (``namespace bssn``).
     """
     params_type = f"{solver_namespace}::generated::params_struct"
     names = emitted_parameter_names()
+    subdirectory = PARAMETERS_SUBDIRECTORY
+    includes = [f"{solver_stem}_defines.h"]
 
     # A char array is filled with snprintf, which guarantees null termination,
     # exactly as BHaH's CodeParameters emitter does.  A numeric array is set
@@ -212,13 +214,21 @@ def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> N
             )
         else:
             set_lines.append(f"params.{cp_name} = {float(value)!r};")
+    set_to_default_desc = (
+        "Generated parameter defaults, from the registered CodeParameters."
+    )
+    set_to_default_cfunc_type = "void"
+    set_to_default_name = f"{solver_stem}_params_struct_set_to_default"
+    set_to_default_params = f"{params_type}& params"
+    set_to_default_body = "\n".join(set_lines)
     cfc.register_CFunction(
-        subdirectory=PARAMETERS_SUBDIRECTORY,
-        desc="Generated parameter defaults, from the registered CodeParameters.",
-        includes=[f"{solver_stem}_defines.h"],
-        name=f"{solver_stem}_params_struct_set_to_default",
-        params=f"{params_type}& params",
-        body="\n".join(set_lines),
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=set_to_default_desc,
+        cfunc_type=set_to_default_cfunc_type,
+        name=set_to_default_name,
+        params=set_to_default_params,
+        body=set_to_default_body,
     )
 
     validate_lines: List[str] = ["bool ok = true;"]
@@ -232,14 +242,21 @@ def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> N
             f"if (!std::isfinite(params.{cp_name})) {{ ok = false; }}"
         )
     validate_lines.append("return ok;")
+    validate_desc = (
+        "Generated parameter validation: finite checks for floating point parameters."
+    )
+    validate_cfunc_type = "bool"
+    validate_name = f"{solver_stem}_params_validate"
+    validate_params = f"const {params_type}& params"
+    validate_body = "\n".join(validate_lines)
     cfc.register_CFunction(
-        subdirectory=PARAMETERS_SUBDIRECTORY,
-        desc="Generated parameter validation: finite checks for floating point parameters.",
-        cfunc_type="bool",
-        includes=[f"{solver_stem}_defines.h"],
-        name=f"{solver_stem}_params_validate",
-        params=f"const {params_type}& params",
-        body="\n".join(validate_lines),
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=validate_desc,
+        cfunc_type=validate_cfunc_type,
+        name=validate_name,
+        params=validate_params,
+        body=validate_body,
     )
 
     print_lines: List[str] = [f'std::printf("{solver_stem} effective parameters:\\n");']
@@ -260,13 +277,19 @@ def register_CFunctions_parameters(solver_namespace: str, solver_stem: str) -> N
             print_lines.append(
                 f'std::printf("  {cp_name} = %g\\n", (double) params.{cp_name});'
             )
+    print_effective_desc = "Generated effective-parameter printout."
+    print_effective_cfunc_type = "void"
+    print_effective_name = f"{solver_stem}_params_print_effective"
+    print_effective_params = f"const {params_type}& params"
+    print_effective_body = "\n".join(print_lines)
     cfc.register_CFunction(
-        subdirectory=PARAMETERS_SUBDIRECTORY,
-        desc="Generated effective-parameter printout.",
-        includes=[f"{solver_stem}_defines.h"],
-        name=f"{solver_stem}_params_print_effective",
-        params=f"const {params_type}& params",
-        body="\n".join(print_lines),
+        subdirectory=subdirectory,
+        includes=includes,
+        desc=print_effective_desc,
+        cfunc_type=print_effective_cfunc_type,
+        name=print_effective_name,
+        params=print_effective_params,
+        body=print_effective_body,
     )
 
 
@@ -275,7 +298,9 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

@@ -294,7 +294,9 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

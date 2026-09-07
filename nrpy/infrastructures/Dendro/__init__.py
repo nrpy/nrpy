@@ -1,7 +1,7 @@
 from . import (
     CFunction_roles,
     CodeParameters,
-    Dendro_include_header,
+    Dendro_defines_h,
     block_kernel_helpers,
     clang_format_guards,
     cmake_helpers,

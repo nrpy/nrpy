@@ -47,14 +47,19 @@ from nrpy.infrastructures.Dendro.simple_loop import (
     require_serial_parallelization,
 )
 
-# The per-block CFunction name (the Dendro scheduling role key).
-FCCZ4_RHS_EVAL_BLOCK_CFUNCTION = "fccz4_rhs_eval_block"
+# The emitted CFunction names are the established NRPy operation name,
+# prefixed with the solver stem the caller supplies, exactly as initial_data.py
+# and enforce_detgbar_equals_detghat_trAzero.py spell theirs.  The formulation
+# is carried by the stem, so one suffix serves both.
 
-# All-block CFunction name.
-FCCZ4_RHS_EVAL_ALL_BLOCKS_CFUNCTION = "fccz4_rhs_eval"
+# Per-block CFunction suffix.
+RHS_EVAL_BLOCK_SUFFIX = "rhs_eval_block"
 
-# LTS flat-block adapter CFunction name (same numerical body, flat layout).
-FCCZ4_RHS_EVAL_FLAT_BLOCK_CFUNCTION = "fccz4_rhs_eval_flat_block"
+# All-block CFunction suffix.
+RHS_EVAL_ALL_BLOCKS_SUFFIX = "rhs_eval"
+
+# LTS flat-block adapter CFunction suffix (same numerical body, flat layout).
+RHS_EVAL_FLAT_BLOCK_SUFFIX = "rhs_eval_flat_block"
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,7 @@ class FCCZ4RHSBuild:
 
 
 def _build_rhs_eval_fCCZ4(
+    solver_stem: str,
     *,
     fd_order: int,
     enable_KreissOliger_dissipation: bool,
@@ -115,6 +121,8 @@ def _build_rhs_eval_fCCZ4(
     would produce an unqualified configuration.  The registered Dendro
     generation parameters are validated before anything is lowered.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param fd_order: The finite-difference order (2, 4, or 6).  Order 8
         reaches five ghost points, which the pinned Dendrolib supports at
         element order 10; it stays outside this builder's qualified set.
@@ -138,14 +146,14 @@ def _build_rhs_eval_fCCZ4(
     >>> _gri.glb_gridfcs_dict.clear()
     >>> par.glb_extras_dict.pop("Dendro", None) and None
     >>> try:
-    ...     build_rhs_eval(enable_fCCZ4=True, fd_order=8, enable_KreissOliger_dissipation=False)
+    ...     build_rhs_eval("fccz4", enable_fCCZ4=True, fd_order=8, enable_KreissOliger_dissipation=False)
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
     Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, which the pinned Dendrolib proves at element order 10; it is outside this builder's qualified set rather than host-gated.
     >>> import contextlib, io
     >>> with contextlib.redirect_stdout(io.StringIO()):
     ...     _build = build_rhs_eval(
-    ...         enable_fCCZ4=True, fd_order=4, enable_KreissOliger_dissipation=False
+    ...         "fccz4", enable_fCCZ4=True, fd_order=4, enable_KreissOliger_dissipation=False
     ...     )
     >>> len(_build.evol_order), "Theta_fCCZ4" in _build.evol_order
     (25, True)
@@ -241,7 +249,7 @@ def _build_rhs_eval_fCCZ4(
     # kernel actually contains, taken per axis from the same coefficient
     # source the kernel was lowered with.  It is NOT fd_order // 2: the
     # upwinded and Kreiss-Oliger families reach one point further than the
-    # centred ones (at fd_order 4, dupD reaches 3 while dD reaches 2), so a
+    # centered ones (at fd_order 4, dupD reaches 3 while dD reaches 2), so a
     # radius-derived padding reads past the end of a Dendro block.
     # The consumed CodeParameters are the expression free symbols that are
     # registered CodeParameters.  Reading the symbols the equations actually
@@ -254,7 +262,7 @@ def _build_rhs_eval_fCCZ4(
         bkh.block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
     )
     all_blocks_body = block_loop(
-        f"{FCCZ4_RHS_EVAL_BLOCK_CFUNCTION}(mesh.geom[blk], in_gfs, rhs_gfs"
+        f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}(mesh.geom[blk], in_gfs, rhs_gfs"
         + (
             f", {bkh.cparam_arguments(used_codeparameters)}"
             if used_codeparameters
@@ -277,7 +285,8 @@ def _build_rhs_eval_fCCZ4(
         + f"}};\n{scalar_type}* rhs_gfs_call[] = {{"
         + ", ".join(gf_names.rhs_pointer(name) for name in evol_order)
         + "};\n"
-        + f"{FCCZ4_RHS_EVAL_BLOCK_CFUNCTION}(geom, in_gfs_call, rhs_gfs_call{flat_call_args});\n"
+        + f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}"
+        + f"(geom, in_gfs_call, rhs_gfs_call{flat_call_args});\n"
     )
     cparam_args = bkh.cparam_declarations(used_codeparameters)
     block_params = (
@@ -336,13 +345,13 @@ def _build_rhs_eval_fCCZ4(
 
 
 def _register_CFunctions_rhs_eval_fCCZ4(
+    solver_stem: str,
     *,
     fd_order: int,
     enable_KreissOliger_dissipation: bool,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
-    solver_stem: str,
 ) -> None:
     """
     Register the per-block, all-block, and flat-block fCCZ4 RHS CFunctions.
@@ -351,16 +360,18 @@ def _register_CFunctions_rhs_eval_fCCZ4(
     :func:`nrpy.infrastructures.Dendro.CFunction_roles.set_required_padding`, so
     the state header and the parameter file read them from the registry.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param fd_order: The finite-difference order (2, 4, or 6).  Order 8
         reaches five ghost points; padding 5 is proven on the pinned
         Dendrolib, so order 8 is a generator limit rather than a host limit.
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
-    :param solver_stem: Lowercase formulation stem for the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     """
     build = _build_rhs_eval_fCCZ4(
+        solver_stem,
         fd_order=fd_order,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
@@ -368,47 +379,48 @@ def _register_CFunctions_rhs_eval_fCCZ4(
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
     subdirectory = "generated/src/rhs_eval"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}"
+    block_desc = "Per-block direct-FD fCCZ4 RHS (25 fields)."
     cfc.register_CFunction(
-        name=FCCZ4_RHS_EVAL_BLOCK_CFUNCTION,
-        desc="Per-block direct-FD fCCZ4 RHS (25 fields).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=build.block_params,
         body=build.block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(FCCZ4_RHS_EVAL_BLOCK_CFUNCTION, "rhs_eval_block")
-    roles.set_CFunction_codeparameters(
-        FCCZ4_RHS_EVAL_BLOCK_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(block_name, "rhs_eval_block")
+    roles.set_CFunction_codeparameters(block_name, build.used_codeparameters)
+    all_blocks_name = f"{solver_stem}_{RHS_EVAL_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block direct-FD fCCZ4 RHS (NRPy block loop)."
     cfc.register_CFunction(
-        name=FCCZ4_RHS_EVAL_ALL_BLOCKS_CFUNCTION,
-        desc="All-block direct-FD fCCZ4 RHS (NRPy block loop).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=build.all_blocks_params,
         body=build.all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(FCCZ4_RHS_EVAL_ALL_BLOCKS_CFUNCTION, "rhs_eval")
-    roles.set_CFunction_codeparameters(
-        FCCZ4_RHS_EVAL_ALL_BLOCKS_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(all_blocks_name, "rhs_eval")
+    roles.set_CFunction_codeparameters(all_blocks_name, build.used_codeparameters)
+    flat_block_name = f"{solver_stem}_{RHS_EVAL_FLAT_BLOCK_SUFFIX}"
+    flat_block_desc = "LTS flat-block adapter (same numerical body, flat layout)."
     cfc.register_CFunction(
-        name=FCCZ4_RHS_EVAL_FLAT_BLOCK_CFUNCTION,
-        desc="LTS flat-block adapter (same numerical body, flat layout).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=flat_block_desc,
+        cfunc_type=cfunc_type,
+        name=flat_block_name,
         params=build.flat_block_params,
         body=build.flat_block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(FCCZ4_RHS_EVAL_FLAT_BLOCK_CFUNCTION, "rhs_eval_flat_block")
-    roles.set_CFunction_codeparameters(
-        FCCZ4_RHS_EVAL_FLAT_BLOCK_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(flat_block_name, "rhs_eval_flat_block")
+    roles.set_CFunction_codeparameters(flat_block_name, build.used_codeparameters)
 
-
-BSSN_RHS_EVAL_BLOCK_CFUNCTION = "bssn_rhs_eval_block"
-BSSN_RHS_EVAL_ALL_BLOCKS_CFUNCTION = "bssn_rhs_eval"
-BSSN_RHS_EVAL_FLAT_BLOCK_CFUNCTION = "bssn_rhs_eval_flat_block"
 
 # The BSSN evolved state: hDD (6), aDD (6), cf, trK, lambdaU (3), alpha,
 # vetU (3), betU (3).
@@ -521,6 +533,7 @@ def BSSN_rhs_expressions(
 
 
 def _build_rhs_eval_BSSN(
+    solver_stem: str,
     *,
     fd_order: int,
     enable_KreissOliger_dissipation: bool,
@@ -536,6 +549,8 @@ def _build_rhs_eval_BSSN(
     overwritten, because silently discarding a caller's request would produce
     an unqualified configuration.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param fd_order: The finite-difference order (2, 4, or 6).  Order 8
         reaches five ghost points, which the pinned Dendrolib proves at element
         order 10; the limit recorded in
@@ -567,12 +582,14 @@ def _build_rhs_eval_BSSN(
     >>> # rebuild finds nothing registered.
     >>> _bq.clear() or _brhs.clear()
     >>> try:
-    ...     _build_rhs_eval_BSSN(fd_order=8, enable_KreissOliger_dissipation=False)
+    ...     _build_rhs_eval_BSSN("bssn", fd_order=8, enable_KreissOliger_dissipation=False)
     ... except ValueError as error:
     ...     print(str(error).splitlines()[0])
     Unsupported fd_order=8; allowed: (2, 4, 6). fd_order 8 reaches five ghost points, which the pinned Dendrolib proves at element order 10; it is outside this builder's qualified set rather than host-gated.
     >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     _build = _build_rhs_eval_BSSN(fd_order=4, enable_KreissOliger_dissipation=False)
+    ...     _build = _build_rhs_eval_BSSN(
+    ...         "bssn", fd_order=4, enable_KreissOliger_dissipation=False
+    ...     )
     >>> len(_build.evol_order), "Theta_fCCZ4" in _build.evol_order
     (24, False)
     >>> sorted(_build.lvalues)[:2]
@@ -679,7 +696,8 @@ def _build_rhs_eval_BSSN(
         f"{scalar_type}* const* rhs_gfs" + tail_args
     )
     all_blocks_body = block_loop(
-        f"{BSSN_RHS_EVAL_BLOCK_CFUNCTION}(mesh.geom[blk], in_gfs, rhs_gfs{tail_values});",
+        f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}"
+        f"(mesh.geom[blk], in_gfs, rhs_gfs{tail_values});",
         num_blocks="mesh.num_blocks",
     )
     all_blocks_params = (
@@ -696,7 +714,8 @@ def _build_rhs_eval_BSSN(
         + f"}};\n{scalar_type}* rhs_gfs_call[] = {{"
         + ", ".join(gf_names.rhs_pointer(name) for name in evol_order)
         + "};\n"
-        + f"{BSSN_RHS_EVAL_BLOCK_CFUNCTION}(geom, in_gfs_call, rhs_gfs_call{tail_values});\n"
+        + f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}"
+        + f"(geom, in_gfs_call, rhs_gfs_call{tail_values});\n"
     )
     flat_block_params = (
         f"const BlockGeometry& geom, const {scalar_type}* const in_gfs_flat, "
@@ -722,25 +741,27 @@ def _build_rhs_eval_BSSN(
 
 
 def _register_CFunctions_rhs_eval_BSSN(
+    solver_stem: str,
     *,
     fd_order: int,
     enable_KreissOliger_dissipation: bool,
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
-    solver_stem: str,
 ) -> None:
     """
     Register the per-block, all-block, and flat-block BSSN RHS CFunctions.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param fd_order: The finite-difference order (2, 4, or 6).
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
-    :param solver_stem: Lowercase formulation stem for the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     """
     build = _build_rhs_eval_BSSN(
+        solver_stem,
         fd_order=fd_order,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
@@ -748,45 +769,51 @@ def _register_CFunctions_rhs_eval_BSSN(
         ShiftEvolutionOption=ShiftEvolutionOption,
     )
     subdirectory = "generated/src/rhs_eval"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{RHS_EVAL_BLOCK_SUFFIX}"
+    block_desc = "Per-block direct-FD BSSN RHS (24 fields)."
     cfc.register_CFunction(
-        name=BSSN_RHS_EVAL_BLOCK_CFUNCTION,
-        desc="Per-block direct-FD BSSN RHS (24 fields).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=build.block_params,
         body=build.block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(BSSN_RHS_EVAL_BLOCK_CFUNCTION, "rhs_eval_block")
-    roles.set_CFunction_codeparameters(
-        BSSN_RHS_EVAL_BLOCK_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(block_name, "rhs_eval_block")
+    roles.set_CFunction_codeparameters(block_name, build.used_codeparameters)
+    all_blocks_name = f"{solver_stem}_{RHS_EVAL_ALL_BLOCKS_SUFFIX}"
+    all_blocks_desc = "All-block direct-FD BSSN RHS (NRPy block loop)."
     cfc.register_CFunction(
-        name=BSSN_RHS_EVAL_ALL_BLOCKS_CFUNCTION,
-        desc="All-block direct-FD BSSN RHS (NRPy block loop).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=build.all_blocks_params,
         body=build.all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(BSSN_RHS_EVAL_ALL_BLOCKS_CFUNCTION, "rhs_eval")
-    roles.set_CFunction_codeparameters(
-        BSSN_RHS_EVAL_ALL_BLOCKS_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(all_blocks_name, "rhs_eval")
+    roles.set_CFunction_codeparameters(all_blocks_name, build.used_codeparameters)
+    flat_block_name = f"{solver_stem}_{RHS_EVAL_FLAT_BLOCK_SUFFIX}"
+    flat_block_desc = "LTS flat-block adapter (same numerical body, flat layout)."
     cfc.register_CFunction(
-        name=BSSN_RHS_EVAL_FLAT_BLOCK_CFUNCTION,
-        desc="LTS flat-block adapter (same numerical body, flat layout).",
         subdirectory=subdirectory,
+        includes=includes,
+        desc=flat_block_desc,
+        cfunc_type=cfunc_type,
+        name=flat_block_name,
         params=build.flat_block_params,
         body=build.flat_block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(BSSN_RHS_EVAL_FLAT_BLOCK_CFUNCTION, "rhs_eval_flat_block")
-    roles.set_CFunction_codeparameters(
-        BSSN_RHS_EVAL_FLAT_BLOCK_CFUNCTION, build.used_codeparameters
-    )
+    roles.set_CFunction_role(flat_block_name, "rhs_eval_flat_block")
+    roles.set_CFunction_codeparameters(flat_block_name, build.used_codeparameters)
 
 
 def build_rhs_eval(
+    solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
     fd_order: int = 4,
@@ -804,6 +831,8 @@ def build_rhs_eval(
     different routes, and BHaH's own divergence guard records that unifying the
     branches is not wanted.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name.
     :param enable_fCCZ4: Build fCCZ4 instead of BSSN.
     :param fd_order: The finite-difference order (2, 4, or 6).
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
@@ -814,6 +843,7 @@ def build_rhs_eval(
     """
     if enable_fCCZ4:
         return _build_rhs_eval_fCCZ4(
+            solver_stem,
             fd_order=fd_order,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
             CoordSystem=CoordSystem,
@@ -821,6 +851,7 @@ def build_rhs_eval(
             ShiftEvolutionOption=ShiftEvolutionOption,
         )
     return _build_rhs_eval_BSSN(
+        solver_stem,
         fd_order=fd_order,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
@@ -830,6 +861,7 @@ def build_rhs_eval(
 
 
 def register_CFunctions_rhs_eval(
+    solver_stem: str,
     *,
     enable_fCCZ4: bool = False,
     fd_order: int = 4,
@@ -837,22 +869,22 @@ def register_CFunctions_rhs_eval(
     CoordSystem: str = "Cartesian",
     LapseEvolutionOption: str = "OnePlusLog",
     ShiftEvolutionOption: str = "GammaDriving2ndOrder_Covariant__Hatted",
-    solver_stem: str,
 ) -> None:
     """
     Register the right-hand-side CFunctions for one formulation.
 
+    :param solver_stem: Lowercase formulation stem, prefixed onto every
+        emitted CFunction name and onto the emitted include.
     :param enable_fCCZ4: Register fCCZ4 instead of BSSN.
     :param fd_order: The finite-difference order (2, 4, or 6).
     :param enable_KreissOliger_dissipation: Enable Kreiss-Oliger dissipation.
-    :param solver_stem: Lowercase formulation stem for the emitted include.
     :param CoordSystem: Reference-metric coordinate system.
     :param LapseEvolutionOption: Lapse evolution option.
     :param ShiftEvolutionOption: Shift evolution option.
     """
     if enable_fCCZ4:
         _register_CFunctions_rhs_eval_fCCZ4(
-            solver_stem=solver_stem,
+            solver_stem,
             fd_order=fd_order,
             enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
             CoordSystem=CoordSystem,
@@ -861,7 +893,7 @@ def register_CFunctions_rhs_eval(
         )
         return
     _register_CFunctions_rhs_eval_BSSN(
-        solver_stem=solver_stem,
+        solver_stem,
         fd_order=fd_order,
         enable_KreissOliger_dissipation=enable_KreissOliger_dissipation,
         CoordSystem=CoordSystem,
@@ -875,10 +907,12 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Symbolic pinning of the two shipped right-hand sides.  coding_style.md
     # forbids a golden C file for a kernel this size and names this route
@@ -901,6 +935,7 @@ if __name__ == "__main__":
         trusted_capture.reset_generation_state()
         par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
         sweep_build = build_rhs_eval(
+            "fccz4" if sweep_fCCZ4 else "bssn",
             enable_fCCZ4=sweep_fCCZ4,
             fd_order=4,
             enable_KreissOliger_dissipation=False,

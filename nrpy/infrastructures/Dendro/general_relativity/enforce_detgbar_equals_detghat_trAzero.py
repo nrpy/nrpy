@@ -85,7 +85,7 @@ class DetgtrazeroBuild:
 
 
 def build_enforce_detgbar_equals_detghat_trAzero(
-    *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
+    solver_stem: str, solver_namespace: str, *, CoordSystem: str = "Cartesian"
 ) -> DetgtrazeroBuild:
     """
     Build the per-block and all-block constraint-enforcement CFunction bodies.
@@ -307,7 +307,7 @@ status->max_abs_trace_residual = std::fmax(
 
 
 def register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
-    *, solver_stem: str, solver_namespace: str, CoordSystem: str = "Cartesian"
+    solver_stem: str, solver_namespace: str, *, CoordSystem: str = "Cartesian"
 ) -> None:
     """
     Register the per-block and all-block constraint-enforcement CFunctions.
@@ -318,41 +318,41 @@ def register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
     :param CoordSystem: Reference-metric coordinate system.
     """
     build = build_enforce_detgbar_equals_detghat_trAzero(
-        solver_stem=solver_stem,
-        solver_namespace=solver_namespace,
-        CoordSystem=CoordSystem,
+        solver_stem, solver_namespace, CoordSystem=CoordSystem
     )
+    subdirectory = "generated/src/enforce_detgbar_equals_detghat_trAzero"
+    includes = [f"{solver_stem}_defines.h"]
+    cfunc_type = "void"
+    block_name = f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}"
     block_desc = (
         "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 per block: rescale the conformal metric to unit "
         "determinant ratio and remove the conformal trace of Atilde "
         "(structured status, no exit())."
     )
-    global_desc = "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 over all blocks (NRPy block loop)."
-    subdirectory = "generated/src/enforce_detgbar_equals_detghat_trAzero"
     cfc.register_CFunction(
-        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}",
-        desc=block_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=block_desc,
+        cfunc_type=cfunc_type,
+        name=block_name,
         params=build.block_params,
         body=build.block_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}",
-        "enforce_detgbar_equals_detghat_trAzero_block",
+    roles.set_CFunction_role(block_name, "enforce_detgbar_equals_detghat_trAzero_block")
+    all_blocks_name = (
+        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX}"
     )
+    all_blocks_desc = "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 over all blocks (NRPy block loop)."
     cfc.register_CFunction(
-        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX}",
-        desc=global_desc,
         subdirectory=subdirectory,
+        includes=includes,
+        desc=all_blocks_desc,
+        cfunc_type=cfunc_type,
+        name=all_blocks_name,
         params=build.all_blocks_params,
         body=build.all_blocks_body,
-        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.set_CFunction_role(
-        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX}",
-        "enforce_detgbar_equals_detghat_trAzero",
-    )
+    roles.set_CFunction_role(all_blocks_name, "enforce_detgbar_equals_detghat_trAzero")
 
 
 if __name__ == "__main__":
@@ -360,10 +360,12 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")
 
     # Trusted baseline for the emitted enforcement kernel, one file per shipped
     # profile.  general_relativity/initial_data.py's sweep carries the full

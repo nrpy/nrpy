@@ -1,6 +1,6 @@
 # BSSN Application Wiring
 
-> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: provisional · Last reconciled: 09-06-2026
+> Explain the Dendro BSSN builders, what they reuse from the fCCZ4 profile, and what adding a second formulation proved about the generic layer. · Status: contested · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -11,17 +11,29 @@ shared right-hand-side and constraint-diagnostic modules each gained a BSSN
 builder beside the fCCZ4 one, and the initial data, the det(gammabar)/tr(Abar)
 enforcement and the generic layer are shared with fCCZ4.
 
-The layout follows BHaH. NRPy's one existing two-formulation infrastructure
+The layout follows BHaH. NRPy's established two-formulation infrastructure
 emits BSSN and fCCZ4 from a single `general_relativity/rhs_eval.py` on an
-`enable_fCCZ4` boolean, and Dendro now does the same: one module per artifact,
-with a private builder per formulation behind that boolean. An earlier draft of
-this branch put the BSSN builders in their own `general_relativity/BSSN/`
+`enable_fCCZ4` boolean, and Dendro follows it as far as the module layout:
+one module per artifact, taking the same boolean. An earlier draft of this
+branch put the BSSN builders in their own `general_relativity/BSSN/`
 subpackage, on the argument that a single module would branch on formulation in
 every place the two differ: evolved-field count, constraint set, and which
-shared equations module supplies the expressions. Collapsing them cost nothing,
-because one module holds a private builder per formulation, so neither branches
-on formulation and the public registrar dispatches once on `enable_fCCZ4` --
-BHaH's own arrangement.
+shared equations module supplies the expressions.
+
+Where Dendro departs from BHaH is inside the module. BHaH's
+`general_relativity/rhs_eval.py` is a single public
+`register_CFunction_rhs_eval` that branches inline on `enable_fCCZ4` in the few
+places the formulations differ. Dendro instead holds a private builder and a
+private registrar per formulation, and the public registrar dispatches once on
+the boolean. That arrangement is Dendro's own, and no host requirement drove
+it, so it is a divergence [New Infrastructure
+Conformance](../new-infrastructure-conformance.md) does not permit. It leaves
+the constraint builders sharing a long verbatim tail and the right-hand-side
+builders substantially duplicated. Consolidating them is open.
+
+Claim status: contested; contradiction: CONTR-0011.
+See [CONTR-0011](../../contradictions.md#contr-0011) for the deciding authority
+and the inspection that would resolve it.
 
 ## Detail
 
@@ -61,20 +73,26 @@ while AUX appears once. Every registration in the factory is guarded by
 `if <name> not in gri.glb_gridfcs_dict`, so the Dendro builder registers the
 names it writes as DIAG *before* constructing the factory. That is
 load-bearing for `H`; `MU0`-`MU2` are DIAG simply because this builder is their
-sole registrant. The factory still registers `M` and `LAMBDA_CONSTRAINT`,
-which this kernel does not compute, so the builder removes those two
-afterwards — restricted to newly added AUX names, because the factory's
-construction also pulls in the evolved state.
-Without that the generated state header would advertise two variables no kernel
-writes and no vector backs. No change to the shared equations module.
+sole registrant. The factory would otherwise also register `M` and
+`LAMBDA_CONSTRAINT`, which this kernel does not compute, so the builder
+suppresses those two at the source: it reads
+`register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, sets it to `False` for the
+duration of the factory construction, and restores the previous value in a
+`finally` block so no other caller inherits this builder's choice. Nothing is
+deleted from `glb_gridfcs_dict` afterwards -- suppressing the registration is
+what makes the deletion unnecessary, and a deletion pass would have to tell the
+two names apart from the evolved state the same construction pulls in.
+Without the suppression the generated state header would advertise two
+variables no kernel writes and no vector backs. No change to the shared
+equations module.
 
 Claim evidence:
-- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; `M` and `LAMBDA_CONSTRAINT` are additionally gated by the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` CodeParameter, which defaults to `True`, and `MU` by `register_MU_gridfunctions`, which defaults to `False` and which no Dendro module sets. Both gates are keys of the `BSSNconstraints_dict` construction-parameter memo, so flipping either forces a rebuild. The Dendro BSSN builder pre-registers the names it writes and afterwards deletes the newly added AUX names it does not write, leaving `NUM_AUX_GFS = 0` in the emitted state header.
+- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; `M` and `LAMBDA_CONSTRAINT` are additionally gated by the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` CodeParameter, which defaults to `True`, and `MU` by `register_MU_gridfunctions`, which defaults to `False` and which no Dendro module sets. Both gates are keys of the `BSSNconstraints_dict` construction-parameter memo, so flipping either forces a rebuild. The Dendro BSSN builder pre-registers the names it writes as DIAG and suppresses the two AUX names it does not write by setting `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` to `False` across the factory construction and restoring it afterwards, rather than deleting anything from `gri.glb_gridfcs_dict`, leaving `NUM_AUX_GFS = 0` in the emitted state header.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
-- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` step 1
+- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` save/set/restore around the `BSSN_constraints` construction in the BSSN builder
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-07-2026`
 
 ### Dendro's own vocabulary
 

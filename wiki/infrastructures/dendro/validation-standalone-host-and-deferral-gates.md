@@ -1,6 +1,6 @@
 # Validation, Standalone Host, And Deferral Gates
 
-> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-06-2026
+> Explain the standalone host vehicle, the generated self-tests and Minkowski lifecycle gates, the CI coverage, and the Dendrolib pin and proven capability axes. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -52,8 +52,9 @@ expression dictionaries, in the same `__main__` sweeps, at the same two shipped
 profiles. Four trusted dictionaries, 0.3 to 1.6 kilobytes each, as
 `nrpy/infrastructures/CarpetX/general_relativity/rhs_eval.py` pins its own. The
 finite-difference order axis is left to `nrpy/finite_difference.py`'s own
-oracles and to the generated padding self-test, because the assembled
-expressions carry no stencil.
+oracles, because the assembled expressions carry no stencil; the generated
+padding self-test only bounds the emitted padding below by the centered radius
+and does not discriminate the reach.
 
 Claim evidence:
 - Claim: the Dendro initial-data and algebraic-constraint-enforcement builders capture ten trusted generated-source baselines at finite-difference order 4, five per formulation and each at the conformal factor its application ships, every one byte-identical to the source that project generates; the right-hand side and the constraint diagnostics receive no generated-source baseline and are pinned symbolically instead by four trusted expression dictionaries at the same two shipped profiles.
@@ -184,6 +185,13 @@ zip direction, the `ts::Ctx` right-hand-side contracts, remesh, the checkpoint
 ABI, output selection, and the thread model. Each names the work that would
 close it, and physical boundaries and the checkpoint ABI remain separate
 qualified profiles carried on this page.
+
+One deferred item is named rather than merely open: the `BlockGeometry` adapter
+proof, meaning a single auditable host function that normalizes
+`component_offset` and `pmin_padded` for a block, exercised by a two-block case
+and an offset sentinel. Only the `standalone_host/dendro_standalone_host.h`
+struct exists so far, so the adapter signatures stay frozen until a build
+against a real Dendro-GR checkout runs.
 
 What the pin does not establish is that the generated solver builds against the
 real host. The solver still compiles against `dendro_standalone_host.h` and still refuses

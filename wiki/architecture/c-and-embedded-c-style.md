@@ -1,6 +1,6 @@
 # C And Embedded C Style
 
-> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 09-06-2026
+> C/H formatting, Doxygen, embedded-C string, and generated-C body rules. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Architecture](index.md)
 
 ## Summary
@@ -38,9 +38,11 @@ names. Both simple names such as `BHAHAHA_HEADER_H` and legacy double-underscore
 forms such as `__SIMD_INTRINSICS_H__` appear in the codebase. The guard is
 structure rather than cosmetics, so an emitted header carries one too: BHaH and
 Dendro both generate the `#ifndef`/`#define` pair, Dendro deriving the macro
-from the header's own file name. What the generated-string exemption covers is
-the raw layout and generated-identifier casing, not whether the guard is
-there. Put standard
+from the header's own file name. Deriving it from the file name is what makes
+two generated Dendro solvers safe to place in one host checkout, because each
+generated header name already carries its solver stem. What the
+generated-string exemption covers is the raw layout and generated-identifier
+casing, not whether the guard is there. Put standard
 library includes first, then project headers in quotes, with platform-specific
 headers behind conditional compilation such as `#if defined(__AVX512F__)`.
 

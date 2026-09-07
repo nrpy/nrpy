@@ -1,4 +1,4 @@
-# nrpy/infrastructures/Dendro/Dendro_include_header.py
+# nrpy/infrastructures/Dendro/Dendro_defines_h.py
 """
 Emit the ``<stem>_defines.h`` header every generated CFunction source includes.
 
@@ -17,7 +17,7 @@ from nrpy.infrastructures.Dendro.header_guards import header_guard
 BANNER = generated_file_banner()
 
 
-def output_include_header(solver_stem: str, solver_prefix: str) -> str:
+def output_Dendro_defines_h(solver_stem: str, solver_prefix: str) -> str:
     """
     Emit ``<stem>_defines.h``, the one header every generated CFunction includes.
 
@@ -29,7 +29,7 @@ def output_include_header(solver_stem: str, solver_prefix: str) -> str:
     :return: The complete C++ header text.
 
     Doctests:
-    >>> header = output_include_header("bssn", "BSSN")
+    >>> header = output_Dendro_defines_h("bssn", "BSSN")
     >>> "#ifndef BSSN_DEFINES_H" in header
     True
     >>> header.rstrip().endswith("#endif  // BSSN_DEFINES_H")
@@ -91,7 +91,9 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

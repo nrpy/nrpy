@@ -1,6 +1,6 @@
 # Gridfunctions, Naming, And Loops
 
-> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-06-2026
+> Explain the Dendro gridfunction class, the exact-name role decorations, the CFunction role sidecar, the generation parameters, and the two loop helpers. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -44,11 +44,24 @@ convention onto the registered gridfunction name — `h_rhsDD00` becomes `hDD00`
 — which is the bijection the RHS builder asserts against the registry. It does
 not invert the `rhs_` pointer decoration.
 
-The recorded decision behind this is that the fCCZ4 state keeps its exact NRPy
-names and the `GridFunction.gridfunction_lists()` order, stores native `hDD`
-and native evolved `lambdaU` rather than substituting BSSN quantities, and
-treats runtime physics parameters as the registered `CodeParameter` objects
-only.
+The fCCZ4 state keeps its exact NRPy names and the
+`GridFunction.gridfunction_lists()` order, stores native `hDD`
+-- the reference-metric conformal-metric perturbation, so that in Cartesian
+coordinates the conformal metric is the identity plus `hDD` -- and native
+evolved `lambdaU`, the fCCZ4 conformal connection quantity rather than a BSSN
+contracted connection. No full-metric field replaces `hDD`. Runtime physics
+parameters are the registered
+`CodeParameter` objects, emitted whole rather than filtered to a used-parameter
+closure, so no Dendro physics table duplicates them; an earlier design did
+compute such a closure and was discarded when the infrastructure was rebuilt on
+direct registry reads. A kernel is likewise a registered CFunction plus
+non-authoritative role metadata, with no second body registry.
+
+Because the decorations are reversible, an intentional rename or reorder of the
+registered state is a visible change to the emitted `EvolVar` enum and to the
+component order the generated state header declares. Nothing currently rejects
+a state laid out by a different order, because the checkpoint ABI is a separate
+deferred profile.
 
 ### The role sidecar
 
@@ -116,7 +129,6 @@ every CodeParameter they use into the registry.
 - [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
 - [generation_parameters.py](../../../nrpy/infrastructures/Dendro/generation_parameters.py) - `validate_generation_parameters`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `register_CFunctions_parameters`
-- [ADR_dendro_names.md](../../../nrpy/infrastructures/Dendro/ADR_dendro_names.md) - `Decision`, `Consequences`
 
 ## See Also
 

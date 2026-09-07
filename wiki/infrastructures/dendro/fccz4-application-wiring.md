@@ -1,6 +1,6 @@
 # fCCZ4 Application Wiring
 
-> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-06-2026
+> Explain the Dendro fCCZ4 builders: the direct finite-difference right-hand side, the det(gammabar)/tr(Abar) enforcement, initial-data conversion, and constraint diagnostics. · Status: provisional · Last reconciled: 09-07-2026
 > Up: [Dendro](index.md)
 
 ## Summary
@@ -15,9 +15,12 @@ from registered quantities, and all registered as CFunctions rather than written
 into a fixed template. Each family
 pairs a pure `build_*` function with a `register_CFunctions_*` function so one
 profile can assemble a different subset without the builders knowing about each
-other. That split is Dendro's own: the established infrastructures build and
-register inside a single `register_CFunction_*`, and their kernel-building
-`build_*` helpers return C strings rather than a record.
+other. The established infrastructures do the same where they need it: BHaH's
+`general_relativity/ADM_Initial_Data_Reader__BSSN_Converter.py` carries three
+pure `build_*` helpers beside both a `register_CFunction_*` and a
+`register_CFunctions_*`, and `diagnostics/combine_raytracing_time_slices.py`
+returns a frozen dataclass from one. What is Dendro's own is the scale: every
+kernel family is shaped this way.
 
 ## Detail
 
@@ -33,7 +36,7 @@ bodies — per-block, all-block, and a local-time-stepping flat-block adapter
 that reuses the same numerical body — and records the ghost points its emitted
 operators reach. That padding is taken per axis from the same coefficient
 source the kernel was lowered with, so it is not `fd_order // 2`: the upwinded
-and Kreiss-Oliger families reach one point further than the centred ones.
+and Kreiss-Oliger families reach one point further than the centered ones.
 
 ### Enforcing det(gammabar) = det(gammahat) and tr(Abar) = 0
 

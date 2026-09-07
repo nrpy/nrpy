@@ -327,7 +327,7 @@ def padding_from_derivative_operators(
     so per-axis padding is unrepresentable in the host contract.
 
     This is not ``fd_order // 2``: the upwinded and Kreiss-Oliger families reach
-    one point further than the centred ones (at fd_order 4, ``dupD`` reaches 3
+    one point further than the centered ones (at fd_order 4, ``dupD`` reaches 3
     while ``dD`` reaches 2), so a radius-derived padding would read past the end
     of a Dendro block.  The reach itself comes from
     :func:`nrpy.finite_difference.stencil_reach_per_axis`, which reads the same
@@ -349,11 +349,30 @@ def padding_from_derivative_operators(
     >>> cf_dD = ixp.declarerank1("cf_dD")
     >>> padding_from_derivative_operators([cf_dD[0] + cf_dD[1] + cf_dD[2]], "unset", 4)
     2
+
+    The per-order reach is pinned there; what
+    this wrapper owns is the reduction across axes, so the case below mixes a
+    centered axis with an upwinded one: a uniform expression would pass just as
+    well if this returned the minimum.
+
+    >>> cf_dupD = ixp.declarerank1("cf_dupD")
+    >>> mixed_axes = cf_dD[0] + cf_dupD[1] + cf_dD[2]
+    >>> padding_from_derivative_operators([mixed_axes], "unset", 4)
+    3
     >>> try:
     ...     padding_from_derivative_operators([sp.Symbol("cf")], "unset", 4)
     ... except ValueError as error:
     ...     print(str(error).split(";")[0])
     The expressions reach no ghost points ((0, 0, 0))
+
+    One axis reaching nothing is enough to refuse, so the guard reduces with
+    the minimum where the padding reduces with the maximum.
+
+    >>> try:
+    ...     padding_from_derivative_operators([cf_dD[0]], "unset", 4)
+    ... except ValueError as error:
+    ...     print(str(error).split(";")[0])
+    The expressions reach no ghost points ((2, 0, 0))
     >>> gri.glb_gridfcs_dict.clear()
     """
     padding = stencil_reach_per_axis(expressions, upwind_control_vec, fd_order)
@@ -395,7 +414,9 @@ if __name__ == "__main__":
     import sys
 
     results = doctest.testmod()
+
     if results.failed > 0:
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
-    print(f"Doctest passed: All {results.attempted} test(s) passed")
+    else:
+        print(f"Doctest passed: All {results.attempted} test(s) passed")

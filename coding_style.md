@@ -597,7 +597,7 @@ Doctests:
 Key points:
 - `clang_format` normalizes whitespace before comparison; always apply it to `full_function` before passing to `validate_strings`.
 - `validate_strings` compares against a trusted file in `tests/` (auto-generated on first run).
-- Set `file_ext="cu"` when the generated code is CUDA, `"c"` otherwise.
+- Set `file_ext="cu"` when the generated code is CUDA, `"cpp"` when it is C++, and `"c"` otherwise. The extension records the language the trusted baseline is written in, so a reader opening the file gets the right syntax.
 - Import `validate_strings` (and `clang_format` if needed) inside the doctest, not at module level.
 - Doctests that drive Python-based C/C++ generation are most appropriate in `nrpy/infrastructures/*/*.py`, where registration functions are a core public interface.
 - Outside `nrpy/infrastructures/*/*.py`, such doctests are discouraged but still allowed when they verify meaningful behavior that cheaper symbolic, structural, or non-codegen checks would miss.
