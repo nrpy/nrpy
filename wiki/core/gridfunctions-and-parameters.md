@@ -1,6 +1,6 @@
 # Gridfunctions And Parameters
 
-> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 07-12-2026
+> Core route for symbolic gridfunctions, NRPy parameters, code parameters, and generated data structs. · Status: confirmed · Last reconciled: 09-06-2026
 > Up: [Core APIs](index.md)
 
 ## Summary
@@ -70,6 +70,7 @@ Split into separate parameter and gridfunction leaves is deferred unless this le
 ## Sources
 
 - [nrpy/params.py](../../nrpy/params.py) - `NRPyParameter`, `CodeParameter`, `_parse_array_spec`, `register_param`, `parval_from_str`, `set_parval_from_str`, `register_CodeParameters`, `register_CodeParameter`, `adjust_CodeParam_default`, `glb_params_dict`, `glb_code_params_dict`, `glb_extras_dict`
+- [nrpy/params.py](../../nrpy/params.py) - `parse_cparam_type`, the public parser BHaH and superB both call
 - [nrpy/grid.py](../../nrpy/grid.py) - `GridFunction`, `BHaHGridFunction`, `ETLegacyGridFunction`, `CarpetXGridFunction`, `gridfunction_lists`, `get_parity_type`, `set_parity_types`, `define_gfs_group`, `gridfunction_defines`, `register_gridfunctions`, `register_gridfunctions_for_single_rankN`, `glb_gridfcs_dict`, `GF_CLASS_MAP`
 - [nrpy/infrastructures/BHaH/griddata_commondata.py](../../nrpy/infrastructures/BHaH/griddata_commondata.py) - `GridCommonData`, `register_griddata_commondata`
 

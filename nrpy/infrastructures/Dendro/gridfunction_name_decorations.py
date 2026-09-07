@@ -10,14 +10,12 @@ Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
-import re
 from typing import Optional, Tuple
 
-_C_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+import nrpy.grid as gri
 
 # NRPy RHS naming convention: <base>_rhs<suffix>, where the optional suffix
 # carries the tensor-variance and component indices (e.g., "DD12", "U0").
-_RHS_RE = re.compile(r"^(?P<base>.+)_rhs(?P<suffix>(?:[UD]+[0-9]+)?)$")
 
 
 _VARIANCE_LETTERS = frozenset({"U", "D"})
@@ -58,6 +56,31 @@ def tensor_family_of(name: str) -> Optional[Tuple[str, int]]:
     return family, index_run
 
 
+def _is_variance_suffix(suffix: str) -> bool:
+    """
+    Return whether a suffix is empty or a variance run plus its index digits.
+
+    :param suffix: The text following ``_rhs`` in an NRPy RHS symbol name.
+    :return: True for ``""``, ``"U0"``, ``"DD12"``; False for ``"x"``, ``"U"``,
+        ``"0"``, ``"DD1"``.
+
+    Doctests:
+    >>> [_is_variance_suffix(s) for s in ("", "U0", "DD12")]
+    [True, True, True]
+    >>> [_is_variance_suffix(s) for s in ("x", "U", "0", "DD1")]
+    [False, False, False, False]
+    """
+    if not suffix:
+        return True
+    variance = suffix.rstrip(_INDEX_DIGITS)
+    digits = suffix[len(variance) :]
+    return (
+        bool(variance)
+        and len(digits) == len(variance)
+        and set(variance) <= _VARIANCE_LETTERS
+    )
+
+
 def validate_cpp_identifier(name: str) -> str:
     """
     Validate that a string is a legal C/C++ identifier.
@@ -66,7 +89,9 @@ def validate_cpp_identifier(name: str) -> str:
     :return: The validated string, unchanged.
     :raises ValueError: If the string is not a legal C/C++ identifier.
     """
-    if not _C_IDENTIFIER_RE.match(name):
+    # ``str.isidentifier()`` is Python's identifier grammar, which is the C
+    # grammar once non-ASCII names are excluded.  No pattern is needed.
+    if not (name.isidentifier() and name.isascii()):
         raise ValueError(f"Not a valid C/C++ identifier: {name!r}")
     return name
 
@@ -85,10 +110,14 @@ def input_pointer(name: str) -> str:
     """
     Return the Dendro input-role pointer name for a gridfunction.
 
+    The ``in_`` spelling itself lives on
+    :class:`nrpy.grid.DendroGridFunction`, which is what the shared one-point
+    memory read uses, so the two cannot drift.
+
     :param name: Exact registered NRPy gridfunction name.
     :return: ``in_<name>``.
     """
-    return f"in_{validate_cpp_identifier(name)}"
+    return gri.DendroGridFunction.input_pointer(validate_cpp_identifier(name))
 
 
 def rhs_pointer(name: str) -> str:
@@ -165,10 +194,19 @@ def rhs_symbol_to_gridfunction_name(rhs_name: str) -> str:
     ...     print("Unrecognized RHS symbol rejected. Good.")
     Unrecognized RHS symbol rejected. Good.
     """
-    match = _RHS_RE.fullmatch(rhs_name)
-    if match is None:
-        raise ValueError(f"Unrecognized NRPy RHS symbol: {rhs_name}")
-    return f"{match.group('base')}{match.group('suffix')}"
+    # Walk the "_rhs" occurrences from the right and take the first split whose
+    # base is non-empty and whose suffix is either empty or a variance run
+    # followed by one digit per variance letter -- the same shape
+    # ``tensor_family_of`` above tests, and what the pattern this replaced
+    # matched greedily.
+    index = rhs_name.rfind("_rhs")
+    while index > 0:
+        base = rhs_name[:index]
+        suffix = rhs_name[index + len("_rhs") :]
+        if _is_variance_suffix(suffix):
+            return f"{base}{suffix}"
+        index = rhs_name.rfind("_rhs", 0, index)
+    raise ValueError(f"Unrecognized NRPy RHS symbol: {rhs_name}")
 
 
 if __name__ == "__main__":

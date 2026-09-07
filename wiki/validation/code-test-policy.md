@@ -1,6 +1,6 @@
 # Code Test Policy
 
-> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 07-20-2026
+> Prospective placement, meaningfulness, and proof rules for tests of NRPy code. · Status: provisional · Last reconciled: 09-06-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -99,9 +99,24 @@ Static quality gates remain mandatory and separate.
 External compiler, build, runtime, and numerical-product validation belongs in
 scoped CI, not ordinary owner doctests. Repository-configured `clang-format`
 remains an allowed dependency for owner emitted-source normalization. New core
-standalone harnesses and compile doctests are prohibited. A substantive change
-to an existing compile doctest must follow the migration or tightly bounded
-fallback in [Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
+standalone harnesses and compile doctests are prohibited. The one carve-out is a
+harness that measures an external host's behavior, which no owner doctest and no
+NRPy-side CI job can observe, because the host is present in neither. The rule
+is `coding_style.md`, `### External-Host Test Harnesses`: the harness is tracked
+beside the infrastructure that depends on the host, under `tests_infra/`, is
+built and run by hand against that host, and records the platform, the host
+revision and the date of its last real run
+(`nrpy/infrastructures/Dendro/tests_infra` is the only such harness). It is not
+a route for ordinary compile or build coverage, which stays in scoped CI. A
+substantive change to an existing compile doctest must follow the migration or
+tightly bounded fallback in
+[Test Oracles And Safe Updates](test-oracles-and-safe-updates.md#known-gaps-and-non-precedents).
+
+Claim evidence:
+- Claim: new core standalone harnesses and compile doctests are prohibited, with one carve-out: a harness that measures an external host's behavior is tracked under `tests_infra/` beside the infrastructure that depends on that host, is built and run by hand, and records the platform, the host revision and the date of its last real run. The carve-out does not license ordinary compile or build coverage outside scoped CI.
+- Role: normative rule
+- Deciding authority: [coding_style.md](../../coding_style.md), `### External-Host Test Harnesses`
+- Corroboration: [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md), its recorded last real run and its build and run instructions, the only harness the carve-out admits
 
 ### Status-Only Build Or Crash Gate
 
@@ -277,7 +292,8 @@ for test count.
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `## Static Analysis Configuration`
+- [coding_style.md](../../coding_style.md) - `### if __name__ == "__main__": Block`, `### Doctest Conventions`, `#### Doctest placeholders`, `### External-Host Test Harnesses`, `## Static Analysis Configuration`
+- [README.md](../../nrpy/infrastructures/Dendro/tests_infra/README.md) - the recorded last real run, and the build and run instructions
 - [main.yml](../../.github/workflows/main.yml) - `static-analysis`, `codegen-ubuntu`, `codegen-mac`, `sebob-consistency-test`, `sebobv2-consistency-test`
 - [single_file_static_analysis.sh](../../.github/single_file_static_analysis.sh) - `run_test_step`
 - [.pylintrc](../../.pylintrc) - `[MASTER]`; [.pylintrc_python36](../../.pylintrc_python36) - `[MASTER]`

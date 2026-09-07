@@ -25,6 +25,7 @@ from typing import Dict, List, Tuple
 
 import sympy as sp
 
+import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -33,24 +34,25 @@ from nrpy.c_codegen import c_codegen
 from nrpy.equations.general_relativity.ADM_to_BSSN import ADM_to_BSSN
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
-from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters
+from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
+from nrpy.infrastructures.Dendro import generation_parameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro.block_loop import block_loop
+from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.simple_loop import (
+    block_loop,
     require_serial_parallelization,
-    simple_loop,
 )
 
 # CFunction name suffixes.  The solver stem is threaded from the caller, as
 # Dendro names solver sources for the formulation, so these modules are shared
 # by every formulation without carrying one formulation's name.
 MINKOWSKI_BLOCK_SUFFIX = "minkowski_initial_data_block"
-MINKOWSKI_GLOBAL_SUFFIX = "minkowski_initial_data"
+MINKOWSKI_ALL_BLOCKS_SUFFIX = "minkowski_initial_data"
 
 # Smooth analytic perturbation used by the lifecycle gates: a spatially varying
 # state is what makes the generated derivative stencils observable at all.
 SMOOTH_PERTURBATION_BLOCK_SUFFIX = "smooth_perturbation_block"
-SMOOTH_PERTURBATION_GLOBAL_SUFFIX = "smooth_perturbation"
+SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX = "smooth_perturbation"
 
 ADM_TO_BSSN_BLOCK_SUFFIX = "ADM_to_BSSN_block"
 INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX = "initial_data_lambdaU_block"
@@ -69,13 +71,13 @@ def _block_pointer_bindings(evol_order: Tuple[str, ...], scalar_type: str) -> st
     :param scalar_type: The registered Dendro scalar alias.
     :return: The binding statements.
     """
-    return Dendro_state_h.output_component_bindings(
+    return state_h.output_component_bindings(
         evol_order,
         scalar_type,
         array="out_gfs",
         role=gf_names.out_pointer,
         const_pointee=False,
-        index_expression=lambda _name, position: str(position),
+        index_expression=bkh.by_position,
     )
 
 
@@ -89,7 +91,7 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
     wraps it in the NRPy numerical block loop.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
-    :return: (block_body, block_params, global_body, global_params).
+    :return: (block_body, block_params, all_blocks_body, all_blocks_params).
     :raises ValueError: If Infrastructure is not Dendro.
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
@@ -98,7 +100,7 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
             f"data, got {par.parval_from_str('Infrastructure')!r}."
         )
     require_serial_parallelization()
-    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     evol_order = roles.registered_evol_order()
 
     # The fill writes every EVOL field to its registered asymptotic value.
@@ -117,25 +119,17 @@ def build_minkowski_initial_data(*, solver_stem: str) -> Tuple[str, str, str, st
     # whole block (padding 0) makes the state a true fixed point, so the
     # finite-difference RHS vanishes everywhere, including the interior
     # cells adjacent to a block boundary that read ghost cells.
-    point_loop_body = simple_loop(
-        fill_body,
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="0",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
+    point_loop_body = bkh.point_loop(fill_body, padding="0")
     block_body = (
         _block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
     )
     block_params = f"const BlockGeometry& geom, {scalar_type}* const* out_gfs"
-    global_body = block_loop(
-        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}(world.geom[blk], out_gfs);",
-        num_blocks="world.num_blocks",
+    all_blocks_body = block_loop(
+        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}(mesh.geom[blk], out_gfs);",
+        num_blocks="mesh.num_blocks",
     )
-    global_params = f"const MockWorld& world, {scalar_type}* const* out_gfs"
-    return block_body, block_params, global_body, global_params
+    all_blocks_params = f"const StandaloneHostMesh& mesh, {scalar_type}* const* out_gfs"
+    return block_body, block_params, all_blocks_body, all_blocks_params
 
 
 def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
@@ -158,7 +152,7 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
     identical field, and the ``FLATADAPTER`` lifecycle gate could not see it.
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
-    :return: (block_body, block_params, global_body, global_params).
+    :return: (block_body, block_params, all_blocks_body, all_blocks_params).
     :raises ValueError: If Infrastructure is not Dendro.
     """
     if par.parval_from_str("Infrastructure") != "Dendro":
@@ -167,10 +161,30 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
             f"got {par.parval_from_str('Infrastructure')!r}."
         )
     require_serial_parallelization()
-    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     evol_order = roles.registered_evol_order()
 
-    amplitude, wavelength = sp.symbols("amplitude wavelength", real=True)
+    # Registered CodeParameters, not bare symbols: a tunable the host must
+    # supply belongs in params_struct with a default, a validation entry and a
+    # parfile line, exactly as eta and the kappas are.
+    amplitude = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_amplitude",
+        1e-3,
+        description="Amplitude of the smooth analytic perturbation applied to the evolved state.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
+    wavelength = par.register_CodeParameter(
+        "REAL",
+        __name__,
+        "smooth_perturbation_wavelength",
+        1.0,
+        description="Wavelength of the smooth analytic perturbation applied to the evolved state; the host overwrites this default with a grid-derived value once it knows the block extent and spacing.",
+        commondata=False,
+        add_to_set_CodeParameters_h=False,
+    )
     xx0, xx1, xx2 = sp.symbols("xx0 xx1 xx2", real=True)
     wavenumber = 2 * sp.pi / wavelength
     profile = (
@@ -196,32 +210,26 @@ def build_smooth_perturbation(*, solver_stem: str) -> Tuple[str, str, str, str]:
         )
     # The perturbation is applied over the whole padded block, ghost cells
     # included, so the interior RHS sees a consistent field on every stencil.
-    point_loop_body = simple_loop(
-        "\n".join(fill_lines),
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="0",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
+    point_loop_body = bkh.point_loop("\n".join(fill_lines), padding="0")
     block_body = (
         _block_pointer_bindings(evol_order, scalar_type) + "\n" + point_loop_body
     )
-    block_params = (
-        f"const BlockGeometry& geom, {scalar_type}* const* out_gfs, "
-        f"const {scalar_type} amplitude, const {scalar_type} wavelength"
+    used_codeparameters = bkh.used_codeparameters([profile])
+    cparam_args = bkh.cparam_declarations(used_codeparameters)
+    block_params = f"const BlockGeometry& geom, {scalar_type}* const* out_gfs" + (
+        f", {cparam_args}" if cparam_args else ""
     )
-    global_body = block_loop(
+    forwarded = bkh.cparam_arguments(used_codeparameters)
+    all_blocks_body = block_loop(
         f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}"
-        "(world.geom[blk], out_gfs, amplitude, wavelength);",
-        num_blocks="world.num_blocks",
+        "(mesh.geom[blk], out_gfs" + (f", {forwarded}" if forwarded else "") + ");",
+        num_blocks="mesh.num_blocks",
     )
-    global_params = (
-        f"const MockWorld& world, {scalar_type}* const* out_gfs, "
-        f"const {scalar_type} amplitude, const {scalar_type} wavelength"
+    all_blocks_params = (
+        f"const StandaloneHostMesh& mesh, {scalar_type}* const* out_gfs"
+        + (f", {cparam_args}" if cparam_args else "")
     )
-    return block_body, block_params, global_body, global_params
+    return block_body, block_params, all_blocks_body, all_blocks_params
 
 
 def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
@@ -232,11 +240,10 @@ def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
-    block_body, block_params, global_body, global_params = build_smooth_perturbation(
-        solver_stem=solver_stem
+    block_body, block_params, all_blocks_body, all_blocks_params = (
+        build_smooth_perturbation(solver_stem=solver_stem)
     )
-    roles.register_Dendro_CFunction(
-        role="smooth_perturbation_block",
+    cfc.register_CFunction(
         name=f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}",
         desc=(
             "Per-block smooth analytic perturbation of every evolved field "
@@ -245,14 +252,21 @@ def register_CFunctions_smooth_perturbation(*, solver_stem: str) -> None:
         subdirectory="generated/src/initial_data",
         params=block_params,
         body=block_body,
+        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.register_Dendro_CFunction(
-        role="smooth_perturbation",
-        name=f"{solver_stem}_{SMOOTH_PERTURBATION_GLOBAL_SUFFIX}",
+    roles.set_CFunction_role(
+        f"{solver_stem}_{SMOOTH_PERTURBATION_BLOCK_SUFFIX}", "smooth_perturbation_block"
+    )
+    cfc.register_CFunction(
+        name=f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}",
         desc="All-block smooth analytic perturbation (NRPy block loop).",
         subdirectory="generated/src/initial_data",
-        params=global_params,
-        body=global_body,
+        params=all_blocks_params,
+        body=all_blocks_body,
+        includes=[f"{solver_stem}_defines.h"],
+    )
+    roles.set_CFunction_role(
+        f"{solver_stem}_{SMOOTH_PERTURBATION_ALL_BLOCKS_SUFFIX}", "smooth_perturbation"
     )
 
 
@@ -265,24 +279,30 @@ def register_CFunctions_minkowski_initial_data(*, solver_stem: str) -> None:
 
     :param solver_stem: Lowercase stem for the emitted CFunction names.
     """
-    block_body, block_params, global_body, global_params = build_minkowski_initial_data(
-        solver_stem=solver_stem
+    block_body, block_params, all_blocks_body, all_blocks_params = (
+        build_minkowski_initial_data(solver_stem=solver_stem)
     )
-    roles.register_Dendro_CFunction(
-        role="minkowski_initial_data_block",
+    cfc.register_CFunction(
         name=f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}",
         desc="Per-block Minkowski initial data fill (all EVOL fields to their asymptotic values).",
         subdirectory="generated/src/initial_data",
         params=block_params,
         body=block_body,
+        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.register_Dendro_CFunction(
-        role="minkowski_initial_data",
-        name=f"{solver_stem}_{MINKOWSKI_GLOBAL_SUFFIX}",
+    roles.set_CFunction_role(
+        f"{solver_stem}_{MINKOWSKI_BLOCK_SUFFIX}", "minkowski_initial_data_block"
+    )
+    cfc.register_CFunction(
+        name=f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}",
         desc="All-block Minkowski initial data fill (NRPy block loop).",
         subdirectory="generated/src/initial_data",
-        params=global_params,
-        body=global_body,
+        params=all_blocks_params,
+        body=all_blocks_body,
+        includes=[f"{solver_stem}_defines.h"],
+    )
+    roles.set_CFunction_role(
+        f"{solver_stem}_{MINKOWSKI_ALL_BLOCKS_SUFFIX}", "minkowski_initial_data"
     )
 
 
@@ -374,7 +394,7 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
         )
     require_serial_parallelization()
     generation_parameters.validate_generation_parameters()
-    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     fp_type = str(par.parval_from_str("fp_type"))
     evol_order = roles.registered_evol_order()
 
@@ -441,9 +461,9 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
         fp_type_alias=scalar_type,
         verbose=False,
     )
-    accessed = {
-        str(symbol) for name in written for symbol in targets[name].free_symbols
-    } & set(gri.glb_gridfcs_dict)
+    # The canonical reader resolves a field read only through a derivative,
+    # which raw free symbols would miss.
+    accessed = bkh.accessed_gridfunctions([targets[name] for name in written])
     read_names = tuple(name for name in auxevol_order if name in accessed)
     unexpected = sorted(accessed - set(auxevol_order))
     if unexpected:
@@ -453,7 +473,7 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
         )
     bindings = "\n".join(
         [
-            Dendro_state_h.output_component_bindings(
+            state_h.output_component_bindings(
                 read_names,
                 scalar_type,
                 array="auxevol_gfs",
@@ -461,7 +481,7 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
                 const_pointee=True,
                 index_expression=lambda name, _p: str(auxevol_order.index(name)),
             ),
-            Dendro_state_h.output_component_bindings(
+            state_h.output_component_bindings(
                 written,
                 scalar_type,
                 array="out_gfs",
@@ -471,15 +491,7 @@ def build_ADM_to_BSSN(*, CoordSystem: str = "Cartesian") -> Tuple[str, str]:
             ),
         ]
     )
-    point_loop_body = simple_loop(
-        kernel,
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="0",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
+    point_loop_body = bkh.point_loop(kernel, padding="0")
     block_params = (
         f"const BlockGeometry& geom, const {scalar_type}* const* auxevol_gfs, "
         f"{scalar_type}* const* out_gfs"
@@ -534,7 +546,7 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
             f"{par.parval_from_str('Infrastructure')!r}."
         )
     require_serial_parallelization()
-    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     fp_type = str(par.parval_from_str("fp_type"))
     Bq = BSSN_quantities[CoordSystem]
     rfm = refmetric.reference_metric[CoordSystem]
@@ -542,9 +554,10 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
     exprs = [Bq.DGammaU[i] / rfm.ReU[i] for i in range(3)]
     # The pass must not read what it writes: DeltaGamma^i is built from the
     # conformal metric and its first derivatives only.
-    circular = sorted(
-        {str(symbol) for expr in exprs for symbol in expr.free_symbols} & set(written)
-    )
+    # Derivative reads count here: DeltaGamma^i is built from first
+    # derivatives, so the naive free-symbol set would be blind to exactly the
+    # reads this guard exists to catch.
+    circular = sorted(bkh.accessed_gridfunctions(exprs) & set(written))
     if circular:
         raise ValueError(f"The connection pass reads the fields it writes: {circular}.")
     evol_order = roles.registered_evol_order()
@@ -559,13 +572,11 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
         fp_type_alias=scalar_type,
         verbose=False,
     )
-    accessed = {str(symbol) for expr in exprs for symbol in expr.free_symbols} & set(
-        gri.glb_gridfcs_dict
-    )
+    accessed = bkh.accessed_gridfunctions(exprs)
     read_names = tuple(name for name in evol_order if name in accessed)
     bindings = "\n".join(
         [
-            Dendro_state_h.output_component_bindings(
+            state_h.output_component_bindings(
                 read_names,
                 scalar_type,
                 array="in_gfs",
@@ -573,7 +584,7 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
                 const_pointee=True,
                 index_expression=lambda name, _p: str(evol_order.index(name)),
             ),
-            Dendro_state_h.output_component_bindings(
+            state_h.output_component_bindings(
                 written,
                 scalar_type,
                 array="out_gfs",
@@ -583,15 +594,7 @@ def build_initial_data_lambdaU(*, CoordSystem: str = "Cartesian") -> Tuple[str, 
             ),
         ]
     )
-    point_loop_body = simple_loop(
-        kernel,
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="geom.padding",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
+    point_loop_body = bkh.point_loop(kernel)
     block_params = (
         f"const BlockGeometry& geom, const {scalar_type}* const* in_gfs, "
         f"{scalar_type}* const* out_gfs"
@@ -609,8 +612,7 @@ def register_CFunctions_ADM_to_BSSN(
     :param CoordSystem: Reference-metric coordinate system.
     """
     adm_body, adm_params = build_ADM_to_BSSN(CoordSystem=CoordSystem)
-    roles.register_Dendro_CFunction(
-        role="ADM_to_BSSN_block",
+    cfc.register_CFunction(
         name=f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}",
         desc=(
             "Per-block smooth ADM-to-evolved conversion; the "
@@ -619,10 +621,13 @@ def register_CFunctions_ADM_to_BSSN(
         subdirectory="generated/src/initial_data",
         params=adm_params,
         body=adm_body,
+        includes=[f"{solver_stem}_defines.h"],
+    )
+    roles.set_CFunction_role(
+        f"{solver_stem}_{ADM_TO_BSSN_BLOCK_SUFFIX}", "ADM_to_BSSN_block"
     )
     lam_body, lam_params = build_initial_data_lambdaU(CoordSystem=CoordSystem)
-    roles.register_Dendro_CFunction(
-        role="initial_data_lambdaU_block",
+    cfc.register_CFunction(
         name=f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}",
         desc=(
             "Per-block connection initialization: lambdaU^i = DeltaGamma^i / "
@@ -631,6 +636,11 @@ def register_CFunctions_ADM_to_BSSN(
         subdirectory="generated/src/initial_data",
         params=lam_params,
         body=lam_body,
+        includes=[f"{solver_stem}_defines.h"],
+    )
+    roles.set_CFunction_role(
+        f"{solver_stem}_{INITIAL_DATA_LAMBDAU_BLOCK_SUFFIX}",
+        "initial_data_lambdaU_block",
     )
 
 
@@ -643,3 +653,61 @@ if __name__ == "__main__":
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
     print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    # Trusted baselines for the small emitted kernels: one file per shipped
+    # profile under tests/, captured from the registered CFunction as
+    # BHaH/main_c.py captures its own, with the <Name><Value> axis spelling
+    # BHaH/general_relativity/rhs_eval.py uses for its own sweep.  Cartesian is
+    # pinned because Dendro emits block-Cartesian kernels; the conformal factor
+    # is not, because the two applications ship different ones and a baseline
+    # has to be the text an application emits.  fd_order 4 is what both
+    # examples ship and CI builds, leaving the order axis to
+    # nrpy/finite_difference.py's own oracles and the generated padding
+    # self-test.  Only the small kernels are captured: coding_style.md excludes
+    # a right-hand side, Ricci or constraint kernel from golden-output files.
+    from nrpy.helpers.generic import clang_format, validate_strings
+    from nrpy.infrastructures.Dendro.general_relativity import trusted_capture
+
+    par.set_parval_from_str("Infrastructure", "Dendro")
+    par.set_parval_from_str("parallelization", "none")
+    par.set_parval_from_str("fp_type", "double")
+    par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    TRUSTED_FD_ORDER = 4
+    par.set_parval_from_str("fd_order", TRUSTED_FD_ORDER)
+
+    from nrpy.infrastructures.Dendro.general_relativity import (
+        rhs_eval as sweep_rhs_eval,
+    )
+
+    for sweep_fCCZ4, sweep_cf in trusted_capture.SHIPPED_PROFILES:
+        trusted_capture.reset_generation_state()
+        sweep_stem = "fccz4" if sweep_fCCZ4 else "bssn"
+        par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
+        # The right-hand-side registrar is what registers the evolved state
+        # these builders fill.
+        sweep_rhs_eval.register_CFunctions_rhs_eval(
+            enable_fCCZ4=sweep_fCCZ4,
+            fd_order=TRUSTED_FD_ORDER,
+            enable_KreissOliger_dissipation=False,
+            solver_stem=sweep_stem,
+        )
+        register_CFunctions_minkowski_initial_data(solver_stem=sweep_stem)
+        register_CFunctions_smooth_perturbation(solver_stem=sweep_stem)
+        register_CFunctions_ADM_to_BSSN(solver_stem=sweep_stem)
+        # One file per builder, labelled for the builder rather than for the
+        # role, so the file name does not repeat this module's own stem.
+        for builder_label, builder_role in (
+            ("minkowski", "minkowski_initial_data_block"),
+            ("smooth_perturbation", "smooth_perturbation_block"),
+            ("ADM_to_BSSN", "ADM_to_BSSN_block"),
+            ("lambdaU", "initial_data_lambdaU_block"),
+        ):
+            trusted_kernel = cfc.CFunction_dict[
+                roles.CFunction_name_for_role(builder_role)
+            ]
+            validate_strings(
+                clang_format(trusted_kernel.full_function),
+                f"{builder_label}_Cartesian_{sweep_cf}_fCCZ4{sweep_fCCZ4}"
+                f"_fdorder{TRUSTED_FD_ORDER}",
+                file_ext="cpp",
+            )

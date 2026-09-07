@@ -31,6 +31,7 @@ from typing import List
 
 import sympy as sp
 
+import nrpy.c_function as cfc
 import nrpy.grid as gri
 import nrpy.indexedexp as ixp
 import nrpy.params as par
@@ -41,25 +42,26 @@ from nrpy.equations.general_relativity.BSSN_algebraic_constraints import (
 )
 from nrpy.equations.general_relativity.BSSN_quantities import BSSN_quantities
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
-from nrpy.infrastructures.Dendro import Dendro_state_h, generation_parameters
+from nrpy.infrastructures.Dendro import block_kernel_helpers as bkh
+from nrpy.infrastructures.Dendro import generation_parameters
 from nrpy.infrastructures.Dendro import gridfunction_name_decorations as gf_names
-from nrpy.infrastructures.Dendro.block_loop import block_loop
+from nrpy.infrastructures.Dendro import state_h
 from nrpy.infrastructures.Dendro.simple_loop import (
+    block_loop,
     require_serial_parallelization,
-    simple_loop,
 )
 
 # CFunction name suffixes; the solver stem is threaded from the caller.
 ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX = (
     "enforce_detgbar_equals_detghat_trAzero_block"
 )
-ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_GLOBAL_SUFFIX = (
+ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX = (
     "enforce_detgbar_equals_detghat_trAzero"
 )
 
 # Generated status record: formulation-neutral (determinant, trace residual,
 # nonfinite counts, first failing field/index, rank-local failure), so
-# it belongs to the generated scalar contract emitted by Dendro_types_h rather
+# it belongs to the generated scalar contract emitted by types_h rather
 # than to a physics builder.  The namespace is threaded from the caller, as
 # every other emitted identifier is.
 STATUS_RECORD = "generated::detgtrazero_status_struct"
@@ -72,14 +74,14 @@ class DetgtrazeroBuild:
 
     :param block_body: The per-block CFunction body (bindings + point loop).
     :param block_params: The per-block CFunction parameter list.
-    :param global_body: The all-block CFunction body (NRPy block loop).
-    :param global_params: The all-block CFunction parameter list.
+    :param all_blocks_body: The all-block CFunction body (NRPy block loop).
+    :param all_blocks_params: The all-block CFunction parameter list.
     """
 
     block_body: str
     block_params: str
-    global_body: str
-    global_params: str
+    all_blocks_body: str
+    all_blocks_params: str
 
 
 def build_enforce_detgbar_equals_detghat_trAzero(
@@ -109,7 +111,6 @@ def build_enforce_detgbar_equals_detghat_trAzero(
     >>> import contextlib
     >>> import io
     >>> import nrpy.grid as gri
-    >>> from nrpy.helpers.generic import validate_strings
     >>> from nrpy.equations.general_relativity.fCCZ4_system import (
     ...     build_fccz4_expression_bundle,
     ... )
@@ -144,11 +145,8 @@ def build_enforce_detgbar_equals_detghat_trAzero(
     >>> "exit(" in _build.block_body
     False
 
-    The emitted kernel is compared against the trusted source stored beside
-    this module, so a change in the lowered text is caught here rather than by
-    a standalone harness.
-
-    >>> validate_strings(_build.global_body, "allblock", file_ext="cpp")
+    The emitted kernel itself is compared against the trusted baselines this
+    module's ``__main__`` sweep captures, one file per profile.
     """
     # Step 1: Require the qualified Dendro profile, and validate the registered
     # generation parameters before any expression is built.
@@ -159,7 +157,7 @@ def build_enforce_detgbar_equals_detghat_trAzero(
         )
     require_serial_parallelization()
     generation_parameters.validate_generation_parameters()
-    scalar_type = str(par.parval_from_str("Dendro_scalar_type"))
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     fp_type = str(par.parval_from_str("fp_type"))
     evol_order = roles.registered_evol_order()
 
@@ -211,11 +209,11 @@ def build_enforce_detgbar_equals_detghat_trAzero(
         fp_type_alias=scalar_type,
         verbose=False,
     )
-    accessed = {
-        str(sym)
-        for expr in [det_ratio_expr, trace_expr] + projected_exprs
-        for sym in expr.free_symbols
-    } & set(gri.glb_gridfcs_dict)
+    # Raw free symbols would miss a field read only through a derivative, so
+    # this goes through the canonical derivative-aware reader.
+    accessed = bkh.accessed_gridfunctions(
+        [det_ratio_expr, trace_expr] + projected_exprs
+    )
     read_names = tuple(name for name in evol_order if name in accessed)
 
     # Step 5: Assemble the point body top-to-bottom, matching the order the
@@ -265,7 +263,7 @@ status->max_abs_trace_residual = std::fmax(
 
     # Step 6: Bind exactly the fields the kernel reads, plus the twelve
     # write targets.  Binding an unread pointer would trip -Wunused-variable.
-    bindings = Dendro_state_h.output_component_bindings(
+    bindings = state_h.output_component_bindings(
         read_names,
         scalar_type,
         array="in_gfs",
@@ -274,7 +272,7 @@ status->max_abs_trace_residual = std::fmax(
         index_expression=lambda name, _position: str(evol_order.index(name)),
     )
     bindings += "\n"
-    bindings += Dendro_state_h.output_component_bindings(
+    bindings += state_h.output_component_bindings(
         projected_names,
         scalar_type,
         array="in_gfs",
@@ -287,32 +285,24 @@ status->max_abs_trace_residual = std::fmax(
     # loop.  Padding is zero: the enforcement is algebraic, so every cell of the
     # padded block is projected, ghost cells included.
     block_body = bindings + "\n"
-    block_body += simple_loop(
-        point_body,
-        nx="geom.nx",
-        ny="geom.ny",
-        nz="geom.nz",
-        padding="0",
-        pmin_padded="geom.pmin_padded",
-        dx="geom.dx",
-    )
+    block_body += bkh.point_loop(point_body, padding="0")
     block_params = (
         f"const BlockGeometry& geom, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
-    global_body = block_loop(
-        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}(world.geom[blk], in_gfs, status);",
-        num_blocks="world.num_blocks",
+    all_blocks_body = block_loop(
+        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}(mesh.geom[blk], in_gfs, status);",
+        num_blocks="mesh.num_blocks",
     )
-    global_params = (
-        f"const MockWorld& world, {scalar_type}* const* in_gfs, "
+    all_blocks_params = (
+        f"const StandaloneHostMesh& mesh, {scalar_type}* const* in_gfs, "
         f"{solver_namespace}::{STATUS_RECORD}* const status"
     )
     return DetgtrazeroBuild(
         block_body=block_body,
         block_params=block_params,
-        global_body=global_body,
-        global_params=global_params,
+        all_blocks_body=all_blocks_body,
+        all_blocks_params=all_blocks_params,
     )
 
 
@@ -339,21 +329,29 @@ def register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
     )
     global_desc = "Enforce det(gammabar) = det(gammahat) and tr(Abar) = 0 over all blocks (NRPy block loop)."
     subdirectory = "generated/src/enforce_detgbar_equals_detghat_trAzero"
-    roles.register_Dendro_CFunction(
-        role="enforce_detgbar_equals_detghat_trAzero_block",
+    cfc.register_CFunction(
         name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}",
         desc=block_desc,
         subdirectory=subdirectory,
         params=build.block_params,
         body=build.block_body,
+        includes=[f"{solver_stem}_defines.h"],
     )
-    roles.register_Dendro_CFunction(
-        role="enforce_detgbar_equals_detghat_trAzero",
-        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_GLOBAL_SUFFIX}",
+    roles.set_CFunction_role(
+        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_BLOCK_SUFFIX}",
+        "enforce_detgbar_equals_detghat_trAzero_block",
+    )
+    cfc.register_CFunction(
+        name=f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX}",
         desc=global_desc,
         subdirectory=subdirectory,
-        params=build.global_params,
-        body=build.global_body,
+        params=build.all_blocks_params,
+        body=build.all_blocks_body,
+        includes=[f"{solver_stem}_defines.h"],
+    )
+    roles.set_CFunction_role(
+        f"{solver_stem}_{ENFORCE_DETGBAR_EQUALS_DETGHAT_TRAZERO_ALL_BLOCKS_SUFFIX}",
+        "enforce_detgbar_equals_detghat_trAzero",
     )
 
 
@@ -366,3 +364,46 @@ if __name__ == "__main__":
         print(f"Doctest failed: {results.failed} of {results.attempted} test(s)")
         sys.exit(1)
     print(f"Doctest passed: All {results.attempted} test(s) passed")
+
+    # Trusted baseline for the emitted enforcement kernel, one file per shipped
+    # profile.  general_relativity/initial_data.py's sweep carries the full
+    # rationale for the capture object and the axes.
+    from nrpy.helpers.generic import clang_format, validate_strings
+    from nrpy.infrastructures.Dendro.general_relativity import trusted_capture
+
+    par.set_parval_from_str("Infrastructure", "Dendro")
+    par.set_parval_from_str("parallelization", "none")
+    par.set_parval_from_str("fp_type", "double")
+    par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
+    TRUSTED_FD_ORDER = 4
+    par.set_parval_from_str("fd_order", TRUSTED_FD_ORDER)
+
+    from nrpy.infrastructures.Dendro.general_relativity import (
+        rhs_eval as sweep_rhs_eval,
+    )
+
+    for sweep_fCCZ4, sweep_cf in trusted_capture.SHIPPED_PROFILES:
+        trusted_capture.reset_generation_state()
+        sweep_stem = "fccz4" if sweep_fCCZ4 else "bssn"
+        par.set_parval_from_str("EvolvedConformalFactor_cf", sweep_cf)
+        # The right-hand-side registrar is what registers the evolved state
+        # this enforcement rescales.
+        sweep_rhs_eval.register_CFunctions_rhs_eval(
+            enable_fCCZ4=sweep_fCCZ4,
+            fd_order=TRUSTED_FD_ORDER,
+            enable_KreissOliger_dissipation=False,
+            solver_stem=sweep_stem,
+        )
+        register_CFunctions_enforce_detgbar_equals_detghat_trAzero(
+            solver_stem=sweep_stem, solver_namespace=sweep_stem
+        )
+        trusted_kernel = cfc.CFunction_dict[
+            roles.CFunction_name_for_role(
+                "enforce_detgbar_equals_detghat_trAzero_block"
+            )
+        ]
+        validate_strings(
+            clang_format(trusted_kernel.full_function),
+            f"Cartesian_{sweep_cf}_fCCZ4{sweep_fCCZ4}" f"_fdorder{TRUSTED_FD_ORDER}",
+            file_ext="cpp",
+        )

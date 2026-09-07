@@ -1,11 +1,13 @@
 # nrpy/infrastructures/Dendro/generation_parameters.py
 """
-Dendro target generation parameters.
+Validation of the Dendro generation choices.
 
-These are ordinary NRPy parameters registered through ``par.register_param``.
-They hold the *non-scientific* generation choices for lowering a registered NRPy
-environment into a Dendro-GR module.  No parallel configuration object is kept:
-the values live only in the NRPy parameter registry and are read back from it.
+Dendro registers no NRPy parameters of its own.  The scalar alias is the core
+constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, hardcoded as the three sibling
+gridfunction classes hardcode theirs, and Kreiss-Oliger dissipation is a
+per-call builder argument as it is in BHaH and ETLegacy.  What remains is the
+qualified-value check on the core parameters a Dendro profile depends on, so an
+unqualified configuration fails generation instead of being emitted.
 
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
@@ -14,24 +16,6 @@ Author: Zachariah B. Etienne
 from typing import Dict, Tuple
 
 import nrpy.params as par
-
-# Register the Dendro target generation choices.  register_param() is
-# idempotent, so importing this module (or calling register again) is safe.
-par.register_param(
-    str,
-    __name__,
-    "Dendro_scalar_type",
-    "DendroScalar",
-    description="C/C++ scalar type alias used for all generated numerical code.",
-)
-par.register_param(
-    bool,
-    __name__,
-    "Dendro_enable_KreissOliger_dissipation",
-    True,
-    description="Enable NRPy-owned Kreiss-Oliger dissipation in the canonical backend.",
-)
-
 
 _ALLOWED_VALUES: Dict[str, Tuple[object, ...]] = {
     # The registered `f_infinity` of `cf` is 1 regardless of the selected
@@ -46,40 +30,34 @@ def validate_generation_parameters() -> None:
     """
     Validate the Dendro generation parameters against allowed values.
 
-    Every registered Dendro generation parameter is validated here.  Only the
-    qualified profiles are accepted; anything else fails generation
-    instead of silently producing an unqualified configuration.
+    Only the qualified profiles are accepted; anything else fails generation
+    instead of silently producing an unqualified configuration.  The scalar
+    alias is not validated here because it is no longer a parameter: it is the
+    constant :data:`nrpy.grid.DENDRO_SCALAR_TYPE`, hardcoded exactly as the
+    three sibling gridfunction classes hardcode theirs.
 
     :raises ValueError: If any parameter holds a disallowed value.
 
     Doctests:
-    >>> par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
+    >>> import nrpy.equations.general_relativity.BSSN_quantities  # noqa: F401
+    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     >>> validate_generation_parameters()
-    >>> par.set_parval_from_str("Dendro_scalar_type", "not an identifier")
+    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "phi")
     >>> try:
     ...     validate_generation_parameters()
     ... except ValueError as error:
     ...     print(error)
-    Invalid Dendro_scalar_type: 'not an identifier'.
-    >>> par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
+    Unsupported EvolvedConformalFactor_cf 'phi'; qualified values: chi, W.
+    >>> par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     """
-    scalar_type = par.parval_from_str("Dendro_scalar_type")
-    if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
-        raise ValueError(f"Invalid Dendro_scalar_type: {scalar_type!r}.")
     for name, allowed in _ALLOWED_VALUES.items():
-        # Shared NRPy parameters (e.g. EvolvedConformalFactor_cf) are
-        # registered by the equation modules, so a profile that builds no
-        # equations simply has nothing to validate for them.
-        if name not in par.glb_params_dict:
-            continue
         value = par.parval_from_str(name)
         if value not in allowed:
-            raise ValueError(f"Unsupported {name}={value!r}; allowed: {list(allowed)}.")
-    enable_ko = par.parval_from_str("Dendro_enable_KreissOliger_dissipation")
-    if not isinstance(enable_ko, bool):
-        raise ValueError(
-            f"Invalid Dendro_enable_KreissOliger_dissipation: {enable_ko!r}; expected bool."
-        )
+            raise ValueError(
+                f"Unsupported {name} {value!r}; qualified values: "
+                + ", ".join(str(item) for item in allowed)
+                + "."
+            )
 
 
 if __name__ == "__main__":

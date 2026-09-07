@@ -24,6 +24,13 @@
 4. A kernel is a registered `CFunction` plus non-authoritative Dendro
    role metadata; no second body registry exists.
 
+5. Emitted headers carry traditional `#ifndef`/`#define` header guards, as
+   `coding_style.md` section 4 requires and as NRPy's other infrastructures
+   emit. The macro is derived from the file name of each generated header,
+   which already carries the solver stem, so two generated solvers in one
+   Dendro-GR checkout cannot collide. Dendro-GR's own headers use both forms, so nothing about the host
+   argued for `#pragma once`.
+
 ## Consequences
 
 - Generated machine identities preserve registered names byte-for-byte
@@ -38,9 +45,12 @@
 
 - The `BlockGeometry` adapter proof: the single auditable host function
   normalizing `pmin_padded`/`component_offset`, plus two-block and offset
-  sentinel tests, awaits the Dendrolib pin and capability proof recorded in
-  `dendrolib_pin.json` and `dendrolib_capabilities.json`. Only the
-  `dendro_mock.h` struct exists. This ADR records the deferral; adapter
-  signatures stay frozen until the pin lands.
-- The checkpoint ABI and physical boundaries are separate qualified
-  profiles, gated on the same pin.
+  sentinel tests. The Dendrolib commit and the capability proof it waited on have
+  landed: the generated project's `CMakeLists.txt` records that commit and
+  compares it against the tag a real-host build configures, and the proof is
+  recorded on the Dendro validation page. What remains deferred is a build
+  against a real Dendro-GR checkout. Only the
+  `standalone_host/dendro_standalone_host.h` struct exists so far, and the
+  adapter signatures stay frozen until that build runs.
+- The checkpoint ABI and physical boundaries are separate qualified profiles,
+  gated on that same real-host build.

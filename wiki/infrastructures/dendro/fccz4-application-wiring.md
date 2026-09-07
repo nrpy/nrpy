@@ -128,5 +128,5 @@ the lowering. For the equations themselves see
 - Depends on: [Fully Covariant Conformal Z4](../../equations/general-relativity/fccz4.md)
 - Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [GR Application Wiring](../bhah/gr-application-wiring.md)
-- Validated by: [Validation, Host Mock, And Deferral Gates](validation-host-mock-and-deferral-gates.md)
+- Validated by: [Validation, Standalone Host, And Deferral Gates](validation-standalone-host-and-deferral-gates.md)
 - See also: [C Codegen](../../core/c-codegen.md)

@@ -1,6 +1,6 @@
 # Generated Project CI
 
-> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 09-05-2026
+> CI coverage for generated projects, external backend validation, and waveform consistency checks. · Status: confirmed · Last reconciled: 09-06-2026
 > Up: [Validation](index.md)
 
 ## Summary
@@ -18,8 +18,8 @@ Configured GitHub job map:
 | Job | Matrix/environment | Generate/build scope | Run/result-check scope |
 | --- | --- | --- | --- |
 | `static-analysis` | Ubuntu 22.04/24.04 and selected Python 3.7.13, 3.8.12, 3.9.19, `3.x` cells | No generated project coverage | Python file execution plus version-dependent static checks; see [Static Analysis](static-analysis.md) |
-| `codegen-ubuntu` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Installs NRPy, generates in `tmp/`, and builds 21 default C/library projects: standalone elliptic; three wave projects; collision, spectroscopy, and spinning BH; PN momenta; all nine SEOBNRv5 approximant/calibration variants; TOVola; hydro-without-hydro; BHaHAHA; `sebobv2`. It generates `sebobv1_jax` without package install/build. | No generated executable, test, or numerical result is run; `make clean` follows each C/library build. MANGA commands are commented out. |
-| `codegen-mac` | macOS 14/26 with Python 3.9, 3.10, 3.11, `3.x` | Same 21 default C/library builds and JAX generation as Ubuntu; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
+| `codegen-ubuntu` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Installs NRPy, generates in `tmp/`, and builds 21 default C/library projects with `make`: standalone elliptic; three wave projects; collision, spectroscopy, and spinning BH; PN momenta; all nine SEOBNRv5 approximant/calibration variants; TOVola; hydro-without-hydro; BHaHAHA; `sebobv2`. It generates `sebobv1_jax` without package install/build, and generates and CMake-builds the two Dendro projects. | The 21 `make` builds run nothing, and `make clean` follows each; the two Dendro projects run `ctest --test-dir build --output-on-failure`, eleven cases each, then `cmake --build build --target clean`. MANGA commands are commented out. |
+| `codegen-mac` | macOS 14/26 with Python 3.9, 3.10, 3.11, `3.x` | Same 21 default C/library builds and JAX generation as Ubuntu; no Dendro generation or build, because those runners carry no MPI toolchain; GSL installed with Homebrew | No generated executable, test, or numerical result is run. |
 | `einsteintoolkit-validation` | Ubuntu 24.04, Apptainer 1.3.2, ET 2024-06 beta image | Generates only `carpet_wavetoy_thorns.py` and `carpet_baikal_thorns.py`, links ETLegacy thorns/fixtures into ET, then builds ET | Runs `Baikal`, `BaikalVacuum`, and `WaveToyNRPy` Cactus testsuites and fails on nonzero reported failures. No `carpetx_*` generation/build/run. |
 | `charmpp-validation` | Ubuntu 24.04, Apptainer image, paths pinned to Charm++ 8.0.0 | Generates and builds `superB_nrpyelliptic_conformally_flat`, `superB_blackhole_spectroscopy`, and `superB_two_blackholes_collide` with `make -j2` | Runs only `./charmrun +p2 ./superB_two_blackholes_collide`; no explicit scientific-output assertion beyond process success. |
 | `sebob-consistency-test` | Ubuntu 22.04/24.04; three matrix cells after one exclusion | Checks out trusted commit `785467615d63669a98fe85c6686c2388a324139e`; generates/builds trusted and current copies of all nine SEOBNRv5 variants | Runs nine helper invocations. Each rebuilds both executables, runs ten deterministic inputs, and requires median current/trusted amplitude-plus-phase error not exceed its perturbation-derived baseline. |
@@ -67,17 +67,32 @@ cell is an ordinary C build. The helper installs no CUDA toolkit, declares no
 GPU runner, runs no generated executable, and checks no GPU result. Treat it as
 a local command recipe requiring a prepared environment, not CI pass evidence.
 
-The Dendro infrastructure has no configured job here. Its symbolic and
-emitted-source contracts run as owner doctests in `static-analysis`, and its
-generated self-tests and Minkowski lifecycle are run by hand against a mock
-host. A job building against that mock would establish only that the emitted
-C++ compiles, so real coverage waits on a container image with Dendro
-precompiled; see
-[Validation, Host Mock, And Deferral Gates](../infrastructures/dendro/validation-host-mock-and-deferral-gates.md).
+The Dendro infrastructure is exercised by `codegen-ubuntu`, which runs
+`python -m nrpy.examples.dendro_fccz4` and `dendro_bssn`, configures and builds
+each generated project with CMake, and runs its `ctest` suite; the job installs
+`libopenmpi-dev`, which is what the generated `CMakeLists.txt`'s
+`find_package(MPI REQUIRED COMPONENTS CXX)` needs, and `openmpi-bin`, which
+supplies the `orted` that the registered lifecycle case's singleton
+`MPI_Init` starts and the `mpirun` a by-hand multi-rank run needs. The macOS
+job does not carry the pair, because its runners have no MPI toolchain. Its
+symbolic and emitted-source contracts run as owner doctests in
+`static-analysis`. The
+generated project registers eleven CTest cases -- ten self-tests and the
+Minkowski lifecycle, whose gates exit nonzero on failure -- so that job runs all
+eleven against the NRPy-supplied standalone host. That establishes that the
+emitted C++ compiles and that its own gates pass; coverage against a real
+Dendro-GR host still waits on a container image with Dendro precompiled; see
+[Validation, Standalone Host, And Deferral Gates](../infrastructures/dendro/validation-standalone-host-and-deferral-gates.md).
+
+Claim evidence:
+- Claim: `codegen-ubuntu` generates both Dendro projects, configures and builds each with CMake, and runs its `ctest` suite, which is eleven cases: the ten generated self-tests and the Minkowski lifecycle. The configured job proves that shape, not any particular run's outcome, and nothing in it touches a real Dendro-GR host.
+- Role: CI behavior
+- Deciding authority: [main.yml](../../.github/workflows/main.yml), `codegen-ubuntu`, for what the job runs; [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py), `output_solver_cmake` and `output_tests_cmake`, for which cases exist
+- Corroboration: [main_cpp.py](../../nrpy/infrastructures/Dendro/main_cpp.py), `output_main_cpp`, whose gates the lifecycle case exercises
 
 Explicitly unsupported or unverified by these configurations: CarpetX build or
 runtime; JAX generated-package install/import/basic test or accelerator runtime;
-any CUDA executable/GPU result; standalone evolution runtime; restart behavior;
+any CUDA executable/GPU result; standalone BHaH-project evolution runtime, since the 21 `make` builds run nothing; restart behavior;
 geodesic/raytracing projects; GRoovy; active MANGA build; Kasner; and scientific
 correctness beyond stated ET regression and waveform-comparison assertions.
 
@@ -89,6 +104,7 @@ generated file has been deliberately registered as frozen evidence.
 
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-ubuntu`; [.github/full_nrpy_local_ci.sh](../../.github/full_nrpy_local_ci.sh) - `example_scripts`, `cuda_example_scripts`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `codegen-mac`
+- [cmake_helpers.py](../../nrpy/infrastructures/Dendro/cmake_helpers.py) - `output_solver_cmake`, `output_tests_cmake`, their `add_test` registrations
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `einsteintoolkit-validation`; official Einstein Toolkit [Adding a test case](https://docs.einsteintoolkit.org/et-docs/Adding_a_test_case) - `A test case is...`
 - [test.ccl](../../nrpy/examples/et_WaveToyfiles/test/test.ccl) - `TEST WaveToyNRPy_test`, `RELTOL 1e-11`
 - [../../.github/workflows/main.yml](../../.github/workflows/main.yml) - `charmpp-validation`; official Charm++ [Quickstart](https://charm.readthedocs.io/en/v8.0.0/quickstart.html) - `Compiling the Example`, `Running the Example`

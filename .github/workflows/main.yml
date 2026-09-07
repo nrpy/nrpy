@@ -318,7 +318,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [[ "${{ matrix.python-version }}" != "3.7.13" ]]; then pip install -U mypy==1.8.0 black==24.1.1; fi
                pip install -U pylint clang-format ipython setuptools
-               sudo apt-get update && sudo apt-get -y install libgsl-dev
+               sudo apt-get update && sudo apt-get -y install libgsl-dev libopenmpi-dev openmpi-bin
 
       #    - name: Setup tmate session
       #      uses: mxschmitt/action-tmate@v3
@@ -352,6 +352,8 @@ jobs:
           # python -m nrpy.examples.manga_bhah_lib && (cd project/bhah_lib && make && make clean) &&
           python -m nrpy.examples.bhahaha && (cd project/BHaHAHA && make && make clean) &&
           python -m nrpy.examples.sebobv2 && (cd project/sebobv2 && make && make clean) &&
+          python -m nrpy.examples.dendro_fccz4 && (cd project/dendro_fccz4/Dendro-GR/FCCZ4_GR && cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure && cmake --build build --target clean) &&
+          python -m nrpy.examples.dendro_bssn  && (cd project/dendro_bssn/Dendro-GR/BSSN_GR   && cmake -B build && cmake --build build && ctest --test-dir build --output-on-failure && cmake --build build --target clean) &&
           python -m nrpy.examples.sebobv1_jax
 
   codegen-mac:

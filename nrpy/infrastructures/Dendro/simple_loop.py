@@ -7,10 +7,20 @@ interior.  It emits the interior base index ``pp``, which
 :meth:`gri.DendroGridFunction.read_gf_from_memory_Ccode_onept` uses for all
 one-point reads, and the interior coordinates ``xx0``, ``xx1``, ``xx2``.
 
+Deliberate divergence from the established ``simple_loop`` signature: BHaH and
+ETLegacy take ``loop_region``, ``enable_OpenMP``, ``OMP_custom_pragma`` and
+``OMP_collapse``.  This form takes none of them and takes the block extents,
+padding, padded origin and spacing instead, because a Dendro point loop runs
+inside Dendro's own block traversal over one padded block: the interior is the
+only region a generated kernel writes, and an inner OpenMP pragma would nest
+parallelism, which ``require_serial_parallelization`` refuses rather than
+silently dropping.
+
 Author: Zachariah B. Etienne
         zachetie **at** gmail **dot* com
 """
 
+import nrpy.grid as gri
 import nrpy.helpers.loop as lp
 import nrpy.params as par
 
@@ -61,13 +71,10 @@ def simple_loop(
         zero, an array of three.
     :param dx: C expression for the spacing, an array of three.
     :return: The generated nested-loop C code string.
-    :raises ValueError: If ``parallelization`` is not ``"none"``, or if the
-        registered Dendro scalar alias is missing or not a C identifier.
 
     Doctests:
     >>> import nrpy.params as par
     >>> par.set_parval_from_str("parallelization", "none")
-    >>> import nrpy.infrastructures.Dendro.generation_parameters  # noqa: F401
     >>> print(simple_loop("f(xx0, xx1, xx2, invdxx1, invdxx2)", nx="NX", ny="NY", nz="NZ"))  # doctest: +ELLIPSIS
     const std::ptrdiff_t nx = ...
     ...
@@ -76,19 +83,10 @@ def simple_loop(
     } // END LOOP: for i2 over ...
     <BLANKLINE>
     """
-    parallelization = par.parval_from_str("parallelization")
-    if parallelization != "none":
-        raise ValueError(
-            "Unsupported Dendro CPU parallelization: "
-            f"{parallelization!r} (expected 'none'; the point kernel runs "
-            "inside Dendro's own block traversal, so an inner OpenMP pragma "
-            "would nest parallelism)."
-        )
-    # Both scalar spellings come from registered NRPy parameters, read from
-    # the live registry at the point of use.
-    scalar_type = par.parval_from_str("Dendro_scalar_type")
-    if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
-        raise ValueError(f"Invalid Dendro scalar type: {scalar_type!r}")
+    require_serial_parallelization()
+    # One spelling of the scalar alias, the core constant every Dendro emitter
+    # reads.
+    scalar_type = gri.DENDRO_SCALAR_TYPE
     # Hoisted loop invariants: block extents, strides, padding,
     # and spacing inverses are computed once per block, not per point.
     # Bounds use these locals; `nxy` is maybe-unused when a kernel only
@@ -126,6 +124,33 @@ def simple_loop(
             increment=["1", "1", "1"],
             pragma=["", "", ""],
             loop_body=point_body,
+        )
+    )
+
+
+def block_loop(loop_body: str, num_blocks: str = "numBlocks") -> str:
+    """
+    Emit a Dendro numerical block loop around a loop body.
+
+    :param loop_body: C code executed once per block; has access to ``blk``.
+    :param num_blocks: C expression for the number of local blocks.
+    :return: The generated loop C code string.
+
+    Doctests:
+    >>> print(block_loop("rhs_block(blk);", num_blocks="NBLK"))
+    for (int blk = 0; blk < static_cast<std::ptrdiff_t>(NBLK); blk++) {
+    rhs_block(blk);
+    } // END LOOP: for blk over [0, static_cast<std::ptrdiff_t>(NBLK))
+    <BLANKLINE>
+    """
+    return str(
+        lp.loop(
+            idx_var="blk",
+            lower_bound="0",
+            upper_bound=f"static_cast<std::ptrdiff_t>({num_blocks})",
+            increment="1",
+            pragma="",
+            loop_body=loop_body,
         )
     )
 

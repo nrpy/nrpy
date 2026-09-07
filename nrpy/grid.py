@@ -863,6 +863,13 @@ class CarpetXGridFunction(GridFunction):
         return access_str
 
 
+# The C++ alias every generated Dendro artifact spells for its floating-point
+# scalar.  Hardcoded here exactly as BHaHGridFunction hardcodes "REAL" and
+# ETLegacyGridFunction "CCTK_REAL"; the Dendro types emitter emits the matching
+# `using DendroScalar = double;`.
+DENDRO_SCALAR_TYPE = "DendroScalar"
+
+
 class DendroGridFunction(GridFunction):
     """
     The subclass for Dendro grid functions.
@@ -893,21 +900,13 @@ class DendroGridFunction(GridFunction):
         is_basename: bool = True,
         gf_array_name: Optional[str] = None,
     ) -> None:
-        try:
-            scalar_type = par.parval_from_str("Dendro_scalar_type")
-        except ValueError as exc:
-            raise ValueError(
-                "Invalid Dendro scalar type: 'Dendro_scalar_type' is not registered."
-            ) from exc
-        if not isinstance(scalar_type, str) or not scalar_type.isidentifier():
-            raise ValueError(f"Invalid Dendro scalar type: {scalar_type!r}")
         super().__init__(
             name=name,
             group=group,
             desc=desc,
             rank=rank,
             dimension=dimension,
-            gf_type=scalar_type,
+            gf_type=DENDRO_SCALAR_TYPE,
             f_infinity=f_infinity,
             wavespeed=wavespeed,
             is_basename=is_basename,
@@ -967,7 +966,6 @@ class DendroGridFunction(GridFunction):
         Doctests:
         >>> glb_gridfcs_dict.clear()
         >>> par.set_parval_from_str("Infrastructure", "Dendro")
-        >>> import nrpy.infrastructures.Dendro.generation_parameters  # noqa: F401
         >>> abc = register_gridfunctions("abc")
         >>> glb_gridfcs_dict["abc"].read_gf_from_memory_Ccode_onept(1, 2, 3)
         'in_abc[pp + 1 + 2 * nx + 3 * nxy]'
@@ -981,13 +979,58 @@ class DendroGridFunction(GridFunction):
         """
         if kwargs.get("enable_simd", False):
             raise ValueError("Dendro SIMD access is not qualified in the CPU MVP.")
+        return self.access_gf(self.name, i0_offset, i1_offset, i2_offset)
+
+    @staticmethod
+    def input_pointer(gf_name: str) -> str:
+        """
+        Return the Dendro input-role pointer name for a gridfunction.
+
+        This class owns the ``in_`` spelling: the Dendro infrastructure's
+        decoration helpers call here rather than formatting it themselves, so
+        the emitted pointer name has one source.
+
+        :param gf_name: Exact registered NRPy gridfunction name.
+        :return: ``in_<gf_name>``.
+
+        Doctests:
+        >>> DendroGridFunction.input_pointer("cf")
+        'in_cf'
+        """
+        return f"in_{gf_name}"
+
+    @staticmethod
+    def access_gf(
+        gf_name: str,
+        i0_offset: int = 0,
+        i1_offset: int = 0,
+        i2_offset: int = 0,
+    ) -> str:
+        """
+        Retrieve a Dendro gridfunction value from memory for a given offset.
+
+        Dendro binds one pointer per gridfunction, so the array name follows
+        from the gridfunction name and there is no array selector to pass.
+
+        :param gf_name: The gridfunction name.
+        :param i0_offset: Offset in the fastest (x) direction.
+        :param i1_offset: Offset in the middle (y) direction.
+        :param i2_offset: Offset in the slowest (z) direction.
+        :return: Formatted string.
+
+        Doctests:
+        >>> DendroGridFunction.access_gf("abc", 1, 2, 3)
+        'in_abc[pp + 1 + 2 * nx + 3 * nxy]'
+        >>> DendroGridFunction.access_gf("abc", 0, -1, 0)
+        'in_abc[pp - nx]'
+        """
         index = (
             "pp"
-            + self._term(i0_offset, "1")
-            + self._term(i1_offset, "nx")
-            + self._term(i2_offset, "nxy")
+            + DendroGridFunction._term(i0_offset, "1")
+            + DendroGridFunction._term(i1_offset, "nx")
+            + DendroGridFunction._term(i2_offset, "nxy")
         )
-        return f"in_{self.name}[{index}]"
+        return f"{DendroGridFunction.input_pointer(gf_name)}[{index}]"
 
 
 # Type alias for grid function objects.

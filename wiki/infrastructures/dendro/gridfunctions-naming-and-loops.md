@@ -53,11 +53,14 @@ only.
 ### The role sidecar
 
 A Dendro kernel is an ordinary NRPy CFunction plus one word: its scheduling
-role. `register_Dendro_CFunction` registers the CFunction through
+role. `set_CFunction_role` registers the CFunction through
 `cfc.register_CFunction` and records the role in
 `par.glb_extras_dict["Dendro"]["CFunction_roles"]`;
-`CFunction_name_for_role` reads it back, which is how the host-adapter emitters
-ask for "the all-block RHS entry point" without taking a dozen name arguments.
+`set_CFunction_codeparameters` records the CodeParameters a kernel took, and
+`CFunction_name_for_role`, `CFunction_codeparameters` and
+`registered_aux_order` read the sidecar back. That is how the host-adapter
+emitters ask for "the all-block RHS entry point" without taking a dozen name
+arguments.
 The sidecar holds no body, signature, parameter default, field declaration, or
 source path, because the CFunction registry is the only body and signature
 store. Duplicate names are rejected by `cfc.register_CFunction` itself.
@@ -74,9 +77,9 @@ well-formed kernel with an empty body, which is the one failure a generated
 solver cannot report.
 
 Claim evidence:
-- Claim: the Dendro role sidecar stores exactly one scheduling role string per registered CFunction name and no other metadata, and duplicate registration is rejected by `nrpy.c_function.register_CFunction` rather than by the sidecar.
+- Claim: the Dendro role sidecar stores one scheduling role string per registered CFunction name and, since the signature re-parser was deleted, the CodeParameter names each signature forwards, and duplicate registration is rejected by `nrpy.c_function.register_CFunction` rather than by the sidecar.
 - Role: descriptive behavior
-- Deciding authority: `nrpy/infrastructures/Dendro/CFunction_roles.py`, `register_Dendro_CFunction` and its doctest
+- Deciding authority: `nrpy/infrastructures/Dendro/CFunction_roles.py`, `set_CFunction_role` and its doctest
 - Corroboration: `nrpy/c_function.py`, `register_CFunction` duplicate-name `ValueError`
 
 ### Loops
@@ -94,10 +97,11 @@ inner OpenMP pragma would nest parallelism.
 
 ### Generation parameters
 
-The non-scientific lowering choices are ordinary NRPy parameters registered
-through `par.register_param`: the scalar alias and the Kreiss-Oliger switch.
-There is no parallel configuration object; the values
-live in the parameter registry and every builder reads them from there.
+Dendro registers no NRPy parameters of its own. The scalar alias is the core
+constant `nrpy.grid.DENDRO_SCALAR_TYPE`, which every emitter reads at the point
+of use, as the three sibling gridfunction classes hardcode theirs; Kreiss-Oliger
+dissipation is a per-call builder argument, as it is in BHaH and ETLegacy. There
+is no parallel configuration object.
 `validate_generation_parameters` rejects an unsupported combination before
 anything is lowered, so an unqualified profile fails generation instead of
 producing silently wrong output. The runtime parameter default, validation, and
@@ -106,11 +110,10 @@ every CodeParameter they use into the registry.
 
 ## Sources
 
-- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `read_gf_from_memory_Ccode_onept`
+- [grid.py](../../../nrpy/grid.py) - `DendroGridFunction`, `input_pointer`, `access_gf`, `read_gf_from_memory_Ccode_onept`
 - [gridfunction_name_decorations.py](../../../nrpy/infrastructures/Dendro/gridfunction_name_decorations.py) - `input_pointer`, `rhs_pointer`, `out_pointer`, `enum_member`, `rhs_symbol_to_gridfunction_name`, `validate_cpp_identifier`, `tensor_family_of`
-- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `register_Dendro_CFunction`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
-- [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `require_serial_parallelization`
-- [block_loop.py](../../../nrpy/infrastructures/Dendro/block_loop.py) - `block_loop`
+- [CFunction_roles.py](../../../nrpy/infrastructures/Dendro/CFunction_roles.py) - `set_CFunction_role`, `CFunction_name_for_role`, `registered_evol_order`, `set_required_padding`, `set_upwind_control_fields`
+- [simple_loop.py](../../../nrpy/infrastructures/Dendro/simple_loop.py) - `simple_loop`, `block_loop`, `require_serial_parallelization`
 - [generation_parameters.py](../../../nrpy/infrastructures/Dendro/generation_parameters.py) - `validate_generation_parameters`
 - [CodeParameters.py](../../../nrpy/infrastructures/Dendro/CodeParameters.py) - `register_CFunctions_parameters`
 - [ADR_dendro_names.md](../../../nrpy/infrastructures/Dendro/ADR_dendro_names.md) - `Decision`, `Consequences`

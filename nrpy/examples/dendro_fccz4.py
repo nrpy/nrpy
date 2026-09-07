@@ -12,18 +12,32 @@ Author: Zachariah B. Etienne
 
 import argparse
 import os
+from pathlib import Path
+from typing import Dict
 
 import nrpy.grid as gri
 import nrpy.params as par
+from nrpy.helpers.conditional_file_updater import ConditionalFileUpdater
+from nrpy.helpers.generic import copy_files
 from nrpy.infrastructures.Dendro import CFunction_roles as roles
-from nrpy.infrastructures.Dendro import CodeParameters
+from nrpy.infrastructures.Dendro import (
+    CodeParameters,
+    Dendro_include_header,
+    cmake_helpers,
+    cmdline_input_and_parfiles,
+    constants_h,
+    main_cpp,
+    self_tests_cpp,
+    solver_context,
+    state_h,
+    types_h,
+)
 from nrpy.infrastructures.Dendro.general_relativity import (
     constraints_eval,
     enforce_detgbar_equals_detghat_trAzero,
     initial_data,
     rhs_eval,
 )
-from nrpy.infrastructures.Dendro.output_project import output_project
 
 # Dendro names a solver directory for its formulation (its own is BSSN_GR) and
 # namespaces the solver by the lowercase formulation (namespace bssn), so this
@@ -54,15 +68,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--project-dir", default=os.path.join("project", "dendro_fccz4")
     )
-    # fd_order 8 reaches five ghost points, above the max_proven_padding of 4
-    # recorded in dendrolib_capabilities.json, so it is not offered here.
+    # fd_order 8 reaches five ghost points.  Padding 5 is proven on the
+    # pinned Dendrolib at element order 10, so the limit is this
+    # generator's qualified set rather than the host.
     parser.add_argument(
         "--fd-order",
         type=int,
         choices=(2, 4, 6),
         default=4,
-        help="finite-difference order; 8 is capability-gated by "
-        "dendrolib_capabilities.json (max_proven_padding 4)",
+        help="finite-difference order; 8 is not in this generator's "
+        "qualified set, though the pinned host proves padding 5",
     )
     # argparse.BooleanOptionalAction needs Python 3.9; the supported floor is
     # 3.7, so the two flags are declared explicitly.
@@ -90,8 +105,6 @@ def main() -> None:
     par.set_parval_from_str("fd_order", args.fd_order)
     par.set_parval_from_str("EvolvedConformalFactor_cf", "chi")
     par.set_parval_from_str("detgbarOverdetghat_equals_one", True)
-    par.set_parval_from_str("Dendro_scalar_type", "DendroScalar")
-    par.set_parval_from_str("Dendro_enable_KreissOliger_dissipation", args.ko)
 
     #########################################################
     # Step 2: Register the generated C functions.  The right-hand side goes
@@ -99,6 +112,8 @@ def main() -> None:
     #         CodeParameters through the shared fCCZ4 expression bundle, and
     #         records the ghost points the emitted operators reach.
     rhs_eval.register_CFunctions_rhs_eval(
+        solver_stem=solver_stem,
+        enable_fCCZ4=True,
         fd_order=args.fd_order,
         enable_KreissOliger_dissipation=args.ko,
         CoordSystem=CoordSystem,
@@ -128,9 +143,12 @@ def main() -> None:
     # registered as DIAG gridfunctions: they are recomputed from the evolved
     # state and are never checkpoint state.
     constraints_eval.register_CFunctions_constraints_eval(
+        solver_stem=solver_stem,
+        enable_fCCZ4=True,
         CoordSystem=CoordSystem,
         LapseEvolutionOption=LapseEvolutionOption,
         ShiftEvolutionOption=ShiftEvolutionOption,
+        enable_KreissOliger_dissipation=args.ko,
     )
 
     # The parameter C functions come last, after every CodeParameter the
@@ -138,16 +156,77 @@ def main() -> None:
     CodeParameters.register_CFunctions_parameters(solver_namespace, solver_stem)
 
     #########################################################
-    # Step 3: Write the project to project_dir.
-    output_project(
-        project_dir=args.project_dir,
-        solver_name=solver_name,
-        solver_prefix=solver_prefix,
-        solver_stem=solver_stem,
-        solver_namespace=solver_namespace,
-        exec_or_library_name=exec_or_library_name,
-        profile_name=profile_name,
-        generator_module="nrpy.examples.dendro_fccz4",
+    # Step 3: Assemble and write the project.  The assembly lives here, in the
+    # example, exactly as it does for BHaH, ETLegacy, CarpetX and superB: an
+    # example reads top to bottom as the complete recipe for one solver.
+    layout = cmake_helpers.module_layout(solver_name)
+    required_padding = roles.required_padding()
+    artifacts: Dict[str, str] = {
+        layout.generated_include
+        + f"{solver_stem}_types.h": types_h.output_types_h(
+            solver_stem, solver_namespace
+        ),
+        layout.generated_include
+        + f"{solver_stem}_constants.h": constants_h.output_constants_h(
+            solver_stem, solver_namespace, required_padding, args.ko
+        ),
+        layout.generated_include
+        + f"{solver_stem}_state.h": state_h.output_state_h(
+            solver_stem, solver_namespace
+        ),
+        layout.generated_include
+        + f"{solver_stem}_parameters.h": CodeParameters.output_parameters_h(
+            solver_stem, solver_namespace
+        ),
+        layout.generated_include
+        + f"{solver_stem}_defines.h": Dendro_include_header.output_include_header(
+            solver_stem, solver_prefix
+        ),
+        layout.include
+        + f"{solver_stem}Ctx.h": solver_context.output_solver_context_h(
+            solver_stem, solver_namespace
+        ),
+        layout.src
+        + f"{solver_stem}Ctx.cpp": solver_context.output_solver_context_cpp(
+            solver_stem, solver_namespace
+        ),
+        layout.src
+        + f"{solver_stem}_main.cpp": main_cpp.output_main_cpp(
+            solver_stem, solver_namespace, exec_or_library_name
+        ),
+        layout.pars
+        + f"{solver_stem}_minkowski.par": cmdline_input_and_parfiles.generate_default_parfile(
+            solver_stem, profile_name, required_padding, args.ko
+        ),
+        layout.tests
+        + f"{solver_stem}_self_tests.cpp": self_tests_cpp.output_self_tests_cpp(
+            solver_stem, solver_namespace
+        ),
+    }
+    artifacts.update(
+        cmake_helpers.output_CFunctions_function_prototypes_and_construct_CMakeLists(
+            solver_name, solver_stem, solver_prefix, exec_or_library_name
+        )
+    )
+    for relative_path, text in sorted(artifacts.items()):
+        target = Path(args.project_dir) / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        # C and C++ artifacts are clang-formatted, as every other NRPy
+        # infrastructure formats what it emits; CMake and TOML are left as
+        # written.
+        with ConditionalFileUpdater(
+            target,
+            encoding="utf-8",
+            do_format=target.suffix in (".h", ".hpp", ".c", ".cpp", ".cu"),
+        ) as file:
+            file.write(text)
+    # The standalone-host header is a fixed source asset of this package, copied
+    # verbatim exactly as BHaH copies simd_intrinsics.h in this same position.
+    copy_files(
+        package="nrpy.infrastructures.Dendro.standalone_host",
+        filenames_list=["dendro_standalone_host.h"],
+        project_dir=str(Path(args.project_dir) / layout.root),
+        subdirectory="standalone_host",
     )
 
     EVOL, _AUXEVOL, _DIAG, _AUX = gri.GridFunction.gridfunction_lists()
@@ -156,7 +235,7 @@ def main() -> None:
     print(f"  evolved variables: {len(EVOL)}")
     print(f"  finite-difference order: {args.fd_order}")
     print(f"  Kreiss-Oliger dissipation: {'enabled' if args.ko else 'disabled'}")
-    print(f"  required ghost points: {list(roles.required_padding())}")
+    print(f"  required ghost points: {roles.required_padding()}")
     print("Now build and run the generated self-tests with:")
     print(f"  cmake -S {args.project_dir}/Dendro-GR/{solver_name} -B build")
     print("  cmake --build build && ctest --test-dir build")

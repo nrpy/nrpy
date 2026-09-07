@@ -30,7 +30,7 @@ def generate_pup_serialization_lines_for_CodeParams(
     :return:               A list of C++ lines (strings) performing p| or PUParray calls
                            for this field.
     """
-    base, size, is_array = BHaH.BHaH_defines_h.parse_cparam_type(codeparam.cparam_type)
+    base, size, is_array = par.parse_cparam_type(codeparam.cparam_type)
     lines: List[str] = []
     comment = f"  // {codeparam.module}::{field_name}"
     target = f"{struct_prefix}.{field_name}"

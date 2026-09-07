@@ -35,7 +35,12 @@ structures, and struct definitions.
 
 Header guards use traditional `#ifndef` and `#define` pairs with UPPER_SNAKE_CASE
 names. Both simple names such as `BHAHAHA_HEADER_H` and legacy double-underscore
-forms such as `__SIMD_INTRINSICS_H__` appear in the codebase. Put standard
+forms such as `__SIMD_INTRINSICS_H__` appear in the codebase. The guard is
+structure rather than cosmetics, so an emitted header carries one too: BHaH and
+Dendro both generate the `#ifndef`/`#define` pair, Dendro deriving the macro
+from the header's own file name. What the generated-string exemption covers is
+the raw layout and generated-identifier casing, not whether the guard is
+there. Put standard
 library includes first, then project headers in quotes, with platform-specific
 headers behind conditional compilation such as `#if defined(__AVX512F__)`.
 
@@ -84,10 +89,10 @@ scope. Generated `#include` behavior remains an interface/compiler concern, not
 a layout exception.
 
 Claim evidence:
-- Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words -- excepting only the loop footer emitted by canonical `nrpy/helpers/loop.py`, whose substituted bound expressions exceed the limit identically across every infrastructure -- and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
+- Claim: Existing clang-format normalization exclusively owns indentation, tabs, spacing, alignment, wrapping, and brace layout for C/CUDA/H strings stored or assembled in Python generators; those raw cosmetics must never be reviewed, enforced, or repaired, Python-only cosmetic formatting routines are prohibited, and no generated-identifier naming style is reviewed or enforced, while mandatory generated semantic C/C++ `//` line-comment `END` marker presence, correct construct keyword, colon separator, accurate meaningful high-signal description of at most five words -- excepting only the loop footer emitted by canonical `nrpy/helpers/loop.py`, whose substituted bound expressions exceed the limit identically across every infrastructure -- and a `// clang-format off` / `// clang-format on` guard around any C++ namespace closer NRPy generates or ships into a host project, without which `FixNamespaceComments` strips the marker, and exact API, registry, prototype, semantic, interface, documentation, syntax, compiler, collision, and runtime requirements remain enforceable.
 - Role: normative rule
 - Deciding authority: `coding_style.md` - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`
-- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
+- Corroboration: [loop.py](../../nrpy/helpers/loop.py), whose `loop1D` footer substitutes the loop bounds and so exceeds the word limit identically for every calling infrastructure; [clang_format_guards.py](../../nrpy/infrastructures/Dendro/clang_format_guards.py), `unguarded_end_namespace_markers`, which the Dendro emitters assert against; otherwise none available, and the frozen historical style source conflicts where it applies handwritten layout rules to generated strings.
 
 ### End-Curly-Brace Comments
 
@@ -95,8 +100,17 @@ For Python-generated C/CUDA/H, review and enforce only this semantic marker
 subset for every closing brace that ends a non-trivial block: an `END` marker
 must be carried by a C/C++ `//` line comment, use the correct
 syntactic-construct keyword, include a colon separator, and carry an accurate,
-meaningful, high-signal description of at most five words. Do not review or enforce its exact
-whitespace, alignment, wrapping, placement, or brace shape.
+meaningful, high-signal description of at most five words. Do not review or
+enforce its exact whitespace, alignment, wrapping, placement, or brace shape.
+
+A C++ namespace closer that NRPy generates or ships into a host project carries
+its marker inside a `// clang-format off` / `// clang-format on` guard, because
+clang-format's `FixNamespaceComments` otherwise rewrites the marker to
+`} // namespace ns` -- neither the `END` keyword nor the colon survives. The
+option is on in NRPy's own
+formatter options and in the host project a generated solver is emitted into, so
+the guard is what keeps the marker in the file a reader receives. Dendro is the
+only infrastructure that emits C++ namespaces today.
 
 One exception applies to the word limit. `nrpy/helpers/loop.py` builds every
 generated loop's closing marker as
@@ -195,7 +209,8 @@ Common generated-code patterns include:
 
 ## Sources
 
-- [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `## Style Comparison Summary`; current authority for formatter ownership and generated naming scope
+- [coding_style.md](../../coding_style.md) - `#### Embedded C Code String Conventions`, `## C/H Coding Style`, `### 10. End-Curly-Brace Comments`, `## Style Comparison Summary`; current authority for formatter ownership and generated naming scope
+- [clang_format_guards.py](../../nrpy/infrastructures/Dendro/clang_format_guards.py) - `unguarded_end_namespace_markers`
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `## C/H Style`; current `coding_style.md` decides conflicts
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Embedded C in Python Strings`, `### C Function Registration from Python`; current `coding_style.md` decides conflicts
 - [original-agents.md](../../raw/source-docs/original-agents.md) - historical `### Preprocessor / Comment Patterns`, `## Additional Project Rules`, `## Quick Reference`

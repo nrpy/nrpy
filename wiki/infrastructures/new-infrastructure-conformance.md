@@ -175,7 +175,7 @@ their purpose", was too weak to prevent any of them.
 - [BHaH_defines_h.py](../../nrpy/infrastructures/BHaH/BHaH_defines_h.py) - `par.glb_code_params_dict` iteration
 - [Makefile_helpers.py](../../nrpy/infrastructures/BHaH/Makefile_helpers.py) - `cfc.CFunction_dict` iteration
 - [main_c.py](../../nrpy/infrastructures/BHaH/main_c.py) - `register_CFunction_main_c`
-- [output_project.py](../../nrpy/infrastructures/Dendro/output_project.py) - `output_project` argument list
+- [dendro_fccz4.py](../../nrpy/examples/dendro_fccz4.py) - `main`, the inline project assembly
 - [coding_style.md](../../coding_style.md) - `## Python Coding Style`, module naming
 
 ## See Also

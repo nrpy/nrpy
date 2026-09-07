@@ -6,45 +6,55 @@
 ## Summary
 
 BSSN is the second formulation lowered through the Dendro infrastructure, and
-it lives under `general_relativity/BSSN/`. Two modules are new — the right-hand
-side and the constraint diagnostics — and the initial data, the det(gammabar)/tr(Abar)
+it lives beside the fCCZ4 branch in `general_relativity/`. No module is new: the
+shared right-hand-side and constraint-diagnostic modules each gained a BSSN
+builder beside the fCCZ4 one, and the initial data, the det(gammabar)/tr(Abar)
 enforcement and the generic layer are shared with fCCZ4.
 
-The layout is a deliberate divergence, not an imitation. NRPy's one existing
-two-formulation infrastructure is BHaH, which lowers BSSN and fCCZ4 through a
-single `general_relativity/rhs_eval.py` on an `enable_fCCZ4` boolean; BHaH's
-subdirectories (`Kasner/`, `TOVola/`, `TwoPunctures/`, `psi4/`) are diagnostics
-and initial-data providers, not second implementations of a top-level module's
-role. Dendro diverges because its two formulations differ in evolved-field
-count, in constraint set and in which shared equations module supplies the
-expressions, so a single module would branch on formulation in every one of
-those places. That is one instance against one instance, which the conformance
-page rates as weak evidence either way; collapsing onto BHaH's shape remains a
-live option.
+The layout follows BHaH. NRPy's one existing two-formulation infrastructure
+emits BSSN and fCCZ4 from a single `general_relativity/rhs_eval.py` on an
+`enable_fCCZ4` boolean, and Dendro now does the same: one module per artifact,
+with a private builder per formulation behind that boolean. An earlier draft of
+this branch put the BSSN builders in their own `general_relativity/BSSN/`
+subpackage, on the argument that a single module would branch on formulation in
+every place the two differ: evolved-field count, constraint set, and which
+shared equations module supplies the expressions. Collapsing them cost nothing,
+because one module holds a private builder per formulation, so neither branches
+on formulation and the public registrar dispatches once on `enable_fCCZ4` --
+BHaH's own arrangement.
 
 ## Detail
 
 ### What the builders do
 
-`BSSN/rhs_eval.py` assembles the evolution system the way ETLegacy and BHaH do:
-the non-gauge equations from the cached `BSSN_RHSs` object, the lapse and shift
-from `BSSN_gauge_RHSs` added to a *copy* of its dictionary, Kreiss-Oliger terms
-through the shared `add_KreissOliger_dissipation_terms` helper with
-`include_Theta_fCCZ4=False`, and the upwind control vector as the rescaled
-shift `betaU[i] = vetU[i] * ReU[i]`. It then lowers all of it through
+`general_relativity/rhs_eval.py`'s BSSN builder assembles the evolution system
+the way ETLegacy and BHaH do: the non-gauge equations from the cached
+`BSSN_RHSs` object, the lapse and shift from `BSSN_gauge_RHSs` added to a *copy*
+of its dictionary, Kreiss-Oliger terms through the shared
+`add_KreissOliger_dissipation_terms` helper with `include_Theta_fCCZ4=False`,
+and the upwind control vector as the rescaled shift
+`betaU[i] = vetU[i] * ReU[i]`. It then emits all of it through
 `block_kernel_helpers`, asserts the 24-field bijection against the registry, and
 records the padding and the upwind control set.
 
-`BSSN/constraints_eval.py` emits the Hamiltonian constraint and the three momentum
-constraint components from the established `BSSN_constraints` factory.
+`general_relativity/constraints_eval.py`'s BSSN builder emits the Hamiltonian
+constraint and the three momentum constraint components from the established
+`BSSN_constraints` factory.
 
 ### The DIAG-before-factory ordering, and why
 
 `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the **AUX**
-group when it is constructed, each guarded by an existence check. `MU` is
-different: the factory registers it only under the `register_MU_gridfunctions`
-CodeParameter, which defaults to `False` and which no Dendro module sets, so
-nothing competes for those names. Dendro's diagnostics contract is the
+group when it is constructed, each guarded by an existence check. Two
+CodeParameters gate those registrations. `M` and `LAMBDA_CONSTRAINT` are gated
+by `register_M_and_LAMBDA_CONSTRAINT_gridfunctions`, which defaults to `True`,
+so a caller that wants neither must ask; `H` is unconditional. `MU` is
+different again: the factory registers it only under
+`register_MU_gridfunctions`, which defaults to `False` and which no Dendro
+module sets, so nothing competes for those names. Both gates are keys of the
+`BSSNconstraints_dict` memo, so flipping either forces a rebuild rather than
+returning an object constructed under the previous setting.
+
+Dendro's diagnostics contract is the
 **DIAG** group, which is the settled infrastructure convention: BHaH registers
 31 DIAG gridfunctions across its wave-equation, elliptic and GR diagnostics,
 while AUX appears once. Every registration in the factory is guarded by
@@ -59,12 +69,12 @@ Without that the generated state header would advertise two variables no kernel
 writes and no vector backs. No change to the shared equations module.
 
 Claim evidence:
-- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; it registers `MU` only under the `register_MU_gridfunctions` CodeParameter, which defaults to `False` and which no Dendro module sets. The Dendro BSSN builder pre-registers the names it writes and afterwards deletes the newly added AUX names it does not write, leaving `NUM_AUX_GFS = 0` in the emitted state header.
+- Claim: `BSSN_constraints` registers `H`, `M` and `LAMBDA_CONSTRAINT` into the AUX group, each guarded by an existence check, so a caller that registers `H` first determines its group; `M` and `LAMBDA_CONSTRAINT` are additionally gated by the `register_M_and_LAMBDA_CONSTRAINT_gridfunctions` CodeParameter, which defaults to `True`, and `MU` by `register_MU_gridfunctions`, which defaults to `False` and which no Dendro module sets. Both gates are keys of the `BSSNconstraints_dict` construction-parameter memo, so flipping either forces a rebuild. The Dendro BSSN builder pre-registers the names it writes and afterwards deletes the newly added AUX names it does not write, leaving `NUM_AUX_GFS = 0` in the emitted state header.
 - Role: descriptive behavior
 - Deciding authority: [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py), the `group="AUX"` registrations and their `not in gri.glb_gridfcs_dict` guards
-- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/constraints_eval.py), `build_constraints_eval` step 1
+- Corroboration: [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py), `build_constraints_eval` step 1
 - Validation: `inspected=pass; generated=pass; built=pass; run=pass; result_checked=pass`
-- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-05-2026`
+- Dimensions: `platform=Ubuntu 24.04; tool_version=Python 3.12.3, GCC 13.3.0, CMake 3.28.3, OpenMPI 4.1.6; backend=Dendro; precision=double; GPU=not-applicable; restart=not-applicable; distributed=1 and 2 MPI ranks; error_path=not-run; options=--fd-order 4 --no-ko; date=09-06-2026`
 
 ### Dendro's own vocabulary
 
@@ -82,9 +92,10 @@ pointed the constraint-diagnostics kernel at the wrong operation.
 ### What the port found
 
 Adding the second formulation required generic-layer work: the
-formulation-agnostic lowering was extracted into `block_kernel_helpers` and
-`tensor_family_of` moved into `gridfunction_name_decorations`. No formulation-specific content entered
-the generic layer and no existing emitter changed behaviour.
+formulation-agnostic kernel emission was extracted into `block_kernel_helpers`
+and `tensor_family_of` moved into `gridfunction_name_decorations`. No
+formulation-specific content entered the generic layer and no existing emitter
+changed behaviour.
 
 The port was the cheap test of whether the abstraction exists, and it found
 defects that a single-formulation tree could not expose:
@@ -112,9 +123,9 @@ defects that a single-formulation tree could not expose:
 
 ## Sources
 
-- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/rhs_eval.py) - `BSSN_rhs_expressions`, `build_rhs_eval`, `register_CFunctions_rhs_eval`
-- [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/BSSN/constraints_eval.py) - `build_constraints_eval`, `register_CFunctions_constraints_eval`
-- [block_kernel_helpers.py](../../../nrpy/infrastructures/Dendro/block_kernel_helpers.py) - `accessed_gridfunctions`, `padding_from_operators`, `emitted_operators`
+- [rhs_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/rhs_eval.py) - `BSSN_rhs_expressions`, `build_rhs_eval`, `register_CFunctions_rhs_eval`
+- [constraints_eval.py](../../../nrpy/infrastructures/Dendro/general_relativity/constraints_eval.py) - `build_constraints_eval`, `register_CFunctions_constraints_eval`
+- [block_kernel_helpers.py](../../../nrpy/infrastructures/Dendro/block_kernel_helpers.py) - `accessed_gridfunctions`, `padding_from_derivative_operators`, `emitted_derivative_operators`
 - [BSSN_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_RHSs.py) - `BSSNRHSs`
 - [BSSN_gauge_RHSs.py](../../../nrpy/equations/general_relativity/BSSN_gauge_RHSs.py) - `BSSN_gauge_RHSs`
 - [BSSN_constraints.py](../../../nrpy/equations/general_relativity/BSSN_constraints.py) - `BSSNconstraints`
@@ -126,4 +137,4 @@ defects that a single-formulation tree could not expose:
 - Depends on: [BSSN Family](../../equations/general-relativity/bssn-family.md)
 - Implements: [Gridfunctions, Naming, And Loops](gridfunctions-naming-and-loops.md)
 - Contrasts with: [fCCZ4 Application Wiring](fccz4-application-wiring.md)
-- Validated by: [Validation, Host Mock, And Deferral Gates](validation-host-mock-and-deferral-gates.md)
+- Validated by: [Validation, Standalone Host, And Deferral Gates](validation-standalone-host-and-deferral-gates.md)
