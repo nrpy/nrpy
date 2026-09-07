@@ -876,6 +876,44 @@ def use_pointer_stride_mixed_derivative(operator: str) -> bool:
     )
 
 
+def use_pointer_stride_ko_derivative(operator: str) -> bool:
+    """
+    Select pointer/stride raw KO helpers for BHaH CUDA generation.
+
+    Use the existing backend setting; CPU and other infrastructures retain
+    value arguments. This changes helper storage access, not the KO formula.
+
+    :param operator: Finite-difference operator name.
+    :return: Whether the operator uses a pointer/stride KO helper.
+
+    Doctests:
+    >>> saved = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization")}
+    >>> try:
+    ...     for infra in ("BHaH", "ETLegacy", "CarpetX", "NRPy"):
+    ...         par.set_parval_from_str("Infrastructure", infra)
+    ...         for backend in ("openmp", "cuda"):
+    ...             par.set_parval_from_str("parallelization", backend)
+    ...             print(infra, backend, [use_pointer_stride_ko_derivative(op) for op in
+    ...                   ("dKOD0", "dKOD1", "dKOD2", "dDD01", "dupD0", "ddnD1")])
+    ... finally:
+    ...     for name, value in saved.items():
+    ...         par.set_parval_from_str(name, value)
+    BHaH openmp [False, False, False, False, False, False]
+    BHaH cuda [True, True, True, False, False, False]
+    ETLegacy openmp [False, False, False, False, False, False]
+    ETLegacy cuda [False, False, False, False, False, False]
+    CarpetX openmp [False, False, False, False, False, False]
+    CarpetX cuda [False, False, False, False, False, False]
+    NRPy openmp [False, False, False, False, False, False]
+    NRPy cuda [False, False, False, False, False, False]
+    """
+    return (
+        par.parval_from_str("Infrastructure") == "BHaH"
+        and par.parval_from_str("parallelization") == "cuda"
+        and operator in ("dKOD0", "dKOD1", "dKOD2")
+    )
+
+
 class FDFunction:
     """
     A class to represent Finite-Difference (FD) functions in C/C++.
@@ -909,7 +947,9 @@ class FDFunction:
         if par.parval_from_str("Infrastructure") == "CarpetX":
             self.modifiers += "CCTK_DEVICE CCTK_HOST"
 
-        self.uses_pointer_stride = use_pointer_stride_mixed_derivative(operator)
+        self.uses_pointer_stride = use_pointer_stride_mixed_derivative(
+            operator
+        ) or use_pointer_stride_ko_derivative(operator)
 
         self.CFunction: cfc.CFunction
 
@@ -934,7 +974,14 @@ class FDFunction:
                 "Nxx_plus_2NGHOSTS0",
                 "Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1",
             )
-            directions = [int(direction) for direction in self.operator[-2:]]
+            directions = [
+                int(direction)
+                for direction in (
+                    self.operator[-1:]
+                    if self.operator.startswith("dKOD")
+                    else self.operator[-2:]
+                )
+            ]
             args = [pointer] + [strides[d] for d in directions if d != 0]
             args += [f"invdxx{d}" for d in directions]
             return f"const {self.fp_type_alias} {deriv_var} = {self.c_function_name}({', '.join(args)})"
@@ -954,17 +1001,82 @@ class FDFunction:
         return c_function_call
 
     def CFunction_fd_function(self, FDexpr_c_code: str) -> cfc.CFunction:
-        """
+        r"""
         Generate a C function based on the given finite-difference expression.
 
         :param FDexpr_c_code: The finite-difference expression in C code format.
 
         :return: A cfc.CFunction object that encapsulates the C function details.
+
+        Verify KO loads and arithmetic against the stencil for independent values
+        at every offset. Symbolic strides distinguish the nonunit directions;
+        SIMD checks interpret one lane of each contiguous vector load.
+
+        Doctests:
+        >>> import re
+        >>> saved = {name: par.parval_from_str(name) for name in ("Infrastructure", "parallelization")}
+        >>> try:
+        ...     par.set_parval_from_str("Infrastructure", "BHaH")
+        ...     par.set_parval_from_str("parallelization", "cuda")
+        ...     u = sp.IndexedBase("u")
+        ...     s1, s2 = sp.symbols("s1 s2", integer=True)
+        ...     for order in (2, 4, 6, 8, 10):
+        ...         residuals = []
+        ...         for direction in range(3):
+        ...             op = f"dKOD{direction}"
+        ...             coeffs, points = compute_fdcoeffs_fdstencl(op, order)
+        ...             spacing = sp.Symbol(f"invdxx{direction}")
+        ...             expression = spacing * sum(c * sp.Symbol(fd_temp_variable_name("FDPROTO", *p[:3]))
+        ...                                        for c, p in zip(coeffs, points))
+        ...             reference = spacing * sum(c * u[p[0] + s1*p[1] + s2*p[2]] for c, p in zip(coeffs, points))
+        ...             for simd in (False, True):
+        ...                 alias = "REAL_SIMD_ARRAY" if simd else "REAL"
+        ...                 helper = FDFunction(alias, order, op, {}, expression, simd)
+        ...                 generated = helper.CFunction_fd_function(f"const {alias} FD_result = {sp.ccode(expression)};")
+        ...                 values = {"in_gf_pt": u, "s1": s1, "s2": s2}
+        ...                 for statement in generated.body.split(";")[:-1]:
+        ...                     if " = " in statement:
+        ...                         lhs, rhs = statement.strip().split(" = ", 1)
+        ...                         rhs = re.sub(r"ReadSIMD\(&(.+)\)", r"\1", rhs)
+        ...                         values[lhs.split()[-1]] = sp.sympify(rhs, locals=values)
+        ...                 residuals.append(sp.expand(values["FD_result"] - reference))
+        ...         print(order, set(residuals))
+        ... finally:
+        ...     for name, value in saved.items():
+        ...         par.set_parval_from_str(name, value)
+        2 {0}
+        4 {0}
+        6 {0}
+        8 {0}
+        10 {0}
         """
         includes: List[str] = []
         fp_type_alias = self.fp_type_alias
         name = self.c_function_name
-        if self.uses_pointer_stride:
+        if use_pointer_stride_ko_derivative(self.operator):
+            direction = int(self.operator[-1])
+            params_list = ["const REAL *restrict in_gf_pt"]
+            if direction != 0:
+                params_list.append(f"const int s{direction}")
+            params_list.append(f"const {fp_type_alias} invdxx{direction}")
+            params = ", ".join(params_list)
+            _, stencil = compute_fdcoeffs_fdstencl(self.operator, self.fd_order)
+            loads = []
+            for point in stencil:
+                local_name = fd_temp_variable_name(
+                    "FDPROTO", point[0], point[1], point[2]
+                )
+                offset = str(point[direction])
+                if direction != 0:
+                    offset += f" * s{direction}"
+                value = (
+                    f"ReadSIMD(&in_gf_pt[{offset}])"
+                    if self.enable_simd
+                    else f"in_gf_pt[{offset}]"
+                )
+                loads.append(f"const {fp_type_alias} {local_name} = {value};")
+            body = "\n".join(loads) + f"\n{FDexpr_c_code}\n return FD_result;"
+        elif self.uses_pointer_stride:
             # For BHaH mixed derivatives, pass the gridfunction pointer, strides,
             # and inverse spacings, and compute the FD stencil inside the function.
             params, body = self.pointer_stride_mixed_params_body()
