@@ -138,6 +138,10 @@ def register_CFunction_Ricci_eval(
         comments=desc,
         cfunc_type=f"static {cfunc_type}",
         launchblock_with_braces=False,
+        launch_dict={
+            **BHaH.parallelization.cuda_utilities.default_launch_dictionary,
+            "threads_per_block": ["64", "1", "1"],
+        },
         thread_tiling_macro_suffix="RICCI_EVAL",
     )
 
