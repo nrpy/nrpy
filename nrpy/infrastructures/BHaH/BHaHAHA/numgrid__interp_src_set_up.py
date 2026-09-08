@@ -384,7 +384,7 @@ and computes necessary spatial derivatives.
 @param[in,out] commondata Pointer to the common data structure containing simulation parameters and data.
 @param[in] Nx_evol_grid Array specifying the number of grid points in each dimension for the evolved grid.
 @return Returns BHAHAHA_SUCCESS on successful setup, or an error code if memory allocation fails."""
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "numgrid__interp_src_set_up"
     params = "commondata_struct *restrict commondata, const int Nx_evol_grid[3]"
     body = r"""

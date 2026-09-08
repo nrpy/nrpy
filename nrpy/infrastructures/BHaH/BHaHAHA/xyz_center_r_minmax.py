@@ -40,6 +40,11 @@ based on the number of available data points to ensure flexibility and accuracy.
     name = "xyz_center_r_minmax"
     params = """const bhahaha_params_and_data_struct *restrict pars,
     REAL *restrict x_center, REAL *restrict y_center, REAL *restrict z_center, REAL *restrict r_min, REAL *restrict r_max"""
+    cfunc_decorators = r"""
+#ifdef __CUDACC__
+__host__ __device__
+#endif
+"""
     body = r"""
   // Initialize time points for extrapolation.
   const REAL times[3] = {pars->t_m1, pars->t_m2, pars->t_m3};
@@ -98,5 +103,6 @@ based on the number of available data points to ensure flexibility and accuracy.
         name=name,
         params=params,
         include_CodeParameters_h=False,
+        cfunc_decorators=cfunc_decorators,
         body=body,
     )

@@ -391,7 +391,7 @@ This function performs the following steps:
 
 @return BHAHAHA_SUCCESS on successful setup, or an error code indicating the failure reason.
 """
-    cfunc_type = "int"
+    cfunc_type = "void"
     name = "numgrid__external_input_set_up"
     params = "commondata_struct *restrict commondata, const int n_resolutions, const int *restrict Ntheta, const int *restrict Nphi"
     body = r"""

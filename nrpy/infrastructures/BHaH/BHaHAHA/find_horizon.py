@@ -158,7 +158,7 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
   // Step 1.d: Set up external input grids by adding inner ghost zones and applying boundary conditions.
   commondata.external_input_gfs_Cart_basis_no_gzs = bhahaha_params_and_data->input_metric_data;
-  commondata.error_flag = bah_numgrid__external_input_set_up(&commondata, n_resolutions, Ntheta, Nphi);
+  bah_numgrid__external_input_set_up(&commondata, n_resolutions, Ntheta, Nphi);
   if (commondata.error_flag != BHAHAHA_SUCCESS) {
     return commondata.error_flag;
   }
@@ -184,12 +184,12 @@ to identify the apparent horizon with progressively refined grid resolutions.
     Nx_evol_grid[2] = Nphi[resolution];
 
     // Step 2.b: Set up interpolation source grid and allocate grid functions.
-    commondata.error_flag = bah_numgrid__interp_src_set_up(&commondata, Nx_evol_grid);
+    bah_numgrid__interp_src_set_up(&commondata, Nx_evol_grid);
     if (commondata.error_flag != BHAHAHA_SUCCESS) {
       for (int i = 0; i < 3; i++) {
-        free(commondata.external_input_r_theta_phi[i]);
+        FREE(commondata.external_input_r_theta_phi[i]);
       }
-      free(commondata.external_input_gfs);
+      FREE(commondata.external_input_gfs);
       return commondata.error_flag;
     }
 
@@ -202,6 +202,13 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
     // Step 2.e: Configure the 2D numerical grid for the Apparent Horizon finder.
     bah_numgrid__evol_set_up(&commondata, griddata, Nx_evol_grid);
+    if (commondata.error_flag != BHAHAHA_SUCCESS) {
+      for (int i = 0; i < 3; i++) {
+        FREE(commondata.external_input_r_theta_phi[i]);
+      }
+      FREE(commondata.external_input_gfs);
+      return commondata.error_flag;
+    }
 
     const params_struct *restrict params = &griddata[grid].params;
     const int Nxx_plus_2NGHOSTS0 = params->Nxx_plus_2NGHOSTS0;
@@ -225,16 +232,24 @@ to identify the apparent horizon with progressively refined grid resolutions.
     } // END BLOCK: Allocation of grid functions
 
     // Step 4: Initialize initial data for the simulation.
-    if (bah_initial_data(&commondata, griddata) != BHAHAHA_SUCCESS) {
+    bah_initial_data(&commondata, griddata);
+    if (commondata.error_flag != BHAHAHA_SUCCESS) {
       free_all_but_external_input_gfs(&commondata, griddata);
       for (int i = 0; i < 3; i++) {
         free(commondata.external_input_r_theta_phi[i]);
       }
       free(commondata.external_input_gfs);
-      return INITIAL_DATA_MALLOC_ERROR;
+      return commondata.error_flag;
     }
 
     // Step 5: Execute the main simulation loop to evolve the horizon over time.
+#ifdef __CUDACC__
+    //Allocate h_p
+    cudaMalloc((void**)&commondata.h_p,sizeof(REAL) * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2);
+#else
+    commondata.h_p = (double *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0 * Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2);
+#endif
+
     int stop_condition = 0;
     while (commondata.time < commondata.t_final) { // Main loop to advance the simulation.
 
@@ -247,6 +262,17 @@ to identify the apparent horizon with progressively refined grid resolutions.
 
       // Step 5.b: Update the timestep based on the CFL condition.
       bah_cfl_limited_timestep_based_on_h_equals_r(&commondata, griddata);
+
+
+    // Reset Horizon
+    if (commondata.nn == 0) {
+      PARALLEL_LOOP(i0, NGHOSTS, NGHOSTS+1, i1, 0, Nxx_plus_2NGHOSTS1, i2, 0, Nxx_plus_2NGHOSTS2) {
+        commondata.h_p[IDX3(i0,i1,i2)] = 0.0;
+      } END_PARALLEL_LOOP 
+      #ifdef __CUDACC__
+      gpu_grid.sync();
+      #endif
+    } //End Reset horizon
 
       // Step 5.c: Attempt over-relaxation every once in a while. If an
       //           over-relaxation is performed, the CFL timestep
