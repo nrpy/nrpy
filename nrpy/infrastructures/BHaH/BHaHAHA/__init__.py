@@ -7,6 +7,7 @@ from . import (
     diagnostics,
     diagnostics_area_centroid_and_Theta_norms,
     diagnostics_file_output,
+    diagnostics_full,
     diagnostics_integration_weights,
     diagnostics_min_max_mean_radii_wrt_centroid,
     diagnostics_proper_circumferences,
@@ -28,6 +29,7 @@ from . import (
     quadratic_extrapolation,
     radial_grid_cell_centered_set_up,
     rhs_eval_KO_apply,
+    store_horizon,
     variable_wavespeed,
     xyz_center_r_minmax,
 )

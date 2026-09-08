@@ -220,6 +220,12 @@ typedef struct {
   //==========================
 } bhahaha_diagnostics_struct;
 
+typedef struct __diagnostics_arrays__ {
+  REAL *restrict metric_data_gfs;
+  REAL(*dst_pts)[2];
+  REAL *restrict circumference;
+} diagnostics_arrays_struct;
+
 //==================
 // PUBLIC FUNCTIONS
 //==================

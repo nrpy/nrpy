@@ -328,6 +328,13 @@ to identify the apparent horizon with progressively refined grid resolutions.
       } // END IF: time stepper returned an error
     } // END LOOP: for resolution over main simulation loop
 
+#ifdef __CUDACC__
+    // Retrieve commondata & griddata from device
+    gpuErrchk( cudaMemcpy(&commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) );
+
+    gpuErrchk( cudaMemcpy(d_griddata, griddata, sizeof(griddata_struct), cudaMemcpyHostToDevice) );
+#endif
+
     {
       // End timing for the current resolution and display elapsed time.
       struct timeval end_time;
@@ -337,47 +344,126 @@ to identify the apparent horizon with progressively refined grid resolutions.
         printf("#Nth x Nph = %d x %d elapsed time = %.1f ms / %.1f ms so far...\n", params->Nxx1, params->Nxx2,
                timeval_to_milliseconds(res_start_time, end_time), timeval_to_milliseconds(start_time, end_time));
       }
-    } // END BLOCK: record and optionally print per-resolution timing
+    } // END BLOCK: Timing and logging
 
+    int compute_proper_circumferences= 1; 
+    // Step 6: Compute final diagnostics if Horizon is found.
     if (commondata.error_flag == BHAHAHA_SUCCESS) {
-      // Step 6: Save the coarse horizon for subsequent resolutions or output final diagnostics.
-      if (resolution < n_resolutions - 1) {
-        // Allocate memory for storing coarse horizon data.
-        const int total_points = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
-        commondata.coarse_horizon = malloc(sizeof(REAL) * total_points);
+  
+      // Adjust setting for the final iteration, to trigger diagnostics and compute additional diagnostics.
+      if (resolution >= n_resolutions - 1)
+        commondata.is_final_iteration = 1;
 
-        // Store horizon data including ghost zones for interpolation in the next resolution.
-        const int NUM_THETA = Nxx_plus_2NGHOSTS1; // NUM_THETA needed for IDX2() macro.
-#pragma omp parallel for
-        for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
-          for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-            commondata.coarse_horizon[IDX2(i1, i2)] = griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, NGHOSTS, i1, i2)];
-          } // END LOOP: for i1 over theta indices
-        } // END LOOP: for i2 over phi indices
+      const int orig_output_diagnostics_every_nn = commondata.output_diagnostics_every_nn;
+      commondata.output_diagnostics_every_nn = 1;
+      // Compute diagnostics, cycling _m{3,2} and storing _m1 data while we're at it for {x,y,z}_center
+      //   as they depend on centroids being computed, and r_{min,max} for good measure.
 
-        // Save grid parameters for the coarse horizon to maintain consistency.
-        commondata.coarse_horizon_dxx1 = params->dxx1;
-        commondata.coarse_horizon_dxx2 = params->dxx2;
-        commondata.coarse_horizon_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS1;
-        commondata.coarse_horizon_Nxx_plus_2NGHOSTS2 = Nxx_plus_2NGHOSTS2;
+      // Allocate arrays needed for proper circumference diagnostics only on the final iteration
+      if (commondata.is_final_iteration) {
+        int NUM_DIAG_GFS = 2;
+        int N_angle = griddata[grid].params.Nxx2;
+#ifdef __CUDACC__
+        cudaMalloc((void**)&commondata.diagnostics_arrays.metric_data_gfs, griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
+        cudaMalloc((void**)&commondata.diagnostics_arrays.dst_pts, sizeof(REAL) * N_angle*2);
+        cudaMalloc((void**)&commondata.diagnostics_arrays.circumference, N_angle  * sizeof(REAL));
+        // Update device side with diagnostics arrays allocations
+        gpuErrchk( cudaMemcpy(d_commondata, &commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) );
+#else
+        BHAH_MALLOC(commondata.diagnostics_arrays.metric_data_gfs, griddata[grid].params.Nxx_plus_2NGHOSTS0 * griddata[grid].params.Nxx_plus_2NGHOSTS1 * griddata[grid].params.Nxx_plus_2NGHOSTS2 * NUM_DIAG_GFS * sizeof(REAL));
+        commondata.diagnostics_arrays.dst_pts = (REAL (*)[2])malloc(sizeof(REAL) * N_angle*2);
+        commondata.diagnostics_arrays.circumference = (REAL*)malloc(N_angle  * sizeof(REAL));
+#endif
+        if (commondata.diagnostics_arrays.metric_data_gfs == NULL || commondata.diagnostics_arrays.dst_pts == NULL  ||commondata.diagnostics_arrays.circumference == NULL) {
+          if (commondata.diagnostics_arrays.metric_data_gfs != NULL)
+            FREE(commondata.diagnostics_arrays.metric_data_gfs);
+          if (commondata.diagnostics_arrays.circumference != NULL)
+            FREE(commondata.diagnostics_arrays.circumference);
+          if (commondata.diagnostics_arrays.dst_pts != NULL)
+            FREE(commondata.diagnostics_arrays.dst_pts);
+          compute_proper_circumferences= 0;
+        }
+      }
 
-        // Allocate and store coordinate arrays for the coarse horizon.
-        commondata.coarse_horizon_r_theta_phi[0] = malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
-        for (int i0 = 0; i0 < Nxx_plus_2NGHOSTS0; i0++) {
-          commondata.coarse_horizon_r_theta_phi[0][i0] = griddata[grid].xx[0][i0];
-        } // END LOOP: for i0 over radial coordinates
+      {
+#ifdef __CUDACC__
+        void *Args[] = {&d_commondata, &d_griddata, &compute_proper_circumferences};
+        int sharesize = sizeof(REAL)*(INTERP_ORDER + (THREADSPERBLOCK*4)*INTERP_ORDER + THREADSPERBLOCK*INTERP_ORDER*INTERP_ORDER) + sizeof(REAL)*INTERP_ORDER;
+        COOPERATIVE_KERNEL(bah_diagnostics_full, Args, sharesize);
+#else
+        bah_diagnostics_full(&commondata, griddata, compute_proper_circumferences);
+#endif
+      }
 
-        commondata.coarse_horizon_r_theta_phi[1] = malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
-        for (int i1 = 0; i1 < Nxx_plus_2NGHOSTS1; i1++) {
-          commondata.coarse_horizon_r_theta_phi[1][i1] = griddata[grid].xx[1][i1];
-        } // END LOOP: for i1 over theta coordinates
+#ifdef __CUDACC__
+      // Free diagnostic arrays
+      if (commondata.is_final_iteration && compute_proper_circumferences) {
+        FREE(commondata.diagnostics_arrays.metric_data_gfs);
+        FREE(commondata.diagnostics_arrays.dst_pts);
+        FREE(commondata.diagnostics_arrays.circumference);
+      }
+#endif
 
-        commondata.coarse_horizon_r_theta_phi[2] = malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
-        for (int i2 = 0; i2 < Nxx_plus_2NGHOSTS2; i2++) {
-          commondata.coarse_horizon_r_theta_phi[2][i2] = griddata[grid].xx[2][i2];
-        } // END LOOP: for i2 over phi coordinates
-      } else { // IF: Horizon found at final resolution
+      commondata.output_diagnostics_every_nn = orig_output_diagnostics_every_nn;
+    } // END BLOCK: Compute final diagnostics 
 
+    // Step 7: Save the coarse horizon for subsequent resolutions or output final diagnostics.
+    if (commondata.error_flag == BHAHAHA_SUCCESS  && !commondata.is_final_iteration) {
+      // Allocate memory for storing coarse horizon data.
+      const int total_points = Nxx_plus_2NGHOSTS1 * Nxx_plus_2NGHOSTS2;
+#ifdef __CUDACC__
+      cudaMalloc((void**)&commondata.coarse_horizon, sizeof(REAL) * total_points);
+#else
+      commondata.coarse_horizon = (double *)malloc(sizeof(REAL) * total_points);
+#endif
+
+      // Save grid parameters for the coarse horizon to maintain consistency.
+      commondata.coarse_horizon_dxx1 = params->dxx1;
+      commondata.coarse_horizon_dxx2 = params->dxx2;
+      commondata.coarse_horizon_Nxx_plus_2NGHOSTS1 = Nxx_plus_2NGHOSTS1;
+      commondata.coarse_horizon_Nxx_plus_2NGHOSTS2 = Nxx_plus_2NGHOSTS2;
+
+      // Allocate coordinate arrays for the coarse horizon.
+#ifdef __CUDACC__
+      cudaMalloc((void**)&commondata.coarse_horizon_r_theta_phi[0], sizeof(REAL) * Nxx_plus_2NGHOSTS0);
+      cudaMalloc((void**)&commondata.coarse_horizon_r_theta_phi[1], sizeof(REAL) * Nxx_plus_2NGHOSTS1);
+      cudaMalloc((void**)&commondata.coarse_horizon_r_theta_phi[2], sizeof(REAL) * Nxx_plus_2NGHOSTS2);
+#else
+      commondata.coarse_horizon_r_theta_phi[0] = (double *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS0);
+      commondata.coarse_horizon_r_theta_phi[1] = (double *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS1);
+      commondata.coarse_horizon_r_theta_phi[2] = (double *)malloc(sizeof(REAL) * Nxx_plus_2NGHOSTS2);
+#endif
+
+#ifdef __CUDACC__
+      // Update device side copy of commondata and griddata
+      gpuErrchk( cudaMemcpy(d_commondata, &commondata, sizeof(commondata_struct), cudaMemcpyHostToDevice) ); 
+      gpuErrchk( cudaMemcpy(d_griddata, griddata, sizeof(griddata_struct), cudaMemcpyHostToDevice) ); 
+#endif
+
+#ifdef __CUDACC__
+      bah_store_horizon<<<12,64>>>(d_commondata, d_griddata);
+      cudaDeviceSynchronize();
+#else
+      bah_store_horizon(&commondata, griddata);
+#endif
+    } else { // IF: Horizon found at final resolution or horizon too large
+#ifdef __CUDACC__
+      //Deep retrieveal of commondata from device if final iteration or 1D interpolation was too large
+      gpuErrchk( cudaMemcpy(&commondata, d_commondata, sizeof(commondata_struct), cudaMemcpyDeviceToHost) ); 
+      gpuErrchk( cudaMemcpy(griddata, d_griddata, sizeof(griddata_struct), cudaMemcpyDeviceToHost) ); 
+
+      gpuErrchk( cudaMemcpy(h_bhahaha_diagnostics, d_bhahaha_diagnostics, sizeof(bhahaha_diagnostics_struct), cudaMemcpyDeviceToHost) );
+      commondata.bhahaha_diagnostics = h_bhahaha_diagnostics;
+  
+      gpuErrchk( cudaMemcpy(h_bhahaha_params_and_data, d_bhahaha_params_and_data, sizeof(bhahaha_params_and_data_struct), cudaMemcpyDeviceToHost) );
+      commondata.bhahaha_params_and_data = h_bhahaha_params_and_data;
+
+      REAL *d_y_n_gfs = griddata[0].gridfuncs.y_n_gfs;
+      REAL *h_y_n_gfs = (REAL*)malloc(sizeof(REAL)*Nxx_plus_2NGHOSTS_tot*NUM_EVOL_GFS);
+      gpuErrchk( cudaMemcpy(h_y_n_gfs, d_y_n_gfs, sizeof(REAL)*Nxx_plus_2NGHOSTS_tot*NUM_EVOL_GFS,cudaMemcpyDeviceToHost) );
+      griddata[0].gridfuncs.y_n_gfs = h_y_n_gfs;
+#endif
+      if (commondata.error_flag == BHAHAHA_SUCCESS  && commondata.is_final_iteration) {
         // Store the final horizon data and perform a last diagnostic output.
         const int NUM_THETA = params->Nxx1; // Required for IDX2() macro.
         memcpy(commondata.bhahaha_params_and_data->prev_horizon_m3, commondata.bhahaha_params_and_data->prev_horizon_m2,
@@ -389,60 +475,68 @@ to identify the apparent horizon with progressively refined grid resolutions.
           for (int i1 = 0; i1 < params->Nxx1; i1++) {
             commondata.bhahaha_params_and_data->prev_horizon_m1[IDX2(i1, i2)] =
                 griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, NGHOSTS, i1 + NGHOSTS, i2 + NGHOSTS)];
-          } // END LOOP: for i1 over theta indices
-        } // END LOOP: for i2 over phi indices
-
-        // Adjust setting for the final iteration, to trigger diagnostics and compute additional diagnostics.
-        commondata.is_final_iteration = 1;
-
-      } // END ELSE: handling final resolution
-    } else if (commondata.error_flag == INTERP1D_HORIZON_TOO_LARGE) {
-      // Handle specific error when the horizon exceeds interpolation limits.
-      REAL max_radius = -1e10;
+          } // END LOOP: theta indices
+        } // END LOOP: phi indices
+      } else if (commondata.error_flag == INTERP1D_HORIZON_TOO_LARGE) {
+        // Handle specific error when the horizon exceeds interpolation limits.
+        REAL max_radius = -1e10;
 #pragma omp parallel for reduction(max : max_radius)
-      for (int i2 = 0; i2 < params->Nxx2; i2++) {
-        for (int i1 = 0; i1 < params->Nxx1; i1++) {
-          REAL current_radius = griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, NGHOSTS, i1 + NGHOSTS, i2 + NGHOSTS)];
-          if (current_radius > max_radius) {
-            max_radius = current_radius;
-          }
-        } // END LOOP: for i1 over theta indices
-      } // END LOOP: for i2 over phi indices
+        for (int i2 = 0; i2 < params->Nxx2; i2++) {
+          for (int i1 = 0; i1 < params->Nxx1; i1++) {
+            REAL current_radius = griddata[grid].gridfuncs.y_n_gfs[IDX4(HHGF, NGHOSTS, i1 + NGHOSTS, i2 + NGHOSTS)];
+            if (current_radius > max_radius) {
+              max_radius = current_radius;
+            }
+          } // END LOOP: theta indices
+        } // END LOOP: phi indices
 
-      if (commondata.bhahaha_params_and_data->verbosity_level > 0) {
-        // r_max_interior = r_min_external_input + ((Nr_external_input-BHAHAHA_NGHOSTS) + 0.5)*dr
-        const REAL r_max_interior =
-            commondata.bhahaha_params_and_data->r_min_external_input +
-            ((commondata.bhahaha_params_and_data->Nr_external_input - BHAHAHA_NGHOSTS) + 0.5) * commondata.bhahaha_params_and_data->dr_external_input;
-        printf("ERROR: h_max = %#.4g too close to r_max_search = %#.4g. "
-               "Try either increasing search radius or decreasing cfl_factor.\n",
-               max_radius, r_max_interior);
-      }
-    } // END IF: handle interpolation-too-large horizon error
+        if (commondata.bhahaha_params_and_data->verbosity_level > 0) {
+          // r_max_interior = r_min_external_input + ((Nr_external_input-BHAHAHA_NGHOSTS) + 0.5)*dr
+          const REAL r_max_interior =
+              commondata.bhahaha_params_and_data->r_min_external_input +
+              ((commondata.bhahaha_params_and_data->Nr_external_input - BHAHAHA_NGHOSTS) + 0.5) * commondata.bhahaha_params_and_data->dr_external_input;
+          printf("ERROR: h_max = %#.4g too close to r_max_search = %#.4g. "
+                 "Try either increasing search radius or decreasing cfl_factor.\n",
+                 max_radius, r_max_interior);
+        }
+      } // END IF: Handling specific error conditions
+#ifdef __CUDACC__
+      //Free host copy of y_n_gfs and reset device side
+      free(h_y_n_gfs);
+      griddata[grid].gridfuncs.y_n_gfs = d_y_n_gfs;
+#endif
+    } // END IF: Handling specific error conditions
 
-    // Step 7: Horizon found! Compute final diagnostics.
-    if (commondata.error_flag == BHAHAHA_SUCCESS) {
-      const int orig_output_diagnostics_every_nn = commondata.output_diagnostics_every_nn;
-      commondata.output_diagnostics_every_nn = 1;
-      // Compute diagnostics, cycling _m{3,2} and storing _m1 data while we're at it for {x,y,z}_center
-      //   as they depend on centroids being computed, and r_{min,max} for good measure.
-      bah_diagnostics(&commondata, griddata);
-      commondata.output_diagnostics_every_nn = orig_output_diagnostics_every_nn;
-    } // END BLOCK: final diagnostics after a successful horizon find
 
     // Step 8: Release all allocated memory for the current grid resolution.
     free_all_but_external_input_gfs(&commondata, griddata);
+#ifdef __CUDACC__ 
+    //Free per iteration device side copies
+    gpuErrchk( cudaFree(d_griddata) );
+    gpuErrchk( cudaFree(commondata.norms) );
+    //Free device side copies 
+    if (commondata.is_final_iteration) {
+      cudaFree(d_commondata);
+      cudaFree(d_bhahaha_diagnostics);
+      cudaFree(d_bhahaha_params_and_data);
+    }
+#endif
+
+    // Report error stopping computation of proper circumferences
+    if (compute_proper_circumferences) {
+    } else {
+      commondata.error_flag = DIAG_PROPER_CIRCUM_MALLOC_ERROR; 
+    }
 
     if (commondata.error_flag != BHAHAHA_SUCCESS) {
       break;
-    } // END IF: error persisted after freeing current-resolution memory
-  } // END LOOP: for resolution over grid resolutions
+    } // END IF: Check for errors after freeing memory
+  } // END LOOP: Iterating over grid resolutions
 
   // Step 9: After processing all resolutions, release external input memory.
-  for (int i = 0; i < 3; i++) {
-    free(commondata.external_input_r_theta_phi[i]);
-  }
-  free(commondata.external_input_gfs);
+  for (int i = 0; i < 3; i++)
+    FREE(commondata.external_input_r_theta_phi[i]);
+  FREE(commondata.external_input_gfs);
 
   // Display final timing information if verbosity is enabled.
   if (commondata.bhahaha_params_and_data->verbosity_level > 0) {
