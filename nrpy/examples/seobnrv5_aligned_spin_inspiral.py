@@ -216,6 +216,7 @@ To learn more about usage options, run: python nrpy/example/seobnrv5_aligned_spi
     shutil.rmtree(project_dir, ignore_errors=True)
 
     # register SEOBNRv5 coefficients
+    BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_evaluate_l2m2_qnm()
     BHaH.seobnr.SEOBNRv5_aligned_spin_coefficients.register_CFunction_SEOBNRv5_aligned_spin_coefficients(
         args.calibration_no_spin, args.calibration_spin
     )
